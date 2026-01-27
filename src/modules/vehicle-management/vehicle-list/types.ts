@@ -1,0 +1,1 @@
+// src/modules/vehicle-management/vehicle-list/types.ts
