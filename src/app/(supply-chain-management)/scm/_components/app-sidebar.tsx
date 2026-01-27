@@ -53,7 +53,7 @@ const data = {
             url: "#",
             icon: BookOpen,
             items: [
-                { title: "Vehicle Management", url: "#" },
+                { title: "Vehicle Management", url: "/scm/fleet-management/vehicle-management/vehicle-list" },
                 { title: "Driver Management", url: "#" },
                 { title: "Trip and Dispatch Management", url: "#" },
                 { title: "Logistics and Deliveries", url: "#" },
