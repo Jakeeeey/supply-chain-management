@@ -1,6 +1,6 @@
-// src/modules/vehicle-management/vehicle-list/VehicleListModule.tsx
 "use client";
 
+// src/modules/vehicle-management/vehicle-list/VehicleListModule.tsx
 import * as React from "react";
 import type { VehicleRow } from "./types";
 
@@ -9,10 +9,9 @@ import { VehicleListToolbar } from "./components/VehicleListToolbar";
 import { VehiclesTable } from "./components/VehiclesTable";
 import { AddVehicleDialog } from "./components/AddVehicleDialog";
 import { VehicleHistoryDialog } from "./components/VehicleHistoryDialog";
-import { Toaster } from "sonner";
 
 export default function VehicleListModule() {
-  const { loading, saving, error, query, setQuery, rows, addVehicle, typeMap } =
+  const { loading, saving, query, setQuery, rows, addVehicle, typeMap } =
     useVehicles();
 
   const [openAdd, setOpenAdd] = React.useState(false);
@@ -30,18 +29,12 @@ export default function VehicleListModule() {
   }, [typeMap]);
 
   return (
-    <div className="w-full p-6">
+    <div className="w-full p-4 sm:p-6">
       <VehicleListToolbar
         query={query}
         onQueryChange={setQuery}
         onAdd={() => setOpenAdd(true)}
       />
-
-      {/* {error ? (
-        <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-          {error}
-        </div>
-      ) : null} */}
 
       <div className="mt-6">
         <VehiclesTable
