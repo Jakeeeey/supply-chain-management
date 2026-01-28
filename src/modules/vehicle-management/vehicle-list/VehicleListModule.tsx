@@ -9,6 +9,7 @@ import { VehicleListToolbar } from "./components/VehicleListToolbar";
 import { VehiclesTable } from "./components/VehiclesTable";
 import { AddVehicleDialog } from "./components/AddVehicleDialog";
 import { VehicleHistoryDialog } from "./components/VehicleHistoryDialog";
+import { Toaster } from "sonner";
 
 export default function VehicleListModule() {
   const { loading, saving, error, query, setQuery, rows, addVehicle, typeMap } =
@@ -36,26 +37,21 @@ export default function VehicleListModule() {
         onAdd={() => setOpenAdd(true)}
       />
 
-      {error ? (
+      {/* {error ? (
         <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
           {error}
         </div>
-      ) : null}
+      ) : null} */}
 
       <div className="mt-6">
-        {loading ? (
-          <div className="rounded-lg border bg-background p-10 text-center text-sm text-muted-foreground">
-            Loading vehicles…
-          </div>
-        ) : (
-          <VehiclesTable
-            rows={rows}
-            onViewHistory={(row) => {
-              setSelected(row);
-              setOpenHistory(true);
-            }}
-          />
-        )}
+        <VehiclesTable
+          rows={rows}
+          loading={loading}
+          onViewHistory={(row) => {
+            setSelected(row);
+            setOpenHistory(true);
+          }}
+        />
       </div>
 
       <AddVehicleDialog

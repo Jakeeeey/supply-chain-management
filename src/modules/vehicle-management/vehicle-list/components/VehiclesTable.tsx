@@ -6,6 +6,7 @@ import { Eye } from "lucide-react";
 import type { VehicleRow } from "../types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -21,11 +22,45 @@ function statusVariant(s: string) {
   return "secondary";
 }
 
+function VehiclesTableSkeleton({ rows = 6 }: { rows?: number }) {
+  return (
+    <>
+      {Array.from({ length: rows }).map((_, i) => (
+        <TableRow key={`sk-${i}`}>
+          <TableCell className="font-medium">
+            <Skeleton className="h-4 w-[120px]" />
+          </TableCell>
+
+          <TableCell>
+            <Skeleton className="h-4 w-[180px]" />
+          </TableCell>
+
+          <TableCell>
+            <Skeleton className="h-4 w-[140px]" />
+          </TableCell>
+
+          <TableCell>
+            <Skeleton className="h-6 w-[90px] rounded-full" />
+          </TableCell>
+
+          <TableCell>
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-9 w-[130px] rounded-md" />
+            </div>
+          </TableCell>
+        </TableRow>
+      ))}
+    </>
+  );
+}
+
 export function VehiclesTable({
   rows,
+  loading,
   onViewHistory,
 }: {
   rows: VehicleRow[];
+  loading?: boolean;
   onViewHistory: (row: VehicleRow) => void;
 }) {
   return (
@@ -42,9 +77,14 @@ export function VehiclesTable({
         </TableHeader>
 
         <TableBody>
-          {rows.length === 0 ? (
+          {loading ? (
+            <VehiclesTableSkeleton rows={7} />
+          ) : rows.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
+              <TableCell
+                colSpan={5}
+                className="py-10 text-center text-sm text-muted-foreground"
+              >
                 No vehicles found.
               </TableCell>
             </TableRow>
@@ -60,7 +100,11 @@ export function VehiclesTable({
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <Button type="button" className="gap-2" onClick={() => onViewHistory(r)}>
+                  <Button
+                    type="button"
+                    className="gap-2"
+                    onClick={() => onViewHistory(r)}
+                  >
                     <Eye className="h-4 w-4" />
                     View History
                   </Button>
