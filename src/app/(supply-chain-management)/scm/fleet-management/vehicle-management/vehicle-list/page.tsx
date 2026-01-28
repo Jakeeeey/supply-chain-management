@@ -11,7 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { NavUser } from "../../../_components/nav-user"
-import ComingSoon from "../../../_components/ComingSoon"
+import VehicleListModule from "@/modules/vehicle-management/vehicle-list/VehicleListModule"
 
 const headerUser = {
     name: "Jake Dave M. De Guzman",
@@ -48,7 +48,7 @@ export default function Page() {
             </header>
 
             <ScrollArea className="min-h-0 flex-1">
-                <ComingSoon />
+                <VehicleListModule />
             </ScrollArea>
         </div>
     )
