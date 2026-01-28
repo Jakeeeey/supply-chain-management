@@ -54,15 +54,11 @@ async function proxy(req: NextRequest) {
     );
   }
 
-  const upstreamUrl = buildUpstreamUrl(req, "/items/vehicles");
-  const method = req.method.toUpperCase();
-  const hasBody = !["GET", "HEAD"].includes(method);
-  const body = hasBody ? await req.arrayBuffer() : undefined;
+  const upstreamUrl = buildUpstreamUrl(req, "/items/vehicle_type");
 
   const upstreamRes = await fetch(upstreamUrl.toString(), {
-    method,
+    method: req.method,
     headers: pickForwardHeaders(req),
-    body,
     redirect: "manual",
   });
 
@@ -83,9 +79,5 @@ export async function OPTIONS(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  return proxy(req);
-}
-
-export async function POST(req: NextRequest) {
   return proxy(req);
 }

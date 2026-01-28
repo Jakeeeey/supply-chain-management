@@ -43,7 +43,10 @@ function buildUpstreamUrl(req: NextRequest, path: string) {
   return url;
 }
 
-async function proxy(req: NextRequest) {
+async function proxy(
+  req: NextRequest,
+  ctx: { params: Promise<{ id: string }> }
+) {
   if (!UPSTREAM) {
     return withCors(
       NextResponse.json(
@@ -54,7 +57,9 @@ async function proxy(req: NextRequest) {
     );
   }
 
-  const upstreamUrl = buildUpstreamUrl(req, "/items/vehicles");
+  const { id } = await ctx.params;
+  const upstreamUrl = buildUpstreamUrl(req, `/items/vehicles/${id}`);
+
   const method = req.method.toUpperCase();
   const hasBody = !["GET", "HEAD"].includes(method);
   const body = hasBody ? await req.arrayBuffer() : undefined;
@@ -82,10 +87,14 @@ export async function OPTIONS(req: NextRequest) {
   return withCors(new NextResponse(null, { status: 204 }), req);
 }
 
-export async function GET(req: NextRequest) {
-  return proxy(req);
+export async function GET(req: NextRequest, ctx: any) {
+  return proxy(req, ctx);
 }
 
-export async function POST(req: NextRequest) {
-  return proxy(req);
+export async function PATCH(req: NextRequest, ctx: any) {
+  return proxy(req, ctx);
+}
+
+export async function DELETE(req: NextRequest, ctx: any) {
+  return proxy(req, ctx);
 }
