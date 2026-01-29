@@ -16,6 +16,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 import DetailsTab from "./history/DetailsTab";
 import TripsTab from "./history/TripsTab";
@@ -23,6 +24,31 @@ import PartsTab from "./history/PartsTab";
 import DriversTab from "./history/DriversTab";
 import CustodianTab from "./history/CustodianTab";
 import JobOrdersTab from "./history/JobOrdersTab";
+
+function Trigger({
+  value,
+  icon: Icon,
+  children,
+}: {
+  value: string;
+  icon: React.ElementType;
+  children: React.ReactNode;
+}) {
+  return (
+    <TabsTrigger
+      value={value}
+      className={cn(
+        "relative gap-2 rounded-none bg-transparent px-3 py-2 text-muted-foreground shadow-none",
+        "data-[state=active]:text-foreground",
+        "data-[state=active]:after:absolute data-[state=active]:after:left-0 data-[state=active]:after:right-0",
+        "data-[state=active]:after:-bottom-[13px] data-[state=active]:after:h-[2px] data-[state=active]:after:bg-primary"
+      )}
+    >
+      <Icon className="h-4 w-4" />
+      {children}
+    </TabsTrigger>
+  );
+}
 
 export function VehicleHistoryDialog({
   open,
@@ -57,47 +83,34 @@ export function VehicleHistoryDialog({
 
         <div className="border-t">
           <Tabs defaultValue="details" className="w-full">
-            {/* Tabs */}
+            {/* Tabs row */}
             <div className="border-b px-6 py-3">
-              <div className="flex justify-center">
-                <TabsList className="flex h-auto flex-wrap justify-center gap-2 bg-transparent p-0">
-                  <TabsTrigger value="details" className="gap-2">
-                    <Info className="h-4 w-4" />
-                    Details
-                  </TabsTrigger>
-
-                  <TabsTrigger value="trips" className="gap-2">
-                    <CalendarDays className="h-4 w-4" />
-                    Trips
-                  </TabsTrigger>
-
-                  <TabsTrigger value="parts" className="gap-2">
-                    <Package className="h-4 w-4" />
-                    Parts
-                  </TabsTrigger>
-
-                  <TabsTrigger value="drivers" className="gap-2">
-                    <Users className="h-4 w-4" />
-                    Drivers
-                  </TabsTrigger>
-
-                  <TabsTrigger value="custodian" className="gap-2">
-                    <UserCircle className="h-4 w-4" />
-                    Custodian
-                  </TabsTrigger>
-
-                  <TabsTrigger value="job_orders" className="gap-2">
-                    <Wrench className="h-4 w-4" />
-                    Job Orders
-                  </TabsTrigger>
-                </TabsList>
-              </div>
+              <TabsList className="h-auto w-full justify-start gap-2 bg-transparent p-0">
+                <Trigger value="details" icon={Info}>
+                  Details
+                </Trigger>
+                <Trigger value="trips" icon={CalendarDays}>
+                  Trips
+                </Trigger>
+                <Trigger value="parts" icon={Package}>
+                  Parts
+                </Trigger>
+                <Trigger value="drivers" icon={Users}>
+                  Drivers
+                </Trigger>
+                <Trigger value="custodian" icon={UserCircle}>
+                  Custodian
+                </Trigger>
+                <Trigger value="job_orders" icon={Wrench}>
+                  Job Orders
+                </Trigger>
+              </TabsList>
             </div>
 
             {/* Content */}
             <div className="px-6 py-5">
-              <ScrollArea className="h-[calc(80vh-180px)] pr-3">
-                <div className="mx-auto max-w-4xl">
+              <ScrollArea className="h-[calc(80vh-200px)] pr-3">
+                <div className="w-full">
                   <TabsContent value="details" className="mt-0">
                     <DetailsTab vehicle={vehicle} />
                   </TabsContent>

@@ -2,22 +2,12 @@
 
 import * as React from "react";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 
 import type { VehicleRow, DispatchPlanApiRow, UserApiRow } from "../../types";
 import { listDispatchPlansByVehicle, listUsers } from "../../providers/fetchProviders";
 
-import { Skeleton } from "@/components/ui/skeleton";
-
-type DriverHistoryRow = {
-  driverId: number;
-  driverName: string;
-  startMs: number;
-  endMs: number;
-  totalTrips: number;
-  isCurrent: boolean;
-};
-
-const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+import { Card, CardContent } from "@/components/ui/card";
 
 function toMs(v?: string | null) {
   if (!v) return 0;
@@ -25,7 +15,7 @@ function toMs(v?: string | null) {
   return Number.isFinite(ms) ? ms : 0;
 }
 
-function pickDate(p: DispatchPlanApiRow) {
+function pickPlanDate(p: DispatchPlanApiRow) {
   return (
     p.time_of_dispatch ||
     p.estimated_time_of_dispatch ||
@@ -36,21 +26,26 @@ function pickDate(p: DispatchPlanApiRow) {
   );
 }
 
-function fmtMonthYear(ms: number) {
+function monthYear(ms: number) {
   if (!ms) return "N/A";
-  const d = new Date(ms);
-  const m = MONTHS[d.getMonth()] ?? "N/A";
-  return `${m} ${d.getFullYear()}`;
+  try {
+    return new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      year: "numeric",
+    }).format(new Date(ms));
+  } catch {
+    return "N/A";
+  }
 }
 
 function buildUserMap(users: UserApiRow[]) {
   const map = new Map<number, string>();
   for (const u of users || []) {
-    const id = Number(u?.user_id ?? 0);
+    const id = Number((u as any)?.user_id ?? 0);
     if (!id) continue;
 
-    const first = String(u?.user_fname ?? "").trim();
-    const last = String(u?.user_lname ?? "").trim();
+    const first = String((u as any)?.user_fname ?? "").trim();
+    const last = String((u as any)?.user_lname ?? "").trim();
     const name = `${first} ${last}`.trim();
 
     map.set(id, name.length ? name : `User #${id}`);
@@ -58,163 +53,159 @@ function buildUserMap(users: UserApiRow[]) {
   return map;
 }
 
-function DriversSkeleton() {
-  return (
-    <div className="grid gap-4">
-      {Array.from({ length: 2 }).map((_, i) => (
-        <div key={i} className="rounded-lg border bg-background p-4">
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-            <div className="space-y-2">
-              <Skeleton className="h-3 w-[60px]" />
-              <Skeleton className="h-5 w-[160px]" />
-            </div>
-            <div className="space-y-2">
-              <Skeleton className="h-3 w-[60px]" />
-              <Skeleton className="h-5 w-[180px]" />
-            </div>
-            <div className="space-y-2 md:text-right">
-              <Skeleton className="ml-auto h-3 w-[70px]" />
-              <Skeleton className="ml-auto h-5 w-[60px]" />
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function Field({
-  label,
-  value,
-  alignRight,
-}: {
-  label: string;
-  value: React.ReactNode;
-  alignRight?: boolean;
-}) {
-  return (
-    <div className={["grid gap-1", alignRight ? "md:text-right" : ""].join(" ")}>
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="text-sm font-medium">{value}</div>
-    </div>
-  );
-}
+type DriverSummary = {
+  driverId: number;
+  driverName: string;
+  startMs: number;
+  endMs: number;
+  totalTrips: number;
+};
 
 export default function DriversTab({ vehicle }: { vehicle: VehicleRow }) {
-  const [loading, setLoading] = React.useState(true);
-  const [rows, setRows] = React.useState<DriverHistoryRow[]>([]);
-  const [error, setError] = React.useState<string | null>(null);
+  const vehicleId = Number(vehicle?.id ?? 0);
+
+  const [loading, setLoading] = React.useState(false);
+  const [rows, setRows] = React.useState<DriverSummary[]>([]);
 
   const load = React.useCallback(async () => {
-    setLoading(true);
-    setError(null);
+    if (!vehicleId) return;
 
+    setLoading(true);
     try {
       const [plans, users] = await Promise.all([
-        listDispatchPlansByVehicle(vehicle.id),
+        listDispatchPlansByVehicle(vehicleId),
         listUsers(),
       ]);
 
-      const userMap = buildUserMap(users);
+      const userMap = buildUserMap(users || []);
 
-      const usable = (plans || [])
-        .filter((p) => p?.driver_id != null)
-        .map((p) => {
-          const driverId = Number(p.driver_id);
-          const ms = toMs(pickDate(p) || undefined) || Number(p.id || 0);
-          return { driverId, ms };
-        })
-        .filter((x) => Number.isFinite(x.driverId) && x.driverId > 0);
+      // Identify latest plan overall (to mark "Present" period)
+      let latestOverallMs = 0;
+      let latestOverallDriverId = 0;
 
-      if (!usable.length) {
-        setRows([]);
-        return;
-      }
-
-      // Latest trip date determines "Present"
-      const globalMax = usable.reduce((acc, x) => Math.max(acc, x.ms), 0);
-
-      const grouped = new Map<number, { min: number; max: number; count: number }>();
-      for (const x of usable) {
-        const g = grouped.get(x.driverId);
-        if (!g) {
-          grouped.set(x.driverId, { min: x.ms, max: x.ms, count: 1 });
-        } else {
-          g.min = Math.min(g.min, x.ms);
-          g.max = Math.max(g.max, x.ms);
-          g.count += 1;
+      for (const p of plans || []) {
+        const driverId = Number((p as any)?.driver_id ?? 0);
+        const ms = toMs(pickPlanDate(p) || undefined);
+        if (driverId && ms >= latestOverallMs) {
+          latestOverallMs = ms;
+          latestOverallDriverId = driverId;
         }
       }
 
-      const out: DriverHistoryRow[] = [];
-      for (const [driverId, g] of grouped.entries()) {
-        out.push({
-          driverId,
-          driverName: userMap.get(driverId) ?? `User #${driverId}`,
-          startMs: g.min,
-          endMs: g.max,
-          totalTrips: g.count,
-          isCurrent: g.max === globalMax,
-        });
+      // Group by driver_id
+      const agg = new Map<number, { start: number; end: number; count: number }>();
+
+      for (const p of plans || []) {
+        const driverId = Number((p as any)?.driver_id ?? 0);
+        if (!driverId) continue;
+
+        const ms = toMs(pickPlanDate(p) || undefined);
+        if (!ms) continue;
+
+        const cur = agg.get(driverId);
+        if (!cur) {
+          agg.set(driverId, { start: ms, end: ms, count: 1 });
+        } else {
+          agg.set(driverId, {
+            start: Math.min(cur.start, ms),
+            end: Math.max(cur.end, ms),
+            count: cur.count + 1,
+          });
+        }
       }
 
-      // Current first, then most recent
-      out.sort((a, b) => {
-        if (a.isCurrent !== b.isCurrent) return a.isCurrent ? -1 : 1;
-        return b.endMs - a.endMs;
-      });
+      const summarized: DriverSummary[] = Array.from(agg.entries()).map(
+        ([driverId, v]) => ({
+          driverId,
+          driverName: userMap.get(driverId) || `User #${driverId}`,
+          startMs: v.start,
+          endMs: v.end,
+          totalTrips: v.count,
+        })
+      );
 
-      setRows(out);
+      summarized.sort((a, b) => b.endMs - a.endMs);
+
+      // If there are no plans, keep empty
+      setRows(summarized);
     } catch (e: any) {
-      const msg = String(e?.message || e);
-      setError(msg);
-      toast.error("Failed to load driver history", { description: msg });
+      toast.error("Failed to load drivers", {
+        description: String(e?.message || e),
+      });
+      setRows([]);
     } finally {
       setLoading(false);
     }
-  }, [vehicle.id]);
+  }, [vehicleId]);
 
   React.useEffect(() => {
     load();
   }, [load]);
 
-  if (loading) return <DriversSkeleton />;
-
-  if (error) {
+  if (!vehicleId) {
     return (
-      <div className="rounded-lg border bg-background p-6">
-        <div className="text-sm font-semibold">Drivers</div>
-        <div className="mt-2 text-sm text-destructive">{error}</div>
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-sm text-muted-foreground">No vehicle selected.</div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading drivers...
       </div>
     );
   }
 
-  if (!rows.length) {
+  if (rows.length === 0) {
     return (
-      <div className="rounded-lg border bg-background p-6">
-        <div className="text-sm font-semibold">Drivers</div>
-        <div className="mt-2 text-sm text-muted-foreground">
-          No driver history yet. This will populate once driver history tables are available.
-        </div>
-      </div>
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-sm font-semibold">Drivers</div>
+          <div className="mt-2 text-sm text-muted-foreground">
+            No driver history yet. This will populate once dispatch plans exist.
+          </div>
+        </CardContent>
+      </Card>
     );
   }
+
+  // Determine “Present” driver = most recent endMs after sorting
+  const latestDriverId = rows[0]?.driverId ?? 0;
 
   return (
     <div className="grid gap-4">
       {rows.map((r) => {
-        const start = fmtMonthYear(r.startMs);
-        const end = r.isCurrent ? "Present" : fmtMonthYear(r.endMs);
-        const period = start !== "N/A" ? `${start} - ${end}` : "N/A";
+        const period =
+          r.driverId === latestDriverId
+            ? `${monthYear(r.startMs)} - Present`
+            : `${monthYear(r.startMs)} - ${monthYear(r.endMs)}`;
 
         return (
-          <div key={r.driverId} className="rounded-lg border bg-background p-4">
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-              <Field label="Driver" value={r.driverName} />
-              <Field label="Period" value={period} />
-              <Field label="Total Trips" value={r.totalTrips} alignRight />
-            </div>
-          </div>
+          <Card key={String(r.driverId)}>
+            <CardContent className="p-5">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="grid gap-1">
+                  <div className="text-xs text-muted-foreground">Driver</div>
+                  <div className="text-sm font-medium">{r.driverName}</div>
+                </div>
+
+                <div className="grid gap-1">
+                  <div className="text-xs text-muted-foreground">Period</div>
+                  <div className="text-sm font-medium">{period}</div>
+                </div>
+
+                <div className="grid gap-1 md:text-right">
+                  <div className="text-xs text-muted-foreground">Total Trips</div>
+                  <div className="text-sm font-medium">{r.totalTrips}</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         );
       })}
     </div>
