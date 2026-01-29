@@ -1,8 +1,14 @@
-//src/modules/vehicle-management/vehicle-list/components/VehicleHistoryDialog.tsx
 "use client";
 
 import * as React from "react";
-import { CalendarDays, Info, Package, Users, UserCircle, Wrench } from "lucide-react";
+import {
+  CalendarDays,
+  Info,
+  Package,
+  Users,
+  UserCircle,
+  Wrench,
+} from "lucide-react";
 
 import type { VehicleRow } from "../types";
 
@@ -51,7 +57,7 @@ export function VehicleHistoryDialog({
 
         <div className="border-t">
           <Tabs defaultValue="details" className="w-full">
-            {/* Tabs (centered, no scrollbar) */}
+            {/* Tabs */}
             <div className="border-b px-6 py-3">
               <div className="flex justify-center">
                 <TabsList className="flex h-auto flex-wrap justify-center gap-2 bg-transparent p-0">
@@ -59,22 +65,27 @@ export function VehicleHistoryDialog({
                     <Info className="h-4 w-4" />
                     Details
                   </TabsTrigger>
+
                   <TabsTrigger value="trips" className="gap-2">
                     <CalendarDays className="h-4 w-4" />
                     Trips
                   </TabsTrigger>
+
                   <TabsTrigger value="parts" className="gap-2">
                     <Package className="h-4 w-4" />
                     Parts
                   </TabsTrigger>
+
                   <TabsTrigger value="drivers" className="gap-2">
                     <Users className="h-4 w-4" />
                     Drivers
                   </TabsTrigger>
+
                   <TabsTrigger value="custodian" className="gap-2">
                     <UserCircle className="h-4 w-4" />
                     Custodian
                   </TabsTrigger>
+
                   <TabsTrigger value="job_orders" className="gap-2">
                     <Wrench className="h-4 w-4" />
                     Job Orders
@@ -83,10 +94,7 @@ export function VehicleHistoryDialog({
               </div>
             </div>
 
-            {/* Content area:
-                - keep scroll when needed
-                - constrain inner content width so cards don't stretch
-            */}
+            {/* Content */}
             <div className="px-6 py-5">
               <ScrollArea className="h-[calc(80vh-180px)] pr-3">
                 <div className="mx-auto max-w-4xl">
@@ -98,13 +106,12 @@ export function VehicleHistoryDialog({
                     <TripsTab vehicle={vehicle} />
                   </TabsContent>
 
-
                   <TabsContent value="parts" className="mt-0">
                     <PartsTab />
                   </TabsContent>
 
                   <TabsContent value="drivers" className="mt-0">
-                    <DriversTab />
+                    <DriversTab vehicle={vehicle} />
                   </TabsContent>
 
                   <TabsContent value="custodian" className="mt-0">
@@ -122,7 +129,11 @@ export function VehicleHistoryDialog({
 
         {/* Footer */}
         <div className="border-t bg-muted/30 px-6 py-4">
-          <Button variant="outline" className="w-full" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => onOpenChange(false)}
+          >
             Close
           </Button>
         </div>

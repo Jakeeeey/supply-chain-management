@@ -7,7 +7,7 @@ const DIRECTUS_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 const DIRECTUS_STATIC_TOKEN = process.env.DIRECTUS_STATIC_TOKEN;
 
 function authHeaders(req: NextRequest) {
-  // prefer env static token; fallback to cookie token if you use vos_access_token
+  // Prefer static token (service/admin). Fallback to cookie token if present.
   const cookieToken = req.cookies.get("vos_access_token")?.value;
   const token = DIRECTUS_STATIC_TOKEN || cookieToken;
 
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
     const limit = url.searchParams.get("limit") ?? "-1";
     const vehicleId = url.searchParams.get("vehicle_id");
 
-    // FULL fields (what we want if permissions allow)
+    // FULL fields (best-case if permissions allow)
     const fullFields = [
       "id",
       "doc_no",
@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
       "remarks",
     ].join(",");
 
-    // SAFE fields (guaranteed useful even if route fields are forbidden)
+    // SAFE fields (fallback when forbidden)
     const safeFields = [
       "id",
       "doc_no",
@@ -88,14 +88,14 @@ export async function GET(req: NextRequest) {
       return upstreamUrl.toString();
     };
 
-    // 1st attempt: full fields
+    // 1) try full
     const r1 = await fetch(makeUrl(fullFields), {
       cache: "no-store",
       headers: authHeaders(req),
     });
     const j1 = await readUpstream(r1);
 
-    // If forbidden because of fields, retry with safe fields (so Trips still works)
+    // 2) retry safe if forbidden fields
     if (!r1.ok && isForbiddenFieldsError(j1.body)) {
       const r2 = await fetch(makeUrl(safeFields), {
         cache: "no-store",

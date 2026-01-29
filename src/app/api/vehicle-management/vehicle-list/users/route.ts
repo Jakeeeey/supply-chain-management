@@ -4,6 +4,13 @@ import type { NextRequest } from "next/server";
 export const runtime = "nodejs";
 
 const DIRECTUS_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+const DIRECTUS_STATIC_TOKEN = process.env.DIRECTUS_STATIC_TOKEN;
+
+function authHeaders() {
+  const h: Record<string, string> = { "Content-Type": "application/json" };
+  if (DIRECTUS_STATIC_TOKEN) h["Authorization"] = `Bearer ${DIRECTUS_STATIC_TOKEN}`;
+  return h;
+}
 
 async function readUpstream(res: Response) {
   const ct = res.headers.get("content-type") || "";
@@ -18,16 +25,17 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const limit = url.searchParams.get("limit") ?? "-1";
 
-    // lightweight fields only
-    const fields = "user_id,user_fname,user_lname,user_email,role,user_image";
+    // minimal fields needed for driver display
+    const fields = ["user_id", "user_fname", "user_lname", "user_email", "role", "user_image"].join(",");
 
-    const upstream = await fetch(
-      `${DIRECTUS_URL}/items/user?limit=${encodeURIComponent(limit)}&fields=${encodeURIComponent(fields)}`,
-      {
-        cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-      }
-    );
+    const upstreamUrl = new URL(`${DIRECTUS_URL}/items/user`);
+    upstreamUrl.searchParams.set("limit", limit);
+    upstreamUrl.searchParams.set("fields", fields);
+
+    const upstream = await fetch(upstreamUrl.toString(), {
+      cache: "no-store",
+      headers: authHeaders(),
+    });
 
     const body = await readUpstream(upstream);
     return NextResponse.json(body, { status: upstream.status });

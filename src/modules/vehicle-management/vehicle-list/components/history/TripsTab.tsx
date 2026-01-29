@@ -23,7 +23,6 @@ function pickDate(p: DispatchPlanApiRow) {
 function fmtDateISO(v?: string | null) {
   const s = String(v ?? "").trim();
   if (!s) return "N/A";
-  // ISO -> YYYY-MM-DD
   return s.includes("T") ? s.slice(0, 10) : s;
 }
 
@@ -34,13 +33,8 @@ function toMs(v?: string | null) {
 }
 
 function fmtDuration(p: DispatchPlanApiRow) {
-  const start =
-    toMs(p.time_of_dispatch) ||
-    toMs(p.estimated_time_of_dispatch);
-
-  const end =
-    toMs(p.time_of_arrival) ||
-    toMs(p.estimated_time_of_arrival);
+  const start = toMs(p.time_of_dispatch) || toMs(p.estimated_time_of_dispatch);
+  const end = toMs(p.time_of_arrival) || toMs(p.estimated_time_of_arrival);
 
   if (!start || !end || end <= start) return "N/A";
 
@@ -56,7 +50,6 @@ function fmtDuration(p: DispatchPlanApiRow) {
 function fmtDistanceKm(v?: number | null) {
   if (v == null || !Number.isFinite(Number(v))) return "N/A";
   const n = Number(v);
-  // keep as integer if it is whole
   if (Math.abs(n - Math.round(n)) < 1e-9) return `${Math.round(n)} km`;
   return `${n.toFixed(1)} km`;
 }
@@ -77,9 +70,7 @@ function buildRoute(p: DispatchPlanApiRow) {
   if (explicit) return explicit;
 
   const origin =
-    String(p.origin ?? "").trim() ||
-    pointLabel(p.starting_point) ||
-    null;
+    String(p.origin ?? "").trim() || pointLabel(p.starting_point) || null;
 
   const dest =
     String(p.destination ?? "").trim() ||
@@ -90,7 +81,6 @@ function buildRoute(p: DispatchPlanApiRow) {
   if (origin && dest) return `${origin} to ${dest}`;
   if (origin) return String(origin);
   if (dest) return String(dest);
-
   return "N/A";
 }
 
@@ -143,7 +133,6 @@ export default function TripsTab({ vehicle }: { vehicle: VehicleRow }) {
     try {
       const data = await listDispatchPlansByVehicle(vehicle.id);
 
-      // ensure newest first (just in case)
       const sorted = [...(data || [])].sort((a, b) => {
         const am = toMs(pickDate(a) || undefined) || Number(a.id || 0);
         const bm = toMs(pickDate(b) || undefined) || Number(b.id || 0);

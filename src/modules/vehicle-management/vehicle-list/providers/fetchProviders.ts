@@ -1,8 +1,8 @@
 import type {
   VehicleTypeApiRow,
   VehiclesApiRow,
-  UserApiRow,
   DispatchPlanApiRow,
+  UserApiRow,
 } from "../types";
 
 type DirectusListResponse<T> = { data: T[] };
@@ -33,7 +33,7 @@ export async function listVehicleTypes(): Promise<VehicleTypeApiRow[]> {
 }
 
 export async function listVehicles(): Promise<VehiclesApiRow[]> {
-  const res = await fetch("/api/vehicle-management/vehicle-list?limit=-1");
+  const res = await fetch("/api/vehicle-management/vehicle-list");
   if (!res.ok) throw new Error(await readError(res));
   const json = (await res.json()) as DirectusListResponse<VehiclesApiRow>;
   return json?.data ?? [];
@@ -46,14 +46,24 @@ export async function listUsers(): Promise<UserApiRow[]> {
   return json?.data ?? [];
 }
 
+/**
+ * ✅ NEW: list ALL dispatch plans (used to compute current driver per vehicle on the list table)
+ */
 export async function listDispatchPlans(): Promise<DispatchPlanApiRow[]> {
-  const res = await fetch("/api/vehicle-management/vehicle-list/dispatch-plans?limit=-1");
+  const res = await fetch(
+    "/api/vehicle-management/vehicle-list/dispatch-plans?limit=-1"
+  );
   if (!res.ok) throw new Error(await readError(res));
   const json = (await res.json()) as DirectusListResponse<DispatchPlanApiRow>;
   return json?.data ?? [];
 }
 
-export async function listDispatchPlansByVehicle(vehicleId: number): Promise<DispatchPlanApiRow[]> {
+/**
+ * Existing: list dispatch plans per vehicle (used by Trips/Drivers tabs)
+ */
+export async function listDispatchPlansByVehicle(
+  vehicleId: number
+): Promise<DispatchPlanApiRow[]> {
   const res = await fetch(
     `/api/vehicle-management/vehicle-list/dispatch-plans?limit=-1&vehicle_id=${encodeURIComponent(
       String(vehicleId)
@@ -63,7 +73,6 @@ export async function listDispatchPlansByVehicle(vehicleId: number): Promise<Dis
   const json = (await res.json()) as DirectusListResponse<DispatchPlanApiRow>;
   return json?.data ?? [];
 }
-
 
 export async function createVehicle(payload: Record<string, any>) {
   const first = await fetch("/api/vehicle-management/vehicle-list", {
