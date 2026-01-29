@@ -1,3 +1,4 @@
+//src/modules/vehicle-management/vehicle-list/components/VehiclesTable.tsx
 "use client";
 
 import * as React from "react";

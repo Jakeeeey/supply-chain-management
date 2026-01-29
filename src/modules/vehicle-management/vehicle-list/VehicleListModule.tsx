@@ -1,6 +1,6 @@
+//src/modules/vehicle-management/vehicle-list/VehicleListModule.tsx
 "use client";
 
-// src/modules/vehicle-management/vehicle-list/VehicleListModule.tsx
 import * as React from "react";
 import type { VehicleRow } from "./types";
 

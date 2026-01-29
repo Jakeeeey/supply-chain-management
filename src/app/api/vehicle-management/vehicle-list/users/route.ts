@@ -18,10 +18,16 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const limit = url.searchParams.get("limit") ?? "-1";
 
-    const upstream = await fetch(`${DIRECTUS_URL}/items/vehicle_type?limit=${encodeURIComponent(limit)}`, {
-      cache: "no-store",
-      headers: { "Content-Type": "application/json" },
-    });
+    // lightweight fields only
+    const fields = "user_id,user_fname,user_lname,user_email,role,user_image";
+
+    const upstream = await fetch(
+      `${DIRECTUS_URL}/items/user?limit=${encodeURIComponent(limit)}&fields=${encodeURIComponent(fields)}`,
+      {
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+      }
+    );
 
     const body = await readUpstream(upstream);
     return NextResponse.json(body, { status: upstream.status });

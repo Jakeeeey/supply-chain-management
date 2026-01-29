@@ -1,3 +1,4 @@
+//src/modules/vehicle-management/vehicle-list/components/VehicleHistoryDialog.tsx
 "use client";
 
 import * as React from "react";
@@ -94,8 +95,9 @@ export function VehicleHistoryDialog({
                   </TabsContent>
 
                   <TabsContent value="trips" className="mt-0">
-                    <TripsTab />
+                    <TripsTab vehicle={vehicle} />
                   </TabsContent>
+
 
                   <TabsContent value="parts" className="mt-0">
                     <PartsTab />

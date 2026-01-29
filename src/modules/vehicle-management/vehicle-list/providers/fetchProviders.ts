@@ -1,5 +1,9 @@
-// src/modules/vehicle-management/vehicle-list/providers/fetchProviders.ts
-import type { VehicleTypeApiRow, VehiclesApiRow } from "../types";
+import type {
+  VehicleTypeApiRow,
+  VehiclesApiRow,
+  UserApiRow,
+  DispatchPlanApiRow,
+} from "../types";
 
 type DirectusListResponse<T> = { data: T[] };
 type DirectusItemResponse<T> = { data: T };
@@ -29,11 +33,37 @@ export async function listVehicleTypes(): Promise<VehicleTypeApiRow[]> {
 }
 
 export async function listVehicles(): Promise<VehiclesApiRow[]> {
-  const res = await fetch("/api/vehicle-management/vehicle-list");
+  const res = await fetch("/api/vehicle-management/vehicle-list?limit=-1");
   if (!res.ok) throw new Error(await readError(res));
   const json = (await res.json()) as DirectusListResponse<VehiclesApiRow>;
   return json?.data ?? [];
 }
+
+export async function listUsers(): Promise<UserApiRow[]> {
+  const res = await fetch("/api/vehicle-management/vehicle-list/users?limit=-1");
+  if (!res.ok) throw new Error(await readError(res));
+  const json = (await res.json()) as DirectusListResponse<UserApiRow>;
+  return json?.data ?? [];
+}
+
+export async function listDispatchPlans(): Promise<DispatchPlanApiRow[]> {
+  const res = await fetch("/api/vehicle-management/vehicle-list/dispatch-plans?limit=-1");
+  if (!res.ok) throw new Error(await readError(res));
+  const json = (await res.json()) as DirectusListResponse<DispatchPlanApiRow>;
+  return json?.data ?? [];
+}
+
+export async function listDispatchPlansByVehicle(vehicleId: number): Promise<DispatchPlanApiRow[]> {
+  const res = await fetch(
+    `/api/vehicle-management/vehicle-list/dispatch-plans?limit=-1&vehicle_id=${encodeURIComponent(
+      String(vehicleId)
+    )}`
+  );
+  if (!res.ok) throw new Error(await readError(res));
+  const json = (await res.json()) as DirectusListResponse<DispatchPlanApiRow>;
+  return json?.data ?? [];
+}
+
 
 export async function createVehicle(payload: Record<string, any>) {
   const first = await fetch("/api/vehicle-management/vehicle-list", {
