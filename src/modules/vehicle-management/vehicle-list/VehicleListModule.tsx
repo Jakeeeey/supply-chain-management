@@ -28,6 +28,7 @@ export default function VehicleListModule() {
     return opts;
   }, [typeMap]);
 
+  
   return (
     <div className="w-full p-4 sm:p-6">
       <VehicleListToolbar
