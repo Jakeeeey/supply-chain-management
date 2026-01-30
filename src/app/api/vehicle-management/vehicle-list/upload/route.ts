@@ -1,28 +1,22 @@
-//src/app/api/vehicle-management/vehicle-list/upload/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import fs from "fs/promises";
+import path from "path";
+import crypto from "crypto";
 
 export const runtime = "nodejs";
 
-const DIRECTUS_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
-const DIRECTUS_STATIC_TOKEN = process.env.DIRECTUS_STATIC_TOKEN;
+const MAX_BYTES = 5 * 1024 * 1024; // 5MB
+const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
-function authHeaders() {
-  const h = new Headers();
-  if (DIRECTUS_STATIC_TOKEN) h.set("Authorization", `Bearer ${DIRECTUS_STATIC_TOKEN}`);
-  return h;
-}
-
-async function readUpstream(res: Response) {
-  const ct = res.headers.get("content-type") || "";
-  const isJson = ct.includes("application/json");
-  const body = isJson ? await res.json().catch(() => ({})) : await res.text().catch(() => "");
-  return { ct, body };
+function safeExt(mime: string) {
+  if (mime === "image/jpeg") return "jpg";
+  if (mime === "image/png") return "png";
+  if (mime === "image/webp") return "webp";
+  return "bin";
 }
 
 export async function POST(req: NextRequest) {
   try {
-    if (!DIRECTUS_URL) throw new Error("NEXT_PUBLIC_API_BASE_URL is not configured");
-
     const incoming = await req.formData();
     const file = incoming.get("file");
 
@@ -30,20 +24,51 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "file is required" }, { status: 400 });
     }
 
-    // rebuild formdata for upstream
-    const fd = new FormData();
-    fd.set("file", file, file.name);
+    // ✅ size guard (5MB)
+    if (typeof file.size === "number" && file.size > MAX_BYTES) {
+      return NextResponse.json(
+        { error: "File too large. Maximum size is 5MB." },
+        { status: 413 }
+      );
+    }
 
-    const upstream = await fetch(`${DIRECTUS_URL}/files`, {
-      method: "POST",
-      cache: "no-store",
-      headers: authHeaders(), // don't set content-type for multipart
-      body: fd,
-    });
+    // ✅ type guard
+    const mime = String(file.type || "").toLowerCase();
+    if (!ALLOWED_TYPES.has(mime)) {
+      return NextResponse.json(
+        { error: "Invalid file type. Allowed: JPG, PNG, WEBP." },
+        { status: 400 }
+      );
+    }
 
-    const { body } = await readUpstream(upstream);
-    return NextResponse.json(body, { status: upstream.status });
+    const bytes = Buffer.from(await file.arrayBuffer());
+
+    // Extra safety (in case file.size is missing)
+    if (bytes.length > MAX_BYTES) {
+      return NextResponse.json(
+        { error: "File too large. Maximum size is 5MB." },
+        { status: 413 }
+      );
+    }
+
+    // ✅ Save under /public/uploads/vehicles
+    const uploadsDir = path.join(process.cwd(), "public", "uploads", "vehicles");
+    await fs.mkdir(uploadsDir, { recursive: true });
+
+    const ext = safeExt(mime);
+    const name = `${Date.now()}-${crypto.randomBytes(8).toString("hex")}.${ext}`;
+
+    const diskPath = path.join(uploadsDir, name);
+    await fs.writeFile(diskPath, bytes);
+
+    // ✅ Store this path in DB (vehicles.image)
+    const publicPath = `/uploads/vehicles/${name}`;
+
+    return NextResponse.json({ data: { path: publicPath } }, { status: 200 });
   } catch (e: any) {
-    return NextResponse.json({ error: String(e?.message || e) }, { status: 500 });
+    return NextResponse.json(
+      { error: String(e?.message || e) },
+      { status: 500 }
+    );
   }
 }

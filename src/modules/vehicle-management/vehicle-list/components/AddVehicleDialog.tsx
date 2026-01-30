@@ -1,4 +1,3 @@
-// src/modules/vehicle-management/vehicle-list/components/AddVehicleDialog.tsx
 "use client";
 
 import * as React from "react";
@@ -107,11 +106,20 @@ export function AddVehicleDialog({
 
   function acceptFile(f?: File | null) {
     if (!f) return;
-    // optional: lightweight validation
+
+    // lightweight validation (type)
     if (!f.type.startsWith("image/")) {
       toast.error("Invalid file", { description: "Please upload an image file." });
       return;
     }
+
+    // optional client-side size guard too (server also enforces 5MB)
+    const max = 5 * 1024 * 1024;
+    if (typeof f.size === "number" && f.size > max) {
+      toast.error("File too large", { description: "Maximum image size is 5MB." });
+      return;
+    }
+
     set("imageFile", f);
   }
 
@@ -137,11 +145,12 @@ export function AddVehicleDialog({
       return;
     }
 
-    let imageId: string | null = null;
+    let imagePath: string | null = null;
 
     try {
       if (form.imageFile) {
-        imageId = await uploadVehicleImage(form.imageFile);
+        // ✅ returns /uploads/vehicles/xxx.jpg
+        imagePath = await uploadVehicleImage(form.imageFile);
       }
     } catch (e: any) {
       toast.error("Image upload failed", { description: String(e?.message || e) });
@@ -162,7 +171,9 @@ export function AddVehicleDialog({
     if (mileageInt !== null) payload.current_mileage = mileageInt;
     if (form.fuelTypeId !== null) payload.fuel_type = form.fuelTypeId;
     if (form.engineTypeId !== null) payload.engine_type = form.engineTypeId;
-    if (imageId) payload.image = imageId; // ✅ vehicles.image
+
+    // ✅ store the PATH in vehicles.image
+    if (imagePath) payload.image = imagePath;
 
     try {
       await onCreate(payload);
@@ -399,7 +410,7 @@ export function AddVehicleDialog({
                         Drag & drop an image here, or browse
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        PNG / JPG recommended.
+                        PNG / JPG recommended. (Max 5MB)
                       </div>
                     </div>
                   </div>
@@ -430,7 +441,10 @@ export function AddVehicleDialog({
                 {form.imageFile ? (
                   <div className="mt-4 grid gap-2">
                     <div className="text-xs text-muted-foreground">
-                      Selected: <span className="font-medium text-foreground">{form.imageFile.name}</span>
+                      Selected:{" "}
+                      <span className="font-medium text-foreground">
+                        {form.imageFile.name}
+                      </span>
                     </div>
 
                     {previewUrl ? (

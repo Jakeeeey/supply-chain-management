@@ -1,4 +1,3 @@
-// src/modules/vehicle-management/vehicle-list/providers/fetchProviders.ts
 import type {
   VehicleTypeApiRow,
   VehiclesApiRow,
@@ -81,6 +80,11 @@ export async function listDispatchPlansByVehicle(vehicleId: number): Promise<Dis
   return json?.data ?? [];
 }
 
+/**
+ * ✅ Upload to Next.js server filesystem under /public/uploads/vehicles
+ * Returns a PUBLIC PATH like: /uploads/vehicles/xxx.jpg
+ * (This is what we store in vehicles.image)
+ */
 export async function uploadVehicleImage(file: File): Promise<string> {
   const fd = new FormData();
   fd.append("file", file);
@@ -92,10 +96,10 @@ export async function uploadVehicleImage(file: File): Promise<string> {
 
   if (!res.ok) throw new Error(await readError(res));
 
-  const json = (await res.json()) as DirectusItemResponse<{ id: string }>;
-  const id = String((json as any)?.data?.id ?? "").trim();
-  if (!id) throw new Error("Upload succeeded but no file id was returned.");
-  return id;
+  const json = (await res.json()) as DirectusItemResponse<{ path: string }>;
+  const p = String((json as any)?.data?.path ?? "").trim();
+  if (!p) throw new Error("Upload succeeded but no path was returned.");
+  return p;
 }
 
 const VEHICLE_ALLOWED_KEYS = new Set([

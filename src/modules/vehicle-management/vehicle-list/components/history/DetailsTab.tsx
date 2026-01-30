@@ -1,4 +1,3 @@
-//src/modules/vehicle-management/vehicle-list/components/history/DetailsTab.tsx
 "use client";
 
 import * as React from "react";
@@ -69,6 +68,9 @@ function SectionSkeleton({ rows = 6 }: { rows?: number }) {
 export default function DetailsTab({ vehicle }: { vehicle: VehicleRow }) {
   const raw: any = vehicle?.raw ?? {};
 
+  // ✅ image path stored in vehicles.image (e.g. /uploads/vehicles/xxx.jpg)
+  const imagePath = String(raw?.image ?? "").trim() || null;
+
   const [loading, setLoading] = React.useState(true);
 
   // ✅ skeleton on tab open (no DB for some fields yet)
@@ -82,11 +84,17 @@ export default function DetailsTab({ vehicle }: { vehicle: VehicleRow }) {
     };
   }, [vehicle?.id]);
 
-  const model = cleanStr(raw?.model ?? raw?.vehicle_model ?? vehicle?.vehicleName, "N/A");
+  const model = cleanStr(
+    raw?.model ?? raw?.vehicle_model ?? vehicle?.vehicleName,
+    "N/A"
+  );
   const year = cleanStr(raw?.year, "N/A");
   const category = cleanStr(raw?.category, "N/A");
 
-  const mileage = cleanStr(raw?.mileage_km ?? raw?.mileage ?? raw?.odometer, "N/A");
+  const mileage = cleanStr(
+    raw?.mileage_km ?? raw?.mileage ?? raw?.odometer,
+    "N/A"
+  );
   const fuelType = cleanStr(raw?.fuel_type ?? raw?.fuelType, "N/A");
 
   const lastMaint = raw?.last_maintenance_date
@@ -107,25 +115,47 @@ export default function DetailsTab({ vehicle }: { vehicle: VehicleRow }) {
         </>
       ) : (
         <>
-          {/* Basic Information */}
+          {/* Basic Information (with photo on the right) */}
           <Card>
             <CardContent className="p-6">
-              <div className="text-sm font-semibold">Basic Information</div>
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-semibold">Basic Information</div>
+              </div>
 
-              <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2">
-                <Field label="Plate Number" value={vehicle.plateNo} />
-                <Field label="Vehicle Name/Model" value={model} />
-                <Field label="Year" value={year} />
-                <Field label="Type" value={vehicle.vehicleTypeName || "N/A"} />
-                <Field label="Category" value={category} />
-                <Field
-                  label="Status"
-                  value={
-                    <Badge className="px-3" variant={statusVariant(vehicle.status)}>
-                      {vehicle.status || "Inactive"}
-                    </Badge>
-                  }
-                />
+              <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-12">
+                {/* LEFT: fields */}
+                <div className={imagePath ? "md:col-span-8" : "md:col-span-12"}>
+                  <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                    <Field label="Plate Number" value={vehicle.plateNo} />
+                    <Field label="Vehicle Name/Model" value={model} />
+                    <Field label="Year" value={year} />
+                    <Field label="Type" value={vehicle.vehicleTypeName || "N/A"} />
+                    <Field label="Category" value={category} />
+                    <Field
+                      label="Status"
+                      value={
+                        <Badge className="px-3" variant={statusVariant(vehicle.status)}>
+                          {vehicle.status || "Inactive"}
+                        </Badge>
+                      }
+                    />
+                  </div>
+                </div>
+
+                {/* RIGHT: photo */}
+                {imagePath ? (
+                  <div className="md:col-span-4">
+                    <div className="text-xs text-muted-foreground">Vehicle Photo</div>
+                    <div className="mt-2 overflow-hidden rounded-lg border">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={imagePath}
+                        alt="Vehicle"
+                        className="h-44 w-full object-cover md:h-48"
+                      />
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </CardContent>
           </Card>
