@@ -1,4 +1,3 @@
-//src/modules/vehicle-management/vehicle-list/VehicleListModule.tsx
 "use client";
 
 import * as React from "react";
@@ -11,7 +10,7 @@ import { AddVehicleDialog } from "./components/AddVehicleDialog";
 import { VehicleHistoryDialog } from "./components/VehicleHistoryDialog";
 
 export default function VehicleListModule() {
-  const { loading, saving, query, setQuery, rows, addVehicle, typeMap } =
+  const { loading, saving, query, setQuery, rows, addVehicle, typeMap, fuelMap, engineMap } =
     useVehicles();
 
   const [openAdd, setOpenAdd] = React.useState(false);
@@ -28,7 +27,26 @@ export default function VehicleListModule() {
     return opts;
   }, [typeMap]);
 
-  
+  const fuelOptions = React.useMemo(() => {
+    const opts: Array<{ id: number; name: string }> = [];
+    for (const [id, name] of fuelMap.entries()) {
+      const label = String(name || "").trim();
+      opts.push({ id, name: label.length ? label : `Fuel #${id}` });
+    }
+    opts.sort((a, b) => a.name.localeCompare(b.name));
+    return opts;
+  }, [fuelMap]);
+
+  const engineOptions = React.useMemo(() => {
+    const opts: Array<{ id: number; name: string }> = [];
+    for (const [id, name] of engineMap.entries()) {
+      const label = String(name || "").trim();
+      opts.push({ id, name: label.length ? label : `Engine #${id}` });
+    }
+    opts.sort((a, b) => a.name.localeCompare(b.name));
+    return opts;
+  }, [engineMap]);
+
   return (
     <div className="w-full p-4 sm:p-6">
       <VehicleListToolbar
@@ -52,6 +70,8 @@ export default function VehicleListModule() {
         open={openAdd}
         onOpenChange={setOpenAdd}
         typeOptions={typeOptions}
+        fuelOptions={fuelOptions}
+        engineOptions={engineOptions}
         saving={saving}
         onCreate={addVehicle}
       />

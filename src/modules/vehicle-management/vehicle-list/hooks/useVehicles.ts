@@ -1,7 +1,14 @@
 "use client";
 
 import * as React from "react";
-import type { VehicleRow, VehiclesApiRow, DispatchPlanApiRow, UserApiRow } from "../types";
+import type {
+  VehicleRow,
+  VehiclesApiRow,
+  DispatchPlanApiRow,
+  UserApiRow,
+  FuelTypeApiRow,
+  EngineTypeApiRow,
+} from "../types";
 
 import {
   listVehicles,
@@ -9,6 +16,8 @@ import {
   listUsers,
   listDispatchPlans,
   createVehicle,
+  listFuelTypes,
+  listEngineTypes,
 } from "../providers/fetchProviders";
 
 function cleanStr(v: unknown, fallback = "N/A") {
@@ -20,6 +29,17 @@ function buildTypeMap(types: { id: number; type_name: string }[]) {
   const map = new Map<number, string>();
   for (const t of types || []) {
     if (typeof t?.id === "number") map.set(t.id, String(t.type_name || ""));
+  }
+  return map;
+}
+
+function buildNameMap(rows: Array<{ id: number; name?: string | null }>) {
+  const map = new Map<number, string>();
+  for (const r of rows || []) {
+    const id = Number((r as any)?.id ?? 0);
+    if (!id) continue;
+    const name = String((r as any)?.name ?? "").trim();
+    map.set(id, name.length ? name : `#${id}`);
   }
   return map;
 }
@@ -56,9 +76,6 @@ function pickPlanDate(p: DispatchPlanApiRow) {
   );
 }
 
-/**
- * Latest driver per vehicle based on latest dispatch-plan date
- */
 function buildLatestDriverByVehicle(plans: DispatchPlanApiRow[]) {
   const best = new Map<number, { ms: number; driverId: number }>();
 
@@ -80,11 +97,18 @@ function buildLatestDriverByVehicle(plans: DispatchPlanApiRow[]) {
   return out;
 }
 
+function toNum(v: unknown) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 function mapVehicle(
   v: VehiclesApiRow,
   typeMap: Map<number, string>,
   userMap: Map<number, string>,
-  latestDriverByVehicle: Map<number, number>
+  latestDriverByVehicle: Map<number, number>,
+  fuelMap: Map<number, string>,
+  engineMap: Map<number, string>
 ): VehicleRow {
   const id = Number(v?.vehicle_id ?? 0);
   const plateNo = cleanStr(v?.vehicle_plate, "N/A");
@@ -95,22 +119,45 @@ function mapVehicle(
       : Number(v.vehicle_type);
 
   const typeName =
-    typeId && typeMap.has(typeId)
-      ? cleanStr(typeMap.get(typeId), "N/A")
-      : null;
+    typeId && typeMap.has(typeId) ? cleanStr(typeMap.get(typeId), "N/A") : null;
 
-  // Prefer model/name if your vehicles table actually has it; fallback to type name
   const anyV: any = v as any;
-  const model =
-    String(anyV?.model ?? anyV?.vehicle_model ?? anyV?.vehicle_name ?? "").trim();
 
-  const vehicleName = model.length ? model : (typeName || "N/A");
+  // ✅ now prioritize vehicles.name
+  const name = String(
+    anyV?.name ??
+      anyV?.vehicle_name ??
+      anyV?.model ??
+      anyV?.vehicle_model ??
+      ""
+  ).trim();
+
+  const vehicleName = name.length ? name : (typeName || "N/A");
 
   const latestDriverId = latestDriverByVehicle.get(id) ?? null;
   const driverName =
     latestDriverId && userMap.has(latestDriverId)
       ? cleanStr(userMap.get(latestDriverId), "N/A")
       : "N/A";
+
+  const fuelTypeId =
+    anyV?.fuel_type === null || anyV?.fuel_type === undefined
+      ? null
+      : Number(anyV.fuel_type);
+
+  const engineTypeId =
+    anyV?.engine_type === null || anyV?.engine_type === undefined
+      ? null
+      : Number(anyV.engine_type);
+
+  const fuelTypeName =
+    fuelTypeId && fuelMap.has(fuelTypeId) ? cleanStr(fuelMap.get(fuelTypeId), "N/A") : null;
+
+  const engineTypeName =
+    engineTypeId && engineMap.has(engineTypeId) ? cleanStr(engineMap.get(engineTypeId), "N/A") : null;
+
+  const currentMileage =
+    toNum(anyV?.current_mileage ?? anyV?.mileage_km ?? anyV?.mileage ?? anyV?.odometer) ?? 0;
 
   return {
     id,
@@ -120,6 +167,14 @@ function mapVehicle(
     status: cleanStr(v?.status, "Inactive"),
     vehicleTypeId: typeId,
     vehicleTypeName: typeName,
+
+    fuelTypeId,
+    fuelTypeName,
+    engineTypeId,
+    engineTypeName,
+    currentMileage,
+    image: String(anyV?.image ?? "").trim() || null,
+
     raw: v,
   };
 }
@@ -144,26 +199,37 @@ export function useVehicles() {
 
   const [query, setQuery] = React.useState("");
   const [rows, setRows] = React.useState<VehicleRow[]>([]);
+
   const [typeMap, setTypeMap] = React.useState<Map<number, string>>(new Map());
+  const [fuelMap, setFuelMap] = React.useState<Map<number, string>>(new Map());
+  const [engineMap, setEngineMap] = React.useState<Map<number, string>>(new Map());
 
   const refresh = React.useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const [types, vehicles, users, plans] = await Promise.all([
+      const [types, fuels, engines, vehicles, users, plans] = await Promise.all([
         listVehicleTypes(),
+        listFuelTypes(),
+        listEngineTypes(),
         listVehicles(),
         listUsers(),
         listDispatchPlans(),
       ]);
 
       const tMap = buildTypeMap(types);
+      const fMap = buildNameMap((fuels || []).map((f: FuelTypeApiRow) => ({ id: f.id, name: f.name })));
+      const eMap = buildNameMap((engines || []).map((e: EngineTypeApiRow) => ({ id: e.id, name: e.name })));
+
       const uMap = buildUserMap(users);
       const latestDriverByVehicle = buildLatestDriverByVehicle(plans);
 
       setTypeMap(tMap);
-      setRows((vehicles || []).map((v) => mapVehicle(v, tMap, uMap, latestDriverByVehicle)));
+      setFuelMap(fMap);
+      setEngineMap(eMap);
+
+      setRows((vehicles || []).map((v) => mapVehicle(v, tMap, uMap, latestDriverByVehicle, fMap, eMap)));
     } catch (e: any) {
       setError(String(e?.message || e));
     } finally {
@@ -204,5 +270,7 @@ export function useVehicles() {
     refresh,
     addVehicle,
     typeMap,
+    fuelMap,
+    engineMap,
   };
 }

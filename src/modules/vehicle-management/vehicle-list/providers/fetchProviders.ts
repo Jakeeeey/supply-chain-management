@@ -1,8 +1,11 @@
+// src/modules/vehicle-management/vehicle-list/providers/fetchProviders.ts
 import type {
   VehicleTypeApiRow,
   VehiclesApiRow,
   DispatchPlanApiRow,
   UserApiRow,
+  FuelTypeApiRow,
+  EngineTypeApiRow,
 } from "../types";
 
 type DirectusListResponse<T> = { data: T[] };
@@ -32,6 +35,20 @@ export async function listVehicleTypes(): Promise<VehicleTypeApiRow[]> {
   return json?.data ?? [];
 }
 
+export async function listFuelTypes(): Promise<FuelTypeApiRow[]> {
+  const res = await fetch("/api/vehicle-management/vehicle-list/fuel-type?limit=-1");
+  if (!res.ok) throw new Error(await readError(res));
+  const json = (await res.json()) as DirectusListResponse<FuelTypeApiRow>;
+  return json?.data ?? [];
+}
+
+export async function listEngineTypes(): Promise<EngineTypeApiRow[]> {
+  const res = await fetch("/api/vehicle-management/vehicle-list/engine-type?limit=-1");
+  if (!res.ok) throw new Error(await readError(res));
+  const json = (await res.json()) as DirectusListResponse<EngineTypeApiRow>;
+  return json?.data ?? [];
+}
+
 export async function listVehicles(): Promise<VehiclesApiRow[]> {
   const res = await fetch("/api/vehicle-management/vehicle-list");
   if (!res.ok) throw new Error(await readError(res));
@@ -46,24 +63,14 @@ export async function listUsers(): Promise<UserApiRow[]> {
   return json?.data ?? [];
 }
 
-/**
- * ✅ NEW: list ALL dispatch plans (used to compute current driver per vehicle on the list table)
- */
 export async function listDispatchPlans(): Promise<DispatchPlanApiRow[]> {
-  const res = await fetch(
-    "/api/vehicle-management/vehicle-list/dispatch-plans?limit=-1"
-  );
+  const res = await fetch("/api/vehicle-management/vehicle-list/dispatch-plans?limit=-1");
   if (!res.ok) throw new Error(await readError(res));
   const json = (await res.json()) as DirectusListResponse<DispatchPlanApiRow>;
   return json?.data ?? [];
 }
 
-/**
- * Existing: list dispatch plans per vehicle (used by Trips/Drivers tabs)
- */
-export async function listDispatchPlansByVehicle(
-  vehicleId: number
-): Promise<DispatchPlanApiRow[]> {
+export async function listDispatchPlansByVehicle(vehicleId: number): Promise<DispatchPlanApiRow[]> {
   const res = await fetch(
     `/api/vehicle-management/vehicle-list/dispatch-plans?limit=-1&vehicle_id=${encodeURIComponent(
       String(vehicleId)
@@ -72,6 +79,48 @@ export async function listDispatchPlansByVehicle(
   if (!res.ok) throw new Error(await readError(res));
   const json = (await res.json()) as DirectusListResponse<DispatchPlanApiRow>;
   return json?.data ?? [];
+}
+
+export async function uploadVehicleImage(file: File): Promise<string> {
+  const fd = new FormData();
+  fd.append("file", file);
+
+  const res = await fetch("/api/vehicle-management/vehicle-list/upload", {
+    method: "POST",
+    body: fd,
+  });
+
+  if (!res.ok) throw new Error(await readError(res));
+
+  const json = (await res.json()) as DirectusItemResponse<{ id: string }>;
+  const id = String((json as any)?.data?.id ?? "").trim();
+  if (!id) throw new Error("Upload succeeded but no file id was returned.");
+  return id;
+}
+
+const VEHICLE_ALLOWED_KEYS = new Set([
+  "vehicle_plate",
+  "vehicle_type",
+  "status",
+  "name",
+  "purchased_date",
+  "current_mileage",
+  "fuel_type",
+  "engine_type",
+  "year_to_last",
+  "image",
+  "custodian_id",
+]);
+
+function sanitizeVehicleCreatePayload(payload: Record<string, any>) {
+  const out: Record<string, any> = {};
+  for (const [k, v] of Object.entries(payload || {})) {
+    if (!VEHICLE_ALLOWED_KEYS.has(k)) continue;
+    if (v === undefined) continue;
+    if (typeof v === "string" && v.trim() === "") continue;
+    out[k] = v;
+  }
+  return out;
 }
 
 export async function createVehicle(payload: Record<string, any>) {
@@ -86,7 +135,6 @@ export async function createVehicle(payload: Record<string, any>) {
     return json?.data;
   }
 
-  // retry minimal known keys if invalid-field errors
   const msg = await readError(first);
   const m = msg.toLowerCase();
   const looksLikeInvalidFields =
@@ -94,16 +142,13 @@ export async function createVehicle(payload: Record<string, any>) {
 
   if (!looksLikeInvalidFields) throw new Error(msg);
 
-  const minimal = {
-    vehicle_plate: payload.vehicle_plate,
-    vehicle_type: payload.vehicle_type,
-    status: payload.status,
-  };
+  // ✅ retry with only known vehicle columns (prevents losing good fields)
+  const sanitized = sanitizeVehicleCreatePayload(payload);
 
   const second = await fetch("/api/vehicle-management/vehicle-list", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(minimal),
+    body: JSON.stringify(sanitized),
   });
 
   if (!second.ok) throw new Error(await readError(second));

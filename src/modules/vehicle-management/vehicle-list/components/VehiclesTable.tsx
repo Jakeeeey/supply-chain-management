@@ -121,7 +121,7 @@ function VehicleCard({
 
         <div className="space-y-1">
           <div className="text-xs text-muted-foreground">Type</div>
-          <div className="truncate text-sm">{row.vehicleName || "N/A"}</div>
+          <div className="truncate text-sm">{row.vehicleTypeName || "N/A"}</div>
         </div>
       </div>
 

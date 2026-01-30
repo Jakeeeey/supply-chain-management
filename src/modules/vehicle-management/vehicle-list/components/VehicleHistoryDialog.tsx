@@ -120,7 +120,7 @@ export function VehicleHistoryDialog({
                   </TabsContent>
 
                   <TabsContent value="parts" className="mt-0">
-                    <PartsTab />
+                    <PartsTab vehicle={vehicle} />
                   </TabsContent>
 
                   <TabsContent value="drivers" className="mt-0">
@@ -128,7 +128,7 @@ export function VehicleHistoryDialog({
                   </TabsContent>
 
                   <TabsContent value="custodian" className="mt-0">
-                    <CustodianTab />
+                    <CustodianTab vehicle={vehicle} />
                   </TabsContent>
 
                   <TabsContent value="job_orders" className="mt-0">

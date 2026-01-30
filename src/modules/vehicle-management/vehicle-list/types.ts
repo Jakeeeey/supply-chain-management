@@ -1,6 +1,24 @@
+// src/modules/vehicle-management/vehicle-list/types.ts
+
 export type VehicleTypeApiRow = {
   id: number;
   type_name: string;
+};
+
+export type FuelTypeApiRow = {
+  id: number;
+  name: string;
+  description?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type EngineTypeApiRow = {
+  id: number;
+  name: string;
+  description?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
 export type VehiclesApiRow = {
@@ -9,7 +27,17 @@ export type VehiclesApiRow = {
   vehicle_type: number | null;
   status: string | null;
 
-  // other optional fields (present in your API)
+  // ✅ new columns based on your DB reference/API
+  name?: string | null;
+  purchased_date?: string | null;
+  current_mileage?: number | null;
+  fuel_type?: number | null;
+  engine_type?: number | null;
+  year_to_last?: number | null;
+  image?: string | null;
+  custodian_id?: number | null;
+
+  // existing optional fields
   branch_id?: number | null;
   cbm_length?: string | number | null;
   cbm_width?: string | number | null;
@@ -37,7 +65,6 @@ export type DispatchPlanApiRow = {
 
   total_distance?: number | null;
 
-  // optional route-related fields (may or may not exist / be permitted)
   starting_point?: string | number | null;
   destination_point?: string | number | null;
   ending_point?: string | number | null;
@@ -60,28 +87,47 @@ export type UserApiRow = {
 export type VehicleRow = {
   id: number;
   plateNo: string;
-  vehicleName: string; // we display type name here for now
-  driverName: string; // placeholder for now (can be upgraded later)
+
+  // ✅ display name now prioritizes vehicles.name
+  vehicleName: string;
+
+  driverName: string;
   status: string;
 
   vehicleTypeId: number | null;
   vehicleTypeName: string | null;
+
+  fuelTypeId?: number | null;
+  fuelTypeName?: string | null;
+
+  engineTypeId?: number | null;
+  engineTypeName?: string | null;
+
+  currentMileage?: number | null;
+  image?: string | null;
 
   raw: VehiclesApiRow;
 };
 
 export type CreateVehicleForm = {
   plateNumber: string;
-  model: string;
+
+  // ✅ renamed from model -> vehicleName
+  vehicleName: string;
+
   year: string;
   typeId: number | null;
 
-  category?: string;
   status?: string;
 
   mileageKm?: string;
-  fuelType?: string;
+  fuelTypeId?: number | null;
+  engineTypeId?: number | null;
 
+  // keep your date inputs (UI), but we won’t send unless you confirm field names
   lastMaintenanceDate?: string;
   nextMaintenanceDate?: string;
+
+  // ✅ file upload
+  imageFile?: File | null;
 };

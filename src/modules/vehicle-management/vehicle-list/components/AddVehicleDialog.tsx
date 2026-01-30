@@ -1,16 +1,19 @@
-//src/modules/vehicle-management/vehicle-list/components/AddVehicleDialog.tsx
+// src/modules/vehicle-management/vehicle-list/components/AddVehicleDialog.tsx
 "use client";
 
 import * as React from "react";
-import { Plus } from "lucide-react";
+import { Plus, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 
 import type { CreateVehicleForm } from "../types";
+import { uploadVehicleImage } from "../providers/fetchProviders";
 
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Card } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -23,54 +26,101 @@ function requiredOk(v: string) {
   return String(v || "").trim().length > 0;
 }
 
+function toIntOrNull(v: string) {
+  const n = Number(String(v || "").trim());
+  return Number.isFinite(n) ? Math.trunc(n) : null;
+}
+
 export function AddVehicleDialog({
   open,
   onOpenChange,
   typeOptions,
+  fuelOptions,
+  engineOptions,
   saving,
   onCreate,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   typeOptions: Array<{ id: number; name: string }>;
+  fuelOptions: Array<{ id: number; name: string }>;
+  engineOptions: Array<{ id: number; name: string }>;
   saving: boolean;
   onCreate: (payload: Record<string, any>) => Promise<void>;
 }) {
   const [form, setForm] = React.useState<CreateVehicleForm>({
     plateNumber: "",
-    model: "",
+    vehicleName: "",
     year: "",
     typeId: null,
-    category: "",
-    status: "Available",
+    status: "Active",
     mileageKm: "",
-    fuelType: "",
+    fuelTypeId: null,
+    engineTypeId: null,
     lastMaintenanceDate: "",
     nextMaintenanceDate: "",
+    imageFile: null,
   });
 
   const [touched, setTouched] = React.useState(false);
 
+  // upload UI
+  const fileRef = React.useRef<HTMLInputElement | null>(null);
+  const [dragActive, setDragActive] = React.useState(false);
+  const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!form.imageFile) {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(form.imageFile);
+    setPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return url;
+    });
+    return () => {
+      URL.revokeObjectURL(url);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.imageFile]);
+
   const canSubmit =
     requiredOk(form.plateNumber) &&
-    requiredOk(form.model) &&
+    requiredOk(form.vehicleName) &&
     requiredOk(form.year) &&
     form.typeId !== null;
 
-  function set<K extends keyof CreateVehicleForm>(
-    k: K,
-    v: CreateVehicleForm[K]
-  ) {
+  function set<K extends keyof CreateVehicleForm>(k: K, v: CreateVehicleForm[K]) {
     setForm((p) => ({ ...p, [k]: v }));
   }
 
   function getMissingRequiredFields() {
     const missing: string[] = [];
     if (!requiredOk(form.plateNumber)) missing.push("Plate Number");
-    if (!requiredOk(form.model)) missing.push("Model");
+    if (!requiredOk(form.vehicleName)) missing.push("Vehicle Name");
     if (!requiredOk(form.year)) missing.push("Year");
     if (form.typeId === null) missing.push("Type");
     return missing;
+  }
+
+  function acceptFile(f?: File | null) {
+    if (!f) return;
+    // optional: lightweight validation
+    if (!f.type.startsWith("image/")) {
+      toast.error("Invalid file", { description: "Please upload an image file." });
+      return;
+    }
+    set("imageFile", f);
+  }
+
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    const f = e.dataTransfer.files?.[0];
+    acceptFile(f || null);
   }
 
   async function handleSubmit() {
@@ -87,13 +137,32 @@ export function AddVehicleDialog({
       return;
     }
 
-    const payload = {
+    let imageId: string | null = null;
+
+    try {
+      if (form.imageFile) {
+        imageId = await uploadVehicleImage(form.imageFile);
+      }
+    } catch (e: any) {
+      toast.error("Image upload failed", { description: String(e?.message || e) });
+      return;
+    }
+
+    const yearInt = toIntOrNull(form.year);
+    const mileageInt = toIntOrNull(String(form.mileageKm || ""));
+
+    const payload: Record<string, any> = {
       vehicle_plate: form.plateNumber.trim(),
+      name: form.vehicleName.trim(), // ✅ vehicles.name
       vehicle_type: form.typeId,
       status: form.status || "Active",
-      model: form.model.trim(),
-      year: form.year.trim(),
     };
+
+    if (yearInt !== null) payload.year_to_last = yearInt;
+    if (mileageInt !== null) payload.current_mileage = mileageInt;
+    if (form.fuelTypeId !== null) payload.fuel_type = form.fuelTypeId;
+    if (form.engineTypeId !== null) payload.engine_type = form.engineTypeId;
+    if (imageId) payload.image = imageId; // ✅ vehicles.image
 
     try {
       await onCreate(payload);
@@ -104,15 +173,16 @@ export function AddVehicleDialog({
 
       setForm({
         plateNumber: "",
-        model: "",
+        vehicleName: "",
         year: "",
         typeId: null,
-        category: "",
-        status: "Available",
+        status: "Active",
         mileageKm: "",
-        fuelType: "",
+        fuelTypeId: null,
+        engineTypeId: null,
         lastMaintenanceDate: "",
         nextMaintenanceDate: "",
+        imageFile: null,
       });
 
       setTouched(false);
@@ -130,24 +200,20 @@ export function AddVehicleDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* Dialog shell: fixed header + scroll middle + fixed footer */}
       <DialogContent
-        className={[
-            "p-0",
-            "w-[calc(100%-1.5rem)] sm:w-full sm:max-w-3xl",
-            "max-h-[90dvh] overflow-hidden",
-        ].join(" ")}
-        >
+        className={cn(
+          "p-0",
+          "w-[calc(100%-1.5rem)] sm:w-full sm:max-w-3xl",
+          "max-h-[90dvh] overflow-hidden"
+        )}
+      >
         <div className="flex max-h-[90dvh] flex-col">
-          {/* ✅ HEADER (fixed) */}
+          {/* HEADER */}
           <div className="flex items-center justify-between border-b px-6 py-4">
             <div className="text-lg font-semibold">Add New Vehicle</div>
-
-            {/* keep radix close button working: DialogContent already renders it,
-                but since you want layout control, we don't add another close button here */}
           </div>
 
-          {/* ✅ CONTENT (scrollable middle) */}
+          {/* CONTENT */}
           <div className="flex-1 overflow-y-auto px-6 py-4">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="grid gap-2">
@@ -157,27 +223,19 @@ export function AddVehicleDialog({
                 <Input
                   value={form.plateNumber}
                   onChange={(e) => set("plateNumber", e.target.value)}
-                  className={
-                    touched && !requiredOk(form.plateNumber)
-                      ? "ring-1 ring-destructive"
-                      : ""
-                  }
-                  placeholder="e.g. UAL 593"
+                  className={touched && !requiredOk(form.plateNumber) ? "ring-1 ring-destructive" : ""}
+                  placeholder="e.g. CAD 4419"
                 />
               </div>
 
               <div className="grid gap-2">
                 <Label>
-                  Model <span className="text-destructive">*</span>
+                  Vehicle Name <span className="text-destructive">*</span>
                 </Label>
                 <Input
-                  value={form.model}
-                  onChange={(e) => set("model", e.target.value)}
-                  className={
-                    touched && !requiredOk(form.model)
-                      ? "ring-1 ring-destructive"
-                      : ""
-                  }
+                  value={form.vehicleName}
+                  onChange={(e) => set("vehicleName", e.target.value)}
+                  className={touched && !requiredOk(form.vehicleName) ? "ring-1 ring-destructive" : ""}
                   placeholder="e.g. Toyota Hilux"
                 />
               </div>
@@ -189,11 +247,7 @@ export function AddVehicleDialog({
                 <Input
                   value={form.year}
                   onChange={(e) => set("year", e.target.value)}
-                  className={
-                    touched && !requiredOk(form.year)
-                      ? "ring-1 ring-destructive"
-                      : ""
-                  }
+                  className={touched && !requiredOk(form.year) ? "ring-1 ring-destructive" : ""}
                   placeholder="e.g. 2026"
                   inputMode="numeric"
                 />
@@ -207,13 +261,7 @@ export function AddVehicleDialog({
                   value={form.typeId === null ? "" : String(form.typeId)}
                   onValueChange={(v) => set("typeId", v ? Number(v) : null)}
                 >
-                  <SelectTrigger
-                    className={
-                      touched && form.typeId === null
-                        ? "ring-1 ring-destructive"
-                        : ""
-                    }
-                  >
+                  <SelectTrigger className={touched && form.typeId === null ? "ring-1 ring-destructive" : ""}>
                     <SelectValue placeholder="Select Type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -227,31 +275,12 @@ export function AddVehicleDialog({
               </div>
 
               <div className="grid gap-2">
-                <Label>Category</Label>
-                <Select
-                  value={form.category || ""}
-                  onValueChange={(v) => set("category", v)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="N/A">N/A</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid gap-2">
                 <Label>Status</Label>
-                <Select
-                  value={form.status || ""}
-                  onValueChange={(v) => set("status", v)}
-                >
+                <Select value={form.status || ""} onValueChange={(v) => set("status", v)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select Status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Available">Available</SelectItem>
                     <SelectItem value="Active">Active</SelectItem>
                     <SelectItem value="Inactive">Inactive</SelectItem>
                   </SelectContent>
@@ -259,7 +288,7 @@ export function AddVehicleDialog({
               </div>
 
               <div className="grid gap-2">
-                <Label>Mileage (km)</Label>
+                <Label>Current Mileage</Label>
                 <Input
                   value={form.mileageKm || ""}
                   onChange={(e) => set("mileageKm", e.target.value)}
@@ -271,18 +300,42 @@ export function AddVehicleDialog({
               <div className="grid gap-2">
                 <Label>Fuel Type</Label>
                 <Select
-                  value={form.fuelType || ""}
-                  onValueChange={(v) => set("fuelType", v)}
+                  value={form.fuelTypeId === null ? "" : String(form.fuelTypeId)}
+                  onValueChange={(v) => set("fuelTypeId", v ? Number(v) : null)}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select Fuel Type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="N/A">N/A</SelectItem>
+                    {fuelOptions.map((f) => (
+                      <SelectItem key={f.id} value={String(f.id)}>
+                        {f.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
 
+              <div className="grid gap-2">
+                <Label>Engine Type</Label>
+                <Select
+                  value={form.engineTypeId === null ? "" : String(form.engineTypeId)}
+                  onValueChange={(v) => set("engineTypeId", v ? Number(v) : null)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Engine Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {engineOptions.map((en) => (
+                      <SelectItem key={en.id} value={String(en.id)}>
+                        {en.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* keep your date inputs (UI) */}
               <div className="grid gap-2">
                 <Label>Last Maintenance Date</Label>
                 <Input
@@ -302,11 +355,103 @@ export function AddVehicleDialog({
               </div>
             </div>
 
-            {/* ✅ prevents last inputs from being hidden behind footer */}
+            {/* ✅ Upload Photo (below dates) */}
+            <div className="mt-6">
+              <Label>Vehicle Photo</Label>
+
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => acceptFile(e.target.files?.[0] ?? null)}
+              />
+
+              <Card
+                className={cn(
+                  "mt-2 rounded-lg border border-dashed p-4 transition",
+                  dragActive ? "border-primary bg-primary/5" : "border-muted-foreground/30"
+                )}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDragActive(true);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDragActive(true);
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDragActive(false);
+                }}
+                onDrop={onDrop}
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 rounded-md border p-2">
+                      <Upload className="h-4 w-4" />
+                    </div>
+                    <div className="grid gap-1">
+                      <div className="text-sm font-medium">
+                        Drag & drop an image here, or browse
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        PNG / JPG recommended.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => fileRef.current?.click()}
+                    >
+                      Browse
+                    </Button>
+
+                    {form.imageFile ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => set("imageFile", null)}
+                        className="gap-2"
+                      >
+                        <X className="h-4 w-4" />
+                        Remove
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+
+                {form.imageFile ? (
+                  <div className="mt-4 grid gap-2">
+                    <div className="text-xs text-muted-foreground">
+                      Selected: <span className="font-medium text-foreground">{form.imageFile.name}</span>
+                    </div>
+
+                    {previewUrl ? (
+                      <div className="overflow-hidden rounded-md border">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={previewUrl}
+                          alt="Vehicle preview"
+                          className="h-48 w-full object-cover"
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </Card>
+            </div>
+
             <div className="h-6" />
           </div>
 
-          {/* ✅ FOOTER (fixed) */}
+          {/* FOOTER */}
           <div className="border-t px-6 py-4">
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
               <Button
