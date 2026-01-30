@@ -2,12 +2,15 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
 
 import type { VehicleRow, DispatchPlanApiRow, UserApiRow } from "../../types";
-import { listDispatchPlansByVehicle, listUsers } from "../../providers/fetchProviders";
+import {
+  listDispatchPlansByVehicle,
+  listUsers,
+} from "../../providers/fetchProviders";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 
 function toMs(v?: string | null) {
   if (!v) return 0;
@@ -61,6 +64,35 @@ type DriverSummary = {
   totalTrips: number;
 };
 
+function DriversSkeleton({ rows = 2 }: { rows?: number }) {
+  return (
+    <div className="grid gap-4">
+      {Array.from({ length: rows }).map((_, i) => (
+        <Card key={`drv-sk-${i}`}>
+          <CardContent className="p-5">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-4 w-44" />
+              </div>
+
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-4 w-40" />
+              </div>
+
+              <div className="space-y-2 md:text-right">
+                <Skeleton className="ml-auto h-3 w-16" />
+                <Skeleton className="ml-auto h-4 w-16" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
 export default function DriversTab({ vehicle }: { vehicle: VehicleRow }) {
   const vehicleId = Number(vehicle?.id ?? 0);
 
@@ -79,20 +111,6 @@ export default function DriversTab({ vehicle }: { vehicle: VehicleRow }) {
 
       const userMap = buildUserMap(users || []);
 
-      // Identify latest plan overall (to mark "Present" period)
-      let latestOverallMs = 0;
-      let latestOverallDriverId = 0;
-
-      for (const p of plans || []) {
-        const driverId = Number((p as any)?.driver_id ?? 0);
-        const ms = toMs(pickPlanDate(p) || undefined);
-        if (driverId && ms >= latestOverallMs) {
-          latestOverallMs = ms;
-          latestOverallDriverId = driverId;
-        }
-      }
-
-      // Group by driver_id
       const agg = new Map<number, { start: number; end: number; count: number }>();
 
       for (const p of plans || []) {
@@ -126,7 +144,6 @@ export default function DriversTab({ vehicle }: { vehicle: VehicleRow }) {
 
       summarized.sort((a, b) => b.endMs - a.endMs);
 
-      // If there are no plans, keep empty
       setRows(summarized);
     } catch (e: any) {
       toast.error("Failed to load drivers", {
@@ -146,19 +163,16 @@ export default function DriversTab({ vehicle }: { vehicle: VehicleRow }) {
     return (
       <Card>
         <CardContent className="p-6">
-          <div className="text-sm text-muted-foreground">No vehicle selected.</div>
+          <div className="text-sm text-muted-foreground">
+            No vehicle selected.
+          </div>
         </CardContent>
       </Card>
     );
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Loading drivers...
-      </div>
-    );
+    return <DriversSkeleton rows={2} />;
   }
 
   if (rows.length === 0) {
@@ -174,7 +188,6 @@ export default function DriversTab({ vehicle }: { vehicle: VehicleRow }) {
     );
   }
 
-  // Determine “Present” driver = most recent endMs after sorting
   const latestDriverId = rows[0]?.driverId ?? 0;
 
   return (

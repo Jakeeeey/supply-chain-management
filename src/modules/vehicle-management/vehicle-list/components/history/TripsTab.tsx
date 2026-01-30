@@ -2,12 +2,12 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
 
 import type { VehicleRow, DispatchPlanApiRow } from "../../types";
 import { listDispatchPlansByVehicle } from "../../providers/fetchProviders";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 
 function toMs(v?: string | null) {
   if (!v) return 0;
@@ -57,6 +57,40 @@ function fmtDuration(dispatchIso?: string | null, arrivalIso?: string | null) {
   return `${h} hrs ${m} mins`;
 }
 
+function TripsSkeleton({ rows = 3 }: { rows?: number }) {
+  return (
+    <div className="grid gap-4">
+      {Array.from({ length: rows }).map((_, i) => (
+        <Card key={`trip-sk-${i}`}>
+          <CardContent className="p-5">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-14" />
+                <Skeleton className="h-4 w-32" />
+              </div>
+
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-14" />
+                <Skeleton className="h-4 w-52" />
+              </div>
+
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-4 w-24" />
+              </div>
+
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-4 w-28" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
 export default function TripsTab({ vehicle }: { vehicle: VehicleRow }) {
   const vehicleId = Number(vehicle?.id ?? 0);
 
@@ -70,7 +104,6 @@ export default function TripsTab({ vehicle }: { vehicle: VehicleRow }) {
     try {
       const data = await listDispatchPlansByVehicle(vehicleId);
 
-      // Sort latest first using best available timestamp
       const sorted = [...(data || [])].sort((a, b) => {
         const am = toMs(pickPlanDate(a) || undefined);
         const bm = toMs(pickPlanDate(b) || undefined);
@@ -96,19 +129,16 @@ export default function TripsTab({ vehicle }: { vehicle: VehicleRow }) {
     return (
       <Card>
         <CardContent className="p-6">
-          <div className="text-sm text-muted-foreground">No vehicle selected.</div>
+          <div className="text-sm text-muted-foreground">
+            No vehicle selected.
+          </div>
         </CardContent>
       </Card>
     );
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Loading trips...
-      </div>
-    );
+    return <TripsSkeleton rows={3} />;
   }
 
   if (rows.length === 0) {
