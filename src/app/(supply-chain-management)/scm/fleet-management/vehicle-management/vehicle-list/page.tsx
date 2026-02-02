@@ -15,7 +15,7 @@ import { NavUser } from "../../../_components/nav-user";
 import { cookies } from "next/headers";
 
 // ✅ Wire the module you asked for
-import VehicleListModule from "@/modules/vehicle-management/vehicle-list/VehicleListModule"
+import VehicleListModule from "@/modules/supply-chain-management/vehicle-management/vehicle-list/VehicleListModule"
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -100,11 +100,11 @@ export default async function Page() {
                     <Breadcrumb>
                         <BreadcrumbList>
                             <BreadcrumbItem className="hidden md:block">
-                                <BreadcrumbLink href="#">Treasury</BreadcrumbLink>
+                                <BreadcrumbLink href="#">Vehicle Management</BreadcrumbLink>
                             </BreadcrumbItem>
                             <BreadcrumbSeparator className="hidden md:block" />
                             <BreadcrumbItem>
-                                <BreadcrumbPage>Disbursement</BreadcrumbPage>
+                                <BreadcrumbPage>Vehicle List</BreadcrumbPage>
                             </BreadcrumbItem>
                         </BreadcrumbList>
                     </Breadcrumb>

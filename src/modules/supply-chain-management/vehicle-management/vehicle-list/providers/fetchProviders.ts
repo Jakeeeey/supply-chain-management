@@ -5,7 +5,7 @@ import type {
   UserApiRow,
   FuelTypeApiRow,
   EngineTypeApiRow,
-} from "../types";
+} from "@/modules/supply-chain-management/vehicle-management/vehicle-list/types";
 
 type DirectusListResponse<T> = { data: T[] };
 type DirectusItemResponse<T> = { data: T };

@@ -9,7 +9,7 @@ import type {
   UserApiRow,
   FuelTypeApiRow,
   EngineTypeApiRow,
-} from "../types";
+} from "@/modules/supply-chain-management/vehicle-management/vehicle-list/types";
 
 import {
   listVehicles,
@@ -19,7 +19,7 @@ import {
   createVehicle,
   listFuelTypes,
   listEngineTypes,
-} from "../providers/fetchProviders";
+} from "@/modules/supply-chain-management/vehicle-management/vehicle-list/providers/fetchProviders";
 
 function cleanStr(v: unknown, fallback = "N/A") {
   const s = String(v ?? "").trim();

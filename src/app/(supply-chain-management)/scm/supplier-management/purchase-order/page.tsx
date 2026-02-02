@@ -13,9 +13,11 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { NavUser } from "../../_components/nav-user";
 
 import { cookies } from "next/headers";
+import ComingSoon from "../../_components/ComingSoon"
+
 
 // ✅ Wire the module you asked for
-//import PurchaseOrderModule from "@/modules/supply-chain-management/supplier-management/purchase-order";
+// import PurchaseOrderModule from "@/modules/supply-chain-management/supplier-management/purchase-order/PurchaseOrderModule"
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -100,11 +102,11 @@ export default async function Page() {
                     <Breadcrumb>
                         <BreadcrumbList>
                             <BreadcrumbItem className="hidden md:block">
-                                <BreadcrumbLink href="#">Treasury</BreadcrumbLink>
+                                <BreadcrumbLink href="#">Supplier Management</BreadcrumbLink>
                             </BreadcrumbItem>
                             <BreadcrumbSeparator className="hidden md:block" />
                             <BreadcrumbItem>
-                                <BreadcrumbPage>Disbursement</BreadcrumbPage>
+                                <BreadcrumbPage>Purchase Order</BreadcrumbPage>
                             </BreadcrumbItem>
                         </BreadcrumbList>
                     </Breadcrumb>
@@ -117,7 +119,7 @@ export default async function Page() {
 
             <ScrollArea className="min-h-0 flex-1">
                 <div className="p-4">
-                    
+                    <ComingSoon />
                 </div>
             </ScrollArea>
         </div>

@@ -5,8 +5,8 @@ import * as React from "react";
 import { Plus, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 
-import type { CreateVehicleForm } from "../types";
-import { uploadVehicleImage } from "../providers/fetchProviders";
+import type { CreateVehicleForm } from "@/modules/supply-chain-management/vehicle-management/vehicle-list/types";
+import { uploadVehicleImage } from "@/modules/supply-chain-management/vehicle-management/vehicle-list/providers/fetchProviders";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";

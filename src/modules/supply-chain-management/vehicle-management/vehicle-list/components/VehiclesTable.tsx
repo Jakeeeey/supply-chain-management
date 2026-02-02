@@ -4,7 +4,7 @@
 import * as React from "react";
 import { Eye } from "lucide-react";
 
-import type { VehicleRow } from "../types";
+import type { VehicleRow } from "@/modules/supply-chain-management/vehicle-management/vehicle-list/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";

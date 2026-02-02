@@ -4,11 +4,11 @@
 import * as React from "react";
 import type { VehicleRow } from "./types";
 
-import { useVehicles } from "./hooks/useVehicles";
-import { VehicleListToolbar } from "./components/VehicleListToolbar";
-import { VehiclesTable } from "./components/VehiclesTable";
-import { AddVehicleDialog } from "./components/AddVehicleDialog";
-import { VehicleHistoryDialog } from "./components/VehicleHistoryDialog";
+import { useVehicles } from "@/modules/supply-chain-management/vehicle-management/vehicle-list/hooks/useVehicles";
+import { VehicleListToolbar } from "@/modules/supply-chain-management/vehicle-management/vehicle-list/components/VehicleListToolbar";
+import { VehiclesTable } from "@/modules/supply-chain-management/vehicle-management/vehicle-list/components/VehiclesTable";
+import { AddVehicleDialog } from "@/modules/supply-chain-management/vehicle-management/vehicle-list/components/AddVehicleDialog";
+import { VehicleHistoryDialog } from "@/modules/supply-chain-management/vehicle-management/vehicle-list/components/VehicleHistoryDialog";
 
 export default function VehicleListModule() {
   const { loading, saving, query, setQuery, rows, addVehicle, typeMap, fuelMap, engineMap } =

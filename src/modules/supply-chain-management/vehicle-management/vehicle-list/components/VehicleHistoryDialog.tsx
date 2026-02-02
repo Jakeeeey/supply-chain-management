@@ -11,7 +11,7 @@ import {
   Wrench,
 } from "lucide-react";
 
-import type { VehicleRow } from "../types";
+import type { VehicleRow } from "@/modules/supply-chain-management/vehicle-management/vehicle-list/types";
 
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -19,12 +19,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-import DetailsTab from "./history/DetailsTab";
-import TripsTab from "./history/TripsTab";
-import PartsTab from "./history/PartsTab";
-import DriversTab from "./history/DriversTab";
-import CustodianTab from "./history/CustodianTab";
-import JobOrdersTab from "./history/JobOrdersTab";
+import DetailsTab from "@/modules/supply-chain-management/vehicle-management/vehicle-list/components/history/DetailsTab";
+import TripsTab from "@/modules/supply-chain-management/vehicle-management/vehicle-list/components/history/TripsTab";
+import PartsTab from "@/modules/supply-chain-management/vehicle-management/vehicle-list/components/history/PartsTab";
+import DriversTab from "@/modules/supply-chain-management/vehicle-management/vehicle-list/components/history/DriversTab";
+import CustodianTab from "@/modules/supply-chain-management/vehicle-management/vehicle-list/components/history/CustodianTab";
+import JobOrdersTab from "@/modules/supply-chain-management/vehicle-management/vehicle-list/components/history/JobOrdersTab";
 
 function Trigger({
   value,
