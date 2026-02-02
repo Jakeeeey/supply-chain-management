@@ -1,4 +1,3 @@
-// src/app/(supply-chain-management)/scm/_components/app-sidebar.tsx
 "use client"
 
 import * as React from "react"
@@ -9,6 +8,7 @@ import {
     Command,
     Settings2,
     SquareTerminal,
+
 } from "lucide-react"
 
 import { NavMain } from "./nav-main"
@@ -126,14 +126,6 @@ const data = {
                 { title: "Bad Product Summary", url: "/scm/reporting-kpi/bad-product-summary" },
             ],
         },
-        {
-            title: "Controls & KPIs",
-            url: "#",
-            icon: Settings2,
-            items: [
-                { title: "Inventory Controls", url: "/scm/controls-security/invetory-controls" },
-            ],
-        },
     ],
 }
 
@@ -151,7 +143,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                                 <div className="grid flex-1 text-left text-sm leading-tight">
                                     <span className="truncate font-medium">VOS Web</span>
                                     <span className="truncate text-xs text-muted-foreground">
-                    Supply Chain Management
+                    Financial Management
                   </span>
                                 </div>
                             </Link>

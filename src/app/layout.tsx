@@ -3,7 +3,8 @@ import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import "./globals.css"
 
-// import ThemeProvider from "@/components/theme/ThemeProvider"
+import ThemeProvider from "@/components/theme/ThemeProvider"
+import ThemeSettingsProvider from "@/components/theme/ThemeSettingsProvider"
 import { Toaster } from "@/components/ui/sonner"
 
 const geistSans = Geist({
@@ -29,15 +30,14 @@ export default function RootLayout({
     return (
         <html lang="en" suppressHydrationWarning>
         <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        {/*<ThemeProvider>
-            {children}
+        <ThemeProvider>
+            <ThemeSettingsProvider>
+                {children}
+            </ThemeSettingsProvider>
 
-            Global toast host (Sonner / shadcn)
+            {/* Global toast host (Sonner / shadcn) */}
             <Toaster position="top-right" richColors />
-        </ThemeProvider>*/}
-
-        {children}
-        <Toaster position="top-right" richColors />
+        </ThemeProvider>
         </body>
         </html>
     )
