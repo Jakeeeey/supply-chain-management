@@ -15,9 +15,7 @@ import { NavUser } from "../../_components/nav-user";
 
 import { cookies } from "next/headers";
 
-// ✅ Purchase Order Module
-import { PurchaseOrderModule } from
-        "@/modules/supply-chain-management/supplier-management/purchase-order";
+import ComingSoon from "../../_components/ComingSoon"
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -112,7 +110,7 @@ export default async function Page() {
                             <BreadcrumbSeparator className="hidden md:block" />
                             <BreadcrumbItem>
                                 <BreadcrumbPage>
-                                    Create Purchase Order
+                                    Posting of Purchase Order
                                 </BreadcrumbPage>
                             </BreadcrumbItem>
                         </BreadcrumbList>
@@ -128,7 +126,7 @@ export default async function Page() {
             <ScrollArea className="min-h-0 flex-1">
                 <div className="p-4">
                     {/* ✅ Purchase Order UI (Create / Approval / Receiving / Posting) */}
-                    <PurchaseOrderModule />
+                    <ComingSoon />
                 </div>
             </ScrollArea>
         </div>
