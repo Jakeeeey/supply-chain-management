@@ -1,4 +1,4 @@
-//src/app/api/vehicle-management/vehicle-list/fuel-type/route.ts
+//src/app/api/scm/vehicle-management/vehicle-list/fuel-type/route.ts
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
