@@ -1,12 +1,11 @@
-// src/modules/vehicle-management/vehicle-list/components/AddVehicleDialog.tsx
 "use client";
 
 import * as React from "react";
 import { Plus, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 
-import type { CreateVehicleForm } from "../types";
-import { uploadVehicleImage } from "../providers/fetchProviders";
+import type { CreateVehicleForm } from "@/modules/supply-chain-management/vehicle-management/vehicle-list/types";
+import { uploadVehicleImage } from "@/modules/supply-chain-management/vehicle-management/vehicle-list/providers/fetchProviders";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -30,8 +29,6 @@ function toIntOrNull(v: string) {
   const n = Number(String(v || "").trim());
   return Number.isFinite(n) ? Math.trunc(n) : null;
 }
-
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // ✅ 5MB
 
 export function AddVehicleDialog({
   open,
@@ -108,13 +105,15 @@ export function AddVehicleDialog({
   function acceptFile(f?: File | null) {
     if (!f) return;
 
+    // lightweight validation (type)
     if (!f.type.startsWith("image/")) {
       toast.error("Invalid file", { description: "Please upload an image file." });
       return;
     }
 
-    // ✅ 5MB limit
-    if (f.size > MAX_IMAGE_BYTES) {
+    // optional client-side size guard too (server also enforces 5MB)
+    const max = 5 * 1024 * 1024;
+    if (typeof f.size === "number" && f.size > max) {
       toast.error("File too large", { description: "Maximum image size is 5MB." });
       return;
     }
@@ -144,11 +143,12 @@ export function AddVehicleDialog({
       return;
     }
 
-    let imageId: string | null = null;
+    let imagePath: string | null = null;
 
     try {
       if (form.imageFile) {
-        imageId = await uploadVehicleImage(form.imageFile);
+        // ✅ returns /uploads/vehicles/xxx.jpg
+        imagePath = await uploadVehicleImage(form.imageFile);
       }
     } catch (e: any) {
       toast.error("Image upload failed", { description: String(e?.message || e) });
@@ -160,20 +160,18 @@ export function AddVehicleDialog({
 
     const payload: Record<string, any> = {
       vehicle_plate: form.plateNumber.trim(),
-      name: form.vehicleName.trim(),
+      name: form.vehicleName.trim(), // ✅ vehicles.name
       vehicle_type: form.typeId,
       status: form.status || "Active",
     };
 
-    // ✅ Year goes to year_to_last
     if (yearInt !== null) payload.year_to_last = yearInt;
-
     if (mileageInt !== null) payload.current_mileage = mileageInt;
     if (form.fuelTypeId !== null) payload.fuel_type = form.fuelTypeId;
     if (form.engineTypeId !== null) payload.engine_type = form.engineTypeId;
 
-    // ✅ reuse vehicles.image
-    if (imageId) payload.image = imageId;
+    // ✅ store the PATH in vehicles.image
+    if (imagePath) payload.image = imagePath;
 
     try {
       await onCreate(payload);
@@ -345,7 +343,7 @@ export function AddVehicleDialog({
               </div>
             </div>
 
-            {/* Upload Photo */}
+            {/* ✅ Upload Photo (below dates) */}
             <div className="mt-6">
               <Label>Vehicle Photo</Label>
 
@@ -395,7 +393,11 @@ export function AddVehicleDialog({
                   </div>
 
                   <div className="flex gap-2">
-                    <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => fileRef.current?.click()}
+                    >
                       Browse
                     </Button>
 
