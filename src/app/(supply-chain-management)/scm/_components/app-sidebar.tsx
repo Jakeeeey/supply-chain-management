@@ -36,7 +36,10 @@ const data = {
             url: "#",
             icon: SquareTerminal,
             isActive: true,
-            items: [{ title: "Purchase Order", url: "/scm/supplier-management/purchase-order" }],
+            items: [
+                { title: "Purchase Order", url: "/scm/supplier-management/purchase-order" }
+
+            ],
         },
         {
             title: "Warehouse Management",

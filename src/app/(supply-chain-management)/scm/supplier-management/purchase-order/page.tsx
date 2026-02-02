@@ -1,4 +1,5 @@
-// src/app/(financial-management)/fm/treasury/disbursement/page.tsx
+// src/app/(supply-chain-management)/scm/supplier-management/purchase-order/page.tsx
+
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -13,11 +14,10 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { NavUser } from "../../_components/nav-user";
 
 import { cookies } from "next/headers";
-import ComingSoon from "../../_components/ComingSoon"
 
-
-// ✅ Wire the module you asked for
-// import PurchaseOrderModule from "@/modules/supply-chain-management/supplier-management/purchase-order/PurchaseOrderModule"
+// ✅ Purchase Order Module
+import { PurchaseOrderModule } from
+        "@/modules/supply-chain-management/supplier-management/purchase-order";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -77,7 +77,7 @@ function buildHeaderUserFromToken(token: string | null | undefined) {
 }
 
 export default async function Page() {
-    // ✅ Next.js 16: cookies() is async
+    // ✅ Next.js cookies() is async
     const cookieStore = await cookies();
     const token = cookieStore.get(COOKIE_NAME)?.value ?? null;
 
@@ -85,13 +85,15 @@ export default async function Page() {
 
     return (
         <div className="flex h-full min-h-0 flex-col">
+            {/* ===== Header ===== */}
             <header
                 className="
-          sticky top-2 z-50 relative
-          flex h-16 shrink-0 items-center justify-between
-          border-b bg-background shadow-sm
-          before:content-[''] before:absolute before:inset-x-0 before:-top-2 before:h-2 before:bg-background
-        "
+                    sticky top-2 z-50 relative
+                    flex h-16 shrink-0 items-center justify-between
+                    border-b bg-background shadow-sm
+                    before:content-[''] before:absolute before:inset-x-0
+                    before:-top-2 before:h-2 before:bg-background
+                "
             >
                 <div className="flex h-full items-center gap-2 px-4">
                     <SidebarTrigger className="-ml-1" />
@@ -99,14 +101,19 @@ export default async function Page() {
                         orientation="vertical"
                         className="mr-2 data-[orientation=vertical]:h-4"
                     />
+
                     <Breadcrumb>
                         <BreadcrumbList>
                             <BreadcrumbItem className="hidden md:block">
-                                <BreadcrumbLink href="#">Supplier Management</BreadcrumbLink>
+                                <BreadcrumbLink href="#">
+                                    Supplier Management
+                                </BreadcrumbLink>
                             </BreadcrumbItem>
                             <BreadcrumbSeparator className="hidden md:block" />
                             <BreadcrumbItem>
-                                <BreadcrumbPage>Purchase Order</BreadcrumbPage>
+                                <BreadcrumbPage>
+                                    Purchase Order
+                                </BreadcrumbPage>
                             </BreadcrumbItem>
                         </BreadcrumbList>
                     </Breadcrumb>
@@ -117,9 +124,11 @@ export default async function Page() {
                 </div>
             </header>
 
+            {/* ===== Content ===== */}
             <ScrollArea className="min-h-0 flex-1">
                 <div className="p-4">
-                    <ComingSoon />
+                    {/* ✅ Purchase Order UI (Create / Approval / Receiving / Posting) */}
+                    <PurchaseOrderModule />
                 </div>
             </ScrollArea>
         </div>
