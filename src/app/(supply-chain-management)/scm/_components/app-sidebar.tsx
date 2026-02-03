@@ -37,7 +37,7 @@ const data = {
             icon: SquareTerminal,
             isActive: true,
             items: [
-                { title: "Create Purchase Order", url: "/scm/supplier-management/purchase-order" },
+                { title: "Create Purchase Order", url: "/scm/supplier-management/create-of-purchase-order" },
                 { title: "Approval of PO", url: "/scm/supplier-management/approval-of-purchase-order" },
                 { title: "Receiving Products", url: "/scm/supplier-management/receiving-products" },
                 { title: "Posting Of PO", url: "/scm/supplier-management/posting-of-purchase-order" }
