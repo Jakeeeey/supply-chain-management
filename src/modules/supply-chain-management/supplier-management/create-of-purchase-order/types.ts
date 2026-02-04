@@ -1,23 +1,18 @@
-// Product-related types
+// src/modules/supply-chain-management/supplier-management/create-of-purchase-order/types.ts
+
 export type Product = {
     id: string;
     name: string;
     sku: string;
     category: string;
     price: number;
-    uom: string; // Unit of Measure
-    availableUoms?: string[]; // Available unit of measurement options
+    uom: string;
+    availableUoms?: string[];
 };
 
 export type CartItem = Product & {
     orderQty: number;
-    selectedUom: string; // Selected unit of measurement
-};
-
-// Branch-related types
-export type Branch = {
-    id: string;
-    name: string;
+    selectedUom: string;
 };
 
 export type BranchAllocation = {
@@ -26,28 +21,29 @@ export type BranchAllocation = {
     items: CartItem[];
 };
 
-// Supplier-related types
 export type Supplier = {
     id: string;
     name: string;
     terms: string;
+    apBalance: number;
 };
 
-// Purchase Order types
-export type PurchaseOrder = {
-    poNumber: string;
-    supplier: Supplier | null;
-    branches: BranchAllocation[];
-    subtotal: number;
-    tax: number;
-    total: number;
-    createdAt: Date;
-    status: 'draft' | 'pending' | 'approved' | 'rejected';
-};
-
-// User types
-export type User = {
+export type Branch = {
+    id: string;
     name: string;
-    role: string;
-    initials: string;
+};
+
+export type CreatePoState = {
+    selectedSupplier: Supplier | null;
+    selectedBranches: BranchAllocation[];
+    poNumber: string;
+    poDate: string;
+};
+
+export type ProductPickerState = {
+    open: boolean;
+    activeBranchId: string | null;
+    tempCart: CartItem[];
+    searchQuery: string;
+    selectedCategory: string;
 };
