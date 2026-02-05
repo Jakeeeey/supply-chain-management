@@ -1,50 +1,75 @@
 import { NextRequest, NextResponse } from "next/server";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 function getDirectusBase() {
     const raw =
-        process.env.NEXT_PUBLIC_DIRECTUS_URL ||
         process.env.DIRECTUS_URL ||
+        process.env.NEXT_PUBLIC_DIRECTUS_URL ||
         "http://100.110.197.61:8056";
 
-    if (raw.includes("100.110.197.61:8056") && raw.startsWith("https://")) {
-        return raw.replace(/^https:\/\//, "http://");
-    }
-
-    return raw;
+    if (!/^https?:\/\//i.test(raw)) return `http://${raw}`;
+    return raw.replace(/\/$/, "");
 }
 
-export async function GET(req: NextRequest) {
+export async function POST(req: NextRequest) {
     try {
-        const DIRECTUS_URL = getDirectusBase();
+        const base = getDirectusBase();
         const TOKEN = process.env.DIRECTUS_TOKEN;
 
-        const { searchParams } = new URL(req.url);
-        const supplierId = searchParams.get("supplierId");
+        const body = await req.json().catch(() => null);
 
-        if (!supplierId) return NextResponse.json({ data: [] });
+        if (!body?.supplierId || !body?.poNumber) {
+            return NextResponse.json(
+                { error: "Missing required fields: supplierId, poNumber" },
+                { status: 400 }
+            );
+        }
 
-        const url =
-            `${DIRECTUS_URL.replace(/\/$/, "")}/items/product_per_supplier` +
-            `?filter[supplier_id][_eq]=${encodeURIComponent(supplierId)}` +
-            `&limit=-1`;
+        // ✅ You can adjust these field names to match your Directus collection schema
+        const payload = {
+            po_number: String(body.poNumber),
+            po_date: body.poDate ? String(body.poDate) : new Date().toISOString(),
+            supplier_id: String(body.supplierId),
 
-        const headers: Record<string, string> = {};
-        if (TOKEN) headers.Authorization = `Bearer ${TOKEN}`;
+            status: "FOR_APPROVAL",
 
-        const res = await fetch(url, { headers, cache: "no-store" });
-        const json = await res.json();
+            subtotal: Number(body.subtotal ?? 0),
+            discount: Number(body.discount ?? 0),
+            vat: Number(body.vat ?? body.tax ?? 0),
+            total: Number(body.total ?? 0),
+
+            // store details (if you have JSON fields)
+            allocations: body.allocations ?? [],
+            items: body.items ?? [],
+        };
+
+        const upstream = `${base}/items/purchase_order`;
+
+        const res = await fetch(upstream, {
+            method: "POST",
+            cache: "no-store",
+            headers: {
+                "Content-Type": "application/json",
+                ...(TOKEN ? { Authorization: `Bearer ${TOKEN}` } : {}),
+            },
+            body: JSON.stringify(payload),
+        });
+
+        const json = await res.json().catch(() => ({}));
 
         if (!res.ok) {
             return NextResponse.json(
-                { error: "Failed to fetch product_per_supplier", url, details: json },
+                { error: "Directus create purchase_order failed", details: json },
                 { status: res.status }
             );
         }
 
-        return NextResponse.json(json);
+        return NextResponse.json({ data: json?.data ?? json });
     } catch (e: any) {
         return NextResponse.json(
-            { error: "Links API crashed", message: e?.message || String(e) },
+            { error: "Failed to save purchase order", details: String(e?.message ?? e) },
             { status: 500 }
         );
     }

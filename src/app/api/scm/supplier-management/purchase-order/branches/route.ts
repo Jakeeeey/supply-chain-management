@@ -1,42 +1,59 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 function getDirectusBase() {
     const raw =
-        process.env.NEXT_PUBLIC_DIRECTUS_URL ||
         process.env.DIRECTUS_URL ||
+        process.env.NEXT_PUBLIC_DIRECTUS_URL ||
         "http://100.110.197.61:8056";
 
-    if (raw.includes("100.110.197.61:8056") && raw.startsWith("https://")) {
-        return raw.replace(/^https:\/\//, "http://");
-    }
-
-    return raw;
+    if (!/^https?:\/\//i.test(raw)) return `http://${raw}`;
+    return raw.replace(/\/$/, "");
 }
 
-export async function GET() {
+function buildUpstreamHeaders(req: NextRequest) {
+    const h: Record<string, string> = { "Content-Type": "application/json" };
+
+    const envToken = process.env.DIRECTUS_TOKEN;
+    if (envToken) {
+        h.Authorization = `Bearer ${envToken}`;
+        return h;
+    }
+
+    const incomingAuth = req.headers.get("authorization");
+    if (incomingAuth) h.Authorization = incomingAuth;
+
+    return h;
+}
+
+export async function GET(req: NextRequest) {
     try {
-        const DIRECTUS_URL = getDirectusBase();
-        const TOKEN = process.env.DIRECTUS_TOKEN;
+        const base = getDirectusBase();
+        const url = new URL(req.url);
+        const limit = url.searchParams.get("limit") ?? "-1";
 
-        const url = `${DIRECTUS_URL.replace(/\/$/, "")}/items/branches?limit=-1`;
+        const upstream = `${base}/items/branches?limit=${encodeURIComponent(limit)}`;
 
-        const headers: Record<string, string> = {};
-        if (TOKEN) headers.Authorization = `Bearer ${TOKEN}`;
+        const res = await fetch(upstream, {
+            headers: buildUpstreamHeaders(req),
+            cache: "no-store",
+        });
 
-        const res = await fetch(url, { headers, cache: "no-store" });
-        const json = await res.json();
+        const json = await res.json().catch(() => ({}));
 
         if (!res.ok) {
             return NextResponse.json(
-                { error: "Failed to fetch branches", url, details: json },
+                { error: "Upstream branches fetch failed", details: json },
                 { status: res.status }
             );
         }
 
-        return NextResponse.json(json);
-    } catch (e: any) {
+        return NextResponse.json({ data: json.data ?? [] });
+    } catch (err: any) {
         return NextResponse.json(
-            { error: "Branches API crashed", message: e?.message || String(e) },
+            { error: "Branches route failed", details: String(err?.message ?? err) },
             { status: 500 }
         );
     }

@@ -155,7 +155,7 @@ export function PurchaseOrderSummary(props: {
                             <span className="font-bold text-emerald-600">-{money.format(props.discount)}</span>
                         </div>
                         <div className="flex justify-between text-xs border-b border-border/50 pb-3">
-                            <span className="text-muted-foreground font-medium uppercase">Tax (12%)</span>
+                            <span className="text-muted-foreground font-medium uppercase">VAT </span>
                             <span className="font-bold text-foreground">{money.format(props.tax)}</span>
                         </div>
                         <div className="flex justify-between items-center pt-1">

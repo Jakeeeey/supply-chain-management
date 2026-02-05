@@ -1,54 +1,50 @@
 // src/modules/supply-chain-management/supplier-management/create-of-purchase-order/types.ts
 
-export interface Supplier {
-    id: number;
-    supplier_name: string;
-    address: string;
-    tin_number: string;
-    payment_terms: string;
-    supplier_image?: string;
-    apBalance?: number; // Computed or fetched separately
-}
+export type Supplier = {
+    id: string;
+    name: string;
+    terms: string;
+    apBalance: number;
+};
 
-export interface Branch {
-    id: number;
-    branch_name: string;
-    branch_code: string;
-    isMoving: number;
-}
+export type DiscountType = {
+    id: string;
+    name: string;
+    percent: number;
+};
 
-export interface Product {
-    product_id: number;
-    product_name: string;
-    product_code: string | null;
-    price_per_unit: number; // Mapped from JSON "price_per_unit"
-    unit_of_measurement: number; // ID of UOM
-    category_id: number; // Mapped from relation
-    description: string | null;
-}
+export type Product = {
+    id: string;
+    name: string;
+    sku: string;
+    category: string;
 
-export interface ProductCategory {
-    category_id: number;
-    category_name: string;
-}
+    // ✅ price is now "PRICE PER BOX"
+    price: number;
 
-// Intermediary table for filtering
-export interface ProductSupplierLink {
-    id: number;
-    product_id: number;
-    supplier_id: number;
-}
+    // ✅ Always BOX in UI
+    uom: string; // "BOX"
+    uomId?: number; // 11
 
-// The Cart Item (Product + Selection State)
-export interface CartItem extends Product {
-    orderQty: number;
-    selectedUom: string; // Placeholder for UOM name
-    branchId: number; // Which branch this specific item is for
-    totalAmount: number;
-}
+    // For audit/debug
+    baseUnitPrice?: number; // original price_per_unit
+    baseUomId?: number; // original unit_of_measurement (raw)
+    unitsPerBox?: number; // how many base units in 1 BOX (derived)
 
-export interface BranchAllocation {
-    branchId: number;
+    // ✅ Fixed per supplier-product
+    discountTypeId?: string;
+
+    // keep compat
+    availableUoms?: string[];
+};
+
+export type CartItem = Product & {
+    orderQty: number;      // ✅ qty in BOXES
+    selectedUom: string;   // "BOX"
+};
+
+export type BranchAllocation = {
+    branchId: string;
     branchName: string;
     items: CartItem[];
-}
+};
