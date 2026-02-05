@@ -4,7 +4,7 @@
 import * as React from "react";
 import { Building2, ChevronDown } from "lucide-react";
 import type { Supplier, Branch } from "../types";
-import { cn, buildMoneyFormatter } from "../utils/format";
+import { cn, buildMoneyFormatter } from "../utils/calculations";
 
 export function CreatePurchaseOrderToolbar(props: {
     // supplier

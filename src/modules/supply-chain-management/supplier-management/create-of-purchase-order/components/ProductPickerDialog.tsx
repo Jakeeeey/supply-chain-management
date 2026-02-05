@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Check, Package, Plus, Search, ShoppingCart, X, Minus } from "lucide-react";
 import type { CartItem, Product } from "../types";
-import { cn, buildMoneyFormatter } from "../utils/format";
+import { cn, buildMoneyFormatter } from "../utils/calculations";
 
 import {
     Dialog,

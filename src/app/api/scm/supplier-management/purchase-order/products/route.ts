@@ -19,14 +19,16 @@ export async function GET(req: NextRequest) {
         const TOKEN = process.env.DIRECTUS_TOKEN;
 
         const { searchParams } = new URL(req.url);
-        const supplierId = searchParams.get("supplierId");
+        const idsParam = searchParams.get("ids") || "";
 
-        if (!supplierId) return NextResponse.json({ data: [] });
+        const safeIds = idsParam
+            .split(",")
+            .map((s) => s.trim())
+            .filter((s) => /^\d+$/.test(s))
+            .join(",");
 
-        const url =
-            `${DIRECTUS_URL.replace(/\/$/, "")}/items/product_per_supplier` +
-            `?filter[supplier_id][_eq]=${encodeURIComponent(supplierId)}` +
-            `&limit=-1`;
+        let url = `${DIRECTUS_URL.replace(/\/$/, "")}/items/products?limit=-1`;
+        if (safeIds) url += `&filter[product_id][_in]=${safeIds}`;
 
         const headers: Record<string, string> = {};
         if (TOKEN) headers.Authorization = `Bearer ${TOKEN}`;
@@ -36,7 +38,7 @@ export async function GET(req: NextRequest) {
 
         if (!res.ok) {
             return NextResponse.json(
-                { error: "Failed to fetch product_per_supplier", url, details: json },
+                { error: "Failed to fetch products", url, details: json },
                 { status: res.status }
             );
         }
@@ -44,7 +46,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json(json);
     } catch (e: any) {
         return NextResponse.json(
-            { error: "Links API crashed", message: e?.message || String(e) },
+            { error: "Products API crashed", message: e?.message || String(e) },
             { status: 500 }
         );
     }

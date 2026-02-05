@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 function getDirectusBase() {
     const raw =
@@ -6,6 +6,7 @@ function getDirectusBase() {
         process.env.DIRECTUS_URL ||
         "http://100.110.197.61:8056";
 
+    // If your env accidentally uses https for this host, force http
     if (raw.includes("100.110.197.61:8056") && raw.startsWith("https://")) {
         return raw.replace(/^https:\/\//, "http://");
     }
@@ -13,20 +14,12 @@ function getDirectusBase() {
     return raw;
 }
 
-export async function GET(req: NextRequest) {
+export async function GET() {
     try {
         const DIRECTUS_URL = getDirectusBase();
         const TOKEN = process.env.DIRECTUS_TOKEN;
 
-        const { searchParams } = new URL(req.url);
-        const supplierId = searchParams.get("supplierId");
-
-        if (!supplierId) return NextResponse.json({ data: [] });
-
-        const url =
-            `${DIRECTUS_URL.replace(/\/$/, "")}/items/product_per_supplier` +
-            `?filter[supplier_id][_eq]=${encodeURIComponent(supplierId)}` +
-            `&limit=-1`;
+        const url = `${DIRECTUS_URL.replace(/\/$/, "")}/items/suppliers?limit=-1`;
 
         const headers: Record<string, string> = {};
         if (TOKEN) headers.Authorization = `Bearer ${TOKEN}`;
@@ -36,7 +29,7 @@ export async function GET(req: NextRequest) {
 
         if (!res.ok) {
             return NextResponse.json(
-                { error: "Failed to fetch product_per_supplier", url, details: json },
+                { error: "Failed to fetch suppliers", url, details: json },
                 { status: res.status }
             );
         }
@@ -44,7 +37,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json(json);
     } catch (e: any) {
         return NextResponse.json(
-            { error: "Links API crashed", message: e?.message || String(e) },
+            { error: "Suppliers API crashed", message: e?.message || String(e) },
             { status: 500 }
         );
     }
