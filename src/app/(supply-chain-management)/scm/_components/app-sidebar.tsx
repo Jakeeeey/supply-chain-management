@@ -32,6 +32,15 @@ const data = {
             isActive: true,
         },
         {
+            title: "Management",
+            url: "#",
+            icon: SquareTerminal,
+            isActive: true,
+            items: [
+                { title: "SKU Creation", url: "/scm/management/sku-creation" },
+            ],
+        },
+        {
             title: "Supplier Management",
             url: "#",
             icon: SquareTerminal,
