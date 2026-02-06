@@ -1,3 +1,4 @@
+// src/modules/supply-chain-management/supplier-management/create-of-purchase-order/CreatePurchaseOrderModule.tsx
 "use client";
 
 import * as React from "react";
@@ -10,16 +11,21 @@ import type {
     Supplier,
     DiscountType,
 } from "./types";
+
 import {
     cn,
-    deriveDiscountPercentFromCode,
     deriveUnitsPerBoxFromText,
+    calculateVatExclusiveFromAmounts,
+    makePoMeta,
 } from "./utils/calculations";
+
 import * as provider from "./providers/purchaseOrderProvider";
 
 import { BranchAllocations } from "./components/BranchAllocations";
-import { ProductPickerDialog } from "./components/ProductPickerDialog";
-import { PurchaseOrderSummary } from "./components/PurchaseOrderSummary";
+
+// ✅ Robust imports: works whether components are exported as named OR default
+import * as ProductPickerDialogModule from "./components/ProductPickerDialog";
+import * as PurchaseOrderSummaryModule from "./components/PurchaseOrderSummary";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -34,17 +40,25 @@ import {
 } from "@/components/ui/command";
 import { Separator } from "@/components/ui/separator";
 
+const ProductPickerDialog =
+    (ProductPickerDialogModule as any).ProductPickerDialog ??
+    (ProductPickerDialogModule as any).default;
+
+const PurchaseOrderSummary =
+    (PurchaseOrderSummaryModule as any).PurchaseOrderSummary ??
+    (PurchaseOrderSummaryModule as any).default;
+
 type RawSupplier = any;
 type RawBranch = any;
 type RawProduct = any;
 type RawDiscountType = any;
 
 const BOX_UOM_ID = 11;
-const FALLBACK_NO_DISCOUNT_ID = "24"; // your "No Discount" id
+const FALLBACK_NO_DISCOUNT_ID = "24";
 
 function normalizeSupplier(raw: RawSupplier): Supplier {
     return {
-        id: String(raw?.id ?? ""),
+        id: String(raw?.id ?? raw?.supplier_id ?? ""),
         name: String(raw?.supplier_name ?? raw?.name ?? "—"),
         terms: String(raw?.payment_terms ?? raw?.delivery_terms ?? ""),
         apBalance: Number(raw?.apBalance ?? raw?.ap_balance ?? 0) || 0,
@@ -53,7 +67,7 @@ function normalizeSupplier(raw: RawSupplier): Supplier {
 
 function normalizeBranch(raw: RawBranch) {
     return {
-        id: String(raw?.id ?? ""),
+        id: String(raw?.id ?? raw?.branch_id ?? ""),
         code: String(raw?.branch_code ?? ""),
         name: String(raw?.branch_name ?? raw?.branch_description ?? "—"),
     };
@@ -62,32 +76,16 @@ function normalizeBranch(raw: RawBranch) {
 function normalizeDiscountType(raw: RawDiscountType): DiscountType {
     const id = String(raw?.id ?? "");
     const name = String(raw?.discount_type ?? raw?.name ?? "No Discount");
-    const percent = Number.parseFloat(String(raw?.total_percent ?? "0")) || 0;
+    const percent = Number.parseFloat(String(raw?.total_percent ?? raw?.percent ?? "0")) || 0;
     return { id, name, percent };
-}
-
-function formatDateToday() {
-    const d = new Date();
-    return d.toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-    });
 }
 
 /**
  * ✅ BOX conversion rules:
- * - if baseUomId === 11 (BOX): price is already per box. DO NOT multiply.
- * - else:
- *   piecesPerBaseUnit = unit_of_measurement_count (ex: pack=10 pcs)
- *   piecesPerBox = parse from name/description (ex: x48)
- *   baseUnitsPerBox = piecesPerBox / piecesPerBaseUnit (ex: 200/10=20 packs)
- *   pricePerBox = baseUnitPrice * baseUnitsPerBox
+ * - if baseUomId === 11 (BOX): price already per box
+ * - else: compute price per box using parsed pieces per box
  */
-function normalizeProduct(
-    raw: RawProduct,
-    fixedDiscountTypeId: string
-): Product {
+function normalizeProduct(raw: RawProduct, fixedDiscountTypeId: string): Product {
     const id = String(raw?.product_id ?? raw?.id ?? "");
     const name = String(raw?.product_name ?? raw?.name ?? "—");
     const sku = String(raw?.product_code ?? raw?.barcode ?? raw?.sku ?? "");
@@ -98,53 +96,36 @@ function normalizeProduct(
             raw?.product_category_name ??
             raw?.product_category?.name ??
             raw?.product_category?.category_name ??
-            (raw?.product_category !== undefined
-                ? `Category ${raw.product_category}`
-                : "Uncategorized")
+            (raw?.product_category !== undefined ? `Category ${raw.product_category}` : "Uncategorized")
         ) || "Uncategorized";
 
     const baseUnitPrice =
-        Number(
-            raw?.priceA ??
-            raw?.price_per_unit ??
-            raw?.cost_per_unit ??
-            raw?.price ??
-            0
-        ) || 0;
+        Number(raw?.priceA ?? raw?.price_per_unit ?? raw?.cost_per_unit ?? raw?.price ?? 0) || 0;
 
-    const baseUomIdRaw = Number(
-        raw?.unit_of_measurement ?? raw?.uom_id ?? raw?.unit_id
-    );
+    const baseUomIdRaw = Number(raw?.unit_of_measurement ?? raw?.uom_id ?? raw?.unit_id);
     const baseUomId = Number.isFinite(baseUomIdRaw) ? baseUomIdRaw : 1;
 
     const baseUomCountRaw = Number(raw?.unit_of_measurement_count ?? 1);
     const piecesPerBaseUnit = Math.max(1, Number.isFinite(baseUomCountRaw) ? baseUomCountRaw : 1);
 
-    // parse pieces-per-box from text (ignore weights)
     const piecesPerBoxParsed = deriveUnitsPerBoxFromText(
         name,
         String(raw?.description ?? raw?.short_description ?? ""),
         baseUomId === BOX_UOM_ID ? piecesPerBaseUnit : 0
     );
 
-    // final price per BOX
     let pricePerBox = baseUnitPrice;
     let piecesPerBox = 1;
     let baseUnitsPerBox = 1;
 
     if (baseUomId === BOX_UOM_ID) {
-        // ✅ already a BOX product
         pricePerBox = baseUnitPrice;
-        // for display/reference: how many pcs inside the box
         piecesPerBox = Math.max(1, piecesPerBaseUnit || piecesPerBoxParsed || 1);
         baseUnitsPerBox = 1;
     } else {
         piecesPerBox = Math.max(1, piecesPerBoxParsed || 0);
-
-        // base units per box (packs/ties/pieces needed to complete 1 box)
         baseUnitsPerBox = piecesPerBox > 0 ? piecesPerBox / piecesPerBaseUnit : 1;
         if (!Number.isFinite(baseUnitsPerBox) || baseUnitsPerBox <= 0) baseUnitsPerBox = 1;
-
         pricePerBox = baseUnitPrice * baseUnitsPerBox;
     }
 
@@ -153,18 +134,15 @@ function normalizeProduct(
         name,
         sku,
         category,
-
-        // ✅ everything becomes BOX
         price: pricePerBox,
         uom: "BOX",
         uomId: BOX_UOM_ID,
         availableUoms: ["BOX"],
 
-        // keep reference fields (useful for audit / saving)
         baseUnitPrice,
         baseUomId,
-        unitsPerBox: piecesPerBox,        // pcs per box
-        baseUnitsPerBox,                 // packs/ties/pieces per box (for pack conversion)
+        unitsPerBox: piecesPerBox,
+        baseUnitsPerBox,
         discountTypeId: String(fixedDiscountTypeId || ""),
     } as any;
 }
@@ -192,9 +170,9 @@ function SupplierSelect(props: {
                         disabled={props.disabled}
                     >
                         <div className="flex items-center gap-2 min-w-0">
-              <span className="truncate text-xs font-bold">
-                {props.value?.name ?? "Select supplier"}
-              </span>
+                            <span className="truncate text-xs font-bold">
+                                {props.value?.name ?? "Select supplier"}
+                            </span>
                             {props.value?.id ? (
                                 <Badge variant="secondary" className="text-[10px] font-black">
                                     ID: {props.value.id}
@@ -254,12 +232,12 @@ function SupplierSelect(props: {
 
             {props.value ? (
                 <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-          <span>
-            A/P Balance:{" "}
-              <span className="font-bold text-foreground">
-              {props.value.apBalance.toLocaleString()}
-            </span>
-          </span>
+                    <span>
+                        A/P Balance:{" "}
+                        <span className="font-bold text-foreground">
+                            {props.value.apBalance.toLocaleString()}
+                        </span>
+                    </span>
                     <button
                         type="button"
                         onClick={() => props.onChange(null)}
@@ -328,8 +306,8 @@ function BranchMultiSelect(props: {
                                     <div className="flex items-center gap-2">
                                         <Check className="w-4 h-4 opacity-70" />
                                         <span className="text-xs font-black uppercase tracking-wider">
-                      Select All
-                    </span>
+                                            Select All
+                                        </span>
                                     </div>
                                 </CommandItem>
 
@@ -337,8 +315,8 @@ function BranchMultiSelect(props: {
                                     <div className="flex items-center gap-2 text-destructive">
                                         <X className="w-4 h-4" />
                                         <span className="text-xs font-black uppercase tracking-wider">
-                      Clear
-                    </span>
+                                            Clear
+                                        </span>
                                     </div>
                                 </CommandItem>
                             </CommandGroup>
@@ -410,16 +388,18 @@ function BranchMultiSelect(props: {
 
 export default function CreatePurchaseOrderModule() {
     const [isLoading, setIsLoading] = React.useState(true);
+    const [isSaving, setIsSaving] = React.useState(false);
     const [error, setError] = React.useState<string>("");
 
     const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
-    const [branches, setBranches] = React.useState<Array<{ id: string; code: string; name: string }>>([]);
+    const [branches, setBranches] = React.useState<Array<{ id: string; code: string; name: string }>>(
+        []
+    );
 
     const [discountTypes, setDiscountTypes] = React.useState<DiscountType[]>([]);
 
     const [selectedSupplier, setSelectedSupplier] = React.useState<Supplier | null>(null);
     const [selectedBranchIds, setSelectedBranchIds] = React.useState<string[]>([]);
-
     const [allocations, setAllocations] = React.useState<BranchAllocation[]>([]);
 
     const [allProducts, setAllProducts] = React.useState<Product[]>([]);
@@ -431,8 +411,10 @@ export default function CreatePurchaseOrderModule() {
 
     const [tempCart, setTempCart] = React.useState<CartItem[]>([]);
 
-    const poNumber = "DRAFT-PO";
-    const poDate = React.useMemo(() => formatDateToday(), []);
+    const meta = React.useMemo(() => (makePoMeta() as any), []);
+    const poNumber = String(meta?.poNumber ?? "DRAFT-PO");
+    const poDate = String(meta?.poDate ?? "");
+    const poDateISO = String(meta?.poDateISO ?? new Date().toISOString());
 
     const discountTypeById = React.useMemo(() => {
         const m = new Map<string, DiscountType>();
@@ -441,7 +423,7 @@ export default function CreatePurchaseOrderModule() {
     }, [discountTypes]);
 
     const defaultNoDiscountId = React.useMemo(() => {
-        const byName = discountTypes.find((d) => d.name?.toLowerCase() === "no discount");
+        const byName = discountTypes.find((d) => String(d.name ?? "").toLowerCase() === "no discount");
         if (byName) return byName.id;
         return discountTypes[0]?.id ?? FALLBACK_NO_DISCOUNT_ID;
     }, [discountTypes]);
@@ -492,7 +474,7 @@ export default function CreatePurchaseOrderModule() {
         };
     }, []);
 
-    // ✅ supplier change: fetch products + product_per_supplier links then merge discountTypeId
+    // supplier change: fetch products + product_per_supplier links then merge discountTypeId
     React.useEffect(() => {
         let alive = true;
 
@@ -521,7 +503,9 @@ export default function CreatePurchaseOrderModule() {
                 setAllProducts(
                     (rawProducts ?? []).map((rp: any) => {
                         const pid = String(rp?.product_id ?? rp?.id ?? "");
-                        const fixedDiscountTypeId = discountByProductId.get(pid) || defaultNoDiscountId || FALLBACK_NO_DISCOUNT_ID;
+                        const fixedDiscountTypeId =
+                            discountByProductId.get(pid) || defaultNoDiscountId || FALLBACK_NO_DISCOUNT_ID;
+
                         return normalizeProduct(rp, fixedDiscountTypeId);
                     })
                 );
@@ -635,11 +619,10 @@ export default function CreatePurchaseOrderModule() {
 
                 const item: CartItem = {
                     ...(p as any),
-                    orderQty: 1, // 1 BOX
+                    orderQty: 1,
                     selectedUom: "BOX",
                     uom: "BOX",
                     uomId: BOX_UOM_ID,
-                    // ✅ fixed discount from product_per_supplier mapping
                     discountTypeId: String((p as any).discountTypeId || defaultNoDiscountId || FALLBACK_NO_DISCOUNT_ID),
                 } as any;
 
@@ -649,7 +632,6 @@ export default function CreatePurchaseOrderModule() {
         [defaultNoDiscountId]
     );
 
-    // keep for compatibility (UI removed; forced BOX)
     const updateTempUom = React.useCallback((productId: string, _uom: string) => {
         setTempCart((prev) =>
             prev.map((x: any) =>
@@ -682,6 +664,7 @@ export default function CreatePurchaseOrderModule() {
         setAllocations((prev) =>
             prev.map((b) => (b.branchId === branchId ? { ...b, items: normalized as any } : b))
         );
+
         setPickerOpen(false);
     }, [pickerBranchId, tempCart, defaultNoDiscountId]);
 
@@ -690,12 +673,15 @@ export default function CreatePurchaseOrderModule() {
         return allocations.flatMap((b) => b.items.map((item) => ({ branchName: b.branchName, item })));
     }, [allocations]);
 
-    const subtotal = React.useMemo(() => {
-        return allItemsFlat.reduce((sum, x) => sum + Number(x.item.price || 0) * Number(x.item.orderQty || 0), 0);
+    const grossAmount = React.useMemo(() => {
+        return allItemsFlat.reduce(
+            (sum, x) => sum + Number(x.item.price || 0) * Number(x.item.orderQty || 0),
+            0
+        );
     }, [allItemsFlat]);
 
-    // ✅ discount FIXED (dt.percent if >0 else derive from code like L10/5)
-    const discount = React.useMemo(() => {
+    // ✅ Discount uses DB computed percent ONLY (discount_types.total_percent)
+    const discountAmount = React.useMemo(() => {
         return allItemsFlat.reduce((sum, x) => {
             const item: any = x.item;
             const gross = Number(item.price || 0) * Number(item.orderQty || 0);
@@ -703,79 +689,144 @@ export default function CreatePurchaseOrderModule() {
             const id = String(item.discountTypeId || defaultNoDiscountId || "");
             const dt = id ? discountTypeById.get(id) : undefined;
 
-            const code = String(dt?.name ?? "");
-            const pct =
-                Number(dt?.percent ?? 0) > 0
-                    ? Number(dt?.percent)
-                    : deriveDiscountPercentFromCode(code);
-
+            const pct = Math.max(0, Number(dt?.percent ?? 0));
             return sum + gross * (pct / 100);
         }, 0);
     }, [allItemsFlat, discountTypeById, defaultNoDiscountId]);
 
-    const taxableBase = Math.max(0, subtotal - discount);
-    const tax = taxableBase * 0.12; // VAT 12%
-    const total = taxableBase + tax;
+    // ✅ VAT split logic lives inside calculateVatExclusiveFromAmounts
+    const financials = React.useMemo(() => {
+        return calculateVatExclusiveFromAmounts(grossAmount, discountAmount);
+    }, [grossAmount, discountAmount]);
 
-    const canSave = Boolean(selectedSupplier?.id) && allItemsFlat.length > 0;
+    const canSave = Boolean(selectedSupplier?.id) && allItemsFlat.length > 0 && !isSaving;
 
-    const onSave = React.useCallback(() => {
-        // ✅ if you already added provider.createPurchaseOrder(), switch to that here.
-        // For now, keeping your log but with correct payload shape.
-        console.log("SAVE PO", {
-            poNumber,
-            poDate,
-            supplierId: selectedSupplier?.id ?? null,
-            branches: allocations,
-            subtotal,
-            discount,
-            vat: tax,
-            total,
-            items: allItemsFlat.map((x) => {
-                const it: any = x.item;
-                return {
-                    branchName: x.branchName,
-                    productId: it.id,
-                    qtyBoxes: it.orderQty,
-                    uomId: BOX_UOM_ID,
-                    pricePerBox: it.price,
-                    pcsPerBox: it.unitsPerBox ?? 1,
-                    baseUomId: it.baseUomId ?? null,
-                    baseUnitPrice: it.baseUnitPrice ?? null,
-                    baseUnitsPerBox: it.baseUnitsPerBox ?? null,
-                    discountTypeId: it.discountTypeId ?? null,
-                };
-            }),
-        });
+    const onSave = React.useCallback(async () => {
+        if (!selectedSupplier?.id) return;
+        if (!allItemsFlat.length) return;
 
-        // Example (enable kapag ready na route mo):
-        // void (async () => {
-        //   await provider.createPurchaseOrder({
-        //     poNumber,
-        //     poDate,
-        //     supplierId: selectedSupplier?.id,
-        //     allocations,
-        //     subtotal,
-        //     discount,
-        //     vat: tax,
-        //     total,
-        //     items: allItemsFlat.map((x) => ({
-        //       branchName: x.branchName,
-        //       productId: (x.item as any).id,
-        //       qtyBoxes: (x.item as any).orderQty,
-        //       uomId: BOX_UOM_ID,
-        //       pricePerBox: (x.item as any).price,
-        //       pcsPerBox: (x.item as any).unitsPerBox ?? 1,
-        //       discountTypeId: (x.item as any).discountTypeId ?? null,
-        //     })),
-        //   });
-        // })();
-    }, [poNumber, poDate, selectedSupplier, allocations, subtotal, discount, tax, total, allItemsFlat]);
+        try {
+            setIsSaving(true);
+            setError("");
+
+            const nowISO = new Date().toISOString();
+            const dateOnly = nowISO.slice(0, 10);
+
+            const payload: any = {
+                purchase_order_no: poNumber,
+                supplier_name: Number(selectedSupplier.id),
+
+                date: dateOnly,
+                date_encoded: nowISO,
+
+                gross_amount: financials.grossAmount,
+                discounted_amount: financials.discountAmount,
+
+                vat_amount: financials.vatAmount,
+                withholding_tax_amount: financials.ewtGoods,
+                total_amount: financials.total,
+
+                inventory_status: 1,
+
+                // keep compatibility fields (optional)
+                poNumber,
+                poDate,
+                poDateISO,
+                supplierId: selectedSupplier.id,
+                grossAmount: financials.grossAmount,
+                discountAmount: financials.discountAmount,
+                netAmount: financials.netAmount,
+                vatAmount: financials.vatAmount,
+                ewtGoods: financials.ewtGoods,
+                total: financials.total,
+
+                allocations,
+                items: allItemsFlat.map((x) => {
+                    const it: any = x.item;
+                    return {
+                        branchName: x.branchName,
+                        productId: it.id,
+                        qtyBoxes: it.orderQty,
+                        uomId: BOX_UOM_ID,
+                        pricePerBox: it.price,
+                        pcsPerBox: it.unitsPerBox ?? 1,
+                        baseUomId: it.baseUomId ?? null,
+                        baseUnitPrice: it.baseUnitPrice ?? null,
+                        baseUnitsPerBox: it.baseUnitsPerBox ?? null,
+                        discountTypeId: it.discountTypeId ?? null,
+                    };
+                }),
+            };
+
+            const res = await fetch("/api/scm/supplier-management/purchase-order", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+
+            const json = await res.json().catch(() => ({}));
+
+            if (!res.ok) {
+                throw new Error(json?.error || "Failed to create purchase order");
+            }
+
+            console.log("PO RESPONSE:", json?.data ?? json);
+
+            // ✅ IMPORTANT: return json so Summary can show correct UI (saved vs already exists)
+            return json;
+        } catch (e: any) {
+            const msg = String(e?.message ?? e);
+            setError(msg);
+            throw new Error(msg); // ✅ IMPORTANT: para mahuli ng PurchaseOrderSummary
+        } finally {
+            setIsSaving(false);
+        }
+    }, [selectedSupplier, allItemsFlat, poNumber, poDate, poDateISO, allocations, financials]);
 
     const pickerBranchLabel = React.useMemo(() => {
         const b = allocations.find((x) => x.branchId === pickerBranchId);
         return b?.branchName ?? "Branch";
     }, [allocations, pickerBranchId]);
+
+    // =====================================================
+    // ✅ NEW: ALLOCATIONS PAGINATION (cards below dropdown)
+    // =====================================================
+    const [allocPage, setAllocPage] = React.useState(1);
+    const allocPerPage = 5;
+
+    const allocTotalPages = React.useMemo(() => {
+        return Math.max(1, Math.ceil((allocations?.length ?? 0) / allocPerPage));
+    }, [allocations?.length]);
+
+    React.useEffect(() => {
+        // keep in range when removing/adding branches
+        setAllocPage((p) => Math.min(Math.max(1, p), allocTotalPages));
+    }, [allocTotalPages, allocations?.length]);
+
+    React.useEffect(() => {
+        // whenever selection changes, go back to page 1
+        setAllocPage(1);
+    }, [selectedSupplier?.id, selectedBranchIds.join("|")]);
+
+    const paginatedAllocations = React.useMemo(() => {
+        const start = (allocPage - 1) * allocPerPage;
+        return (allocations ?? []).slice(start, start + allocPerPage);
+    }, [allocations, allocPage]);
+
+    const allocDotPages = React.useMemo(() => {
+        const total = allocTotalPages;
+        const current = Math.min(Math.max(1, allocPage), total);
+        const maxDots = 5;
+        const half = Math.floor(maxDots / 2);
+
+        let start = Math.max(1, current - half);
+        let end = Math.min(total, start + maxDots - 1);
+        start = Math.max(1, end - maxDots + 1);
+
+        const pages: number[] = [];
+        for (let p = start; p <= end; p++) pages.push(p);
+        return pages;
+    }, [allocPage, allocTotalPages]);
 
     return (
         <div className="w-full min-w-0 space-y-6">
@@ -797,14 +848,14 @@ export default function CreatePurchaseOrderModule() {
                         setAllocations([]);
                         setSelectedBranchIds([]);
                     }}
-                    disabled={isLoading}
+                    disabled={isLoading || isSaving}
                 />
 
                 <BranchMultiSelect
                     branches={branches}
                     value={selectedBranchIds}
                     onChange={setSelectedBranchIds}
-                    disabled={isLoading}
+                    disabled={isLoading || isSaving}
                 />
 
                 <div className="flex items-end gap-2">
@@ -821,14 +872,60 @@ export default function CreatePurchaseOrderModule() {
                 </div>
             ) : null}
 
+            {/* ✅ NEW: Pagination controls for BranchAllocations cards */}
+            {allocations.length > allocPerPage ? (
+                <div className="flex items-center justify-between gap-3">
+                    <span className="text-[10px] font-bold text-muted-foreground bg-background px-2 py-0.5 rounded border uppercase">
+                        Page {allocPage} of {allocTotalPages}
+                    </span>
+
+                    <div className="flex items-center gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 px-3 text-[10px] font-black uppercase"
+                            disabled={allocPage === 1}
+                            onClick={() => setAllocPage((p) => Math.max(1, p - 1))}
+                        >
+                            Prev
+                        </Button>
+
+                        <div className="flex gap-1.5">
+                            {allocDotPages.map((p) => (
+                                <div
+                                    key={p}
+                                    className={cn(
+                                        "w-1.5 h-1.5 rounded-full",
+                                        allocPage === p ? "bg-primary" : "bg-border"
+                                    )}
+                                />
+                            ))}
+                        </div>
+
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 px-3 text-[10px] font-black uppercase"
+                            disabled={allocPage >= allocTotalPages}
+                            onClick={() => setAllocPage((p) => Math.min(allocTotalPages, p + 1))}
+                        >
+                            Next
+                        </Button>
+                    </div>
+                </div>
+            ) : null}
+
+            {/* ✅ IMPORTANT: Only show 5 branch cards per page */}
             <BranchAllocations
-                branches={allocations}
+                branches={paginatedAllocations}
                 canAddProducts={canAddProducts}
                 onRemoveBranch={removeBranch}
                 onOpenPicker={openPicker}
                 onUpdateQty={updateQty}
                 onRemoveItem={removeItem}
-                discountTypes={discountTypes} // display only
+                discountTypes={discountTypes}
             />
 
             <PurchaseOrderSummary
@@ -838,10 +935,11 @@ export default function CreatePurchaseOrderModule() {
                 supplier={selectedSupplier}
                 branches={allocations}
                 allItemsFlat={allItemsFlat}
-                subtotal={subtotal}
-                discount={discount}
-                tax={tax}
-                total={total}
+                subtotal={financials.grossAmount}
+                discount={financials.discountAmount}
+                tax={financials.vatAmount}
+                ewtGoods={financials.ewtGoods}
+                total={financials.total}
                 onSave={onSave}
                 canSave={canSave}
             />
@@ -859,7 +957,7 @@ export default function CreatePurchaseOrderModule() {
                 products={filteredProducts}
                 tempCart={tempCart}
                 onToggleProduct={toggleProduct}
-                onUpdateTempUom={updateTempUom} // locked to BOX
+                onUpdateTempUom={updateTempUom}
                 onRemoveFromTemp={removeFromTemp}
                 onUpdateTempQty={updateTempQty}
                 onConfirm={confirmPicker}

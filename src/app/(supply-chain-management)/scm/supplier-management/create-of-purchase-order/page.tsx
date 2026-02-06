@@ -10,6 +10,8 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+
+// ✅ FIX: nav-user is under scm/_components (not supplier-management/_components)
 import { NavUser } from "../../_components/nav-user";
 
 import { cookies } from "next/headers";
@@ -48,8 +50,20 @@ function pickString(obj: any, keys: string[]): string {
 function buildHeaderUserFromToken(token: string | null | undefined) {
     const payload = token ? decodeJwtPayload(token) : null;
 
-    const first = pickString(payload, ["Firstname", "FirstName", "firstName", "firstname", "first_name"]);
-    const last = pickString(payload, ["LastName", "Lastname", "lastName", "lastname", "last_name"]);
+    const first = pickString(payload, [
+        "Firstname",
+        "FirstName",
+        "firstName",
+        "firstname",
+        "first_name",
+    ]);
+    const last = pickString(payload, [
+        "LastName",
+        "Lastname",
+        "lastName",
+        "lastname",
+        "last_name",
+    ]);
     const email = pickString(payload, ["email", "Email"]);
 
     const name = [first, last].filter(Boolean).join(" ") || email || "User";
@@ -79,7 +93,10 @@ export default async function Page() {
             >
                 <div className="flex h-full items-center gap-2 px-4">
                     <SidebarTrigger className="-ml-1" />
-                    <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
+                    <Separator
+                        orientation="vertical"
+                        className="mr-2 data-[orientation=vertical]:h-4"
+                    />
                     <Breadcrumb>
                         <BreadcrumbList>
                             <BreadcrumbItem className="hidden md:block">

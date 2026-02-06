@@ -66,10 +66,12 @@ export async function fetchDiscountTypes() {
     return fetchData<any[]>(`${BASE}/discount-types`);
 }
 
-/** ✅ NEW: Save PO to Directus purchase_order */
+/** ✅ Save PO to API route */
 export async function createPurchaseOrder(payload: any) {
-    return fetchData<any>(`${BASE}/purchase-orders`, {
+    return fetchData<any>(`${BASE}`, {
         method: "POST",
         body: JSON.stringify(payload),
     });
 }
+
+

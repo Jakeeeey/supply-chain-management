@@ -3,6 +3,27 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/**
+ * Same logic as utils/deriveDiscountPercentFromCode (server-safe copy)
+ * Sequential: total = 1 - Π(1 - pi/100)
+ */
+function deriveDiscountPercentFromCode(codeRaw: string): number {
+    const code = String(codeRaw ?? "").trim().toUpperCase();
+
+    if (!code || code === "NO DISCOUNT" || code === "D0") return 0;
+
+    const nums = (code.match(/\d+(?:\.\d+)?/g) ?? [])
+        .map((s) => Number(s))
+        .filter((n) => Number.isFinite(n) && n > 0 && n <= 100);
+
+    if (!nums.length) return 0;
+
+    const netFactor = nums.reduce((acc, p) => acc * (1 - p / 100), 1);
+    const combined = (1 - netFactor) * 100;
+
+    return Math.max(0, Math.min(100, Number(combined.toFixed(4))));
+}
+
 export async function GET() {
     try {
         const DIRECTUS_URL =
@@ -28,7 +49,21 @@ export async function GET() {
         }
 
         const json = await res.json();
-        return NextResponse.json({ data: json?.data ?? [] });
+
+        // ✅ ensure total_percent is usable (ACE promo already computed in DB)
+        const mapped = (json?.data ?? []).map((d: any) => {
+            const rawPct = Number.parseFloat(String(d?.total_percent ?? "0")) || 0;
+            const code = String(d?.discount_type ?? "");
+            const computed = rawPct > 0 ? rawPct : deriveDiscountPercentFromCode(code);
+
+            return {
+                id: d?.id,
+                discount_type: d?.discount_type,
+                total_percent: computed,
+            };
+        });
+
+        return NextResponse.json({ data: mapped });
     } catch (e: any) {
         return NextResponse.json(
             { error: "Failed to fetch discount types", details: String(e?.message ?? e) },

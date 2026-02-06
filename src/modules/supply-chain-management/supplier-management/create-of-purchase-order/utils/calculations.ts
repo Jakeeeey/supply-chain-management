@@ -14,16 +14,23 @@ export function buildMoneyFormatter() {
 }
 
 export function makePoMeta() {
-    const timestamp = Date.now();
-    const dateStr = new Date().toISOString().split("T")[0].replace(/-/g, "");
+    const d = new Date();
+    const timestamp = d.getTime();
+    const dateStr = d.toISOString().split("T")[0].replace(/-/g, "");
     const poNumber = `PO-${dateStr}-${timestamp}`;
+
+    // keep as-is (you can display a different date format in UI)
     const poDate = new Intl.DateTimeFormat("en-US", {
         month: "numeric",
         day: "numeric",
         year: "numeric",
-    }).format(new Date());
+    }).format(d);
 
-    return { poNumber, poDate };
+    // ✅ add ISO helpers (no breaking change; just additional fields)
+    const poDateISO = d.toISOString();
+    const poDateOnlyISO = poDateISO.slice(0, 10);
+
+    return { poNumber, poDate, poDateISO, poDateOnlyISO };
 }
 
 export const TAX_RATES = {
@@ -32,6 +39,9 @@ export const TAX_RATES = {
     EWT_SERVICES: 0.02,
 };
 
+/**
+ * Legacy VAT-inclusive logic (KEEP — per your instruction, we won't touch usage)
+ */
 export function calculateFinancials(
     items: { price_per_unit: number; orderQty: number }[],
     discountPercentage: number = 0
@@ -59,15 +69,6 @@ export function calculateFinancials(
 
 /**
  * ✅ Derive discount percent from discount code string
- * Supports:
- *  - L10, L6.5
- *  - L10/L5/L2
- *  - L10/5  (treated as L10/L5)
- * Sequential: total = 1 - Π(1 - pi/100)
- *
- * Notes:
- * - If code has no usable % parts => 0
- * - Ignores numbers > 100 (ex: L1312)
  */
 export function deriveDiscountPercentFromCode(codeRaw: string): number {
     const code = String(codeRaw ?? "").trim().toUpperCase();
@@ -83,16 +84,11 @@ export function deriveDiscountPercentFromCode(codeRaw: string): number {
     const netFactor = nums.reduce((acc, p) => acc * (1 - p / 100), 1);
     const combined = (1 - netFactor) * 100;
 
-    // 2-decimal stable
     return Math.max(0, Math.min(100, Number(combined.toFixed(4))));
 }
 
 /**
  * ✅ Derive units per BOX from product name/description
- * Example: "Paminta Cracked 15'sx30 Pieces" => 15 * 30 = 450
- *
- * Fallback:
- * - if no x-pattern: use fallbackCount if > 1 else 1
  */
 export function deriveUnitsPerBoxFromText(
     name?: string,
@@ -101,17 +97,15 @@ export function deriveUnitsPerBoxFromText(
 ): number {
     const text = `${name ?? ""} ${description ?? ""}`.trim();
 
-    // Find first x-chain: "15'sx30", "15 x 30", "15X30", "15's x30"
     const match = text.match(
         /\d+(?:\.\d+)?(?:\s*'?s)?\s*[xX]\s*\d+(?:\.\d+)?(?:\s*'?s)?(?:\s*[xX]\s*\d+(?:\.\d+)?(?:\s*'?s)?)*?/ // chain
     );
 
     if (match?.[0]) {
-        // keep digits, dot, x
         const cleaned = match[0]
             .toUpperCase()
             .replace(/['\s]/g, "")
-            .replace(/S(?=X)/g, ""); // removes "'s" before X loosely
+            .replace(/S(?=X)/g, "");
 
         const parts = cleaned
             .split("X")
@@ -120,10 +114,53 @@ export function deriveUnitsPerBoxFromText(
 
         if (parts.length >= 2) {
             const factor = parts.reduce((acc, n) => acc * n, 1);
-            if (Number.isFinite(factor) && factor > 0) return Math.max(1, Math.round(factor));
+            if (Number.isFinite(factor) && factor > 0)
+                return Math.max(1, Math.round(factor));
         }
     }
 
     const fb = Number(fallbackCount ?? 1);
     return Number.isFinite(fb) && fb > 1 ? Math.round(fb) : 1;
+}
+
+/**
+ * ✅ UPDATED COMPUTATION (per your formula)
+ *
+ * Net Amount = Gross - Discount
+ * VAT Exclusive = Net / 1.12
+ * VAT Amount = Net - VAT Exclusive
+ * EWT Goods = 1% of Net
+ *
+ * IMPORTANT:
+ * - "Total" here equals Net (VAT is already inside Net as a portion)
+ * - This prevents "lumolobo" ang total (no double-adding VAT)
+ */
+export function calculateVatExclusiveFromAmounts(
+    grossAmount: number,
+    discountAmount: number,
+    vatRate: number = TAX_RATES.VAT,
+    ewtGoodsRate: number = TAX_RATES.EWT_GOODS
+) {
+    const gross = Number(grossAmount || 0);
+    const disc = Math.max(0, Number(discountAmount || 0));
+
+    const netAmount = Math.max(0, gross - disc); // ✅ your "Net Amount" basis
+    const vatExclusive = netAmount / (1 + vatRate); // ✅ Net / 1.12
+    const vatAmount = Math.max(0, netAmount - vatExclusive); // ✅ Net - VAT Exclusive
+
+    const ewtGoods = Math.max(0, netAmount * ewtGoodsRate); // ✅ 1% of Net
+
+    const totalInvoice = netAmount; // ✅ total = net (do NOT add VAT again)
+    const payableToSupplier = Math.max(0, totalInvoice - ewtGoods);
+
+    return {
+        grossAmount: gross,
+        discountAmount: disc,
+        netAmount,
+        vatExclusive,
+        vatAmount,
+        ewtGoods,
+        total: totalInvoice,
+        payableToSupplier,
+    };
 }

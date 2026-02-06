@@ -3,11 +3,7 @@
 import * as React from "react";
 import { Building2, Minus, Plus, Store, Trash2, X } from "lucide-react";
 import type { BranchAllocation, DiscountType } from "../types";
-import {
-    cn,
-    buildMoneyFormatter,
-    deriveDiscountPercentFromCode,
-} from "../utils/calculations";
+import { cn, buildMoneyFormatter, deriveDiscountPercentFromCode } from "../utils/calculations";
 
 export function BranchAllocations(props: {
     branches: BranchAllocation[];
@@ -18,7 +14,7 @@ export function BranchAllocations(props: {
     onUpdateQty: (branchId: string, productId: string, qty: number) => void;
     onRemoveItem: (branchId: string, productId: string) => void;
 
-    // ✅ still needed for mapping id -> discount name (DISPLAY ONLY)
+    // DISPLAY ONLY
     discountTypes: DiscountType[];
 }) {
     const money = React.useMemo(() => buildMoneyFormatter(), []);
@@ -57,8 +53,7 @@ export function BranchAllocations(props: {
                 {branch.branchName}
               </span>
                             <span className="text-[10px] bg-muted px-2 py-0.5 rounded-full text-muted-foreground shrink-0 font-medium">
-                {branch.items.length}{" "}
-                                {branch.items.length === 1 ? "ITEM" : "ITEMS"}
+                {branch.items.length} {branch.items.length === 1 ? "ITEM" : "ITEMS"}
               </span>
                         </div>
 
@@ -88,7 +83,6 @@ export function BranchAllocations(props: {
                         ) : (
                             <div className="space-y-3 w-full min-w-0">
                                 <div className="w-full overflow-x-auto rounded-lg border border-border bg-background">
-                                    {/* ✅ min width adjusted */}
                                     <table className="min-w-[980px] w-full text-sm border-separate border-spacing-0">
                                         <thead className="bg-muted/50">
                                         <tr>
@@ -120,8 +114,8 @@ export function BranchAllocations(props: {
                                         </thead>
 
                                         <tbody className="divide-y divide-border">
-                                        {branch.items.slice(0, 10).map((item) => {
-                                            const dtId = String((item as any)?.discountTypeId ?? "");
+                                        {branch.items.slice(0, 10).map((item: any) => {
+                                            const dtId = String(item?.discountTypeId ?? "");
                                             const dt = dtId ? discountTypeById.get(dtId) : undefined;
 
                                             const code = dt?.name ?? "";
@@ -131,9 +125,7 @@ export function BranchAllocations(props: {
                                                     : deriveDiscountPercentFromCode(code);
 
                                             const discountLabel =
-                                                code && pct > 0
-                                                    ? `${code} (${pct.toFixed(2)}%)`
-                                                    : code || "—";
+                                                code && pct > 0 ? `${code} (${pct.toFixed(2)}%)` : code || "—";
 
                                             return (
                                                 <tr
@@ -143,9 +135,9 @@ export function BranchAllocations(props: {
                                                     <td className="p-3 font-medium text-foreground">
                                                         <div className="flex flex-col">
                                                             <span>{item.name}</span>
-                                                            {Number((item as any)?.unitsPerBox ?? 1) > 1 ? (
+                                                            {Number(item?.unitsPerBox ?? 1) > 1 ? (
                                                                 <span className="text-[10px] text-muted-foreground">
-                                    {Number((item as any)?.unitsPerBox)} base units / BOX
+                                    {Number(item?.unitsPerBox)} pcs / BOX
                                   </span>
                                                             ) : null}
                                                         </div>
@@ -155,9 +147,7 @@ export function BranchAllocations(props: {
                                                         {item.id}
                                                     </td>
 
-                                                    <td className="p-3 text-right">
-                                                        {money.format(item.price)}
-                                                    </td>
+                                                    <td className="p-3 text-right">{money.format(item.price)}</td>
 
                                                     <td className="p-3 text-center">
                               <span className="px-2 py-0.5 bg-secondary text-secondary-foreground text-[10px] font-bold rounded uppercase">
@@ -212,9 +202,7 @@ export function BranchAllocations(props: {
 
                                                     <td className="p-3 text-right">
                                                         <button
-                                                            onClick={() =>
-                                                                props.onRemoveItem(branch.branchId, item.id)
-                                                            }
+                                                            onClick={() => props.onRemoveItem(branch.branchId, item.id)}
                                                             className="p-1.5 text-muted-foreground hover:text-destructive transition opacity-0 group-hover:opacity-100"
                                                         >
                                                             <X className="w-4 h-4" />
