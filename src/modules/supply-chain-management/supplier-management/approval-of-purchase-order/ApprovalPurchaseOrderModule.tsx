@@ -73,8 +73,6 @@ export default function ApprovalPurchaseOrderModule() {
                     termsDays: opts.termsDays,
                 });
 
-                window.alert("Purchase Order approved successfully!");
-
                 // remove from list + clear selection
                 setPending((prev) => prev.filter((x) => x.id !== selectedId));
                 setSelectedId(null);
