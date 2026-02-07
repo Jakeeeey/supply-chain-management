@@ -27,30 +27,10 @@ export async function fetchPendingApprovalPOs(): Promise<PendingApprovalPO[]> {
 
     const rows = unwrapDeep<any[]>(json) ?? [];
 
-    return rows.map((r) => {
-        const id = String(r?.purchase_order_id ?? r?.id ?? "");
-        const poNumber = String(r?.purchase_order_no ?? r?.poNumber ?? "—");
-
-        const supplierName =
-            String(r?.supplier_name?.supplier_name ?? r?.supplier_name_text ?? r?.supplierName ?? "—");
-
-        const branchName =
-            String(r?.branch_summary ?? r?.branch_id?.branch_name ?? r?.branchName ?? "—");
-
-        const createdAt = String(r?.date ?? r?.date_encoded ?? r?.createdAt ?? "—");
-
-        const total = toNum(r?.total_amount ?? r?.totalAmount ?? r?.total);
-
-        return {
-            ...r,
-            id,
-            poNumber,
-            supplierName,
-            branchName,
-            createdAt,
-            total,
-        } as any;
-    });
+    return rows.map((r) => ({
+        ...r,
+        id: String(r?.id ?? r?.purchase_order_id ?? ""),
+    })) as any;
 }
 
 export async function fetchPurchaseOrderDetail(id: string): Promise<PurchaseOrderDetail> {
@@ -72,19 +52,17 @@ export async function fetchPurchaseOrderDetail(id: string): Promise<PurchaseOrde
 
     return {
         ...d,
-
-        // stable ids
         id: String(d?.purchase_order_id ?? d?.id ?? id),
         purchase_order_id: d?.purchase_order_id ?? d?.id ?? id,
-        purchase_order_no: d?.purchase_order_no ?? d?.poNumber ?? "—",
+        purchase_order_no: d?.purchase_order_no ?? d?.poNumber ?? d?.purchase_order_no,
 
-        // normalized numeric fields (snake + camel duplicates)
         gross_amount: gross,
         discounted_amount: disc,
         vat_amount: vat,
         withholding_tax_amount: ewt,
         total_amount: total,
 
+        // duplicates for safety
         grossAmount: gross,
         discountAmount: disc,
         vatAmount: vat,
@@ -93,6 +71,7 @@ export async function fetchPurchaseOrderDetail(id: string): Promise<PurchaseOrde
     } as any;
 }
 
+// ✅ MUST exist (fix your import error)
 export async function approvePurchaseOrder(payload: {
     id: string;
     markAsInvoice: boolean;

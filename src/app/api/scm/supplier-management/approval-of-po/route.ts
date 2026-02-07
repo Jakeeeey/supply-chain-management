@@ -5,6 +5,35 @@ export const dynamic = "force-dynamic";
 
 const COOKIE_NAME = "vos_access_token";
 
+function getDirectusBase() {
+    const raw =
+        process.env.DIRECTUS_URL ||
+        process.env.NEXT_PUBLIC_DIRECTUS_URL ||
+        "http://100.110.197.61:8056";
+
+    if (!/^https?:\/\//i.test(raw)) return `http://${raw}`;
+    return raw.replace(/\/$/, "");
+}
+
+function pickEnvToken() {
+    return process.env.DIRECTUS_TOKEN || process.env.DIRECTUS_STATIC_TOKEN || "";
+}
+
+function buildHeaders(req?: NextRequest) {
+    const h: Record<string, string> = { "Content-Type": "application/json" };
+
+    const envToken = pickEnvToken();
+    if (envToken) {
+        h.Authorization = `Bearer ${envToken}`;
+        return h;
+    }
+
+    const incomingAuth = req?.headers?.get("authorization");
+    if (incomingAuth) h.Authorization = incomingAuth;
+
+    return h;
+}
+
 function decodeJwtPayload(token: string): any | null {
     try {
         const parts = token.split(".");
@@ -30,38 +59,6 @@ function pickNumber(obj: any, keys: string[], fallback = 0): number {
     return fallback;
 }
 
-function normalizeBaseUrl(url: string) {
-    return String(url || "").replace(/\/+$/, "");
-}
-
-function getDirectusConfig() {
-    const DIRECTUS_URL =
-        process.env.DIRECTUS_URL ||
-        process.env.NEXT_PUBLIC_DIRECTUS_URL ||
-        process.env.NEXT_PUBLIC_API_BASE_URL;
-
-    if (!DIRECTUS_URL) throw new Error("DIRECTUS_URL is not set");
-
-    return { DIRECTUS_URL: normalizeBaseUrl(DIRECTUS_URL) };
-}
-
-function buildUpstreamHeaders(req: NextRequest) {
-    const h: Record<string, string> = { "Content-Type": "application/json" };
-
-    // ✅ Prefer service token(s) if present
-    const envToken = process.env.DIRECTUS_TOKEN || process.env.DIRECTUS_STATIC_TOKEN;
-    if (envToken) {
-        h.Authorization = `Bearer ${envToken}`;
-        return h;
-    }
-
-    // ✅ Else forward incoming Authorization if present
-    const incomingAuth = req.headers.get("authorization");
-    if (incomingAuth) h.Authorization = incomingAuth;
-
-    return h;
-}
-
 function mapPaymentTermToPaymentType(term: string): number {
     switch (term) {
         case "cash_with_order":
@@ -75,6 +72,11 @@ function mapPaymentTermToPaymentType(term: string): number {
     }
 }
 
+function safeStr(v: any, fallback = "—") {
+    const s = String(v ?? "").trim();
+    return s ? s : fallback;
+}
+
 function toNum(v: any): number {
     if (v === null || v === undefined) return 0;
     const s = String(v).trim();
@@ -83,20 +85,20 @@ function toNum(v: any): number {
     return Number.isFinite(n) ? n : 0;
 }
 
-async function fetchBranchesMap(req: NextRequest, DIRECTUS_URL: string) {
-    // ✅ no fields= to avoid permission errors
-    const url = `${DIRECTUS_URL}/items/branches?limit=-1`;
-
-    const r = await fetch(url, {
-        headers: buildUpstreamHeaders(req),
-        cache: "no-store",
-    });
-
+// ---------- Fetch helpers ----------
+async function fetchJson(url: string, req?: NextRequest) {
+    const r = await fetch(url, { headers: buildHeaders(req), cache: "no-store" });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) {
-        // don’t hard-fail entire route; just return empty map
-        return new Map<number, any>();
+        const msg = j?.errors?.[0]?.message || j?.error || `Upstream failed: ${r.status}`;
+        throw new Error(msg);
     }
+    return j;
+}
+
+async function fetchBranchesMap(base: string, req?: NextRequest) {
+    const url = `${base}/items/branches?limit=-1`;
+    const j = await fetchJson(url, req);
 
     const map = new Map<number, any>();
     for (const b of j?.data ?? []) {
@@ -106,91 +108,129 @@ async function fetchBranchesMap(req: NextRequest, DIRECTUS_URL: string) {
         map.set(id, {
             id,
             branch_code: String(b?.branch_code ?? ""),
-            branch_name: String(b?.branch_name ?? b?.branch_description ?? ""),
+            branch_name: String(b?.branch_name ?? b?.branch_description ?? "—"),
             branch_description: b?.branch_description ?? null,
         });
     }
     return map;
 }
 
-async function fetchSuppliersMap(req: NextRequest, DIRECTUS_URL: string) {
-    // ✅ IMPORTANT: remove fields= entirely to avoid permission/schema errors
-    const url = `${DIRECTUS_URL}/items/suppliers?limit=-1`;
-
-    const r = await fetch(url, {
-        headers: buildUpstreamHeaders(req),
-        cache: "no-store",
-    });
-
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) {
-        // If token truly can’t access suppliers, we won’t crash the PO approval page
-        return new Map<number, any>();
-    }
+/**
+ * ✅ Fix permission error:
+ * Do NOT request forbidden fields.
+ * We'll fetch suppliers without `fields=` so Directus returns only allowed fields for your role.
+ */
+async function fetchSuppliersMap(base: string, req?: NextRequest) {
+    const url = `${base}/items/suppliers?limit=-1`;
+    const j = await fetchJson(url, req);
 
     const map = new Map<number, any>();
     for (const s of j?.data ?? []) {
         const id = Number(s?.id);
         if (!Number.isFinite(id)) continue;
 
-        // pick best available name field (whatever Directus returns for your role)
-        const supplierName =
-            String(
-                s?.supplier_name ??
-                s?.name ??
-                s?.supplier ??
-                s?.supplierName ??
-                ""
-            ).trim() || `Supplier #${id}`;
-
-        // AP balance may be hidden by permissions; safe fallback 0
-        const apBalance =
-            toNum(s?.ap_balance ?? s?.apBalance ?? s?.accounts_payable ?? s?.ap ?? 0) || 0;
-
         map.set(id, {
             id,
-            supplier_name: supplierName,
-            ap_balance: apBalance,
+            supplier_name: String(s?.supplier_name ?? "—"),
+            // if not readable by role, it will be undefined -> 0
+            ap_balance: Number(s?.ap_balance ?? s?.apBalance ?? 0) || 0,
+        });
+    }
+    return map;
+}
+
+async function fetchPOProductsByPoIds(base: string, poIds: number[], req?: NextRequest) {
+    if (!poIds.length) return [];
+
+    // Directus _in uses comma-separated list
+    const inList = poIds.join(",");
+    const url =
+        `${base}/items/purchase_order_products?limit=-1` +
+        `&filter[purchase_order_id][_in]=${encodeURIComponent(inList)}` +
+        `&fields=purchase_order_id,branch_id`;
+
+    const j = await fetchJson(url, req);
+    return Array.isArray(j?.data) ? j.data : [];
+}
+
+async function fetchPOProducts(base: string, poId: string, req?: NextRequest) {
+    const url =
+        `${base}/items/purchase_order_products?limit=-1` +
+        `&filter[purchase_order_id][_eq]=${encodeURIComponent(poId)}` +
+        `&fields=` +
+        [
+            "purchase_order_product_id",
+            "purchase_order_id",
+            "branch_id",
+            "product_id",
+            "ordered_quantity",
+            "unit_price",
+            "total_amount",
+            "vat_amount",
+            "withholding_amount",
+        ].join(",");
+
+    const j = await fetchJson(url, req);
+    return Array.isArray(j?.data) ? j.data : [];
+}
+
+async function fetchProductsMap(base: string, productIds: number[], req?: NextRequest) {
+    const map = new Map<number, any>();
+    if (!productIds.length) return map;
+
+    const inList = productIds.join(",");
+    // Keep fields minimal to avoid permissions issues
+    const url =
+        `${base}/items/products?limit=-1` +
+        `&filter[product_id][_in]=${encodeURIComponent(inList)}` +
+        `&fields=product_id,product_name,product_code`;
+
+    const j = await fetchJson(url, req);
+
+    for (const p of j?.data ?? []) {
+        const id = Number(p?.product_id ?? p?.id);
+        if (!Number.isFinite(id)) continue;
+        map.set(id, {
+            product_id: id,
+            product_name: String(p?.product_name ?? p?.name ?? `Product ${id}`),
+            product_code: String(p?.product_code ?? p?.sku ?? ""),
         });
     }
 
     return map;
 }
 
-async function fetchPOItems(req: NextRequest, DIRECTUS_URL: string, poId: string) {
-    // keep your fields list if it works; if you want ultra-safe, remove fields=
-    const itemsUrl =
-        `${DIRECTUS_URL}/items/purchase_order_items?limit=-1` +
-        `&filter[purchase_order_id][_eq]=${encodeURIComponent(poId)}` +
-        `&sort=line_no`;
-
-    const ir = await fetch(itemsUrl, {
-        headers: buildUpstreamHeaders(req),
-        cache: "no-store",
-    });
-
-    const ij = await ir.json().catch(() => ({}));
-    if (!ir.ok) {
-        return [];
+function buildBranchArrayFromIds(branchIds: Array<number | null | undefined>, branchesMap: Map<number, any>) {
+    const uniq = new Set<number>();
+    for (const b of branchIds) {
+        const n = Number(b);
+        if (Number.isFinite(n) && n > 0) uniq.add(n);
     }
-
-    return Array.isArray(ij?.data) ? ij.data : [];
+    const arr: any[] = [];
+    for (const id of uniq) {
+        const b = branchesMap.get(id);
+        if (b) arr.push(b);
+    }
+    return arr;
 }
 
+// ---------- Route ----------
 export async function GET(req: NextRequest) {
     try {
-        const { DIRECTUS_URL } = getDirectusConfig();
+        const base = getDirectusBase();
+
         const url = new URL(req.url);
         const id = url.searchParams.get("id");
 
         const [branchesMap, suppliersMap] = await Promise.all([
-            fetchBranchesMap(req, DIRECTUS_URL),
-            fetchSuppliersMap(req, DIRECTUS_URL),
+            fetchBranchesMap(base, req),
+            fetchSuppliersMap(base, req),
         ]);
 
+        // LIST: pending approvals
         if (!id) {
             const listUrl =
-                `${DIRECTUS_URL}/items/purchase_order` +
+                `${base}/items/purchase_order` +
                 `?limit=-1` +
                 `&sort=-date_encoded` +
                 `&filter[_or][0][approver_id][_null]=true` +
@@ -212,79 +252,112 @@ export async function GET(req: NextRequest) {
                     "inventory_status",
                     "lead_time_payment",
                     "supplier_name",
-                    "branch_id",
                 ].join(",");
 
-            const r = await fetch(listUrl, {
-                headers: buildUpstreamHeaders(req),
-                cache: "no-store",
-            });
+            const j = await fetchJson(listUrl, req);
+            const rowsRaw = Array.isArray(j?.data) ? j.data : [];
 
-            const j = await r.json().catch(() => ({}));
-            if (!r.ok) {
-                throw new Error(j?.errors?.[0]?.message || j?.error || "Failed to fetch pending POs");
+            const poIds = rowsRaw
+                .map((po: any) => Number(po?.purchase_order_id))
+                .filter((n: any) => Number.isFinite(n) && n > 0);
+
+            // derive branches from purchase_order_products (multi-branch)
+            const poProducts = await fetchPOProductsByPoIds(base, poIds, req);
+
+            const branchesByPo = new Map<number, number[]>();
+            for (const r of poProducts) {
+                const poId = Number(r?.purchase_order_id);
+                const brId = Number(r?.branch_id);
+                if (!Number.isFinite(poId) || poId <= 0) continue;
+                if (!Number.isFinite(brId) || brId <= 0) continue;
+
+                const arr = branchesByPo.get(poId) ?? [];
+                arr.push(brId);
+                branchesByPo.set(poId, arr);
             }
 
-            const rows = (j?.data ?? []).map((po: any) => {
-                const bid = Number(po?.branch_id);
-                const branch = Number.isFinite(bid) ? branchesMap.get(bid) : null;
+            const rows = rowsRaw.map((po: any) => {
+                const poIdNum = Number(po?.purchase_order_id);
 
+                // supplier
                 const sid = Number(po?.supplier_name);
                 const supplier = Number.isFinite(sid) ? suppliersMap.get(sid) : null;
 
+                // branches (array)
+                const brIds = branchesByPo.get(poIdNum) ?? [];
+                const brArr = buildBranchArrayFromIds(brIds, branchesMap);
+
                 return {
                     ...po,
+                    supplier_name_value: po?.supplier_name ?? null,
+                    supplier_name: supplier ?? { supplier_name: "—", ap_balance: 0 },
 
                     branch_id_value: po?.branch_id ?? null,
-                    branch_id: branch ?? po?.branch_id ?? null,
-                    branch_summary: branch
-                        ? `${String(branch?.branch_code || "").trim()}${branch?.branch_code ? " — " : ""}${String(branch?.branch_name || "").trim()}`
-                        : "",
-
-                    supplier_name_value: po?.supplier_name ?? null,
-                    supplier_name: supplier ?? po?.supplier_name ?? null,
-                    supplier_name_text: supplier?.supplier_name ?? (Number.isFinite(sid) ? `Supplier #${sid}` : "—"),
+                    branch_id: brArr, // ✅ array for multi-branch
                 };
             });
 
             return NextResponse.json({ data: rows });
         }
 
-        const detailUrl = `${DIRECTUS_URL}/items/purchase_order/${encodeURIComponent(id)}?fields=*`;
+        // DETAIL
+        const detailUrl = `${base}/items/purchase_order/${encodeURIComponent(id)}?fields=*`;
+        const dj = await fetchJson(detailUrl, req);
+        const po = dj?.data ?? {};
 
-        const r = await fetch(detailUrl, {
-            headers: buildUpstreamHeaders(req),
-            cache: "no-store",
-        });
-
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok) {
-            throw new Error(j?.errors?.[0]?.message || j?.error || "Failed to fetch PO detail");
-        }
-
-        const po = j?.data ?? {};
-
-        const bid = Number(po?.branch_id);
-        const branch = Number.isFinite(bid) ? branchesMap.get(bid) : null;
-
+        // supplier
         const sid = Number(po?.supplier_name);
         const supplier = Number.isFinite(sid) ? suppliersMap.get(sid) : null;
 
-        const items = await fetchPOItems(req, DIRECTUS_URL, id);
+        // products from purchase_order_products
+        const poProducts = await fetchPOProducts(base, id, req);
+        const productIds = Array.from(
+            new Set(
+                poProducts
+                    .map((x: any) => Number(x?.product_id))
+                    .filter((n: any) => Number.isFinite(n) && n > 0)
+            )
+        );
+
+        const productsMap = await fetchProductsMap(base, productIds, req);
+
+        const items = poProducts.map((ln: any, idx: number) => {
+            const pid = Number(ln?.product_id);
+            const p = Number.isFinite(pid) ? productsMap.get(pid) : null;
+
+            const qty = toNum(ln?.ordered_quantity ?? 0);
+            const unitPrice = toNum(ln?.unit_price ?? 0);
+            const lineTotal = toNum(ln?.total_amount ?? 0) || qty * unitPrice;
+
+            return {
+                po_item_id: ln?.purchase_order_product_id ?? idx + 1,
+                purchase_order_id: ln?.purchase_order_id ?? po?.purchase_order_id ?? id,
+                line_no: idx + 1,
+                item_name: safeStr(p?.product_name ?? `Product ${pid}`),
+                item_description: null,
+                uom: "BOX",
+                qty: String(qty),
+                unit_price: String(unitPrice),
+                line_total: String(lineTotal),
+                branch_id: ln?.branch_id ?? null,
+                product_id: ln?.product_id ?? null,
+            };
+        });
+
+        // branches array (dedup)
+        const brArr = buildBranchArrayFromIds(
+            poProducts.map((x: any) => Number(x?.branch_id)),
+            branchesMap
+        );
 
         return NextResponse.json({
             data: {
                 ...po,
+                supplier_name_value: po?.supplier_name ?? null,
+                supplier_name: supplier ?? { supplier_name: "—", ap_balance: 0 },
 
                 branch_id_value: po?.branch_id ?? null,
-                branch_id: branch ?? po?.branch_id ?? null,
-                branch_summary: branch
-                    ? `${String(branch?.branch_code || "").trim()}${branch?.branch_code ? " — " : ""}${String(branch?.branch_name || "").trim()}`
-                    : "",
-
-                supplier_name_value: po?.supplier_name ?? null,
-                supplier_name: supplier ?? po?.supplier_name ?? null,
-                supplier_name_text: supplier?.supplier_name ?? (Number.isFinite(sid) ? `Supplier #${sid}` : "—"),
+                branch_id: brArr, // ✅ array
 
                 items,
             },
@@ -296,7 +369,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
     try {
-        const { DIRECTUS_URL } = getDirectusConfig();
+        const base = getDirectusBase();
         const body = await req.json().catch(() => ({}));
 
         const id = String(body?.id ?? "");
@@ -309,11 +382,7 @@ export async function POST(req: NextRequest) {
         const jwt = req.cookies.get(COOKIE_NAME)?.value ?? null;
         const payload = jwt ? decodeJwtPayload(jwt) : null;
 
-        const approverId = pickNumber(
-            payload,
-            ["user_id", "userId", "id", "uid", "UserId", "EmployeeId"],
-            0
-        );
+        const approverId = pickNumber(payload, ["user_id", "userId", "id", "uid", "UserId", "EmployeeId"], 0);
 
         const patch: any = {
             approver_id: approverId || 1,
@@ -323,24 +392,20 @@ export async function POST(req: NextRequest) {
         };
 
         if (paymentTerm === "terms") {
-            const safeDays = Number.isFinite(termsDaysRaw)
-                ? Math.max(1, Math.floor(termsDaysRaw))
-                : 1;
+            const safeDays = Number.isFinite(termsDaysRaw) ? Math.max(1, Math.floor(termsDaysRaw)) : 1;
             patch.lead_time_payment = safeDays;
         }
 
-        const patchUrl = `${DIRECTUS_URL}/items/purchase_order/${encodeURIComponent(id)}`;
-
+        const patchUrl = `${base}/items/purchase_order/${encodeURIComponent(id)}`;
         const r = await fetch(patchUrl, {
             method: "PATCH",
-            headers: buildUpstreamHeaders(req),
+            headers: buildHeaders(req),
             body: JSON.stringify(patch),
+            cache: "no-store",
         });
 
         const j = await r.json().catch(() => ({}));
-        if (!r.ok) {
-            throw new Error(j?.errors?.[0]?.message || j?.error || "Failed to approve PO");
-        }
+        if (!r.ok) throw new Error(j?.errors?.[0]?.message || j?.error || "Failed to approve PO");
 
         return NextResponse.json({ data: j?.data ?? j });
     } catch (e: any) {

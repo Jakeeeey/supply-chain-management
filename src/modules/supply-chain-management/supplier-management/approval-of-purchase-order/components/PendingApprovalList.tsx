@@ -15,38 +15,78 @@ type Props = {
 
 const PAGE_SIZE = 5;
 
-function toNum(v: any): number {
-    if (v === null || v === undefined) return 0;
-    const s = String(v).trim();
-    if (!s) return 0;
-    const n = Number(s.replace(/,/g, ""));
-    return Number.isFinite(n) ? n : 0;
+function safeStr(v: any, fallback = "—") {
+    const s = String(v ?? "").trim();
+    return s ? s : fallback;
 }
 
-function money() {
-    try {
-        return new Intl.NumberFormat("en-PH", {
-            style: "currency",
-            currency: "PHP",
-            minimumFractionDigits: 2,
-        });
-    } catch {
-        return new Intl.NumberFormat("en-PH", { minimumFractionDigits: 2 });
+function branchLabel(branch: any) {
+    if (!branch) return "—";
+
+    if (Array.isArray(branch)) {
+        if (!branch.length) return "—";
+        const labels = branch
+            .map((b) => {
+                const code = safeStr(b?.branch_code ?? "");
+                const name = safeStr(b?.branch_name ?? b?.branch_description ?? "");
+                if (code !== "—" && name !== "—") return `${code} — ${name}`;
+                if (name !== "—") return name;
+                return "—";
+            })
+            .filter((x) => x !== "—");
+
+        if (!labels.length) return "—";
+        if (labels.length <= 2) return labels.join(", ");
+        return `${labels.slice(0, 2).join(", ")} +${labels.length - 2} more`;
     }
+
+    const code = safeStr(branch?.branch_code ?? "");
+    const name = safeStr(branch?.branch_name ?? branch?.branch_description ?? "");
+    if (code !== "—" && name !== "—") return `${code} — ${name}`;
+    if (name !== "—") return name;
+
+    // if numeric/raw, do NOT show id
+    return "—";
 }
 
-export default function PendingApprovalList({
-                                                items,
-                                                selectedId,
-                                                onSelect,
-                                                disabled,
-                                            }: Props) {
-    const fmt = React.useMemo(() => money(), []);
+/** ✅ prefers helper text from API, otherwise uses expanded object */
+function branchLabelFromRow(row: any) {
+    // From updated approval-of-po route (recommended)
+    const helper = safeStr(row?.branch_name_text ?? row?.branchNameText ?? row?.branchName ?? "", "");
+    const helperCode = safeStr(row?.branch_code_text ?? row?.branchCodeText ?? row?.branchCode ?? "", "");
+
+    if (helper) {
+        // If code also provided, show code — name
+        if (helperCode) return `${helperCode} — ${helper}`;
+        return helper;
+    }
+
+    // Expanded object/array support
+    return branchLabel(row?.branch_id);
+}
+
+function supplierLabelFromRow(row: any) {
+    // From updated approval-of-po route (recommended)
+    const helper = safeStr(row?.supplier_name_text ?? "", "");
+    if (helper) return helper;
+
+    // Expanded object case
+    return safeStr(
+        row?.supplier_name?.supplier_name ??
+        row?.supplier_name?.name ??
+        row?.supplierName ??
+        row?.supplier ??
+        "—"
+    );
+}
+
+export default function PendingApprovalList({ items, selectedId, onSelect, disabled }: Props) {
     const [page, setPage] = React.useState(1);
 
-    const totalPages = React.useMemo(() => {
-        return Math.max(1, Math.ceil((items?.length ?? 0) / PAGE_SIZE));
-    }, [items?.length]);
+    const totalPages = React.useMemo(
+        () => Math.max(1, Math.ceil((items?.length ?? 0) / PAGE_SIZE)),
+        [items?.length]
+    );
 
     React.useEffect(() => {
         setPage((p) => Math.min(Math.max(1, p), totalPages));
@@ -79,9 +119,7 @@ export default function PendingApprovalList({
                     <div className="text-sm font-black text-foreground uppercase tracking-tight">
                         Pending for Approval
                     </div>
-                    <div className="text-[11px] text-muted-foreground">
-                        {items?.length ?? 0} total
-                    </div>
+                    <div className="text-[11px] text-muted-foreground">{items?.length ?? 0} total</div>
                 </div>
 
                 <Badge variant="outline" className="text-[10px] font-black uppercase">
@@ -95,26 +133,17 @@ export default function PendingApprovalList({
                         No pending purchase orders.
                     </div>
                 ) : (
-                    paginated.map((x: any) => {
-                        const id = String(x?.id ?? x?.purchase_order_id ?? "");
-                        const poNo = String(x?.poNumber ?? x?.purchase_order_no ?? "—");
+                    paginated.map((x) => {
+                        const row: any = x;
 
-                        const supplier = String(
-                            x?.supplierName ??
-                            x?.supplier_name?.supplier_name ??
-                            x?.supplier_name_text ??
-                            "—"
-                        );
+                        const id = String(row.id ?? row.purchase_order_id ?? "");
+                        const poNo = safeStr(row.poNumber ?? row.purchase_order_no ?? "—");
+                        const date = safeStr(row.date ?? row.date_encoded ?? "—");
 
-                        const branch = String(
-                            x?.branchName ??
-                            x?.branch_summary ??
-                            x?.branch_id?.branch_name ??
-                            "—"
-                        );
+                        const supplier = supplierLabelFromRow(row);
+                        const br = branchLabelFromRow(row);
 
-                        const date = String(x?.createdAt ?? x?.date ?? x?.date_encoded ?? "—");
-                        const total = toNum(x?.total ?? x?.total_amount ?? x?.totalAmount ?? 0);
+                        const total = Number(row.totalAmount ?? row.total_amount ?? row.total ?? 0) || 0;
 
                         const selected = selectedId === id;
 
@@ -130,20 +159,22 @@ export default function PendingApprovalList({
                                 )}
                             >
                                 <div className="flex items-start justify-between gap-3">
-                                    <div className="min-w-0">
+                                    <div className="min-w-0 space-y-1">
                                         <div className="text-xs font-black text-foreground truncate">{poNo}</div>
 
-                                        <div className="text-[11px] text-muted-foreground truncate">{supplier}</div>
-
                                         <div className="text-[11px] text-muted-foreground truncate">
-                                            Branch: <span className="text-foreground/80 font-medium">{branch}</span>
+                                            {supplier}
                                         </div>
 
-                                        <div className="text-[10px] text-muted-foreground mt-1 truncate">{date}</div>
+                                        <div className="text-[11px] text-muted-foreground truncate">
+                                            {br}
+                                        </div>
+
+                                        <div className="text-[10px] text-muted-foreground truncate">{date}</div>
                                     </div>
 
                                     <Badge variant="secondary" className="text-[10px] font-black">
-                                        {fmt.format(total)}
+                                        {total.toLocaleString()}
                                     </Badge>
                                 </div>
                             </button>
@@ -169,7 +200,10 @@ export default function PendingApprovalList({
                         {dotPages.map((p) => (
                             <div
                                 key={p}
-                                className={cn("w-1.5 h-1.5 rounded-full", page === p ? "bg-primary" : "bg-border")}
+                                className={cn(
+                                    "w-1.5 h-1.5 rounded-full",
+                                    page === p ? "bg-primary" : "bg-border"
+                                )}
                             />
                         ))}
                     </div>

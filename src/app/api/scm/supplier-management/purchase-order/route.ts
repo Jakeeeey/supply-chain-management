@@ -84,8 +84,19 @@ function isNotUniqueDirectusError(json: any) {
     return errs.some((e) => e?.extensions?.code === "RECORD_NOT_UNIQUE");
 }
 
+function toFixedMoney(v: any) {
+    const n = Number(v);
+    const safe = Number.isFinite(n) ? n : 0;
+    return safe.toFixed(2);
+}
+
+function pickEnvToken() {
+    // prefer DIRECTUS_TOKEN, fallback to DIRECTUS_STATIC_TOKEN
+    return process.env.DIRECTUS_TOKEN || process.env.DIRECTUS_STATIC_TOKEN || "";
+}
+
 async function directusFetch(url: string, init?: RequestInit) {
-    const TOKEN = process.env.DIRECTUS_TOKEN;
+    const TOKEN = pickEnvToken();
     return fetch(url, {
         cache: "no-store",
         ...init,
@@ -98,7 +109,6 @@ async function directusFetch(url: string, init?: RequestInit) {
 }
 
 async function findExistingByPoNumber(base: string, poNumber: string) {
-    // NOTE: adjust "fields" if you want more/less returned
     const url =
         `${base}/items/purchase_order` +
         `?filter[purchase_order_no][_eq]=${encodeURIComponent(poNumber)}` +
@@ -108,6 +118,87 @@ async function findExistingByPoNumber(base: string, poNumber: string) {
     const json = await res.json().catch(() => ({}));
     const row = Array.isArray(json?.data) ? json.data[0] : null;
     return row ?? null;
+}
+
+function extractPoId(row: any): number | null {
+    const v = row?.purchase_order_id ?? row?.id;
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function buildPoProductLines(input: any, poId: number) {
+    const allocations = Array.isArray(input?.allocations) ? input.allocations : [];
+    const lines: any[] = [];
+
+    for (const a of allocations) {
+        const branchIdRaw = a?.branchId ?? a?.branch_id ?? a?.id ?? null;
+        const branchIdNum = Number(branchIdRaw);
+        const branch_id = Number.isFinite(branchIdNum) && branchIdNum > 0 ? branchIdNum : null;
+
+        const items = Array.isArray(a?.items) ? a.items : [];
+        for (const it of items) {
+            const productIdRaw = it?.id ?? it?.productId ?? it?.product_id ?? null;
+            const productIdNum = Number(productIdRaw);
+            if (!Number.isFinite(productIdNum) || productIdNum <= 0) continue;
+
+            const qty = Math.max(1, Number(it?.orderQty ?? it?.qtyBoxes ?? it?.qty ?? 1) || 1);
+            const unitPrice = Number(it?.price ?? it?.pricePerBox ?? it?.unit_price ?? 0) || 0;
+            const lineTotal = qty * unitPrice;
+
+            lines.push({
+                purchase_order_id: poId,
+                branch_id,
+                product_id: productIdNum,
+                ordered_quantity: qty,
+                unit_price: toFixedMoney(unitPrice),
+                total_amount: toFixedMoney(lineTotal),
+                // keep these nullable; later modules can compute/override
+                vat_amount: null,
+                withholding_amount: null,
+                discounted_price: null,
+                approved_price: null,
+                received: null,
+            });
+        }
+    }
+
+    return lines;
+}
+
+async function poProductsAlreadyExist(base: string, poId: number) {
+    const url =
+        `${base}/items/purchase_order_products` +
+        `?filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}` +
+        `&limit=1&fields=purchase_order_product_id`;
+
+    const r = await directusFetch(url, { method: "GET" });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) return false;
+    return Array.isArray(j?.data) && j.data.length > 0;
+}
+
+async function ensurePoProducts(base: string, poId: number, input: any) {
+    const lines = buildPoProductLines(input, poId);
+    if (!lines.length) return { created: 0, skipped: true };
+
+    const exists = await poProductsAlreadyExist(base, poId);
+    if (exists) return { created: 0, skipped: true };
+
+    const url = `${base}/items/purchase_order_products`;
+
+    // Directus "create many" expects { data: [...] }
+    const r = await directusFetch(url, {
+        method: "POST",
+        body: JSON.stringify({ data: lines }),
+    });
+
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+        throw new Error(j?.errors?.[0]?.message || j?.error || "Failed to create purchase_order_products");
+    }
+
+    const createdCount = Array.isArray(j?.data) ? j.data.length : lines.length;
+    return { created: createdCount, skipped: false };
 }
 
 export async function POST(req: NextRequest) {
@@ -135,6 +226,16 @@ export async function POST(req: NextRequest) {
         // ✅ If already exists, return it (idempotent save)
         const existing = await findExistingByPoNumber(base, poNumber);
         if (existing) {
+            const existingPoId = extractPoId(existing);
+            if (existingPoId) {
+                // ✅ if header exists but lines missing, create lines once
+                try {
+                    await ensurePoProducts(base, existingPoId, input);
+                } catch {
+                    // don't block returning existing header; lines can be retried by saving again
+                }
+            }
+
             return NextResponse.json({
                 data: existing,
                 meta: { alreadyExists: true, purchase_order_no: poNumber },
@@ -190,7 +291,11 @@ export async function POST(req: NextRequest) {
 
             reference: input?.reference ?? null,
             remark: input?.remark ?? null,
+
+            // IMPORTANT: header branch_id is single only; since branch-first is multi,
+            // keep this nullable (we will derive branches from purchase_order_products)
             branch_id: input?.branch_id ?? input?.branchId ?? null,
+
             price_type_id: input?.price_type_id ?? null,
         };
 
@@ -208,10 +313,16 @@ export async function POST(req: NextRequest) {
         const json = await res.json().catch(() => ({}));
 
         if (!res.ok) {
-            // ✅ handle race condition: if became unique error, fetch existing and return it
             if (isNotUniqueDirectusError(json)) {
                 const again = await findExistingByPoNumber(base, poNumber);
                 if (again) {
+                    const againPoId = extractPoId(again);
+                    if (againPoId) {
+                        try {
+                            await ensurePoProducts(base, againPoId, input);
+                        } catch {}
+                    }
+
                     return NextResponse.json({
                         data: again,
                         meta: { alreadyExists: true, purchase_order_no: poNumber, raced: true },
@@ -230,9 +341,21 @@ export async function POST(req: NextRequest) {
             );
         }
 
+        const created = json?.data ?? json;
+        const createdPoId = extractPoId(created);
+
+        let linesMeta: any = { created: 0, skipped: true };
+        if (createdPoId) {
+            linesMeta = await ensurePoProducts(base, createdPoId, input);
+        }
+
         return NextResponse.json({
-            data: json?.data ?? json,
-            meta: { alreadyExists: false, purchase_order_no: poNumber },
+            data: created,
+            meta: {
+                alreadyExists: false,
+                purchase_order_no: poNumber,
+                po_products: linesMeta,
+            },
         });
     } catch (e: any) {
         return NextResponse.json(
