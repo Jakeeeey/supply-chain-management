@@ -1,4 +1,4 @@
-//src/modules/vehicle-management/vehicle-list/hooks/useVehicles.ts
+//src/modules/vehicle-management/vehicle-list/hooks/sample.ts
 "use client";
 
 import * as React from "react";
@@ -9,7 +9,7 @@ import type {
   UserApiRow,
   FuelTypeApiRow,
   EngineTypeApiRow,
-} from "@/modules/supply-chain-management/vehicle-management/vehicle-list/types";
+} from "@/modules/supply-chain-management/fleet-management/vehicle-management/vehicle-list/types";
 
 import {
   listVehicles,
@@ -19,7 +19,7 @@ import {
   createVehicle,
   listFuelTypes,
   listEngineTypes,
-} from "@/modules/supply-chain-management/vehicle-management/vehicle-list/providers/fetchProviders";
+} from "@/modules/supply-chain-management/fleet-management/vehicle-management/vehicle-list/providers/fetchProviders";
 
 function cleanStr(v: unknown, fallback = "N/A") {
   const s = String(v ?? "").trim();

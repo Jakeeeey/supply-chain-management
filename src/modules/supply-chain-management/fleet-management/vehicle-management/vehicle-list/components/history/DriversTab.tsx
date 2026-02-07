@@ -4,11 +4,11 @@
 import * as React from "react";
 import { toast } from "sonner";
 
-import type { VehicleRow, DispatchPlanApiRow, UserApiRow } from "@/modules/supply-chain-management/vehicle-management/vehicle-list/types";
+import type { VehicleRow, DispatchPlanApiRow, UserApiRow } from "@/modules/supply-chain-management/fleet-management/vehicle-management/vehicle-list/types";
 import {
   listDispatchPlansByVehicle,
   listUsers,
-} from "@/modules/supply-chain-management/vehicle-management/vehicle-list/providers/fetchProviders";
+} from "@/modules/supply-chain-management/fleet-management/vehicle-management/vehicle-list/providers/fetchProviders";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
