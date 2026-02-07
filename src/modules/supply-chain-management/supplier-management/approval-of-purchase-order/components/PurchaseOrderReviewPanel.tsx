@@ -40,6 +40,7 @@ function toNum(v: any): number {
 }
 
 function unwrap(po: any) {
+    // keep behavior, but tolerate accidental nesting
     return po?.data ?? po;
 }
 
@@ -61,13 +62,47 @@ function normalizeLines(rawItems: any[]): NormalizedLine[] {
     if (!Array.isArray(rawItems)) return [];
     return rawItems.map((it: any, idx: number) => {
         const key = String(it?.po_item_id ?? it?.id ?? idx);
-        const name = safeStr(it?.item_name ?? it?.name ?? it?.product_name ?? `Item ${idx + 1}`);
+        const name = safeStr(
+            it?.item_name ?? it?.name ?? it?.product_name ?? `Item ${idx + 1}`
+        );
         const uom = safeStr(it?.uom ?? it?.unit ?? "—");
         const qty = Math.max(0, toNum(it?.qty ?? it?.quantity ?? 0));
         const price = Math.max(0, toNum(it?.unit_price ?? it?.price ?? 0));
         const total = toNum(it?.line_total) || Math.max(0, qty * price);
         return { key, name, uom, qty, price, total };
     });
+}
+
+function summarizeFromItems(rawItems: any[]) {
+    const items = Array.isArray(rawItems) ? rawItems : [];
+    let gross = 0;
+    let discount = 0;
+    let vat = 0;
+    let total = 0;
+
+    for (const it of items) {
+        const lineSubtotal =
+            toNum(it?.line_subtotal) ||
+            Math.max(0, toNum(it?.qty ?? 0) * toNum(it?.unit_price ?? 0));
+
+        const lineDiscount = toNum(it?.discount_amount);
+        const lineVat = toNum(it?.tax_amount);
+        const lineTotal =
+            toNum(it?.line_total) ||
+            Math.max(0, lineSubtotal + lineVat - lineDiscount);
+
+        gross += lineSubtotal;
+        discount += lineDiscount;
+        vat += lineVat;
+        total += lineTotal;
+    }
+
+    return {
+        gross: Math.max(0, gross),
+        discount: Math.max(0, discount),
+        vat: Math.max(0, vat),
+        total: Math.max(0, total),
+    };
 }
 
 export default function PurchaseOrderReviewPanel(props: {
@@ -83,7 +118,8 @@ export default function PurchaseOrderReviewPanel(props: {
     const fmt = React.useMemo(() => money(), []);
 
     const [markAsInvoice, setMarkAsInvoice] = React.useState(false);
-    const [paymentTerm, setPaymentTerm] = React.useState<PaymentTerm>("cash_on_delivery");
+    const [paymentTerm, setPaymentTerm] =
+        React.useState<PaymentTerm>("cash_on_delivery");
     const [termsDays, setTermsDays] = React.useState<number>(30);
 
     const poAny: any = React.useMemo(() => unwrap(props.po), [props.po]);
@@ -94,65 +130,100 @@ export default function PurchaseOrderReviewPanel(props: {
         setTermsDays(30);
     }, [poAny?.purchase_order_id ?? poAny?.id ?? null]);
 
+    // ✅ Prefer route-provided branch_summary (string), fallback to branch object
     const branchLabel = React.useMemo(() => {
+        const summary = safeStr(poAny?.branch_summary ?? "", "");
+        if (summary) return summary;
+
         const b = poAny?.branch_id ?? null;
-        const code = safeStr(b?.branch_code ?? b?.code ?? "");
-        const name = safeStr(b?.branch_name ?? b?.name ?? b?.branch_description ?? "");
-        if (code !== "—" && name !== "—") return `${code} — ${name}`;
-        if (name !== "—") return name;
-        const raw = poAny?.branch_id_value ?? poAny?.branch_id ?? poAny?.branch;
+        const code = safeStr(b?.branch_code ?? b?.code ?? "", "");
+        const name = safeStr(
+            b?.branch_name ?? b?.name ?? b?.branch_description ?? "",
+            ""
+        );
+        if (code && name) return `${code} — ${name}`;
+        if (name) return name;
+
+        const raw = poAny?.branch_id_value ?? poAny?.branch;
         const s = String(raw ?? "").trim();
         return s ? s : "—";
     }, [poAny]);
 
-    // ✅ Supplier name ONLY (no numeric fallback)
+    // ✅ Supplier name ONLY: use supplier object OR supplier_name_text (but hide "Supplier #13" fallback)
     const supplierName = React.useMemo(() => {
-        return safeStr(
-            poAny?.supplier_name?.supplier_name ??
-            poAny?.supplierName ??
-            poAny?.supplier ??
-            "—"
-        );
+        const objName = safeStr(poAny?.supplier_name?.supplier_name ?? "", "");
+        if (objName) return objName;
+
+        const text = safeStr(poAny?.supplier_name_text ?? "", "");
+        if (text && !/^Supplier\s*#\s*\d+/i.test(text)) return text;
+
+        const other = safeStr(poAny?.supplierName ?? poAny?.supplier ?? "", "");
+        if (other) return other;
+
+        return "—";
     }, [poAny]);
 
     const apBalance = React.useMemo(() => {
         return toNum(poAny?.supplier_name?.ap_balance ?? poAny?.apBalance ?? 0);
     }, [poAny]);
 
-    const lines = React.useMemo(() => normalizeLines(poAny?.items ?? []), [poAny]);
+    const lines = React.useMemo(
+        () => normalizeLines(poAny?.items ?? []),
+        [poAny]
+    );
 
-    const grossDirect = toNum(poAny?.gross_amount ?? poAny?.grossAmount);
-    const discountAmount = toNum(poAny?.discounted_amount ?? poAny?.discountAmount);
-    const vatAmount = toNum(poAny?.vat_amount ?? poAny?.vatAmount);
-    const ewtDirect = toNum(poAny?.withholding_tax_amount ?? poAny?.ewtGoods);
-    const totalDirect = toNum(poAny?.total_amount ?? poAny?.total);
+    // ✅ Header numbers (from purchase_order)
+    const grossHeader = toNum(poAny?.gross_amount ?? poAny?.grossAmount);
+    const discountHeader = toNum(
+        poAny?.discounted_amount ?? poAny?.discountAmount
+    );
+    const vatHeader = toNum(poAny?.vat_amount ?? poAny?.vatAmount);
+    const ewtHeader = toNum(
+        poAny?.withholding_tax_amount ?? poAny?.ewtGoods
+    );
+    const totalHeader = toNum(poAny?.total_amount ?? poAny?.total);
+
+    // ✅ Fallback from items (purchase_order_items)
+    const itemsSum = React.useMemo(() => {
+        return summarizeFromItems(poAny?.items ?? []);
+    }, [poAny]);
+
+    // ✅ Use header values if present; else fallback to items sums
+    const discountAmount = discountHeader > 0 ? discountHeader : itemsSum.discount;
+    const grossDirect = grossHeader > 0 ? grossHeader : itemsSum.gross;
+    const vatAmount = vatHeader > 0 ? vatHeader : itemsSum.vat;
 
     const netAmount = React.useMemo(() => {
         if (grossDirect > 0) return Math.max(0, grossDirect - discountAmount);
-        if (totalDirect > 0) return totalDirect;
+        if (totalHeader > 0) return totalHeader;
+        if (itemsSum.total > 0) return itemsSum.total;
         return 0;
-    }, [grossDirect, discountAmount, totalDirect]);
+    }, [grossDirect, discountAmount, totalHeader, itemsSum.total]);
 
     const grossAmount = React.useMemo(() => {
         if (grossDirect > 0) return grossDirect;
-        if (netAmount > 0 || discountAmount > 0) return Math.max(0, netAmount + discountAmount);
+        if (netAmount > 0 || discountAmount > 0)
+            return Math.max(0, netAmount + discountAmount);
         return 0;
     }, [grossDirect, netAmount, discountAmount]);
 
     const ewtGoods = React.useMemo(() => {
-        if (ewtDirect > 0) return ewtDirect;
+        if (ewtHeader > 0) return ewtHeader;
         return netAmount > 0 ? netAmount * 0.01 : 0;
-    }, [ewtDirect, netAmount]);
+    }, [ewtHeader, netAmount]);
 
     const totalAmount = React.useMemo(() => {
-        if (totalDirect > 0) return totalDirect;
+        // IMPORTANT: your PO total_amount usually already equals NET (gross-discount)
+        if (totalHeader > 0) return totalHeader;
+        if (itemsSum.total > 0) return itemsSum.total;
         return netAmount;
-    }, [totalDirect, netAmount]);
+    }, [totalHeader, itemsSum.total, netAmount]);
 
     const paymentStatusLabel = React.useMemo(() => {
         if (paymentTerm === "cash_on_delivery") return "Payment Due on Delivery";
         if (paymentTerm === "cash_with_order") return "Payment Due with Order";
-        if (paymentTerm === "terms") return `Payment Due in ${Math.max(1, termsDays)} Day(s)`;
+        if (paymentTerm === "terms")
+            return `Payment Due in ${Math.max(1, termsDays)} Day(s)`;
         return "—";
     }, [paymentTerm, termsDays]);
 
@@ -171,7 +242,11 @@ export default function PurchaseOrderReviewPanel(props: {
                         Purchase Order Review
                     </div>
                     <div className="text-[11px] text-muted-foreground truncate">
-                        {String(poAny?.purchase_order_no ?? poAny?.poNumber ?? "Select a PO to review")}
+                        {String(
+                            poAny?.purchase_order_no ??
+                            poAny?.poNumber ??
+                            "Select a PO to review"
+                        )}
                     </div>
                 </div>
 
@@ -202,7 +277,9 @@ export default function PurchaseOrderReviewPanel(props: {
                                     <div className="flex justify-between gap-3">
                                         <span className="text-muted-foreground">PO Number</span>
                                         <span className="font-mono font-bold text-foreground">
-                      {String(poAny?.purchase_order_no ?? poAny?.poNumber ?? "—")}
+                      {String(
+                          poAny?.purchase_order_no ?? poAny?.poNumber ?? "—"
+                      )}
                     </span>
                                     </div>
                                     <div className="flex justify-between gap-3">
@@ -230,7 +307,9 @@ export default function PurchaseOrderReviewPanel(props: {
                                     </div>
                                     <div className="text-xs text-muted-foreground mt-1">
                                         A/P Balance:{" "}
-                                        <span className="text-foreground font-medium">{fmt.format(apBalance)}</span>
+                                        <span className="text-foreground font-medium">
+                      {fmt.format(apBalance)}
+                    </span>
                                     </div>
                                 </div>
                             </div>
@@ -261,15 +340,23 @@ export default function PurchaseOrderReviewPanel(props: {
                                 <ScrollArea className="max-h-56 pr-2">
                                     <div className="space-y-2">
                                         {lines.map((l) => (
-                                            <div key={l.key} className="rounded-lg border border-border bg-background p-3">
+                                            <div
+                                                key={l.key}
+                                                className="rounded-lg border border-border bg-background p-3"
+                                            >
                                                 <div className="flex items-start justify-between gap-3">
                                                     <div className="min-w-0">
-                                                        <div className="text-sm font-bold text-foreground truncate">{l.name}</div>
+                                                        <div className="text-sm font-bold text-foreground truncate">
+                                                            {l.name}
+                                                        </div>
                                                         <div className="text-[11px] text-muted-foreground mt-1">
-                                                            UOM: {l.uom} • Qty: {l.qty} • Unit Price: {fmt.format(l.price)}
+                                                            UOM: {l.uom} • Qty: {l.qty} • Unit Price:{" "}
+                                                            {fmt.format(l.price)}
                                                         </div>
                                                     </div>
-                                                    <div className="text-sm font-black text-foreground">{fmt.format(l.total)}</div>
+                                                    <div className="text-sm font-black text-foreground">
+                                                        {fmt.format(l.total)}
+                                                    </div>
                                                 </div>
                                             </div>
                                         ))}
@@ -288,33 +375,50 @@ export default function PurchaseOrderReviewPanel(props: {
                             </div>
 
                             <div className="flex justify-between text-xs">
-                                <span className="text-muted-foreground font-medium uppercase">Gross Amount</span>
-                                <span className="font-bold text-foreground">{fmt.format(grossAmount)}</span>
+                <span className="text-muted-foreground font-medium uppercase">
+                  Gross Amount
+                </span>
+                                <span className="font-bold text-foreground">
+                  {fmt.format(grossAmount)}
+                </span>
                             </div>
 
                             <div className="flex justify-between text-xs">
-                                <span className="text-muted-foreground font-medium uppercase">Discount</span>
+                <span className="text-muted-foreground font-medium uppercase">
+                  Discount
+                </span>
                                 <span className="font-bold text-emerald-600 dark:text-emerald-400">
                   -{fmt.format(discountAmount)}
                 </span>
                             </div>
 
                             <div className="flex justify-between text-xs border-b border-border/50 pb-3">
-                                <span className="text-muted-foreground font-medium uppercase">Net Amount</span>
-                                <span className="font-bold text-foreground">{fmt.format(netAmount)}</span>
+                <span className="text-muted-foreground font-medium uppercase">
+                  Net Amount
+                </span>
+                                <span className="font-bold text-foreground">
+                  {fmt.format(netAmount)}
+                </span>
                             </div>
 
-                            {/* ✅ VAT/EWT + note only when Mark as Invoice is ON */}
                             {markAsInvoice ? (
                                 <>
                                     <div className="flex justify-between text-xs">
-                                        <span className="text-muted-foreground font-medium uppercase">VAT</span>
-                                        <span className="font-bold text-foreground">{fmt.format(vatAmount)}</span>
+                    <span className="text-muted-foreground font-medium uppercase">
+                      VAT
+                    </span>
+                                        <span className="font-bold text-foreground">
+                      {fmt.format(vatAmount)}
+                    </span>
                                     </div>
 
                                     <div className="flex justify-between text-xs">
-                                        <span className="text-muted-foreground font-medium uppercase">EWT Goods (1%)</span>
-                                        <span className="font-bold text-destructive">-{fmt.format(ewtGoods)}</span>
+                    <span className="text-muted-foreground font-medium uppercase">
+                      EWT Goods (1%)
+                    </span>
+                                        <span className="font-bold text-destructive">
+                      -{fmt.format(ewtGoods)}
+                    </span>
                                     </div>
 
                                     <div className="rounded-md bg-background/60 border border-border/60 px-3 py-2 text-[11px] text-muted-foreground italic">
@@ -339,11 +443,16 @@ export default function PurchaseOrderReviewPanel(props: {
                             ) : (
                                 <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs">
                                     <div className="flex items-center justify-between gap-3">
-                                        <span className="font-bold text-primary">Total Accounts Payable (after approval):</span>
-                                        <span className="font-black text-primary">{fmt.format(apBalance + totalAmount)}</span>
+                    <span className="font-bold text-primary">
+                      Total Accounts Payable (after approval):
+                    </span>
+                                        <span className="font-black text-primary">
+                      {fmt.format(apBalance + totalAmount)}
+                    </span>
                                     </div>
                                     <div className="mt-1 text-[11px] text-primary/80">
-                                        Current: {fmt.format(apBalance)} + This PO: {fmt.format(totalAmount)}
+                                        Current: {fmt.format(apBalance)} + This PO:{" "}
+                                        {fmt.format(totalAmount)}
                                     </div>
                                 </div>
                             )}
@@ -353,7 +462,11 @@ export default function PurchaseOrderReviewPanel(props: {
 
                         <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
                             <div className="flex items-center gap-3">
-                                <Switch checked={markAsInvoice} onCheckedChange={setMarkAsInvoice} id="markAsInvoice" />
+                                <Switch
+                                    checked={markAsInvoice}
+                                    onCheckedChange={setMarkAsInvoice}
+                                    id="markAsInvoice"
+                                />
                                 <Label htmlFor="markAsInvoice" className="text-sm font-bold">
                                     Mark as Invoice
                                 </Label>
@@ -365,7 +478,10 @@ export default function PurchaseOrderReviewPanel(props: {
                                 </div>
 
                                 <div className="flex items-center gap-2">
-                                    <Select value={paymentTerm} onValueChange={(v) => setPaymentTerm(v as PaymentTerm)}>
+                                    <Select
+                                        value={paymentTerm}
+                                        onValueChange={(v) => setPaymentTerm(v as PaymentTerm)}
+                                    >
                                         <SelectTrigger className="h-10 w-[220px] rounded-xl">
                                             <SelectValue placeholder="Select payment term" />
                                         </SelectTrigger>
@@ -385,7 +501,9 @@ export default function PurchaseOrderReviewPanel(props: {
                                                 type="number"
                                                 min={1}
                                                 value={String(termsDays)}
-                                                onChange={(e) => setTermsDays(Math.max(1, toNum(e.target.value)))}
+                                                onChange={(e) =>
+                                                    setTermsDays(Math.max(1, toNum(e.target.value)))
+                                                }
                                                 className="h-10 w-[110px] rounded-xl"
                                             />
                                         </div>
@@ -399,7 +517,8 @@ export default function PurchaseOrderReviewPanel(props: {
                                             props.onApprove({
                                                 markAsInvoice,
                                                 paymentTerm,
-                                                termsDays: paymentTerm === "terms" ? Math.max(1, termsDays) : undefined,
+                                                termsDays:
+                                                    paymentTerm === "terms" ? Math.max(1, termsDays) : undefined,
                                             })
                                         }
                                     >

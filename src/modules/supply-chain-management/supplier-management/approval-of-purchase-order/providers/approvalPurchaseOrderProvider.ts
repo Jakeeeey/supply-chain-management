@@ -27,10 +27,30 @@ export async function fetchPendingApprovalPOs(): Promise<PendingApprovalPO[]> {
 
     const rows = unwrapDeep<any[]>(json) ?? [];
 
-    return rows.map((r) => ({
-        ...r,
-        id: String(r?.id ?? r?.purchase_order_id ?? ""),
-    })) as any;
+    return rows.map((r) => {
+        const id = String(r?.purchase_order_id ?? r?.id ?? "");
+        const poNumber = String(r?.purchase_order_no ?? r?.poNumber ?? "—");
+
+        const supplierName =
+            String(r?.supplier_name?.supplier_name ?? r?.supplier_name_text ?? r?.supplierName ?? "—");
+
+        const branchName =
+            String(r?.branch_summary ?? r?.branch_id?.branch_name ?? r?.branchName ?? "—");
+
+        const createdAt = String(r?.date ?? r?.date_encoded ?? r?.createdAt ?? "—");
+
+        const total = toNum(r?.total_amount ?? r?.totalAmount ?? r?.total);
+
+        return {
+            ...r,
+            id,
+            poNumber,
+            supplierName,
+            branchName,
+            createdAt,
+            total,
+        } as any;
+    });
 }
 
 export async function fetchPurchaseOrderDetail(id: string): Promise<PurchaseOrderDetail> {
@@ -44,21 +64,21 @@ export async function fetchPurchaseOrderDetail(id: string): Promise<PurchaseOrde
 
     const d: any = unwrapDeep<any>(json) ?? {};
 
-    const gross = toNum(d?.gross_amount ?? d?.grossAmount ?? d?.data?.gross_amount ?? d?.data?.grossAmount);
-    const disc = toNum(d?.discounted_amount ?? d?.discountAmount ?? d?.data?.discounted_amount ?? d?.data?.discountAmount);
-    const vat = toNum(d?.vat_amount ?? d?.vatAmount ?? d?.data?.vat_amount ?? d?.data?.vatAmount);
-    const ewt = toNum(d?.withholding_tax_amount ?? d?.ewtGoods ?? d?.data?.withholding_tax_amount ?? d?.data?.ewtGoods);
-    const total = toNum(d?.total_amount ?? d?.total ?? d?.data?.total_amount ?? d?.data?.total);
+    const gross = toNum(d?.gross_amount ?? d?.grossAmount);
+    const disc = toNum(d?.discounted_amount ?? d?.discountAmount);
+    const vat = toNum(d?.vat_amount ?? d?.vatAmount);
+    const ewt = toNum(d?.withholding_tax_amount ?? d?.ewtGoods);
+    const total = toNum(d?.total_amount ?? d?.total);
 
     return {
         ...d,
 
-        // stable id fields
+        // stable ids
         id: String(d?.purchase_order_id ?? d?.id ?? id),
-        purchase_order_id: d?.purchase_order_id ?? d?.id ?? d?.data?.purchase_order_id ?? d?.data?.id,
-        purchase_order_no: d?.purchase_order_no ?? d?.poNumber ?? d?.data?.purchase_order_no ?? d?.data?.poNumber,
+        purchase_order_id: d?.purchase_order_id ?? d?.id ?? id,
+        purchase_order_no: d?.purchase_order_no ?? d?.poNumber ?? "—",
 
-        // ✅ normalized numeric fields (snake + camel duplicates for safety)
+        // normalized numeric fields (snake + camel duplicates)
         gross_amount: gross,
         discounted_amount: disc,
         vat_amount: vat,

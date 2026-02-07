@@ -1,68 +1,94 @@
 export type PaymentTerm = "cash_with_order" | "cash_on_delivery" | "terms";
 
-/**
- * Keep your existing fields, but make them optional + add Directus fields so UI never breaks.
- */
 export type PendingApprovalPO = {
     id: string;
 
-    // your original
+    // normalized convenience fields
     poNumber?: string;
     supplierName?: string;
     branchName?: string;
     createdAt?: string;
     total?: number;
+
     raw?: any;
 
-    // directus common
+    // directus fields
     purchase_order_id?: number | string;
     purchase_order_no?: string;
     date?: string;
     date_encoded?: string;
+
+    gross_amount?: any;
+    discounted_amount?: any;
+    vat_amount?: any;
+    withholding_tax_amount?: any;
     total_amount?: any;
 
     supplier_name?: any; // number OR expanded object
-    branch_id?: any;
+    supplier_name_value?: any;
+    supplier_name_text?: string;
+
+    branch_id?: any; // number OR expanded object
+    branch_id_value?: any;
+    branch_summary?: string;
 };
 
 export type PurchaseOrderItem = {
-    // your original fields
-    name?: string;
-    qty?: number;
-    price?: number;
-    total?: number;
-
-    // directus common shape (optional)
-    id?: any;
-    product_id?: any; // number or expanded object {id, product_name}
-    product_name?: string;
-    quantity?: any;
+    // directus purchase_order_items fields (optional)
+    po_item_id?: any;
+    purchase_order_id?: any;
+    line_no?: any;
+    item_name?: string;
+    item_description?: any;
+    uom?: string;
+    qty?: any;
     unit_price?: any;
-    total_amount?: any;
+    line_subtotal?: any;
+    tax_rate?: any;
+    tax_amount?: any;
+    discount_amount?: any;
+    line_total?: any;
+    expected_date?: any;
+    notes?: any;
+    supplier_id?: any;
+    currency?: any;
+    created_at?: any;
+    updated_at?: any;
+
+    // compatibility (optional)
+    name?: string;
+    quantity?: any;
+    price?: any;
+    total?: any;
 };
 
 export type PurchaseOrderDetail = {
-    // your original fields
+    // normalized convenience fields
     id?: string;
     poNumber?: string;
     supplierName?: string;
     apBalance?: number;
     items?: PurchaseOrderItem[];
-    subtotal?: number;
-    discount?: number;
-    tax?: number;
-    ewt?: number;
-    total?: number;
     raw?: any;
 
-    // directus fields used by approval UI
+    // directus purchase_order fields
     purchase_order_id?: number | string;
     purchase_order_no?: string;
     date?: string;
     date_encoded?: string;
 
-    supplier_name?: any; // number or expanded {supplier_name, ap_balance}
-    branch_id?: any;
+    supplier_name?: any; // expanded {supplier_name, ap_balance} or number
+    supplier_name_value?: any;
+    supplier_name_text?: string;
+
+    branch_id?: any; // expanded branch object or number
+    branch_id_value?: any;
+    branch_summary?: string;
+
+    lead_time_payment?: any;
+    payment_type?: any;
+    payment_status?: any;
+    receipt_required?: any;
 
     gross_amount?: any;
     discounted_amount?: any;
@@ -75,4 +101,5 @@ export type PurchaseOrderDetail = {
     discountAmount?: any;
     vatAmount?: any;
     ewtGoods?: any;
+    total?: any;
 };
