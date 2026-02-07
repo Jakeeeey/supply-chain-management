@@ -1,4 +1,5 @@
-// src/app/(financial-management)/fm/treasury/disbursement/page.tsx
+// src/app/(supply-chain-management)/scm/supplier-management/purchase-order/page.tsx
+
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -10,12 +11,11 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { NavUser } from "../../../_components/nav-user";
+import { NavUser } from "../../_components/nav-user";
 
 import { cookies } from "next/headers";
 
-// ✅ Wire the module you asked for
-import VehicleListModule from "@/modules/supply-chain-management/vehicle-management/vehicle-list/VehicleListModule"
+import ComingSoon from "../../_components/ComingSoon"
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -75,7 +75,7 @@ function buildHeaderUserFromToken(token: string | null | undefined) {
 }
 
 export default async function Page() {
-    // ✅ Next.js 16: cookies() is async
+    // ✅ Next.js cookies() is async
     const cookieStore = await cookies();
     const token = cookieStore.get(COOKIE_NAME)?.value ?? null;
 
@@ -83,13 +83,15 @@ export default async function Page() {
 
     return (
         <div className="flex h-full min-h-0 flex-col">
+            {/* ===== Header ===== */}
             <header
                 className="
-          sticky top-2 z-50 relative
-          flex h-16 shrink-0 items-center justify-between
-          border-b bg-background shadow-sm
-          before:content-[''] before:absolute before:inset-x-0 before:-top-2 before:h-2 before:bg-background
-        "
+                    sticky top-2 z-50 relative
+                    flex h-16 shrink-0 items-center justify-between
+                    border-b bg-background shadow-sm
+                    before:content-[''] before:absolute before:inset-x-0
+                    before:-top-2 before:h-2 before:bg-background
+                "
             >
                 <div className="flex h-full items-center gap-2 px-4">
                     <SidebarTrigger className="-ml-1" />
@@ -97,14 +99,19 @@ export default async function Page() {
                         orientation="vertical"
                         className="mr-2 data-[orientation=vertical]:h-4"
                     />
+
                     <Breadcrumb>
                         <BreadcrumbList>
                             <BreadcrumbItem className="hidden md:block">
-                                <BreadcrumbLink href="#">Vehicle Management</BreadcrumbLink>
+                                <BreadcrumbLink href="#">
+                                    Supplier Management
+                                </BreadcrumbLink>
                             </BreadcrumbItem>
                             <BreadcrumbSeparator className="hidden md:block" />
                             <BreadcrumbItem>
-                                <BreadcrumbPage>Vehicle List</BreadcrumbPage>
+                                <BreadcrumbPage>
+                                    Approval of Purchase Order
+                                </BreadcrumbPage>
                             </BreadcrumbItem>
                         </BreadcrumbList>
                     </Breadcrumb>
@@ -115,9 +122,11 @@ export default async function Page() {
                 </div>
             </header>
 
+            {/* ===== Content ===== */}
             <ScrollArea className="min-h-0 flex-1">
                 <div className="p-4">
-                    <VehicleListModule />
+                    {/* ✅ Purchase Order UI (Create / Approval / Receiving / Posting) */}
+                    <ComingSoon />
                 </div>
             </ScrollArea>
         </div>

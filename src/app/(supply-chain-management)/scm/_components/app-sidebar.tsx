@@ -32,11 +32,25 @@ const data = {
             isActive: true,
         },
         {
+            title: "Management",
+            url: "#",
+            icon: SquareTerminal,
+            isActive: true,
+            items: [
+                { title: "SKU Creation", url: "/scm/management/sku-creation" },
+            ],
+        },
+        {
             title: "Supplier Management",
             url: "#",
             icon: SquareTerminal,
             isActive: true,
-            items: [{ title: "Purchase Order", url: "/scm/supplier-management/purchase-order" }],
+            items: [
+                { title: "Create Purchase Order", url: "/scm/supplier-management/purchase-order" },
+                { title: "Approval of PO", url: "/scm/supplier-management/approval-of-purchase-order" },
+                { title: "Receiving Products", url: "/scm/supplier-management/receiving-products" },
+                { title: "Posting Of PO", url: "/scm/supplier-management/posting-of-purchase-order" }
+            ],
         },
         {
             title: "Warehouse Management",

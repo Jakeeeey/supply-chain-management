@@ -1,4 +1,4 @@
-// src/app/(financial-management)/fm/treasury/disbursement/page.tsx
+// src/app/(supply-chain-management)/scm/management/sku-creation/page.tsx
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -10,12 +10,12 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { NavUser } from "../../../_components/nav-user";
+import { NavUser } from "../../_components/nav-user";
 
 import { cookies } from "next/headers";
 
 // ✅ Wire the module you asked for
-import VehicleListModule from "@/modules/supply-chain-management/vehicle-management/vehicle-list/VehicleListModule"
+import ComingSoon from "../../_components/ComingSoon"
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -100,11 +100,11 @@ export default async function Page() {
                     <Breadcrumb>
                         <BreadcrumbList>
                             <BreadcrumbItem className="hidden md:block">
-                                <BreadcrumbLink href="#">Vehicle Management</BreadcrumbLink>
+                                <BreadcrumbLink href="#">Management</BreadcrumbLink>
                             </BreadcrumbItem>
                             <BreadcrumbSeparator className="hidden md:block" />
                             <BreadcrumbItem>
-                                <BreadcrumbPage>Vehicle List</BreadcrumbPage>
+                                <BreadcrumbPage>SKU Creation</BreadcrumbPage>
                             </BreadcrumbItem>
                         </BreadcrumbList>
                     </Breadcrumb>
@@ -117,7 +117,7 @@ export default async function Page() {
 
             <ScrollArea className="min-h-0 flex-1">
                 <div className="p-4">
-                    <VehicleListModule />
+                    <ComingSoon />
                 </div>
             </ScrollArea>
         </div>
