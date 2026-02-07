@@ -1,4 +1,4 @@
-// src/modules/supply-chain-management/supplier-management/create-of-purchase-order/utils/calculations.ts
+// src/modules/supply-chain-management/supplier-management/create-of-purchase-order/utils/format.ts
 
 export function cn(...classes: Array<string | false | null | undefined>) {
     return classes.filter(Boolean).join(" ");

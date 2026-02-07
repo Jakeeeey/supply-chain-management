@@ -1,4 +1,4 @@
-// src/modules/supply-chain-management/supplier-management/create-of-purchase-order/CreatePurchaseOrderModule.tsx
+// src/modules/supply-chain-management/supplier-management/create-of-purchase-order/ApprovalPurchaseOrderModule.tsx
 "use client";
 
 import * as React from "react";
