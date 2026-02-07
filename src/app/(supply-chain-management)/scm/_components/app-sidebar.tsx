@@ -38,6 +38,9 @@ const data = {
             isActive: true,
             items: [
                 { title: "SKU Creation", url: "/scm/management/sku-creation" },
+                { title: "Brand", url: "/scm/management/brand" },
+                { title: "Category", url: "/scm/management/category" },
+                { title: "Unit of Measurement", url: "/scm/management/unit-of-measurement" },
             ],
         },
         {
@@ -67,7 +70,13 @@ const data = {
             url: "#",
             icon: BookOpen,
             items: [
-                { title: "Vehicle Management", url: "/scm/fleet-management/vehicle-management/vehicle-list" },
+                {
+                    title: "Vehicle Management",
+                    url: "#",
+                    items: [
+                        { title: "Vehicle List", url: "/scm/fleet-management/vehicle-management/vehicle-list" },
+                    ]
+                },
                 { title: "Driver Management", url: "#" },
                 { title: "Trip and Dispatch Management", url: "#" },
                 {
