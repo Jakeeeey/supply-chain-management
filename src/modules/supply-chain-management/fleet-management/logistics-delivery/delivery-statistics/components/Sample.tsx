@@ -1,10 +1,10 @@
-//src/modules/vehicle-management/vehicle-list/components/VehiclesTable.tsx
+//src/modules/vehicle-management/vehicle-list/components/Sample.tsx
 "use client";
 
 import * as React from "react";
 import { Eye } from "lucide-react";
 
-import type { VehicleRow } from "@/modules/supply-chain-management/vehicle-management/vehicle-list/types";
+import type { VehicleRow } from "@/modules/supply-chain-management/fleet-management/vehicle-management/vehicle-list/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -139,7 +139,7 @@ function VehicleCard({
   );
 }
 
-export function VehiclesTable({
+export function Sample({
   rows,
   loading,
   onViewHistory,

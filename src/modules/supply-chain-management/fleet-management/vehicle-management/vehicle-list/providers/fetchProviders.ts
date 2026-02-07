@@ -5,7 +5,7 @@ import type {
   UserApiRow,
   FuelTypeApiRow,
   EngineTypeApiRow,
-} from "@/modules/supply-chain-management/vehicle-management/vehicle-list/types";
+} from "@/modules/supply-chain-management/fleet-management/vehicle-management/vehicle-list/types";
 
 type DirectusListResponse<T> = { data: T[] };
 type DirectusItemResponse<T> = { data: T };
@@ -28,42 +28,42 @@ async function readError(res: Response) {
 }
 
 export async function listVehicleTypes(): Promise<VehicleTypeApiRow[]> {
-  const res = await fetch("/api/vehicle-management/vehicle-list/vehicle-type");
+  const res = await fetch("/api/scm/fleet-management/vehicle-management/vehicle-list/vehicle-type");
   if (!res.ok) throw new Error(await readError(res));
   const json = (await res.json()) as DirectusListResponse<VehicleTypeApiRow>;
   return json?.data ?? [];
 }
 
 export async function listFuelTypes(): Promise<FuelTypeApiRow[]> {
-  const res = await fetch("/api/vehicle-management/vehicle-list/fuel-type?limit=-1");
+  const res = await fetch("/api/scm/fleet-management/vehicle-management/vehicle-list/fuel-type?limit=-1");
   if (!res.ok) throw new Error(await readError(res));
   const json = (await res.json()) as DirectusListResponse<FuelTypeApiRow>;
   return json?.data ?? [];
 }
 
 export async function listEngineTypes(): Promise<EngineTypeApiRow[]> {
-  const res = await fetch("/api/vehicle-management/vehicle-list/engine-type?limit=-1");
+  const res = await fetch("/api/scm/fleet-management/vehicle-management/vehicle-list/engine-type?limit=-1");
   if (!res.ok) throw new Error(await readError(res));
   const json = (await res.json()) as DirectusListResponse<EngineTypeApiRow>;
   return json?.data ?? [];
 }
 
 export async function listVehicles(): Promise<VehiclesApiRow[]> {
-  const res = await fetch("/api/vehicle-management/vehicle-list");
+  const res = await fetch("/api/scm/fleet-management/vehicle-management/vehicle-list");
   if (!res.ok) throw new Error(await readError(res));
   const json = (await res.json()) as DirectusListResponse<VehiclesApiRow>;
   return json?.data ?? [];
 }
 
 export async function listUsers(): Promise<UserApiRow[]> {
-  const res = await fetch("/api/vehicle-management/vehicle-list/users?limit=-1");
+  const res = await fetch("/api/scm/fleet-management/vehicle-management/vehicle-list/users?limit=-1");
   if (!res.ok) throw new Error(await readError(res));
   const json = (await res.json()) as DirectusListResponse<UserApiRow>;
   return json?.data ?? [];
 }
 
 export async function listDispatchPlans(): Promise<DispatchPlanApiRow[]> {
-  const res = await fetch("/api/vehicle-management/vehicle-list/dispatch-plans?limit=-1");
+  const res = await fetch("/api/scm/fleet-management/vehicle-management/vehicle-list/dispatch-plans?limit=-1");
   if (!res.ok) throw new Error(await readError(res));
   const json = (await res.json()) as DirectusListResponse<DispatchPlanApiRow>;
   return json?.data ?? [];
@@ -71,7 +71,7 @@ export async function listDispatchPlans(): Promise<DispatchPlanApiRow[]> {
 
 export async function listDispatchPlansByVehicle(vehicleId: number): Promise<DispatchPlanApiRow[]> {
   const res = await fetch(
-    `/api/vehicle-management/vehicle-list/dispatch-plans?limit=-1&vehicle_id=${encodeURIComponent(
+    `/api/vehicle-management/scm/fleet-management/vehicle-list/dispatch-plans?limit=-1&vehicle_id=${encodeURIComponent(
       String(vehicleId)
     )}`
   );
@@ -89,7 +89,7 @@ export async function uploadVehicleImage(file: File): Promise<string> {
   const fd = new FormData();
   fd.append("file", file);
 
-  const res = await fetch("/api/vehicle-management/vehicle-list/upload", {
+  const res = await fetch("/api/scm/fleet-management/vehicle-management/vehicle-list/upload", {
     method: "POST",
     body: fd,
   });
@@ -128,7 +128,7 @@ function sanitizeVehicleCreatePayload(payload: Record<string, any>) {
 }
 
 export async function createVehicle(payload: Record<string, any>) {
-  const first = await fetch("/api/vehicle-management/vehicle-list", {
+  const first = await fetch("/api/scm/fleet-management/vehicle-management/vehicle-list", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
@@ -149,7 +149,7 @@ export async function createVehicle(payload: Record<string, any>) {
   // ✅ retry with only known vehicle columns (prevents losing good fields)
   const sanitized = sanitizeVehicleCreatePayload(payload);
 
-  const second = await fetch("/api/vehicle-management/vehicle-list", {
+  const second = await fetch("/api/scm/fleet-management/vehicle-management/vehicle-list", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(sanitized),

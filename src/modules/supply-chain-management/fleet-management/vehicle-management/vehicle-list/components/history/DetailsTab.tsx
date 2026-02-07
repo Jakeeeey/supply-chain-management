@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import type { VehicleRow } from "@/modules/supply-chain-management/vehicle-management/vehicle-list/types";
+import type { VehicleRow } from "@/modules/supply-chain-management/fleet-management/vehicle-management/vehicle-list/types";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";

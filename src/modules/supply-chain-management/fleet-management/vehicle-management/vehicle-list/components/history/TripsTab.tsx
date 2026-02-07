@@ -4,8 +4,8 @@
 import * as React from "react";
 import { toast } from "sonner";
 
-import type { VehicleRow, DispatchPlanApiRow } from "@/modules/supply-chain-management/vehicle-management/vehicle-list/types";
-import { listDispatchPlansByVehicle } from "@/modules/supply-chain-management/vehicle-management/vehicle-list/providers/fetchProviders";
+import type { VehicleRow, DispatchPlanApiRow } from "@/modules/supply-chain-management/fleet-management/vehicle-management/vehicle-list/types";
+import { listDispatchPlansByVehicle } from "@/modules/supply-chain-management/fleet-management/vehicle-management/vehicle-list/providers/fetchProviders";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";

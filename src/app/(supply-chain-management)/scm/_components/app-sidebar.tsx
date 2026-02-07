@@ -70,7 +70,16 @@ const data = {
                 { title: "Vehicle Management", url: "/scm/fleet-management/vehicle-management/vehicle-list" },
                 { title: "Driver Management", url: "#" },
                 { title: "Trip and Dispatch Management", url: "#" },
-                { title: "Logistics and Deliveries", url: "#" },
+                {
+                    title: "Logistics and Deliveries",
+                    url: "#",
+                    items: [
+                        { title: "Delivery Statistics", url: "/scm/fleet-management/logistics-deliveries/delivery-statistics" },
+                        { title: "Logistics Summary", url: "/scm/fleet-management/logistics-deliveries/logistics-summary" },
+                        { title: "Pending Deliveries", url: "/scm/fleet-management/logistics-deliveries/pending-deliveries" },
+                        { title: "Pending Invoices", url: "/scm/fleet-management/logistics-deliveries/pending-invoices" },
+                    ]
+                },
                 { title: "Fleet Inventory", url: "#" },
             ],
         },
