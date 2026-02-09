@@ -1,3 +1,4 @@
+// src/app/api/scm/supplier-management/approval-of-po/route.ts
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -5,33 +6,35 @@ export const dynamic = "force-dynamic";
 
 const COOKIE_NAME = "vos_access_token";
 
+/** ✅ .env.local dependent base */
 function getDirectusBase() {
     const raw =
+        process.env.NEXT_PUBLIC_API_BASE_URL ||
         process.env.DIRECTUS_URL ||
         process.env.NEXT_PUBLIC_DIRECTUS_URL ||
         "http://100.110.197.61:8056";
 
-    if (!/^https?:\/\//i.test(raw)) return `http://${raw}`;
-    return raw.replace(/\/$/, "");
+    const cleaned = String(raw || "").trim().replace(/\/$/, "");
+    if (!/^https?:\/\//i.test(cleaned)) return `http://${cleaned}`;
+    return cleaned;
 }
 
-function pickEnvToken() {
-    return process.env.DIRECTUS_TOKEN || process.env.DIRECTUS_STATIC_TOKEN || "";
+/** ✅ ALWAYS use server/static token to avoid Directus role field stripping */
+function getServerToken() {
+    return String(process.env.DIRECTUS_STATIC_TOKEN || process.env.DIRECTUS_TOKEN || "").trim();
 }
 
-function buildHeaders(req?: NextRequest) {
-    const h: Record<string, string> = { "Content-Type": "application/json" };
-
-    const envToken = pickEnvToken();
-    if (envToken) {
-        h.Authorization = `Bearer ${envToken}`;
-        return h;
+function buildHeaders(_req?: NextRequest) {
+    const token = getServerToken();
+    if (!token) {
+        throw new Error(
+            "DIRECTUS_STATIC_TOKEN (or DIRECTUS_TOKEN) is missing. Add it to .env.local then restart dev server."
+        );
     }
-
-    const incomingAuth = req?.headers?.get("authorization");
-    if (incomingAuth) h.Authorization = incomingAuth;
-
-    return h;
+    return {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+    };
 }
 
 function decodeJwtPayload(token: string): any | null {
@@ -115,11 +118,6 @@ async function fetchBranchesMap(base: string, req?: NextRequest) {
     return map;
 }
 
-/**
- * ✅ Fix permission error:
- * Do NOT request forbidden fields.
- * We'll fetch suppliers without `fields=` so Directus returns only allowed fields for your role.
- */
 async function fetchSuppliersMap(base: string, req?: NextRequest) {
     const url = `${base}/items/suppliers?limit=-1`;
     const j = await fetchJson(url, req);
@@ -132,7 +130,6 @@ async function fetchSuppliersMap(base: string, req?: NextRequest) {
         map.set(id, {
             id,
             supplier_name: String(s?.supplier_name ?? "—"),
-            // if not readable by role, it will be undefined -> 0
             ap_balance: Number(s?.ap_balance ?? s?.apBalance ?? 0) || 0,
         });
     }
@@ -142,7 +139,6 @@ async function fetchSuppliersMap(base: string, req?: NextRequest) {
 async function fetchPOProductsByPoIds(base: string, poIds: number[], req?: NextRequest) {
     if (!poIds.length) return [];
 
-    // Directus _in uses comma-separated list
     const inList = poIds.join(",");
     const url =
         `${base}/items/purchase_order_products?limit=-1` +
@@ -179,7 +175,6 @@ async function fetchProductsMap(base: string, productIds: number[], req?: NextRe
     if (!productIds.length) return map;
 
     const inList = productIds.join(",");
-    // Keep fields minimal to avoid permissions issues
     const url =
         `${base}/items/products?limit=-1` +
         `&filter[product_id][_in]=${encodeURIComponent(inList)}` +
@@ -261,7 +256,7 @@ export async function GET(req: NextRequest) {
                 .map((po: any) => Number(po?.purchase_order_id))
                 .filter((n: any) => Number.isFinite(n) && n > 0);
 
-            // derive branches from purchase_order_products (multi-branch)
+            // ✅ derive branches from purchase_order_products (multi-branch)
             const poProducts = await fetchPOProductsByPoIds(base, poIds, req);
 
             const branchesByPo = new Map<number, number[]>();
@@ -279,38 +274,63 @@ export async function GET(req: NextRequest) {
             const rows = rowsRaw.map((po: any) => {
                 const poIdNum = Number(po?.purchase_order_id);
 
-                // supplier
                 const sid = Number(po?.supplier_name);
                 const supplier = Number.isFinite(sid) ? suppliersMap.get(sid) : null;
 
-                // branches (array)
                 const brIds = branchesByPo.get(poIdNum) ?? [];
                 const brArr = buildBranchArrayFromIds(brIds, branchesMap);
 
                 return {
                     ...po,
+
                     supplier_name_value: po?.supplier_name ?? null,
                     supplier_name: supplier ?? { supplier_name: "—", ap_balance: 0 },
 
                     branch_id_value: po?.branch_id ?? null,
-                    branch_id: brArr, // ✅ array for multi-branch
+                    branch_id: brArr, // ✅ array
                 };
             });
 
             return NextResponse.json({ data: rows });
         }
 
-        // DETAIL
-        const detailUrl = `${base}/items/purchase_order/${encodeURIComponent(id)}?fields=*`;
+        // DETAIL (avoid fields=* to prevent permission errors)
+        const detailUrl =
+            `${base}/items/purchase_order/${encodeURIComponent(id)}` +
+            `?fields=` +
+            [
+                "purchase_order_id",
+                "purchase_order_no",
+                "date",
+                "date_encoded",
+                "gross_amount",
+                "discounted_amount",
+                "vat_amount",
+                "withholding_tax_amount",
+                "total_amount",
+                "receipt_required",
+                "payment_type",
+                "payment_status",
+                "inventory_status",
+                "lead_time_payment",
+                "lead_time_receiving",
+                "supplier_name",
+                "reference",
+                "remark",
+                "receiving_type",
+                "transaction_type",
+                "branch_id",
+            ].join(",");
+
         const dj = await fetchJson(detailUrl, req);
         const po = dj?.data ?? {};
 
-        // supplier
         const sid = Number(po?.supplier_name);
         const supplier = Number.isFinite(sid) ? suppliersMap.get(sid) : null;
 
         // products from purchase_order_products
         const poProducts = await fetchPOProducts(base, id, req);
+
         const productIds = Array.from(
             new Set(
                 poProducts
@@ -344,7 +364,6 @@ export async function GET(req: NextRequest) {
             };
         });
 
-        // branches array (dedup)
         const brArr = buildBranchArrayFromIds(
             poProducts.map((x: any) => Number(x?.branch_id)),
             branchesMap
@@ -353,6 +372,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({
             data: {
                 ...po,
+
                 supplier_name_value: po?.supplier_name ?? null,
                 supplier_name: supplier ?? { supplier_name: "—", ap_balance: 0 },
 
@@ -379,6 +399,7 @@ export async function POST(req: NextRequest) {
         const paymentTerm = String(body?.paymentTerm ?? "cash_on_delivery");
         const termsDaysRaw = Number(body?.termsDays);
 
+        // If cookie exists, use it only to determine approver_id (optional)
         const jwt = req.cookies.get(COOKIE_NAME)?.value ?? null;
         const payload = jwt ? decodeJwtPayload(jwt) : null;
 
