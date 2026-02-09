@@ -33,7 +33,6 @@ export const skuService = {
     });
     if (!response.ok) throw new Error("Failed to fetch product drafts");
     const data = await response.json();
-    console.log("Drafts raw data (first item):", JSON.stringify(data.data[0] || {}, null, 2));
     return {
       data: data.data || [],
       meta: data.meta || { total_count: 0, filter_count: 0 }
@@ -92,7 +91,6 @@ export const skuService = {
       })),
     };
 
-    console.log("Resolved Master Data - Suppliers:", JSON.stringify(result.suppliers.slice(0, 2), null, 2));
     return result;
   },
 
@@ -132,7 +130,7 @@ export const skuService = {
       }
     }
 
-    console.log(`Creating Draft with SKU: ${product_code} | Supplier: ${sku.product_supplier}`);
+    console.log(`Creating Draft with SKU: ${product_code}`);
 
     const response = await fetch(`${API_BASE_URL}/items/product_draft`, {
       method: "POST",
@@ -170,7 +168,6 @@ export const skuService = {
         console.warn("Failed to generate code during update:", e);
       }
     }
-    console.log(`Updating Draft ${id} | SKU: ${product_code} | Supplier: ${sku.product_supplier}`);
 
     const response = await fetch(`${API_BASE_URL}/items/product_draft/${id}`, {
       method: "PATCH",
