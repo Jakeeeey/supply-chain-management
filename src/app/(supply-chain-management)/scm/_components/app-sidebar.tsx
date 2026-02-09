@@ -41,20 +41,16 @@ const data = {
           url: "/scm/product-management/sku-masterlist",
         },
         {
-          title: "SKU Creation",
-          url: "/scm/product-management/sku-creation",
-        },
-      ],
-    },
-    {
-      title: "Supplier Management",
-      url: "#",
-      icon: SquareTerminal,
-      isActive: true,
-      items: [
-        {
-          title: "Create Purchase Order",
-          url: "/scm/supplier-management/purchase-order",
+            title: "Management",
+            url: "#",
+            icon: SquareTerminal,
+            isActive: true,
+            items: [
+                { title: "SKU Creation", url: "/scm/management/sku-creation" },
+                { title: "Brand", url: "/scm/management/brand" },
+                { title: "Category", url: "/scm/management/category" },
+                { title: "Unit of Measurement", url: "/scm/management/unit-of-measurement" },
+            ],
         },
         {
           title: "Approval of PO",
@@ -65,19 +61,31 @@ const data = {
           url: "/scm/supplier-management/receiving-products",
         },
         {
-          title: "Posting Of PO",
-          url: "/scm/supplier-management/posting-of-purchase-order",
-        },
-      ],
-    },
-    {
-      title: "Warehouse Management",
-      url: "#",
-      icon: Bot,
-      items: [
-        {
-          title: "Warehouse Unit Conversion",
-          url: "/scm/warehouse-management/warehouse-unit-conversion",
+            title: "Fleet Management",
+            url: "#",
+            icon: BookOpen,
+            items: [
+                {
+                    title: "Vehicle Management",
+                    url: "#",
+                    items: [
+                        { title: "Vehicle List", url: "/scm/fleet-management/vehicle-management/vehicle-list" },
+                    ]
+                },
+                { title: "Driver Management", url: "#" },
+                { title: "Trip and Dispatch Management", url: "#" },
+                {
+                    title: "Logistics and Deliveries",
+                    url: "#",
+                    items: [
+                        { title: "Delivery Statistics", url: "/scm/fleet-management/logistics-deliveries/delivery-statistics" },
+                        { title: "Logistics Summary", url: "/scm/fleet-management/logistics-deliveries/logistics-summary" },
+                        { title: "Pending Deliveries", url: "/scm/fleet-management/logistics-deliveries/pending-deliveries" },
+                        { title: "Pending Invoices", url: "/scm/fleet-management/logistics-deliveries/pending-invoices" },
+                    ]
+                },
+                { title: "Fleet Inventory", url: "#" },
+            ],
         },
         {
           title: "Stock Transfer",

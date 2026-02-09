@@ -161,7 +161,6 @@ export default function SKUCreationModule() {
           </Button>
         </div>
       </div>
-
       <div className="mt-6">
         <SKUTable 
           title="Pending Approval & Draft Records"
