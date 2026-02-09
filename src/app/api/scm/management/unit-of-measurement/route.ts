@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 
 const DIRECTUS_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
-const ACCESS_TOKEN = process.env.NEXT_PUBLIC_DIRECTUS_TOKEN;
+const ACCESS_TOKEN = process.env.DIRECTUS_STATIC_TOKEN;
 // ✅ Correct endpoint matches folder name
 const ENDPOINT = "/items/units";
 
