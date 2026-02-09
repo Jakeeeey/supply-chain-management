@@ -15,7 +15,7 @@ import { NavUser } from "../../_components/nav-user";
 import { cookies } from "next/headers";
 
 // ✅ Wire the module you asked for
-import SKUCreationModule from "@/modules/supply-chain-management/product-management/sku-creation/skuCreationModule";
+import { SKUCreationPage } from "@/modules/supply-chain-management/product-management/sku-creation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -117,7 +117,7 @@ export default async function Page() {
 
       <ScrollArea className="min-h-0 flex-1">
         <div className="p-4">
-          <SKUCreationModule />
+          <SKUCreationPage />
         </div>
       </ScrollArea>
     </div>

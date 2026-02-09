@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { skuService } from "@/modules/supply-chain-management/product-management/sku-creation/services/sku.service";
+import { skuService } from "@/modules/supply-chain-management/product-management/sku-creation/services/sku";
 import { skuSchema } from "@/modules/supply-chain-management/product-management/sku-creation/types/sku.schema";
 
 export const runtime = "nodejs";

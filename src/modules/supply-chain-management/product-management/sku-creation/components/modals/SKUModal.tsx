@@ -21,29 +21,27 @@ interface SKUModalProps {
 }
 
 export function SKUModal({ open, setOpen, initialData, masterData, onSubmit, loading }: SKUModalProps) {
-  const isLocked = initialData?.status === "For Approval" || initialData?.status === "Active";
-
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="max-w-4xl p-0 overflow-hidden gap-0 border-none shadow-2xl">
-        <DialogHeader className="p-8 bg-gradient-to-r from-slate-900 to-slate-800 text-white">
-          <div className="flex items-center gap-3">
-            <DialogTitle className="text-2xl font-bold tracking-tight">
-              {initialData ? "Product Maintenance" : "New SKU Registration"}
+      <DialogContent className="max-w-4xl p-0 overflow-hidden">
+        <DialogHeader className="p-6 border-b">
+          <div className="flex items-center gap-2">
+            <DialogTitle>
+              {initialData ? "Edit SKU" : "Register New SKU"}
             </DialogTitle>
             {initialData?.status && (
-              <Badge variant="outline" className="border-white/20 text-white uppercase text-[10px] tracking-widest">
+              <Badge variant="secondary">
                 {initialData.status}
               </Badge>
             )}
           </div>
-          <DialogDescription className="text-slate-300 text-sm mt-2 font-medium max-w-2xl leading-relaxed">
+          <DialogDescription>
             {initialData 
-              ? `Reviewing record for ${initialData.product_name}. ${isLocked ? "Strategic fields are locked to maintain data integrity." : "Complete the fields below to update the record."}` 
-              : "Register a new product into the system. The record will be saved as a draft for verification before activation."}
+              ? `Manage product details for ${initialData.product_name}.` 
+              : "Enter product information to register a new SKU."}
           </DialogDescription>
         </DialogHeader>
-        <div className="p-8 bg-background">
+        <div className="p-6">
           <SKUForm 
             initialData={initialData} 
             masterData={masterData}

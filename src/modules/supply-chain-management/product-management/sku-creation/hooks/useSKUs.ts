@@ -10,10 +10,10 @@ export function useSKUs() {
   const [draftsTotal, setDraftsTotal] = useState(0);
   
   const [approvedPage, setApprovedPage] = useState(0);
-  const [approvedLimit, setApprovedLimit] = useState(100);
+  const [approvedLimit, setApprovedLimit] = useState(10);
   
   const [draftsPage, setDraftsPage] = useState(0);
-  const [draftsLimit, setDraftsLimit] = useState(100);
+  const [draftsLimit, setDraftsLimit] = useState(10);
 
   const [masterData, setMasterData] = useState<MasterData | null>(null);
   const [isLoading, setIsLoading] = useState(true);

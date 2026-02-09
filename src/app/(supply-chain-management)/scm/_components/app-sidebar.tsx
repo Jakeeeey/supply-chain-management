@@ -37,6 +37,10 @@ const data = {
       isActive: true,
       items: [
         {
+          title: "SKU Masterlist",
+          url: "/scm/product-management/sku-masterlist",
+        },
+        {
           title: "SKU Creation",
           url: "/scm/product-management/sku-creation",
         },

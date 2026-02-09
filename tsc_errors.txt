@@ -1,0 +1,7 @@
+﻿src/modules/supply-chain-management/supplier-management/purchase-order/providers/PurchaseOrderUIProvider.ts(11,31): error TS1005: '>' expected.
+src/modules/supply-chain-management/supplier-management/purchase-order/providers/PurchaseOrderUIProvider.ts(11,36): error TS1005: ')' expected.
+src/modules/supply-chain-management/supplier-management/purchase-order/providers/PurchaseOrderUIProvider.ts(11,38): error TS1136: Property assignment expected.
+src/modules/supply-chain-management/supplier-management/purchase-order/providers/PurchaseOrderUIProvider.ts(11,56): error TS1005: ',' expected.
+src/modules/supply-chain-management/supplier-management/purchase-order/providers/PurchaseOrderUIProvider.ts(13,6): error TS1161: Unterminated regular expression literal.
+src/modules/supply-chain-management/supplier-management/purchase-order/providers/PurchaseOrderUIProvider.ts(14,1): error TS1128: Declaration or statement expected.
+src/modules/supply-chain-management/supplier-management/purchase-order/providers/PurchaseOrderUIProvider.ts(15,1): error TS1128: Declaration or statement expected.
