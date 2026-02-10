@@ -1,4 +1,4 @@
-// src/modules/supply-chain-management/supplier-management/create-of-purchase-order/ApprovalPurchaseOrderModule.tsx
+// src/modules/supply-chain-management/supplier-management/create-of-purchase-order/CreatePurchaseOrderModule.tsx
 "use client";
 
 import * as React from "react";
@@ -500,13 +500,71 @@ export default function CreatePurchaseOrderModule() {
                     if (pid) discountByProductId.set(pid, dtid);
                 }
 
+                // =====================================================
+                // ✅ DEBUG: BOX CONVERSION VERIFICATION (SAFE ADD ONLY)
+                // =====================================================
+                const DEBUG_BOX_CONVERSION = true; // set false to silence logs
+                const MAX_DEBUG_LOGS = 50; // prevent console spam
+                let debugCount = 0;
+                // =====================================================
+
                 setAllProducts(
                     (rawProducts ?? []).map((rp: any) => {
                         const pid = String(rp?.product_id ?? rp?.id ?? "");
                         const fixedDiscountTypeId =
                             discountByProductId.get(pid) || defaultNoDiscountId || FALLBACK_NO_DISCOUNT_ID;
 
-                        return normalizeProduct(rp, fixedDiscountTypeId);
+                        const np = normalizeProduct(rp, fixedDiscountTypeId);
+
+                        // =====================================================
+                        // ✅ LOG: show conversion result (price per BOX, unitsPerBox, etc.)
+                        // =====================================================
+                        if (DEBUG_BOX_CONVERSION && debugCount < MAX_DEBUG_LOGS) {
+                            debugCount += 1;
+
+                            const name = String((np as any)?.name ?? "");
+                            const desc = String(rp?.description ?? rp?.short_description ?? "");
+                            const baseUomId = Number((np as any)?.baseUomId ?? 0);
+                            const unitsPerBox = Number((np as any)?.unitsPerBox ?? 1);
+                            const baseUnitsPerBox = Number((np as any)?.baseUnitsPerBox ?? 1);
+                            const baseUnitPrice = Number((np as any)?.baseUnitPrice ?? 0);
+
+                            const isSuspicious =
+                                !Number.isFinite(unitsPerBox) ||
+                                unitsPerBox <= 1 ||
+                                !Number.isFinite(baseUnitsPerBox) ||
+                                baseUnitsPerBox <= 1;
+
+                            // Log all first 50; suspicious ones are highlighted
+                            if (isSuspicious) {
+                                console.warn("[BOX-CONV][SUSPICIOUS]", {
+                                    product_id: (np as any)?.id,
+                                    name,
+                                    sku: (np as any)?.sku,
+                                    baseUomId,
+                                    baseUnitPrice,
+                                    unitsPerBox,
+                                    baseUnitsPerBox,
+                                    pricePerBox: (np as any)?.price,
+                                    raw_unit_of_measurement: rp?.unit_of_measurement ?? rp?.uom_id ?? rp?.unit_id,
+                                    raw_unit_of_measurement_count: rp?.unit_of_measurement_count,
+                                    descPreview: desc.slice(0, 120),
+                                });
+                            } else {
+                                console.log("[BOX-CONV]", {
+                                    product_id: (np as any)?.id,
+                                    name,
+                                    baseUomId,
+                                    baseUnitPrice,
+                                    unitsPerBox,
+                                    baseUnitsPerBox,
+                                    pricePerBox: (np as any)?.price,
+                                });
+                            }
+                        }
+                        // =====================================================
+
+                        return np;
                     })
                 );
             } catch (e: any) {

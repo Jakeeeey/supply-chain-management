@@ -1,4 +1,4 @@
-// src/modules/supply-chain-management/supplier-management/create-of-purchase-order/utils/format.ts
+// src/modules/supply-chain-management/supplier-management/create-of-purchase-order/utils/calculations.ts
 
 export function cn(...classes: Array<string | false | null | undefined>) {
     return classes.filter(Boolean).join(" ");
@@ -89,33 +89,189 @@ export function deriveDiscountPercentFromCode(codeRaw: string): number {
 
 /**
  * ✅ Derive units per BOX from product name/description
+ *
+ * Supports patterns like:
+ * - 12x10, 3 x 10 x 12, 12×10
+ * - 12 PACKS OF 10 PCS  => 120
+ * - 24 PCS / 24PC / 24 PIECES => 24
+ * - 24'S / 24S => 24
+ *
+ * ✅ NEW (added only, no removal):
+ * - (10pcsx20bags) => 200
+ * - 48gx60pcs / 74gx40pcs / 39gx60pcs => 60/40/60 (ignore grams/ml)
+ * - 250mlx48 / 500mlx24 / 330ml x 24  => 48/24/24
+ * - 150mlFtx48 / 150ml FTX 48         => 48
+ * - (12+2) / (11+1) / 12+2            => 14 / 12 / etc
+ * - size-only like "17KG" (no pack indicators) => 1 (container, not pack count)
+ *
+ * IMPORTANT:
+ * - returns "pieces per box"
+ * - if nothing matched -> fallbackCount if > 1 else 1
  */
 export function deriveUnitsPerBoxFromText(
     name?: string,
     description?: string,
     fallbackCount?: number
 ): number {
-    const text = `${name ?? ""} ${description ?? ""}`.trim();
+    const raw = `${name ?? ""} ${description ?? ""}`.trim();
+    if (!raw) {
+        const fb = Number(fallbackCount ?? 1);
+        return Number.isFinite(fb) && fb > 1 ? Math.round(fb) : 1;
+    }
 
-    const match = text.match(
-        /\d+(?:\.\d+)?(?:\s*'?s)?\s*[xX]\s*\d+(?:\.\d+)?(?:\s*'?s)?(?:\s*[xX]\s*\d+(?:\.\d+)?(?:\s*'?s)?)*?/ // chain
-    );
+    const text = raw
+        .toUpperCase()
+        .replace(/,/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
 
-    if (match?.[0]) {
-        const cleaned = match[0]
-            .toUpperCase()
-            .replace(/['\s]/g, "")
-            .replace(/S(?=X)/g, "");
+    const safeInt = (n: number) => {
+        if (!Number.isFinite(n)) return 0;
+        if (n <= 0) return 0;
+        if (n > 10000) return 0;
+        return Math.round(n);
+    };
 
-        const parts = cleaned
-            .split("X")
-            .map((p) => Number(String(p).replace(/[^\d.]/g, "")))
-            .filter((n) => Number.isFinite(n) && n > 0);
+    // =========================================================
+    // 0) ✅ SPECIAL/EDGE CASES (pack formats without spaces)
+    // =========================================================
+    {
+        // E) ✅ Promo freebies like "(12+2)" / "(11+1)" => 14 / 12
+        // Also catches "12+2" even if embedded in SKU.
+        const promoParen = text.match(/\(\s*(\d+(?:\.\d+)?)\s*\+\s*(\d+(?:\.\d+)?)\s*\)/);
+        if (promoParen) {
+            const a = Number(promoParen[1]);
+            const b = Number(promoParen[2]);
+            const out = safeInt(a + b);
+            if (out > 0) return Math.max(1, out);
+        }
 
-        if (parts.length >= 2) {
-            const factor = parts.reduce((acc, n) => acc * n, 1);
-            if (Number.isFinite(factor) && factor > 0)
-                return Math.max(1, Math.round(factor));
+        const promoInline = text.match(/\b(\d+(?:\.\d+)?)\s*\+\s*(\d+(?:\.\d+)?)\b/);
+        if (promoInline) {
+            const a = Number(promoInline[1]);
+            const b = Number(promoInline[2]);
+            // guard: avoid weird sums
+            const out = safeInt(a + b);
+            if (out > 0 && out <= 1000) return Math.max(1, out);
+        }
+
+        // A) (10PCSX20BAGS) / 10PCS X 20BAGS / 10PC X 20 => 200
+        const m = text.match(
+            /\b(\d+(?:\.\d+)?)\s*(PCS?|PC|PIECES|PCE|EA|CT)\s*(?:X|×|\*)\s*(\d+(?:\.\d+)?)(?:\s*(BAGS?|BAG|PACKS?|PKS?|PK|TIES?|BUNDLES?|BUNDLE|SACHETS?|SACHET|STRIPS?|STRIP|ROLLS?|ROLL))?\b/
+        );
+        if (m) {
+            const a = Number(m[1]);
+            const b = Number(m[3]);
+            const out = safeInt(a * b);
+            if (out > 0) return Math.max(1, out);
+        }
+
+        // B) SIZE+UNIT then X counts (ignore size), supports trailing units:
+        // - 48GX60PCS => 60
+        // - 250MLX48  => 48
+        // - 250ML X 4 X 6 => 24
+        // - 74GX40PCS => 40
+        const seg = text.match(
+            /\b\d+(?:\.\d+)?\s*(?:ML|G|KG|L|OZ|LTR|LITER|LITRE)\s*(?:FTX|FT|F)?\s*(?:X|×|\*)\s*\d+(?:\.\d+)?\s*(?:PCS?|PC|PIECES|PCE|EA|CT|BAGS?|BAG|PACKS?|PKS?|PK|TIES?|BUNDLES?|BUNDLE|SACHETS?|SACHET|STRIPS?|STRIP|ROLLS?|ROLL)?(?:\s*(?:X|×|\*)\s*\d+(?:\.\d+)?\s*(?:PCS?|PC|PIECES|PCE|EA|CT|BAGS?|BAG|PACKS?|PKS?|PK|TIES?|BUNDLES?|BUNDLE|SACHETS?|SACHET|STRIPS?|STRIP|ROLLS?|ROLL)?)*\b/
+        );
+
+        if (seg?.[0]) {
+            const rest = seg[0]
+                .replace(
+                    /^\s*\d+(?:\.\d+)?\s*(?:ML|G|KG|L|OZ|LTR|LITER|LITRE)\s*(?:FTX|FT|F)?\s*/i,
+                    ""
+                )
+                .trim();
+
+            const nums = rest
+                .split(/X|×|\*/g)
+                .map((s) => Number(String(s).replace(/[^\d.]/g, "")))
+                .filter((n) => Number.isFinite(n) && n > 0);
+
+            if (nums.length >= 1) {
+                const product = nums.reduce((acc, n) => acc * n, 1);
+                const out = safeInt(product);
+                if (out > 0) return Math.max(1, out);
+            }
+        }
+
+        // C) Generic "X60PCS" / "X 60 PCS" anywhere (fixes missing word-boundary cases)
+        const xpcs = text.match(/(?:X|×|\*)\s*(\d{1,5})\s*(PCS?|PC|PIECES|PCE|EA|CT)\b/);
+        if (xpcs?.[1]) {
+            const out = safeInt(Number(xpcs[1]));
+            if (out > 0) return Math.max(1, out);
+        }
+
+        // D) FTX variant: "150MLFTX48" / "150ML FTX 48" => 48
+        const ftx = text.match(
+            /\b\d+(?:\.\d+)?\s*(?:ML|G|KG|L|OZ|LTR|LITER|LITRE)\s*(?:FTX|FT|F)\s*(\d{1,5})\b/
+        );
+        if (ftx?.[1]) {
+            const out = safeInt(Number(ftx[1]));
+            if (out > 0) return Math.max(1, out);
+        }
+
+        // F) ✅ Size-only container like "17KG" / "500ML" with NO pack indicators => 1
+        // This makes these cases explicitly recognized (useful if your caller logs "not converted").
+        const hasSizeOnly = /\b\d+(?:\.\d+)?\s*(?:ML|G|KG|L|OZ|LTR|LITER|LITRE)\b/.test(text);
+        const hasPackIndicators =
+            /\b(?:X|×|\*|PCS?|PC|PIECES|PCE|EA|CT|PACKS?|PKS?|PK|BAGS?|BAG|TIES?|BUNDLES?|BUNDLE|SACHETS?|SACHET|STRIPS?|STRIP|ROLLS?|ROLL)\b/.test(
+                text
+            ) || /'?\s*S\b/.test(text) || /\+/.test(text);
+
+        if (hasSizeOnly && !hasPackIndicators) {
+            return 1;
+        }
+    }
+
+    // 1) Strongest: chained multipliers like 12x10, 3 x 10 x 12 (also ×)
+    {
+        const m = text.match(
+            /\b\d+(?:\.\d+)?\s*(?:X|×|\*)\s*\d+(?:\.\d+)?(?:\s*(?:X|×|\*)\s*\d+(?:\.\d+)?)*\b/
+        );
+
+        if (m?.[0]) {
+            const nums = m[0]
+                .split(/X|×|\*/g)
+                .map((s) => Number(String(s).replace(/[^\d.]/g, "")))
+                .filter((n) => Number.isFinite(n) && n > 0);
+
+            if (nums.length >= 2) {
+                const product = nums.reduce((acc, n) => acc * n, 1);
+                const out = safeInt(product);
+                if (out > 0) return Math.max(1, out);
+            }
+        }
+    }
+
+    // 2) "12 PACKS OF 10 PCS" / "12 PK OF 10" => 120
+    {
+        const m = text.match(
+            /\b(\d+(?:\.\d+)?)\s*(PACKS?|PKS?|PK|TIES?|BUNDLES?|BUNDLE|BAGS?|BAG|SACHETS?|SACHET|STRIPS?|STRIP|ROLLS?|ROLL)\s*(?:OF\s*)?(\d+(?:\.\d+)?)\s*(PCS?|PC|PIECES|PCE|EA|CT)?\b/
+        );
+        if (m) {
+            const outer = Number(m[1]);
+            const inner = Number(m[3]);
+            const out = safeInt(outer * inner);
+            if (out > 0) return Math.max(1, out);
+        }
+    }
+
+    // 3) "24 PCS", "24PC", "24 PIECES" => 24
+    {
+        const m = text.match(/\b(\d+(?:\.\d+)?)\s*(PCS?|PC|PIECES|PCE|EA|CT)\b/);
+        if (m) {
+            const out = safeInt(Number(m[1]));
+            if (out > 0) return Math.max(1, out);
+        }
+    }
+
+    // 4) "24'S", "24S" common FMCG format
+    {
+        const m = text.match(/\b(\d{1,3})(?:\s*'?\s*S)\b/);
+        if (m) {
+            const n = Number(m[1]);
+            if (Number.isFinite(n) && n > 0 && n <= 500) return Math.max(1, Math.round(n));
         }
     }
 
