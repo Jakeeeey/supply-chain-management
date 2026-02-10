@@ -1,3 +1,4 @@
+// src/app/api/suppliers/route.ts
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -35,11 +36,15 @@ export async function GET(req: NextRequest) {
     try {
         const base = getDirectusBase();
         const url = new URL(req.url);
+
         const limit = url.searchParams.get("limit") ?? "-1";
 
-        const upstream = `${base}/items/suppliers?limit=${encodeURIComponent(limit)}`;
+        // ✅ ALWAYS filter to TRADE suppliers only
+        const upstreamUrl = new URL(`${base}/items/suppliers`);
+        upstreamUrl.searchParams.set("limit", limit);
+        upstreamUrl.searchParams.set("filter[supplier_type][_eq]", "TRADE");
 
-        const res = await fetch(upstream, {
+        const res = await fetch(upstreamUrl.toString(), {
             headers: buildUpstreamHeaders(req),
             cache: "no-store",
         });

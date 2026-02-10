@@ -104,6 +104,11 @@ export function deriveDiscountPercentFromCode(codeRaw: string): number {
  * - (12+2) / (11+1) / 12+2            => 14 / 12 / etc
  * - size-only like "17KG" (no pack indicators) => 1 (container, not pack count)
  *
+ * ✅ ADDED (this request):
+ * - 48X100G / 20X1KG => return COUNT (48/20), NOT multiply
+ * - 70STRIPS/CASE / (75STRIPS/CASE) / CASE OF 70 STRIPS => return 70/75
+ * - size-only "25KLS", "25KGS" => 1 (if no pack indicators)
+ *
  * IMPORTANT:
  * - returns "pieces per box"
  * - if nothing matched -> fallbackCount if > 1 else 1
@@ -138,7 +143,9 @@ export function deriveUnitsPerBoxFromText(
     {
         // E) ✅ Promo freebies like "(12+2)" / "(11+1)" => 14 / 12
         // Also catches "12+2" even if embedded in SKU.
-        const promoParen = text.match(/\(\s*(\d+(?:\.\d+)?)\s*\+\s*(\d+(?:\.\d+)?)\s*\)/);
+        const promoParen = text.match(
+            /\(\s*(\d+(?:\.\d+)?)\s*\+\s*(\d+(?:\.\d+)?)\s*\)/
+        );
         if (promoParen) {
             const a = Number(promoParen[1]);
             const b = Number(promoParen[2]);
@@ -153,6 +160,73 @@ export function deriveUnitsPerBoxFromText(
             // guard: avoid weird sums
             const out = safeInt(a + b);
             if (out > 0 && out <= 1000) return Math.max(1, out);
+        }
+
+        // =========================================================
+        // 0) ✅ NEW: COUNT x SIZE formats should return COUNT (not multiply)
+        // Examples:
+        // - 48X100G  => 48
+        // - 10X1000G => 10
+        // - 12X450G  => 12
+        // - 20X1KG   => 20
+        // - 4X2500G  => 4
+        // =========================================================
+        const countXSize = text.match(
+            /\b(\d{1,5})\s*(?:X|×|\*)\s*(\d+(?:\.\d+)?)\s*(?:ML|G|KG|KGS|KLS|L|OZ|LTR|LITER|LITRE)\b/
+        );
+        if (countXSize) {
+            const count = Number(countXSize[1]);
+            const out = safeInt(count);
+            if (out > 0) return Math.max(1, out);
+        }
+
+        // =========================================================
+        // 0) ✅ NEW: "70STRIPS/CASE", "(75STRIPS/CASE)", "48PCS/CASE", etc => return left number
+        // Examples:
+        // - (75STRIPS/CASE) => 75
+        // - 70 STRIPS / CASE => 70
+        // - 48 PCS/CTN => 48
+        // =========================================================
+        const perCase = text.match(
+            /\b(\d{1,5})\s*(STRIPS?|STRIP|SACHETS?|SACHET|PCS?|PC|PIECES|PCE|EA|CT|PACKS?|PKS?|PK|BAGS?|BAG)\s*(?:\/|PER)\s*(CASE|CS|CTN|CARTON|BOX)\b/
+        );
+        if (perCase) {
+            const out = safeInt(Number(perCase[1]));
+            if (out > 0) return Math.max(1, out);
+        }
+
+        // Variant: "70 STRIPS CASE" (no slash/per)
+        const unitThenCase = text.match(
+            /\b(\d{1,5})\s*(STRIPS?|STRIP|SACHETS?|SACHET|PCS?|PC|PIECES|PCE|EA|CT|PACKS?|PKS?|PK|BAGS?|BAG)\s*(CASE|CS|CTN|CARTON|BOX)\b/
+        );
+        if (unitThenCase) {
+            const out = safeInt(Number(unitThenCase[1]));
+            if (out > 0) return Math.max(1, out);
+        }
+
+        // Variant: "CASE OF 70 STRIPS" => 70
+        const caseOf = text.match(
+            /\b(?:CASE|CS|CTN|CARTON|BOX)\s*(?:OF\s*)?(\d{1,5})\s*(STRIPS?|STRIP|SACHETS?|SACHET|PCS?|PC|PIECES|PCE|EA|CT|PACKS?|PKS?|PK|BAGS?|BAG)\b/
+        );
+        if (caseOf) {
+            const out = safeInt(Number(caseOf[1]));
+            if (out > 0) return Math.max(1, out);
+        }
+
+        // =========================================================
+        // 0) ✅ NEW: Size-only kilo abbreviations (ex: "25KLS", "25KGS") => 1
+        // (useful for items like "CORNSTARCH 25KLS - MASTER CHEF")
+        // =========================================================
+        const hasSizeOnlyAlt = /\b\d+(?:\.\d+)?\s*(?:KLS|KGS|KILO|KILOS)\b/.test(text);
+        const hasPackIndicatorsAlt =
+            /\b(?:X|×|\*|PCS?|PC|PIECES|PCE|EA|CT|PACKS?|PKS?|PK|BAGS?|BAG|TIES?|BUNDLES?|BUNDLE|SACHETS?|SACHET|STRIPS?|STRIP|ROLLS?|ROLL)\b/.test(
+                text
+            ) ||
+            /'?\s*S\b/.test(text) ||
+            /\+/.test(text);
+
+        if (hasSizeOnlyAlt && !hasPackIndicatorsAlt) {
+            return 1;
         }
 
         // A) (10PCSX20BAGS) / 10PCS X 20BAGS / 10PC X 20 => 200
@@ -217,7 +291,9 @@ export function deriveUnitsPerBoxFromText(
         const hasPackIndicators =
             /\b(?:X|×|\*|PCS?|PC|PIECES|PCE|EA|CT|PACKS?|PKS?|PK|BAGS?|BAG|TIES?|BUNDLES?|BUNDLE|SACHETS?|SACHET|STRIPS?|STRIP|ROLLS?|ROLL)\b/.test(
                 text
-            ) || /'?\s*S\b/.test(text) || /\+/.test(text);
+            ) ||
+            /'?\s*S\b/.test(text) ||
+            /\+/.test(text);
 
         if (hasSizeOnly && !hasPackIndicators) {
             return 1;

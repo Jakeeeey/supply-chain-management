@@ -76,7 +76,8 @@ function normalizeBranch(raw: RawBranch) {
 function normalizeDiscountType(raw: RawDiscountType): DiscountType {
     const id = String(raw?.id ?? "");
     const name = String(raw?.discount_type ?? raw?.name ?? "No Discount");
-    const percent = Number.parseFloat(String(raw?.total_percent ?? raw?.percent ?? "0")) || 0;
+    const percent =
+        Number.parseFloat(String(raw?.total_percent ?? raw?.percent ?? "0")) || 0;
     return { id, name, percent };
 }
 
@@ -96,7 +97,9 @@ function normalizeProduct(raw: RawProduct, fixedDiscountTypeId: string): Product
             raw?.product_category_name ??
             raw?.product_category?.name ??
             raw?.product_category?.category_name ??
-            (raw?.product_category !== undefined ? `Category ${raw.product_category}` : "Uncategorized")
+            (raw?.product_category !== undefined
+                ? `Category ${raw.product_category}`
+                : "Uncategorized")
         ) || "Uncategorized";
 
     const baseUnitPrice =
@@ -106,7 +109,10 @@ function normalizeProduct(raw: RawProduct, fixedDiscountTypeId: string): Product
     const baseUomId = Number.isFinite(baseUomIdRaw) ? baseUomIdRaw : 1;
 
     const baseUomCountRaw = Number(raw?.unit_of_measurement_count ?? 1);
-    const piecesPerBaseUnit = Math.max(1, Number.isFinite(baseUomCountRaw) ? baseUomCountRaw : 1);
+    const piecesPerBaseUnit = Math.max(
+        1,
+        Number.isFinite(baseUomCountRaw) ? baseUomCountRaw : 1
+    );
 
     const piecesPerBoxParsed = deriveUnitsPerBoxFromText(
         name,
@@ -156,7 +162,7 @@ function SupplierSelect(props: {
     const [open, setOpen] = React.useState(false);
 
     return (
-        <div className="space-y-1.5 min-w-[280px]">
+        <div className="space-y-1.5 w-full min-w-0">
             <div className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
                 Supplier
             </div>
@@ -166,27 +172,31 @@ function SupplierSelect(props: {
                     <Button
                         type="button"
                         variant="outline"
-                        className="w-full justify-between h-11 rounded-xl"
+                        className="w-full justify-between h-11 rounded-xl min-w-0"
                         disabled={props.disabled}
                     >
                         <div className="flex items-center gap-2 min-w-0">
-                            <span className="truncate text-xs font-bold">
-                                {props.value?.name ?? "Select supplier"}
-                            </span>
+              <span className="truncate text-xs font-bold">
+                {props.value?.name ?? "Select supplier"}
+              </span>
                             {props.value?.id ? (
-                                <Badge variant="secondary" className="text-[10px] font-black">
+                                <Badge variant="secondary" className="text-[10px] font-black shrink-0">
                                     ID: {props.value.id}
                                 </Badge>
                             ) : null}
                         </div>
-                        <ChevronDown className="w-4 h-4 opacity-60" />
+                        <ChevronDown className="w-4 h-4 opacity-60 shrink-0" />
                     </Button>
                 </PopoverTrigger>
 
-                <PopoverContent className="p-0 w-[420px] max-w-[92vw]" align="start">
+                {/* ✅ Match trigger width + scroll list */}
+                <PopoverContent
+                    className="p-0 w-[--radix-popover-trigger-width] min-w-[280px] max-w-[92vw]"
+                    align="start"
+                >
                     <Command>
                         <CommandInput placeholder="Search supplier..." />
-                        <CommandList>
+                        <CommandList className="max-h-[320px] overflow-auto">
                             <CommandEmpty>No supplier found.</CommandEmpty>
                             <CommandGroup heading="Suppliers">
                                 {props.suppliers.map((s) => {
@@ -203,7 +213,7 @@ function SupplierSelect(props: {
                                             <div className="flex items-center gap-2 min-w-0 w-full">
                                                 <div
                                                     className={cn(
-                                                        "h-5 w-5 rounded-full border flex items-center justify-center",
+                                                        "h-5 w-5 rounded-full border flex items-center justify-center shrink-0",
                                                         selected
                                                             ? "bg-primary text-primary-foreground border-primary"
                                                             : "bg-background"
@@ -217,7 +227,7 @@ function SupplierSelect(props: {
                                                         A/P: {s.apBalance.toLocaleString()}
                                                     </div>
                                                 </div>
-                                                <Badge variant="secondary" className="text-[10px] font-black">
+                                                <Badge variant="secondary" className="text-[10px] font-black shrink-0">
                                                     {s.id}
                                                 </Badge>
                                             </div>
@@ -231,17 +241,18 @@ function SupplierSelect(props: {
             </Popover>
 
             {props.value ? (
-                <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                    <span>
-                        A/P Balance:{" "}
-                        <span className="font-bold text-foreground">
-                            {props.value.apBalance.toLocaleString()}
-                        </span>
-                    </span>
+                <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+          <span className="truncate">
+            A/P Balance:{" "}
+              <span className="font-bold text-foreground">
+              {props.value.apBalance.toLocaleString()}
+            </span>
+          </span>
                     <button
                         type="button"
                         onClick={() => props.onChange(null)}
-                        className="inline-flex items-center gap-1 hover:text-destructive"
+                        className="inline-flex items-center gap-1 hover:text-destructive shrink-0"
+                        aria-label="Clear supplier"
                     >
                         <X className="w-3 h-3" /> Clear
                     </button>
@@ -271,7 +282,7 @@ function BranchMultiSelect(props: {
     }, [props.value, props.branches]);
 
     return (
-        <div className="space-y-1.5 flex-1 min-w-[320px]">
+        <div className="space-y-1.5 w-full min-w-0">
             <div className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
                 Delivery Branches
             </div>
@@ -281,18 +292,22 @@ function BranchMultiSelect(props: {
                     <Button
                         type="button"
                         variant="outline"
-                        className="w-full justify-between h-11 rounded-xl"
+                        className="w-full justify-between h-11 rounded-xl min-w-0"
                         disabled={props.disabled}
                     >
                         <span className="truncate text-xs font-bold">{label}</span>
-                        <ChevronDown className="w-4 h-4 opacity-60" />
+                        <ChevronDown className="w-4 h-4 opacity-60 shrink-0" />
                     </Button>
                 </PopoverTrigger>
 
-                <PopoverContent className="p-0 w-[520px] max-w-[92vw]" align="start">
+                {/* ✅ Match trigger width + scroll list */}
+                <PopoverContent
+                    className="p-0 w-[--radix-popover-trigger-width] min-w-[320px] max-w-[92vw]"
+                    align="start"
+                >
                     <Command>
                         <CommandInput placeholder="Search branch..." />
-                        <CommandList>
+                        <CommandList className="max-h-[340px] overflow-auto">
                             <CommandEmpty>No branch found.</CommandEmpty>
 
                             <CommandGroup heading="Actions">
@@ -301,22 +316,29 @@ function BranchMultiSelect(props: {
                                     onSelect={() => {
                                         const all = props.branches.map((b) => b.id);
                                         props.onChange(all);
+                                        setOpen(false);
                                     }}
                                 >
                                     <div className="flex items-center gap-2">
                                         <Check className="w-4 h-4 opacity-70" />
                                         <span className="text-xs font-black uppercase tracking-wider">
-                                            Select All
-                                        </span>
+                      Select All
+                    </span>
                                     </div>
                                 </CommandItem>
 
-                                <CommandItem value="__clear__" onSelect={() => props.onChange([])}>
+                                <CommandItem
+                                    value="__clear__"
+                                    onSelect={() => {
+                                        props.onChange([]);
+                                        setOpen(false);
+                                    }}
+                                >
                                     <div className="flex items-center gap-2 text-destructive">
                                         <X className="w-4 h-4" />
                                         <span className="text-xs font-black uppercase tracking-wider">
-                                            Clear
-                                        </span>
+                      Clear
+                    </span>
                                     </div>
                                 </CommandItem>
                             </CommandGroup>
@@ -340,7 +362,7 @@ function BranchMultiSelect(props: {
                                             <div className="flex items-center gap-2 w-full min-w-0">
                                                 <div
                                                     className={cn(
-                                                        "h-5 w-5 rounded border flex items-center justify-center",
+                                                        "h-5 w-5 rounded border flex items-center justify-center shrink-0",
                                                         isOn
                                                             ? "bg-primary text-primary-foreground border-primary"
                                                             : "bg-background"
@@ -500,13 +522,9 @@ export default function CreatePurchaseOrderModule() {
                     if (pid) discountByProductId.set(pid, dtid);
                 }
 
-                // =====================================================
-                // ✅ DEBUG: BOX CONVERSION VERIFICATION (SAFE ADD ONLY)
-                // =====================================================
-                const DEBUG_BOX_CONVERSION = true; // set false to silence logs
-                const MAX_DEBUG_LOGS = 50; // prevent console spam
+                const DEBUG_BOX_CONVERSION = false; // 👈 set true only when debugging
+                const MAX_DEBUG_LOGS = 50;
                 let debugCount = 0;
-                // =====================================================
 
                 setAllProducts(
                     (rawProducts ?? []).map((rp: any) => {
@@ -516,53 +534,18 @@ export default function CreatePurchaseOrderModule() {
 
                         const np = normalizeProduct(rp, fixedDiscountTypeId);
 
-                        // =====================================================
-                        // ✅ LOG: show conversion result (price per BOX, unitsPerBox, etc.)
-                        // =====================================================
                         if (DEBUG_BOX_CONVERSION && debugCount < MAX_DEBUG_LOGS) {
                             debugCount += 1;
-
-                            const name = String((np as any)?.name ?? "");
-                            const desc = String(rp?.description ?? rp?.short_description ?? "");
-                            const baseUomId = Number((np as any)?.baseUomId ?? 0);
-                            const unitsPerBox = Number((np as any)?.unitsPerBox ?? 1);
-                            const baseUnitsPerBox = Number((np as any)?.baseUnitsPerBox ?? 1);
-                            const baseUnitPrice = Number((np as any)?.baseUnitPrice ?? 0);
-
-                            const isSuspicious =
-                                !Number.isFinite(unitsPerBox) ||
-                                unitsPerBox <= 1 ||
-                                !Number.isFinite(baseUnitsPerBox) ||
-                                baseUnitsPerBox <= 1;
-
-                            // Log all first 50; suspicious ones are highlighted
-                            if (isSuspicious) {
-                                console.warn("[BOX-CONV][SUSPICIOUS]", {
-                                    product_id: (np as any)?.id,
-                                    name,
-                                    sku: (np as any)?.sku,
-                                    baseUomId,
-                                    baseUnitPrice,
-                                    unitsPerBox,
-                                    baseUnitsPerBox,
-                                    pricePerBox: (np as any)?.price,
-                                    raw_unit_of_measurement: rp?.unit_of_measurement ?? rp?.uom_id ?? rp?.unit_id,
-                                    raw_unit_of_measurement_count: rp?.unit_of_measurement_count,
-                                    descPreview: desc.slice(0, 120),
-                                });
-                            } else {
-                                console.log("[BOX-CONV]", {
-                                    product_id: (np as any)?.id,
-                                    name,
-                                    baseUomId,
-                                    baseUnitPrice,
-                                    unitsPerBox,
-                                    baseUnitsPerBox,
-                                    pricePerBox: (np as any)?.price,
-                                });
-                            }
+                            console.log("[BOX-CONV]", {
+                                product_id: (np as any)?.id,
+                                name: (np as any)?.name,
+                                baseUomId: (np as any)?.baseUomId,
+                                baseUnitPrice: (np as any)?.baseUnitPrice,
+                                unitsPerBox: (np as any)?.unitsPerBox,
+                                baseUnitsPerBox: (np as any)?.baseUnitsPerBox,
+                                pricePerBox: (np as any)?.price,
+                            });
                         }
-                        // =====================================================
 
                         return np;
                     })
@@ -624,10 +607,12 @@ export default function CreatePurchaseOrderModule() {
             if (!canAddProducts) return;
 
             const branch = allocations.find((b) => b.branchId === branchId);
+            if (!branch) return;
+
             setPickerBranchId(branchId);
 
             setTempCart(
-                (branch?.items ?? []).map((it: any) => ({
+                (branch.items ?? []).map((it: any) => ({
                     ...it,
                     selectedUom: "BOX",
                     uom: "BOX",
@@ -710,6 +695,10 @@ export default function CreatePurchaseOrderModule() {
 
     const confirmPicker = React.useCallback(() => {
         const branchId = pickerBranchId;
+        if (!branchId) {
+            setPickerOpen(false);
+            return;
+        }
 
         const normalized = tempCart.map((it: any) => ({
             ...it,
@@ -738,7 +727,6 @@ export default function CreatePurchaseOrderModule() {
         );
     }, [allItemsFlat]);
 
-    // ✅ Discount uses DB computed percent ONLY (discount_types.total_percent)
     const discountAmount = React.useMemo(() => {
         return allItemsFlat.reduce((sum, x) => {
             const item: any = x.item;
@@ -752,7 +740,6 @@ export default function CreatePurchaseOrderModule() {
         }, 0);
     }, [allItemsFlat, discountTypeById, defaultNoDiscountId]);
 
-    // ✅ VAT split logic lives inside calculateVatExclusiveFromAmounts
     const financials = React.useMemo(() => {
         return calculateVatExclusiveFromAmounts(grossAmount, discountAmount);
     }, [grossAmount, discountAmount]);
@@ -786,7 +773,6 @@ export default function CreatePurchaseOrderModule() {
 
                 inventory_status: 1,
 
-                // keep compatibility fields (optional)
                 poNumber,
                 poDate,
                 poDateISO,
@@ -829,13 +815,11 @@ export default function CreatePurchaseOrderModule() {
             }
 
             console.log("PO RESPONSE:", json?.data ?? json);
-
-            // ✅ IMPORTANT: return json so Summary can show correct UI (saved vs already exists)
             return json;
         } catch (e: any) {
             const msg = String(e?.message ?? e);
             setError(msg);
-            throw new Error(msg); // ✅ IMPORTANT: para mahuli ng PurchaseOrderSummary
+            throw new Error(msg);
         } finally {
             setIsSaving(false);
         }
@@ -846,9 +830,7 @@ export default function CreatePurchaseOrderModule() {
         return b?.branchName ?? "Branch";
     }, [allocations, pickerBranchId]);
 
-    // =====================================================
-    // ✅ NEW: ALLOCATIONS PAGINATION (cards below dropdown)
-    // =====================================================
+    // ✅ Allocations pagination
     const [allocPage, setAllocPage] = React.useState(1);
     const allocPerPage = 5;
 
@@ -857,12 +839,10 @@ export default function CreatePurchaseOrderModule() {
     }, [allocations?.length]);
 
     React.useEffect(() => {
-        // keep in range when removing/adding branches
         setAllocPage((p) => Math.min(Math.max(1, p), allocTotalPages));
     }, [allocTotalPages, allocations?.length]);
 
     React.useEffect(() => {
-        // whenever selection changes, go back to page 1
         setAllocPage(1);
     }, [selectedSupplier?.id, selectedBranchIds.join("|")]);
 
@@ -897,27 +877,40 @@ export default function CreatePurchaseOrderModule() {
 
             <Separator />
 
-            <div className="flex flex-col lg:flex-row gap-4 w-full min-w-0">
-                <SupplierSelect
-                    suppliers={suppliers}
-                    value={selectedSupplier}
-                    onChange={(s) => {
-                        setSelectedSupplier(s);
-                        setAllocations([]);
-                        setSelectedBranchIds([]);
-                    }}
-                    disabled={isLoading || isSaving}
-                />
+            {/* ✅ Responsive controls (no forced min-width overflow) */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 w-full min-w-0">
+                <div className="lg:col-span-4 min-w-0">
+                    <SupplierSelect
+                        suppliers={suppliers}
+                        value={selectedSupplier}
+                        onChange={(s) => {
+                            setSelectedSupplier(s);
+                            setAllocations([]);
+                            setSelectedBranchIds([]);
+                            setPickerOpen(false);
+                            setPickerBranchId("");
+                            setTempCart([]);
+                        }}
+                        disabled={isLoading || isSaving}
+                    />
+                </div>
 
-                <BranchMultiSelect
-                    branches={branches}
-                    value={selectedBranchIds}
-                    onChange={setSelectedBranchIds}
-                    disabled={isLoading || isSaving}
-                />
+                <div className="lg:col-span-6 min-w-0">
+                    <BranchMultiSelect
+                        branches={branches}
+                        value={selectedBranchIds}
+                        onChange={setSelectedBranchIds}
+                        disabled={isLoading || isSaving}
+                    />
+                </div>
 
-                <div className="flex items-end gap-2">
-                    <Button type="button" variant="outline" className="h-11 rounded-xl" disabled>
+                <div className="lg:col-span-2 min-w-0 flex items-end">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        className="h-11 rounded-xl w-full"
+                        disabled
+                    >
                         <Search className="w-4 h-4 mr-2" />
                         {isLoading ? "Loading…" : "Ready"}
                     </Button>
@@ -930,12 +923,12 @@ export default function CreatePurchaseOrderModule() {
                 </div>
             ) : null}
 
-            {/* ✅ NEW: Pagination controls for BranchAllocations cards */}
+            {/* Pagination controls */}
             {allocations.length > allocPerPage ? (
                 <div className="flex items-center justify-between gap-3">
-                    <span className="text-[10px] font-bold text-muted-foreground bg-background px-2 py-0.5 rounded border uppercase">
-                        Page {allocPage} of {allocTotalPages}
-                    </span>
+          <span className="text-[10px] font-bold text-muted-foreground bg-background px-2 py-0.5 rounded border uppercase">
+            Page {allocPage} of {allocTotalPages}
+          </span>
 
                     <div className="flex items-center gap-2">
                         <Button
@@ -975,7 +968,7 @@ export default function CreatePurchaseOrderModule() {
                 </div>
             ) : null}
 
-            {/* ✅ IMPORTANT: Only show 5 branch cards per page */}
+            {/* Only show 5 branch cards per page */}
             <BranchAllocations
                 branches={paginatedAllocations}
                 canAddProducts={canAddProducts}
