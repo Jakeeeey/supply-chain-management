@@ -78,7 +78,13 @@ const data = {
                     ]
                 },
                 { title: "Driver Management", url: "#" },
-                { title: "Trip and Dispatch Management", url: "#" },
+                { 
+                    title: "Trip Management",
+                    url: "#",
+                    items: [
+                        { title: "Dispatch Summary", url: "/scm/fleet-management/trip-management/dispatch-summary" },
+                    ]
+                },
                 {
                     title: "Logistics and Deliveries",
                     url: "#",
