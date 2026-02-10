@@ -4,7 +4,7 @@ import { ColumnDef } from "@tanstack/react-table"
 import { SKU, MasterData, SKUStatus } from "@/modules/supply-chain-management/product-management/sku-creation/types/sku.schema"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Edit, Trash2, Send, CheckCircle, XCircle, MoreHorizontal } from "lucide-react"
+import { CheckCircle, XCircle, MoreHorizontal } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,6 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import React from "react"
 
 const statusVariants: Record<string, "outline" | "secondary" | "default" | "destructive"> = {
   Draft: "outline",
@@ -22,20 +23,17 @@ const statusVariants: Record<string, "outline" | "secondary" | "default" | "dest
   Inactive: "outline",
   DRAFT: "outline",
   "FOR APPROVAL": "secondary",
+  FOR_APPROVAL: "secondary",
   REJECTED: "destructive",
   ACTIVE: "default",
   INACTIVE: "outline",
   PENDING: "secondary",
-  FOR_APPROVAL: "secondary",
 };
 
-export const getColumns = (
+export const getApprovalColumns = (
   masterData: MasterData | null,
-  onEdit?: (sku: SKU) => void,
-  onDelete?: (id: number) => void,
-  onSubmitForApproval?: (id: number) => void,
-  onApprove?: (id: number) => void,
-  onReject?: (id: number) => void,
+  onApprove?: (id: number | string) => void,
+  onReject?: (id: number | string) => void,
 ): ColumnDef<SKU>[] => [
   {
     accessorKey: "product_name",
@@ -88,18 +86,6 @@ export const getColumns = (
     },
   },
   {
-    accessorKey: "product_code",
-    header: "SKU Code",
-    cell: ({ row }) => {
-      const code = row.getValue("product_code") as string;
-      return (
-        <code className="px-1 py-0.5 bg-muted rounded text-xs font-mono">
-          {code || "Pending"}
-        </code>
-      );
-    },
-  },
-  {
     accessorKey: "status",
     header: "Status",
     cell: ({ row }) => {
@@ -121,8 +107,6 @@ export const getColumns = (
     cell: ({ row }) => {
       const sku = row.original;
       const id = (sku as any).id || (sku as any).product_id;
-      const rawStatus = (sku.status || "Draft") as string;
-      const status = rawStatus.toLowerCase();
 
       return (
         <div className="flex justify-end">
@@ -136,62 +120,17 @@ export const getColumns = (
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuSeparator />
               
-              {/* Draft/Rejected Status Actions */}
-              {(status === "draft" || status === "rejected") && (
-                <>
-                  {onEdit && (
-                    <DropdownMenuItem onClick={() => onEdit(sku)}>
-                      <Edit className="h-4 w-4 mr-2" />
-                      Edit Draft
-                    </DropdownMenuItem>
-                  )}
-                  {onSubmitForApproval && (
-                    <DropdownMenuItem onClick={() => onSubmitForApproval(id)}>
-                      <Send className="h-4 w-4 mr-2" />
-                      Submit for Approval
-                    </DropdownMenuItem>
-                  )}
-                </>
-              )}
-
-              {/* Approval Process Actions */}
-              {(status === "for approval" || status === "for_approval" || status === "pending") && (
-                <>
-                  {onApprove && (
-                    <DropdownMenuItem onClick={() => onApprove(id)} className="text-primary focus:text-primary">
-                      <CheckCircle className="h-4 w-4 mr-2" />
-                      Approve SKU
-                    </DropdownMenuItem>
-                  )}
-                  {onReject && (
-                    <DropdownMenuItem onClick={() => onReject(id)}>
-                      <XCircle className="h-4 w-4 mr-2" />
-                      Reject/Return
-                    </DropdownMenuItem>
-                  )}
-                </>
-              )}
-
-              {/* Active Status Actions */}
-              {status === "active" && onEdit && (
-                <DropdownMenuItem onClick={() => onEdit(sku)}>
-                  <Edit className="h-4 w-4 mr-2" />
-                  View 
+              {onApprove && (
+                <DropdownMenuItem onClick={() => onApprove(id)} className="text-primary focus:text-primary">
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Approve SKU
                 </DropdownMenuItem>
               )}
-
-              {/* Common Actions */}
-              {onDelete && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem 
-                    onClick={() => onDelete(id)}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete
-                  </DropdownMenuItem>
-                </>
+              {onReject && (
+                <DropdownMenuItem onClick={() => onReject(id)}>
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Reject/Return
+                </DropdownMenuItem>
               )}
             </DropdownMenuContent>
           </DropdownMenu>

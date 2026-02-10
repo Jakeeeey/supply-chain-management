@@ -1,13 +1,12 @@
 "use client";
 
 import React from "react";
-
 import { SKU, MasterData } from "@/modules/supply-chain-management/product-management/sku-creation/types/sku.schema";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DataTable } from "@/components/ui/data-table";
-import { getColumns } from "./columns";
+import { getApprovalColumns } from "./columns";
 
-interface SKUTableProps {
+interface ApprovalTableProps {
   data: SKU[];
   totalCount: number;
   pageIndex: number;
@@ -15,17 +14,12 @@ interface SKUTableProps {
   onPaginationChange: (pagination: { pageIndex: number; pageSize: number }) => void;
   masterData: MasterData | null;
   isLoading: boolean;
-  onEdit?: (sku: SKU) => void;
-  onDelete?: (id: number | string) => void;
-  onSubmitForApproval?: (id: number | string) => void;
   onApprove?: (id: number | string) => void;
   onReject?: (id: number | string) => void;
   title: string;
-  manualPagination?: boolean;
-  onSearch?: (value: string) => void;
 }
 
-export function SKUTable({ 
+export function ApprovalTable({ 
   data, 
   totalCount,
   pageIndex,
@@ -33,38 +27,29 @@ export function SKUTable({
   onPaginationChange,
   masterData,
   isLoading, 
-  onEdit, 
-  onDelete, 
-  onSubmitForApproval, 
   onApprove,
   onReject,
-  title,
-  manualPagination = true,
-  onSearch
-}: SKUTableProps) {
+  title
+}: ApprovalTableProps) {
   
-  const columns = React.useMemo(() => getColumns(
+  const columns = React.useMemo(() => getApprovalColumns(
     masterData,
-    onEdit,
-    onDelete,
-    onSubmitForApproval,
     onApprove,
     onReject
-  ), [masterData, onEdit, onDelete, onSubmitForApproval, onApprove, onReject]);
+  ), [masterData, onApprove, onReject]);
 
   // We don't unmount the table during loading to prevent losing focus on search
-
+  
   return (
     <div className="space-y-4">
       <DataTable 
         columns={columns} 
         data={data}
-        pageCount={manualPagination ? Math.ceil(totalCount / pageSize) : undefined}
-        pagination={manualPagination ? { pageIndex, pageSize } : undefined}
+        pageCount={Math.ceil(totalCount / pageSize)}
+        pagination={{ pageIndex, pageSize }}
         onPaginationChange={onPaginationChange}
-        manualPagination={manualPagination}
+        manualPagination={false} // Approval queue is currently handled client-side
         searchKey="product_name"
-        onSearch={onSearch}
         isLoading={isLoading}
       />
     </div>

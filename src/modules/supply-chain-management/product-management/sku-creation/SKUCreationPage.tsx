@@ -39,6 +39,7 @@ export default function SKUCreationModule() {
     deleteDraft,
     checkDuplicate,
     rejectSKU,
+    setSearch,
   } = useSKUs();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -190,6 +191,9 @@ export default function SKUCreationModule() {
           onDelete={handleDelete as any} 
           onSubmitForApproval={handleSubmitToManager as any}
           manualPagination={false}
+          onSearch={(v: string) => {
+            setSearch(v);
+          }}
         />
       </div>
 

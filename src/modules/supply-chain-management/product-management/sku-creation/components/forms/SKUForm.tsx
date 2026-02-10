@@ -30,8 +30,8 @@ export function SKUForm({ initialData, masterData, onSubmit, loading }: SKUFormP
   const form = useForm<SKU>({
     resolver: zodResolver(skuSchema),
     defaultValues: {
-      isActive: initialData?.isActive ?? 1,
-      status: initialData?.status ?? "Draft",
+      isActive: initialData?.isActive ?? 0,
+      status: initialData?.status ?? "DRAFT",
       inventory_type: initialData?.inventory_type ?? "Regular",
       product_name: initialData?.product_name ?? "",
       description: initialData?.description ?? "",

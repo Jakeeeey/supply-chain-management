@@ -33,6 +33,46 @@ import {
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Settings2 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
+interface SearchInputProps {
+  placeholder: string;
+  initialValue: string;
+  onSearch: (value: string) => void;
+  isLoading?: boolean;
+}
+
+function SearchInput({ placeholder, initialValue, onSearch, isLoading = false }: SearchInputProps) {
+  const [value, setValue] = React.useState(initialValue);
+  
+  // Update local state if initialValue changes (e.g. from table reset)
+  React.useEffect(() => {
+    setValue(initialValue);
+  }, [initialValue]);
+
+  // Debounce the actual search trigger
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      onSearch(value);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [value, onSearch]);
+
+  return (
+    <div className="relative w-full">
+      <Input
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        className="h-10 rounded-xl pr-10 bg-background"
+      />
+      {isLoading && (
+        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
@@ -45,6 +85,7 @@ interface DataTableProps<TData, TValue> {
   manualPagination?: boolean
   searchKey?: string
   onSearch?: (value: string) => void
+  isLoading?: boolean
 }
 
 export function DataTable<TData, TValue>({
@@ -56,6 +97,7 @@ export function DataTable<TData, TValue>({
   manualPagination = false,
   searchKey,
   onSearch,
+  isLoading = false,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
@@ -104,16 +146,18 @@ export function DataTable<TData, TValue>({
     <div className="space-y-4">
       <div className="flex items-center gap-4">
         {searchKey && (
-          <Input
-            placeholder={`Search ${searchKey}...`}
-            value={(table.getColumn(searchKey)?.getFilterValue() as string) ?? ""}
-            onChange={(event) => {
-              const value = event.target.value;
-              table.getColumn(searchKey)?.setFilterValue(value);
-              if (onSearch) onSearch(value);
-            }}
-            className="max-w-sm h-10 rounded-xl"
-          />
+          <div className="max-w-sm w-full">
+            <SearchInput 
+              placeholder={`Search ${searchKey.replace(/_/g, ' ')}...`}
+              initialValue={(table.getColumn(searchKey)?.getFilterValue() as string) ?? ""}
+              isLoading={isLoading}
+              onSearch={(value) => {
+                const col = table.getColumn(searchKey);
+                if (col) col.setFilterValue(value);
+                if (onSearch) onSearch(value);
+              }}
+            />
+          </div>
         )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

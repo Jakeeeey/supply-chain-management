@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { RefreshCcw } from "lucide-react";
 import { useSKUMasterlist } from "./hooks/useSKUMasterlist";
-import { SKUTable } from "@/modules/supply-chain-management/product-management/sku-creation/components/data-table/SKUTable";
+import { MasterlistTable } from "./components/data-table/MasterlistTable";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -69,19 +69,19 @@ export default function SKUMasterlistModule() {
       </div>
 
       <div className="mt-6">
-        <SKUTable 
+        <MasterlistTable 
           title="Active Product Master Records"
           data={data} 
           totalCount={totalCount}
           pageIndex={page}
           pageSize={limit}
-          onPaginationChange={({ pageIndex, pageSize }) => {
+          onPaginationChange={({ pageIndex, pageSize }: { pageIndex: number; pageSize: number }) => {
               setPage(pageIndex);
               setLimit(pageSize);
           }}
           masterData={masterData}
           isLoading={isLoading} 
-          onSearch={(v) => {
+          onSearch={(v: string) => {
             setSearch(v);
             setPage(0);
           }}

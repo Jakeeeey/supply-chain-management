@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { RefreshCcw } from "lucide-react";
 import { useSKUs } from "@/modules/supply-chain-management/product-management/sku-creation/hooks/useSKUs";
-import { SKUTable } from "@/modules/supply-chain-management/product-management/sku-creation/components/data-table/SKUTable";
+import { ApprovalTable } from "@/modules/supply-chain-management/product-management/sku-approval/components/data-table/ApprovalTable";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -90,13 +90,13 @@ export default function SKUApprovalPage() {
       </div>
 
       <div className="mt-6">
-        <SKUTable 
+        <ApprovalTable 
           title="Items Pending Approval"
           data={pendingApprovalData} 
           totalCount={pendingTotal}
           pageIndex={pendingPage}
           pageSize={pendingLimit}
-          onPaginationChange={({ pageIndex, pageSize }) => {
+          onPaginationChange={({ pageIndex, pageSize }: { pageIndex: number; pageSize: number }) => {
               setPendingPage(pageIndex);
               setPendingLimit(pageSize);
           }}
@@ -104,7 +104,6 @@ export default function SKUApprovalPage() {
           isLoading={isLoading} 
           onApprove={handleApproveAndActivate as any}
           onReject={handleReject as any}
-          manualPagination={false}
         />
       </div>
     </div>

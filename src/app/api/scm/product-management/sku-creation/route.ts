@@ -47,8 +47,8 @@ export async function POST(req: NextRequest) {
     // Sanitize body for essential fields that might be null from form/defaults
     const sanitizedBody = {
       ...body,
-      isActive: body.isActive ?? 1,
-      status: body.status ?? "Draft",
+      isActive: body.isActive ?? 0,
+      status: body.status ?? "DRAFT",
       inventory_type: body.inventory_type ?? "Regular",
       unit_of_measurement_count: body.unit_of_measurement_count ?? 1,
       barcode: body.barcode ?? "",

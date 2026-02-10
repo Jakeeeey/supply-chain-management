@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const SKUStatusSchema = z.enum(["Draft", "For Approval", "Rejected", "Active", "Inactive"]);
+export const SKUStatusSchema = z.enum(["Draft", "For Approval", "Rejected", "Active", "Inactive", "DRAFT", "FOR APPROVAL", "FOR_APPROVAL", "REJECTED", "ACTIVE", "INACTIVE", "PENDING"]);
 export type SKUStatus = z.infer<typeof SKUStatusSchema>;
 
 export const InventoryTypeSchema = z.enum(["Regular", "Variant"]);

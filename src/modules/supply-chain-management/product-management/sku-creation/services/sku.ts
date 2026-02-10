@@ -14,7 +14,13 @@ export const skuService = {
     
     let url = `${API_BASE_URL}/items/products?limit=-1&meta=total_count,filter_count`;
     if (search) {
-      url += `&filter[product_name][_icontains]=${encodeURIComponent(search)}`;
+      const searchFilter = encodeURIComponent(JSON.stringify({
+        _or: [
+          { product_name: { _icontains: search } },
+          { product_code: { _icontains: search } }
+        ]
+      }));
+      url += `&filter=${searchFilter}`;
     }
     
     console.log(`fetchApproved: Calling ${url} with token: ${STATIC_TOKEN ? STATIC_TOKEN.substring(0, 5) + '...' : 'MISSING'}`);
@@ -43,7 +49,8 @@ export const skuService = {
     // Masterlist shows items from the products table that are Active (1)
     items = items.filter(i => {
       const isLive = i.isActive === 1 || i.isActive === true;
-      const isActiveStatus = i.status === "Active" || !i.status; 
+      const status = (i.status as string || "").toUpperCase();
+      const isActiveStatus = status === "ACTIVE" || !i.status; 
       return isLive && isActiveStatus;
     });
 
@@ -204,7 +211,7 @@ export const skuService = {
       body: JSON.stringify({
         ...sku,
         product_code,
-        status: "Draft"
+        status: "DRAFT"
       }),
     });
     
@@ -252,7 +259,7 @@ export const skuService = {
     const response = await fetch(`${API_BASE_URL}/items/product_draft/${id}`, {
       method: "PATCH",
       headers: HEADERS,
-      body: JSON.stringify({ status: "For Approval" }),
+      body: JSON.stringify({ status: "FOR_APPROVAL" }),
     });
     console.log(`Submit for Approval response (${id}):`, response.status, response.statusText);
     if (!response.ok) {
@@ -268,7 +275,7 @@ export const skuService = {
     const response = await fetch(`${API_BASE_URL}/items/product_draft/${id}`, {
       method: "PATCH",
       headers: HEADERS,
-      body: JSON.stringify({ status: "Rejected" }),
+      body: JSON.stringify({ status: "REJECTED" }),
     });
     if (!response.ok) throw new Error("Failed to reject draft");
     return true;
@@ -392,7 +399,7 @@ export const skuService = {
       body: JSON.stringify({
         ...draft,
         product_code: skuCode,
-        status: "Active",
+        status: "ACTIVE",
         isActive: 1,
         id: undefined, // Remove draft ID
         product_id: undefined,
@@ -406,7 +413,7 @@ export const skuService = {
     await fetch(`${API_BASE_URL}/items/product_draft/${id}`, {
       method: "PATCH",
       headers: HEADERS,
-      body: JSON.stringify({ status: "Active" }),
+      body: JSON.stringify({ status: "ACTIVE" }),
     });
 
     return true;

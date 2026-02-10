@@ -18,6 +18,7 @@ export function useSKUs() {
   const [pendingTotal, setPendingTotal] = useState(0);
   const [pendingPage, setPendingPage] = useState(0);
   const [pendingLimit, setPendingLimit] = useState(10);
+  const [search, setSearch] = useState("");
 
   const [masterData, setMasterData] = useState<MasterData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -28,9 +29,9 @@ export function useSKUs() {
     setError(null);
     try {
       const [approvedRes, draftsRes, pendingRes, masterRes] = await Promise.all([
-        fetch(`/api/scm/product-management/sku-creation?type=approved&limit=${approvedLimit}&offset=${approvedPage * approvedLimit}`).then(res => res.json()),
-        fetch(`/api/scm/product-management/sku-creation?type=drafts&status=Draft&limit=-1`).then(res => res.json()),
-        fetch(`/api/scm/product-management/sku-creation?type=drafts&status=For%20Approval&limit=-1`).then(res => res.json()),
+        fetch(`/api/scm/product-management/sku-creation?type=approved&limit=${approvedLimit}&offset=${approvedPage * approvedLimit}&search=${encodeURIComponent(search)}`).then(res => res.json()),
+        fetch(`/api/scm/product-management/sku-creation?type=drafts&status=DRAFT&limit=-1`).then(res => res.json()),
+        fetch(`/api/scm/product-management/sku-creation?type=drafts&status=FOR_APPROVAL&limit=-1`).then(res => res.json()),
         fetch("/api/scm/product-management/sku-creation?type=master").then(res => res.json())
       ]);
 
@@ -54,7 +55,7 @@ export function useSKUs() {
     } finally {
       setIsLoading(false);
     }
-  }, [approvedLimit, approvedPage, draftsLimit, draftsPage, pendingLimit, pendingPage]);
+  }, [approvedLimit, approvedPage, draftsLimit, draftsPage, pendingLimit, pendingPage, search]);
 
   useEffect(() => {
     refresh();
@@ -160,6 +161,9 @@ export function useSKUs() {
     setPendingPage,
     pendingLimit,
     setPendingLimit,
+    
+    search,
+    setSearch,
     
     masterData,
     isLoading,
