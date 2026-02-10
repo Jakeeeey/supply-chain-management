@@ -40,6 +40,11 @@ import {
 } from "@/components/ui/command";
 import { Separator } from "@/components/ui/separator";
 
+// ✅ NEW: shadcn snippets
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Item, ItemContent, ItemMedia, ItemTitle } from "@/components/ui/item";
+import { Spinner } from "@/components/ui/spinner";
+
 const ProductPickerDialog =
     (ProductPickerDialogModule as any).ProductPickerDialog ??
     (ProductPickerDialogModule as any).default;
@@ -103,9 +108,17 @@ function normalizeProduct(raw: RawProduct, fixedDiscountTypeId: string): Product
         ) || "Uncategorized";
 
     const baseUnitPrice =
-        Number(raw?.priceA ?? raw?.price_per_unit ?? raw?.cost_per_unit ?? raw?.price ?? 0) || 0;
+        Number(
+            raw?.priceA ??
+            raw?.price_per_unit ??
+            raw?.cost_per_unit ??
+            raw?.price ??
+            0
+        ) || 0;
 
-    const baseUomIdRaw = Number(raw?.unit_of_measurement ?? raw?.uom_id ?? raw?.unit_id);
+    const baseUomIdRaw = Number(
+        raw?.unit_of_measurement ?? raw?.uom_id ?? raw?.unit_id
+    );
     const baseUomId = Number.isFinite(baseUomIdRaw) ? baseUomIdRaw : 1;
 
     const baseUomCountRaw = Number(raw?.unit_of_measurement_count ?? 1);
@@ -131,7 +144,8 @@ function normalizeProduct(raw: RawProduct, fixedDiscountTypeId: string): Product
     } else {
         piecesPerBox = Math.max(1, piecesPerBoxParsed || 0);
         baseUnitsPerBox = piecesPerBox > 0 ? piecesPerBox / piecesPerBaseUnit : 1;
-        if (!Number.isFinite(baseUnitsPerBox) || baseUnitsPerBox <= 0) baseUnitsPerBox = 1;
+        if (!Number.isFinite(baseUnitsPerBox) || baseUnitsPerBox <= 0)
+            baseUnitsPerBox = 1;
         pricePerBox = baseUnitPrice * baseUnitsPerBox;
     }
 
@@ -180,7 +194,10 @@ function SupplierSelect(props: {
                 {props.value?.name ?? "Select supplier"}
               </span>
                             {props.value?.id ? (
-                                <Badge variant="secondary" className="text-[10px] font-black shrink-0">
+                                <Badge
+                                    variant="secondary"
+                                    className="text-[10px] font-black shrink-0"
+                                >
                                     ID: {props.value.id}
                                 </Badge>
                             ) : null}
@@ -189,52 +206,67 @@ function SupplierSelect(props: {
                     </Button>
                 </PopoverTrigger>
 
-                {/* ✅ Match trigger width + scroll list */}
+                {/* ✅ ScrollArea + Separators */}
                 <PopoverContent
                     className="p-0 w-[--radix-popover-trigger-width] min-w-[280px] max-w-[92vw]"
                     align="start"
                 >
                     <Command>
                         <CommandInput placeholder="Search supplier..." />
-                        <CommandList className="max-h-[320px] overflow-auto">
+                        <CommandList>
                             <CommandEmpty>No supplier found.</CommandEmpty>
-                            <CommandGroup heading="Suppliers">
-                                {props.suppliers.map((s) => {
-                                    const selected = props.value?.id === s.id;
-                                    return (
-                                        <CommandItem
-                                            key={s.id}
-                                            value={`${s.name} ${s.id}`}
-                                            onSelect={() => {
-                                                props.onChange(selected ? null : s);
-                                                setOpen(false);
-                                            }}
-                                        >
-                                            <div className="flex items-center gap-2 min-w-0 w-full">
-                                                <div
-                                                    className={cn(
-                                                        "h-5 w-5 rounded-full border flex items-center justify-center shrink-0",
-                                                        selected
-                                                            ? "bg-primary text-primary-foreground border-primary"
-                                                            : "bg-background"
-                                                    )}
+
+                            <ScrollArea className="h-72">
+                                <CommandGroup heading="Suppliers" className="p-2">
+                                    {props.suppliers.map((s, idx) => {
+                                        const selected = props.value?.id === s.id;
+                                        return (
+                                            <React.Fragment key={s.id}>
+                                                <CommandItem
+                                                    value={`${s.name} ${s.id}`}
+                                                    onSelect={() => {
+                                                        props.onChange(selected ? null : s);
+                                                        setOpen(false);
+                                                    }}
                                                 >
-                                                    {selected ? <Check className="w-3 h-3" /> : null}
-                                                </div>
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="text-xs font-bold truncate">{s.name}</div>
-                                                    <div className="text-[10px] text-muted-foreground truncate">
-                                                        A/P: {s.apBalance.toLocaleString()}
+                                                    <div className="flex items-center gap-2 min-w-0 w-full">
+                                                        <div
+                                                            className={cn(
+                                                                "h-5 w-5 rounded-full border flex items-center justify-center shrink-0",
+                                                                selected
+                                                                    ? "bg-primary text-primary-foreground border-primary"
+                                                                    : "bg-background"
+                                                            )}
+                                                        >
+                                                            {selected ? <Check className="w-3 h-3" /> : null}
+                                                        </div>
+
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="text-xs font-bold truncate">
+                                                                {s.name}
+                                                            </div>
+                                                            <div className="text-[10px] text-muted-foreground truncate">
+                                                                A/P: {s.apBalance.toLocaleString()}
+                                                            </div>
+                                                        </div>
+
+                                                        <Badge
+                                                            variant="secondary"
+                                                            className="text-[10px] font-black shrink-0"
+                                                        >
+                                                            {s.id}
+                                                        </Badge>
                                                     </div>
-                                                </div>
-                                                <Badge variant="secondary" className="text-[10px] font-black shrink-0">
-                                                    {s.id}
-                                                </Badge>
-                                            </div>
-                                        </CommandItem>
-                                    );
-                                })}
-                            </CommandGroup>
+                                                </CommandItem>
+
+                                                {idx < props.suppliers.length - 1 ? (
+                                                    <Separator className="my-2" />
+                                                ) : null}
+                                            </React.Fragment>
+                                        );
+                                    })}
+                                </CommandGroup>
+                            </ScrollArea>
                         </CommandList>
                     </Command>
                 </PopoverContent>
@@ -300,17 +332,17 @@ function BranchMultiSelect(props: {
                     </Button>
                 </PopoverTrigger>
 
-                {/* ✅ Match trigger width + scroll list */}
+                {/* ✅ Actions fixed, list scrollable */}
                 <PopoverContent
                     className="p-0 w-[--radix-popover-trigger-width] min-w-[320px] max-w-[92vw]"
                     align="start"
                 >
                     <Command>
                         <CommandInput placeholder="Search branch..." />
-                        <CommandList className="max-h-[340px] overflow-auto">
+                        <CommandList>
                             <CommandEmpty>No branch found.</CommandEmpty>
 
-                            <CommandGroup heading="Actions">
+                            <CommandGroup heading="Actions" className="p-2">
                                 <CommandItem
                                     value="__all__"
                                     onSelect={() => {
@@ -345,43 +377,52 @@ function BranchMultiSelect(props: {
 
                             <Separator />
 
-                            <CommandGroup heading="Branches">
-                                {props.branches.map((b) => {
-                                    const isOn = selected.has(b.id);
-                                    return (
-                                        <CommandItem
-                                            key={b.id}
-                                            value={`${b.code} ${b.name}`}
-                                            onSelect={() => {
-                                                const next = new Set(selected);
-                                                if (next.has(b.id)) next.delete(b.id);
-                                                else next.add(b.id);
-                                                props.onChange(Array.from(next));
-                                            }}
-                                        >
-                                            <div className="flex items-center gap-2 w-full min-w-0">
-                                                <div
-                                                    className={cn(
-                                                        "h-5 w-5 rounded border flex items-center justify-center shrink-0",
-                                                        isOn
-                                                            ? "bg-primary text-primary-foreground border-primary"
-                                                            : "bg-background"
-                                                    )}
+                            <ScrollArea className="h-72">
+                                <CommandGroup heading="Branches" className="p-2">
+                                    {props.branches.map((b, idx) => {
+                                        const isOn = selected.has(b.id);
+                                        return (
+                                            <React.Fragment key={b.id}>
+                                                <CommandItem
+                                                    value={`${b.code} ${b.name}`}
+                                                    onSelect={() => {
+                                                        const next = new Set(selected);
+                                                        if (next.has(b.id)) next.delete(b.id);
+                                                        else next.add(b.id);
+                                                        props.onChange(Array.from(next));
+                                                    }}
                                                 >
-                                                    {isOn ? <Check className="w-3 h-3" /> : null}
-                                                </div>
+                                                    <div className="flex items-center gap-2 w-full min-w-0">
+                                                        <div
+                                                            className={cn(
+                                                                "h-5 w-5 rounded border flex items-center justify-center shrink-0",
+                                                                isOn
+                                                                    ? "bg-primary text-primary-foreground border-primary"
+                                                                    : "bg-background"
+                                                            )}
+                                                        >
+                                                            {isOn ? <Check className="w-3 h-3" /> : null}
+                                                        </div>
 
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="text-xs font-black truncate">{b.code}</div>
-                                                    <div className="text-[10px] text-muted-foreground truncate">
-                                                        {b.name}
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="text-xs font-black truncate">
+                                                                {b.code}
+                                                            </div>
+                                                            <div className="text-[10px] text-muted-foreground truncate">
+                                                                {b.name}
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            </div>
-                                        </CommandItem>
-                                    );
-                                })}
-                            </CommandGroup>
+                                                </CommandItem>
+
+                                                {idx < props.branches.length - 1 ? (
+                                                    <Separator className="my-2" />
+                                                ) : null}
+                                            </React.Fragment>
+                                        );
+                                    })}
+                                </CommandGroup>
+                            </ScrollArea>
                         </CommandList>
                     </Command>
                 </PopoverContent>
@@ -414,9 +455,7 @@ export default function CreatePurchaseOrderModule() {
     const [error, setError] = React.useState<string>("");
 
     const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
-    const [branches, setBranches] = React.useState<Array<{ id: string; code: string; name: string }>>(
-        []
-    );
+    const [branches, setBranches] = React.useState<Array<{ id: string; code: string; name: string }>>([]);
 
     const [discountTypes, setDiscountTypes] = React.useState<DiscountType[]>([]);
 
@@ -522,7 +561,7 @@ export default function CreatePurchaseOrderModule() {
                     if (pid) discountByProductId.set(pid, dtid);
                 }
 
-                const DEBUG_BOX_CONVERSION = false; // 👈 set true only when debugging
+                const DEBUG_BOX_CONVERSION = false;
                 const MAX_DEBUG_LOGS = 50;
                 let debugCount = 0;
 
@@ -530,7 +569,9 @@ export default function CreatePurchaseOrderModule() {
                     (rawProducts ?? []).map((rp: any) => {
                         const pid = String(rp?.product_id ?? rp?.id ?? "");
                         const fixedDiscountTypeId =
-                            discountByProductId.get(pid) || defaultNoDiscountId || FALLBACK_NO_DISCOUNT_ID;
+                            discountByProductId.get(pid) ||
+                            defaultNoDiscountId ||
+                            FALLBACK_NO_DISCOUNT_ID;
 
                         const np = normalizeProduct(rp, fixedDiscountTypeId);
 
@@ -877,7 +918,7 @@ export default function CreatePurchaseOrderModule() {
 
             <Separator />
 
-            {/* ✅ Responsive controls (no forced min-width overflow) */}
+            {/* ✅ Responsive controls */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 w-full min-w-0">
                 <div className="lg:col-span-4 min-w-0">
                     <SupplierSelect
@@ -904,16 +945,33 @@ export default function CreatePurchaseOrderModule() {
                     />
                 </div>
 
+                {/* ✅ Loader updated */}
                 <div className="lg:col-span-2 min-w-0 flex items-end">
-                    <Button
-                        type="button"
-                        variant="outline"
-                        className="h-11 rounded-xl w-full"
-                        disabled
-                    >
-                        <Search className="w-4 h-4 mr-2" />
-                        {isLoading ? "Loading…" : "Ready"}
-                    </Button>
+                    {isLoading || isSaving ? (
+                        <div className="w-full [--radius:1rem]">
+                            <Item variant="muted" className="h-11 rounded-xl">
+                                <ItemMedia>
+                                    <Spinner />
+                                </ItemMedia>
+
+                                <ItemContent>
+                                    <ItemTitle className="line-clamp-1">
+                                        {isSaving ? "Saving purchase order..." : "Loading Please WAIT..."}
+                                    </ItemTitle>
+                                </ItemContent>
+
+                                <ItemContent className="flex-none justify-end">
+                  <span className="text-sm tabular-nums">
+                    {isSaving ? "Please wait" : "Fetching"}
+                  </span>
+                                </ItemContent>
+                            </Item>
+                        </div>
+                    ) : (
+                        <Button type="button" variant="outline" className="h-11 rounded-xl w-full" disabled>
+                            Ready
+                        </Button>
+                    )}
                 </div>
             </div>
 
@@ -968,7 +1026,6 @@ export default function CreatePurchaseOrderModule() {
                 </div>
             ) : null}
 
-            {/* Only show 5 branch cards per page */}
             <BranchAllocations
                 branches={paginatedAllocations}
                 canAddProducts={canAddProducts}

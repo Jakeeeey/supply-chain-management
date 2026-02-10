@@ -61,6 +61,65 @@ function safeStr(v: any, fallback = "—") {
     return s ? s : fallback;
 }
 
+function isNumericString(v: any) {
+    const s = String(v ?? "").trim();
+    if (!s) return false;
+    return /^[0-9]+$/.test(s);
+}
+
+function pickText(v: any): string {
+    // ✅ never stringify objects into "[object Object]"
+    if (v === null || v === undefined) return "";
+    if (typeof v === "string") return v.trim();
+    if (typeof v === "number") return String(v);
+    if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
+    // objects/arrays/functions -> ignore
+    return "";
+}
+
+function formatBranchOne(raw: any): string {
+    if (!raw) return "";
+
+    // allocation style: { branchId, branchName }
+    const allocName = pickText(raw?.branchName ?? raw?.branch_name_text ?? raw?.branchNameText ?? "");
+    const allocCode = pickText(raw?.branchCode ?? raw?.branch_code_text ?? raw?.branchCodeText ?? "");
+
+    // expanded branch object
+    const code = pickText(raw?.branch_code ?? raw?.code ?? allocCode);
+    const name = pickText(raw?.branch_name ?? raw?.name ?? raw?.branch_description ?? allocName);
+
+    if (code && name) return `${code} — ${name}`;
+    if (name) return name;
+    if (code) return code;
+
+    // primitive fallback (avoid numeric id)
+    if (typeof raw === "string" || typeof raw === "number") {
+        const s = String(raw).trim();
+        if (!s || isNumericString(s)) return "";
+        return s;
+    }
+
+    return "";
+}
+
+function formatBranches(raw: any): string {
+    // 1) Array form
+    if (Array.isArray(raw)) {
+        const labels = raw
+            .map((b) => formatBranchOne(b))
+            .map((x) => x.trim())
+            .filter(Boolean);
+
+        if (!labels.length) return "—";
+        if (labels.length <= 2) return labels.join(", ");
+        return `${labels.slice(0, 2).join(", ")} +${labels.length - 2} more`;
+    }
+
+    // 2) Single object or primitive
+    const one = formatBranchOne(raw);
+    return one ? one : "—";
+}
+
 type NormalizedLine = {
     key: string;
     name: string;
@@ -115,15 +174,43 @@ export default function PurchaseOrderReviewPanel(props: {
         setSubmitting(false);
     }, [poAny?.purchase_order_id ?? poAny?.id ?? null]);
 
+    /**
+     * ✅ FIX: Branch label resolver
+     * Handles:
+     * - helper strings: branch_name_text / branch_code_text
+     * - expanded object: branch_id {branch_code, branch_name}
+     * - allocations array: allocations [{branchName,...}]
+     * - branch_id array
+     * Prevents "[object Object]"
+     */
     const branchLabel = React.useMemo(() => {
-        const b = poAny?.branch_id ?? null;
-        const code = safeStr(b?.branch_code ?? b?.code ?? "");
-        const name = safeStr(b?.branch_name ?? b?.name ?? b?.branch_description ?? "");
-        if (code !== "—" && name !== "—") return `${code} — ${name}`;
-        if (name !== "—") return name;
-        const raw = poAny?.branch_id_value ?? poAny?.branch_id ?? poAny?.branch;
-        const s = String(raw ?? "").trim();
-        return s ? s : "—";
+        // 0) prefer helper fields from API
+        const helperName = pickText(poAny?.branch_name_text ?? poAny?.branchNameText ?? poAny?.branchName ?? "");
+        const helperCode = pickText(poAny?.branch_code_text ?? poAny?.branchCodeText ?? poAny?.branchCode ?? "");
+
+        if (helperName) {
+            return helperCode ? `${helperCode} — ${helperName}` : helperName;
+        }
+
+        // 1) if allocations exist (create PO uses allocations)
+        if (Array.isArray(poAny?.allocations) && poAny.allocations.length) {
+            return formatBranches(poAny.allocations);
+        }
+
+        // 2) if API returns branch_id expanded or array
+        if (poAny?.branch_id !== undefined) {
+            return formatBranches(poAny.branch_id);
+        }
+
+        // 3) other possible keys
+        if (poAny?.branches !== undefined) return formatBranches(poAny.branches);
+        if (poAny?.branch !== undefined) return formatBranches(poAny.branch);
+
+        // 4) last resort but avoid numeric id
+        const raw = poAny?.branch_id_value ?? poAny?.branchId ?? "";
+        if (raw && !isNumericString(raw)) return String(raw).trim();
+
+        return "—";
     }, [poAny]);
 
     // ✅ Supplier name ONLY (no numeric fallback)
@@ -194,7 +281,6 @@ export default function PurchaseOrderReviewPanel(props: {
                 })
             );
 
-            // ✅ replace browser alert with toast
             toast.success("Purchase Order approved successfully!", {
                 description: "The PO has been approved and updated.",
             });
@@ -213,7 +299,6 @@ export default function PurchaseOrderReviewPanel(props: {
 
     return (
         <>
-            {/* ✅ Local toaster (no layout.tsx needed) */}
             <SonnerToaster richColors position="top-right" closeButton />
 
             <div
@@ -259,20 +344,20 @@ export default function PurchaseOrderReviewPanel(props: {
                                         <div className="flex justify-between gap-3">
                                             <span className="text-muted-foreground">PO Number</span>
                                             <span className="font-mono font-bold text-foreground">
-                        {String(poAny?.purchase_order_no ?? poAny?.poNumber ?? "—")}
-                      </span>
+                                                {String(poAny?.purchase_order_no ?? poAny?.poNumber ?? "—")}
+                                            </span>
                                         </div>
                                         <div className="flex justify-between gap-3">
                                             <span className="text-muted-foreground">Date</span>
                                             <span className="font-medium text-foreground">
-                        {String(poAny?.date ?? poAny?.date_encoded ?? "—")}
-                      </span>
+                                                {String(poAny?.date ?? poAny?.date_encoded ?? "—")}
+                                            </span>
                                         </div>
                                         <div className="flex justify-between gap-3">
                                             <span className="text-muted-foreground">Branch</span>
                                             <span className="font-medium text-foreground truncate text-right">
-                        {branchLabel}
-                      </span>
+                                                {branchLabel}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -296,9 +381,9 @@ export default function PurchaseOrderReviewPanel(props: {
                                     Payment Status
                                 </div>
                                 <div className="mt-2 rounded-lg bg-muted/30 p-3 text-sm">
-                  <span className="text-amber-600 dark:text-amber-400 font-bold">
-                    Payment Status: {paymentStatusLabel}
-                  </span>
+                                    <span className="text-amber-600 dark:text-amber-400 font-bold">
+                                        Payment Status: {paymentStatusLabel}
+                                    </span>
                                 </div>
                             </div>
 
@@ -350,8 +435,8 @@ export default function PurchaseOrderReviewPanel(props: {
                                 <div className="flex justify-between text-xs">
                                     <span className="text-muted-foreground font-medium uppercase">Discount</span>
                                     <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                    -{fmt.format(discountAmount)}
-                  </span>
+                                        -{fmt.format(discountAmount)}
+                                    </span>
                                 </div>
 
                                 <div className="flex justify-between text-xs border-b border-border/50 pb-3">
@@ -359,7 +444,6 @@ export default function PurchaseOrderReviewPanel(props: {
                                     <span className="font-bold text-foreground">{fmt.format(netAmount)}</span>
                                 </div>
 
-                                {/* ✅ VAT/EWT + note only when Mark as Invoice is ON */}
                                 {markAsInvoice ? (
                                     <>
                                         <div className="flex justify-between text-xs">
@@ -379,12 +463,12 @@ export default function PurchaseOrderReviewPanel(props: {
                                 ) : null}
 
                                 <div className="flex justify-between items-center pt-2 border-t border-border/50 mt-2">
-                  <span className="font-black text-foreground uppercase tracking-tighter text-sm">
-                    Total
-                  </span>
+                                    <span className="font-black text-foreground uppercase tracking-tighter text-sm">
+                                        Total
+                                    </span>
                                     <span className="font-black text-2xl text-primary tracking-tighter">
-                    {fmt.format(totalAmount)}
-                  </span>
+                                        {fmt.format(totalAmount)}
+                                    </span>
                                 </div>
 
                                 {!markAsInvoice ? (
@@ -446,7 +530,6 @@ export default function PurchaseOrderReviewPanel(props: {
                                             </div>
                                         ) : null}
 
-                                        {/* ✅ Approve with confirmation dialog */}
                                         <AlertDialog open={confirmOpen} onOpenChange={(o) => !submitting && setConfirmOpen(o)}>
                                             <Button
                                                 type="button"
