@@ -4,54 +4,125 @@ export const runtime = "nodejs";
 
 const DIRECTUS_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 const ACCESS_TOKEN = process.env.DIRECTUS_STATIC_TOKEN;
-const ENDPOINT = "/items/products";
 
 function json(res: any, status = 200) {
   return NextResponse.json(res, { status });
 }
 
+// Helper to handle fetches with better error logging
+async function fetchDirectus(endpoint: string, params: Record<string, string>) {
+  if (!DIRECTUS_URL || !ACCESS_TOKEN) throw new Error("Missing config");
+
+  const url = new URL(`${DIRECTUS_URL}${endpoint}`);
+  Object.entries(params).forEach(([k, v]) => url.searchParams.append(k, v));
+
+  console.log(`[API] Fetching: ${url.toString()}`); // Debug Log
+
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${ACCESS_TOKEN}`,
+    },
+    cache: "no-store",
+  });
+
+  const json = await res.json();
+
+  if (!res.ok) {
+    console.error(`[API Error] ${endpoint}:`, json); // Log specific Directus error
+    throw new Error(json.error?.message || `Directus Error ${res.status}`);
+  }
+
+  return json.data;
+}
+
 async function proxyRequest(req: NextRequest, method: string) {
   if (!DIRECTUS_URL) return json({ error: "Missing Base URL" }, 500);
-  if (!ACCESS_TOKEN) return json({ error: "Missing Token" }, 500);
 
   const url = new URL(req.url);
   const id = url.searchParams.get("id");
+  const scope = url.searchParams.get("scope");
 
-  let upstreamUrl = `${DIRECTUS_URL}${ENDPOINT}`;
-
-  // GET: List Products
-  if (method === "GET") {
-    // Fetch products with related category and unit names
-    upstreamUrl += `?fields=*,product_category.category_name,unit_of_measurement.unit_name,unit_of_measurement.unit_shortcut&limit=-1`;
-  }
-
-  // PATCH: Update specific product
-  if (method === "PATCH" && id) {
-    upstreamUrl += `/${id}`;
-  }
-
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${ACCESS_TOKEN}`,
-  };
-
-  const options: RequestInit = { method, headers, cache: "no-store" };
-
-  if (["POST", "PATCH"].includes(method)) {
-    const body = await req.json().catch(() => ({}));
-    options.body = JSON.stringify(body);
-  }
-
-  try {
-    const response = await fetch(upstreamUrl, options);
-    const data = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      return json(data, response.status);
+  // HANDLE PATCH (Update Barcode)
+  if (method === "PATCH") {
+    const body = await req.json();
+    try {
+      const res = await fetch(`${DIRECTUS_URL}/items/products/${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${ACCESS_TOKEN}`,
+        },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      return json(data, res.status);
+    } catch (e: any) {
+      return json({ error: e.message }, 500);
     }
+  }
 
-    return json(data, 200);
+  // HANDLE GET
+  try {
+    if (scope === "suppliers") {
+      const data = await fetchDirectus("/items/suppliers", {
+        fields: "id,supplier_name,supplier_shortcut",
+        "filter[isActive][_eq]": "1",
+        limit: "-1",
+        sort: "supplier_name",
+      });
+      return json({ data });
+    } else {
+      // 1. Fetch Products (FIXED: product_code instead of sku_code)
+      const productsPromise = fetchDirectus("/items/products", {
+        fields:
+          "product_id,product_name,barcode,description,product_code,product_category.category_name,unit_of_measurement.unit_name,unit_of_measurement.unit_shortcut",
+        limit: "-1",
+      });
+
+      // 2. Fetch Junction Table for Suppliers
+      const junctionPromise = fetchDirectus("/items/product_per_supplier", {
+        fields:
+          "product_id,supplier_id.id,supplier_id.supplier_name,supplier_id.supplier_shortcut",
+        limit: "-1",
+      });
+
+      const [products, junction] = await Promise.all([
+        productsPromise,
+        junctionPromise,
+      ]);
+
+      // 3. Manual Merge: Attach Suppliers to Products
+      const supplierMap = new Map<number, any[]>();
+
+      junction.forEach((item: any) => {
+        if (!item.product_id || !item.supplier_id) return;
+
+        // Handle case where supplier_id is expanded (Object) vs not (Number)
+        const supplierObj =
+          typeof item.supplier_id === "object"
+            ? item.supplier_id
+            : { id: item.supplier_id, supplier_name: "Unknown" };
+
+        const pid = item.product_id;
+        if (!supplierMap.has(pid)) {
+          supplierMap.set(pid, []);
+        }
+
+        // Push in the format the frontend expects: { supplier_id: {...} }
+        supplierMap.get(pid)?.push({ supplier_id: supplierObj });
+      });
+
+      const mergedData = products.map((p: any) => ({
+        ...p,
+        product_per_supplier: supplierMap.get(p.product_id) || [],
+      }));
+
+      return json({ data: mergedData });
+    }
   } catch (error: any) {
+    console.error("Proxy Error:", error);
     return json({ error: error.message }, 500);
   }
 }
@@ -59,7 +130,6 @@ async function proxyRequest(req: NextRequest, method: string) {
 export async function GET(req: NextRequest) {
   return proxyRequest(req, "GET");
 }
-
 export async function PATCH(req: NextRequest) {
   return proxyRequest(req, "PATCH");
 }

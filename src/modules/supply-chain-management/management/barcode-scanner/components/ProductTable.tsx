@@ -9,8 +9,8 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ScanBarcode, Edit } from "lucide-react"; // Assuming lucide-react is available via shadcn setup
-import { Product, Category, Unit } from "../types";
+import { ScanBarcode, Edit } from "lucide-react";
+import { Product, Category, Unit, getSupplierName } from "../types";
 
 interface ProductTableProps {
   products: Product[];
@@ -22,9 +22,10 @@ export function ProductTable({ products, onEdit }: ProductTableProps) {
     <div className="rounded-md border">
       <Table>
         <TableHeader>
-          <TableRow>
-            <TableHead className="w-37.5">Barcode</TableHead>
-            <TableHead>Product Name</TableHead>
+          <TableRow className="bg-muted/50">
+            <TableHead className="w-32.5">Barcode</TableHead>
+            <TableHead className="w-45">Supplier</TableHead>
+            <TableHead className="max-w-75">Product Name</TableHead>
             <TableHead>Category</TableHead>
             <TableHead>Unit</TableHead>
             <TableHead className="text-right">Action</TableHead>
@@ -33,8 +34,11 @@ export function ProductTable({ products, onEdit }: ProductTableProps) {
         <TableBody>
           {products.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={5} className="text-center h-24">
-                No products found.
+              <TableCell
+                colSpan={6}
+                className="text-center h-24 text-muted-foreground"
+              >
+                No products found matching your filters.
               </TableCell>
             </TableRow>
           ) : (
@@ -52,34 +56,70 @@ export function ProductTable({ products, onEdit }: ProductTableProps) {
                     (product.unit_of_measurement as Unit).unit_name
                   : "-";
 
+              const supplierName = getSupplierName(product);
+              const displayName = product.description || product.product_name;
+
               return (
-                <TableRow key={product.product_id}>
-                  <TableCell className="font-mono">
+                <TableRow
+                  key={product.product_id}
+                  className="hover:bg-muted/50"
+                >
+                  {/* Barcode */}
+                  <TableCell className="text-sm font-mono py-3">
                     {product.barcode ? (
-                      <span className="text-foreground">{product.barcode}</span>
+                      <span>{product.barcode}</span>
                     ) : (
-                      <Badge variant="secondary" className="text-xs">
+                      <Badge
+                        variant="secondary"
+                        className="text-xs font-normal"
+                      >
                         Missing
                       </Badge>
                     )}
                   </TableCell>
-                  <TableCell className="font-medium">
-                    {product.product_name}
+
+                  {/* Supplier - Truncated */}
+                  <TableCell className="py-3">
+                    <div
+                      className="text-sm text-muted-foreground truncate max-w-42.5"
+                      title={supplierName}
+                    >
+                      {supplierName}
+                    </div>
                   </TableCell>
-                  <TableCell>{categoryName}</TableCell>
-                  <TableCell>{unitName}</TableCell>
-                  <TableCell className="text-right">
+
+                  {/* Product Name - Truncated, ID removed */}
+                  <TableCell className="py-3">
+                    <div
+                      className="text-sm font-medium truncate max-w-70"
+                      title={displayName}
+                    >
+                      {displayName}
+                    </div>
+                  </TableCell>
+
+                  {/* Category */}
+                  <TableCell className="text-sm py-3">{categoryName}</TableCell>
+
+                  {/* Unit */}
+                  <TableCell className="text-sm py-3">{unitName}</TableCell>
+
+                  {/* Action */}
+                  <TableCell className="text-right py-3">
                     <Button
                       variant={product.barcode ? "ghost" : "default"}
                       size="sm"
+                      className="h-8 px-2 lg:px-3"
                       onClick={() => onEdit(product)}
                     >
                       {product.barcode ? (
-                        <Edit className="h-4 w-4 mr-1" />
+                        <Edit className="h-3.5 w-3.5 mr-1.5" />
                       ) : (
-                        <ScanBarcode className="h-4 w-4 mr-1" />
+                        <ScanBarcode className="h-3.5 w-3.5 mr-1.5" />
                       )}
-                      {product.barcode ? "Edit" : "Scan"}
+                      <span className="text-xs">
+                        {product.barcode ? "Edit" : "Scan"}
+                      </span>
                     </Button>
                   </TableCell>
                 </TableRow>

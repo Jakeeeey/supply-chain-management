@@ -58,11 +58,19 @@ export function ScannerModal({
   const handleSave = async () => {
     if (!barcode) return;
     setLoading(true);
+
     try {
+      // We await the hook. If the hook throws the "Duplicate" error,
+      // execution jumps to the catch block.
       await onSave(barcode);
+
+      // This line is only reached if NO error was thrown
       onClose();
     } catch (e) {
-      console.error(e);
+      // Error is caught here.
+      // We do NOT call onClose(), so the modal stays open.
+      // The toast in the hook handles the UI notification.
+      console.log("Validation failed");
     } finally {
       setLoading(false);
     }
