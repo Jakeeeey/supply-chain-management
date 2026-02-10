@@ -1,7 +1,6 @@
 "use client";
 
 import { SKU, MasterData } from "@/modules/supply-chain-management/product-management/sku-creation/types/sku.schema";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DataTable } from "@/components/ui/data-table";
 import { getColumns } from "./columns";
@@ -14,11 +13,14 @@ interface SKUTableProps {
   onPaginationChange: (pagination: { pageIndex: number; pageSize: number }) => void;
   masterData: MasterData | null;
   isLoading: boolean;
-  onEdit: (sku: SKU) => void;
-  onDelete: (id: number) => void;
-  onSubmitForApproval: (id: number) => void;
-  onApprove: (id: number) => void;
+  onEdit?: (sku: SKU) => void;
+  onDelete?: (id: number | string) => void;
+  onSubmitForApproval?: (id: number | string) => void;
+  onApprove?: (id: number | string) => void;
+  onReject?: (id: number | string) => void;
   title: string;
+  manualPagination?: boolean;
+  onSearch?: (value: string) => void;
 }
 
 export function SKUTable({ 
@@ -33,7 +35,10 @@ export function SKUTable({
   onDelete, 
   onSubmitForApproval, 
   onApprove,
-  title
+  onReject,
+  title,
+  manualPagination = true,
+  onSearch
 }: SKUTableProps) {
   
   const columns = getColumns(
@@ -41,7 +46,8 @@ export function SKUTable({
     onEdit,
     onDelete,
     onSubmitForApproval,
-    onApprove
+    onApprove,
+    onReject
   );
 
   if (isLoading) {
@@ -58,11 +64,12 @@ export function SKUTable({
       <DataTable 
         columns={columns} 
         data={data}
-        pageCount={Math.ceil(totalCount / pageSize)}
-        pagination={{ pageIndex, pageSize }}
+        pageCount={manualPagination ? Math.ceil(totalCount / pageSize) : undefined}
+        pagination={manualPagination ? { pageIndex, pageSize } : undefined}
         onPaginationChange={onPaginationChange}
-        manualPagination={true}
+        manualPagination={manualPagination}
         searchKey="product_name"
+        onSearch={onSearch}
       />
     </div>
   );

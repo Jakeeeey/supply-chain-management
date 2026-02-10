@@ -8,16 +8,18 @@ export function useSKUMasterlist() {
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(0);
   const [limit, setLimit] = useState(10);
+  const [search, setSearch] = useState("");
   const [masterData, setMasterData] = useState<MasterData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
 
   const refresh = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
       const [approvedRes, masterRes] = await Promise.all([
-        fetch(`/api/scm/product-management/sku-creation?type=approved&limit=${limit}&offset=${page * limit}`).then(res => res.json()),
+        fetch(`/api/scm/product-management/sku-creation?type=approved&limit=${limit}&offset=${page * limit}&search=${encodeURIComponent(search)}`).then(res => res.json()),
         fetch("/api/scm/product-management/sku-creation?type=master").then(res => res.json())
       ]);
 
@@ -32,7 +34,7 @@ export function useSKUMasterlist() {
     } finally {
       setIsLoading(false);
     }
-  }, [limit, page]);
+  }, [limit, page, search]);
 
   useEffect(() => {
     refresh();
@@ -45,6 +47,8 @@ export function useSKUMasterlist() {
     setPage,
     limit,
     setLimit,
+    search,
+    setSearch,
     masterData,
     isLoading,
     error,

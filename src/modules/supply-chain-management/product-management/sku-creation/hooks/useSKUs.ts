@@ -5,15 +5,19 @@ import { SKU, MasterData } from "@/modules/supply-chain-management/product-manag
 
 export function useSKUs() {
   const [approvedData, setApprovedData] = useState<SKU[]>([]);
-  const [draftData, setDraftData] = useState<SKU[]>([]);
   const [approvedTotal, setApprovedTotal] = useState(0);
-  const [draftsTotal, setDraftsTotal] = useState(0);
-  
   const [approvedPage, setApprovedPage] = useState(0);
   const [approvedLimit, setApprovedLimit] = useState(10);
-  
+
+  const [draftData, setDraftData] = useState<SKU[]>([]);
+  const [draftsTotal, setDraftsTotal] = useState(0);
   const [draftsPage, setDraftsPage] = useState(0);
   const [draftsLimit, setDraftsLimit] = useState(10);
+
+  const [pendingApprovalData, setPendingApprovalData] = useState<SKU[]>([]);
+  const [pendingTotal, setPendingTotal] = useState(0);
+  const [pendingPage, setPendingPage] = useState(0);
+  const [pendingLimit, setPendingLimit] = useState(10);
 
   const [masterData, setMasterData] = useState<MasterData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -23,14 +27,16 @@ export function useSKUs() {
     setIsLoading(true);
     setError(null);
     try {
-      const [approvedRes, draftsRes, masterRes] = await Promise.all([
+      const [approvedRes, draftsRes, pendingRes, masterRes] = await Promise.all([
         fetch(`/api/scm/product-management/sku-creation?type=approved&limit=${approvedLimit}&offset=${approvedPage * approvedLimit}`).then(res => res.json()),
-        fetch(`/api/scm/product-management/sku-creation?type=drafts&limit=${draftsLimit}&offset=${draftsPage * draftsLimit}`).then(res => res.json()),
+        fetch(`/api/scm/product-management/sku-creation?type=drafts&status=Draft&limit=-1`).then(res => res.json()),
+        fetch(`/api/scm/product-management/sku-creation?type=drafts&status=For%20Approval&limit=-1`).then(res => res.json()),
         fetch("/api/scm/product-management/sku-creation?type=master").then(res => res.json())
       ]);
 
       if (approvedRes.error) throw new Error(approvedRes.error);
       if (draftsRes.error) throw new Error(draftsRes.error);
+      if (pendingRes.error) throw new Error(pendingRes.error);
       if (masterRes.error) throw new Error(masterRes.error);
 
       setApprovedData(approvedRes.data || []);
@@ -38,6 +44,9 @@ export function useSKUs() {
       
       setDraftData(draftsRes.data || []);
       setDraftsTotal(draftsRes.meta?.total_count || 0);
+
+      setPendingApprovalData(pendingRes.data || []);
+      setPendingTotal(pendingRes.meta?.total_count || 0);
       
       setMasterData(masterRes.data || null);
     } catch (err: any) {
@@ -45,7 +54,7 @@ export function useSKUs() {
     } finally {
       setIsLoading(false);
     }
-  }, [approvedLimit, approvedPage, draftsLimit, draftsPage]);
+  }, [approvedLimit, approvedPage, draftsLimit, draftsPage, pendingLimit, pendingPage]);
 
   useEffect(() => {
     refresh();
@@ -79,12 +88,14 @@ export function useSKUs() {
   };
 
   const submitForApproval = async (id: number | string) => {
+    console.log(`Submitting SKU ${id} for approval...`);
     const response = await fetch(`/api/scm/product-management/sku-creation/${id}/action`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "submit" }),
     });
     const result = await response.json();
+    console.log(`Submit response for ${id}:`, result);
     if (result.error) throw new Error(result.error);
     await refresh();
   };
@@ -94,6 +105,17 @@ export function useSKUs() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "approve" }),
+    });
+    const result = await response.json();
+    if (result.error) throw new Error(result.error);
+    await refresh();
+  };
+
+  const rejectSKU = async (id: number | string) => {
+    const response = await fetch(`/api/scm/product-management/sku-creation/${id}/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "reject" }),
     });
     const result = await response.json();
     if (result.error) throw new Error(result.error);
@@ -131,6 +153,13 @@ export function useSKUs() {
     setDraftsPage,
     draftsLimit,
     setDraftsLimit,
+
+    pendingApprovalData,
+    pendingTotal,
+    pendingPage,
+    setPendingPage,
+    pendingLimit,
+    setPendingLimit,
     
     masterData,
     isLoading,
@@ -142,5 +171,6 @@ export function useSKUs() {
     approveSKU,
     deleteDraft,
     checkDuplicate,
+    rejectSKU,
   };
 }

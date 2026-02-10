@@ -13,6 +13,7 @@ export async function POST(
     const { id } = await params;
     const body = await req.json();
     const action = body.action; // 'submit' or 'approve'
+    console.log(`Action Route: Performing ${action} for ID ${id}`);
     
     if (action === "submit") {
       await skuService.submitForApproval(id);
@@ -22,6 +23,11 @@ export async function POST(
     if (action === "approve") {
       const masterData = await skuService.fetchMasterData();
       await skuService.approveDraft(id, masterData);
+      return NextResponse.json({ success: true });
+    }
+
+    if (action === "reject") {
+      await skuService.rejectDraft(id);
       return NextResponse.json({ success: true });
     }
 

@@ -8,6 +8,7 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const type = searchParams.get("type") || "approved";
+    console.log("SKU API Route GET type:", type, "API_BASE_URL:", process.env.NEXT_PUBLIC_API_BASE_URL);
     const limit = parseInt(searchParams.get("limit") || "10");
     const offset = parseInt(searchParams.get("offset") || "0");
 
@@ -17,7 +18,8 @@ export async function GET(req: NextRequest) {
     }
 
     if (type === "drafts") {
-      const paginated = await skuService.fetchDrafts(limit, offset);
+      const status = searchParams.get("status") || undefined;
+      const paginated = await skuService.fetchDrafts(limit, offset, status);
       return NextResponse.json(paginated);
     }
 
@@ -27,9 +29,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ isDuplicate });
     }
 
-    const paginated = await skuService.fetchApproved(limit, offset);
+    const search = searchParams.get("search") || undefined;
+    const paginated = await skuService.fetchApproved(limit, offset, search);
+    console.log(`API Route [approved]: Returning ${paginated.data.length} items, total: ${paginated.meta.total_count}`);
     return NextResponse.json(paginated);
   } catch (error: any) {
+    console.error("SKU GET Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -42,7 +47,7 @@ export async function POST(req: NextRequest) {
     // Sanitize body for essential fields that might be null from form/defaults
     const sanitizedBody = {
       ...body,
-      isActive: body.isActive ?? true,
+      isActive: body.isActive ?? 1,
       status: body.status ?? "Draft",
       inventory_type: body.inventory_type ?? "Regular",
       unit_of_measurement_count: body.unit_of_measurement_count ?? 1,

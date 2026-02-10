@@ -2,33 +2,53 @@
 
 import { useState, useEffect } from "react";
 import { RefreshCcw } from "lucide-react";
-import { useSKUMasterlist } from "./hooks/useSKUMasterlist";
+import { useSKUs } from "@/modules/supply-chain-management/product-management/sku-creation/hooks/useSKUs";
 import { SKUTable } from "@/modules/supply-chain-management/product-management/sku-creation/components/data-table/SKUTable";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-export default function SKUMasterlistModule() {
+export default function SKUApprovalPage() {
   const { 
-    data,
-    totalCount,
-    page,
-    setPage,
-    limit,
-    setLimit,
-    search,
-    setSearch,
+    pendingApprovalData,
+    pendingTotal,
+    pendingPage,
+    setPendingPage,
+    pendingLimit,
+    setPendingLimit,
+    
     masterData,
     isLoading, 
     error, 
     refresh, 
-  } = useSKUMasterlist();
+    approveSKU,
+    rejectSKU,
+  } = useSKUs();
   
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  const handleApproveAndActivate = async (id: number | string) => {
+    try {
+      await approveSKU(id);
+      toast.success("SKU Activated and Master Record Created");
+    } catch (err: any) {
+      toast.error("Activation failed: " + err.message);
+    }
+  };
+
+  const handleReject = async (id: number | string) => {
+    try {
+      await rejectSKU(id);
+      toast.success("Record returned to Draft status");
+    } catch (err: any) {
+      toast.error("Process failed: " + err.message);
+    }
+  };
 
   if (!mounted) {
     return (
@@ -61,6 +81,7 @@ export default function SKUMasterlistModule() {
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex items-center justify-between">
+        <h2 className="text-3xl font-bold tracking-tight">SKU Approval Queue</h2>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={refresh} disabled={isLoading}>
             <RefreshCcw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
@@ -70,21 +91,20 @@ export default function SKUMasterlistModule() {
 
       <div className="mt-6">
         <SKUTable 
-          title="Active Product Master Records"
-          data={data} 
-          totalCount={totalCount}
-          pageIndex={page}
-          pageSize={limit}
+          title="Items Pending Approval"
+          data={pendingApprovalData} 
+          totalCount={pendingTotal}
+          pageIndex={pendingPage}
+          pageSize={pendingLimit}
           onPaginationChange={({ pageIndex, pageSize }) => {
-              setPage(pageIndex);
-              setLimit(pageSize);
+              setPendingPage(pageIndex);
+              setPendingLimit(pageSize);
           }}
           masterData={masterData}
           isLoading={isLoading} 
-          onSearch={(v) => {
-            setSearch(v);
-            setPage(0);
-          }}
+          onApprove={handleApproveAndActivate as any}
+          onReject={handleReject as any}
+          manualPagination={false}
         />
       </div>
     </div>

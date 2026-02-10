@@ -41,8 +41,12 @@ const data = {
           url: "/scm/product-management/sku-masterlist",
         },
         {
-          title: "SKU Creation",
+          title: "SKU Registration",
           url: "/scm/product-management/sku-creation",
+        },
+        {
+          title: "SKU Approval Queue",
+          url: "/scm/product-management/sku-approval",
         },
       ],
     },

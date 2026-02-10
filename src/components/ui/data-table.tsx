@@ -44,6 +44,7 @@ interface DataTableProps<TData, TValue> {
   onPaginationChange?: (pagination: { pageIndex: number, pageSize: number }) => void
   manualPagination?: boolean
   searchKey?: string
+  onSearch?: (value: string) => void
 }
 
 export function DataTable<TData, TValue>({
@@ -54,11 +55,17 @@ export function DataTable<TData, TValue>({
   onPaginationChange,
   manualPagination = false,
   searchKey,
+  onSearch,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = React.useState({})
+
+  const [internalPagination, setInternalPagination] = React.useState({
+    pageIndex: pagination?.pageIndex ?? 0,
+    pageSize: pagination?.pageSize ?? 10,
+  });
 
   const table = useReactTable({
     data,
@@ -78,14 +85,17 @@ export function DataTable<TData, TValue>({
       columnFilters,
       columnVisibility,
       rowSelection,
-      ...(pagination && { pagination }),
+      pagination: manualPagination ? (pagination ?? internalPagination) : internalPagination,
     },
     onPaginationChange: (updater) => {
-      if (typeof updater === 'function' && pagination && onPaginationChange) {
-        const next = updater(pagination)
-        onPaginationChange(next)
-      } else if (onPaginationChange) {
-        onPaginationChange(updater as any)
+      const nextPagination = typeof updater === 'function' 
+        ? updater(manualPagination ? (pagination ?? internalPagination) : internalPagination) 
+        : updater;
+      
+      if (manualPagination && onPaginationChange) {
+        onPaginationChange(nextPagination);
+      } else {
+        setInternalPagination(nextPagination);
       }
     }
   })
@@ -97,9 +107,11 @@ export function DataTable<TData, TValue>({
           <Input
             placeholder={`Search ${searchKey}...`}
             value={(table.getColumn(searchKey)?.getFilterValue() as string) ?? ""}
-            onChange={(event) =>
-              table.getColumn(searchKey)?.setFilterValue(event.target.value)
-            }
+            onChange={(event) => {
+              const value = event.target.value;
+              table.getColumn(searchKey)?.setFilterValue(value);
+              if (onSearch) onSearch(value);
+            }}
             className="max-w-sm h-10 rounded-xl"
           />
         )}

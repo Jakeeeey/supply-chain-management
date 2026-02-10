@@ -1,5 +1,3 @@
-// src/app/(supply-chain-management)/scm/management/sku-creation/page.
-import SKUMasterlistModule from "@/modules/supply-chain-management/product-management/sku-masterlist/SKUMasterlistPage";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -15,8 +13,8 @@ import { NavUser } from "../../_components/nav-user";
 
 import { cookies } from "next/headers";
 
-// ✅ Wire the module you asked for
-import { SKUCreationPage } from "@/modules/supply-chain-management/product-management/sku-creation";
+// ✅ Wire the module
+import SKUApprovalPage from "@/modules/supply-chain-management/product-management/sku-approval/SKUApprovalPage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -76,7 +74,6 @@ function buildHeaderUserFromToken(token: string | null | undefined) {
 }
 
 export default async function Page() {
-  // ✅ Next.js 16: cookies() is async
   const cookieStore = await cookies();
   const token = cookieStore.get(COOKIE_NAME)?.value ?? null;
 
@@ -105,7 +102,7 @@ export default async function Page() {
               </BreadcrumbItem>
               <BreadcrumbSeparator className="hidden md:block" />
               <BreadcrumbItem>
-                <BreadcrumbPage>SKU Masterlist</BreadcrumbPage>
+                <BreadcrumbPage>SKU Approval Queue</BreadcrumbPage>
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
@@ -118,10 +115,9 @@ export default async function Page() {
 
       <ScrollArea className="min-h-0 flex-1">
         <div className="p-4">
-       <SKUMasterlistModule />
+          <SKUApprovalPage />
         </div>
       </ScrollArea>
     </div>
   );
 }
-

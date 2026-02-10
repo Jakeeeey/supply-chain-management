@@ -1,4 +1,4 @@
-import { SKU, MasterData, PaginatedSKU } from "@/modules/supply-chain-management/product-management/sku-creation/types/sku.schema";
+import { SKU, MasterData, PaginatedSKU, SKUStatus } from "@/modules/supply-chain-management/product-management/sku-creation/types/sku.schema";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 const STATIC_TOKEN = process.env.DIRECTUS_STATIC_TOKEN;
@@ -9,33 +9,95 @@ const HEADERS = {
 };
 
 export const skuService = {
-  async fetchApproved(limit: number = 10, offset: number = 0): Promise<PaginatedSKU> {
-    if (!API_BASE_URL) throw new Error("API base URL is not configured");
-    const response = await fetch(`${API_BASE_URL}/items/products?limit=${limit}&offset=${offset}&meta=total_count,filter_count`, {
+  async fetchApproved(limit: number = 10, offset: number = 0, search?: string): Promise<PaginatedSKU> {
+    console.log("Process ENV Keys:", Object.keys(process.env).filter(k => k.includes("DIRECTUS") || k.includes("API")));
+    
+    let url = `${API_BASE_URL}/items/products?limit=-1&meta=total_count,filter_count`;
+    if (search) {
+      url += `&filter[product_name][_icontains]=${encodeURIComponent(search)}`;
+    }
+    
+    console.log(`fetchApproved: Calling ${url} with token: ${STATIC_TOKEN ? STATIC_TOKEN.substring(0, 5) + '...' : 'MISSING'}`);
+    const response = await fetch(url, {
       method: "GET",
       headers: HEADERS,
       cache: "no-store",
     });
-    if (!response.ok) throw new Error("Failed to fetch approved products");
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`fetchApproved: API Error ${response.status}: ${errorText}`);
+      throw new Error(`Failed to fetch products: ${response.status}`);
+    }
     const data = await response.json();
+    let items = (data.data || []) as SKU[];
+    
+    // Sort descending by ID
+    items.sort((a, b) => Number(b.product_id || 0) - Number(a.product_id || 0));
+
+    console.log(`fetchApproved: Fetched ${items.length} items from /items/products`);
+    if (items.length > 0) {
+      console.log("Sample product item keys:", Object.keys(items[0]));
+      console.log("Sample product isActive:", items[0].isActive, "status:", items[0].status);
+    }
+
+    // Masterlist shows items from the products table that are Active (1)
+    items = items.filter(i => {
+      const isLive = i.isActive === 1 || i.isActive === true;
+      const isActiveStatus = i.status === "Active" || !i.status; 
+      return isLive && isActiveStatus;
+    });
+
+    const end = limit === -1 ? undefined : offset + limit;
     return {
-      data: data.data || [],
-      meta: data.meta || { total_count: 0, filter_count: 0 }
+      data: items.slice(offset, end),
+      meta: { 
+        total_count: items.length, 
+        filter_count: items.length 
+      }
     };
   },
 
-  async fetchDrafts(limit: number = 10, offset: number = 0): Promise<PaginatedSKU> {
+  async fetchDrafts(limit: number = 10, offset: number = 0, status?: string): Promise<PaginatedSKU> {
     if (!API_BASE_URL) throw new Error("API base URL is not configured");
-    const response = await fetch(`${API_BASE_URL}/items/product_draft?limit=${limit}&offset=${offset}&meta=total_count,filter_count`, {
+    const response = await fetch(`${API_BASE_URL}/items/product_draft?limit=-1&meta=total_count,filter_count`, {
       method: "GET",
       headers: HEADERS,
       cache: "no-store",
     });
     if (!response.ok) throw new Error("Failed to fetch product drafts");
     const data = await response.json();
+    let items = (data.data || []) as SKU[];
+
+    // Sort descending by ID
+    items.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+
+    if (items.length > 0) {
+      console.log("Sample product_draft item keys:", Object.keys(items[0]));
+      console.log("Sample product_draft item status value:", items[0].status);
+    }
+
+    if (status) {
+      console.log(`Filtering drafts by status: "${status}". Total items before filter: ${items.length}`);
+      const filtered = items.filter(i => {
+        const itemStatus = (i.status || "Draft").toLowerCase();
+        const targetStatus = status.toLowerCase();
+        
+        if (targetStatus === "draft") {
+          return itemStatus === "draft" || itemStatus === "rejected";
+        }
+        
+        return itemStatus === targetStatus;
+      });
+      console.log(`Items after filter for "${status}" (including Rejected if Draft): ${filtered.length}`);
+      items = filtered;
+    }
+
     return {
-      data: data.data || [],
-      meta: data.meta || { total_count: 0, filter_count: 0 }
+      data: items.slice(offset, limit === -1 ? undefined : offset + limit),
+      meta: { 
+        total_count: items.length, 
+        filter_count: items.length 
+      }
     };
   },
 
@@ -81,7 +143,11 @@ export const skuService = {
     }));
 
     const result = {
-      units: normalize(units.data || [], "unit_id"),
+      units: (units.data || []).map((u: any) => ({
+        ...u,
+        id: u.id || u.unit_id,
+        name: u.unit_name || u.unit || u.name || u.title || u.code || `Unit #${u.id || u.unit_id}`
+      })),
       categories: normalize(categories.data || [], "category_id"),
       brands: normalize(brands.data || [], "brand_id"),
       suppliers: (suppliers.data || []).map((s: any) => ({ 
@@ -181,7 +247,6 @@ export const skuService = {
     const data = await response.json();
     return data.data as SKU;
   },
-
   async submitForApproval(id: number | string) {
     if (!API_BASE_URL) throw new Error("API base URL is not configured");
     const response = await fetch(`${API_BASE_URL}/items/product_draft/${id}`, {
@@ -189,7 +254,23 @@ export const skuService = {
       headers: HEADERS,
       body: JSON.stringify({ status: "For Approval" }),
     });
-    if (!response.ok) throw new Error("Failed to submit for approval");
+    console.log(`Submit for Approval response (${id}):`, response.status, response.statusText);
+    if (!response.ok) {
+      const errorMsg = await response.text();
+      console.error("Submit for Approval failed:", errorMsg);
+      throw new Error(`Failed to submit for approval: ${errorMsg}`);
+    }
+    return true;
+  },
+
+  async rejectDraft(id: number | string) {
+    if (!API_BASE_URL) throw new Error("API base URL is not configured");
+    const response = await fetch(`${API_BASE_URL}/items/product_draft/${id}`, {
+      method: "PATCH",
+      headers: HEADERS,
+      body: JSON.stringify({ status: "Rejected" }),
+    });
+    if (!response.ok) throw new Error("Failed to reject draft");
     return true;
   },
 
@@ -312,8 +393,9 @@ export const skuService = {
         ...draft,
         product_code: skuCode,
         status: "Active",
-        isActive: true,
+        isActive: 1,
         id: undefined, // Remove draft ID
+        product_id: undefined,
       }),
     });
 

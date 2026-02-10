@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const SKUStatusSchema = z.enum(["Draft", "For Approval", "Active", "Inactive"]);
+export const SKUStatusSchema = z.enum(["Draft", "For Approval", "Rejected", "Active", "Inactive"]);
 export type SKUStatus = z.infer<typeof SKUStatusSchema>;
 
 export const InventoryTypeSchema = z.enum(["Regular", "Variant"]);
@@ -9,7 +9,7 @@ export type InventoryType = z.infer<typeof InventoryTypeSchema>;
 export const skuSchema = z.object({
   product_id: z.number().int().optional(),
   id: z.number().int().optional(), // For Directus drafting
-  isActive: z.boolean(),
+  isActive: z.union([z.boolean(), z.number()]),
   status: SKUStatusSchema,
   inventory_type: InventoryTypeSchema,
   parent_id: z.number().int().nullable().optional(),

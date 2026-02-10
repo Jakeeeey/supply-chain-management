@@ -38,6 +38,7 @@ export default function SKUCreationModule() {
     approveSKU,
     deleteDraft,
     checkDuplicate,
+    rejectSKU,
   } = useSKUs();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -102,7 +103,7 @@ export default function SKUCreationModule() {
     }
   };
 
-  const handleSubmitToManager = async (id: number) => {
+  const handleSubmitToManager = async (id: number | string) => {
     try {
       await submitForApproval(id);
       toast.success("Submitted for manager review");
@@ -111,12 +112,21 @@ export default function SKUCreationModule() {
     }
   };
 
-  const handleApproveAndActivate = async (id: number) => {
+  const handleApproveAndActivate = async (id: number | string) => {
     try {
       await approveSKU(id);
       toast.success("SKU Activated and Master Record Created");
     } catch (err: any) {
       toast.error("Activation failed: " + err.message);
+    }
+  };
+
+  const handleReject = async (id: number | string) => {
+    try {
+      await rejectSKU(id);
+      toast.success("Record returned to Draft status");
+    } catch (err: any) {
+      toast.error("Process failed: " + err.message);
     }
   };
 
@@ -151,6 +161,7 @@ export default function SKUCreationModule() {
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex items-center justify-between">
+        <h2 className="text-3xl font-bold tracking-tight">SKU Registration</h2>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={refresh} disabled={isLoading}>
             <RefreshCcw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
@@ -164,7 +175,7 @@ export default function SKUCreationModule() {
 
       <div className="mt-6">
         <SKUTable 
-          title="Pending Approval & Draft Records"
+          title="Product Drafts"
           data={draftData} 
           totalCount={draftsTotal}
           pageIndex={draftsPage}
@@ -178,7 +189,7 @@ export default function SKUCreationModule() {
           onEdit={handleEdit} 
           onDelete={handleDelete as any} 
           onSubmitForApproval={handleSubmitToManager as any}
-          onApprove={handleApproveAndActivate as any}
+          manualPagination={false}
         />
       </div>
 

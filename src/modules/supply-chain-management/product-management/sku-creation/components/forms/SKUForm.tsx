@@ -30,7 +30,7 @@ export function SKUForm({ initialData, masterData, onSubmit, loading }: SKUFormP
   const form = useForm<SKU>({
     resolver: zodResolver(skuSchema),
     defaultValues: {
-      isActive: initialData?.isActive ?? true,
+      isActive: initialData?.isActive ?? 1,
       status: initialData?.status ?? "Draft",
       inventory_type: initialData?.inventory_type ?? "Regular",
       product_name: initialData?.product_name ?? "",
@@ -192,6 +192,109 @@ export function SKUForm({ initialData, masterData, onSubmit, loading }: SKUFormP
                 />
               </div>
             </section>
+            
+            {/* Units & Attributes */}
+            <section className="space-y-4">
+              <h3 className="text-lg font-semibold tracking-tight">Units & Attributes</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="base_unit"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Base Unit</FormLabel>
+                      <FormControl>
+                        <Combobox
+                          options={(masterData?.units || []).map(u => ({
+                            value: u.id.toString(),
+                            label: u.name,
+                            fullLabel: u.name
+                          }))}
+                          value={field.value?.toString() || ""}
+                          onValueChange={(v) => field.onChange(v ? parseInt(v) : null)}
+                          placeholder="Select base unit"
+                          disabled={isReadOnly}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="unit_of_measurement_count"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>UOM Count</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          placeholder="1" 
+                          {...field} 
+                          onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
+                          value={field.value || 1} 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {inventoryType === "Variant" && (
+                <div className="grid grid-cols-2 gap-4 p-4 border rounded-lg bg-muted/30 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <FormField
+                    control={form.control}
+                    name="size"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Size</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g. Medium, 42" {...field} value={field.value || ""} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="color"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Color</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g. Red, Blue" {...field} value={field.value || ""} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="volume"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Volume</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g. 500ml" {...field} value={field.value || ""} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="flavor"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Flavor</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g. Vanilla" {...field} value={field.value || ""} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
+            </section>
             <Separator />
             {/* Pricing & Description */}
             <section className="space-y-4">
@@ -257,15 +360,17 @@ export function SKUForm({ initialData, masterData, onSubmit, loading }: SKUFormP
                 />
               </div>
             </section>
+
+
           </div>
         </ScrollArea>
         
-        <div className="flex items-center justify-end gap-3 pt-4 border-t">
+        <div className="flex items-center justify-end gap-3">
           <Button type="button" variant="outline" onClick={() => form.reset()} disabled={loading}>
             Reset
           </Button>
           <Button type="submit" disabled={loading}>
-            {loading ? "Saving..." : initialData ? "Update Record" : "Create SKU"}
+            {loading ? "Saving..." : initialData ? "Update Record" : "Create Draft"}
           </Button>
         </div>
       </form>
