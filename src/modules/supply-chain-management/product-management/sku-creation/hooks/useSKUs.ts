@@ -185,11 +185,11 @@ export function useSKUs() {
     await refresh();
   };
 
-  const rejectSKU = async (id: number | string) => {
+  const rejectSKU = async (id: number | string, remarks?: string) => {
     const response = await fetch(`/api/scm/product-management/sku-creation/${id}/action`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "reject" }),
+      body: JSON.stringify({ action: "reject", remarks }),
     });
     const result = await response.json();
     if (result.error) throw new Error(result.error);

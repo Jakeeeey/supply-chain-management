@@ -17,8 +17,7 @@ import {
 import { Button } from "@/components/ui/button"
 
 export const getMasterlistColumns = (
-  masterData: MasterData | null,
-  onEditDescription?: (sku: SKU) => void
+  masterData: MasterData | null
 ): ColumnDef<SKU>[] => [
   {
     accessorKey: "product_name",
@@ -90,10 +89,6 @@ export const getMasterlistColumns = (
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => onEditDescription?.(sku)}>
-                <Edit className="h-4 w-4 mr-2" />
-                Edit Description
-              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

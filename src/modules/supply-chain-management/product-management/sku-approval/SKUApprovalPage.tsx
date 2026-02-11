@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import ErrorPage from "@/components/shared/ErrorPage";
+import { EditDescriptionModal } from "@/modules/supply-chain-management/product-management/sku-masterlist/components/modals/EditDescriptionModal";
+import { RejectRemarksModal } from "@/modules/supply-chain-management/product-management/sku-approval/components/modals/RejectRemarksModal";
+import { SKU } from "@/modules/supply-chain-management/product-management/sku-creation/types/sku.schema";
 
 export default function SKUApprovalPage() {
   const { 
@@ -30,6 +33,9 @@ export default function SKUApprovalPage() {
   } = useSKUs();
   
   const [mounted, setMounted] = useState(false);
+  const [editingSKU, setEditingSKU] = useState<SKU | null>(null);
+  const [rejectingSKU, setRejectingSKU] = useState<SKU | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -54,12 +60,43 @@ export default function SKUApprovalPage() {
     }
   };
 
-  const handleReject = async (id: number | string) => {
+  const handleReject = async (sku: SKU) => {
+    setRejectingSKU(sku);
+  };
+
+  const handleConfirmReject = async (id: number | string, remarks: string) => {
+    setIsUpdating(true);
     try {
-      await rejectSKU(id);
-      toast.success("Record returned to Draft status");
+      await rejectSKU(id, remarks);
+      toast.success("Record returned to Draft status with remarks");
+      refresh();
+      setRejectingSKU(null);
     } catch (err: any) {
       toast.error("Process failed: " + err.message);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleSaveDescription = async (id: number | string, description: string) => {
+    setIsUpdating(true);
+    try {
+      const res = await fetch(`/api/scm/product-management/sku-creation/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description }),
+      });
+      
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Failed to update description");
+
+      toast.success("Description updated successfully");
+      refresh();
+      setEditingSKU(null);
+    } catch (err: any) {
+      toast.error(err.message || "An error occurred while updating");
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -94,7 +131,25 @@ export default function SKUApprovalPage() {
           isLoading={isLoading} 
           onApprove={handleApproveAndActivate as any}
           onReject={handleReject as any}
+          onEdit={setEditingSKU}
         />
+
+      <EditDescriptionModal
+        sku={editingSKU}
+        isOpen={!!editingSKU}
+        onClose={() => setEditingSKU(null)}
+        onSave={handleSaveDescription}
+        isLoading={isUpdating}
+        masterData={masterData}
+      />
+
+      <RejectRemarksModal
+        sku={rejectingSKU}
+        isOpen={!!rejectingSKU}
+        onClose={() => setRejectingSKU(null)}
+        onConfirm={handleConfirmReject}
+        isLoading={isUpdating}
+      />
     </div>
   );
 }

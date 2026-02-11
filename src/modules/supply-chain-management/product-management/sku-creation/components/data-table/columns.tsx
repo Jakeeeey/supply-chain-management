@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { DataTableColumnHeader } from "./table-column-header"
 import { CellHelpers, statusVariants } from "../../utils/sku-helpers"
+import { spawn } from "child_process"
 
 // --- Main Column Definition ---
 
@@ -86,6 +87,26 @@ export const getColumns = (
         </Badge>
       );
     },
+  },
+  {
+    accessorKey: "remarks",
+    header: ({ column }) => <DataTableColumnHeader column={column} label="Remarks" />,
+    meta: { label: "Remarks" },
+    cell: ({ row }) => {
+      const remarks = row.original.remarks;
+      const status = row.original.status;
+      const isRejected = status === "REJECTED" || status === "Rejected";
+
+      if (!remarks) {
+        if (isRejected) {
+          return <span className="text-xs">No remarks provided</span>;
+        }
+        return null;
+      }
+      return (
+        <span className="text-xs">{remarks}</span>
+      );
+    }
   },
   {
     id: "actions",

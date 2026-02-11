@@ -4,7 +4,7 @@ import { ColumnDef } from "@tanstack/react-table"
 import { SKU, MasterData } from "@/modules/supply-chain-management/product-management/sku-creation/types/sku.schema"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, XCircle, Eye, MoreHorizontal } from "lucide-react"
+import { CheckCircle, XCircle, Eye, MoreHorizontal, Edit } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,7 +20,8 @@ export const getApprovalColumns = (
   masterData: MasterData | null,
   onView?: (sku: SKU) => void,
   onApprove?: (id: number) => void,
-  onReject?: (id: number) => void,
+  onReject?: (sku: SKU) => void,
+  onEdit?: (sku: SKU) => void,
 ): ColumnDef<SKU>[] => [
   {
     accessorKey: "product_name",
@@ -94,8 +95,9 @@ export const getApprovalColumns = (
               <DropdownMenuLabel>Review Actions</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {onView && <DropdownMenuItem onClick={() => onView(sku)}><Eye className="h-4 w-4 mr-2" /> View Details</DropdownMenuItem>}
+              {onEdit && <DropdownMenuItem onClick={() => onEdit(sku)}><Edit className="h-4 w-4 mr-2" /> Edit Description</DropdownMenuItem>}
               {onApprove && <DropdownMenuItem onClick={() => onApprove(id as number)} className="text-primary"><CheckCircle className="h-4 w-4 mr-2" /> Approve</DropdownMenuItem>}
-              {onReject && <DropdownMenuItem onClick={() => onReject(id as number)} className="text-destructive"><XCircle className="h-4 w-4 mr-2" /> Reject</DropdownMenuItem>}
+              {onReject && <DropdownMenuItem onClick={() => onReject(sku)} className="text-destructive"><XCircle className="h-4 w-4 mr-2" /> Reject</DropdownMenuItem>}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

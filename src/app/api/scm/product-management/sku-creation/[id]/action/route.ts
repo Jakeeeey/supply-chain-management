@@ -27,7 +27,8 @@ export async function POST(
     }
 
     if (action === "reject") {
-      await skuService.rejectDraft(id);
+      const remarks = body.remarks;
+      await skuService.rejectDraft(id, remarks);
       return NextResponse.json({ success: true });
     }
 

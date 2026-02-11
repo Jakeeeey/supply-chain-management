@@ -35,10 +35,22 @@ export function SKUModal({ open, setOpen, initialData, masterData, onSubmit, loa
               </Badge>
             )}
           </div>
-          <DialogDescription>
-            {initialData 
-              ? `Manage product details for ${initialData.product_name}.` 
-              : "Enter product information to register a new SKU."}
+          <DialogDescription className="space-y-3">
+            {initialData?.remarks ? (
+              <div className="p-4 bg-destructive/5 border border-destructive/10 rounded-lg animate-in fade-in slide-in-from-top-1 duration-300">
+                <div className="flex items-center gap-2 text-destructive font-bold text-[10px] uppercase tracking-widest mb-2">
+                  <div className="h-1.5 w-1.5 rounded-full bg-destructive animate-pulse" />
+                  Rejection Notes from Manager
+                </div>
+                <p className="text-sm text-destructive/90 leading-relaxed font-medium">
+                  {initialData.remarks}
+                </p>
+              </div>
+            ) : (
+              initialData 
+                ? `Manage product details for ${initialData.product_name}.` 
+                : "Enter product information to register a new SKU."
+            )}
           </DialogDescription>
         </DialogHeader>
         <div className="p-6">

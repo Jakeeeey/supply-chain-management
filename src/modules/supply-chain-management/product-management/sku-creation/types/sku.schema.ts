@@ -61,6 +61,7 @@ export const skuSchema = z.object({
   date_added: z.string().nullable().optional(),
   last_updated: z.string().nullable().optional(),
   created_at: z.string().nullable().optional(),
+  remarks: z.string().nullable().optional(),
 });
 
 export type SKU = z.infer<typeof skuSchema>;

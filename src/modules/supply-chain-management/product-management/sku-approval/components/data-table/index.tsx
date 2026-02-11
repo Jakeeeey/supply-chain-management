@@ -19,7 +19,8 @@ interface ApprovalTableProps {
   masterData: MasterData | null;
   isLoading: boolean;
   onApprove?: (id: number | string) => void;
-  onReject?: (id: number | string) => void;
+  onReject?: (sku: SKU) => void;
+  onEdit?: (sku: SKU) => void;
   onSearch?: (v: string) => void;
   title: string;
   emptyTitle?: string;
@@ -39,6 +40,7 @@ export function ApprovalTable({
   isLoading, 
   onApprove,
   onReject,
+  onEdit,
   onSearch,
   title,
   emptyTitle,
@@ -49,8 +51,9 @@ export function ApprovalTable({
     masterData,
     undefined, // No onView provided
     onApprove,
-    onReject
-  ), [masterData, onApprove, onReject]);
+    onReject,
+    onEdit
+  ), [masterData, onApprove, onReject, onEdit]);
 
   return (
     <div className="space-y-4">

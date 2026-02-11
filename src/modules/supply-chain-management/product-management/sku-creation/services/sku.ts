@@ -198,7 +198,12 @@ export const skuService = {
   },
   
   async submitForApproval(id: number | string) { return request(`${API_BASE_URL}/items/product_draft/${id}`, { method: "PATCH", body: JSON.stringify({ status: "FOR_APPROVAL" }) }); },
-  async rejectDraft(id: number | string) { return request(`${API_BASE_URL}/items/product_draft/${id}`, { method: "PATCH", body: JSON.stringify({ status: "REJECTED" }) }); },
+  async rejectDraft(id: number | string, remarks?: string) { 
+    return request(`${API_BASE_URL}/items/product_draft/${id}`, { 
+      method: "PATCH", 
+      body: JSON.stringify({ status: "REJECTED", remarks }) 
+    }); 
+  },
   async deleteDraft(id: number | string) { return request(`${API_BASE_URL}/items/product_draft/${id}`, { method: "DELETE" }); },
   async checkDuplicateName(name: string): Promise<boolean> {
     const filter = `filter[product_name][_eq]=${encodeURIComponent(name)}&limit=1`;

@@ -18,7 +18,6 @@ interface MasterlistTableProps {
   manualSorting?: boolean;
   masterData: MasterData | null;
   isLoading: boolean;
-  onEdit?: (sku: SKU) => void;
   title: string;
   onSearch?: (value: string) => void;
   emptyTitle?: string;
@@ -36,7 +35,6 @@ export function MasterlistTable({
   manualSorting = true,
   masterData,
   isLoading, 
-  onEdit, 
   title,
   onSearch,
   emptyTitle,
@@ -44,9 +42,8 @@ export function MasterlistTable({
 }: MasterlistTableProps) {
   
   const columns = React.useMemo(() => getMasterlistColumns(
-    masterData,
-    onEdit
-  ), [masterData, onEdit]);
+    masterData
+  ), [masterData]);
 
   // We don't unmount the table during loading anymore 
   // to prevent losing focus on the search input.
