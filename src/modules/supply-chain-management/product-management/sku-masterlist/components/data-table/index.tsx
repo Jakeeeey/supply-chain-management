@@ -1,7 +1,10 @@
 "use client";
 
 import React from "react";
-import { SKU, MasterData } from "@/modules/supply-chain-management/product-management/sku-creation/types/sku.schema";
+import {
+  SKU,
+  MasterData,
+} from "@/modules/supply-chain-management/product-management/sku-creation/types/sku.schema";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DataTable } from "@/components/ui/data-table";
 import { getMasterlistColumns } from "./columns";
@@ -12,7 +15,10 @@ interface MasterlistTableProps {
   totalCount: number;
   pageIndex: number;
   pageSize: number;
-  onPaginationChange: (pagination: { pageIndex: number; pageSize: number }) => void;
+  onPaginationChange: (pagination: {
+    pageIndex: number;
+    pageSize: number;
+  }) => void;
   sorting?: SortingState;
   onSortingChange?: (sorting: SortingState) => void;
   manualSorting?: boolean;
@@ -20,12 +26,14 @@ interface MasterlistTableProps {
   isLoading: boolean;
   title: string;
   onSearch?: (value: string) => void;
+  onSelectionChange?: (selectedRows: SKU[]) => void;
+  actionComponent?: React.ReactNode;
   emptyTitle?: string;
   emptyDescription?: string;
 }
 
-export function MasterlistTable({ 
-  data, 
+export function MasterlistTable({
+  data,
   totalCount,
   pageIndex,
   pageSize,
@@ -34,24 +42,26 @@ export function MasterlistTable({
   onSortingChange,
   manualSorting = true,
   masterData,
-  isLoading, 
+  isLoading,
   title,
   onSearch,
+  onSelectionChange,
+  actionComponent,
   emptyTitle,
-  emptyDescription
+  emptyDescription,
 }: MasterlistTableProps) {
-  
-  const columns = React.useMemo(() => getMasterlistColumns(
-    masterData
-  ), [masterData]);
+  const columns = React.useMemo(
+    () => getMasterlistColumns(masterData),
+    [masterData],
+  );
 
-  // We don't unmount the table during loading anymore 
+  // We don't unmount the table during loading anymore
   // to prevent losing focus on the search input.
 
   return (
     <div className="space-y-4">
-      <DataTable 
-        columns={columns} 
+      <DataTable
+        columns={columns}
         data={data}
         pageCount={Math.ceil(totalCount / pageSize)}
         pagination={{ pageIndex, pageSize }}
@@ -63,6 +73,8 @@ export function MasterlistTable({
         searchKey="product_name"
         onSearch={onSearch}
         isLoading={isLoading}
+        onSelectionChange={onSelectionChange}
+        actionComponent={actionComponent}
         emptyTitle={emptyTitle}
         emptyDescription={emptyDescription}
       />

@@ -8,7 +8,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { DataTableColumnHeader } from "./table-column-header";
 import { CellHelpers } from "../../../sku-creation/utils/sku-helpers";
-import { Edit, MoreHorizontal } from "lucide-react";
+import { MoreHorizontal } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +23,34 @@ import { Button } from "@/components/ui/button";
 export const getMasterlistColumns = (
   masterData: MasterData | null,
 ): ColumnDef<SKU>[] => [
+  {
+    id: "select",
+    header: ({ table }) => (
+      <div className="px-1">
+        <Checkbox
+          checked={
+            table.getIsAllPageRowsSelected() ||
+            (table.getIsSomePageRowsSelected() && "indeterminate")
+          }
+          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+          aria-label="Select all"
+          className="translate-y-1"
+        />
+      </div>
+    ),
+    cell: ({ row }) => (
+      <div className="px-1">
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(!!value)}
+          aria-label="Select row"
+          className="translate-y-1"
+        />
+      </div>
+    ),
+    enableSorting: false,
+    enableHiding: false,
+  },
   {
     accessorKey: "product_code",
     enableSorting: true,
@@ -120,38 +149,20 @@ export const getMasterlistColumns = (
     ),
     meta: { label: "Status" },
     cell: ({ row }) => {
-      const active = Number(row.getValue("isActive")) === 1;
+      const sku = row.original;
+      const isActiveVal = sku.isActive;
+      const active = isActiveVal === 1 || isActiveVal === true;
+      const displayStatus =
+        (sku as any).status || (active ? "ACTIVE" : "INACTIVE");
+
       return (
         <div className="w-[110px]">
           <Badge
             variant={active ? "default" : "outline"}
-            className="text-[10px] font-bold"
+            className={`text-[10px] font-bold ${active ? "bg-primary" : "bg-destructive text-destructive-foreground"}`}
           >
-            {active ? "ACTIVE" : "INACTIVE"}
+            {displayStatus.toUpperCase()}
           </Badge>
-        </div>
-      );
-    },
-  },
-  {
-    id: "actions",
-    enableHiding: false,
-    meta: { label: "Actions" },
-    cell: ({ row }) => {
-      const sku = row.original;
-      return (
-        <div className="flex justify-end w-[60px]">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-            </DropdownMenuContent>
-          </DropdownMenu>
         </div>
       );
     },

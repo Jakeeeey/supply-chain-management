@@ -6,9 +6,12 @@ export const HEADERS = {
   ...(STATIC_TOKEN ? { Authorization: `Bearer ${STATIC_TOKEN}` } : {}),
 };
 
-export async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
+export async function request<T>(
+  url: string,
+  options: RequestInit = {},
+): Promise<T> {
   if (!API_BASE_URL) throw new Error("API base URL is not configured");
-  
+
   const response = await fetch(url, {
     ...options,
     headers: { ...HEADERS, ...options.headers },
@@ -17,8 +20,22 @@ export async function request<T>(url: string, options: RequestInit = {}): Promis
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error(`API Error [${response.status}] for ${url}:`, errorText.substring(0, 200)); 
-    throw new Error(errorText || `API Request failed: ${response.status}`);
+    let errorMessage = errorText || `API Request failed: ${response.status}`;
+
+    try {
+      const errorJson = JSON.parse(errorText);
+      if (errorJson.errors?.[0]?.message) {
+        errorMessage = errorJson.errors[0].message;
+      }
+    } catch (e) {
+      // Not JSON or no message
+    }
+
+    console.error(
+      `API Error [${response.status}] for ${url}:`,
+      errorMessage.substring(0, 200),
+    );
+    throw new Error(errorMessage);
   }
 
   // Handle 204 No Content
@@ -28,10 +45,22 @@ export async function request<T>(url: string, options: RequestInit = {}): Promis
   return json as T;
 }
 
-export async function fetchItems<T>(endpoint: string, params: Record<string, any> = {}): Promise<{ data: T[], meta?: any }> {
+export async function fetchItems<T>(
+  endpoint: string,
+  params: Record<string, any> = {},
+): Promise<{ data: T[]; meta?: any }> {
   const baseUrl = API_BASE_URL?.replace(/\/$/, "");
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
-  const queryString = new URLSearchParams(params).toString();
-  const url = `${baseUrl}${cleanEndpoint}${queryString ? `?${queryString}` : ''}`;
-  return request<{ data: T[], meta?: any }>(url);
+
+  // Clean params: remove undefined or null values
+  const cleanParams: Record<string, string> = {};
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      cleanParams[key] = String(value);
+    }
+  });
+
+  const queryString = new URLSearchParams(cleanParams).toString();
+  const url = `${baseUrl}${cleanEndpoint}${queryString ? `?${queryString}` : ""}`;
+  return request<{ data: T[]; meta?: any }>(url);
 }

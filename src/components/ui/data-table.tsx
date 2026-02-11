@@ -118,6 +118,8 @@ interface DataTableProps<TData, TValue> {
   isLoading?: boolean;
   emptyTitle?: string;
   emptyDescription?: string;
+  onSelectionChange?: (selectedRows: TData[]) => void;
+  actionComponent?: React.ReactNode;
 }
 
 export function DataTable<TData, TValue>({
@@ -135,6 +137,8 @@ export function DataTable<TData, TValue>({
   isLoading = false,
   emptyTitle,
   emptyDescription,
+  onSelectionChange,
+  actionComponent,
 }: DataTableProps<TData, TValue>) {
   const [internalSorting, setInternalSorting] = React.useState<SortingState>(
     [],
@@ -145,6 +149,21 @@ export function DataTable<TData, TValue>({
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
+
+  // Trigger onSelectionChange when rowSelection updates
+  React.useEffect(() => {
+    if (onSelectionChange) {
+      // rowSelection is a map of index/id to boolean
+      // We need to map it back to the data
+      const selectedIndices = Object.keys(rowSelection).filter(
+        (key) => rowSelection[key as keyof typeof rowSelection],
+      );
+      const selectedData = selectedIndices
+        .map((index) => data[parseInt(index)])
+        .filter(Boolean);
+      onSelectionChange(selectedData);
+    }
+  }, [rowSelection, data, onSelectionChange]);
 
   const actualSorting = externalSorting ?? internalSorting;
 
@@ -228,34 +247,38 @@ export function DataTable<TData, TValue>({
             />
           </div>
         )}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="ml-auto h-10 rounded-xl gap-2">
-              <Settings2 className="h-4 w-4" />
-              View
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-[150px] rounded-xl">
-            {table
-              .getAllColumns()
-              .filter((column) => column.getCanHide())
-              .map((column) => {
-                return (
-                  <DropdownMenuCheckboxItem
-                    key={column.id}
-                    className="capitalize rounded-lg"
-                    checked={column.getIsVisible()}
-                    onCheckedChange={(value) =>
-                      column.toggleVisibility(!!value)
-                    }
-                  >
-                    {(column.columnDef.meta as any)?.label ||
-                      column.id.replace(/_/g, " ")}
-                  </DropdownMenuCheckboxItem>
-                );
-              })}
-          </DropdownMenuContent>
-        </DropdownMenu>
+
+        <div className="flex items-center gap-2 ml-auto">
+          {actionComponent}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="h-10 rounded-xl gap-2">
+                <Settings2 className="h-4 w-4" />
+                View
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[150px] rounded-xl">
+              {table
+                .getAllColumns()
+                .filter((column) => column.getCanHide())
+                .map((column) => {
+                  return (
+                    <DropdownMenuCheckboxItem
+                      key={column.id}
+                      className="capitalize rounded-lg"
+                      checked={column.getIsVisible()}
+                      onCheckedChange={(value) =>
+                        column.toggleVisibility(!!value)
+                      }
+                    >
+                      {(column.columnDef.meta as any)?.label ||
+                        column.id.replace(/_/g, " ")}
+                    </DropdownMenuCheckboxItem>
+                  );
+                })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
       <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
         <Table>
