@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Settings2 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { EmptyPlaceholder } from "@/components/shared/EmptyPlaceholder"
 
 interface SearchInputProps {
   placeholder: string;
@@ -48,8 +49,14 @@ function SearchInput({ placeholder, initialValue, onSearch, isLoading = false }:
     setValue(initialValue);
   }, [initialValue]);
 
+  const isFirstRender = React.useRef(true);
+
   // Debounce the actual search trigger
   React.useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
     const timer = setTimeout(() => {
       onSearch(value);
     }, 500);
@@ -83,9 +90,14 @@ interface DataTableProps<TData, TValue> {
   }
   onPaginationChange?: (pagination: { pageIndex: number, pageSize: number }) => void
   manualPagination?: boolean
+  sorting?: SortingState
+  onSortingChange?: (sorting: SortingState) => void
+  manualSorting?: boolean
   searchKey?: string
   onSearch?: (value: string) => void
   isLoading?: boolean
+  emptyTitle?: string
+  emptyDescription?: string
 }
 
 export function DataTable<TData, TValue>({
@@ -95,14 +107,21 @@ export function DataTable<TData, TValue>({
   pagination,
   onPaginationChange,
   manualPagination = false,
+  sorting: externalSorting,
+  onSortingChange: onExternalSortingChange,
+  manualSorting = false,
   searchKey,
   onSearch,
   isLoading = false,
+  emptyTitle,
+  emptyDescription,
 }: DataTableProps<TData, TValue>) {
-  const [sorting, setSorting] = React.useState<SortingState>([])
+  const [internalSorting, setInternalSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = React.useState({})
+
+  const actualSorting = externalSorting ?? internalSorting;
 
   const [internalPagination, setInternalPagination] = React.useState({
     pageIndex: pagination?.pageIndex ?? 0,
@@ -114,7 +133,14 @@ export function DataTable<TData, TValue>({
     columns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    onSortingChange: setSorting,
+    onSortingChange: (updater) => {
+      const nextSorting = typeof updater === 'function' ? updater(actualSorting) : updater;
+      if (onExternalSortingChange) {
+        onExternalSortingChange(nextSorting);
+      } else {
+        setInternalSorting(nextSorting);
+      }
+    },
     getSortedRowModel: getSortedRowModel(),
     onColumnFiltersChange: setColumnFilters,
     getFilteredRowModel: getFilteredRowModel(),
@@ -122,8 +148,9 @@ export function DataTable<TData, TValue>({
     onRowSelectionChange: setRowSelection,
     pageCount: pageCount,
     manualPagination: manualPagination,
+    manualSorting: manualSorting,
     state: {
-      sorting,
+      sorting: actualSorting,
       columnFilters,
       columnVisibility,
       rowSelection,
@@ -142,6 +169,14 @@ export function DataTable<TData, TValue>({
     }
   })
 
+  const handleSearchWrapper = React.useCallback((value: string) => {
+    if (searchKey) {
+      const col = table.getColumn(searchKey);
+      if (col) col.setFilterValue(value);
+    }
+    if (onSearch) onSearch(value);
+  }, [table, searchKey, onSearch]);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-4">
@@ -151,11 +186,7 @@ export function DataTable<TData, TValue>({
               placeholder={`Search ${searchKey.replace(/_/g, ' ')}...`}
               initialValue={(table.getColumn(searchKey)?.getFilterValue() as string) ?? ""}
               isLoading={isLoading}
-              onSearch={(value) => {
-                const col = table.getColumn(searchKey);
-                if (col) col.setFilterValue(value);
-                if (onSearch) onSearch(value);
-              }}
+              onSearch={handleSearchWrapper}
             />
           </div>
         )}
@@ -210,7 +241,23 @@ export function DataTable<TData, TValue>({
             ))}
           </TableHeader>
           <TableBody>
-            {table.getRowModel().rows?.length ? (
+            {isLoading && !data?.length ? (
+              Array.from({ length: 5 }).map((_, rowIndex) => (
+                <TableRow key={rowIndex} className="hover:bg-transparent">
+                  {columns.map((_, colIndex) => (
+                    <TableCell key={colIndex} className="py-4">
+                      <div className="flex items-center gap-2">
+                        <div className={`h-4 bg-muted animate-pulse rounded ${
+                          colIndex === 0 ? 'w-48' : 
+                          colIndex === columns.length - 1 ? 'w-8 ml-auto' : 
+                          'w-24'
+                        }`} />
+                      </div>
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
                 <TableRow
                   key={row.id}
@@ -226,8 +273,11 @@ export function DataTable<TData, TValue>({
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center">
-                  No results.
+                <TableCell colSpan={columns.length} className="h-[400px] p-0 border-none">
+                  <EmptyPlaceholder 
+                    title={emptyTitle}
+                    description={emptyDescription}
+                  />
                 </TableCell>
               </TableRow>
             )}

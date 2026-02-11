@@ -4,41 +4,53 @@ import React from "react";
 import { SKU, MasterData } from "@/modules/supply-chain-management/product-management/sku-creation/types/sku.schema";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DataTable } from "@/components/ui/data-table";
-import { getMasterlistColumns } from "./columns";
+import { getApprovalColumns } from "./columns";
+import { SortingState } from "@tanstack/react-table";
 
-interface MasterlistTableProps {
+interface ApprovalTableProps {
   data: SKU[];
   totalCount: number;
   pageIndex: number;
   pageSize: number;
   onPaginationChange: (pagination: { pageIndex: number; pageSize: number }) => void;
+  sorting?: SortingState;
+  onSortingChange?: (sorting: SortingState) => void;
+  manualSorting?: boolean;
   masterData: MasterData | null;
   isLoading: boolean;
-  onEdit?: (sku: SKU) => void;
+  onApprove?: (id: number | string) => void;
+  onReject?: (id: number | string) => void;
+  onSearch?: (v: string) => void;
   title: string;
-  onSearch?: (value: string) => void;
+  emptyTitle?: string;
+  emptyDescription?: string;
 }
 
-export function MasterlistTable({ 
+export function ApprovalTable({ 
   data, 
   totalCount,
   pageIndex,
   pageSize,
   onPaginationChange,
+  sorting,
+  onSortingChange,
+  manualSorting = true,
   masterData,
   isLoading, 
-  onEdit, 
+  onApprove,
+  onReject,
+  onSearch,
   title,
-  onSearch
-}: MasterlistTableProps) {
+  emptyTitle,
+  emptyDescription
+}: ApprovalTableProps) {
   
-  const columns = React.useMemo(() => getMasterlistColumns(
+  const columns = React.useMemo(() => getApprovalColumns(
     masterData,
-    onEdit
-  ), [masterData, onEdit]);
-
-  // We don't unmount the table during loading anymore 
-  // to prevent losing focus on the search input.
+    undefined, // No onView provided
+    onApprove,
+    onReject
+  ), [masterData, onApprove, onReject]);
 
   return (
     <div className="space-y-4">
@@ -49,9 +61,14 @@ export function MasterlistTable({
         pagination={{ pageIndex, pageSize }}
         onPaginationChange={onPaginationChange}
         manualPagination={true}
+        sorting={sorting}
+        onSortingChange={onSortingChange}
+        manualSorting={manualSorting}
         searchKey="product_name"
         onSearch={onSearch}
         isLoading={isLoading}
+        emptyTitle={emptyTitle}
+        emptyDescription={emptyDescription}
       />
     </div>
   );

@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { SKU, MasterData } from "@/modules/supply-chain-management/product-management/sku-creation/types/sku.schema";
+import { SortingState } from "@tanstack/react-table";
+import { CellHelpers } from "../utils/sku-helpers";
 
 export function useSKUs() {
   const [approvedData, setApprovedData] = useState<SKU[]>([]);
@@ -13,11 +15,14 @@ export function useSKUs() {
   const [draftsTotal, setDraftsTotal] = useState(0);
   const [draftsPage, setDraftsPage] = useState(0);
   const [draftsLimit, setDraftsLimit] = useState(10);
+  const [draftsSorting, setDraftsSorting] = useState<SortingState>([]);
+  const [approvedSorting, setApprovedSorting] = useState<SortingState>([]);
 
   const [pendingApprovalData, setPendingApprovalData] = useState<SKU[]>([]);
   const [pendingTotal, setPendingTotal] = useState(0);
   const [pendingPage, setPendingPage] = useState(0);
   const [pendingLimit, setPendingLimit] = useState(10);
+  const [pendingSorting, setPendingSorting] = useState<SortingState>([]);
   const [search, setSearch] = useState("");
 
   const [masterData, setMasterData] = useState<MasterData | null>(null);
@@ -28,10 +33,14 @@ export function useSKUs() {
     setIsLoading(true);
     setError(null);
     try {
+      const aSort = CellHelpers.getDirectusSort(approvedSorting) || "";
+      const dSort = CellHelpers.getDirectusSort(draftsSorting) || "";
+      const pSort = CellHelpers.getDirectusSort(pendingSorting) || "";
+
       const [approvedRes, draftsRes, pendingRes, masterRes] = await Promise.all([
-        fetch(`/api/scm/product-management/sku-creation?type=approved&limit=${approvedLimit}&offset=${approvedPage * approvedLimit}&search=${encodeURIComponent(search)}`).then(res => res.json()),
-        fetch(`/api/scm/product-management/sku-creation?type=drafts&status=DRAFT&limit=-1`).then(res => res.json()),
-        fetch(`/api/scm/product-management/sku-creation?type=drafts&status=FOR_APPROVAL&limit=-1`).then(res => res.json()),
+        fetch(`/api/scm/product-management/sku-creation?type=approved&limit=${approvedLimit}&offset=${approvedPage * approvedLimit}&search=${encodeURIComponent(search)}&sort=${aSort}`).then(res => res.json()),
+        fetch(`/api/scm/product-management/sku-creation?type=drafts&status=DRAFT&limit=${draftsLimit}&offset=${draftsPage * draftsLimit}&search=${encodeURIComponent(search)}&sort=${dSort}`).then(res => res.json()),
+        fetch(`/api/scm/product-management/sku-creation?type=drafts&status=FOR_APPROVAL&limit=${pendingLimit}&offset=${pendingPage * pendingLimit}&search=${encodeURIComponent(search)}&sort=${pSort}`).then(res => res.json()),
         fetch("/api/scm/product-management/sku-creation?type=master").then(res => res.json())
       ]);
 
@@ -55,7 +64,7 @@ export function useSKUs() {
     } finally {
       setIsLoading(false);
     }
-  }, [approvedLimit, approvedPage, draftsLimit, draftsPage, pendingLimit, pendingPage, search]);
+  }, [approvedLimit, approvedPage, approvedSorting, draftsLimit, draftsPage, draftsSorting, pendingLimit, pendingPage, pendingSorting, search]);
 
   useEffect(() => {
     refresh();
@@ -154,6 +163,10 @@ export function useSKUs() {
     setDraftsPage,
     draftsLimit,
     setDraftsLimit,
+    draftsSorting,
+    setDraftsSorting,
+    approvedSorting,
+    setApprovedSorting,
 
     pendingApprovalData,
     pendingTotal,
@@ -161,6 +174,8 @@ export function useSKUs() {
     setPendingPage,
     pendingLimit,
     setPendingLimit,
+    pendingSorting,
+    setPendingSorting,
     
     search,
     setSearch,

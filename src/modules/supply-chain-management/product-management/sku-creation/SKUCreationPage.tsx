@@ -1,16 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Plus, RefreshCcw } from "lucide-react";
 import { useSKUs } from "@/modules/supply-chain-management/product-management/sku-creation/hooks/useSKUs";
-import { SKUTable } from "@/modules/supply-chain-management/product-management/sku-creation/components/data-table/SKUTable";
+import { SKUTable } from "@/modules/supply-chain-management/product-management/sku-creation/components/data-table";
 import { SKUModal } from "@/modules/supply-chain-management/product-management/sku-creation/components/modals/SKUModal";
 import { Button } from "@/components/ui/button";
 import { SKU } from "@/modules/supply-chain-management/product-management/sku-creation/types/sku.schema";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
+import ErrorPage from "@/components/shared/ErrorPage";
 
 export default function SKUCreationModule() {
   const { 
@@ -27,6 +27,8 @@ export default function SKUCreationModule() {
     setDraftsPage,
     draftsLimit,
     setDraftsLimit,
+    draftsSorting,
+    setDraftsSorting,
     
     masterData,
     isLoading, 
@@ -50,6 +52,18 @@ export default function SKUCreationModule() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  const handleDraftPagination = useCallback(({ pageIndex, pageSize }: { pageIndex: number; pageSize: number }) => {
+    setDraftsPage(pageIndex);
+    setDraftsLimit(pageSize);
+  }, [setDraftsPage, setDraftsLimit]);
+
+  const handleSearch = useCallback((v: string) => {
+    setSearch(v);
+    // When searching, we keep pages as they are or reset them? Typically reset.
+    setApprovedPage(0);
+    setDraftsPage(0);
+  }, [setSearch, setApprovedPage, setDraftsPage]);
 
   const handleAdd = () => {
     setSelectedSKU(undefined);
@@ -131,31 +145,18 @@ export default function SKUCreationModule() {
     }
   };
 
-  if (!mounted) {
-    return (
-      <div className="container mx-auto py-6 space-y-6">
-        <Skeleton className="h-12 w-1/3" />
-        <Skeleton className="h-[400px] w-full" />
-      </div>
-    );
+  if (!mounted || (isLoading && !draftData.length && !approvedData.length)) {
+    return <ModuleSkeleton hasTabs={false} rowCount={6} />;
   }
 
   if (error) {
     return (
-      <div className="container mx-auto py-10">
-        <Alert variant="destructive">
-          <AlertTitle>System Connection Error</AlertTitle>
-          <AlertDescription>
-            {error}
-            <div className="mt-4">
-              <Button onClick={refresh} variant="outline" size="sm">
-                <RefreshCcw className="h-4 w-4 mr-2" />
-                Retry
-              </Button>
-            </div>
-          </AlertDescription>
-        </Alert>
-      </div>
+      <ErrorPage 
+        code="Connection Error"
+        title="Failed to Load Product Data"
+        message={error}
+        reset={refresh}
+      />
     );
   }
 
@@ -181,19 +182,18 @@ export default function SKUCreationModule() {
           totalCount={draftsTotal}
           pageIndex={draftsPage}
           pageSize={draftsLimit}
-          onPaginationChange={({ pageIndex, pageSize }) => {
-              setDraftsPage(pageIndex);
-              setDraftsLimit(pageSize);
-          }}
+          onPaginationChange={handleDraftPagination}
+          sorting={draftsSorting}
+          onSortingChange={setDraftsSorting}
           masterData={masterData}
           isLoading={isLoading} 
           onEdit={handleEdit} 
           onDelete={handleDelete as any} 
           onSubmitForApproval={handleSubmitToManager as any}
-          manualPagination={false}
-          onSearch={(v: string) => {
-            setSearch(v);
-          }}
+          manualPagination={true}
+          onSearch={handleSearch}
+          emptyTitle="No product drafts"
+          emptyDescription="Your SKU registration queue is empty. Click 'Add SKU' above to create a new product draft and begin the approval process."
         />
       </div>
 

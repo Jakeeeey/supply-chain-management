@@ -46,6 +46,17 @@ export const skuSchema = z.object({
   product_shelf_life: z.number().int().nullable().optional(),
   product_weight: z.number().nullable().optional(),
   
+  // Multi-Unit Support
+  units: z.array(z.object({
+    id: z.number().optional(), // Junction ID for updates
+    unit_id: z.number(),
+    conversion_factor: z.number(),
+    price: z.number().nullable().optional(),
+    cost: z.number().nullable().optional(),
+    barcode: z.string().nullable().optional(),
+    sku_code: z.string().nullable().optional(), // Potentially for future breakdown
+  })).optional().default([]),
+
   external_id: z.string().nullable().optional(),
   date_added: z.string().nullable().optional(),
   last_updated: z.string().nullable().optional(),

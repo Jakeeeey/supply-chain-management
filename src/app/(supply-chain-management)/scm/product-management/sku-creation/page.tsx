@@ -87,7 +87,7 @@ export default async function Page() {
         className="
           sticky top-2 z-50 relative
           flex h-16 shrink-0 items-center justify-between
-          border-b bg-background shadow-sm
+          border-b bg-background
           before:content-[''] before:absolute before:inset-x-0 before:-top-2 before:h-2 before:bg-background
         "
       >

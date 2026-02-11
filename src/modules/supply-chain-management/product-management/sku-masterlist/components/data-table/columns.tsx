@@ -1,10 +1,11 @@
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
-import { SKU, MasterData, SKUStatus } from "@/modules/supply-chain-management/product-management/sku-creation/types/sku.schema"
+import { SKU, MasterData } from "@/modules/supply-chain-management/product-management/sku-creation/types/sku.schema"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Edit, MoreHorizontal, CheckCircle, XCircle } from "lucide-react"
+import { DataTableColumnHeader } from "./table-column-header"
+import { CellHelpers } from "../../../sku-creation/utils/sku-helpers"
+import { Edit, MoreHorizontal } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,134 +14,78 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import React from "react"
-
-const statusVariants: Record<string, "outline" | "secondary" | "default" | "destructive"> = {
-  Draft: "outline",
-  "For Approval": "secondary",
-  Rejected: "destructive",
-  Active: "default",
-  Inactive: "outline",
-  DRAFT: "outline",
-  "FOR APPROVAL": "secondary",
-  FOR_APPROVAL: "secondary",
-  REJECTED: "destructive",
-  ACTIVE: "default",
-  INACTIVE: "outline",
-};
+import { Button } from "@/components/ui/button"
 
 export const getMasterlistColumns = (
   masterData: MasterData | null,
-  onEdit?: (sku: SKU) => void,
+  onEditDescription?: (sku: SKU) => void
 ): ColumnDef<SKU>[] => [
   {
     accessorKey: "product_name",
-    header: "Product Name",
-    cell: ({ row }) => {
-      const sku = row.original;
-      return (
-        <span className="font-medium text-foreground">
-          {sku.product_name}
-        </span>
-      );
-    },
+    enableSorting: true,
+    header: ({ column }) => <DataTableColumnHeader column={column} label="Product Name" />,
+    cell: ({ row }) => <span className="font-semibold">{row.original.product_name || "Unnamed Product"}</span>,
   },
   {
     accessorKey: "product_category",
-    header: "Category",
-    cell: ({ row }) => {
-      const sku = row.original;
-      const category = masterData?.categories.find(c => (c.id == sku.product_category));
-      const categoryName = category ? (category.name || (category as any).category || (category as any).category_name || (category as any).title || (category as any).code) : "—";
-      
-      return <span>{categoryName}</span>;
-    },
+    enableSorting: true,
+    header: ({ column }) => <DataTableColumnHeader column={column} label="Category" />,
+    cell: ({ row }) => <span>{CellHelpers.renderMasterText(row.original.product_category, masterData?.categories)}</span>,
   },
   {
     accessorKey: "product_brand",
-    header: "Brand",
-    cell: ({ row }) => {
-      const sku = row.original;
-      const brand = masterData?.brands.find(b => (b.id == sku.product_brand));
-      const brandName = brand ? (brand.name || (brand as any).brand || (brand as any).brand_name || (brand as any).title || (brand as any).code) : "—";
-      
-      return <span>{brandName}</span>;
-    },
+    enableSorting: true,
+    header: ({ column }) => <DataTableColumnHeader column={column} label="Brand" />,
+    cell: ({ row }) => <span>{CellHelpers.renderMasterText(row.original.product_brand, masterData?.brands)}</span>,
   },
   {
-    accessorKey: "product_supplier",
-    header: "Supplier",
+    accessorKey: "inventory_type",
+    header: ({ column }) => <DataTableColumnHeader column={column} label="Type" />,
     cell: ({ row }) => {
-      const sku = row.original;
-      const rawSupplier = sku.product_supplier || (sku as any).supplier || (sku as any).supplier_id || (sku as any).vendor;
-      const supplierId = (typeof rawSupplier === 'object' && rawSupplier !== null) 
-        ? (rawSupplier as any).id 
-        : rawSupplier;
-
-      const supplier = masterData?.suppliers?.find(s => (s.id == supplierId));
-      const supplierName = supplier ? (supplier.name || (supplier as any).supplier_name) : "—";
-      
-      return <span className="truncate max-w-[150px] block" title={supplierName}>{supplierName}</span>;
+      const type = CellHelpers.detectInventoryType(row.original);
+      return (
+        <Badge variant="outline" className={`font-medium ${type === 'Variant' ? 'border-primary text-primary bg-primary/5' : 'text-muted-foreground opacity-70'}`}>
+          {type}
+        </Badge>
+      );
     },
   },
   {
     accessorKey: "product_code",
-    header: "SKU Code",
-    cell: ({ row }) => {
-      const code = row.getValue("product_code") as string;
-      return (
-        <code className="px-1 py-0.5 bg-muted rounded text-xs font-mono">
-          {code || "—"}
-        </code>
-      );
-    },
+    enableSorting: true,
+    header: ({ column }) => <DataTableColumnHeader column={column} label="SKU Code" />,
+    cell: ({ row }) => (
+      row.original.product_code ? (
+        <code className="px-2 py-1 bg-primary/10 text-primary rounded font-mono text-xs font-bold">{row.original.product_code}</code>
+      ) : (
+        <span className="text-muted-foreground/40 italic text-xs ml-2">Unassigned</span>
+      )
+    ),
   },
   {
-    accessorKey: "status",
-    header: "Status",
+    accessorKey: "isActive",
+    enableSorting: true,
+    header: ({ column }) => <DataTableColumnHeader column={column} label="Status" />,
     cell: ({ row }) => {
-      const sku = row.original;
-      const isActive = sku.isActive === 1 || sku.isActive === true;
-      
-      // Override status for masterlist: if isActive is 1, show ACTIVE
-      let rawStatus = (row.getValue("status") || "DRAFT") as string;
-      if (isActive) {
-        rawStatus = "ACTIVE";
-      }
-
-      const status = (rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1).toLowerCase()) as SKUStatus;
-      const displayStatus = rawStatus.replace(/_/g, " ");
-
-      return (
-        <Badge variant={statusVariants[rawStatus] || statusVariants[status] || "outline"} className="font-semibold uppercase px-3">
-          {displayStatus}
-        </Badge>
-      );
+      const active = Number(row.getValue("isActive")) === 1;
+      return <Badge variant={active ? "default" : "outline"}>{active ? "ACTIVE" : "INACTIVE"}</Badge>;
     },
   },
   {
     id: "actions",
     cell: ({ row }) => {
       const sku = row.original;
-
       return (
         <div className="flex justify-end">
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[160px]">
+            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              
-              {onEdit && (
-                <DropdownMenuItem onClick={() => onEdit(sku)}>
-                  <Edit className="h-4 w-4 mr-2" />
-                  View Details
-                </DropdownMenuItem>
-              )}
+              <DropdownMenuItem onClick={() => onEditDescription?.(sku)}>
+                <Edit className="h-4 w-4 mr-2" />
+                Edit Description
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

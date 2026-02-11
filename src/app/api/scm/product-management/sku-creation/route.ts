@@ -11,6 +11,7 @@ export async function GET(req: NextRequest) {
     console.log("SKU API Route GET type:", type, "API_BASE_URL:", process.env.NEXT_PUBLIC_API_BASE_URL);
     const limit = parseInt(searchParams.get("limit") || "10");
     const offset = parseInt(searchParams.get("offset") || "0");
+    const sort = searchParams.get("sort") || undefined;
 
     if (type === "master") {
       const data = await skuService.fetchMasterData();
@@ -19,7 +20,8 @@ export async function GET(req: NextRequest) {
 
     if (type === "drafts") {
       const status = searchParams.get("status") || undefined;
-      const paginated = await skuService.fetchDrafts(limit, offset, status);
+      const search = searchParams.get("search") || undefined;
+      const paginated = await skuService.fetchDrafts(limit, offset, status, search, sort);
       return NextResponse.json(paginated);
     }
 
@@ -30,7 +32,7 @@ export async function GET(req: NextRequest) {
     }
 
     const search = searchParams.get("search") || undefined;
-    const paginated = await skuService.fetchApproved(limit, offset, search);
+    const paginated = await skuService.fetchApproved(limit, offset, search, sort);
     console.log(`API Route [approved]: Returning ${paginated.data.length} items, total: ${paginated.meta.total_count}`);
     return NextResponse.json(paginated);
   } catch (error: any) {

@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { RefreshCcw } from "lucide-react";
 import { useSKUs } from "@/modules/supply-chain-management/product-management/sku-creation/hooks/useSKUs";
-import { ApprovalTable } from "@/modules/supply-chain-management/product-management/sku-approval/components/data-table/ApprovalTable";
+import { ApprovalTable } from "@/modules/supply-chain-management/product-management/sku-approval/components/data-table";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
+import ErrorPage from "@/components/shared/ErrorPage";
 
 export default function SKUApprovalPage() {
   const { 
@@ -17,6 +17,9 @@ export default function SKUApprovalPage() {
     setPendingPage,
     pendingLimit,
     setPendingLimit,
+    pendingSorting,
+    setPendingSorting,
+    setSearch,
     
     masterData,
     isLoading, 
@@ -31,6 +34,16 @@ export default function SKUApprovalPage() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  const handlePagination = useCallback(({ pageIndex, pageSize }: { pageIndex: number; pageSize: number }) => {
+    setPendingPage(pageIndex);
+    setPendingLimit(pageSize);
+  }, [setPendingPage, setPendingLimit]);
+
+  const handleSearch = useCallback((v: string) => {
+    setSearch(v);
+    setPendingPage(0);
+  }, [setSearch, setPendingPage]);
 
   const handleApproveAndActivate = async (id: number | string) => {
     try {
@@ -50,31 +63,18 @@ export default function SKUApprovalPage() {
     }
   };
 
-  if (!mounted) {
-    return (
-      <div className="container mx-auto py-6 space-y-6">
-        <Skeleton className="h-12 w-1/3" />
-        <Skeleton className="h-[400px] w-full" />
-      </div>
-    );
+  if (!mounted || (isLoading && !pendingApprovalData.length)) {
+    return <ModuleSkeleton hasActions={false} rowCount={5} />;
   }
 
   if (error) {
     return (
-      <div className="container mx-auto py-10">
-        <Alert variant="destructive">
-          <AlertTitle>System Connection Error</AlertTitle>
-          <AlertDescription>
-            {error}
-            <div className="mt-4">
-              <Button onClick={refresh} variant="outline" size="sm">
-                <RefreshCcw className="h-4 w-4 mr-2" />
-                Retry
-              </Button>
-            </div>
-          </AlertDescription>
-        </Alert>
-      </div>
+      <ErrorPage 
+        code="Connection Error"
+        title="Approval Queue Unavailable"
+        message={error}
+        reset={refresh}
+      />
     );
   }
 
@@ -96,14 +96,16 @@ export default function SKUApprovalPage() {
           totalCount={pendingTotal}
           pageIndex={pendingPage}
           pageSize={pendingLimit}
-          onPaginationChange={({ pageIndex, pageSize }: { pageIndex: number; pageSize: number }) => {
-              setPendingPage(pageIndex);
-              setPendingLimit(pageSize);
-          }}
+          onPaginationChange={handlePagination}
+          sorting={pendingSorting}
+          onSortingChange={setPendingSorting}
+          onSearch={handleSearch}
           masterData={masterData}
           isLoading={isLoading} 
           onApprove={handleApproveAndActivate as any}
           onReject={handleReject as any}
+          emptyTitle="Queue clear"
+          emptyDescription="There are currently no items pending approval. All submitted SKUs have been processed."
         />
       </div>
     </div>
