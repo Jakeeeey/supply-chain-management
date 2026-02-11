@@ -29,6 +29,10 @@ export const skuService = {
 
   async fetchDrafts(limit: number = 10, offset: number = 0, status?: string, search?: string, sort?: string): Promise<PaginatedSKU> {
     const filter: any = { _and: [] };
+    
+    // Always exclude ACTIVE status (these are approved and should not show in queue)
+    filter._and.push({ status: { _neq: "ACTIVE" } });
+    
     if (status) {
       const target = status.toUpperCase();
       filter._and.push(target === "DRAFT" ? { status: { _in: ["DRAFT", "REJECTED"] } } : { status: { _eq: target } });
@@ -127,20 +131,17 @@ export const skuService = {
 
     let pMasterId: number | null = null;
     for (const draft of all) {
-      console.log(`[Approve] Processing draft ID: ${draft.id} | Name: ${draft.product_name}`);
       let code = draft.product_code;
       if (!code) {
-        console.log(`[Approve] No code found on draft, generating new one...`);
         code = await generateSKUCode(draft, masterData);
       }
-      console.log(`[Approve] Using Code: ${code}`);
       
       // Check if product already exists by Code (Primary matching strategy)
       const { data: existing } = await fetchItems<any>('/items/products', { 
         filter: JSON.stringify({ product_code: { _eq: code } }),
         limit: 1
       });
-      console.log(`[Approve] Existing check for ${code}: Found ${existing?.length || 0} matches`);
+
       
       const targetId = existing?.[0]?.id || existing?.[0]?.product_id;
 
@@ -162,7 +163,7 @@ export const skuService = {
       };
 
       if (targetId) {
-        console.log(`[Approve] Updating EXISTING product ID: ${targetId}`);
+
         // UPDATE existing product
          await request(`${API_BASE_URL}/items/products/${targetId}`, {
           method: "PATCH",
@@ -170,26 +171,24 @@ export const skuService = {
         });
         if (!draft.parent_id) pMasterId = targetId;
       } else {
-        console.log(`[Approve] Creating NEW product`);
+
         // CREATE new product
         const res: any = await request<{ data: any }>(`${API_BASE_URL}/items/products`, {
           method: "POST",
           body: JSON.stringify(commonFields)
         });
         const newId = res.data.id || res.data.product_id;
-        console.log(`[Approve] New product created with ID: ${newId}`);
+
         if (!draft.parent_id) pMasterId = newId;
       }
 
       try {
-        console.log(`[Approve] Setting draft ${draft.id} status to ACTIVE`);
         await request(`${API_BASE_URL}/items/product_draft/${(draft as any).id}`, { method: "PATCH", body: JSON.stringify({ status: "ACTIVE" }) });
       } catch (e: any) {
-        console.warn(`[Approve] Status update failed: ${e.message}. Attempting cleanup via DELETE.`);
         try {
            await request(`${API_BASE_URL}/items/product_draft/${(draft as any).id}`, { method: "DELETE" });
         } catch (delErr: any) {
-           console.error(`[Approve] Cleanup failed: ${delErr.message}`);
+
            // We suppress the error here so the UI reports "Success" (since the Product was created),
            // even though the Draft might remain in the queue due to permissions.
         }

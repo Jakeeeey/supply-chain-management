@@ -273,11 +273,8 @@ export function DataTable<TData, TValue>({
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={columns.length} className="h-[400px] p-0 border-none">
-                  <EmptyPlaceholder 
-                    title={emptyTitle}
-                    description={emptyDescription}
-                  />
+                <TableCell colSpan={columns.length} className="h-24 text-center">
+                  <p className="text-sm text-muted-foreground">No results.</p>
                 </TableCell>
               </TableRow>
             )}

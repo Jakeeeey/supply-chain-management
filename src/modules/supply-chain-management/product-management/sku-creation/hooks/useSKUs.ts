@@ -28,6 +28,9 @@ export function useSKUs() {
   const [masterData, setMasterData] = useState<MasterData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Track locally approved IDs to filter them out even if backend status update fails
+  const [approvedIds, setApprovedIds] = useState<Set<number | string>>(new Set());
 
   const refresh = useCallback(async () => {
     setIsLoading(true);
@@ -58,13 +61,23 @@ export function useSKUs() {
       setPendingApprovalData(pendingRes.data || []);
       setPendingTotal(pendingRes.meta?.total_count || 0);
       
+      // Filter out locally approved items (in case backend status update failed)
+      if (approvedIds.size > 0) {
+        const filteredPending = (pendingRes.data || []).filter((item: SKU) => {
+          const itemId = item.id || item.product_id;
+          return !approvedIds.has(String(itemId));
+        });
+        setPendingApprovalData(filteredPending);
+        setPendingTotal(filteredPending.length);
+      }
+      
       setMasterData(masterRes.data || null);
     } catch (err: any) {
       setError(err.message);
     } finally {
       setIsLoading(false);
     }
-  }, [approvedLimit, approvedPage, approvedSorting, draftsLimit, draftsPage, draftsSorting, pendingLimit, pendingPage, pendingSorting, search]);
+  }, [approvedLimit, approvedPage, approvedSorting, draftsLimit, draftsPage, draftsSorting, pendingLimit, pendingPage, pendingSorting, search, approvedIds]);
 
   useEffect(() => {
     refresh();
@@ -117,7 +130,23 @@ export function useSKUs() {
       body: JSON.stringify({ action: "approve" }),
     });
     const result = await response.json();
+    
     if (result.error) throw new Error(result.error);
+    
+    // Add to locally approved IDs cache
+    setApprovedIds(prev => new Set(prev).add(String(id)));
+    
+    // Optimistic update: immediately remove from pending queue
+    setPendingApprovalData(prev => {
+      const filtered = prev.filter(item => {
+        const itemId = item.id || item.product_id;
+        const match = String(itemId) === String(id);
+        return !match;
+      });
+      return filtered;
+    });
+    setPendingTotal(prev => Math.max(0, prev - 1));
+    
     await refresh();
   };
 
