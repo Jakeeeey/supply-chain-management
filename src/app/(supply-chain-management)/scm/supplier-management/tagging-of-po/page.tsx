@@ -1,4 +1,4 @@
-// src/app/(supply-chain-management)/scm/supplier-management/receiving-products/page.tsx
+// src/app/(supply-chain-management)/scm/supplier-management/tagging-of-po/page.tsx
 
 import {
     Breadcrumb,
@@ -15,7 +15,9 @@ import { NavUser } from "../../_components/nav-user";
 
 import { cookies } from "next/headers";
 
-import ReceivingProductsModule from "@/modules/supply-chain-management/supplier-management/receiving-products/ReceivingProductsModule";
+import { Suspense } from "react";
+
+import TaggingOfPOModule from "@/modules/supply-chain-management/supplier-management/tagging-of-po/TaggingOfPOModule";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -110,7 +112,7 @@ export default async function Page() {
                             <BreadcrumbSeparator className="hidden md:block" />
                             <BreadcrumbItem>
                                 <BreadcrumbPage>
-                                    Receiving Products
+                                    Tagging of PO
                                 </BreadcrumbPage>
                             </BreadcrumbItem>
                         </BreadcrumbList>
@@ -125,8 +127,10 @@ export default async function Page() {
             {/* ===== Content ===== */}
             <ScrollArea className="min-h-0 flex-1">
                 <div className="p-4">
-                    {/* ✅ Purchase Order UI (Create / Approval / Receiving / Posting) */}
-                    <ReceivingProductsModule />
+                    {/* ✅ Supplier Management - Tagging of PO */}
+                    <Suspense fallback={null}>
+                        <TaggingOfPOModule />
+                    </Suspense>
                 </div>
             </ScrollArea>
         </div>
