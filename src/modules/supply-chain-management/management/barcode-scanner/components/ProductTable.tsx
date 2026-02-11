@@ -1,4 +1,5 @@
 import React from "react";
+import { toast } from "sonner";
 import {
   Table,
   TableBody,
@@ -9,25 +10,85 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ScanBarcode, Edit } from "lucide-react";
-import { Product, Category, Unit, getSupplierName } from "../types";
+import { Checkbox } from "@/components/ui/checkbox"; // Shadcn Checkbox
+import { ChevronRight } from "lucide-react";
+import { Product, Unit } from "../types";
 
 interface ProductTableProps {
   products: Product[];
   onEdit: (product: Product) => void;
+  // New Props for Selection
+  isSelectionMode: boolean;
+  selectedIds: string[]; // List of selected product_ids
+  onToggleSelect: (product: Product) => void;
+  onToggleAll: (allIds: string[]) => void;
 }
 
-export function ProductTable({ products, onEdit }: ProductTableProps) {
+export function ProductTable({
+  products,
+  onEdit,
+  isSelectionMode,
+  selectedIds,
+  onToggleSelect,
+  onToggleAll,
+}: ProductTableProps) {
+  // Helper to handle safe selection
+  const handleCheckboxChange = (product: Product) => {
+    // STRICT VALIDATION: Check for SKU and Barcode
+    if (!product.barcode) {
+      toast.error("Incomplete Record", {
+        description: "Cannot select product without Barcode.",
+      });
+      return;
+    }
+    onToggleSelect(product);
+  };
+
+  const handleSelectAll = () => {
+    // Filter only valid items for "Select All"
+    const validIds = products
+      .filter((p) => p.product_code && p.barcode)
+      .map((p) => String(p.product_id));
+
+    if (validIds.length === 0) {
+      toast.warning("No valid records to select.");
+      return;
+    }
+
+    // If all valid items are already selected, unselect all. Otherwise select valid ones.
+    const allValidSelected = validIds.every((id) => selectedIds.includes(id));
+    onToggleAll(allValidSelected ? [] : validIds);
+  };
+
   return (
     <div className="rounded-md border">
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/50">
-            <TableHead className="w-32.5">Barcode</TableHead>
-            <TableHead className="w-45">Supplier</TableHead>
-            <TableHead className="max-w-75">Product Name</TableHead>
-            <TableHead>Category</TableHead>
-            <TableHead>Unit</TableHead>
+            {/* Selection Column */}
+            {isSelectionMode && (
+              <TableHead className="w-[50px]">
+                <Checkbox
+                  checked={
+                    products.length > 0 &&
+                    products.every(
+                      (p) =>
+                        !p.product_code ||
+                        !p.barcode ||
+                        selectedIds.includes(String(p.product_id)),
+                    ) &&
+                    selectedIds.length > 0
+                  }
+                  onCheckedChange={handleSelectAll}
+                />
+              </TableHead>
+            )}
+
+            <TableHead className="w-[150px]">SKU Code</TableHead>
+            <TableHead className="min-w-[300px]">Product Name</TableHead>
+            <TableHead>Inventory Type</TableHead>
+            <TableHead>UOM</TableHead>
+            <TableHead>Attributes</TableHead>
             <TableHead className="text-right">Action</TableHead>
           </TableRow>
         </TableHeader>
@@ -35,7 +96,7 @@ export function ProductTable({ products, onEdit }: ProductTableProps) {
           {products.length === 0 ? (
             <TableRow>
               <TableCell
-                colSpan={6}
+                colSpan={isSelectionMode ? 7 : 6}
                 className="text-center h-24 text-muted-foreground"
               >
                 No products found matching your filters.
@@ -43,83 +104,84 @@ export function ProductTable({ products, onEdit }: ProductTableProps) {
             </TableRow>
           ) : (
             products.map((product) => {
-              const categoryName =
-                typeof product.product_category === "object" &&
-                product.product_category
-                  ? (product.product_category as Category).category_name
-                  : "-";
-
               const unitName =
                 typeof product.unit_of_measurement === "object" &&
                 product.unit_of_measurement
                   ? (product.unit_of_measurement as Unit).unit_shortcut ||
                     (product.unit_of_measurement as Unit).unit_name
-                  : "-";
+                  : "PCS";
 
-              const supplierName = getSupplierName(product);
               const displayName = product.description || product.product_name;
+              const inventoryType = "Regular";
+              const attributes = "-";
+
+              const isSelected = selectedIds.includes(
+                String(product.product_id),
+              );
 
               return (
                 <TableRow
                   key={product.product_id}
                   className="hover:bg-muted/50"
+                  data-state={isSelected ? "selected" : undefined}
                 >
-                  {/* Barcode */}
-                  <TableCell className="text-sm font-mono py-3">
-                    {product.barcode ? (
-                      <span>{product.barcode}</span>
-                    ) : (
-                      <Badge
-                        variant="secondary"
-                        className="text-xs font-normal"
-                      >
-                        Missing
-                      </Badge>
-                    )}
+                  {/* Checkbox Cell */}
+                  {isSelectionMode && (
+                    <TableCell>
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => handleCheckboxChange(product)}
+                      />
+                    </TableCell>
+                  )}
+
+                  {/* SKU Code */}
+                  <TableCell
+                    className="font-medium text-blue-600 cursor-pointer"
+                    onClick={() => onEdit(product)}
+                  >
+                    {product.product_code || "-"}
                   </TableCell>
 
-                  {/* Supplier - Truncated */}
-                  <TableCell className="py-3">
-                    <div
-                      className="text-sm text-muted-foreground truncate max-w-42.5"
-                      title={supplierName}
-                    >
-                      {supplierName}
-                    </div>
-                  </TableCell>
-
-                  {/* Product Name - Truncated, ID removed */}
-                  <TableCell className="py-3">
-                    <div
-                      className="text-sm font-medium truncate max-w-70"
-                      title={displayName}
-                    >
+                  {/* Product Name */}
+                  <TableCell
+                    className="font-medium cursor-pointer"
+                    onClick={() => onEdit(product)}
+                  >
+                    <div className="truncate max-w-[350px]" title={displayName}>
                       {displayName}
                     </div>
                   </TableCell>
 
-                  {/* Category */}
-                  <TableCell className="text-sm py-3">{categoryName}</TableCell>
+                  {/* Inventory Type */}
+                  <TableCell>
+                    <Badge
+                      variant="secondary"
+                      className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200"
+                    >
+                      {inventoryType}
+                    </Badge>
+                  </TableCell>
 
-                  {/* Unit */}
-                  <TableCell className="text-sm py-3">{unitName}</TableCell>
+                  {/* UOM */}
+                  <TableCell className="text-muted-foreground">
+                    {unitName}
+                  </TableCell>
+
+                  {/* Attributes */}
+                  <TableCell className="text-muted-foreground text-sm font-mono">
+                    {attributes}
+                  </TableCell>
 
                   {/* Action */}
-                  <TableCell className="text-right py-3">
+                  <TableCell className="text-right">
                     <Button
-                      variant={product.barcode ? "ghost" : "default"}
-                      size="sm"
-                      className="h-8 px-2 lg:px-3"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground"
                       onClick={() => onEdit(product)}
                     >
-                      {product.barcode ? (
-                        <Edit className="h-3.5 w-3.5 mr-1.5" />
-                      ) : (
-                        <ScanBarcode className="h-3.5 w-3.5 mr-1.5" />
-                      )}
-                      <span className="text-xs">
-                        {product.barcode ? "Edit" : "Scan"}
-                      </span>
+                      <ChevronRight className="h-4 w-4" />
                     </Button>
                   </TableCell>
                 </TableRow>

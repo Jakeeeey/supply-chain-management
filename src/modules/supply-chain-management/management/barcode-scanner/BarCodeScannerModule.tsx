@@ -1,23 +1,33 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardFooter,
-} from "@/components/ui/card";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Search,
+  Printer,
+  RotateCcw,
+  ChevronsUpDown,
+  Check,
+  ChevronsLeft,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsRight,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Command,
   CommandEmpty,
@@ -26,48 +36,23 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-} from "@/components/ui/pagination";
-import {
-  ChevronsLeft,
-  ChevronsRight,
-  ChevronLeft,
-  ChevronRight,
-  Check,
-  ChevronsUpDown,
-  Search,
-  ScanBarcode,
-  Filter,
-  RotateCcw,
-  ChevronDown, // Added Reset Icon
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import { Spinner } from "@/components/ui/spinner";
 
+import { useBarcodeScanner } from "./hooks/useBarcodeScanner";
 import { ProductTable } from "./components/ProductTable";
 import { ScannerModal } from "./components/ScannerModal";
-import {
-  useBarcodeScanner,
-  BarcodeFilterStatus,
-} from "./hooks/useBarcodeScanner";
+import { PrintFormatModal, PrintPreviewModal } from "./components/PrintModal";
+import { BarcodeScannerSkeleton } from "./components/BarcodeScannerSkeleton";
+import { Product } from "./types";
 
 export default function BarCodeScannerModule() {
   const {
     products,
     allProducts,
     suppliers,
-    isLoading,
     selectedProduct,
     setSelectedProduct,
     handleUpdateBarcode,
+    isLoading,
     currentPage,
     setCurrentPage,
     totalPages,
@@ -82,130 +67,149 @@ export default function BarCodeScannerModule() {
     setBarcodeFilter,
   } = useBarcodeScanner();
 
+  // --- PRINTING & SELECTION STATE ---
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  // UI States for Comboboxes
+  const [openSupplier, setOpenSupplier] = useState(false);
+  const [openProduct, setOpenProduct] = useState(false);
+
+  // Local state for page input to allow typing
   const [pageInput, setPageInput] = useState(String(currentPage));
-  useEffect(() => setPageInput(String(currentPage)), [currentPage]);
 
-  const [openProductCombo, setOpenProductCombo] = useState(false);
-  const [openSupplierCombo, setOpenSupplierCombo] = useState(false);
+  // Sync page input when currentPage changes externally (e.g. arrows)
+  useEffect(() => {
+    setPageInput(String(currentPage));
+  }, [currentPage]);
 
-  // State to track typing inside the Product Combobox
-  const [comboSearch, setComboSearch] = useState("");
+  // Print Modal States
+  const [showFormatModal, setShowFormatModal] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [printFormat, setPrintFormat] = useState<"simple" | "detailed">(
+    "simple",
+  );
 
-  const handlePageInputSubmit = () => {
-    const page = parseInt(pageInput);
-    if (!isNaN(page) && page >= 1 && page <= totalPages) setCurrentPage(page);
-    else setPageInput(String(currentPage));
-  };
-
-  const getSelectedProductName = () => {
-    if (productFilter === "all") return "All Products";
-    const p = allProducts.find((p) => p.product_id === productFilter);
-    if (!p) return "Unknown Product";
-    return p.description || p.product_name;
-  };
-
-  const getSelectedSupplierName = () => {
-    if (supplierFilter === "all") return "All Suppliers";
-    const s = suppliers.find((s) => String(s.id) === supplierFilter);
-    if (!s) return "Unknown Supplier";
-    return s.supplier_name;
-  };
-
-  const getFilterLabel = () => {
-    switch (barcodeFilter) {
-      case "missing":
-        return "Missing Barcodes";
-      case "completed":
-        return "With Barcodes";
-      default:
-        return "All Products";
+  // --- HANDLERS ---
+  const handleToggleSelectionMode = () => {
+    if (isSelectionMode) {
+      setIsSelectionMode(false);
+      setSelectedIds([]);
+    } else {
+      setIsSelectionMode(true);
     }
   };
 
-  // NEW: Reset Handler
-  const handleResetFilters = () => {
-    setSearchQuery("");
-    setSupplierFilter("all");
-    setProductFilter("all");
-    setBarcodeFilter("all");
-    setComboSearch("");
-    setCurrentPage(1);
+  const handleToggleSelect = (product: Product) => {
+    const id = String(product.product_id);
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
+    );
   };
 
-  // Efficiently filter products for the combobox
-  const filteredComboProducts = useMemo(() => {
-    if (!comboSearch) return allProducts.slice(0, 50);
+  const handleToggleAll = (ids: string[]) => {
+    setSelectedIds(ids);
+  };
 
-    const lowerSearch = comboSearch.toLowerCase();
-    return allProducts
-      .filter((p) => {
-        const name = (p.description || p.product_name || "").toLowerCase();
-        const id = String(p.product_id);
-        return name.includes(lowerSearch) || id.includes(lowerSearch);
-      })
-      .slice(0, 50);
-  }, [allProducts, comboSearch]);
+  const handleInitiatePrint = () => {
+    if (selectedIds.length === 0) return;
+    setShowFormatModal(true);
+  };
+
+  const handleFormatSelected = (format: "simple" | "detailed") => {
+    setPrintFormat(format);
+    setShowFormatModal(false);
+    setShowPreviewModal(true);
+  };
+
+  const handlePageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setPageInput(val); // Allow typing freely
+
+    // Only update actual page if it's a valid number
+    const pageNum = parseInt(val);
+    if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+      setCurrentPage(pageNum);
+    }
+  };
+
+  const handlePageInputBlur = () => {
+    // Reset input to valid current page on blur if invalid
+    setPageInput(String(currentPage));
+  };
+
+  const selectedProductsData = allProducts.filter((p) =>
+    selectedIds.includes(String(p.product_id)),
+  );
+
+  // --- 1. SKELETON LOADING STATE ---
+  if (isLoading) {
+    return <BarcodeScannerSkeleton />;
+  }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-3xl font-bold tracking-tight">
-          Barcode Management
+    <div className="space-y-6 p-6 w-full bg-slate-50/50 min-h-screen">
+      {/* HEADER */}
+      <div className="flex flex-col gap-2">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+          Barcode Master List
         </h1>
         <p className="text-muted-foreground">
-          Scan or manually enter barcodes to assign them to existing products.
+          Manage product barcodes, scan new items, and print labels.
         </p>
       </div>
 
-      <div className="flex flex-col xl:flex-row gap-4 items-end xl:items-center justify-between bg-card border rounded-lg p-4 shadow-sm">
-        <div className="flex flex-col sm:flex-row gap-4 w-full xl:w-auto flex-1">
-          {/* Search */}
-          <div className="flex flex-col gap-2 w-full sm:w-62.5">
-            <span className="text-xs font-semibold text-muted-foreground uppercase">
+      {/* FILTER BAR */}
+      <div className="bg-white p-4 rounded-lg border shadow-sm flex flex-col xl:flex-row gap-6 items-end justify-between">
+        {/* LEFT SIDE: SEARCH & FILTERS */}
+        <div className="flex flex-col md:flex-row gap-4 w-full xl:w-auto">
+          {/* SEARCH */}
+          <div className="flex flex-col gap-2 w-full md:w-[280px]">
+            <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
               Search
-            </span>
+            </Label>
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Desc, ID, or Barcode..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
+                className="pl-9 h-10"
               />
             </div>
           </div>
 
-          {/* Supplier Filter */}
-          <div className="flex flex-col gap-2 w-full sm:w-50">
-            <span className="text-xs font-semibold text-muted-foreground uppercase">
+          {/* SUPPLIER COMBOBOX */}
+          <div className="flex flex-col gap-2 w-full md:w-[240px]">
+            <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
               Supplier
-            </span>
-            <Popover
-              open={openSupplierCombo}
-              onOpenChange={setOpenSupplierCombo}
-            >
+            </Label>
+            <Popover open={openSupplier} onOpenChange={setOpenSupplier}>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
                   role="combobox"
-                  aria-expanded={openSupplierCombo}
-                  className="justify-between overflow-hidden"
+                  aria-expanded={openSupplier}
+                  className="h-10 w-full justify-between font-normal"
                 >
-                  <span className="truncate">{getSelectedSupplierName()}</span>
+                  {supplierFilter && supplierFilter !== "all"
+                    ? suppliers.find((s) => String(s.id) === supplierFilter)
+                        ?.supplier_name
+                    : "All Suppliers"}
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-75 p-0" align="start">
+              <PopoverContent className="w-[240px] p-0">
                 <Command>
                   <CommandInput placeholder="Search supplier..." />
                   <CommandList>
                     <CommandEmpty>No supplier found.</CommandEmpty>
                     <CommandGroup>
                       <CommandItem
-                        value="all_suppliers"
+                        value="all"
                         onSelect={() => {
                           setSupplierFilter("all");
-                          setOpenSupplierCombo(false);
+                          setOpenSupplier(false);
                         }}
                       >
                         <Check
@@ -221,10 +225,10 @@ export default function BarCodeScannerModule() {
                       {suppliers.map((supplier) => (
                         <CommandItem
                           key={supplier.id}
-                          value={`${supplier.supplier_name} ${supplier.id}`}
+                          value={supplier.supplier_name}
                           onSelect={() => {
                             setSupplierFilter(String(supplier.id));
-                            setOpenSupplierCombo(false);
+                            setOpenSupplier(false);
                           }}
                         >
                           <Check
@@ -235,9 +239,7 @@ export default function BarCodeScannerModule() {
                                 : "opacity-0",
                             )}
                           />
-                          <span className="truncate">
-                            {supplier.supplier_name}
-                          </span>
+                          {supplier.supplier_name}
                         </CommandItem>
                       ))}
                     </CommandGroup>
@@ -247,39 +249,38 @@ export default function BarCodeScannerModule() {
             </Popover>
           </div>
 
-          {/* Product Select */}
-          <div className="flex flex-col gap-2 w-full sm:w-87.5">
-            <span className="text-xs font-semibold text-muted-foreground uppercase">
+          {/* PRODUCT COMBOBOX */}
+          <div className="flex flex-col gap-2 w-full md:w-[240px]">
+            <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
               Product Select
-            </span>
-            <Popover open={openProductCombo} onOpenChange={setOpenProductCombo}>
+            </Label>
+            <Popover open={openProduct} onOpenChange={setOpenProduct}>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
                   role="combobox"
-                  aria-expanded={openProductCombo}
-                  className="justify-between overflow-hidden"
+                  aria-expanded={openProduct}
+                  className="h-10 w-full justify-between font-normal"
                 >
-                  <span className="truncate">{getSelectedProductName()}</span>
+                  {productFilter && productFilter !== "all"
+                    ? allProducts.find(
+                        (p) => String(p.product_id) === productFilter,
+                      )?.product_name || "Unknown"
+                    : "All Products"}
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-100 p-0" align="start">
-                <Command shouldFilter={false}>
-                  <CommandInput
-                    placeholder="Search by description..."
-                    value={comboSearch}
-                    onValueChange={setComboSearch}
-                  />
+              <PopoverContent className="w-[240px] p-0">
+                <Command>
+                  <CommandInput placeholder="Search product..." />
                   <CommandList>
                     <CommandEmpty>No product found.</CommandEmpty>
                     <CommandGroup>
                       <CommandItem
-                        value="all_products"
+                        value="all"
                         onSelect={() => {
                           setProductFilter("all");
-                          setOpenProductCombo(false);
-                          setComboSearch("");
+                          setOpenProduct(false);
                         }}
                       >
                         <Check
@@ -292,30 +293,27 @@ export default function BarCodeScannerModule() {
                         />
                         All Products
                       </CommandItem>
-
-                      {filteredComboProducts.map((product) => (
+                      {allProducts.slice(0, 50).map((product) => (
                         <CommandItem
                           key={product.product_id}
-                          value={`${
-                            product.description || product.product_name
-                          } ${product.product_id}`}
+                          value={product.product_name || ""}
                           onSelect={() => {
-                            setProductFilter(product.product_id);
-                            setOpenProductCombo(false);
-                            setComboSearch("");
+                            setProductFilter(String(product.product_id));
+                            setOpenProduct(false);
                           }}
                         >
                           <Check
                             className={cn(
                               "mr-2 h-4 w-4",
-                              productFilter === product.product_id
+                              productFilter === String(product.product_id)
                                 ? "opacity-100"
                                 : "opacity-0",
                             )}
                           />
-                          <div className="flex flex-col w-full overflow-hidden">
-                            <span className="truncate font-medium">
-                              {product.description || product.product_name}
+                          <div className="flex flex-col">
+                            <span>{product.product_name}</span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {product.product_code}
                             </span>
                           </div>
                         </CommandItem>
@@ -328,160 +326,176 @@ export default function BarCodeScannerModule() {
           </div>
         </div>
 
-        {/* Right Side: Status Filter & Reset */}
-        <div className="flex flex-col gap-2 w-full sm:w-auto min-w-50">
-          <span className="text-xs font-semibold text-muted-foreground uppercase">
-            Status
-          </span>
-          <div className="flex items-center gap-2">
-            {/* Status Filter */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+        {/* RIGHT SIDE: ACTIONS */}
+        <div className="flex items-end gap-3 w-full xl:w-auto justify-end">
+          {/* PRINT BUTTON */}
+          <div className="flex flex-col gap-2">
+            <div className="h-4 hidden md:block"></div>
+            {isSelectionMode ? (
+              <div className="flex gap-2">
                 <Button
-                  variant="outline"
-                  className="flex-1 justify-between min-w-40"
+                  variant="ghost"
+                  onClick={handleToggleSelectionMode}
+                  className="h-10 text-muted-foreground"
                 >
-                  <div className="flex items-center gap-2">
-                    <Filter className="h-4 w-4 text-muted-foreground" />
-                    <span>{getFilterLabel()}</span>
-                  </div>
-                  <ChevronDown className="h-4 w-4 opacity-50" />
+                  Cancel
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuRadioGroup
-                  value={barcodeFilter}
-                  onValueChange={(v) =>
-                    setBarcodeFilter(v as BarcodeFilterStatus)
-                  }
+                <Button
+                  onClick={handleInitiatePrint}
+                  disabled={selectedIds.length === 0}
+                  className="bg-blue-600 hover:bg-blue-700 h-10 shadow-sm"
                 >
-                  <DropdownMenuRadioItem value="all">
-                    Show All
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="missing">
-                    Missing Barcode Only
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="completed">
-                    With Barcode Only
-                  </DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <Printer className="mr-2 h-4 w-4" />
+                  Print ({selectedIds.length})
+                </Button>
+              </div>
+            ) : (
+              <Button
+                variant="outline"
+                onClick={handleToggleSelectionMode}
+                className="gap-2 h-10"
+              >
+                <Printer className="h-4 w-4 text-muted-foreground" />
+                Select to Print
+              </Button>
+            )}
+          </div>
 
-            {/* NEW: Reset Button */}
+          {/* STATUS FILTER */}
+          <div className="flex flex-col gap-2 w-[160px]">
+            <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+              Status
+            </Label>
+            <Select
+              value={barcodeFilter}
+              onValueChange={(v: any) => setBarcodeFilter(v)}
+            >
+              <SelectTrigger className="h-10">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Products</SelectItem>
+                <SelectItem value="missing">Missing Barcode</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* REFRESH BUTTON */}
+          <div className="flex flex-col gap-2">
+            <div className="h-4 hidden md:block"></div>
             <Button
               variant="outline"
               size="icon"
-              onClick={handleResetFilters}
-              title="Reset Filters"
+              className="h-10 w-10"
+              onClick={() => window.location.reload()}
             >
-              <RotateCcw className="h-4 w-4" />
+              <RotateCcw className="h-4 w-4 text-muted-foreground" />
             </Button>
           </div>
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ScanBarcode className="h-5 w-5 text-primary" />
-            Product List
-          </CardTitle>
-          <CardDescription>
-            Showing {products.length} of {totalItems} items based on current
-            filters.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="flex justify-center items-center h-64">
-              <Spinner className="h-8 w-8 text-primary" />
+      {/* TABLE */}
+      <ProductTable
+        products={products}
+        onEdit={setSelectedProduct}
+        isSelectionMode={isSelectionMode}
+        selectedIds={selectedIds}
+        onToggleSelect={handleToggleSelect}
+        onToggleAll={handleToggleAll}
+      />
+
+      {/* PAGINATION - REVISED */}
+      {!isLoading && (
+        <div className="flex flex-col md:flex-row items-center justify-between pt-4 border-t gap-4">
+          <p className="text-sm text-muted-foreground order-2 md:order-1">
+            Showing {products.length} of {totalItems} items.
+          </p>
+
+          <div className="flex items-center gap-2 order-1 md:order-2">
+            {/* Start */}
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+            >
+              <ChevronsLeft className="h-4 w-4" />
+            </Button>
+
+            {/* Previous */}
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+
+            {/* Manual Page Input */}
+            <div className="flex items-center gap-2 mx-2">
+              <span className="text-sm font-medium">Page</span>
+              <Input
+                className="h-8 w-12 text-center px-1"
+                value={pageInput}
+                onChange={handlePageInputChange}
+                onBlur={handlePageInputBlur}
+              />
+              <span className="text-sm text-muted-foreground">
+                of {totalPages}
+              </span>
             </div>
-          ) : (
-            <ProductTable
-              products={products}
-              onEdit={(product) => setSelectedProduct(product)}
-            />
-          )}
-        </CardContent>
 
-        {/* Pagination */}
-        {!isLoading && totalPages > 1 && (
-          <CardFooter className="flex justify-center sm:justify-end border-t pt-4 select-none">
-            <Pagination>
-              <PaginationContent className="gap-1">
-                <PaginationItem>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => setCurrentPage(1)}
-                    disabled={currentPage === 1}
-                  >
-                    <ChevronsLeft className="h-4 w-4" />
-                  </Button>
-                </PaginationItem>
-                <PaginationItem>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                    disabled={currentPage === 1}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                </PaginationItem>
-                <div className="flex items-center gap-2 mx-2">
-                  <span className="text-sm text-muted-foreground">Page</span>
-                  <Input
-                    className="h-8 w-12 text-center px-1"
-                    value={pageInput}
-                    onChange={(e) => setPageInput(e.target.value)}
-                    onBlur={handlePageInputSubmit}
-                    onKeyDown={(e) =>
-                      e.key === "Enter" && handlePageInputSubmit()
-                    }
-                  />
-                  <span className="text-sm text-muted-foreground whitespace-nowrap">
-                    of {totalPages}
-                  </span>
-                </div>
-                <PaginationItem>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() =>
-                      setCurrentPage(Math.min(totalPages, currentPage + 1))
-                    }
-                    disabled={currentPage === totalPages}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </PaginationItem>
-                <PaginationItem>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => setCurrentPage(totalPages)}
-                    disabled={currentPage === totalPages}
-                  >
-                    <ChevronsRight className="h-4 w-4" />
-                  </Button>
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
-          </CardFooter>
-        )}
-      </Card>
+            {/* Next */}
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
 
+            {/* End */}
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage === totalPages}
+            >
+              <ChevronsRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* MODALS */}
       <ScannerModal
         open={!!selectedProduct}
         product={selectedProduct}
+        allProducts={allProducts}
         onClose={() => setSelectedProduct(null)}
         onSave={handleUpdateBarcode}
+      />
+
+      <PrintFormatModal
+        open={showFormatModal}
+        onClose={() => setShowFormatModal(false)}
+        onSelectFormat={handleFormatSelected}
+        count={selectedIds.length}
+      />
+
+      <PrintPreviewModal
+        open={showPreviewModal}
+        onClose={() => setShowPreviewModal(false)}
+        products={selectedProductsData}
+        format={printFormat}
       />
     </div>
   );
