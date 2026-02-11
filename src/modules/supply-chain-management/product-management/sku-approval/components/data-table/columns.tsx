@@ -53,6 +53,18 @@ export const getApprovalColumns = (
     },
   },
   {
+      accessorKey: "product_code",
+      enableSorting: true,
+      header: ({ column }) => <DataTableColumnHeader column={column} label="SKU Code" />,
+      cell: ({ row }) => (
+        row.original.product_code ? (
+          <code className="px-1 py-0.5 bg-muted rounded text-xs font-mono">{row.original.product_code}</code>
+        ) : (
+          <span className="text-muted-foreground/50 text-xs italic">Pending</span>
+        )
+      ),
+    },
+  {
     accessorKey: "status",
     enableSorting: true,
     header: ({ column }) => <DataTableColumnHeader column={column} label="Status" />,

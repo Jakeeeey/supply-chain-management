@@ -17,7 +17,7 @@ export async function request<T>(url: string, options: RequestInit = {}): Promis
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error(`API Error [${response.status}]:`, errorText.substring(0, 200)); 
+    console.error(`API Error [${response.status}] for ${url}:`, errorText.substring(0, 200)); 
     throw new Error(errorText || `API Request failed: ${response.status}`);
   }
 
