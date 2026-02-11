@@ -30,7 +30,27 @@ export function useSKUs() {
   const [error, setError] = useState<string | null>(null);
   
   // Track locally approved IDs to filter them out even if backend status update fails
-  const [approvedIds, setApprovedIds] = useState<Set<number | string>>(new Set());
+  // Initialize from localStorage to persist across page refreshes
+  const [approvedIds, setApprovedIds] = useState<Set<number | string>>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('sku_approved_ids');
+      if (stored) {
+        try {
+          return new Set(JSON.parse(stored));
+        } catch {
+          return new Set();
+        }
+      }
+    }
+    return new Set();
+  });
+
+  // Persist approvedIds to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('sku_approved_ids', JSON.stringify(Array.from(approvedIds)));
+    }
+  }, [approvedIds]);
 
   const refresh = useCallback(async () => {
     setIsLoading(true);
@@ -61,7 +81,6 @@ export function useSKUs() {
       setPendingApprovalData(pendingRes.data || []);
       setPendingTotal(pendingRes.meta?.total_count || 0);
       
-      // Filter out locally approved items (in case backend status update failed)
       if (approvedIds.size > 0) {
         const filteredPending = (pendingRes.data || []).filter((item: SKU) => {
           const itemId = item.id || item.product_id;
@@ -69,6 +88,22 @@ export function useSKUs() {
         });
         setPendingApprovalData(filteredPending);
         setPendingTotal(filteredPending.length);
+        
+        const pendingIds = new Set((pendingRes.data || []).map((item: SKU) => String(item.id || item.product_id)));
+        const idsToRemove: (number | string)[] = [];
+        approvedIds.forEach(id => {
+          if (!pendingIds.has(String(id))) {
+            idsToRemove.push(id);
+          }
+        });
+        
+        if (idsToRemove.length > 0) {
+          setApprovedIds(prev => {
+            const newSet = new Set(prev);
+            idsToRemove.forEach(id => newSet.delete(id));
+            return newSet;
+          });
+        }
       }
       
       setMasterData(masterRes.data || null);
