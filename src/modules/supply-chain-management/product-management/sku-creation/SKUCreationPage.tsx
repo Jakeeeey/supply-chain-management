@@ -161,21 +161,17 @@ export default function SKUCreationModule() {
   }
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold tracking-tight">SKU Registration</h2>
-        <div className="flex items-center gap-2">
+    <div className="space-y-4">
+      <div className="flex items-end justify-end gap-2  ">
           <Button variant="outline" onClick={refresh} disabled={isLoading}>
             <RefreshCcw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            Refresh
           </Button>
           <Button onClick={handleAdd}>
             <Plus className="h-4 w-4 mr-2" />
             Add SKU
           </Button>
-        </div>
       </div>
-
-      <div className="mt-6">
         <SKUTable 
           title="Product Drafts"
           data={draftData} 
@@ -195,8 +191,6 @@ export default function SKUCreationModule() {
           emptyTitle="No product drafts"
           emptyDescription="Your SKU registration queue is empty. Click 'Add SKU' above to create a new product draft and begin the approval process."
         />
-      </div>
-
       <SKUModal 
         open={isModalOpen} 
         setOpen={setIsModalOpen} 

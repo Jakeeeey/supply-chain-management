@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Info, FileText, Tag, Package, Factory, LayoutGrid, Barcode, Box } from "lucide-react";
 import { SKU, MasterData } from "@/modules/supply-chain-management/product-management/sku-creation/types/sku.schema";
-import { CellHelpers } from "../../sku-creation/utils/sku-helpers";
+import { CellHelpers } from "../../../sku-creation/utils/sku-helpers";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface EditDescriptionModalProps {

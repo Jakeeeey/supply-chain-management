@@ -7,7 +7,7 @@ import { MasterlistTable } from "./components/data-table";
 import { Button } from "@/components/ui/button";
 import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import ErrorPage from "@/components/shared/ErrorPage";
-import { EditDescriptionModal } from "./components/EditDescriptionModal";
+import { EditDescriptionModal } from "./components/modals/EditDescriptionModal";
 import { SKU } from "../sku-creation/types/sku.schema";
 import { toast } from "sonner";
 
@@ -85,17 +85,9 @@ export default function SKUMasterlistModule() {
   }
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">SKU Masterlist</h1>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={refresh} disabled={isLoading || isUpdating}>
-            <RefreshCcw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-          </Button>
-        </div>
-      </div>
+    <div className="space-y-4">
+     
 
-      <div className="mt-6">
         <MasterlistTable 
           title="Active Product Master Records"
           data={data} 
@@ -109,10 +101,7 @@ export default function SKUMasterlistModule() {
           isLoading={isLoading} 
           onSearch={handleSearch}
           onEdit={setEditingSKU}
-          emptyTitle="Masterlist is empty"
-          emptyDescription="No active master records were found. Products will appear here once they are approved in the SKU Registration module."
         />
-      </div>
 
       <EditDescriptionModal
         sku={editingSKU}

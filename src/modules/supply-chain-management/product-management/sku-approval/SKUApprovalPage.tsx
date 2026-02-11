@@ -79,17 +79,7 @@ export default function SKUApprovalPage() {
   }
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold tracking-tight">SKU Approval Queue</h2>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={refresh} disabled={isLoading}>
-            <RefreshCcw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-          </Button>
-        </div>
-      </div>
-
-      <div className="mt-6">
+    <div>
         <ApprovalTable 
           title="Items Pending Approval"
           data={pendingApprovalData} 
@@ -104,10 +94,7 @@ export default function SKUApprovalPage() {
           isLoading={isLoading} 
           onApprove={handleApproveAndActivate as any}
           onReject={handleReject as any}
-          emptyTitle="Queue clear"
-          emptyDescription="There are currently no items pending approval. All submitted SKUs have been processed."
         />
-      </div>
     </div>
   );
 }

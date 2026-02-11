@@ -17,7 +17,7 @@ export function ModuleSkeleton({
   hasTabs = false
 }: ModuleSkeletonProps) {
   return (
-    <div className="container mx-auto py-6 space-y-6 animate-in fade-in duration-500">
+    <div className="animate-in fade-in duration-500">
       {/* Header Skeleton */}
       {/* <div className="flex items-center justify-between">
         <Skeleton className="h-10 w-64 rounded-xl" />

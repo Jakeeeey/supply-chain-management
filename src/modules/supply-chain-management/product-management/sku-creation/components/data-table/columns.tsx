@@ -30,27 +30,31 @@ export const getColumns = (
     accessorKey: "product_name",
     enableSorting: true,
     header: ({ column }) => <DataTableColumnHeader column={column} label="Product Name" />,
+    meta: { label: "Product Name" },
     cell: ({ row }) => <span className="font-medium">{row.original.product_name || "Unnamed Product"}</span>,
   },
   {
     accessorKey: "product_category",
     enableSorting: true,
     header: ({ column }) => <DataTableColumnHeader column={column} label="Category" />,
+    meta: { label: "Category" },
     cell: ({ row }) => <span>{CellHelpers.renderMasterText(row.original.product_category, masterData?.categories)}</span>,
   },
   {
     accessorKey: "product_brand",
     enableSorting: true,
     header: ({ column }) => <DataTableColumnHeader column={column} label="Brand" />,
+    meta: { label: "Brand" },
     cell: ({ row }) => <span>{CellHelpers.renderMasterText(row.original.product_brand, masterData?.brands)}</span>,
   },
   {
     accessorKey: "inventory_type",
     header: ({ column }) => <DataTableColumnHeader column={column} label="Type" />,
+    meta: { label: "Type" },
     cell: ({ row }) => {
       const type = CellHelpers.detectInventoryType(row.original);
       return (
-        <Badge variant="outline" className={`font-medium ${type === 'Variant' ? 'border-primary text-primary bg-primary/5' : 'text-muted-foreground opacity-70'}`}>
+        <Badge variant="secondary" className={`font-medium ${type === 'Variant' ? 'border-primary text-primary bg-primary/5' : 'text-muted-foreground opacity-70'}`}>
           {type}
         </Badge>
       );
@@ -60,6 +64,7 @@ export const getColumns = (
     accessorKey: "product_code",
     enableSorting: true,
     header: ({ column }) => <DataTableColumnHeader column={column} label="SKU Code" />,
+    meta: { label: "SKU Code" },
     cell: ({ row }) => (
       row.original.product_code ? (
         <code className="px-1 py-0.5 bg-muted rounded text-xs font-mono">{row.original.product_code}</code>
@@ -72,10 +77,11 @@ export const getColumns = (
     accessorKey: "status",
     enableSorting: true,
     header: ({ column }) => <DataTableColumnHeader column={column} label="Status" />,
+    meta: { label: "Status" },
     cell: ({ row }) => {
       const raw = (row.getValue("status") || "DRAFT") as string;
       return (
-        <Badge variant={statusVariants[raw] || "outline"} className="font-semibold uppercase px-3">
+        <Badge variant={statusVariants[raw] || "outline"} className="font-semibold uppercase">
           {raw.replace(/_/g, " ")}
         </Badge>
       );
@@ -83,6 +89,8 @@ export const getColumns = (
   },
   {
     id: "actions",
+    enableHiding: false,
+    meta: { label: "Actions" },
     cell: ({ row }) => {
       const sku = row.original;
       const id = (sku as any).id || sku.product_id;

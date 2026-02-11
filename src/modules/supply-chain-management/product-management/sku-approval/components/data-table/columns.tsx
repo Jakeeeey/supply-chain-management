@@ -26,23 +26,27 @@ export const getApprovalColumns = (
     accessorKey: "product_name",
     enableSorting: true,
     header: ({ column }) => <DataTableColumnHeader column={column} label="Product Name" />,
+    meta: { label: "Product Name" },
     cell: ({ row }) => <span className="font-medium">{row.original.product_name || "Unnamed Product"}</span>,
   },
   {
     accessorKey: "product_category",
     enableSorting: true,
     header: ({ column }) => <DataTableColumnHeader column={column} label="Category" />,
+    meta: { label: "Category" },
     cell: ({ row }) => <span>{CellHelpers.renderMasterText(row.original.product_category, masterData?.categories)}</span>,
   },
   {
     accessorKey: "product_brand",
     enableSorting: true,
     header: ({ column }) => <DataTableColumnHeader column={column} label="Brand" />,
+    meta: { label: "Brand" },
     cell: ({ row }) => <span>{CellHelpers.renderMasterText(row.original.product_brand, masterData?.brands)}</span>,
   },
   {
     accessorKey: "inventory_type",
     header: ({ column }) => <DataTableColumnHeader column={column} label="Type" />,
+    meta: { label: "Type" },
     cell: ({ row }) => {
       const type = CellHelpers.detectInventoryType(row.original);
       return (
@@ -56,6 +60,7 @@ export const getApprovalColumns = (
       accessorKey: "product_code",
       enableSorting: true,
       header: ({ column }) => <DataTableColumnHeader column={column} label="SKU Code" />,
+      meta: { label: "SKU Code" },
       cell: ({ row }) => (
         row.original.product_code ? (
           <code className="px-1 py-0.5 bg-muted rounded text-xs font-mono">{row.original.product_code}</code>
@@ -68,6 +73,7 @@ export const getApprovalColumns = (
     accessorKey: "status",
     enableSorting: true,
     header: ({ column }) => <DataTableColumnHeader column={column} label="Status" />,
+    meta: { label: "Status" },
     cell: ({ row }) => {
       const raw = (row.getValue("status") || "PENDING") as string;
       return <Badge variant={statusVariants[raw] || "secondary"} className="uppercase">{raw.replace(/_/g, " ")}</Badge>;
@@ -75,6 +81,8 @@ export const getApprovalColumns = (
   },
   {
     id: "actions",
+    enableHiding: false,
+    meta: { label: "Actions" },
     cell: ({ row }) => {
       const sku = row.original;
       const id = (sku as any).id || sku.product_id;
