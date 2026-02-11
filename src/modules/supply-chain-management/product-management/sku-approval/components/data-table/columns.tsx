@@ -1,10 +1,13 @@
-"use client"
+"use client";
 
-import { ColumnDef } from "@tanstack/react-table"
-import { SKU, MasterData } from "@/modules/supply-chain-management/product-management/sku-creation/types/sku.schema"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { CheckCircle, XCircle, Eye, MoreHorizontal, Edit } from "lucide-react"
+import { ColumnDef } from "@tanstack/react-table";
+import {
+  SKU,
+  MasterData,
+} from "@/modules/supply-chain-management/product-management/sku-creation/types/sku.schema";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { CheckCircle, XCircle, Eye, MoreHorizontal, Edit } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,9 +15,12 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { DataTableColumnHeader } from "./table-column-header"
-import { CellHelpers, statusVariants } from "../../../sku-creation/utils/sku-helpers"
+} from "@/components/ui/dropdown-menu";
+import { DataTableColumnHeader } from "./table-column-header";
+import {
+  CellHelpers,
+  statusVariants,
+} from "../../../sku-creation/utils/sku-helpers";
 
 export const getApprovalColumns = (
   masterData: MasterData | null,
@@ -24,60 +30,114 @@ export const getApprovalColumns = (
   onEdit?: (sku: SKU) => void,
 ): ColumnDef<SKU>[] => [
   {
+    accessorKey: "product_code",
+    enableSorting: true,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="SKU Code" />
+    ),
+    meta: { label: "SKU Code" },
+    cell: ({ row }) => (
+      <div className="w-[140px]">
+        {row.original.product_code ? (
+          <code className="px-1 py-0.5 bg-muted rounded text-xs font-mono font-medium">
+            {row.original.product_code}
+          </code>
+        ) : (
+          <span className="text-muted-foreground/50 text-xs italic">
+            Pending
+          </span>
+        )}
+      </div>
+    ),
+  },
+  {
     accessorKey: "product_name",
     enableSorting: true,
-    header: ({ column }) => <DataTableColumnHeader column={column} label="Product Name" />,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Product Name" />
+    ),
     meta: { label: "Product Name" },
-    cell: ({ row }) => <span className="font-medium">{row.original.product_name || "Unnamed Product"}</span>,
+    cell: ({ row }) => (
+      <span className="font-medium">
+        {row.original.product_name || "Unnamed Product"}
+      </span>
+    ),
   },
   {
     accessorKey: "product_category",
     enableSorting: true,
-    header: ({ column }) => <DataTableColumnHeader column={column} label="Category" />,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Category" />
+    ),
     meta: { label: "Category" },
-    cell: ({ row }) => <span>{CellHelpers.renderMasterText(row.original.product_category, masterData?.categories)}</span>,
+    cell: ({ row }) => (
+      <div className="w-[120px] truncate">
+        <span className="text-xs">
+          {CellHelpers.renderMasterText(
+            row.original.product_category,
+            masterData?.categories,
+          )}
+        </span>
+      </div>
+    ),
   },
   {
     accessorKey: "product_brand",
     enableSorting: true,
-    header: ({ column }) => <DataTableColumnHeader column={column} label="Brand" />,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Brand" />
+    ),
     meta: { label: "Brand" },
-    cell: ({ row }) => <span>{CellHelpers.renderMasterText(row.original.product_brand, masterData?.brands)}</span>,
+    cell: ({ row }) => (
+      <div className="w-[120px] truncate">
+        <span className="text-xs">
+          {CellHelpers.renderMasterText(
+            row.original.product_brand,
+            masterData?.brands,
+          )}
+        </span>
+      </div>
+    ),
   },
   {
     accessorKey: "inventory_type",
-    header: ({ column }) => <DataTableColumnHeader column={column} label="Type" />,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Type" />
+    ),
     meta: { label: "Type" },
     cell: ({ row }) => {
       const type = CellHelpers.detectInventoryType(row.original);
       return (
-        <Badge variant="outline" className={`font-medium ${type === 'Variant' ? 'border-primary text-primary bg-primary/5' : 'text-muted-foreground opacity-70'}`}>
-          {type}
-        </Badge>
+        <div className="w-[80px]">
+          <Badge
+            variant="outline"
+            className={`font-medium ${type === "Variant" ? "border-primary text-primary bg-primary/5" : "text-muted-foreground opacity-70"}`}
+          >
+            {type}
+          </Badge>
+        </div>
       );
     },
   },
   {
-      accessorKey: "product_code",
-      enableSorting: true,
-      header: ({ column }) => <DataTableColumnHeader column={column} label="SKU Code" />,
-      meta: { label: "SKU Code" },
-      cell: ({ row }) => (
-        row.original.product_code ? (
-          <code className="px-1 py-0.5 bg-muted rounded text-xs font-mono">{row.original.product_code}</code>
-        ) : (
-          <span className="text-muted-foreground/50 text-xs italic">Pending</span>
-        )
-      ),
-    },
-  {
     accessorKey: "status",
     enableSorting: true,
-    header: ({ column }) => <DataTableColumnHeader column={column} label="Status" />,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Status" />
+    ),
     meta: { label: "Status" },
     cell: ({ row }) => {
       const raw = (row.getValue("status") || "PENDING") as string;
-      return <Badge variant={statusVariants[raw] || "secondary"} className="uppercase">{raw.replace(/_/g, " ")}</Badge>;
+      return (
+        <div className="w-[110px]">
+          <Badge
+            variant={statusVariants[raw] || "secondary"}
+            className="uppercase text-[10px]"
+          >
+            {raw.replace(/_/g, " ")}
+          </Badge>
+        </div>
+      );
     },
   },
   {
@@ -88,16 +148,42 @@ export const getApprovalColumns = (
       const sku = row.original;
       const id = (sku as any).id || sku.product_id;
       return (
-        <div className="flex justify-end">
+        <div className="flex justify-end w-[60px]">
           <DropdownMenu>
-            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Review Actions</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {onView && <DropdownMenuItem onClick={() => onView(sku)}><Eye className="h-4 w-4 mr-2" /> View Details</DropdownMenuItem>}
-              {onEdit && <DropdownMenuItem onClick={() => onEdit(sku)}><Edit className="h-4 w-4 mr-2" /> Edit Description</DropdownMenuItem>}
-              {onApprove && <DropdownMenuItem onClick={() => onApprove(id as number)} className="text-primary"><CheckCircle className="h-4 w-4 mr-2" /> Approve</DropdownMenuItem>}
-              {onReject && <DropdownMenuItem onClick={() => onReject(sku)} className="text-destructive"><XCircle className="h-4 w-4 mr-2" /> Reject</DropdownMenuItem>}
+              {onView && (
+                <DropdownMenuItem onClick={() => onView(sku)}>
+                  <Eye className="h-4 w-4 mr-2" /> View Details
+                </DropdownMenuItem>
+              )}
+              {onEdit && (
+                <DropdownMenuItem onClick={() => onEdit(sku)}>
+                  <Edit className="h-4 w-4 mr-2" /> Edit Description
+                </DropdownMenuItem>
+              )}
+              {onApprove && (
+                <DropdownMenuItem
+                  onClick={() => onApprove(id as number)}
+                  className="text-primary"
+                >
+                  <CheckCircle className="h-4 w-4 mr-2" /> Approve
+                </DropdownMenuItem>
+              )}
+              {onReject && (
+                <DropdownMenuItem
+                  onClick={() => onReject(sku)}
+                  className="text-destructive"
+                >
+                  <XCircle className="h-4 w-4 mr-2" /> Reject
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

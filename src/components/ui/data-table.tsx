@@ -1,6 +1,6 @@
-"use client"
+"use client";
 
-import * as React from "react"
+import * as React from "react";
 import {
   ColumnDef,
   ColumnFiltersState,
@@ -12,7 +12,7 @@ import {
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
-} from "@tanstack/react-table"
+} from "@tanstack/react-table";
 
 import {
   Table,
@@ -21,18 +21,30 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+} from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Settings2 } from "lucide-react"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { EmptyPlaceholder } from "@/components/shared/EmptyPlaceholder"
+} from "@/components/ui/dropdown-menu";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Settings2,
+} from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { EmptyPlaceholder } from "@/components/shared/EmptyPlaceholder";
 
 interface SearchInputProps {
   placeholder: string;
@@ -41,9 +53,14 @@ interface SearchInputProps {
   isLoading?: boolean;
 }
 
-function SearchInput({ placeholder, initialValue, onSearch, isLoading = false }: SearchInputProps) {
+function SearchInput({
+  placeholder,
+  initialValue,
+  onSearch,
+  isLoading = false,
+}: SearchInputProps) {
   const [value, setValue] = React.useState(initialValue);
-  
+
   // Update local state if initialValue changes (e.g. from table reset)
   React.useEffect(() => {
     setValue(initialValue);
@@ -81,23 +98,26 @@ function SearchInput({ placeholder, initialValue, onSearch, isLoading = false }:
 }
 
 interface DataTableProps<TData, TValue> {
-  columns: ColumnDef<TData, TValue>[]
-  data: TData[]
-  pageCount?: number
+  columns: ColumnDef<TData, TValue>[];
+  data: TData[];
+  pageCount?: number;
   pagination?: {
-    pageIndex: number
-    pageSize: number
-  }
-  onPaginationChange?: (pagination: { pageIndex: number, pageSize: number }) => void
-  manualPagination?: boolean
-  sorting?: SortingState
-  onSortingChange?: (sorting: SortingState) => void
-  manualSorting?: boolean
-  searchKey?: string
-  onSearch?: (value: string) => void
-  isLoading?: boolean
-  emptyTitle?: string
-  emptyDescription?: string
+    pageIndex: number;
+    pageSize: number;
+  };
+  onPaginationChange?: (pagination: {
+    pageIndex: number;
+    pageSize: number;
+  }) => void;
+  manualPagination?: boolean;
+  sorting?: SortingState;
+  onSortingChange?: (sorting: SortingState) => void;
+  manualSorting?: boolean;
+  searchKey?: string;
+  onSearch?: (value: string) => void;
+  isLoading?: boolean;
+  emptyTitle?: string;
+  emptyDescription?: string;
 }
 
 export function DataTable<TData, TValue>({
@@ -116,10 +136,15 @@ export function DataTable<TData, TValue>({
   emptyTitle,
   emptyDescription,
 }: DataTableProps<TData, TValue>) {
-  const [internalSorting, setInternalSorting] = React.useState<SortingState>([])
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
-  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
-  const [rowSelection, setRowSelection] = React.useState({})
+  const [internalSorting, setInternalSorting] = React.useState<SortingState>(
+    [],
+  );
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
+    [],
+  );
+  const [columnVisibility, setColumnVisibility] =
+    React.useState<VisibilityState>({});
+  const [rowSelection, setRowSelection] = React.useState({});
 
   const actualSorting = externalSorting ?? internalSorting;
 
@@ -134,7 +159,8 @@ export function DataTable<TData, TValue>({
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     onSortingChange: (updater) => {
-      const nextSorting = typeof updater === 'function' ? updater(actualSorting) : updater;
+      const nextSorting =
+        typeof updater === "function" ? updater(actualSorting) : updater;
       if (onExternalSortingChange) {
         onExternalSortingChange(nextSorting);
       } else {
@@ -154,37 +180,49 @@ export function DataTable<TData, TValue>({
       columnFilters,
       columnVisibility,
       rowSelection,
-      pagination: manualPagination ? (pagination ?? internalPagination) : internalPagination,
+      pagination: manualPagination
+        ? (pagination ?? internalPagination)
+        : internalPagination,
     },
     onPaginationChange: (updater) => {
-      const nextPagination = typeof updater === 'function' 
-        ? updater(manualPagination ? (pagination ?? internalPagination) : internalPagination) 
-        : updater;
-      
+      const nextPagination =
+        typeof updater === "function"
+          ? updater(
+              manualPagination
+                ? (pagination ?? internalPagination)
+                : internalPagination,
+            )
+          : updater;
+
       if (manualPagination && onPaginationChange) {
         onPaginationChange(nextPagination);
       } else {
         setInternalPagination(nextPagination);
       }
-    }
-  })
+    },
+  });
 
-  const handleSearchWrapper = React.useCallback((value: string) => {
-    if (searchKey) {
-      const col = table.getColumn(searchKey);
-      if (col) col.setFilterValue(value);
-    }
-    if (onSearch) onSearch(value);
-  }, [table, searchKey, onSearch]);
+  const handleSearchWrapper = React.useCallback(
+    (value: string) => {
+      if (searchKey) {
+        const col = table.getColumn(searchKey);
+        if (col) col.setFilterValue(value);
+      }
+      if (onSearch) onSearch(value);
+    },
+    [table, searchKey, onSearch],
+  );
 
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-4">
         {searchKey && (
           <div className="max-w-sm w-full">
-            <SearchInput 
-              placeholder={`Search ${searchKey.replace(/_/g, ' ')}...`}
-              initialValue={(table.getColumn(searchKey)?.getFilterValue() as string) ?? ""}
+            <SearchInput
+              placeholder={`Search ${searchKey.replace(/_/g, " ")}...`}
+              initialValue={
+                (table.getColumn(searchKey)?.getFilterValue() as string) ?? ""
+              }
               isLoading={isLoading}
               onSearch={handleSearchWrapper}
             />
@@ -200,9 +238,7 @@ export function DataTable<TData, TValue>({
           <DropdownMenuContent align="end" className="w-[150px] rounded-xl">
             {table
               .getAllColumns()
-              .filter(
-                (column) => column.getCanHide()
-              )
+              .filter((column) => column.getCanHide())
               .map((column) => {
                 return (
                   <DropdownMenuCheckboxItem
@@ -213,9 +249,10 @@ export function DataTable<TData, TValue>({
                       column.toggleVisibility(!!value)
                     }
                   >
-                    {(column.columnDef.meta as any)?.label || column.id.replace(/_/g, " ")}
+                    {(column.columnDef.meta as any)?.label ||
+                      column.id.replace(/_/g, " ")}
                   </DropdownMenuCheckboxItem>
-                )
+                );
               })}
           </DropdownMenuContent>
         </DropdownMenu>
@@ -232,10 +269,10 @@ export function DataTable<TData, TValue>({
                         ? null
                         : flexRender(
                             header.column.columnDef.header,
-                            header.getContext()
+                            header.getContext(),
                           )}
                     </TableHead>
-                  )
+                  );
                 })}
               </TableRow>
             ))}
@@ -247,11 +284,15 @@ export function DataTable<TData, TValue>({
                   {columns.map((_, colIndex) => (
                     <TableCell key={colIndex} className="py-4">
                       <div className="flex items-center gap-2">
-                        <div className={`h-4 bg-muted animate-pulse rounded ${
-                          colIndex === 0 ? 'w-48' : 
-                          colIndex === columns.length - 1 ? 'w-8 ml-auto' : 
-                          'w-24'
-                        }`} />
+                        <div
+                          className={`h-4 bg-muted animate-pulse rounded ${
+                            colIndex === 0
+                              ? "w-48"
+                              : colIndex === columns.length - 1
+                                ? "w-8 ml-auto"
+                                : "w-24"
+                          }`}
+                        />
                       </div>
                     </TableCell>
                   ))}
@@ -266,14 +307,20 @@ export function DataTable<TData, TValue>({
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id} className="py-4">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext(),
+                      )}
                     </TableCell>
                   ))}
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center">
+                <TableCell
+                  colSpan={columns.length}
+                  className="h-24 text-center"
+                >
                   <p className="text-sm text-muted-foreground">No results.</p>
                 </TableCell>
               </TableRow>
@@ -294,11 +341,13 @@ export function DataTable<TData, TValue>({
             <Select
               value={`${table.getState().pagination.pageSize}`}
               onValueChange={(value) => {
-                table.setPageSize(Number(value))
+                table.setPageSize(Number(value));
               }}
             >
               <SelectTrigger className="h-8 w-[70px] rounded-lg">
-                <SelectValue placeholder={table.getState().pagination.pageSize} />
+                <SelectValue
+                  placeholder={table.getState().pagination.pageSize}
+                />
               </SelectTrigger>
               <SelectContent side="top">
                 {[10, 20, 30, 40, 50].map((pageSize) => (
@@ -354,5 +403,5 @@ export function DataTable<TData, TValue>({
         </div>
       </div>
     </div>
-  )
+  );
 }

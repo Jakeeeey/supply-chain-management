@@ -1,10 +1,22 @@
-"use client"
+"use client";
 
-import { ColumnDef } from "@tanstack/react-table"
-import { SKU, MasterData, SKUStatus } from "@/modules/supply-chain-management/product-management/sku-creation/types/sku.schema"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Edit, Trash2, Send, CheckCircle, XCircle, MoreHorizontal, Eye } from "lucide-react"
+import { ColumnDef } from "@tanstack/react-table";
+import {
+  SKU,
+  MasterData,
+  SKUStatus,
+} from "@/modules/supply-chain-management/product-management/sku-creation/types/sku.schema";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Edit,
+  Trash2,
+  Send,
+  CheckCircle,
+  XCircle,
+  MoreHorizontal,
+  Eye,
+} from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,10 +24,10 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { DataTableColumnHeader } from "./table-column-header"
-import { CellHelpers, statusVariants } from "../../utils/sku-helpers"
-import { spawn } from "child_process"
+} from "@/components/ui/dropdown-menu";
+import { DataTableColumnHeader } from "./table-column-header";
+import { CellHelpers, statusVariants } from "../../utils/sku-helpers";
+import { spawn } from "child_process";
 
 // --- Main Column Definition ---
 
@@ -28,69 +40,121 @@ export const getColumns = (
   onReject?: (id: number) => void,
 ): ColumnDef<SKU>[] => [
   {
+    accessorKey: "product_code",
+    enableSorting: true,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="SKU Code" />
+    ),
+    meta: { label: "SKU Code" },
+    cell: ({ row }) => (
+      <div className="w-[140px]">
+        {row.original.product_code ? (
+          <code className="px-1 py-0.5 bg-muted rounded text-xs font-mono font-medium">
+            {row.original.product_code}
+          </code>
+        ) : (
+          <span className="text-muted-foreground/50 text-xs italic">
+            Pending
+          </span>
+        )}
+      </div>
+    ),
+  },
+  {
     accessorKey: "product_name",
     enableSorting: true,
-    header: ({ column }) => <DataTableColumnHeader column={column} label="Product Name" />,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Product Name" />
+    ),
     meta: { label: "Product Name" },
-    cell: ({ row }) => <span className="font-medium">{row.original.product_name || "Unnamed Product"}</span>,
+    cell: ({ row }) => (
+      <span className="font-medium">
+        {row.original.product_name || "Unnamed Product"}
+      </span>
+    ),
   },
   {
     accessorKey: "product_category",
     enableSorting: true,
-    header: ({ column }) => <DataTableColumnHeader column={column} label="Category" />,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Category" />
+    ),
     meta: { label: "Category" },
-    cell: ({ row }) => <span>{CellHelpers.renderMasterText(row.original.product_category, masterData?.categories)}</span>,
+    cell: ({ row }) => (
+      <div className="w-[120px] truncate">
+        <span className="text-xs">
+          {CellHelpers.renderMasterText(
+            row.original.product_category,
+            masterData?.categories,
+          )}
+        </span>
+      </div>
+    ),
   },
   {
     accessorKey: "product_brand",
     enableSorting: true,
-    header: ({ column }) => <DataTableColumnHeader column={column} label="Brand" />,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Brand" />
+    ),
     meta: { label: "Brand" },
-    cell: ({ row }) => <span>{CellHelpers.renderMasterText(row.original.product_brand, masterData?.brands)}</span>,
+    cell: ({ row }) => (
+      <div className="w-[120px] truncate">
+        <span className="text-xs">
+          {CellHelpers.renderMasterText(
+            row.original.product_brand,
+            masterData?.brands,
+          )}
+        </span>
+      </div>
+    ),
   },
   {
     accessorKey: "inventory_type",
-    header: ({ column }) => <DataTableColumnHeader column={column} label="Type" />,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Type" />
+    ),
     meta: { label: "Type" },
     cell: ({ row }) => {
       const type = CellHelpers.detectInventoryType(row.original);
       return (
-        <Badge variant="secondary" className={`font-medium ${type === 'Variant' ? 'border-primary text-primary bg-primary/5' : 'text-muted-foreground opacity-70'}`}>
-          {type}
-        </Badge>
+        <div className="w-[80px]">
+          <Badge
+            variant="outline"
+            className={`font-medium ${type === "Variant" ? "border-primary text-primary bg-primary/5" : "text-muted-foreground opacity-70"}`}
+          >
+            {type}
+          </Badge>
+        </div>
       );
     },
   },
   {
-    accessorKey: "product_code",
-    enableSorting: true,
-    header: ({ column }) => <DataTableColumnHeader column={column} label="SKU Code" />,
-    meta: { label: "SKU Code" },
-    cell: ({ row }) => (
-      row.original.product_code ? (
-        <code className="px-1 py-0.5 bg-muted rounded text-xs font-mono">{row.original.product_code}</code>
-      ) : (
-        <span className="text-muted-foreground/50 text-xs italic">Pending</span>
-      )
-    ),
-  },
-  {
     accessorKey: "status",
     enableSorting: true,
-    header: ({ column }) => <DataTableColumnHeader column={column} label="Status" />,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Status" />
+    ),
     meta: { label: "Status" },
     cell: ({ row }) => {
       const raw = (row.getValue("status") || "DRAFT") as string;
       return (
-        <Badge variant={statusVariants[raw] || "outline"} className="font-semibold uppercase">
-          {raw.replace(/_/g, " ")}
-        </Badge>
+        <div className="w-[110px]">
+          <Badge
+            variant={statusVariants[raw] || "outline"}
+            className="font-semibold uppercase text-[10px]"
+          >
+            {raw.replace(/_/g, " ")}
+          </Badge>
+        </div>
       );
     },
   },
   {
     accessorKey: "remarks",
-    header: ({ column }) => <DataTableColumnHeader column={column} label="Remarks" />,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Remarks" />
+    ),
     meta: { label: "Remarks" },
     cell: ({ row }) => {
       const remarks = row.original.remarks;
@@ -99,14 +163,20 @@ export const getColumns = (
 
       if (!remarks) {
         if (isRejected) {
-          return <span className="text-xs">No remarks provided</span>;
+          return (
+            <span className="text-xs text-muted-foreground/50 italic">
+              No remarks provided
+            </span>
+          );
         }
         return null;
       }
       return (
-        <span className="text-xs">{remarks}</span>
+        <div className="max-w-[200px] truncate" title={remarks}>
+          <span className="text-xs text-muted-foreground">{remarks}</span>
+        </div>
       );
-    }
+    },
   },
   {
     id: "actions",
@@ -118,28 +188,58 @@ export const getColumns = (
       const status = (sku.status || "Draft").toLowerCase().replace(/_/g, " ");
 
       return (
-        <div className="flex justify-end">
+        <div className="flex justify-end w-[60px]">
           <DropdownMenu>
-            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-[160px]">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {(status === "draft" || status === "rejected") && (
                 <>
-                  {onSubmitForApproval && <DropdownMenuItem onClick={() => onSubmitForApproval(id as number)}><Send className="h-4 w-4 mr-2" /> Submit</DropdownMenuItem>}
+                  {onSubmitForApproval && (
+                    <DropdownMenuItem
+                      onClick={() => onSubmitForApproval(id as number)}
+                    >
+                      <Send className="h-4 w-4 mr-2" /> Submit
+                    </DropdownMenuItem>
+                  )}
                 </>
               )}
               {(status === "for approval" || status === "pending") && (
                 <>
-                  {onApprove && <DropdownMenuItem onClick={() => onApprove(id as number)} className="text-primary"><CheckCircle className="h-4 w-4 mr-2" /> Approve</DropdownMenuItem>}
-                  {onReject && <DropdownMenuItem onClick={() => onReject(id as number)}><XCircle className="h-4 w-4 mr-2" /> Reject</DropdownMenuItem>}
+                  {onApprove && (
+                    <DropdownMenuItem
+                      onClick={() => onApprove(id as number)}
+                      className="text-primary"
+                    >
+                      <CheckCircle className="h-4 w-4 mr-2" /> Approve
+                    </DropdownMenuItem>
+                  )}
+                  {onReject && (
+                    <DropdownMenuItem onClick={() => onReject(id as number)}>
+                      <XCircle className="h-4 w-4 mr-2" /> Reject
+                    </DropdownMenuItem>
+                  )}
                 </>
               )}
-              {status === "active" && onEdit && <DropdownMenuItem onClick={() => onEdit(sku)}><Eye className="h-4 w-4 mr-2" /> View Details</DropdownMenuItem>}
+              {status === "active" && onEdit && (
+                <DropdownMenuItem onClick={() => onEdit(sku)}>
+                  <Eye className="h-4 w-4 mr-2" /> View Details
+                </DropdownMenuItem>
+              )}
               {onDelete && (
                 <>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => onDelete(id as number)} className="text-destructive"><Trash2 className="h-4 w-4 mr-2" /> Delete</DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => onDelete(id as number)}
+                    className="text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" /> Delete
+                  </DropdownMenuItem>
                 </>
               )}
             </DropdownMenuContent>
