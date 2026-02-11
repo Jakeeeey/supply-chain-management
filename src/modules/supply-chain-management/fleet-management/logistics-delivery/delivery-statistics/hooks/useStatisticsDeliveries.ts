@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import { toast } from "sonner";
+
 import type { DashboardData, FilterType } from "../types";
 import { getDateRangeParams } from "../utils/dateRange";
 import { getDeliveryStatistics } from "../providers/fetchProviders";
@@ -12,9 +14,18 @@ const EMPTY: DashboardData = {
   avgSales: 0,
 };
 
+function toUserMessage(err: any): string {
+  // Most common fetch error in Next: "Failed to fetch"
+  const msg = String(err?.message || err || "").trim();
+  if (!msg) return "Request failed.";
+
+  // Improve common low-signal messages
+  if (msg.toLowerCase() === "failed to fetch") return "Server is unreachable. Please try again.";
+  return msg;
+}
+
 export function useStatisticsDeliveries() {
   const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
   const [data, setData] = React.useState<DashboardData>(EMPTY);
 
   const [filterType, setFilterType] = React.useState<FilterType>("thisMonth");
@@ -24,6 +35,24 @@ export function useStatisticsDeliveries() {
   const canFetch =
     filterType !== "custom" ||
     (filterType === "custom" && !!customStartDate && !!customEndDate);
+
+  // Prevent toast spam when filters change quickly (or rerender)
+  const lastToastKeyRef = React.useRef<string>("");
+
+  const showErrorToast = React.useCallback((message: string) => {
+    const key = `${message}`; // stable key
+    if (lastToastKeyRef.current === key) return;
+    lastToastKeyRef.current = key;
+
+    toast.error("Failed to load", {
+      description: message,
+    });
+
+    // allow same error again after a short time
+    window.setTimeout(() => {
+      if (lastToastKeyRef.current === key) lastToastKeyRef.current = "";
+    }, 1500);
+  }, []);
 
   const refetch = React.useCallback(async () => {
     if (!canFetch) return;
@@ -35,7 +64,6 @@ export function useStatisticsDeliveries() {
     });
 
     try {
-      setError(null);
       setLoading(true);
       const result = await getDeliveryStatistics({
         startDate: start,
@@ -44,12 +72,13 @@ export function useStatisticsDeliveries() {
       });
       setData(result);
     } catch (e: any) {
-      setError(e?.message || "Failed to fetch delivery statistics");
-      setData(EMPTY);
+      const msg = toUserMessage(e);
+      showErrorToast(msg);
+      setData(EMPTY); // keep UI stable (zeros) but no inline error
     } finally {
       setLoading(false);
     }
-  }, [canFetch, filterType, customStartDate, customEndDate]);
+  }, [canFetch, filterType, customStartDate, customEndDate, showErrorToast]);
 
   React.useEffect(() => {
     void refetch();
@@ -57,7 +86,6 @@ export function useStatisticsDeliveries() {
 
   return {
     loading,
-    error,
     data,
 
     filterType,

@@ -9,7 +9,6 @@ import { DeliveryStatusDistributionCard } from "./components/DeliveryStatusDistr
 import { DeliveryTrendsCard } from "./components/DeliveryTrendsCard";
 import { SalesTrendCard } from "./components/SalesTrendCard";
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { RefreshCcw } from "lucide-react";
 
@@ -19,7 +18,7 @@ export default function DeliveryStatisticsModule() {
   return (
     <div className="w-full">
       <div className="mx-auto w-full max-w-[1400px] px-6 py-6 lg:px-10">
-        {/* Header + Controls (match screenshot: left title, right filter pill) */}
+        {/* Header + Controls */}
         <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-1">
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">
@@ -53,15 +52,7 @@ export default function DeliveryStatisticsModule() {
           </div>
         </div>
 
-        {/* Error */}
-        {s.error ? (
-          <div className="mb-6">
-            <Alert variant="destructive">
-              <AlertTitle>Failed to load</AlertTitle>
-              <AlertDescription>{s.error}</AlertDescription>
-            </Alert>
-          </div>
-        ) : null}
+        {/* ✅ Removed inline error alert - all errors are Sonner toast */}
 
         {/* Summary Cards */}
         <div className="mb-6">

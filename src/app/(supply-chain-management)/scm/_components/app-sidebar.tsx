@@ -35,7 +35,7 @@ const data = {
             title: "Management",
             url: "#",
             icon: SquareTerminal,
-            isActive: true,
+            isActive: false,
             items: [
                 { title: "SKU Creation", url: "/scm/management/sku-creation" },
                 { title: "Brand", url: "/scm/management/brand" },
@@ -47,7 +47,7 @@ const data = {
             title: "Supplier Management",
             url: "#",
             icon: SquareTerminal,
-            isActive: true,
+            isActive: false,
             items: [
                 { title: "Create Purchase Order", url: "/scm/supplier-management/purchase-order" },
                 { title: "Approval of PO", url: "/scm/supplier-management/approval-of-purchase-order" },
@@ -69,6 +69,7 @@ const data = {
             title: "Fleet Management",
             url: "#",
             icon: BookOpen,
+            isActive: false,
             items: [
                 {
                     title: "Vehicle Management",

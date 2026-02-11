@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
+
 import type { InvoiceDetailsResponse } from "../types";
 import { money } from "../utils/money";
 import { useInvoiceDetails } from "../hooks/useInvoiceDetails";
@@ -22,14 +24,16 @@ function ReadonlyField({ label, value, className }: { label: string; value: Reac
   );
 }
 
+/* ------------------------------ Skeleton UI ------------------------------ */
+
 function InvoiceDetailsSkeleton() {
   return (
     <div className="space-y-6">
-      {/* Form Section Skeleton */}
+      {/* Header block */}
       <div className="bg-white p-5 rounded-lg border shadow-sm space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="md:col-span-3 space-y-2">
-            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-3 w-28" />
             <Skeleton className="h-9 w-full" />
           </div>
           <div className="space-y-2">
@@ -41,7 +45,7 @@ function InvoiceDetailsSkeleton() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="space-y-2">
-              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-3 w-20" />
               <Skeleton className="h-9 w-full" />
             </div>
           ))}
@@ -57,41 +61,48 @@ function InvoiceDetailsSkeleton() {
         </div>
       </div>
 
-      {/* Table & Summary Section Skeleton */}
+      {/* Table + Summary */}
       <div className="flex flex-col xl:flex-row gap-6">
         <div className="flex-1 rounded-lg border bg-white shadow-sm overflow-hidden min-h-[300px]">
+          <div className="bg-slate-100 px-4 py-3 border-b">
+            <Skeleton className="h-4 w-56" />
+          </div>
           <div className="p-4 space-y-3">
-            <Skeleton className="h-9 w-full" />
-            {Array.from({ length: 7 }).map((_, i) => (
+            {Array.from({ length: 10 }).map((_, i) => (
               <Skeleton key={i} className="h-6 w-full" />
             ))}
           </div>
         </div>
 
-        <div className="w-full xl:w-[320px]">
-          <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
-            <div className="bg-slate-50 py-3 px-4 border-b">
-              <Skeleton className="h-4 w-24" />
-            </div>
-            <div className="p-4 space-y-3">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="flex items-center justify-between gap-4">
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-4 w-20" />
-                </div>
-              ))}
-              <Skeleton className="h-px w-full" />
-              <div className="flex items-center justify-between gap-4">
-                <Skeleton className="h-6 w-20" />
-                <Skeleton className="h-6 w-24" />
+        <Card className="w-full xl:w-[320px] shadow-sm h-fit">
+          <CardHeader className="bg-slate-50 py-3 border-b">
+            <ShadCardTitle className="text-sm font-semibold text-blue-700">Summary</ShadCardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 pt-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="flex items-center justify-between">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-20" />
               </div>
+            ))}
+            <Separator />
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-5 w-16" />
+              <Skeleton className="h-5 w-24" />
             </div>
-          </div>
-        </div>
+            <Separator className="bg-slate-200 h-[2px]" />
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-6 w-20" />
+              <Skeleton className="h-6 w-28" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
 }
+
+/* -------------------------------- Component ------------------------------ */
 
 export function InvoiceDetailsDialog({
   open,
@@ -105,11 +116,26 @@ export function InvoiceDetailsDialog({
   const { data, loading, error } = useInvoiceDetails(open, invoiceNo);
   const h = data?.header;
 
+  // Sonner for errors (no inline banners)
+  const lastErrRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!open) return;
+    if (!error) {
+      lastErrRef.current = null;
+      return;
+    }
+    if (lastErrRef.current === error) return;
+    lastErrRef.current = error;
+    toast.error(error);
+  }, [open, error]);
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-[95vw] md:max-w-[1300px] h-[90vh] flex flex-col p-0 gap-0 bg-white">
         <DialogHeader className="px-6 py-4 border-b bg-white shrink-0 flex flex-row items-center justify-between">
           <DialogTitle className="text-blue-600 text-xl font-bold">Invoice #{invoiceNo ?? ""}</DialogTitle>
+
+          {/* Keep badges only when header exists */}
           {h && (
             <div className="flex gap-2">
               <Badge className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1">{h.status || "Unknown"}</Badge>
@@ -124,7 +150,6 @@ export function InvoiceDetailsDialog({
 
         <div className="flex-1 overflow-y-auto bg-slate-50/50 p-6">
           {loading && <InvoiceDetailsSkeleton />}
-          {error && <div className="text-sm text-red-600 bg-red-50 p-3 rounded-md">{error}</div>}
 
           {!loading && data && h && (
             <div className="space-y-6">
@@ -226,6 +251,9 @@ export function InvoiceDetailsDialog({
               </div>
             </div>
           )}
+
+          {/* If request failed and no data, we just show empty (toast already displayed) */}
+          {!loading && !data && <div className="h-10" />}
         </div>
       </DialogContent>
     </Dialog>

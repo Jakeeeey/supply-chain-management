@@ -4,6 +4,7 @@ import * as React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
 
 import type { FiltersState } from "./types";
 import { usePendingInvoices } from "./hooks/usePendingInvoices";
@@ -16,35 +17,19 @@ import { PendingInvoicesTable } from "./components/PendingInvoicesTable";
 import { ExportDialog } from "./components/ExportDialog";
 import { InvoiceDetailsDialog } from "./components/InvoiceDetailsDialog";
 
-function PendingInvoicesTableSkeleton() {
+function TableSkeleton() {
   return (
-    <div className="rounded-md border bg-white overflow-hidden">
-      {/* header */}
-      <div className="bg-slate-50 px-4 py-3">
-        <div className="grid grid-cols-12 gap-3 items-center">
-          <Skeleton className="h-4 col-span-2" />
-          <Skeleton className="h-4 col-span-2" />
-          <Skeleton className="h-4 col-span-3" />
-          <Skeleton className="h-4 col-span-2" />
-          <Skeleton className="h-4 col-span-1 justify-self-center" />
-          <Skeleton className="h-4 col-span-2 justify-self-end" />
+    <div className="space-y-3 py-4">
+      <Skeleton className="h-8 w-full" />
+      {Array.from({ length: 8 }).map((_, i) => (
+        <Skeleton key={i} className="h-10 w-full" />
+      ))}
+      <div className="pt-4 border-t mt-4 flex items-center justify-between">
+        <Skeleton className="h-4 w-44" />
+        <div className="flex gap-2">
+          <Skeleton className="h-9 w-20" />
+          <Skeleton className="h-9 w-20" />
         </div>
-      </div>
-
-      {/* rows */}
-      <div className="px-4 py-4 space-y-3">
-        {Array.from({ length: 8 }).map((_, i) => (
-          <div key={i} className="grid grid-cols-12 gap-3 items-center">
-            <Skeleton className="h-4 col-span-2" />
-            <Skeleton className="h-4 col-span-2" />
-            <Skeleton className="h-4 col-span-3" />
-            <Skeleton className="h-4 col-span-2" />
-            <Skeleton className="h-4 col-span-1 justify-self-center" />
-            <div className="col-span-2 justify-self-end">
-              <Skeleton className="h-7 w-24 rounded-full" />
-            </div>
-          </div>
-        ))}
       </div>
     </div>
   );
@@ -68,6 +53,18 @@ export default function PendingInvoicesModule() {
 
   const totalPages = data ? Math.ceil(data.total / filters.pageSize) : 1;
 
+  // Sonner for errors (no inline banners)
+  const lastErrRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!error) {
+      lastErrRef.current = null;
+      return;
+    }
+    if (lastErrRef.current === error) return;
+    lastErrRef.current = error;
+    toast.error(error);
+  }, [error]);
+
   return (
     <div className="space-y-6 p-6 md:p-8">
       <div>
@@ -75,21 +72,15 @@ export default function PendingInvoicesModule() {
         <div className="text-sm text-muted-foreground mt-1">Track undelivered and uncleared printed receipts</div>
       </div>
 
-      <DashboardCards kpis={data?.kpis} loading={loading} />
-      <StatusCharts kpis={data?.kpis} loading={loading} />
+      {/* Skeletons for KPI + Charts */}
+      <DashboardCards kpis={data?.kpis} loading={loading && !data?.kpis} />
+      <StatusCharts kpis={data?.kpis} loading={loading && !data?.kpis} />
 
       <Card className="shadow-sm border-slate-200">
         <CardContent className="p-6 space-y-4">
-          <FiltersBar
-            filters={filters}
-            setFilters={setFilters}
-            options={options}
-            onExport={() => setExportOpen(true)}
-          />
+          <FiltersBar filters={filters} setFilters={setFilters} options={options} onExport={() => setExportOpen(true)} />
 
-          {error && <div className="text-sm text-red-600 bg-red-50 p-3 rounded-md">{error}</div>}
-
-          {loading && <PendingInvoicesTableSkeleton />}
+          {loading && <TableSkeleton />}
 
           {!loading && data && (
             <>
@@ -122,16 +113,15 @@ export default function PendingInvoicesModule() {
               </div>
             </>
           )}
+
+          {/* If failed and no data, keep layout clean (toast already shown) */}
+          {!loading && !data && <div className="h-10" />}
         </CardContent>
       </Card>
 
       <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} options={options} />
 
-      <InvoiceDetailsDialog
-        open={!!detailsInvoiceNo}
-        invoiceNo={detailsInvoiceNo}
-        onClose={() => setDetailsInvoiceNo(null)}
-      />
+      <InvoiceDetailsDialog open={!!detailsInvoiceNo} invoiceNo={detailsInvoiceNo} onClose={() => setDetailsInvoiceNo(null)} />
     </div>
   );
 }
