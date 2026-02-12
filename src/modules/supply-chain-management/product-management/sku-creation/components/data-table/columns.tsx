@@ -25,6 +25,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Checkbox } from "@/components/ui/checkbox";
 import { DataTableColumnHeader } from "./table-column-header";
 import { CellHelpers, statusVariants } from "../../utils/sku-helpers";
 import { spawn } from "child_process";
@@ -39,6 +40,34 @@ export const getColumns = (
   onApprove?: (id: number) => void,
   onReject?: (id: number) => void,
 ): ColumnDef<SKU>[] => [
+  {
+    id: "select",
+    header: ({ table }) => (
+      <div className="px-1">
+        <Checkbox
+          checked={
+            table.getIsAllPageRowsSelected() ||
+            (table.getIsSomePageRowsSelected() && "indeterminate")
+          }
+          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+          aria-label="Select all"
+          className="translate-y-1"
+        />
+      </div>
+    ),
+    cell: ({ row }) => (
+      <div className="px-1">
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(!!value)}
+          aria-label="Select row"
+          className="translate-y-1"
+        />
+      </div>
+    ),
+    enableSorting: false,
+    enableHiding: false,
+  },
   {
     accessorKey: "product_code",
     enableSorting: true,
@@ -117,16 +146,7 @@ export const getColumns = (
     meta: { label: "Type" },
     cell: ({ row }) => {
       const type = CellHelpers.detectInventoryType(row.original);
-      return (
-        <div className="w-[80px]">
-          <Badge
-            variant="outline"
-            className={`font-medium ${type === "Variant" ? "border-primary text-primary bg-primary/5" : "text-muted-foreground opacity-70"}`}
-          >
-            {type}
-          </Badge>
-        </div>
-      );
+      return <Badge variant="secondary">{type}</Badge>;
     },
   },
   {
@@ -139,14 +159,9 @@ export const getColumns = (
     cell: ({ row }) => {
       const raw = (row.getValue("status") || "DRAFT") as string;
       return (
-        <div className="w-[110px]">
-          <Badge
-            variant={statusVariants[raw] || "outline"}
-            className="font-semibold uppercase text-[10px]"
-          >
-            {raw.replace(/_/g, " ")}
-          </Badge>
-        </div>
+        <Badge variant="secondary" className="font-semibold uppercase text-xs">
+          {raw.replace(/_/g, " ")}
+        </Badge>
       );
     },
   },

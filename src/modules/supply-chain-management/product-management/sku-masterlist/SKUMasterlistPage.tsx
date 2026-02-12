@@ -102,8 +102,8 @@ export default function SKUMasterlistModule() {
             onClick={handleBulkActivate}
             disabled={isUpdating}
           >
-            Activate{" "}
-            {selectedRows.filter((r) => Number(r.isActive) !== 1).length} items
+            Activate (
+            {selectedRows.filter((r) => Number(r.isActive) !== 1).length})
           </Button>
         )}
         {hasSelectedActive && (
@@ -113,8 +113,8 @@ export default function SKUMasterlistModule() {
             onClick={handleBulkDeactivate}
             disabled={isUpdating}
           >
-            Deactivate{" "}
-            {selectedRows.filter((r) => Number(r.isActive) === 1).length} items
+            Deactivate (
+            {selectedRows.filter((r) => Number(r.isActive) === 1).length})
           </Button>
         )}
       </div>
