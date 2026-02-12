@@ -150,6 +150,7 @@ export default function SKUMasterlistModule() {
         isLoading={isLoading}
         onSearch={handleSearch}
         onSelectionChange={setSelectedRows}
+        onToggleStatus={(id, current) => toggleStatus(id, !current)}
         actionComponent={bulkActionComponent}
       />
     </div>

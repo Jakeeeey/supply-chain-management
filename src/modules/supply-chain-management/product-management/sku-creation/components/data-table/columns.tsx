@@ -28,7 +28,6 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { DataTableColumnHeader } from "./table-column-header";
 import { CellHelpers, statusVariants } from "../../utils/sku-helpers";
-import { spawn } from "child_process";
 
 // --- Main Column Definition ---
 

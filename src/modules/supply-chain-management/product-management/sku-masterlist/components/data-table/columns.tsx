@@ -8,7 +8,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { DataTableColumnHeader } from "./table-column-header";
 import { CellHelpers } from "../../../sku-creation/utils/sku-helpers";
-import { MoreHorizontal } from "lucide-react";
+import { CheckCircle, XCircle, MoreHorizontal } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 
 export const getMasterlistColumns = (
   masterData: MasterData | null,
+  onToggleStatus?: (id: number | string, current: boolean) => void,
 ): ColumnDef<SKU>[] => [
   {
     id: "select",
@@ -160,6 +161,48 @@ export const getMasterlistColumns = (
         >
           {displayStatus.toUpperCase()}
         </Badge>
+      );
+    },
+  },
+  {
+    id: "actions",
+    enableHiding: false,
+    meta: { label: "Actions" },
+    cell: ({ row }) => {
+      const sku = row.original;
+      const id = (sku as any).id || (sku as any).product_id;
+      const active = sku.isActive === 1 || sku.isActive === true;
+
+      if (!onToggleStatus) return null;
+
+      return (
+        <div className="flex justify-end w-[60px]">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Quick Actions</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => onToggleStatus(id, active)}
+                className={active ? "text-destructive" : "text-primary"}
+              >
+                {active ? (
+                  <>
+                    <XCircle className="h-4 w-4 mr-2" /> Deactivate
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="h-4 w-4 mr-2" /> Activate
+                  </>
+                )}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       );
     },
   },

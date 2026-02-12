@@ -185,7 +185,7 @@ export function useSKUs() {
     skipRefresh = false,
   ) => {
     const response = await fetch(
-      `/api/scm/product-management/sku-creation/${id}/action`,
+      `/api/scm/product-management/sku-creation/${id}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -204,7 +204,7 @@ export function useSKUs() {
 
   const approveSKU = async (id: number | string, skipRefresh = false) => {
     const response = await fetch(
-      `/api/scm/product-management/sku-creation/${id}/action`,
+      `/api/scm/product-management/sku-creation/${id}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -233,10 +233,27 @@ export function useSKUs() {
   };
 
   const bulkApproveSKUs = async (ids: (number | string)[]) => {
-    // Process approvals sequentially or in parallel?
-    // Given each approval does multiple fetches/writes, sequential is safer
-    // but parallel is faster. Let's do parallel for better UX as they are independent.
-    await Promise.all(ids.map((id) => approveSKU(id, true)));
+    // 1. Sort IDs: Parents first, then children to ensure linking works
+    const sortedIds = [...ids].sort((a, b) => {
+      const skuA = pendingApprovalData.find(
+        (s) => String(s.id || s.product_id) === String(a),
+      );
+      const skuB = pendingApprovalData.find(
+        (s) => String(s.id || s.product_id) === String(b),
+      );
+
+      const aIsChild = !!skuA?.parent_id;
+      const bIsChild = !!skuB?.parent_id;
+
+      if (!aIsChild && bIsChild) return -1;
+      if (aIsChild && !bIsChild) return 1;
+      return 0;
+    });
+
+    // 2. Process sequentially to avoid race conditions in parent-linking
+    for (const id of sortedIds) {
+      await approveSKU(id, true);
+    }
     await refresh();
   };
 
@@ -246,7 +263,7 @@ export function useSKUs() {
     skipRefresh = false,
   ) => {
     const response = await fetch(
-      `/api/scm/product-management/sku-creation/${id}/action`,
+      `/api/scm/product-management/sku-creation/${id}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

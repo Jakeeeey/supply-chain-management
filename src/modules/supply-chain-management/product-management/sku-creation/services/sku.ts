@@ -221,48 +221,72 @@ export const skuService = {
   },
 
   async approveDraft(id: number | string, masterData: MasterData) {
-    const { data: parent } = await request<{ data: SKU }>(
+    // 1. Fetch only the specific draft
+    const { data: draft } = await request<{ data: SKU }>(
       `${API_BASE_URL}/items/product_draft/${id}?fields=*.*`,
     );
-    const { data: children } = await fetchItems<SKU>("/items/product_draft", {
-      filter: JSON.stringify({ parent_id: { _eq: id } }),
-      fields: "*.*",
-    });
 
-    const all = [parent, ...(children || [])];
+    if (!draft) throw new Error("Draft record not found");
+
     let pMasterId: number | null = null;
 
-    for (const draft of all) {
-      const code =
-        draft.product_code || (await generateSKUCode(draft, masterData));
+    // 2. If it's a child, try to find the master record for its parent in the products table
+    if (draft.parent_id) {
+      const toId = (val: any) =>
+        val && typeof val === "object" ? val.id : val;
+      const bId = toId(draft.product_brand);
+      const cId = toId(draft.product_category);
 
-      const { data: existing } = await fetchItems<any>("/items/products", {
-        filter: JSON.stringify({ product_code: { _eq: code } }),
-        limit: 1,
-      });
+      const conditions: any[] = [
+        { product_name: { _eq: draft.product_name } },
+        { parent_id: { _null: true } },
+      ];
 
-      const targetId = existing?.[0]?.id || existing?.[0]?.product_id;
-      const payload = prepareSKUPayload(draft, pMasterId, code);
+      if (bId) conditions.push({ product_brand: { _eq: bId } });
+      if (cId) conditions.push({ product_category: { _eq: cId } });
 
-      if (targetId) {
-        await request(`${API_BASE_URL}/items/products/${targetId}`, {
-          method: "PATCH",
-          body: JSON.stringify(payload),
-        });
-        if (!draft.parent_id) pMasterId = targetId;
-      } else {
-        const res: any = await request<{ data: any }>(
-          `${API_BASE_URL}/items/products`,
-          {
-            method: "POST",
-            body: JSON.stringify(payload),
-          },
-        );
-        if (!draft.parent_id) pMasterId = res.data.id || res.data.product_id;
+      const parentFilter = { _and: conditions };
+
+      const { data: possibleParents } = await fetchItems<any>(
+        "/items/products",
+        {
+          filter: JSON.stringify(parentFilter),
+          limit: 1,
+        },
+      );
+
+      if (possibleParents?.length) {
+        pMasterId = possibleParents[0].id || possibleParents[0].product_id;
       }
-
-      await this.cleanupDraft(draft);
     }
+
+    // 3. Generate or use existing code
+    const code =
+      draft.product_code || (await generateSKUCode(draft, masterData));
+
+    // 4. Check if a master record for THIS specific code already exists (Upsert logic)
+    const { data: existing } = await fetchItems<any>("/items/products", {
+      filter: JSON.stringify({ product_code: { _eq: code } }),
+      limit: 1,
+    });
+
+    const targetId = existing?.[0]?.id || existing?.[0]?.product_id;
+    const payload = prepareSKUPayload(draft, pMasterId, code);
+
+    if (targetId) {
+      await request(`${API_BASE_URL}/items/products/${targetId}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      });
+    } else {
+      await request(`${API_BASE_URL}/items/products`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+    }
+
+    // 5. Cleanup only THIS draft
+    await this.cleanupDraft(draft);
     return true;
   },
 
@@ -270,14 +294,15 @@ export const skuService = {
    * Helper to mark draft as active or delete it after approval
    */
   async cleanupDraft(draft: any) {
+    const dId = draft.id || draft.product_id;
     try {
-      await request(`${API_BASE_URL}/items/product_draft/${draft.id}`, {
+      await request(`${API_BASE_URL}/items/product_draft/${dId}`, {
         method: "PATCH",
         body: JSON.stringify({ status: "ACTIVE" }),
       });
     } catch (e: any) {
       try {
-        await request(`${API_BASE_URL}/items/product_draft/${draft.id}`, {
+        await request(`${API_BASE_URL}/items/product_draft/${dId}`, {
           method: "DELETE",
         });
       } catch (delErr: any) {}
@@ -285,21 +310,24 @@ export const skuService = {
   },
 
   async submitForApproval(id: number | string) {
-    return request(`${API_BASE_URL}/items/product_draft/${id}`, {
+    await request(`${API_BASE_URL}/items/product_draft/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ status: "FOR_APPROVAL" }),
     });
+    return true;
   },
   async rejectDraft(id: number | string, remarks?: string) {
-    return request(`${API_BASE_URL}/items/product_draft/${id}`, {
+    await request(`${API_BASE_URL}/items/product_draft/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ status: "REJECTED", remarks }),
     });
+    return true;
   },
   async deleteDraft(id: number | string) {
-    return request(`${API_BASE_URL}/items/product_draft/${id}`, {
+    await request(`${API_BASE_URL}/items/product_draft/${id}`, {
       method: "DELETE",
     });
+    return true;
   },
   async checkDuplicateName(name: string): Promise<boolean> {
     const filter = `filter[product_name][_eq]=${encodeURIComponent(name)}&limit=1`;
