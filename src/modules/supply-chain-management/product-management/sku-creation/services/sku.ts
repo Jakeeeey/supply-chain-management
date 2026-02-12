@@ -230,33 +230,20 @@ export const skuService = {
 
     let pMasterId: number | null = null;
 
-    // 2. If it's a child, try to find the master record for its parent in the products table
+    // 2. If it's a child, find the specific master record using the Parent's Product Code
     if (draft.parent_id) {
-      const toId = (val: any) =>
-        val && typeof val === "object" ? val.id : val;
-      const bId = toId(draft.product_brand);
-      const cId = toId(draft.product_category);
+      const parentDraft = draft.parent_id as any;
+      const parentCode = parentDraft.product_code;
 
-      const conditions: any[] = [
-        { product_name: { _eq: draft.product_name } },
-        { parent_id: { _null: true } },
-      ];
-
-      if (bId) conditions.push({ product_brand: { _eq: bId } });
-      if (cId) conditions.push({ product_category: { _eq: cId } });
-
-      const parentFilter = { _and: conditions };
-
-      const { data: possibleParents } = await fetchItems<any>(
-        "/items/products",
-        {
-          filter: JSON.stringify(parentFilter),
+      if (parentCode) {
+        const { data: realParent } = await fetchItems<any>("/items/products", {
+          filter: JSON.stringify({ product_code: { _eq: parentCode } }),
           limit: 1,
-        },
-      );
+        });
 
-      if (possibleParents?.length) {
-        pMasterId = possibleParents[0].id || possibleParents[0].product_id;
+        if (realParent?.length) {
+          pMasterId = realParent[0].id || realParent[0].product_id;
+        }
       }
     }
 
@@ -272,20 +259,66 @@ export const skuService = {
 
     const targetId = existing?.[0]?.id || existing?.[0]?.product_id;
     const payload = prepareSKUPayload(draft, pMasterId, code);
+    let finalMasterId: number | string;
 
     if (targetId) {
       await request(`${API_BASE_URL}/items/products/${targetId}`, {
         method: "PATCH",
         body: JSON.stringify(payload),
       });
+      finalMasterId = targetId;
     } else {
-      await request(`${API_BASE_URL}/items/products`, {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
+      const res: any = await request<{ data: any }>(
+        `${API_BASE_URL}/items/products`,
+        {
+          method: "POST",
+          body: JSON.stringify(payload),
+        },
+      );
+      finalMasterId = res.data.id || res.data.product_id;
     }
 
-    // 5. Cleanup only THIS draft
+    // 5. "Adoption Logic": If this was a Parent, look for existing orphans to adopt
+    if (!draft.parent_id) {
+      const toId = (val: any) =>
+        val && typeof val === "object" ? val.id : val;
+      const bId = toId(draft.product_brand);
+      const cId = toId(draft.product_category);
+
+      const orphanConditions: any[] = [
+        { product_name: { _eq: draft.product_name } },
+        { parent_id: { _null: true } },
+        { product_id: { _neq: finalMasterId } },
+      ];
+
+      // Match by code prefix if possible for higher precision
+      const codeBase = code.substring(0, 10);
+      if (codeBase && codeBase.length >= 5) {
+        orphanConditions.push({ product_code: { _starts_with: codeBase } });
+      }
+
+      const { data: orphans } = await fetchItems<any>("/items/products", {
+        filter: JSON.stringify({ _and: orphanConditions }),
+        limit: -1,
+      });
+
+      if (orphans?.length) {
+        console.log(
+          `Parent ${finalMasterId} adopting ${orphans.length} orphans...`,
+        );
+        await Promise.all(
+          orphans.map((orphan) => {
+            const oId = orphan.id || orphan.product_id;
+            return request(`${API_BASE_URL}/items/products/${oId}`, {
+              method: "PATCH",
+              body: JSON.stringify({ parent_id: finalMasterId }),
+            });
+          }),
+        );
+      }
+    }
+
+    // 6. Cleanup only THIS draft
     await this.cleanupDraft(draft);
     return true;
   },
