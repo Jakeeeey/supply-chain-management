@@ -141,7 +141,7 @@ export const statusVariants: Record<
   FOR_APPROVAL: "secondary",
   REJECTED: "destructive",
   ACTIVE: "default",
-  INACTIVE: "outline",
+  INACTIVE: "destructive",
   PENDING: "secondary",
 };
 

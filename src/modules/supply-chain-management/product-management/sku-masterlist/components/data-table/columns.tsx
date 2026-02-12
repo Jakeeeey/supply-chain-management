@@ -59,7 +59,7 @@ export const getMasterlistColumns = (
     ),
     meta: { label: "SKU Code" },
     cell: ({ row }) => (
-      <div className="w-[140px]">
+      <div className="w-fit">
         {row.original.product_code ? (
           <code className="px-1 py-0.5 bg-muted rounded text-xs font-mono font-medium">
             {row.original.product_code}
@@ -93,29 +93,11 @@ export const getMasterlistColumns = (
     ),
     meta: { label: "Category" },
     cell: ({ row }) => (
-      <div className="w-[120px] truncate">
+      <div className="w-full truncate">
         <span className="text-xs">
           {CellHelpers.renderMasterText(
             row.original.product_category,
             masterData?.categories,
-          )}
-        </span>
-      </div>
-    ),
-  },
-  {
-    accessorKey: "product_brand",
-    enableSorting: true,
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} label="Brand" />
-    ),
-    meta: { label: "Brand" },
-    cell: ({ row }) => (
-      <div className="w-[120px] truncate">
-        <span className="text-xs">
-          {CellHelpers.renderMasterText(
-            row.original.product_brand,
-            masterData?.brands,
           )}
         </span>
       </div>
@@ -130,16 +112,32 @@ export const getMasterlistColumns = (
     cell: ({ row }) => {
       const type = CellHelpers.detectInventoryType(row.original);
       return (
-        <div className="w-[80px]">
-          <Badge
-            variant="outline"
-            className={`font-medium ${type === "Variant" ? "border-primary text-primary bg-primary/5" : "text-muted-foreground opacity-70"}`}
-          >
-            {type}
-          </Badge>
-        </div>
+        <Badge
+          variant="outline"
+          className={`font-medium ${type === "Variant" ? "border-primary text-primary bg-primary/5" : ""}`}
+        >
+          {type}
+        </Badge>
       );
     },
+  },
+  {
+    accessorKey: "product_brand",
+    enableSorting: true,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Brand" />
+    ),
+    meta: { label: "Brand" },
+    cell: ({ row }) => (
+      <div className="w-full truncate">
+        <span className="text-xs">
+          {CellHelpers.renderMasterText(
+            row.original.product_brand,
+            masterData?.brands,
+          )}
+        </span>
+      </div>
+    ),
   },
   {
     accessorKey: "isActive",
@@ -156,14 +154,12 @@ export const getMasterlistColumns = (
         (sku as any).status || (active ? "ACTIVE" : "INACTIVE");
 
       return (
-        <div className="w-[110px]">
-          <Badge
-            variant={active ? "default" : "outline"}
-            className={`text-[10px] font-bold ${active ? "bg-primary" : "bg-destructive text-destructive-foreground"}`}
-          >
-            {displayStatus.toUpperCase()}
-          </Badge>
-        </div>
+        <Badge
+          variant={active ? "default" : "destructive"}
+          className={`text-xs`}
+        >
+          {displayStatus.toUpperCase()}
+        </Badge>
       );
     },
   },

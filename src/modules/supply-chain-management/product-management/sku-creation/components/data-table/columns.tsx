@@ -76,7 +76,7 @@ export const getColumns = (
     ),
     meta: { label: "SKU Code" },
     cell: ({ row }) => (
-      <div className="w-[140px]">
+      <div className="w-fit">
         {row.original.product_code ? (
           <code className="px-1 py-0.5 bg-muted rounded text-xs font-mono font-medium">
             {row.original.product_code}
@@ -110,29 +110,11 @@ export const getColumns = (
     ),
     meta: { label: "Category" },
     cell: ({ row }) => (
-      <div className="w-[120px] truncate">
+      <div className="w-full truncate">
         <span className="text-xs">
           {CellHelpers.renderMasterText(
             row.original.product_category,
             masterData?.categories,
-          )}
-        </span>
-      </div>
-    ),
-  },
-  {
-    accessorKey: "product_brand",
-    enableSorting: true,
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} label="Brand" />
-    ),
-    meta: { label: "Brand" },
-    cell: ({ row }) => (
-      <div className="w-[120px] truncate">
-        <span className="text-xs">
-          {CellHelpers.renderMasterText(
-            row.original.product_brand,
-            masterData?.brands,
           )}
         </span>
       </div>
@@ -146,8 +128,33 @@ export const getColumns = (
     meta: { label: "Type" },
     cell: ({ row }) => {
       const type = CellHelpers.detectInventoryType(row.original);
-      return <Badge variant="secondary">{type}</Badge>;
+      return (
+        <Badge
+          variant="outline"
+          className={`${type === "Variant" ? "bg-secondary text-secondary-foreground" : ""}`}
+        >
+          {type}
+        </Badge>
+      );
     },
+  },
+  {
+    accessorKey: "product_brand",
+    enableSorting: true,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Brand" />
+    ),
+    meta: { label: "Brand" },
+    cell: ({ row }) => (
+      <div className="w-full truncate">
+        <span className="text-xs">
+          {CellHelpers.renderMasterText(
+            row.original.product_brand,
+            masterData?.brands,
+          )}
+        </span>
+      </div>
+    ),
   },
   {
     accessorKey: "status",
@@ -159,7 +166,7 @@ export const getColumns = (
     cell: ({ row }) => {
       const raw = (row.getValue("status") || "DRAFT") as string;
       return (
-        <Badge variant="secondary" className="font-semibold uppercase text-xs">
+        <Badge variant={statusVariants[raw] || "secondary"}>
           {raw.replace(/_/g, " ")}
         </Badge>
       );

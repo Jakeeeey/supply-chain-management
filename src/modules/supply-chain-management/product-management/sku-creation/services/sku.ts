@@ -26,7 +26,7 @@ export const skuService = {
       offset,
       fields: "*.*",
       meta: "filter_count",
-      sort: sort || "-product_id",
+      sort: sort || "-created_at,-product_id",
       filter:
         Object.keys(filter).length > 0 ? JSON.stringify(filter) : undefined,
     });
@@ -68,7 +68,7 @@ export const skuService = {
       offset,
       fields: "*.*",
       meta: "filter_count",
-      sort: sort || "-product_id",
+      sort: sort || "-last_updated,-product_id",
       filter: JSON.stringify(filter),
     });
 
