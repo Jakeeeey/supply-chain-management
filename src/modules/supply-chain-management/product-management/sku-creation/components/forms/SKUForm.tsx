@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -130,7 +130,10 @@ export function SKUForm({
       flavor: "",
       price_per_unit: 0,
       cost_per_unit: 0,
-      units: [],
+      product_brand: (initialData as any)?.product_brand || 0,
+      product_category: (initialData as any)?.product_category || 0,
+      product_supplier: (initialData as any)?.product_supplier || 0,
+      units: initialData?.units?.length ? initialData.units : [],
       ...initialData,
       // Priority overrides for specific IDs
       product_id: initialData?.product_id,
@@ -145,26 +148,31 @@ export function SKUForm({
 
   const unitsMaster = masterData?.units || [];
   const inventoryType = form.watch("inventory_type");
+  const hasInitialized = useRef(false);
   const isReadOnly =
     initialData?.status === "Active" || initialData?.status === "For Approval";
 
-  // Auto-init for new records
+  // Auto-init for new records - ensure we have exactly one row on start
   useEffect(() => {
-    if (fields.length === 0 && !initialData && unitsMaster.length > 0) {
+    if (
+      !initialData &&
+      !hasInitialized.current &&
+      unitsMaster.length > 0 &&
+      fields.length === 0
+    ) {
+      hasInitialized.current = true;
       const pieceUnit = unitsMaster.find((u) =>
         u.name.toLowerCase().includes("piece"),
       );
-      if (pieceUnit) {
-        append({
-          unit_id: pieceUnit.id,
-          conversion_factor: 1,
-          price: 0,
-          cost: 0,
-          barcode: "",
-        });
-      }
+      append({
+        unit_id: pieceUnit?.id || unitsMaster[0].id,
+        conversion_factor: 1,
+        price: 0,
+        cost: 0,
+        barcode: "",
+      });
     }
-  }, [fields.length, initialData, unitsMaster, append]);
+  }, [unitsMaster, fields.length, initialData, append]);
 
   const renderUnitRow = (fieldItem: any, index: number) => (
     <div
@@ -191,11 +199,23 @@ export function SKUForm({
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {unitsMaster.map((u) => (
-                    <SelectItem key={u.id} value={u.id.toString()}>
-                      {u.name}
-                    </SelectItem>
-                  ))}
+                  {unitsMaster.map((u) => {
+                    const isSelectedElsewhere = (
+                      form.watch("units") || []
+                    ).some(
+                      (unit: any, i: number) =>
+                        unit.unit_id === u.id && i !== index,
+                    );
+                    return (
+                      <SelectItem
+                        key={u.id}
+                        value={u.id.toString()}
+                        disabled={isSelectedElsewhere}
+                      >
+                        {u.name}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
               <FormMessage />
@@ -296,6 +316,7 @@ export function SKUForm({
                             disabled={isReadOnly}
                           />
                         </FormControl>
+                        <FormMessage />
                       </FormItem>
                     )}
                   />
@@ -324,6 +345,7 @@ export function SKUForm({
                             disabled={isReadOnly}
                           />
                         </FormControl>
+                        <FormMessage />
                       </FormItem>
                     )}
                   />
@@ -356,7 +378,7 @@ export function SKUForm({
                     render={({ field }) => (
                       <FormItem className="col-span-2">
                         <FormLabel className="text-muted-foreground uppercase text-[10px] font-bold tracking-wider">
-                          Supplier
+                          Supplier *
                         </FormLabel>
                         <div className="flex gap-2 ">
                           <Combobox
@@ -373,6 +395,7 @@ export function SKUForm({
                             className="flex-1"
                           />
                         </div>
+                        <FormMessage />
                       </FormItem>
                     )}
                   />
@@ -391,7 +414,21 @@ export function SKUForm({
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => append({ unit_id: 0, conversion_factor: 1 })}
+                    onClick={() => {
+                      const selectedIds = (form.getValues("units") || []).map(
+                        (u: any) => u.unit_id,
+                      );
+                      const nextUnit =
+                        unitsMaster.find((u) => !selectedIds.includes(u.id)) ||
+                        unitsMaster[0];
+                      append({
+                        unit_id: nextUnit?.id || 0,
+                        conversion_factor: 1,
+                        price: 0,
+                        cost: 0,
+                        barcode: "",
+                      });
+                    }}
                   >
                     <Plus className="mr-2 h-4 w-4" /> Add Unit
                   </Button>
@@ -439,28 +476,28 @@ export function SKUForm({
                     <FormFieldWrapper
                       control={form.control}
                       name="flavor"
-                      label="Flavor"
+                      label="Flavor *"
                       placeholder="Vanilla"
                       disabled={isReadOnly}
                     />
                     <FormFieldWrapper
                       control={form.control}
                       name="size"
-                      label="Size"
+                      label="Size *"
                       placeholder="Medium"
                       disabled={isReadOnly}
                     />
                     <FormFieldWrapper
                       control={form.control}
                       name="color"
-                      label="Color"
+                      label="Color *"
                       placeholder="Red"
                       disabled={isReadOnly}
                     />
                     <FormFieldWrapper
                       control={form.control}
                       name="volume"
-                      label="Volume"
+                      label="Volume *"
                       placeholder="330ml"
                       disabled={isReadOnly}
                     />

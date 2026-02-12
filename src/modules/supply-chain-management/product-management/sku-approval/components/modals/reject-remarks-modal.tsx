@@ -45,24 +45,30 @@ export function RejectRemarksModal({
         <DialogHeader>
           <DialogTitle>Reject SKU Registration</DialogTitle>
           <DialogDescription>
-            Provide a reason for rejecting <span className="font-semibold text-foreground">{sku?.product_name}</span>. This will be visible to the requester.
+            Provide a reason for rejecting{" "}
+            <span className="font-semibold text-foreground">
+              {sku?.product_name}
+            </span>
+            . This will be visible to the requester.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
-            <Label htmlFor="remarks">Rejection Remarks</Label>
+            <Label htmlFor="remarks">Remarks</Label>
             <Textarea
               id="remarks"
-              placeholder="e.g. Incorrect pricing, missing barcode details..."
+              placeholder="remarks..."
               className="min-h-[100px]"
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
               disabled={isLoading}
             />
-            <p className={`text-[11px] ${remarks.trim().length >= 12 ? 'text-muted-foreground' : 'text-destructive font-medium'}`}>
-              {remarks.trim().length < 12 
-                ? `Please provide more detail (minimum 12 characters: ${remarks.trim().length}/12)` 
+            <p
+              className={`text-[11px] ${remarks.trim().length >= 12 ? "text-muted-foreground" : "text-destructive font-medium"}`}
+            >
+              {remarks.trim().length < 12
+                ? `Please provide more detail (minimum 12 characters: ${remarks.trim().length}/12)`
                 : "Requirement met."}
             </p>
           </div>
@@ -72,10 +78,10 @@ export function RejectRemarksModal({
           <Button variant="outline" onClick={onClose} disabled={isLoading}>
             Cancel
           </Button>
-          <Button 
+          <Button
             variant="destructive"
-            onClick={handleConfirm} 
-            disabled={isLoading || remarks.trim().length < 12} 
+            onClick={handleConfirm}
+            disabled={isLoading || remarks.trim().length < 12}
           >
             {isLoading ? "Rejecting..." : "Reject SKU"}
           </Button>
@@ -84,4 +90,3 @@ export function RejectRemarksModal({
     </Dialog>
   );
 }
-
