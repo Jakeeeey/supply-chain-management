@@ -143,8 +143,17 @@ export function PrintPreviewModal({
                               ? p.unit_of_measurement?.unit_shortcut
                               : "PCS"}
                           </span>
-                          <span>Weight: 0 kg (Placeholder)</span>
-                          <span>CBM: 0.000 m³ (Placeholder)</span>
+                          <span>
+                            Weight:{" "}
+                            {p.weight ?? "N/A"}{" "}
+                            {p.weight_unit?.code || "kg"}
+                          </span>
+                          <span>
+                            CBM:{" "}
+                            {p.cbm_length
+                              ? `${p.cbm_length}×${p.cbm_width}×${p.cbm_height} ${p.cbm_unit?.code || "cm"}`
+                              : "N/A"}
+                          </span>
                         </div>
                       )}
                     </div>
@@ -155,6 +164,11 @@ export function PrintPreviewModal({
                         {p.barcode ? (
                           <Barcode
                             value={p.barcode}
+                            format={
+                              p.barcode_type?.name?.includes("EAN")
+                                ? "EAN13"
+                                : "CODE128"
+                            }
                             width={1}
                             height={40}
                             fontSize={12}

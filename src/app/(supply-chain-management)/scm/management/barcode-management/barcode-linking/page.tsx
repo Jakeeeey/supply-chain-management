@@ -8,12 +8,12 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { NavUser } from "../../_components/nav-user";
+import { NavUser } from "../../../_components/nav-user";
 
 import { cookies } from "next/headers";
 
 // ✅ Wire the module you asked for
-import BarCode from "@/modules/supply-chain-management/management/barcode-scanner/BarCodeScannerModule";
+import BarCodeLinking from "@/modules/supply-chain-management/management/barcode-management/barcode-linking/BarCodeLinkingModule";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -101,7 +101,7 @@ export default async function Page() {
                 <BreadcrumbSeparator className="hidden md:block shrink-0" />
                 <BreadcrumbItem className="min-w-0 overflow-hidden">
                   <BreadcrumbPage className="truncate max-w-[56vw] sm:max-w-[60vw] md:max-w-none">
-                    Barcode Scanner
+                    Barcode Linking
                   </BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
@@ -116,7 +116,7 @@ export default async function Page() {
 
       {/* ✅ Only content scrolls inside RIGHT column */}
       <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-2 sm:p-4">
-        <BarCode />
+        <BarCodeLinking />
       </main>
     </div>
   );

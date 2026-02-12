@@ -1,5 +1,3 @@
-// src/modules/supply-chain-management/management/barcode-scanner/types.ts
-
 export interface Supplier {
   id: number;
   supplier_name: string;
@@ -17,6 +15,24 @@ export interface Unit {
   unit_shortcut?: string;
 }
 
+// Reference Data
+export interface WeightUnit {
+  id: number;
+  code: string;
+  name: string;
+}
+
+export interface CbmUnit {
+  id: number;
+  code: string;
+  name: string;
+}
+
+export interface BarcodeType {
+  id: number;
+  name: string;
+}
+
 export interface ProductSupplierJunction {
   id: number;
   product_id: number;
@@ -27,18 +43,28 @@ export interface Product {
   product_id: string;
   description?: string | null;
   product_name: string;
+  product_code: string; // SKU
   barcode: string | null;
-  product_code: string;
+  created_at?: string;
+
+  // Relations
   product_category: Category | string | null;
   unit_of_measurement: Unit | string | null;
   product_per_supplier?: ProductSupplierJunction[];
+
+  // Logistics Fields
+  // Note: These key names must match exactly what Directus returns
+  barcode_type?: BarcodeType | null;
+
+  weight?: number | null;
+  weight_unit?: WeightUnit | null;
+
+  cbm_length?: number | null;
+  cbm_width?: number | null;
+  cbm_height?: number | null;
+  cbm_unit?: CbmUnit | null;
 }
 
-export interface UpdateBarcodeDTO {
-  barcode: string;
-}
-
-// REVISION: Return Supplier Name instead of Shortcut
 export const getSupplierName = (p: Product): string => {
   if (
     !p.product_per_supplier ||
@@ -52,7 +78,6 @@ export const getSupplierName = (p: Product): string => {
     .map((junction) => {
       if (junction.supplier_id && typeof junction.supplier_id === "object") {
         const sup = junction.supplier_id as Supplier;
-        // CHANGED: Return supplier_name primarily
         return sup.supplier_name || sup.supplier_shortcut;
       }
       return null;

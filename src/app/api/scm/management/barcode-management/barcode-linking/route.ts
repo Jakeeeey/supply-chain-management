@@ -73,12 +73,34 @@ async function proxyRequest(req: NextRequest, method: string) {
         sort: "supplier_name",
       });
       return json({ data });
+    } else if (scope === "barcode_type") {
+      const data = await fetchDirectus("/items/barcode_type", {
+        fields: "id,name",
+        "filter[is_active][_eq]": "1",
+        limit: "-1",
+      });
+      return json({ data });
+    } else if (scope === "weight_unit") {
+      const data = await fetchDirectus("/items/weight_unit", {
+        fields: "id,code,name",
+        "filter[is_active][_eq]": "1",
+        limit: "-1",
+      });
+      return json({ data });
+    } else if (scope === "cbm_unit") {
+      const data = await fetchDirectus("/items/cbm_unit", {
+        fields: "id,code,name",
+        "filter[is_active][_eq]": "1",
+        limit: "-1",
+      });
+      return json({ data });
     } else {
       // 1. Fetch Products (FIXED: product_code instead of sku_code)
       const productsPromise = fetchDirectus("/items/products", {
         fields:
           "product_id,product_name,barcode,description,product_code,product_category.category_name,unit_of_measurement.unit_name,unit_of_measurement.unit_shortcut",
         limit: "-1",
+        "filter[isActive][_eq]": "1",
       });
 
       // 2. Fetch Junction Table for Suppliers
