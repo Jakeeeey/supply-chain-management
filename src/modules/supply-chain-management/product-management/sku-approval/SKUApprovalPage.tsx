@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import ErrorPage from "@/components/shared/ErrorPage";
-import { EditDescriptionModal } from "@/modules/supply-chain-management/product-management/sku-masterlist/components/modals/EditDescriptionModal";
-import { RejectRemarksModal } from "@/modules/supply-chain-management/product-management/sku-approval/components/modals/RejectRemarksModal";
+import { EditDescriptionModal } from "@/modules/supply-chain-management/product-management/sku-masterlist/components/modals/edit-description-modal";
+import { RejectRemarksModal } from "@/modules/supply-chain-management/product-management/sku-approval/components/modals/reject-remarks-modal";
 import { SKU } from "@/modules/supply-chain-management/product-management/sku-creation/types/sku.schema";
 
 export default function SKUApprovalPage() {

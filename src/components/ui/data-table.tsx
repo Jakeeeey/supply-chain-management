@@ -35,6 +35,7 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  Search,
   Settings2,
 } from "lucide-react";
 import {
@@ -81,12 +82,13 @@ function SearchInput({
   }, [value, onSearch]);
 
   return (
-    <div className="relative w-full">
+    <div className="relative flex-1 w-full">
+      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
       <Input
         placeholder={placeholder}
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        className="h-10 rounded-xl pr-10 bg-background"
+        className="rounded-lg pl-8"
       />
       {isLoading && (
         <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -252,12 +254,12 @@ export function DataTable<TData, TValue>({
           {actionComponent}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="h-10 rounded-xl gap-2">
+              <Button variant="outline" className="gap-2">
                 <Settings2 className="h-4 w-4" />
                 View
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[150px] rounded-xl">
+            <DropdownMenuContent align="end" className="w-[150px]">
               {table
                 .getAllColumns()
                 .filter((column) => column.getCanHide())

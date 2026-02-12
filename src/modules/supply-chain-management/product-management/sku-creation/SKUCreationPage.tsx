@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Plus, RefreshCcw } from "lucide-react";
 import { useSKUs } from "@/modules/supply-chain-management/product-management/sku-creation/hooks/useSKUs";
 import { SKUTable } from "@/modules/supply-chain-management/product-management/sku-creation/components/data-table";
-import { SKUModal } from "@/modules/supply-chain-management/product-management/sku-creation/components/modals/SKUModal";
+import { SKUModal } from "@/modules/supply-chain-management/product-management/sku-creation/components/modals/sku-create-modal";
 import { Button } from "@/components/ui/button";
 import { SKU } from "@/modules/supply-chain-management/product-management/sku-creation/types/sku.schema";
 import { toast } from "sonner";

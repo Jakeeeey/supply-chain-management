@@ -101,9 +101,7 @@ export default function SKUMasterlistModule() {
             size="sm"
             onClick={handleBulkActivate}
             disabled={isUpdating}
-            className="rounded-xl h-10 px-4 border-emerald-200 bg-emerald-50/50 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300"
           >
-            <Power className="h-4 w-4 mr-2" />
             Activate{" "}
             {selectedRows.filter((r) => Number(r.isActive) !== 1).length} items
           </Button>
@@ -114,9 +112,7 @@ export default function SKUMasterlistModule() {
             size="sm"
             onClick={handleBulkDeactivate}
             disabled={isUpdating}
-            className="rounded-xl h-10 px-4"
           >
-            <PowerOff className="h-4 w-4 mr-2" />
             Deactivate{" "}
             {selectedRows.filter((r) => Number(r.isActive) === 1).length} items
           </Button>
