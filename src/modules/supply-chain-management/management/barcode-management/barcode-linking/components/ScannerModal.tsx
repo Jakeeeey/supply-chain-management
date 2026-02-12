@@ -24,6 +24,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Card, CardContent } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   ScanLine,
   Wand2,
@@ -33,9 +37,12 @@ import {
   Scan,
   CheckCircle2,
   Settings2,
+  Package,
+  Layers,
+  Scale,
+  Ruler,
 } from "lucide-react";
-import { Card } from "@/components/ui/card";
-import { Product, UpdateBarcodeDTO } from "../types";
+import { Product, Category, Unit, UpdateBarcodeDTO } from "../types";
 import {
   generateEAN13,
   generateCode128,
@@ -80,15 +87,15 @@ export function ScannerModal({
   const [selectedBarcodeTypeId, setSelectedBarcodeTypeId] =
     useState<string>("");
 
-  // Dimensions & Weight (Use Strings to allow typing decimals)
+  // Dimensions & Weight
   const [recordDimensions, setRecordDimensions] = useState(false);
   const [dimensions, setDimensions] = useState({
     length: "",
     width: "",
     height: "",
-    unit: "", // CBM Unit ID
+    unit: "",
     weight: "",
-    weightUnit: "", // Weight Unit ID
+    weightUnit: "",
   });
 
   // --- FETCH DATA ---
@@ -112,8 +119,6 @@ export function ScannerModal({
             const data = await btRes.json();
             const list = Array.isArray(data.data) ? data.data : [];
             setBarcodeTypes(list);
-
-            // Set Default Barcode Type (EAN-13)
             if (list.length > 0 && !selectedBarcodeTypeId) {
               const defaultType =
                 list.find((t: any) => t.name?.includes("EAN")) || list[0];
@@ -126,8 +131,6 @@ export function ScannerModal({
             const data = await wuRes.json();
             const list = Array.isArray(data.data) ? data.data : [];
             setWeightUnits(list);
-
-            // Set Default Weight Unit (KG)
             if (list.length > 0 && !dimensions.weightUnit) {
               const defaultUnit =
                 list.find((u: any) => u.code === "KG") || list[0];
@@ -143,8 +146,6 @@ export function ScannerModal({
             const data = await cuRes.json();
             const list = Array.isArray(data.data) ? data.data : [];
             setCbmUnits(list);
-
-            // Set Default CBM Unit (CM)
             if (list.length > 0 && !dimensions.unit) {
               const defaultUnit =
                 list.find((u: any) => u.code === "CM") || list[0];
@@ -171,7 +172,6 @@ export function ScannerModal({
       setCameraError(null);
       setStep("profile");
       setRecordDimensions(false);
-      // Reset inputs to empty strings for typing
       setDimensions((prev) => ({
         ...prev,
         length: "",
@@ -184,6 +184,7 @@ export function ScannerModal({
     }
   }, [open, product]);
 
+  // --- HELPERS ---
   const getSelectedBarcodeTypeName = () => {
     return (
       barcodeTypes.find((t) => String(t.id) === selectedBarcodeTypeId)?.name ||
@@ -191,13 +192,39 @@ export function ScannerModal({
     );
   };
 
+  const getCategoryName = () => {
+    if (
+      typeof product?.product_category === "object" &&
+      product?.product_category
+    ) {
+      return (product.product_category as Category).category_name;
+    }
+    if (typeof product?.product_category === "string") {
+      return product.product_category;
+    }
+    return "Uncategorized";
+  };
+
+  const getUnitName = () => {
+    if (
+      typeof product?.unit_of_measurement === "object" &&
+      product?.unit_of_measurement
+    ) {
+      return (
+        (product.unit_of_measurement as Unit).unit_shortcut ||
+        (product.unit_of_measurement as Unit).unit_name
+      );
+    }
+    return "PCS";
+  };
+
+  // --- SAVE ---
   const handleSave = async () => {
     if (!barcode) {
       toast.error("Barcode cannot be empty.");
       return;
     }
 
-    // Weight is mandatory per business rules
     if (!dimensions.weight || parseFloat(dimensions.weight) <= 0) {
       toast.error("Weight must be greater than zero.");
       return;
@@ -207,7 +234,6 @@ export function ScannerModal({
       return;
     }
 
-    // 1. Validation
     let isValidFormat = true;
     let formatError = "";
     const typeName = getSelectedBarcodeTypeName();
@@ -242,20 +268,21 @@ export function ScannerModal({
       return;
     }
 
-    // 2. Prepare Payload
-    // Convert strings to numbers for API
     const payload: UpdateBarcodeDTO = {
       barcode,
       barcode_type_id: parseInt(selectedBarcodeTypeId),
-      weight: parseFloat(dimensions.weight), // DB Field: weight
-      weight_unit_id: parseInt(dimensions.weightUnit), // DB Field: weight_unit_id
+      weight: parseFloat(dimensions.weight),
+      weight_unit_id: parseInt(dimensions.weightUnit),
     };
 
     if (recordDimensions) {
       if (
-        !dimensions.length || parseFloat(dimensions.length) <= 0 ||
-        !dimensions.width || parseFloat(dimensions.width) <= 0 ||
-        !dimensions.height || parseFloat(dimensions.height) <= 0
+        !dimensions.length ||
+        parseFloat(dimensions.length) <= 0 ||
+        !dimensions.width ||
+        parseFloat(dimensions.width) <= 0 ||
+        !dimensions.height ||
+        parseFloat(dimensions.height) <= 0
       ) {
         toast.error("All CBM dimensions must be greater than zero.");
         return;
@@ -305,283 +332,338 @@ export function ScannerModal({
     setStep("assignment");
   };
 
-  // --- RENDERERS ---
+  // ============================
+  // PROFILE STEP
+  // ============================
   const renderProfileStep = () => (
-    <div className="space-y-8 py-2">
-      <div className="rounded-xl border bg-card text-card-foreground shadow-sm p-6">
-        <div className="grid grid-cols-2 gap-y-6 gap-x-8">
-          <div className="space-y-1.5">
-            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-              Product Name
-            </span>
-            <p className="text-sm font-semibold text-foreground leading-tight">
-              {product?.description || product?.product_name}
-            </p>
+    <div className="space-y-6 py-2">
+      {/* Product Identity Card */}
+      <Card>
+        <CardContent className="p-5">
+          <div className="flex items-start gap-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+              <Package className="h-5 w-5 text-primary" />
+            </div>
+            <div className="space-y-2 min-w-0 flex-1">
+              <p className="text-sm font-semibold text-foreground leading-snug">
+                {product?.description || product?.product_name}
+              </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge
+                  variant="outline"
+                  className="font-mono text-xs text-muted-foreground"
+                >
+                  {product?.product_code}
+                </Badge>
+                <Badge
+                  variant="secondary"
+                  className="text-xs"
+                >
+                  <Layers className="h-3 w-3 mr-1" />
+                  {getCategoryName()}
+                </Badge>
+                <Badge className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 text-xs">
+                  {getUnitName()}
+                </Badge>
+              </div>
+            </div>
           </div>
-          <div className="space-y-1.5">
-            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-              SKU Code
-            </span>
-            <p className="font-mono text-sm font-medium">
-              {product?.product_code}
-            </p>
-          </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
-      <div className="space-y-4">
+      {/* Method Selection */}
+      <div className="space-y-3">
         <h3 className="text-sm font-semibold text-foreground">
           Select Barcode Assignment Method
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <Card
-            className="group cursor-pointer border-2 hover:border-blue-500/20 hover:shadow-md transition-all p-6 text-center space-y-4"
+            className="group cursor-pointer border-2 hover:border-primary/30 hover:shadow-sm transition-all"
             onClick={() => handleMethodSelect("manual")}
           >
-            <div className="h-14 w-14 mx-auto rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
-              <Keyboard className="h-7 w-7" />
-            </div>
-            <div>
-              <span className="block font-semibold text-sm">Manual Entry</span>
-            </div>
+            <CardContent className="p-5 text-center space-y-3">
+              <div className="h-12 w-12 mx-auto rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                <Keyboard className="h-6 w-6" />
+              </div>
+              <div>
+                <span className="block font-semibold text-sm">
+                  Manual Entry
+                </span>
+                <span className="block text-xs text-muted-foreground mt-0.5">
+                  Type a barcode value
+                </span>
+              </div>
+            </CardContent>
           </Card>
           <Card
-            className="group cursor-pointer border-2 hover:border-purple-500/20 hover:shadow-md transition-all p-6 text-center space-y-4"
+            className="group cursor-pointer border-2 hover:border-primary/30 hover:shadow-sm transition-all"
             onClick={() => handleMethodSelect("scan")}
           >
-            <div className="h-14 w-14 mx-auto rounded-full bg-purple-50 text-purple-600 flex items-center justify-center">
-              <Scan className="h-7 w-7" />
-            </div>
-            <div>
-              <span className="block font-semibold text-sm">Scanning</span>
-            </div>
+            <CardContent className="p-5 text-center space-y-3">
+              <div className="h-12 w-12 mx-auto rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
+                <Scan className="h-6 w-6" />
+              </div>
+              <div>
+                <span className="block font-semibold text-sm">Scanning</span>
+                <span className="block text-xs text-muted-foreground mt-0.5">
+                  Use camera to scan
+                </span>
+              </div>
+            </CardContent>
           </Card>
           <Card
-            className="group cursor-pointer border-2 hover:border-amber-500/20 hover:shadow-md transition-all p-6 text-center space-y-4"
+            className="group cursor-pointer border-2 hover:border-primary/30 hover:shadow-sm transition-all"
             onClick={() => handleMethodSelect("generate")}
           >
-            <div className="h-14 w-14 mx-auto rounded-full bg-amber-50 text-amber-600 flex items-center justify-center">
-              <Wand2 className="h-7 w-7" />
-            </div>
-            <div>
-              <span className="block font-semibold text-sm">
-                Generate Barcode
-              </span>
-            </div>
+            <CardContent className="p-5 text-center space-y-3">
+              <div className="h-12 w-12 mx-auto rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+                <Wand2 className="h-6 w-6" />
+              </div>
+              <div>
+                <span className="block font-semibold text-sm">
+                  Generate Barcode
+                </span>
+                <span className="block text-xs text-muted-foreground mt-0.5">
+                  Auto-generate a code
+                </span>
+              </div>
+            </CardContent>
           </Card>
         </div>
       </div>
     </div>
   );
 
+  // ============================
+  // ASSIGNMENT STEP
+  // ============================
   const renderAssignmentStep = () => (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between border-b pb-4">
-        <div>
-          <h3 className="font-semibold text-lg">{product?.product_code}</h3>
-          <p className="text-sm text-muted-foreground truncate max-w-[300px]">
-            {product?.description || product?.product_name}
-          </p>
-        </div>
-        <Button variant="ghost" size="sm" onClick={() => setStep("profile")}>
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Profile
-        </Button>
-      </div>
-
-      <div className="flex items-center gap-4 p-4 bg-muted/30 rounded-lg border">
-        <div className="p-2 bg-primary/10 rounded-full">
-          <Settings2 className="h-5 w-5 text-primary" />
-        </div>
-        <div className="flex-1">
-          <Label className="text-xs font-semibold uppercase text-muted-foreground">
-            Barcode Type Setting
-          </Label>
-          <p className="text-xs text-muted-foreground">
-            This format will be enforced on save.
-          </p>
-        </div>
-        <div className="w-[180px]">
-          {/* ✅ UPDATED: Select with Fallback and Filter */}
-          <Select
-            value={selectedBarcodeTypeId || undefined}
-            onValueChange={setSelectedBarcodeTypeId}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select type" />
-            </SelectTrigger>
-            <SelectContent>
-              {barcodeTypes
-                .filter((t) => t?.id) // Ensure ID exists
-                .map((t) => (
-                  <SelectItem key={String(t.id)} value={String(t.id)}>
-                    {t.name}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 mb-6">
-          <TabsTrigger value="manual">Manual Entry</TabsTrigger>
-          <TabsTrigger value="scan">Barcode Scanning</TabsTrigger>
-          <TabsTrigger value="generate">System Generated</TabsTrigger>
-        </TabsList>
-        <div className="p-4 border rounded-lg bg-card space-y-4">
-          <TabsContent value="manual" className="mt-0 space-y-4">
-            <div className="space-y-2">
-              <Label>
-                Barcode Value <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                value={barcode}
-                onChange={(e) => setBarcode(e.target.value)}
-                placeholder="Enter code..."
-                className="font-mono text-lg"
-                autoFocus
-              />
+    <ScrollArea className="h-full">
+      <div className="space-y-5 pr-3">
+        {/* Product Summary Bar */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted">
+              <Package className="h-4 w-4 text-muted-foreground" />
             </div>
-          </TabsContent>
-
-          <TabsContent
-            value="scan"
-            className="mt-0 flex flex-col items-center gap-4"
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-foreground truncate max-w-[280px]">
+                {product?.description || product?.product_name}
+              </p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <Badge
+                  variant="outline"
+                  className="font-mono text-[10px] px-1.5 py-0 h-5"
+                >
+                  {product?.product_code}
+                </Badge>
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5">
+                  {getCategoryName()}
+                </Badge>
+              </div>
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setStep("profile")}
+            className="shrink-0"
           >
-            <div className="relative w-full aspect-[4/3] bg-black rounded-lg overflow-hidden border shadow-inner flex items-center justify-center">
-              {activeTab === "scan" && (
-                <div className="absolute inset-0">
-                  <BarcodeScannerComponent
-                    onUpdate={handleScan}
-                    width="100%"
-                    height="100%"
-                    videoConstraints={{ facingMode: "environment" }}
-                  />
-                </div>
-              )}
-              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center pointer-events-none">
-                <div className="relative w-64 h-32 flex flex-col items-center justify-center">
-                  <div className="absolute top-0 left-0 w-8 h-8 border-l-4 border-t-4 border-blue-500 rounded-tl-lg" />
-                  <div className="absolute top-0 right-0 w-8 h-8 border-r-4 border-t-4 border-blue-500 rounded-tr-lg" />
-                  <div className="absolute bottom-0 left-0 w-8 h-8 border-l-4 border-b-4 border-blue-500 rounded-bl-lg" />
-                  <div className="absolute bottom-0 right-0 w-8 h-8 border-r-4 border-b-4 border-blue-500 rounded-br-lg" />
-                  {scanSuccess && (
-                    <div className="animate-in zoom-in duration-300 bg-white/20 backdrop-blur-sm p-3 rounded-full">
-                      <CheckCircle2 className="w-10 h-10 text-green-400 drop-shadow-lg" />
-                    </div>
-                  )}
-                </div>
-                <p className="mt-4 text-white text-xs font-medium bg-black/60 px-3 py-1.5 rounded-full backdrop-blur-md">
-                  Center barcode horizontally inside the box
+            <ArrowLeft className="mr-1.5 h-3.5 w-3.5" /> Back
+          </Button>
+        </div>
+
+        <Separator />
+
+        {/* Barcode Type Setting */}
+        <Card>
+          <CardContent className="p-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10">
+                <Settings2 className="h-4 w-4 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <Label className="text-xs font-semibold uppercase text-muted-foreground">
+                  Barcode Format
+                </Label>
+                <p className="text-[11px] text-muted-foreground">
+                  Enforced on save
                 </p>
               </div>
-            </div>
-            <div className="w-full flex items-center justify-between p-4 rounded-lg border bg-white shadow-sm">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-slate-100 rounded-md">
-                  <ScanLine className="h-5 w-5 text-slate-600" />
-                </div>
-                <span className="text-sm font-semibold text-slate-700">
-                  Scanned Code:
-                </span>
+              <div className="w-[160px]">
+                <Select
+                  value={selectedBarcodeTypeId || undefined}
+                  onValueChange={setSelectedBarcodeTypeId}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {barcodeTypes
+                      .filter((t) => t?.id)
+                      .map((t) => (
+                        <SelectItem key={String(t.id)} value={String(t.id)}>
+                          {t.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <span
-                className={`font-mono text-lg font-bold ${barcode ? "text-green-600" : "text-slate-300"}`}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Assignment Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="manual" className="text-xs">
+              <Keyboard className="h-3.5 w-3.5 mr-1.5" />
+              Manual
+            </TabsTrigger>
+            <TabsTrigger value="scan" className="text-xs">
+              <Scan className="h-3.5 w-3.5 mr-1.5" />
+              Scan
+            </TabsTrigger>
+            <TabsTrigger value="generate" className="text-xs">
+              <Wand2 className="h-3.5 w-3.5 mr-1.5" />
+              Generate
+            </TabsTrigger>
+          </TabsList>
+
+          <Card className="mt-3">
+            <CardContent className="p-4">
+              <TabsContent value="manual" className="mt-0 space-y-3">
+                <div className="space-y-2">
+                  <Label className="text-xs">
+                    Barcode Value <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    value={barcode}
+                    onChange={(e) => setBarcode(e.target.value)}
+                    placeholder="Enter barcode..."
+                    className="font-mono text-base"
+                    autoFocus
+                  />
+                </div>
+              </TabsContent>
+
+              <TabsContent
+                value="scan"
+                className="mt-0 flex flex-col items-center gap-3"
               >
-                {barcode || "Waiting..."}
-              </span>
-            </div>
-          </TabsContent>
+                <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden border flex items-center justify-center">
+                  {activeTab === "scan" && (
+                    <div className="absolute inset-0">
+                      <BarcodeScannerComponent
+                        onUpdate={handleScan}
+                        width="100%"
+                        height="100%"
+                        videoConstraints={{ facingMode: "environment" }}
+                      />
+                    </div>
+                  )}
+                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center pointer-events-none">
+                    <div className="relative w-64 h-32 flex flex-col items-center justify-center">
+                      <div className="absolute top-0 left-0 w-8 h-8 border-l-4 border-t-4 border-primary rounded-tl-lg" />
+                      <div className="absolute top-0 right-0 w-8 h-8 border-r-4 border-t-4 border-primary rounded-tr-lg" />
+                      <div className="absolute bottom-0 left-0 w-8 h-8 border-l-4 border-b-4 border-primary rounded-bl-lg" />
+                      <div className="absolute bottom-0 right-0 w-8 h-8 border-r-4 border-b-4 border-primary rounded-br-lg" />
+                      {scanSuccess && (
+                        <div className="animate-in zoom-in duration-300 bg-white/20 backdrop-blur-sm p-3 rounded-full">
+                          <CheckCircle2 className="w-10 h-10 text-green-400 drop-shadow-lg" />
+                        </div>
+                      )}
+                    </div>
+                    <p className="mt-4 text-white text-xs font-medium bg-black/60 px-3 py-1.5 rounded-full backdrop-blur-md">
+                      Center barcode inside the frame
+                    </p>
+                  </div>
+                </div>
+                <div className="w-full flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+                  <div className="flex items-center gap-2">
+                    <ScanLine className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Scanned:
+                    </span>
+                  </div>
+                  <span
+                    className={`font-mono text-sm font-bold ${barcode ? "text-green-600" : "text-muted-foreground"}`}
+                  >
+                    {barcode || "Waiting..."}
+                  </span>
+                </div>
+              </TabsContent>
 
-          <TabsContent value="generate" className="mt-0 space-y-4">
-            <Button onClick={handleGenerate} className="w-full">
-              <RefreshCcw className="mr-2 h-4 w-4" /> Generate{" "}
-              {getSelectedBarcodeTypeName()}
-            </Button>
-
-            <div className="flex flex-col items-center justify-center p-4 border border-dashed rounded bg-white min-h-[100px]">
-              {barcode ? (
-                <Barcode
+              <TabsContent value="generate" className="mt-0 space-y-3">
+                <Button onClick={handleGenerate} className="w-full" size="sm">
+                  <RefreshCcw className="mr-2 h-3.5 w-3.5" /> Generate{" "}
+                  {getSelectedBarcodeTypeName()}
+                </Button>
+                <div className="flex flex-col items-center justify-center p-4 border border-dashed rounded-lg bg-muted/20 min-h-[80px]">
+                  {barcode ? (
+                    <Barcode
+                      value={barcode}
+                      format={
+                        getSelectedBarcodeTypeName().includes("EAN")
+                          ? "EAN13"
+                          : "CODE128"
+                      }
+                      width={1.5}
+                      height={50}
+                      fontSize={14}
+                    />
+                  ) : (
+                    <span className="text-xs text-muted-foreground">
+                      Click Generate to create a code
+                    </span>
+                  )}
+                </div>
+                <Input
                   value={barcode}
-                  format={
-                    getSelectedBarcodeTypeName().includes("EAN")
-                      ? "EAN13"
-                      : "CODE128"
-                  }
-                  width={1.5}
-                  height={50}
-                  fontSize={14}
+                  readOnly
+                  className="bg-muted font-mono text-sm"
                 />
-              ) : (
-                <span className="text-sm text-muted-foreground">
-                  Click Generate to create a code
-                </span>
-              )}
-            </div>
-            <Input value={barcode} readOnly className="bg-muted font-mono" />
-          </TabsContent>
-        </div>
-      </Tabs>
+              </TabsContent>
+            </CardContent>
+          </Card>
+        </Tabs>
 
-      <div className="border rounded-lg p-4 space-y-4">
-        <div className="flex items-center space-x-2">
-          <Checkbox
-            id="dims"
-            checked={recordDimensions}
-            onCheckedChange={(c) => setRecordDimensions(!!c)}
-          />
-          <Label htmlFor="dims" className="font-normal cursor-pointer">
-            Record Dimensions (CBM)
-          </Label>
-        </div>
+        <Separator />
 
-        {recordDimensions && (
-          <div className="grid grid-cols-4 gap-4 animate-in fade-in">
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Length</Label>
+        {/* Logistics Section */}
+        <div className="space-y-4">
+          <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <Scale className="h-4 w-4" /> Logistics Data
+          </h4>
+
+          {/* Weight (always visible) */}
+          <div className="grid grid-cols-4 gap-3">
+            <div className="col-span-3 space-y-1.5">
+              <Label className="text-xs text-muted-foreground">
+                Weight <span className="text-destructive">*</span>
+              </Label>
               <Input
-                placeholder="0"
+                placeholder="0.00"
                 type="number"
-                value={dimensions.length}
+                value={dimensions.weight}
                 onChange={(e) =>
-                  setDimensions({ ...dimensions, length: e.target.value })
+                  setDimensions({ ...dimensions, weight: e.target.value })
                 }
               />
             </div>
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Width</Label>
-              <Input
-                placeholder="0"
-                type="number"
-                value={dimensions.width}
-                onChange={(e) =>
-                  setDimensions({ ...dimensions, width: e.target.value })
-                }
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Height</Label>
-              <Input
-                placeholder="0"
-                type="number"
-                value={dimensions.height}
-                onChange={(e) =>
-                  setDimensions({ ...dimensions, height: e.target.value })
-                }
-              />
-            </div>
-            <div className="space-y-1">
+            <div className="col-span-1 space-y-1.5">
               <Label className="text-xs text-muted-foreground">Unit</Label>
-              {/* ✅ UPDATED: CBM Unit Select */}
               <Select
-                value={dimensions.unit || undefined}
-                onValueChange={(v) => setDimensions({ ...dimensions, unit: v })}
+                value={dimensions.weightUnit || undefined}
+                onValueChange={(v) =>
+                  setDimensions({ ...dimensions, weightUnit: v })
+                }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Unit" />
                 </SelectTrigger>
                 <SelectContent>
-                  {cbmUnits
+                  {weightUnits
                     .filter((u) => u?.id)
                     .map((u) => (
                       <SelectItem key={String(u.id)} value={String(u.id)}>
@@ -592,71 +674,148 @@ export function ScannerModal({
               </Select>
             </div>
           </div>
-        )}
 
-        <div className="grid grid-cols-4 gap-4">
-          <div className="col-span-3 space-y-1">
-            <Label className="text-xs text-muted-foreground">
-              Weight (Required)
-            </Label>
-            <Input
-              placeholder="0"
-              type="number"
-              value={dimensions.weight}
-              onChange={(e) =>
-                setDimensions({ ...dimensions, weight: e.target.value })
-              }
-            />
-          </div>
-          <div className="col-span-1 space-y-1">
-            <Label className="text-xs text-muted-foreground">&nbsp;</Label>
-            {/* ✅ UPDATED: Weight Unit Select */}
-            <Select
-              value={dimensions.weightUnit || undefined}
-              onValueChange={(v) =>
-                setDimensions({ ...dimensions, weightUnit: v })
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Unit" />
-              </SelectTrigger>
-              <SelectContent>
-                {weightUnits
-                  .filter((u) => u?.id)
-                  .map((u) => (
-                    <SelectItem key={String(u.id)} value={String(u.id)}>
-                      {u.code || u.name}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* CBM Toggle + Fields */}
+          <Card className="border-dashed">
+            <CardContent className="p-3 space-y-3">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="dims"
+                  checked={recordDimensions}
+                  onCheckedChange={(c) => setRecordDimensions(!!c)}
+                />
+                <Label
+                  htmlFor="dims"
+                  className="text-xs font-normal cursor-pointer flex items-center gap-1.5"
+                >
+                  <Ruler className="h-3.5 w-3.5 text-muted-foreground" />
+                  Record Dimensions (CBM)
+                </Label>
+              </div>
+
+              {recordDimensions && (
+                <div className="grid grid-cols-4 gap-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">
+                      Length
+                    </Label>
+                    <Input
+                      placeholder="0"
+                      type="number"
+                      value={dimensions.length}
+                      onChange={(e) =>
+                        setDimensions({
+                          ...dimensions,
+                          length: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">
+                      Width
+                    </Label>
+                    <Input
+                      placeholder="0"
+                      type="number"
+                      value={dimensions.width}
+                      onChange={(e) =>
+                        setDimensions({
+                          ...dimensions,
+                          width: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">
+                      Height
+                    </Label>
+                    <Input
+                      placeholder="0"
+                      type="number"
+                      value={dimensions.height}
+                      onChange={(e) =>
+                        setDimensions({
+                          ...dimensions,
+                          height: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">
+                      Unit
+                    </Label>
+                    <Select
+                      value={dimensions.unit || undefined}
+                      onValueChange={(v) =>
+                        setDimensions({ ...dimensions, unit: v })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Unit" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {cbmUnits
+                          .filter((u) => u?.id)
+                          .map((u) => (
+                            <SelectItem
+                              key={String(u.id)}
+                              value={String(u.id)}
+                            >
+                              {u.code || u.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
-    </div>
+    </ScrollArea>
   );
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[750px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-xl">
-            {step === "profile" ? "Product Profile" : "Barcode Assignment"}
-          </DialogTitle>
-          <DialogDescription className="text-sm">
-            {step === "profile" ? "View details" : "Assign barcode"}
-          </DialogDescription>
-        </DialogHeader>
-        {step === "profile" ? renderProfileStep() : renderAssignmentStep()}
+      <DialogContent className="sm:max-w-[700px] max-h-[85vh] p-0 gap-0 flex flex-col overflow-hidden">
+        <div className="px-6 pt-6 pb-3 shrink-0">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold">
+              {step === "profile" ? "Product Profile" : "Barcode Assignment"}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              {step === "profile"
+                ? "Review product details and select assignment method"
+                : "Assign a barcode and enter logistics data"}
+            </DialogDescription>
+          </DialogHeader>
+        </div>
+
+        <div className="px-6 pb-4 flex-1 min-h-0 overflow-y-auto">
+          {step === "profile" ? renderProfileStep() : renderAssignmentStep()}
+        </div>
+
         {step === "assignment" && (
-          <DialogFooter className="gap-2 sm:gap-0 mt-4">
-            <Button variant="outline" onClick={() => setStep("profile")}>
+          <div className="border-t px-6 py-3 flex items-center justify-end gap-2 bg-muted/30 shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setStep("profile")}
+            >
               Cancel
             </Button>
-            <Button onClick={handleSave} disabled={loading || !barcode}>
+            <Button
+              size="sm"
+              onClick={handleSave}
+              disabled={loading || !barcode}
+            >
               {loading ? "Saving..." : "Save Changes"}
             </Button>
-          </DialogFooter>
+          </div>
         )}
       </DialogContent>
     </Dialog>
