@@ -98,7 +98,7 @@ async function proxyRequest(req: NextRequest, method: string) {
       // 1. Fetch Products (FIXED: product_code instead of sku_code)
       const productsPromise = fetchDirectus("/items/products", {
         fields:
-          "product_id,product_name,barcode,description,product_code,product_category.category_name,unit_of_measurement.unit_name,unit_of_measurement.unit_shortcut",
+          "product_id,product_name,barcode,barcode_date,description,product_code,product_category.category_name,unit_of_measurement.unit_name,unit_of_measurement.unit_shortcut",
         limit: "-1",
         "filter[isActive][_eq]": "1",
       });

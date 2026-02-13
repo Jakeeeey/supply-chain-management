@@ -45,7 +45,7 @@ export interface Product {
   product_name: string;
   product_code: string; // SKU
   barcode: string | null;
-  created_at?: string;
+  barcode_date?: string | null;
 
   // Relations
   product_category: Category | string | null;
@@ -54,15 +54,15 @@ export interface Product {
 
   // Logistics Fields
   // Note: These key names must match exactly what Directus returns
-  barcode_type?: BarcodeType | null;
+  barcode_type_id?: BarcodeType | null;
 
   weight?: number | null;
-  weight_unit?: WeightUnit | null;
+  weight_unit_id?: WeightUnit | null;
 
   cbm_length?: number | null;
   cbm_width?: number | null;
   cbm_height?: number | null;
-  cbm_unit?: CbmUnit | null;
+  cbm_unit_id?: CbmUnit | null;
 }
 
 export const getSupplierName = (p: Product): string => {

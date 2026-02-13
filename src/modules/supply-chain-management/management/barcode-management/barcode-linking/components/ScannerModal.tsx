@@ -271,6 +271,7 @@ export function ScannerModal({
     const payload: UpdateBarcodeDTO = {
       barcode,
       barcode_type_id: parseInt(selectedBarcodeTypeId),
+      barcode_date: new Date().toISOString(),
       weight: parseFloat(dimensions.weight),
       weight_unit_id: parseInt(dimensions.weightUnit),
     };

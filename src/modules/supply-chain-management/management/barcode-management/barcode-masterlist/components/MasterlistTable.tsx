@@ -83,8 +83,8 @@ export function MasterlistTable({
               const isSelected = selectedIds.includes(
                 String(product.product_id),
               );
-              const dateLinked = product.created_at
-                ? new Date(product.created_at).toLocaleDateString("en-US", {
+              const dateLinked = product.barcode_date
+                ? new Date(product.barcode_date).toLocaleDateString("en-US", {
                   month: "short",
                   day: "2-digit",
                   year: "numeric",
@@ -118,11 +118,6 @@ export function MasterlistTable({
                   </TableCell>
                   <TableCell className="font-mono font-semibold">
                     {product.barcode}
-                    {product.barcode_type && (
-                      <span className="block text-[10px] text-muted-foreground font-normal">
-                        {product.barcode_type.name}
-                      </span>
-                    )}
                   </TableCell>
                   <TableCell>
                     <span className="font-medium">

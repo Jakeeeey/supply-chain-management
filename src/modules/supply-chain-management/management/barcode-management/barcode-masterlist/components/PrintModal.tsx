@@ -1,21 +1,19 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { QrCode, FileText, Printer, X } from "lucide-react";
-import { Product } from "../types";
-import Barcode from "react-barcode";
+import { QrCode, FileText } from "lucide-react";
+import { Product, Category } from "../types";
 
-// --- MODAL 1: SELECT FORMAT ---
+// =============================================================================
+// MODAL: SELECT FORMAT
+// =============================================================================
 
 interface PrintFormatModalProps {
   open: boolean;
@@ -48,7 +46,7 @@ export function PrintFormatModal({
             <div>
               <h4 className="font-semibold">Barcode Only</h4>
               <p className="text-sm text-muted-foreground">
-                Simple format: Barcode, Product Name, SKU
+                Table format: SKU Code, Description, Barcode
               </p>
             </div>
           </Card>
@@ -63,145 +61,308 @@ export function PrintFormatModal({
             <div>
               <h4 className="font-semibold">Barcode with Details</h4>
               <p className="text-sm text-muted-foreground">
-                Detailed format: Includes CBM, Weight, UOM, etc.
+                Table format: includes CBM (L×W×H), Weight, Category
               </p>
             </div>
           </Card>
         </div>
 
         <p className="text-center text-sm text-muted-foreground">
-          {count} items selected for printing
+          {count} item{count !== 1 ? "s" : ""} selected for printing
         </p>
       </DialogContent>
     </Dialog>
   );
 }
 
-// --- MODAL 2: PREVIEW & PRINT ---
+// =============================================================================
+// NEW TAB PRINT — opens a blank tab and writes the printable HTML directly
+// =============================================================================
 
-interface PrintPreviewModalProps {
-  open: boolean;
-  onClose: () => void;
-  products: Product[];
-  format: "simple" | "detailed";
+// --- Helpers ---
+
+function getCategoryName(product: Product): string {
+  if (
+    typeof product.product_category === "object" &&
+    product.product_category
+  ) {
+    return (product.product_category as Category).category_name;
+  }
+  if (typeof product.product_category === "string") {
+    return product.product_category;
+  }
+  return "–";
 }
 
-export function PrintPreviewModal({
-  open,
-  onClose,
-  products,
-  format,
-}: PrintPreviewModalProps) {
-  const handlePrint = () => {
-    window.print(); // Simple browser print trigger
-  };
+function getBarcodeJsFormat(product: Product): string {
+  if (product.barcode_type_id?.name?.includes("EAN")) return "EAN13";
+  return "CODE128";
+}
 
-  return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-[800px] h-[90vh] flex flex-col">
-        <DialogHeader className="flex flex-row items-center justify-between border-b pb-4">
-          <DialogTitle className="flex items-center gap-2">
-            <Printer className="h-5 w-5" />
-            Print Preview ({format === "simple" ? "Simple" : "Detailed"})
-          </DialogTitle>
-        </DialogHeader>
+function formatDecimal(value: number | null | undefined): string {
+  if (value == null) return "–";
+  return Number(value).toFixed(2);
+}
 
-        <div className="flex-1 bg-slate-50 p-4 overflow-hidden flex flex-col items-center">
-          <div className="bg-white shadow-lg border p-8 w-full max-w-[700px] min-h-[500px]">
-            <div className="text-center mb-8 border-b pb-4">
-              <h2 className="text-xl font-bold uppercase tracking-widest">
-                {format === "simple"
-                  ? "Barcode Label Export"
-                  : "Product Detail Export"}
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                Generated on {new Date().toLocaleDateString()}
-              </p>
-            </div>
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
 
-            <ScrollArea className="h-[500px] pr-4">
-              <div className="space-y-4">
-                {products.map((p) => (
-                  <div
-                    key={p.product_id}
-                    className="border rounded-lg p-4 flex justify-between items-center bg-white"
-                  >
-                    <div className="space-y-1">
-                      <h3 className="font-bold text-lg">
-                        {p.description || p.product_name}
-                      </h3>
-                      <p className="text-xs font-mono text-muted-foreground">
-                        SKU: {p.product_code}
-                      </p>
+// --- Main function ---
 
-                      {format === "detailed" && (
-                        <div className="grid grid-cols-2 gap-x-8 gap-y-1 mt-2 text-xs text-slate-600">
-                          <span>Type: Regular</span>
-                          <span>
-                            UOM:{" "}
-                            {typeof p.unit_of_measurement === "object"
-                              ? p.unit_of_measurement?.unit_shortcut
-                              : "PCS"}
-                          </span>
-                          <span>
-                            Weight:{" "}
-                            {p.weight ?? "N/A"}{" "}
-                            {p.weight_unit?.code || "kg"}
-                          </span>
-                          <span>
-                            CBM:{" "}
-                            {p.cbm_length
-                              ? `${p.cbm_length}×${p.cbm_width}×${p.cbm_height} ${p.cbm_unit?.code || "cm"}`
-                              : "N/A"}
-                          </span>
-                        </div>
-                      )}
-                    </div>
+export function openPrintTab(
+  products: Product[],
+  format: "simple" | "detailed",
+) {
+  const isDetailed = format === "detailed";
+  const orientation = isDetailed ? "landscape" : "portrait";
+  const title = isDetailed ? "Product Barcode Report" : "Barcode Label Export";
+  const dateStr = new Date().toLocaleDateString();
+  const itemCount = products.length;
 
-                    <div className="flex flex-col items-end">
-                      <div className="h-16 overflow-hidden">
-                        {/* Only render barcode if value exists, otherwise placeholder */}
-                        {p.barcode ? (
-                          <Barcode
-                            value={p.barcode}
-                            format={
-                              p.barcode_type?.name?.includes("EAN")
-                                ? "EAN13"
-                                : "CODE128"
-                            }
-                            width={1}
-                            height={40}
-                            fontSize={12}
-                          />
-                        ) : (
-                          <span className="text-xs text-red-500">
-                            Missing Barcode
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
-          </div>
-        </div>
+  // Build table header
+  const baseHeaders = `
+    <th>SKU Code</th>
+    <th>Description</th>
+    <th style="text-align:center;">Barcode</th>
+  `;
 
-        <DialogFooter className="pt-4 border-t">
-          <p className="text-sm text-muted-foreground mr-auto self-center">
-            {products.length} items ready
-          </p>
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handlePrint}
-            className="bg-blue-600 hover:bg-blue-700"
-          >
-            <Printer className="mr-2 h-4 w-4" /> Print Labels
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
+  const detailedHeaders = isDetailed
+    ? `
+    <th style="text-align:center;">CBM (L)</th>
+    <th style="text-align:center;">CBM (W)</th>
+    <th style="text-align:center;">CBM (H)</th>
+    <th style="text-align:center;">Weight</th>
+    <th style="text-align:center;">Category</th>
+  `
+    : "";
+
+  // Build table rows
+  const rows = products
+    .map((p) => {
+      const sku = escapeHtml(p.product_code || "");
+      const desc = escapeHtml(p.description || p.product_name || "");
+      const barcodeValue = p.barcode || "";
+      const barcodeFormat = getBarcodeJsFormat(p);
+
+      const barcodeCell = barcodeValue
+        ? `<svg class="barcode-svg" data-value="${escapeHtml(barcodeValue)}" data-format="${barcodeFormat}"></svg>`
+        : `<span style="color:#999;font-style:italic;">–</span>`;
+
+      let detailedCells = "";
+      if (isDetailed) {
+        const cbmUnit = p.cbm_unit_id?.code || p.cbm_unit_id?.name || "";
+        const weightUnit = p.weight_unit_id?.code || p.weight_unit_id?.name || "";
+
+        const cbmL = p.cbm_length != null ? `${formatDecimal(p.cbm_length)} ${cbmUnit}` : "–";
+        const cbmW = p.cbm_width != null ? `${formatDecimal(p.cbm_width)} ${cbmUnit}` : "–";
+        const cbmH = p.cbm_height != null ? `${formatDecimal(p.cbm_height)} ${cbmUnit}` : "–";
+        const weightDisplay = p.weight != null ? `${Number(p.weight).toFixed(2)} ${weightUnit}` : "–";
+
+        detailedCells = `
+          <td style="text-align:center;">${escapeHtml(cbmL)}</td>
+          <td style="text-align:center;">${escapeHtml(cbmW)}</td>
+          <td style="text-align:center;">${escapeHtml(cbmH)}</td>
+          <td style="text-align:center;">${escapeHtml(weightDisplay)}</td>
+          <td style="text-align:center;">${escapeHtml(getCategoryName(p))}</td>
+        `;
+      }
+
+      return `
+        <tr>
+          <td style="font-weight:500;white-space:nowrap;">${sku}</td>
+          <td>${desc}</td>
+          <td class="barcode-cell">${barcodeCell}</td>
+          ${detailedCells}
+        </tr>
+      `;
+    })
+    .join("");
+
+  // Build full HTML document
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>${escapeHtml(title)}</title>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: #1a1a1a;
+      background: #f8fafc;
+      padding: 24px 32px;
+    }
+
+    .print-controls {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 20px;
+    }
+
+    .print-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      background: #1e40af;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .print-btn:hover { background: #1e3a8a; }
+
+    .print-btn svg {
+      width: 16px;
+      height: 16px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .report-header {
+      text-align: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 2px solid #e2e8f0;
+    }
+
+    .report-header h1 {
+      font-size: 18px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    .report-header p {
+      font-size: 12px;
+      color: #64748b;
+      margin-top: 4px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      ${isDetailed ? "table-layout: fixed;" : ""}
+    }
+
+    thead th {
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      padding: 8px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    tbody td {
+      border: 1px solid #cbd5e1;
+      padding: 10px 12px;
+      vertical-align: middle;
+      overflow: hidden;
+    }
+
+    .barcode-cell {
+      text-align: center;
+      overflow: hidden;
+      max-width: 0;
+    }
+
+    .barcode-svg {
+      display: block;
+      margin: 0 auto;
+      max-width: 100%;
+      height: auto;
+    }
+
+    @media print {
+      @page {
+        size: ${orientation};
+        margin: 10mm;
+      }
+
+      body {
+        background: white;
+        padding: 0;
+      }
+
+      .print-controls {
+        display: none !important;
+      }
+
+      table {
+        width: 100% !important;
+        ${isDetailed ? "table-layout: fixed;" : ""}
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="print-controls">
+    <button class="print-btn" onclick="window.print()">
+      <svg viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      Print Now
+    </button>
+  </div>
+
+  <div class="report-header">
+    <h1>${escapeHtml(title)}</h1>
+    <p>Generated on ${escapeHtml(dateStr)} &middot; ${itemCount} item${itemCount !== 1 ? "s" : ""}</p>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        ${baseHeaders}
+        ${detailedHeaders}
+      </tr>
+    </thead>
+    <tbody>
+      ${rows}
+    </tbody>
+  </table>
+
+  <script>
+    // Initialize all barcodes after page loads
+    document.querySelectorAll('.barcode-svg').forEach(function(el) {
+      try {
+        JsBarcode(el, el.dataset.value, {
+          format: el.dataset.format,
+          width: ${isDetailed ? 1 : 1.2},
+          height: ${isDetailed ? 35 : 45},
+          fontSize: ${isDetailed ? 10 : 12},
+          margin: 0,
+          displayValue: true,
+        });
+      } catch (e) {
+        el.outerHTML = '<span style="color:#999;font-style:italic;">Invalid barcode</span>';
+      }
+    });
+  <\/script>
+</body>
+</html>`;
+
+  // Open new tab and write the content
+  const printWindow = window.open("", "_blank");
+  if (printWindow) {
+    printWindow.document.write(html);
+    printWindow.document.close();
+  }
 }

@@ -49,13 +49,11 @@ export function ProductDetailModal({
         ? product.product_category
         : "Uncategorized";
 
-  const dateLinked = product.created_at
-    ? new Date(product.created_at).toLocaleDateString("en-US", {
+  const dateLinked = product.barcode_date
+    ? new Date(product.barcode_date).toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",
       day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
     })
     : "N/A";
 
@@ -124,7 +122,7 @@ export function ProductDetailModal({
                         Barcode Type
                       </span>
                       <p className="text-sm font-medium text-foreground">
-                        {product.barcode_type?.name || "Standard"}
+                        {product.barcode_type_id?.name || "Standard"}
                       </p>
                     </div>
                   </div>
@@ -145,9 +143,9 @@ export function ProductDetailModal({
                     </span>
                     {product.weight ? (
                       <p className="text-base font-bold text-foreground">
-                        {product.weight}{" "}
+                        {Number(product.weight).toFixed(2)}{" "}
                         <span className="text-sm font-normal text-muted-foreground">
-                          {product.weight_unit?.code || "kg"}
+                          {product.weight_unit_id?.code || product.weight_unit_id?.name || "–"}
                         </span>
                       </p>
                     ) : (
@@ -165,11 +163,11 @@ export function ProductDetailModal({
                     {product.cbm_length ? (
                       <div>
                         <p className="text-sm font-medium text-foreground">
-                          {product.cbm_length} × {product.cbm_width} ×{" "}
-                          {product.cbm_height}
+                          {Number(product.cbm_length).toFixed(2)} × {Number(product.cbm_width).toFixed(2)} ×{" "}
+                          {Number(product.cbm_height).toFixed(2)}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          Unit: {product.cbm_unit?.name || "cm"}
+                          Unit: {product.cbm_unit_id?.code || product.cbm_unit_id?.name || "–"}
                         </p>
                       </div>
                     ) : (

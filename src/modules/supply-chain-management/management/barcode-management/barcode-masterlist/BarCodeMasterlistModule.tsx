@@ -40,7 +40,7 @@ import {
 import { useBarcodeMasterlist } from "./hooks/useBarcodeMasterlist";
 import { MasterlistTable } from "./components/MasterlistTable";
 import { BarcodeScannerSkeleton } from "./components/BarcodeScannerSkeleton";
-import { PrintFormatModal, PrintPreviewModal } from "./components/PrintModal";
+import { PrintFormatModal, openPrintTab } from "./components/PrintModal";
 // ✅ NEW: Import Detail Modal
 import { ProductDetailModal } from "./components/ProductDetailModal";
 import { Product } from "./types";
@@ -71,10 +71,6 @@ export default function BarcodeMasterlistModule() {
 
   // Print States
   const [showFormatModal, setShowFormatModal] = useState(false);
-  const [showPreviewModal, setShowPreviewModal] = useState(false);
-  const [printFormat, setPrintFormat] = useState<"simple" | "detailed">(
-    "simple",
-  );
 
   // ✅ NEW: Detail Modal State
   const [viewProduct, setViewProduct] = useState<Product | null>(null);
@@ -106,9 +102,8 @@ export default function BarcodeMasterlistModule() {
   };
 
   const handleFormatSelected = (format: "simple" | "detailed") => {
-    setPrintFormat(format);
     setShowFormatModal(false);
-    setShowPreviewModal(true);
+    openPrintTab(selectedProductsData, format);
   };
 
   const selectedProductsData = allProducts.filter((p) =>
@@ -172,7 +167,7 @@ export default function BarcodeMasterlistModule() {
                 >
                   {supplierFilter && supplierFilter !== "all"
                     ? suppliers.find((s) => String(s.id) === supplierFilter)
-                        ?.supplier_name
+                      ?.supplier_name
                     : "All Suppliers"}
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
@@ -350,12 +345,7 @@ export default function BarcodeMasterlistModule() {
         onSelectFormat={handleFormatSelected}
         count={selectedIds.length}
       />
-      <PrintPreviewModal
-        open={showPreviewModal}
-        onClose={() => setShowPreviewModal(false)}
-        products={selectedProductsData}
-        format={printFormat}
-      />
+
 
       {/* ✅ NEW: Detail Modal Component */}
       <ProductDetailModal

@@ -31,7 +31,7 @@ export function generateCode128(): string {
   for (let i = 0; i < 10; i++) {
     result += chars.charAt(Math.floor(Math.random() * chars.length));
   }
-  return `SKU-${result}`;
+  return `${result}`;
 }
 
 // --- VALIDATORS ---

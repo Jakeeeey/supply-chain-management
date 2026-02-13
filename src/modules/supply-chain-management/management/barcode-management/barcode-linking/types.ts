@@ -26,16 +26,17 @@ export interface Product {
   description?: string | null;
   product_name: string;
   barcode: string | null;
+  barcode_date?: string | null;
   product_code: string;
   product_category: Category | string | null;
   unit_of_measurement: Unit | string | null;
   product_per_supplier?: ProductSupplierJunction[];
 }
 
-// ✅ FIXED: Matched DB Columns (_id suffixes)
 export interface UpdateBarcodeDTO {
   barcode: string;
   barcode_type_id: number;
+  barcode_date: string;
 
   // Dimensions
   cbm_length?: number;
