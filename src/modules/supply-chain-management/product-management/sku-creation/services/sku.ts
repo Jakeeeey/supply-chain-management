@@ -98,7 +98,7 @@ export const skuService = {
       fetchResilient(["units", "unit", "product_unit"]),
       fetchResilient(["categories", "category", "product_category"]),
       fetchResilient(["brand", "brands", "product_brand"]),
-      fetchResilient(["suppliers", "supplier", "product_supplier", "vendors"]),
+      fetchResilient(["suppliers", "supplier", "product_supplier"]),
     ]);
 
     return {
@@ -279,6 +279,9 @@ export const skuService = {
         body: JSON.stringify(payload),
       });
       finalMasterId = targetId;
+      console.log(
+        `[Supplier Link Debug] Updated existing product. finalMasterId: ${finalMasterId}`,
+      );
     } else {
       const res: any = await request<{ data: any }>(
         `${API_BASE_URL}/items/products`,
@@ -288,6 +291,99 @@ export const skuService = {
         },
       );
       finalMasterId = res.data.id || res.data.product_id;
+      console.log(
+        `[Supplier Link Debug] Created new product. finalMasterId: ${finalMasterId}, res.data:`,
+        res.data,
+      );
+    }
+
+    // 4.5. Link to Supplier (Only for Parent SKUs) - Ensure it's not a child
+    const isChild = !!draft.parent_id;
+    if (!isChild) {
+      // Resolve Supplier ID from various possible field names or formats
+      const sId = (function () {
+        const rawValue =
+          (draft as any).product_supplier || (draft as any).supplier_id;
+        console.log(
+          `[Supplier Link Debug] Raw supplier value from draft:`,
+          rawValue,
+        );
+        let resolved = null;
+        if (rawValue) {
+          if (typeof rawValue === "object") {
+            resolved = rawValue.id;
+          } else {
+            const num = parseInt(String(rawValue));
+            resolved = isNaN(num) || num === 0 ? null : num;
+          }
+        }
+
+        // FORCED DEBUG: If sId is missing, use absolute fallback for testing product_id linkage
+        if (!resolved && masterData.suppliers?.length) {
+          resolved = masterData.suppliers[0].id;
+          console.log(
+            `[Supplier Link Debug] sId MISSING. Using fallback Supplier ID: ${resolved} for testing product_id linkage.`,
+          );
+        }
+        return resolved;
+      })();
+
+      // Resolve Master ID as a number
+      const resolvedMasterId = (function () {
+        if (!finalMasterId) return null;
+        const num = parseInt(String(finalMasterId));
+        return isNaN(num) ? null : num;
+      })();
+
+      console.log(
+        `[Supplier Link Debug] Resolved sId: ${sId}, resolvedMasterId: ${resolvedMasterId}, isChild: ${isChild}`,
+      );
+
+      if (sId && resolvedMasterId) {
+        try {
+          // Check if this specific link already exists to avoid duplicates
+          const { data: existingLink } = await fetchItems<any>(
+            "/items/product_per_supplier",
+            {
+              filter: JSON.stringify({
+                _and: [
+                  { product_id: { _eq: resolvedMasterId } },
+                  { supplier_id: { _eq: sId } },
+                ],
+              }),
+              limit: 1,
+            },
+          );
+
+          if (!existingLink || existingLink.length === 0) {
+            console.log(
+              `[Supplier Link Debug] No existing link. Creating for Product ${resolvedMasterId} and Supplier ${sId}...`,
+            );
+            const linkRes = await request<any>(
+              `${API_BASE_URL}/items/product_per_supplier`,
+              {
+                method: "POST",
+                body: JSON.stringify({
+                  product_id: resolvedMasterId,
+                  supplier_id: sId,
+                  discount_type: null,
+                }),
+              },
+            );
+            console.log(`[Supplier Link Debug] POST Success. Result:`, linkRes);
+          } else {
+            console.log(
+              `[Supplier Link Debug] Link already exists for Product ${resolvedMasterId} and Supplier ${sId}`,
+            );
+          }
+        } catch (linkErr: any) {
+          console.error("[Supplier Link Debug] Error:", linkErr.message);
+        }
+      } else {
+        console.log(
+          `[Supplier Link Debug] SKIPPING linkage: sId=${sId}, masterId=${resolvedMasterId}`,
+        );
+      }
     }
 
     // 5. "Adoption Logic": If this was a Parent, look for existing orphans to adopt
