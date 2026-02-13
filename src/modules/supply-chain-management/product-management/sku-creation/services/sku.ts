@@ -232,8 +232,20 @@ export const skuService = {
 
     // 2. If it's a child, find the specific master record using the Parent's Product Code
     if (draft.parent_id) {
-      const parentDraft = draft.parent_id as any;
-      const parentCode = parentDraft.product_code;
+      // Handle both expanded object and plain ID cases
+      let parentCode = (draft.parent_id as any)?.product_code;
+
+      if (!parentCode) {
+        const parentId =
+          typeof draft.parent_id === "object"
+            ? (draft.parent_id as any).id
+            : draft.parent_id;
+
+        const { data: pDraft } = await request<{ data: any }>(
+          `${API_BASE_URL}/items/product_draft/${parentId}`,
+        );
+        parentCode = pDraft?.product_code;
+      }
 
       if (parentCode) {
         const { data: realParent } = await fetchItems<any>("/items/products", {
