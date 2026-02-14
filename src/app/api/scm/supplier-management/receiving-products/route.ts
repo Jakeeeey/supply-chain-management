@@ -1,233 +1,637 @@
 import { NextRequest, NextResponse } from "next/server";
 
-/**
- * NOTE:
- * - Barcode/RFID in web usually arrives as keyboard input + Enter.
- * - This API is mock data to match your wireframe UI.
- */
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+// =====================
+// DIRECTUS CONFIG (env dependent)
+// =====================
+function getDirectusBase() {
+    const raw =
+        process.env.NEXT_PUBLIC_API_BASE_URL ||
+        process.env.DIRECTUS_URL ||
+        process.env.NEXT_PUBLIC_DIRECTUS_URL ||
+        "http://100.110.197.61:8056";
+
+    const cleaned = String(raw || "").trim().replace(/\/$/, "");
+    if (!/^https?:\/\//i.test(cleaned)) return `http://${cleaned}`;
+    return cleaned;
+}
+
+function getServerToken() {
+    return String(
+        process.env.DIRECTUS_STATIC_TOKEN || process.env.DIRECTUS_TOKEN || ""
+    ).trim();
+}
+
+function buildHeaders() {
+    const token = getServerToken();
+    if (!token) {
+        throw new Error(
+            "DIRECTUS_STATIC_TOKEN (or DIRECTUS_TOKEN) is missing. Add it to .env.local then restart dev server."
+        );
+    }
+    return {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+    };
+}
+
+async function fetchJson(url: string, init?: RequestInit) {
+    const r = await fetch(url, {
+        ...init,
+        headers: {
+            ...(buildHeaders() as any),
+            ...(init?.headers ?? {}),
+        },
+        cache: "no-store",
+    });
+
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+        const msg =
+            j?.errors?.[0]?.message || j?.error || `Upstream failed: ${r.status}`;
+        throw new Error(msg);
+    }
+    return j;
+}
+
+// =====================
+// HELPERS
+// =====================
+function ok(data: any, status = 200) {
+    return NextResponse.json({ data }, { status });
+}
+function bad(error: string, status = 400) {
+    return NextResponse.json({ error }, { status });
+}
+function toStr(v: any, fb = "") {
+    const s = String(v ?? "").trim();
+    return s ? s : fb;
+}
+function toNum(v: any) {
+    const n = Number(String(v ?? "").replace(/,/g, ""));
+    return Number.isFinite(n) ? n : 0;
+}
+function nowISO() {
+    return new Date().toISOString();
+}
+function ymdToIsoDate(ymd: string) {
+    // keep as YYYY-MM-DD for Directus date fields
+    return toStr(ymd);
+}
+
+// =====================
+// COLLECTIONS
+// =====================
+const PO_COLLECTION = "purchase_order";
+const SUPPLIERS_COLLECTION = "suppliers";
+const PRODUCTS_COLLECTION = "products";
+const BRANCHES_COLLECTION = "branches";
+
+const POR_COLLECTION = "purchase_order_receiving"; // parent
+const POR_ITEMS_COLLECTION = "purchase_order_receiving_items"; // RFID tags table
 
 type POStatus = "OPEN" | "PARTIAL" | "CLOSED";
 
-type Supplier = { id: string; name: string };
-type Branch = { id: string; name: string };
+type ListItem = {
+    id: string; // purchase_order_id
+    poNumber: string;
+    supplierName: string;
+    status: POStatus;
+    totalAmount: number;
+    currency: "PHP";
+    itemsCount: number;
+    branchesCount: number;
+};
 
 type POItem = {
-    id: string;
+    id: string; // porId (purchase_order_receiving.purchase_order_product_id)
+    porId: string;
     productId: string;
     name: string;
     barcode: string;
     uom: string;
-    expectedQty: number;
-    receivedQty: number;
-    requiresRfid?: boolean;
+    expectedQty: number; // from tagged RFIDs count
+    receivedQty: number; // from POR.received_quantity (fallback 0)
+    requiresRfid: true;
+    taggedQty: number;
+    rfids: string[];
+    isReceived: boolean;
 };
 
-type POBranchAllocation = {
-    branch: Branch;
-    items: POItem[];
-};
-
-type PurchaseOrder = {
+type PurchaseOrderDetail = {
     id: string;
     poNumber: string;
-    supplier: Supplier;
+    supplier: { id: string; name: string };
     status: POStatus;
     totalAmount: number;
-    currency: "PHP" | "USD";
-    barcodeValue: string; // what is printed on PO barcode
-    allocations: POBranchAllocation[];
+    currency: "PHP";
+    allocations: Array<{
+        branch: { id: string; name: string };
+        items: POItem[];
+    }>;
     createdAt: string;
 };
 
-const MOCK_POS: PurchaseOrder[] = [
-    {
-        id: "po_1",
-        poNumber: "PO-0001",
-        supplier: { id: "sup_1", name: "ABC Trading Co." },
-        status: "OPEN",
-        totalAmount: 2520,
-        currency: "USD",
-        barcodeValue: "PO-0001",
-        createdAt: new Date().toISOString(),
-        allocations: [
-            {
-                branch: { id: "unassigned", name: "Unassigned" },
-                items: [
-                    {
-                        id: "poi_1",
-                        productId: "prod_1",
-                        name: "Office Chair - Ergonomic",
-                        barcode: "1234567890123",
-                        uom: "pc",
-                        expectedQty: 10,
-                        receivedQty: 0,
-                        requiresRfid: false,
-                    },
-                    {
-                        id: "poi_2",
-                        productId: "prod_2",
-                        name: "Desk Lamp - LED",
-                        barcode: "9876543210987",
-                        uom: "pc",
-                        expectedQty: 20,
-                        receivedQty: 0,
-                        requiresRfid: true,
-                    },
-                ],
-            },
-        ],
-    },
-    {
-        id: "po_2",
-        poNumber: "PO-0002",
-        supplier: { id: "sup_2", name: "Global Supplies Inc." },
-        status: "PARTIAL",
-        totalAmount: 3752,
-        currency: "USD",
-        barcodeValue: "PO-0002",
-        createdAt: new Date().toISOString(),
-        allocations: [
-            {
-                branch: { id: "unassigned", name: "Unassigned" },
-                items: [
-                    {
-                        id: "poi_3",
-                        productId: "prod_3",
-                        name: "Bond Paper A4",
-                        barcode: "1111111111111",
-                        uom: "ream",
-                        expectedQty: 30,
-                        receivedQty: 12,
-                        requiresRfid: false,
-                    },
-                    {
-                        id: "poi_4",
-                        productId: "prod_4",
-                        name: "Ink Cartridge - Black",
-                        barcode: "2222222222222",
-                        uom: "pc",
-                        expectedQty: 10,
-                        receivedQty: 3,
-                        requiresRfid: false,
-                    },
-                    {
-                        id: "poi_5",
-                        productId: "prod_5",
-                        name: "Label Sticker Roll",
-                        barcode: "3333333333333",
-                        uom: "roll",
-                        expectedQty: 15,
-                        receivedQty: 0,
-                        requiresRfid: false,
-                    },
-                ],
-            },
-        ],
-    },
-    {
-        id: "po_5",
-        poNumber: "PO-0005",
-        supplier: { id: "sup_3", name: "Pacific Imports" },
-        status: "PARTIAL",
-        totalAmount: 5286.4,
-        currency: "USD",
-        barcodeValue: "PO-0005",
-        createdAt: new Date().toISOString(),
-        allocations: [
-            {
-                branch: { id: "unassigned", name: "Unassigned" },
-                items: [
-                    {
-                        id: "poi_6",
-                        productId: "prod_6",
-                        name: "Storage Bin - Medium",
-                        barcode: "4444444444444",
-                        uom: "pc",
-                        expectedQty: 12,
-                        receivedQty: 0,
-                        requiresRfid: false,
-                    },
-                    {
-                        id: "poi_7",
-                        productId: "prod_7",
-                        name: "Handheld Scanner Stand",
-                        barcode: "5555555555555",
-                        uom: "pc",
-                        expectedQty: 4,
-                        receivedQty: 0,
-                        requiresRfid: false,
-                    },
-                    {
-                        id: "poi_8",
-                        productId: "prod_8",
-                        name: "RFID Tag Pack (UHF)",
-                        barcode: "6666666666666",
-                        uom: "pack",
-                        expectedQty: 2,
-                        receivedQty: 0,
-                        requiresRfid: false,
-                    },
-                ],
-            },
-        ],
-    },
-];
-
-function summarizePO(po: PurchaseOrder) {
-    const itemsCount = po.allocations.reduce((acc, a) => acc + a.items.length, 0);
-    // In your wireframe list it shows Branches: 0 (even if Unassigned exists)
-    const branchesCount = 0;
-    return {
-        id: po.id,
-        poNumber: po.poNumber,
-        supplierName: po.supplier.name,
-        status: po.status,
-        totalAmount: po.totalAmount,
-        currency: po.currency,
-        itemsCount,
-        branchesCount,
-    };
+// =====================
+// CHUNK HELPERS
+// =====================
+function chunk<T>(arr: T[], size: number) {
+    const out: T[][] = [];
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+    return out;
 }
 
-export async function GET() {
-    return NextResponse.json({
-        data: MOCK_POS.map(summarizePO),
+// =====================
+// FETCHERS
+// =====================
+async function fetchReceivingItems(base: string, filterPorIds?: number[]) {
+    const qs: string[] = [
+        "limit=-1",
+        "fields=receiving_item_id,purchase_order_product_id,product_id,rfid_code,created_at",
+    ];
+
+    if (filterPorIds && filterPorIds.length) {
+        qs.push(
+            `filter[purchase_order_product_id][_in]=${encodeURIComponent(
+                filterPorIds.join(",")
+            )}`
+        );
+    }
+
+    const url = `${base}/items/${POR_ITEMS_COLLECTION}?${qs.join("&")}`;
+    const j = await fetchJson(url);
+    return Array.isArray(j?.data) ? j.data : [];
+}
+
+async function fetchPORByIds(base: string, porIds: number[]) {
+    if (!porIds.length) return [];
+    const rows: any[] = [];
+    for (const ids of chunk(Array.from(new Set(porIds)), 250)) {
+        const url =
+            `${base}/items/${POR_COLLECTION}?limit=-1` +
+            `&filter[purchase_order_product_id][_in]=${encodeURIComponent(
+                ids.join(",")
+            )}` +
+            `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted`;
+        const j = await fetchJson(url);
+        rows.push(...(Array.isArray(j?.data) ? j.data : []));
+    }
+    return rows;
+}
+
+async function fetchPORByPOId(base: string, poId: number) {
+    const url =
+        `${base}/items/${POR_COLLECTION}?limit=-1` +
+        `&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}` +
+        `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted`;
+    const j = await fetchJson(url);
+    return Array.isArray(j?.data) ? j.data : [];
+}
+
+async function fetchPOHeadersByIds(base: string, poIds: number[]) {
+    if (!poIds.length) return [];
+    const rows: any[] = [];
+    for (const ids of chunk(Array.from(new Set(poIds)), 250)) {
+        const url =
+            `${base}/items/${PO_COLLECTION}?limit=-1` +
+            `&filter[purchase_order_id][_in]=${encodeURIComponent(ids.join(","))}` +
+            `&fields=purchase_order_id,purchase_order_no,date,date_encoded,supplier_name,total_amount,date_received,inventory_status`;
+        const j = await fetchJson(url);
+        rows.push(...(Array.isArray(j?.data) ? j.data : []));
+    }
+    return rows;
+}
+
+async function fetchSupplierNames(base: string, supplierIds: number[]) {
+    const map = new Map<number, string>();
+    const uniq = Array.from(new Set(supplierIds.filter((n) => n > 0)));
+    if (!uniq.length) return map;
+
+    const rows: any[] = [];
+    for (const ids of chunk(uniq, 250)) {
+        const url =
+            `${base}/items/${SUPPLIERS_COLLECTION}?limit=-1` +
+            `&filter[id][_in]=${encodeURIComponent(ids.join(","))}` +
+            `&fields=id,supplier_name`;
+        const j = await fetchJson(url);
+        rows.push(...(Array.isArray(j?.data) ? j.data : []));
+    }
+
+    for (const s of rows) {
+        const id = toNum(s?.id);
+        if (!id) continue;
+        map.set(id, toStr(s?.supplier_name, "—"));
+    }
+    return map;
+}
+
+async function fetchBranchesMap(base: string, branchIds: number[]) {
+    const map = new Map<number, string>();
+    const uniq = Array.from(new Set(branchIds.filter((n) => n > 0)));
+    if (!uniq.length) return map;
+
+    const rows: any[] = [];
+    for (const ids of chunk(uniq, 250)) {
+        // ✅ IMPORTANT: branches has branch_name, not name
+        const url =
+            `${base}/items/${BRANCHES_COLLECTION}?limit=-1` +
+            `&filter[id][_in]=${encodeURIComponent(ids.join(","))}` +
+            `&fields=id,branch_name,branch_description`;
+        const j = await fetchJson(url);
+        rows.push(...(Array.isArray(j?.data) ? j.data : []));
+    }
+
+    for (const b of rows) {
+        const id = toNum(b?.id);
+        if (!id) continue;
+        map.set(id, toStr(b?.branch_name) || toStr(b?.branch_description) || `Branch ${id}`);
+    }
+
+    return map;
+}
+
+async function fetchProductsMap(base: string, productIds: number[]) {
+    const map = new Map<number, any>();
+    const uniq = Array.from(new Set(productIds.filter((n) => n > 0)));
+    if (!uniq.length) return map;
+
+    const rows: any[] = [];
+    for (const ids of chunk(uniq, 250)) {
+        const url =
+            `${base}/items/${PRODUCTS_COLLECTION}?limit=-1` +
+            `&filter[product_id][_in]=${encodeURIComponent(ids.join(","))}` +
+            `&fields=product_id,product_name,barcode,product_code`;
+        const j = await fetchJson(url);
+        rows.push(...(Array.isArray(j?.data) ? j.data : []));
+    }
+
+    for (const p of rows) {
+        const id = toNum(p?.product_id ?? p?.id);
+        if (!id) continue;
+        map.set(id, {
+            product_id: id,
+            product_name: toStr(p?.product_name, `Product #${id}`),
+            barcode: toStr(p?.barcode),
+            product_code: toStr(p?.product_code),
+        });
+    }
+    return map;
+}
+
+// =====================
+// BUILDERS
+// =====================
+function statusFrom(po: any, porRowsForPo: any[]): POStatus {
+    if (toStr(po?.date_received)) return "CLOSED";
+
+    // PARTIAL if any POR has received_date or receipt_no/receipt_date
+    const partial = (porRowsForPo ?? []).some((r) => {
+        const rd = toStr(r?.received_date);
+        const rn = toStr(r?.receipt_no);
+        const rdt = toStr(r?.receipt_date);
+        const posted = toNum(r?.isPosted) === 1;
+        return Boolean(rd) || Boolean(rn) || Boolean(rdt) || posted;
     });
+
+    return partial ? "PARTIAL" : "OPEN";
+}
+
+function productDisplayCode(p: any, productId: number) {
+    return toStr(p?.barcode) || toStr(p?.product_code) || String(productId);
+}
+
+function groupRfidsByPorId(rows: any[]) {
+    const map = new Map<number, string[]>();
+    for (const r of rows) {
+        const porId = toNum(r?.purchase_order_product_id);
+        if (!porId) continue;
+        const arr = map.get(porId) ?? [];
+        const code = toStr(r?.rfid_code);
+        if (code) arr.push(code);
+        map.set(porId, arr);
+    }
+    return map;
+}
+
+// =====================
+// ROUTES
+// =====================
+export async function GET() {
+    try {
+        const base = getDirectusBase();
+
+        // 1) Load all tagged RFIDs
+        const receivingItems = await fetchReceivingItems(base);
+        if (!receivingItems.length) return ok([] as ListItem[]);
+
+        // 2) receiving_items -> POR -> PO
+        const porIds = receivingItems
+            .map((r: any) => toNum(r?.purchase_order_product_id))
+            .filter(Boolean);
+
+        const porRows = await fetchPORByIds(base, porIds);
+
+        const porByPo = new Map<number, any[]>();
+        for (const r of porRows) {
+            const poId = toNum(r?.purchase_order_id);
+            if (!poId) continue;
+            const arr = porByPo.get(poId) ?? [];
+            arr.push(r);
+            porByPo.set(poId, arr);
+        }
+
+        const poIds = Array.from(porByPo.keys());
+        if (!poIds.length) return ok([] as ListItem[]);
+
+        // 3) PO headers + suppliers
+        const poHeaders = await fetchPOHeadersByIds(base, poIds);
+        const supplierIds = poHeaders.map((p: any) => toNum(p?.supplier_name)).filter(Boolean);
+        const supplierMap = await fetchSupplierNames(base, supplierIds);
+
+        // 4) itemsCount = distinct products in POR per PO
+        const itemsCountByPo = new Map<number, number>();
+        const branchCountByPo = new Map<number, number>();
+
+        for (const [poId, arr] of porByPo) {
+            const products = new Set<number>();
+            const branches = new Set<number>();
+            for (const r of arr) {
+                products.add(toNum(r?.product_id));
+                branches.add(toNum(r?.branch_id));
+            }
+            itemsCountByPo.set(poId, products.size);
+            branchCountByPo.set(poId, Array.from(branches).filter(Boolean).length);
+        }
+
+        // 5) Build list
+        const list: ListItem[] = poHeaders.map((po: any) => {
+            const poId = toNum(po?.purchase_order_id);
+            const poNumber = toStr(po?.purchase_order_no, String(poId));
+
+            const sid = toNum(po?.supplier_name);
+            const supplierName = sid ? toStr(supplierMap.get(sid), "—") : "—";
+
+            const porForPo = porByPo.get(poId) ?? [];
+            const status = statusFrom(po, porForPo);
+
+            return {
+                id: String(poId),
+                poNumber,
+                supplierName,
+                status,
+                totalAmount: toNum(po?.total_amount ?? 0),
+                currency: "PHP",
+                itemsCount: itemsCountByPo.get(poId) ?? 0,
+                branchesCount: branchCountByPo.get(poId) ?? 0, // ✅ real branch count
+            };
+        });
+
+        // newest first-ish
+        list.sort((a, b) => (a.poNumber < b.poNumber ? 1 : -1));
+
+        return ok(list);
+    } catch (e: any) {
+        return bad(String(e?.message ?? e ?? "Failed to load receiving list"), 500);
+    }
 }
 
 export async function POST(req: NextRequest) {
     try {
-        const body = await req.json();
-        const action = body?.action as string;
+        const base = getDirectusBase();
+        const body = await req.json().catch(() => ({}));
+        const action = toStr(body?.action);
 
-        if (action === "verify_po") {
-            const barcode = String(body?.barcode ?? "").trim();
-            if (!barcode) {
-                return NextResponse.json({ error: "Missing barcode" }, { status: 400 });
-            }
-            const po = MOCK_POS.find(
-                (x) => x.barcodeValue.toLowerCase() === barcode.toLowerCase()
+        // -------------------------
+        // Open PO by id (primary)
+        // -------------------------
+        if (action === "open_po") {
+            const poId = toNum(body?.poId);
+            if (!poId) return bad("Missing poId.", 400);
+
+            const poUrl =
+                `${base}/items/${PO_COLLECTION}/${encodeURIComponent(String(poId))}` +
+                `?fields=purchase_order_id,purchase_order_no,date,date_encoded,supplier_name,total_amount,date_received,inventory_status`;
+
+            const pj = await fetchJson(poUrl);
+            const po = pj?.data ?? null;
+            if (!po) return bad("PO not found.", 404);
+
+            const sid = toNum(po?.supplier_name);
+            const supplierMap = await fetchSupplierNames(base, sid ? [sid] : []);
+            const supplierName = sid ? toStr(supplierMap.get(sid), "—") : "—";
+
+            // POR rows for this PO (this is the real receiving base)
+            const porRows = await fetchPORByPOId(base, poId);
+            const porIds = porRows.map((r: any) => toNum(r?.purchase_order_product_id)).filter(Boolean);
+
+            // RFIDs under those POR ids
+            const receivingItems = porIds.length ? await fetchReceivingItems(base, porIds) : [];
+            const rfidsByPorId = groupRfidsByPorId(receivingItems);
+
+            // products + branches maps
+            const productIds = Array.from(
+                new Set(porRows.map((r: any) => toNum(r?.product_id)).filter(Boolean))
             );
-            if (!po) {
-                return NextResponse.json({ error: "PO not found" }, { status: 404 });
+            const branchIds = Array.from(
+                new Set(porRows.map((r: any) => toNum(r?.branch_id)).filter(Boolean))
+            );
+
+            const productsMap = await fetchProductsMap(base, productIds);
+            const branchesMap = await fetchBranchesMap(base, branchIds);
+
+            const status = statusFrom(po, porRows);
+
+            // group items by branch
+            const itemsByBranch = new Map<number, POItem[]>();
+
+            for (const r of porRows) {
+                const porId = toNum(r?.purchase_order_product_id);
+                const pid = toNum(r?.product_id);
+                const bid = toNum(r?.branch_id);
+
+                const p = pid ? productsMap.get(pid) : null;
+                const rfids = rfidsByPorId.get(porId) ?? [];
+
+                const isReceived =
+                    Boolean(toStr(r?.received_date)) ||
+                    Boolean(toStr(r?.receipt_no)) ||
+                    Boolean(toStr(r?.receipt_date));
+
+                const item: POItem = {
+                    id: String(porId),
+                    porId: String(porId),
+                    productId: String(pid || ""),
+                    name: toStr(p?.product_name, `Product #${pid}`),
+                    barcode: productDisplayCode(p, pid),
+                    uom: "—",
+                    expectedQty: rfids.length, // expected = tagged RFIDs
+                    receivedQty: Math.max(0, toNum(r?.received_quantity ?? 0)),
+                    requiresRfid: true,
+                    taggedQty: rfids.length,
+                    rfids,
+                    isReceived,
+                };
+
+                const arr = itemsByBranch.get(bid) ?? [];
+                arr.push(item);
+                itemsByBranch.set(bid, arr);
             }
-            return NextResponse.json({ data: po });
+
+            const allocations = Array.from(itemsByBranch.entries()).map(([bid, items]) => ({
+                branch: {
+                    id: bid ? String(bid) : "unassigned",
+                    name: bid ? toStr(branchesMap.get(bid), `Branch ${bid}`) : "Unassigned",
+                },
+                items,
+            }));
+
+            const detail: PurchaseOrderDetail = {
+                id: String(poId),
+                poNumber: toStr(po?.purchase_order_no, String(poId)),
+                supplier: { id: String(sid || ""), name: supplierName },
+                status,
+                totalAmount: toNum(po?.total_amount ?? 0),
+                currency: "PHP",
+                allocations,
+                createdAt: toStr(po?.date_encoded || po?.date || "", nowISO()),
+            };
+
+            return ok(detail);
         }
 
-        if (action === "save_receipt") {
-            // For now return success. Hook this to your backend later.
-            // Expected payload shape:
-            // { receipt: { ... }, poId, branchId, receivedLines: [...], rfidMap: {...} }
-            return NextResponse.json({
-                data: { ok: true, receiptId: `REC-${Math.floor(Math.random() * 9000 + 1000)}` },
+        // -------------------------
+        // Backward compat (if UI still calls verify_po)
+        // barcode treated as PO number (purchase_order_no)
+        // -------------------------
+        if (action === "verify_po") {
+            const barcode = toStr(body?.barcode);
+            if (!barcode) return bad("Missing barcode.", 400);
+
+            const url =
+                `${base}/items/${PO_COLLECTION}?limit=1` +
+                `&filter[purchase_order_no][_eq]=${encodeURIComponent(barcode)}` +
+                `&fields=purchase_order_id`;
+
+            const j = await fetchJson(url);
+            const row = Array.isArray(j?.data) ? j.data[0] : null;
+            const poId = toNum(row?.purchase_order_id);
+            if (!poId) return bad("PO not found.", 404);
+
+            // call open_po logic
+            const poReq = { ...req, json: async () => ({ action: "open_po", poId }) } as any;
+            return POST(poReq);
+        }
+
+        // -------------------------
+        // RFID scan verify (STRICT)
+        // -------------------------
+        if (action === "scan_rfid") {
+            const poId = toNum(body?.poId);
+            const rfid = toStr(body?.rfid);
+
+            if (!poId) return bad("Missing poId.", 400);
+            if (!rfid) return bad("Missing rfid.", 400);
+
+            // find RFID
+            const riUrl =
+                `${base}/items/${POR_ITEMS_COLLECTION}?limit=1` +
+                `&filter[rfid_code][_eq]=${encodeURIComponent(rfid)}` +
+                `&fields=receiving_item_id,purchase_order_product_id,product_id,rfid_code,created_at`;
+
+            const rij = await fetchJson(riUrl);
+            const row = Array.isArray(rij?.data) ? rij.data[0] : null;
+            if (!row) return bad("RFID not found. Tag this item first in Tagging of PO.", 404);
+
+            const porId = toNum(row?.purchase_order_product_id);
+            if (!porId) return bad("RFID record has no purchase_order_product_id.", 400);
+
+            // resolve POR owner + received state
+            const porUrl =
+                `${base}/items/${POR_COLLECTION}/${encodeURIComponent(String(porId))}` +
+                `?fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,received_date,receipt_no,receipt_date`;
+
+            const porj = await fetchJson(porUrl);
+            const por = porj?.data ?? null;
+
+            const ownerPoId = toNum(por?.purchase_order_id);
+            if (!ownerPoId) return bad("Unable to resolve PO owner of this RFID.", 400);
+            if (ownerPoId !== poId) return bad("RFID belongs to a different PO.", 400);
+
+            const alreadyReceived =
+                Boolean(toStr(por?.received_date)) ||
+                Boolean(toStr(por?.receipt_no)) ||
+                Boolean(toStr(por?.receipt_date));
+
+            const productId = toNum(por?.product_id ?? row?.product_id);
+            const pm = await fetchProductsMap(base, productId ? [productId] : []);
+            const p = productId ? pm.get(productId) : null;
+
+            return ok({
+                porId: String(porId),
+                rfid: toStr(row?.rfid_code),
+                productId: String(productId || ""),
+                productName: toStr(p?.product_name, `Product #${productId}`),
+                sku: productDisplayCode(p, productId),
+                time: toStr(row?.created_at, ""),
+                alreadyReceived,
             });
         }
 
-        return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+        // -------------------------
+        // Save receipt (updates POR rows)
+        // -------------------------
+        if (action === "save_receipt") {
+            const poId = toNum(body?.poId);
+            const receiptNo = toStr(body?.receiptNo);
+            const receiptType = toStr(body?.receiptType); // stored? (you can save in POR later if may column)
+            const receiptDate = toStr(body?.receiptDate);
+            const porCounts = body?.porCounts ?? {};
+
+            if (!poId) return bad("Missing poId.", 400);
+            if (!receiptNo) return bad("Receipt Number is required.", 400);
+            if (!receiptType) return bad("Receipt Type is required.", 400);
+            if (!receiptDate) return bad("Receipt Date is required.", 400);
+
+            const entries = Object.entries(porCounts || {}).map(([k, v]) => ({
+                porId: toNum(k),
+                qty: Math.max(0, toNum(v)),
+            }));
+
+            if (!entries.length) return bad("No scanned RFIDs to save.", 400);
+
+            // patch each POR row (partial supported because qty can be < tagged)
+            for (const it of entries) {
+                if (!it.porId || it.qty <= 0) continue;
+
+                const patchUrl = `${base}/items/${POR_COLLECTION}/${encodeURIComponent(String(it.porId))}`;
+                await fetchJson(patchUrl, {
+                    method: "PATCH",
+                    body: JSON.stringify({
+                        receipt_no: receiptNo,
+                        receipt_date: ymdToIsoDate(receiptDate),
+                        received_date: nowISO(),
+                        received_quantity: it.qty,
+                        isPosted: 0,
+                    }),
+                });
+            }
+
+            // return updated detail so UI refreshes
+            const poReq = { ...req, json: async () => ({ action: "open_po", poId }) } as any;
+            const res = await POST(poReq);
+            const json = await res.json().catch(() => ({}));
+
+            return ok({
+                ok: true,
+                receiptId: receiptNo,
+                detail: json?.data ?? null,
+            });
+        }
+
+        return bad("Unknown action.", 400);
     } catch (e: any) {
-        return NextResponse.json(
-            { error: e?.message ?? "Failed request" },
-            { status: 500 }
-        );
+        return bad(String(e?.message ?? e ?? "Failed request"), 500);
     }
 }

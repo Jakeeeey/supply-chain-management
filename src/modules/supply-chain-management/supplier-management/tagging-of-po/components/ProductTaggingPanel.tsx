@@ -1,4 +1,3 @@
-// src/modules/supply-chain-management/supplier-management/tagging-of-po/components/ProductTaggingPanel.tsx
 "use client";
 
 import * as React from "react";
@@ -117,8 +116,6 @@ export default function ProductTaggingPanel(props: {
             // keep SKU (scanner usually repeats SKU), clear RFID
             setRfid("");
             rfidRef.current?.focus();
-        } catch (e: any) {
-            // provider will throw on strict validation / server validation
         } finally {
             setSaving(false);
         }
@@ -130,7 +127,6 @@ export default function ProductTaggingPanel(props: {
     }
 
     function closeScanner() {
-        // stop stream first, then close next tick (prevents webcam freeze in some browsers)
         setStopStream(true);
         setTimeout(() => setScannerOpen(false), 0);
     }
@@ -141,25 +137,20 @@ export default function ProductTaggingPanel(props: {
 
         setSku(next);
         closeScanner();
-
-        // move to RFID quickly
         setTimeout(() => rfidRef.current?.focus(), 50);
     }
 
     return (
         <div className="w-full min-w-0 space-y-4">
             <div className="flex items-center gap-2">
-                <Button
-                    type="button"
-                    variant="ghost"
-                    className="h-9 px-2"
-                    onClick={props.onBack}
-                >
+                <Button type="button" variant="ghost" className="h-9 px-2" onClick={props.onBack}>
                     <ArrowLeft className="h-4 w-4" />
                 </Button>
 
                 <div className="min-w-0">
-                    <div className="text-2xl font-black leading-tight">Product Tagging</div>
+                    <div className="text-2xl font-black leading-tight text-foreground">
+                        Product Tagging
+                    </div>
                     <div className="text-sm text-muted-foreground truncate">
                         PO: {po?.poNumber ?? "—"} • {po?.supplierName ?? "—"}
                     </div>
@@ -174,17 +165,17 @@ export default function ProductTaggingPanel(props: {
                 <div className="grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-4 min-w-0">
                     {/* LEFT */}
                     <div className="min-w-0 space-y-4">
-                        {/* DARK SCAN PANEL */}
+                        {/* ✅ DARK SCAN PANEL (fixed for light mode using arbitrary colors) */}
                         <div
                             className={cn(
                                 "rounded-2xl border border-border shadow-sm overflow-hidden",
-                                "bg-slate-950 text-white"
+                                "bg-[linear-gradient(180deg,#0b1220_0%,#070a14_100%)] text-[#F8FAFC]"
                             )}
                         >
                             <div className="p-5">
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="space-y-1">
-                                        <div className="text-xs font-black uppercase tracking-widest opacity-80">
+                                        <div className="text-xs font-black uppercase tracking-widest text-[rgba(248,250,252,0.82)]">
                                             1. Scan Barcode (SKU)
                                         </div>
                                     </div>
@@ -192,16 +183,15 @@ export default function ProductTaggingPanel(props: {
                                     <div className="flex items-center gap-2">
                                         <Badge
                                             variant="secondary"
-                                            className="bg-white/10 text-white border border-white/10 text-[11px] font-black"
+                                            className="bg-[rgba(255,255,255,0.10)] text-[#F8FAFC] border border-[rgba(255,255,255,0.12)] text-[11px] font-black"
                                         >
                                             Strict Validation Active
                                         </Badge>
 
-                                        {/* ✅ Camera scan button */}
                                         <Button
                                             type="button"
                                             variant="secondary"
-                                            className="h-8 rounded-xl bg-white/10 text-white border border-white/10 hover:bg-white/15"
+                                            className="h-8 rounded-xl bg-[rgba(255,255,255,0.10)] text-[#F8FAFC] border border-[rgba(255,255,255,0.12)] hover:bg-[rgba(255,255,255,0.14)]"
                                             onClick={openScanner}
                                         >
                                             <Camera className="h-4 w-4 mr-2" />
@@ -219,10 +209,10 @@ export default function ProductTaggingPanel(props: {
                                             onChange={(e) => setSku(e.target.value)}
                                             placeholder="Scan SKU..."
                                             className={cn(
-                                                "h-12 rounded-xl bg-white/5 border-white/10 text-white placeholder:text-white/40",
-                                                skuRejected
-                                                    ? "border-destructive/70 ring-2 ring-destructive/30"
-                                                    : "focus-visible:ring-white/20"
+                                                "h-12 rounded-xl",
+                                                "bg-[rgba(255,255,255,0.06)] border-[rgba(255,255,255,0.12)] text-[#F8FAFC]",
+                                                "placeholder:text-[rgba(248,250,252,0.45)] focus-visible:ring-[rgba(248,250,252,0.22)]",
+                                                skuRejected ? "border-destructive/70 ring-2 ring-destructive/30" : ""
                                             )}
                                             onKeyDown={(e) => {
                                                 if (e.key === "Enter") {
@@ -233,7 +223,7 @@ export default function ProductTaggingPanel(props: {
                                         />
 
                                         {!sku.trim() ? (
-                                            <div className="text-xs italic text-white/50">
+                                            <div className="text-xs italic text-[rgba(248,250,252,0.55)]">
                                                 Waiting for scan...
                                             </div>
                                         ) : null}
@@ -256,20 +246,13 @@ export default function ProductTaggingPanel(props: {
                                     {/* RFID */}
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between">
-                                            <div className="text-xs font-black uppercase tracking-widest opacity-80">
+                                            <div className="text-xs font-black uppercase tracking-widest text-[rgba(248,250,252,0.82)]">
                                                 2. Scan RFID Tag
                                             </div>
 
                                             <div className="flex items-center gap-2">
-                                                <Switch
-                                                    checked={strict}
-                                                    onCheckedChange={setStrict}
-                                                    id="strict"
-                                                />
-                                                <Label
-                                                    htmlFor="strict"
-                                                    className="text-xs font-bold text-white/80"
-                                                >
+                                                <Switch checked={strict} onCheckedChange={setStrict} id="strict" />
+                                                <Label htmlFor="strict" className="text-xs font-bold text-[rgba(248,250,252,0.78)]">
                                                     Strict
                                                 </Label>
                                             </div>
@@ -280,7 +263,11 @@ export default function ProductTaggingPanel(props: {
                                             value={rfid}
                                             onChange={(e) => setRfid(e.target.value)}
                                             placeholder="Scan RFID..."
-                                            className="h-12 rounded-xl bg-white/5 border-white/10 text-white placeholder:text-white/40 focus-visible:ring-white/20"
+                                            className={cn(
+                                                "h-12 rounded-xl",
+                                                "bg-[rgba(255,255,255,0.06)] border-[rgba(255,255,255,0.12)] text-[#F8FAFC]",
+                                                "placeholder:text-[rgba(248,250,252,0.45)] focus-visible:ring-[rgba(248,250,252,0.22)]"
+                                            )}
                                             onKeyDown={(e) => {
                                                 if (e.key === "Enter") {
                                                     e.preventDefault();
@@ -306,24 +293,24 @@ export default function ProductTaggingPanel(props: {
 
                                 {/* MATCHED PRODUCT BOX */}
                                 {matched ? (
-                                    <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                    <div className="mt-4 rounded-2xl border border-[rgba(255,255,255,0.12)] bg-[rgba(255,255,255,0.06)] p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                                         <div>
-                                            <div className="text-xs font-black uppercase tracking-widest text-white/70">
+                                            <div className="text-xs font-black uppercase tracking-widest text-[rgba(248,250,252,0.70)]">
                                                 Matched Product
                                             </div>
                                             <div className="text-lg font-black mt-1">{matched.name}</div>
-                                            <div className="text-xs text-white/60 mt-1">
+                                            <div className="text-xs text-[rgba(248,250,252,0.60)] mt-1">
                                                 SKU: {matched.sku}
                                             </div>
                                         </div>
 
                                         <div className="text-right">
-                                            <div className="text-xs font-black uppercase tracking-widest text-white/70">
+                                            <div className="text-xs font-black uppercase tracking-widest text-[rgba(248,250,252,0.70)]">
                                                 Progress
                                             </div>
                                             <div className="text-2xl font-black mt-1">
                                                 {matched.taggedQty}{" "}
-                                                <span className="text-white/60">/</span>{" "}
+                                                <span className="text-[rgba(248,250,252,0.55)]">/</span>{" "}
                                                 {matched.expectedQty}
                                             </div>
                                         </div>
@@ -335,7 +322,7 @@ export default function ProductTaggingPanel(props: {
                         {/* RECENT ACTIVITY LOG */}
                         <div className="rounded-2xl border border-border bg-background shadow-sm overflow-hidden">
                             <div className="px-5 py-4 border-b border-border bg-muted/30 flex items-center justify-between gap-2">
-                                <div className="text-base font-black">Recent Activity Log</div>
+                                <div className="text-base font-black text-foreground">Recent Activity Log</div>
                                 <Badge variant="secondary" className="text-[11px] font-black">
                                     {po.activity.length}{" "}
                                     {po.activity.length === 1 ? "entry" : "entries"}
@@ -361,18 +348,10 @@ export default function ProductTaggingPanel(props: {
                                             <TableBody>
                                                 {po.activity.map((a) => (
                                                     <TableRow key={a.id}>
-                                                        <TableCell className="font-mono text-xs">
-                                                            {a.sku}
-                                                        </TableCell>
-                                                        <TableCell className="font-bold">
-                                                            {a.productName}
-                                                        </TableCell>
-                                                        <TableCell className="font-mono text-xs text-primary">
-                                                            {a.rfid}
-                                                        </TableCell>
-                                                        <TableCell className="text-right text-xs text-muted-foreground">
-                                                            {a.time}
-                                                        </TableCell>
+                                                        <TableCell className="font-mono text-xs">{a.sku}</TableCell>
+                                                        <TableCell className="font-bold">{a.productName}</TableCell>
+                                                        <TableCell className="font-mono text-xs text-primary">{a.rfid}</TableCell>
+                                                        <TableCell className="text-right text-xs text-muted-foreground">{a.time}</TableCell>
                                                     </TableRow>
                                                 ))}
                                             </TableBody>
@@ -388,7 +367,7 @@ export default function ProductTaggingPanel(props: {
                         {/* TAGGING PROGRESS */}
                         <div className="rounded-2xl border border-border bg-background shadow-sm overflow-hidden">
                             <div className="px-5 py-4 border-b border-border bg-muted/30">
-                                <div className="text-base font-black">Tagging Progress</div>
+                                <div className="text-base font-black text-foreground">Tagging Progress</div>
                             </div>
 
                             <div className="p-5 space-y-4">
@@ -397,16 +376,13 @@ export default function ProductTaggingPanel(props: {
                                     return (
                                         <div key={it.id} className="space-y-2">
                                             <div className="flex items-center justify-between gap-2">
-                                                <div className="text-sm font-bold truncate">{it.name}</div>
+                                                <div className="text-sm font-bold truncate text-foreground">{it.name}</div>
                                                 <div className="text-xs text-muted-foreground font-medium shrink-0">
                                                     {it.taggedQty}/{it.expectedQty}
                                                 </div>
                                             </div>
                                             <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-                                                <div
-                                                    className="h-full bg-primary"
-                                                    style={{ width: `${p}%` }}
-                                                />
+                                                <div className="h-full bg-primary" style={{ width: `${p}%` }} />
                                             </div>
                                         </div>
                                     );
@@ -416,10 +392,8 @@ export default function ProductTaggingPanel(props: {
 
                                 <div className="flex items-center justify-between">
                                     <div className="text-sm text-muted-foreground">Total Tagged</div>
-                                    <div className="text-lg font-black">
-                                        {totalTagged}{" "}
-                                        <span className="text-muted-foreground">/</span>{" "}
-                                        {totalExpected}
+                                    <div className="text-lg font-black text-foreground">
+                                        {totalTagged} <span className="text-muted-foreground">/</span> {totalExpected}
                                     </div>
                                 </div>
 
@@ -442,7 +416,7 @@ export default function ProductTaggingPanel(props: {
                         {/* VALID SKUS CHEATSHEET */}
                         <div className="rounded-2xl border border-border bg-background shadow-sm overflow-hidden">
                             <div className="px-5 py-4 border-b border-border bg-muted/30">
-                                <div className="text-sm font-black uppercase tracking-wide">
+                                <div className="text-sm font-black uppercase tracking-wide text-foreground">
                                     Valid SKUs (Cheatsheet)
                                 </div>
                             </div>
@@ -453,10 +427,8 @@ export default function ProductTaggingPanel(props: {
                                         key={it.id}
                                         className="rounded-xl border border-border bg-background px-3 py-2 flex items-center justify-between gap-3"
                                     >
-                                        <div className="font-mono text-xs font-bold">{it.sku}</div>
-                                        <div className="text-xs text-muted-foreground truncate text-right">
-                                            {it.name}
-                                        </div>
+                                        <div className="font-mono text-xs font-bold text-foreground">{it.sku}</div>
+                                        <div className="text-xs text-muted-foreground truncate text-right">{it.name}</div>
                                     </div>
                                 ))}
                             </div>
@@ -466,7 +438,13 @@ export default function ProductTaggingPanel(props: {
             )}
 
             {/* ✅ Camera Scanner Dialog (shadcn) */}
-            <Dialog open={scannerOpen} onOpenChange={(o) => (o ? openScanner() : closeScanner())}>
+            <Dialog
+                open={scannerOpen}
+                onOpenChange={(o) => {
+                    if (o) openScanner();
+                    else closeScanner();
+                }}
+            >
                 <DialogContent className="sm:max-w-[720px]">
                     <DialogHeader>
                         <DialogTitle>Scan SKU Barcode</DialogTitle>
@@ -491,7 +469,6 @@ export default function ProductTaggingPanel(props: {
                                         if (result?.text) applyScannedSku(result.text);
                                     }}
                                     onError={(error: any) => {
-                                        // keep UI stable; user can close dialog
                                         console.error("Barcode scanner error:", error);
                                     }}
                                 />

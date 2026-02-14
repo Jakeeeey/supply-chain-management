@@ -1,61 +1,120 @@
 "use client";
 
 import * as React from "react";
-import type {
-    POListItem,
-    PurchaseOrder,
-    ReceiptForm,
-    ReceiptTypeOption,
-    ReceivingStep,
-    ReceivedLine,
-    POItem,
-} from "../types";
+
+type POStatus = "OPEN" | "PARTIAL" | "CLOSED";
+
+export type ReceivingListItem = {
+    id: string;
+    poNumber: string;
+    supplierName: string;
+    status: POStatus;
+    totalAmount: number;
+    currency: "PHP";
+    itemsCount: number;
+    branchesCount: number;
+};
+
+export type ReceivingPOItem = {
+    id: string; // porId
+    porId?: string;
+    productId: string;
+    name: string;
+    barcode: string;
+    uom: string;
+    expectedQty: number;
+    receivedQty: number;
+    requiresRfid: true;
+    taggedQty: number;
+    rfids?: string[];
+};
+
+export type ReceivingPODetail = {
+    id: string;
+    poNumber: string;
+    supplier: { id: string; name: string };
+    status: POStatus;
+    totalAmount: number;
+    currency: "PHP";
+    allocations: Array<{
+        branch: { id: string; name: string };
+        items: ReceivingPOItem[];
+    }>;
+    createdAt: string;
+};
+
+type ScanRFIDResult = {
+    porId: string;
+    rfid: string;
+    productId: string;
+    productName: string;
+    sku: string;
+    time: string;
+    alreadyReceived?: boolean;
+};
+
+type ActivityRow = {
+    id: string;
+    rfid: string;
+    productName: string;
+    time: string;
+    status: "ok" | "warn";
+};
 
 type Ctx = {
-    loadingList: boolean;
-    list: POListItem[];
-    selectedListId: string | null;
+    // left list
+    list: ReceivingListItem[];
+    listLoading: boolean;
+    listError: string;
+    refreshList: () => Promise<void>;
+    openPO: (poId: string) => Promise<void>;
 
-    step: ReceivingStep;
+    // selection (your workbench expects selectedPO)
+    selectedPO: ReceivingPODetail | null;
 
-    po: PurchaseOrder | null;
-
+    // step 0 compat (optional)
     poBarcode: string;
     setPoBarcode: (v: string) => void;
-
-    verifyError: string | null;
     verifyPO: () => Promise<void>;
+    verifyError: string;
 
-    receipt: ReceiptForm;
-    setReceipt: (patch: Partial<ReceiptForm>) => void;
+    // receipt
+    receiptNo: string;
+    setReceiptNo: (v: string) => void;
+    receiptType: string;
+    setReceiptType: (v: string) => void;
+    receiptDate: string;
+    setReceiptDate: (v: string) => void;
 
-    receiptTypes: ReceiptTypeOption[];
+    // rfid scan
+    rfid: string;
+    setRfid: (v: string) => void;
+    strict: boolean;
+    setStrict: (v: boolean) => void;
+    scanError: string;
 
-    goStep: (s: ReceivingStep) => void;
+    lastMatched: ScanRFIDResult | null;
+    activity: ActivityRow[];
 
-    selectedBranchId: string;
-    setSelectedBranchId: (v: string) => void;
+    scannedCountByPorId: Record<string, number>;
 
-    scannedProductBarcode: string;
-    setScannedProductBarcode: (v: string) => void;
-
-    selectedScannedItem: POItem | null;
-
-    rfidValue: string;
-    setRfidValue: (v: string) => void;
-
-    receivedLines: ReceivedLine[];
-    addByBarcode: (barcode: string) => void;
-    attachRfidToCurrent: (rfid: string) => void;
-    clearCurrentScanned: () => void;
-
-    saveLoading: boolean;
+    scanRFID: () => Promise<void>;
     saveReceipt: () => Promise<void>;
+    savingReceipt: boolean;
+    saveError: string;
 };
 
 const ReceivingProductsContext = React.createContext<Ctx | null>(null);
 
-function todayISO() {
+async function asJson(r: Response) {
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+        throw new Error(j?.error || j?.errors?.[0]?.message || `Request failed: ${r.status}`);
+    }
+    return j;
+}
+
+function todayYMD() {
     const d = new Date();
     const yyyy = d.getFullYear();
     const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -63,351 +122,270 @@ function todayISO() {
     return `${yyyy}-${mm}-${dd}`;
 }
 
-export function ReceivingProductsProvider({
-                                              children,
-                                          }: {
-    children: React.ReactNode;
-}) {
-    const [loadingList, setLoadingList] = React.useState(true);
-    const [list, setList] = React.useState<POListItem[]>([]);
-    const [selectedListId, setSelectedListId] = React.useState<string | null>(
-        null
-    );
+export function ReceivingProductsProvider({ children }: { children: React.ReactNode }) {
+    const [list, setList] = React.useState<ReceivingListItem[]>([]);
+    const [listLoading, setListLoading] = React.useState(false);
+    const [listError, setListError] = React.useState("");
 
-    const [step, setStep] = React.useState<ReceivingStep>(1);
+    const [selectedPO, setSelectedPO] = React.useState<ReceivingPODetail | null>(null);
 
-    const [po, setPo] = React.useState<PurchaseOrder | null>(null);
-
+    // step 0 compat
     const [poBarcode, setPoBarcode] = React.useState("");
-    const [verifyError, setVerifyError] = React.useState<string | null>(null);
+    const [verifyError, setVerifyError] = React.useState("");
 
-    const receiptTypes: ReceiptTypeOption[] = React.useMemo(
-        () => [
-            { code: "SI-CHARGE", label: "Charge Sales Invoice [SI-CHARGE]" },
-            { code: "DR", label: "Delivery Receipt [DR]" },
-            { code: "INV", label: "Supplier Invoice [INV]" },
-        ],
-        []
-    );
+    // receipt
+    const [receiptNo, setReceiptNo] = React.useState("");
+    const [receiptType, setReceiptType] = React.useState("");
+    const [receiptDate, setReceiptDate] = React.useState(todayYMD());
 
-    const [receipt, setReceiptState] = React.useState<ReceiptForm>({
-        receiptNumber: "REC-0001",
-        receiptTypeCode: "",
-        receiptDate: todayISO(),
-        lotNumber: "",
-        lotExpiration: "",
-    });
+    // scan
+    const [rfid, setRfid] = React.useState("");
+    const [strict, setStrict] = React.useState(true);
+    const [scanError, setScanError] = React.useState("");
+    const [lastMatched, setLastMatched] = React.useState<ScanRFIDResult | null>(null);
+    const [activity, setActivity] = React.useState<ActivityRow[]>([]);
+    const [scannedCountByPorId, setScannedCountByPorId] = React.useState<Record<string, number>>({});
 
-    const setReceipt = (patch: Partial<ReceiptForm>) =>
-        setReceiptState((prev) => ({ ...prev, ...patch }));
+    const [savingReceipt, setSavingReceipt] = React.useState(false);
+    const [saveError, setSaveError] = React.useState("");
 
-    const [selectedBranchId, setSelectedBranchId] = React.useState("");
-
-    const [scannedProductBarcode, setScannedProductBarcode] = React.useState("");
-    const [currentItemId, setCurrentItemId] = React.useState<string | null>(null);
-
-    const [rfidValue, setRfidValue] = React.useState("");
-
-    const [receivedLines, setReceivedLines] = React.useState<ReceivedLine[]>([]);
-
-    const [saveLoading, setSaveLoading] = React.useState(false);
-
-    React.useEffect(() => {
-        let alive = true;
-        (async () => {
-            try {
-                setLoadingList(true);
-                const res = await fetch(
-                    "/api/scm/supplier-management/receiving-products",
-                    { method: "GET" }
-                );
-                const json = await res.json();
-                if (!alive) return;
-                setList(json?.data ?? []);
-                // auto-select first item (matches wireframe feel)
-                const first = (json?.data ?? [])?.[0]?.id ?? null;
-                setSelectedListId(first);
-            } catch {
-                if (!alive) return;
-                setList([]);
-            } finally {
-                if (!alive) return;
-                setLoadingList(false);
-            }
-        })();
-        return () => {
-            alive = false;
-        };
+    const refreshList = React.useCallback(async () => {
+        setListLoading(true);
+        setListError("");
+        try {
+            const r = await fetch("/api/scm/supplier-management/receiving-products", { cache: "no-store" });
+            const j = await asJson(r);
+            setList(Array.isArray(j?.data) ? j.data : []);
+        } catch (e: any) {
+            setListError(String(e?.message ?? e));
+        } finally {
+            setListLoading(false);
+        }
     }, []);
 
-    const goStep = (s: ReceivingStep) => setStep(s);
+    React.useEffect(() => {
+        refreshList();
+    }, [refreshList]);
 
-    const verifyPO = async () => {
-        setVerifyError(null);
-        const code = poBarcode.trim();
+    const resetSession = React.useCallback(() => {
+        setScanError("");
+        setSaveError("");
+        setLastMatched(null);
+        setActivity([]);
+        setScannedCountByPorId({});
+        setRfid("");
+    }, []);
+
+    const openPO = React.useCallback(
+        async (poId: string) => {
+            setVerifyError("");
+            resetSession();
+
+            try {
+                const r = await fetch("/api/scm/supplier-management/receiving-products", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "open_po", poId }),
+                });
+                const j = await asJson(r);
+                setSelectedPO(j?.data ?? null);
+
+                // auto-fill receipt defaults
+                setReceiptDate(todayYMD());
+                setReceiptNo(`REC-${String(Math.floor(Math.random() * 9000) + 1000)}`);
+                setReceiptType(""); // user must pick
+
+                // keep barcode blank, but set for reference
+                setPoBarcode(j?.data?.poNumber ?? "");
+            } catch (e: any) {
+                setListError(String(e?.message ?? e));
+            }
+        },
+        [resetSession]
+    );
+
+    // optional: verify by PO number if user types
+    const verifyPO = React.useCallback(async () => {
+        setVerifyError("");
+        resetSession();
+
+        const code = String(poBarcode ?? "").trim();
         if (!code) {
-            setVerifyError("Please scan or type the PO barcode.");
+            setVerifyError("Enter/select PO first.");
             return;
         }
+
         try {
-            const res = await fetch("/api/scm/supplier-management/receiving-products", {
+            const r = await fetch("/api/scm/supplier-management/receiving-products", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ action: "verify_po", barcode: code }),
             });
-            const json = await res.json();
-            if (!res.ok) {
-                setVerifyError(json?.error ?? "Failed to verify PO.");
-                return;
-            }
-            setPo(json?.data ?? null);
-            // default branch empty until step 3
-            setSelectedBranchId("");
-            setReceivedLines([]);
-            setCurrentItemId(null);
-            setScannedProductBarcode("");
-            setRfidValue("");
-            setStep(2);
-        } catch {
-            setVerifyError("Network error while verifying PO.");
+            const j = await asJson(r);
+            setSelectedPO(j?.data ?? null);
+
+            setReceiptDate(todayYMD());
+            setReceiptNo(`REC-${String(Math.floor(Math.random() * 9000) + 1000)}`);
+            setReceiptType("");
+        } catch (e: any) {
+            setVerifyError(String(e?.message ?? e));
         }
-    };
+    }, [poBarcode, resetSession]);
 
-    const selectedScannedItem = React.useMemo(() => {
-        if (!po || !currentItemId) return null;
-        for (const alloc of po.allocations) {
-            const found = alloc.items.find((x) => x.id === currentItemId);
-            if (found) return found;
-        }
-        return null;
-    }, [po, currentItemId]);
+    const scanRFID = React.useCallback(async () => {
+        setScanError("");
+        setLastMatched(null);
 
-    const clearCurrentScanned = () => {
-        setCurrentItemId(null);
-        setScannedProductBarcode("");
-        setRfidValue("");
-    };
-
-    const addByBarcode = (barcode: string) => {
-        if (!po) return;
-        const b = barcode.trim();
-        if (!b) return;
-
-        if (!selectedBranchId) {
-            // require branch selection
+        const poId = selectedPO?.id;
+        if (!poId) {
+            setScanError("Select a PO first.");
             return;
         }
 
-        const alloc = po.allocations.find((a) => a.branch.id === selectedBranchId);
-        if (!alloc) return;
-
-        const item = alloc.items.find(
-            (x) => x.barcode.toLowerCase() === b.toLowerCase()
-        );
-
-        // If not found in branch, allow searching across all allocations (still show error via no-op)
-        const fallback =
-            item ??
-            po.allocations.flatMap((a) => a.items).find((x) => x.barcode === b);
-
-        if (!fallback) {
-            // not found
-            setCurrentItemId(null);
-            setScannedProductBarcode(b);
+        const value = rfid.trim();
+        if (!value) {
+            setScanError("Scan RFID first.");
             return;
         }
-
-        setCurrentItemId(fallback.id);
-        setScannedProductBarcode(b);
-
-        // For non-RFID items, auto-increment receivedNowQty by 1
-        if (!fallback.requiresRfid) {
-            setReceivedLines((prev) => {
-                const idx = prev.findIndex((l) => l.itemId === fallback.id);
-                const expected = fallback.expectedQty;
-                const alreadyReceived = fallback.receivedQty;
-                const currentSession = idx >= 0 ? prev[idx].receivedNowQty : 0;
-                const canAdd = alreadyReceived + currentSession + 1 <= expected;
-                if (!canAdd) return prev;
-
-                if (idx >= 0) {
-                    const next = [...prev];
-                    next[idx] = { ...next[idx], receivedNowQty: next[idx].receivedNowQty + 1 };
-                    return next;
-                }
-                return [
-                    ...prev,
-                    {
-                        itemId: fallback.id,
-                        productId: fallback.productId,
-                        barcode: fallback.barcode,
-                        name: fallback.name,
-                        uom: fallback.uom,
-                        receivedNowQty: 1,
-                        rfids: [],
-                    },
-                ];
-            });
-        }
-    };
-
-    const attachRfidToCurrent = (rfid: string) => {
-        if (!po) return;
-        if (!currentItemId) return;
-
-        const tag = rfid.trim();
-        if (!tag) return;
-
-        const item = po.allocations.flatMap((a) => a.items).find((x) => x.id === currentItemId);
-        if (!item) return;
-
-        setReceivedLines((prev) => {
-            const allRfids = prev.flatMap((x) => x.rfids);
-            if (allRfids.includes(tag)) return prev;
-
-            const idx = prev.findIndex((l) => l.itemId === currentItemId);
-            const expected = item.expectedQty;
-            const alreadyReceived = item.receivedQty;
-            const currentSession = idx >= 0 ? prev[idx].receivedNowQty : 0;
-
-            // each RFID counts as 1 unit received
-            const canAdd = alreadyReceived + currentSession + 1 <= expected;
-            if (!canAdd) return prev;
-
-            if (idx >= 0) {
-                const next = [...prev];
-                next[idx] = {
-                    ...next[idx],
-                    receivedNowQty: next[idx].receivedNowQty + 1,
-                    rfids: [...next[idx].rfids, tag],
-                };
-                return next;
-            }
-
-            return [
-                ...prev,
-                {
-                    itemId: item.id,
-                    productId: item.productId,
-                    barcode: item.barcode,
-                    name: item.name,
-                    uom: item.uom,
-                    receivedNowQty: 1,
-                    rfids: [tag],
-                },
-            ];
-        });
-
-        setRfidValue("");
-    };
-
-    const saveReceipt = async () => {
-        if (!po) return;
-        if (!selectedBranchId) return;
-
-        // basic validation
-        if (!receipt.receiptNumber.trim()) return;
-        if (!receipt.receiptTypeCode.trim()) return;
-        if (!receipt.receiptDate.trim()) return;
-        if (!receipt.lotNumber.trim()) return;
-        if (!receipt.lotExpiration.trim()) return;
-
-        if (receivedLines.length === 0) return;
 
         try {
-            setSaveLoading(true);
-            const res = await fetch("/api/scm/supplier-management/receiving-products", {
+            const r = await fetch("/api/scm/supplier-management/receiving-products", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "scan_rfid", poId, rfid: value }),
+            });
+            const j = await asJson(r);
+            const data = j?.data as ScanRFIDResult;
+
+            // strict rules (safe)
+            if (strict && data?.alreadyReceived) {
+                setActivity((prev) => [
+                    {
+                        id: `${Date.now()}-${Math.random()}`,
+                        rfid: data.rfid,
+                        productName: data.productName,
+                        time: data.time || new Date().toISOString(),
+                        status: "warn",
+                    },
+                    ...prev,
+                ]);
+                setScanError("RFID already received. (Strict mode)");
+                setRfid("");
+                setLastMatched(data);
+                return;
+            }
+
+            // increment per POR
+            const porId = String(data?.porId ?? "");
+            setScannedCountByPorId((prev) => ({
+                ...(prev ?? {}),
+                [porId]: (prev?.[porId] ?? 0) + 1,
+            }));
+
+            setActivity((prev) => [
+                {
+                    id: `${Date.now()}-${Math.random()}`,
+                    rfid: data.rfid,
+                    productName: data.productName,
+                    time: data.time || new Date().toISOString(),
+                    status: "ok",
+                },
+                ...prev,
+            ]);
+
+            setLastMatched(data);
+            setRfid("");
+        } catch (e: any) {
+            setScanError(String(e?.message ?? e));
+        }
+    }, [selectedPO, rfid, strict]);
+
+    const saveReceipt = React.useCallback(async () => {
+        setSaveError("");
+
+        const poId = selectedPO?.id;
+        if (!poId) return setSaveError("Select a PO first.");
+        if (!receiptNo.trim()) return setSaveError("Receipt Number is required.");
+        if (!receiptType.trim()) return setSaveError("Receipt Type is required.");
+        if (!receiptDate.trim()) return setSaveError("Receipt Date is required.");
+
+        const counts = scannedCountByPorId ?? {};
+        if (!Object.keys(counts).length) return setSaveError("Scan at least 1 RFID before saving.");
+
+        setSavingReceipt(true);
+        try {
+            const r = await fetch("/api/scm/supplier-management/receiving-products", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     action: "save_receipt",
-                    poId: po.id,
-                    branchId: selectedBranchId,
-                    receipt,
-                    receivedLines,
+                    poId,
+                    receiptNo: receiptNo.trim(),
+                    receiptType: receiptType.trim(),
+                    receiptDate: receiptDate.trim(),
+                    porCounts: counts,
                 }),
             });
-            const json = await res.json();
-            if (!res.ok) return;
+            const j = await asJson(r);
 
-            // reset to step 1 state
-            setPo(null);
-            setStep(1);
-            setPoBarcode("");
-            setVerifyError(null);
-            setSelectedBranchId("");
-            setReceivedLines([]);
-            setCurrentItemId(null);
-            setScannedProductBarcode("");
-            setRfidValue("");
+            const detail = j?.data?.detail ?? null;
+            if (detail) setSelectedPO(detail);
 
-            // bump receipt number a bit (mock)
-            const nextNo = json?.data?.receiptId ?? "REC-0001";
-            setReceiptState((prev) => ({
-                ...prev,
-                receiptNumber: nextNo,
-                receiptTypeCode: "",
-                receiptDate: todayISO(),
-                lotNumber: "",
-                lotExpiration: "",
-            }));
+            // refresh list statuses
+            refreshList();
 
-            // re-fetch list (optional)
-            // keep it simple: no refetch now
+            // clear session scans
+            resetSession();
+        } catch (e: any) {
+            setSaveError(String(e?.message ?? e));
         } finally {
-            setSaveLoading(false);
+            setSavingReceipt(false);
         }
-    };
+    }, [selectedPO, receiptNo, receiptType, receiptDate, scannedCountByPorId, refreshList, resetSession]);
 
     const value: Ctx = {
-        loadingList,
         list,
-        selectedListId,
+        listLoading,
+        listError,
+        refreshList,
+        openPO,
 
-        step,
-        po,
+        selectedPO,
 
         poBarcode,
         setPoBarcode,
-
-        verifyError,
         verifyPO,
+        verifyError,
 
-        receipt,
-        setReceipt,
-        receiptTypes,
+        receiptNo,
+        setReceiptNo,
+        receiptType,
+        setReceiptType,
+        receiptDate,
+        setReceiptDate,
 
-        goStep,
+        rfid,
+        setRfid,
+        strict,
+        setStrict,
+        scanError,
 
-        selectedBranchId,
-        setSelectedBranchId,
+        lastMatched,
+        activity,
 
-        scannedProductBarcode,
-        setScannedProductBarcode,
+        scannedCountByPorId: scannedCountByPorId ?? {},
 
-        selectedScannedItem,
-
-        rfidValue,
-        setRfidValue,
-
-        receivedLines,
-        addByBarcode,
-        attachRfidToCurrent,
-        clearCurrentScanned,
-
-        saveLoading,
+        scanRFID,
         saveReceipt,
+        savingReceipt,
+        saveError,
     };
 
-    return (
-        <ReceivingProductsContext.Provider value={value}>
-            {children}
-        </ReceivingProductsContext.Provider>
-    );
+    return <ReceivingProductsContext.Provider value={value}>{children}</ReceivingProductsContext.Provider>;
 }
 
 export function useReceivingProducts() {
     const ctx = React.useContext(ReceivingProductsContext);
-    if (!ctx) throw new Error("useReceivingProducts must be used within provider");
+    if (!ctx) throw new Error("useReceivingProducts must be used within ReceivingProductsProvider");
     return ctx;
 }

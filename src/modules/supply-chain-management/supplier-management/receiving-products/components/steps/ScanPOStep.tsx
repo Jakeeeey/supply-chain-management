@@ -8,7 +8,7 @@ import { useReceivingProducts } from "../../providers/ReceivingProductsProvider"
 import { Scan } from "lucide-react";
 
 export function ScanPOStep() {
-    const { poBarcode, setPoBarcode, verifyPO, verifyError } =
+    const { poBarcode, setPoBarcode, verifyPO, verifyError, selectedPO } =
         useReceivingProducts();
 
     const inputRef = React.useRef<HTMLInputElement | null>(null);
@@ -17,19 +17,27 @@ export function ScanPOStep() {
         inputRef.current?.focus();
     }, []);
 
+    const branchesText = React.useMemo(() => {
+        const alloc = Array.isArray(selectedPO?.allocations) ? selectedPO!.allocations : [];
+        const names = alloc
+            .map((a) => a?.branch?.name)
+            .filter(Boolean) as string[];
+        return names.length ? names.join(", ") : "—";
+    }, [selectedPO]);
+
     return (
         <div className="space-y-4">
             <Card className="p-4">
                 <div className="text-sm font-semibold">Selected PO Details</div>
                 <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                     <div className="text-muted-foreground">PO Number</div>
-                    <div className="text-right font-medium">—</div>
+                    <div className="text-right font-medium">{selectedPO?.poNumber ?? "—"}</div>
 
                     <div className="text-muted-foreground">Supplier</div>
-                    <div className="text-right font-medium">—</div>
+                    <div className="text-right font-medium">{selectedPO?.supplier?.name ?? "—"}</div>
 
                     <div className="text-muted-foreground">Delivery Branches</div>
-                    <div className="text-right font-medium">—</div>
+                    <div className="text-right font-medium">{branchesText}</div>
                 </div>
             </Card>
 
@@ -39,7 +47,7 @@ export function ScanPOStep() {
                 </div>
                 <div className="text-sm font-medium">Scan Purchase Order Barcode</div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                    Scan the barcode on the PO document to verify
+                    Optional: scan/enter PO number to verify (you can also select from the list)
                 </div>
 
                 <div className="mt-6 space-y-3 text-left">
