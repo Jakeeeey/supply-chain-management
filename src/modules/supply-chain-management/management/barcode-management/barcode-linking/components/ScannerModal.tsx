@@ -42,7 +42,7 @@ import {
   Scale,
   Ruler,
 } from "lucide-react";
-import { Product, Category, Unit, UpdateBarcodeDTO } from "../types";
+import { Product, Category, Unit, RefData, UpdateBarcodeDTO } from "../types";
 import {
   generateEAN13,
   generateCode128,
@@ -50,16 +50,15 @@ import {
   validateCode128,
 } from "../utils/barcodeUtils";
 
-interface RefData {
-  id: number;
-  name: string;
-  code?: string;
-}
+
 
 interface ScannerModalProps {
   open: boolean;
   product: Product | null;
   allProducts: Product[];
+  barcodeTypes: RefData[];
+  weightUnits: RefData[];
+  cbmUnits: RefData[];
   onClose: () => void;
   onSave: (data: UpdateBarcodeDTO) => Promise<void>;
 }
@@ -68,6 +67,9 @@ export function ScannerModal({
   open,
   product,
   allProducts,
+  barcodeTypes,
+  weightUnits,
+  cbmUnits,
   onClose,
   onSave,
 }: ScannerModalProps) {
@@ -78,10 +80,6 @@ export function ScannerModal({
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [scanSuccess, setScanSuccess] = useState(false);
 
-  // Dynamic Data State
-  const [barcodeTypes, setBarcodeTypes] = useState<RefData[]>([]);
-  const [weightUnits, setWeightUnits] = useState<RefData[]>([]);
-  const [cbmUnits, setCbmUnits] = useState<RefData[]>([]);
 
   // Selection
   const [selectedBarcodeTypeId, setSelectedBarcodeTypeId] =
@@ -98,71 +96,35 @@ export function ScannerModal({
     weightUnit: "",
   });
 
-  // --- FETCH DATA ---
+  // --- SET DEFAULTS FROM CACHED REF DATA ---
   useEffect(() => {
     if (open) {
-      const fetchRefs = async () => {
-        try {
-          const [btRes, wuRes, cuRes] = await Promise.all([
-            fetch(
-              "/api/scm/management/barcode-management/barcode-linking?scope=barcode_type",
-            ),
-            fetch(
-              "/api/scm/management/barcode-management/barcode-linking?scope=weight_unit",
-            ),
-            fetch(
-              "/api/scm/management/barcode-management/barcode-linking?scope=cbm_unit",
-            ),
-          ]);
-
-          if (btRes.ok) {
-            const data = await btRes.json();
-            const list = Array.isArray(data.data) ? data.data : [];
-            setBarcodeTypes(list);
-            if (list.length > 0 && !selectedBarcodeTypeId) {
-              const defaultType =
-                list.find((t: any) => t.name?.includes("EAN")) || list[0];
-              if (defaultType?.id)
-                setSelectedBarcodeTypeId(String(defaultType.id));
-            }
-          }
-
-          if (wuRes.ok) {
-            const data = await wuRes.json();
-            const list = Array.isArray(data.data) ? data.data : [];
-            setWeightUnits(list);
-            if (list.length > 0 && !dimensions.weightUnit) {
-              const defaultUnit =
-                list.find((u: any) => u.code === "KG") || list[0];
-              if (defaultUnit?.id)
-                setDimensions((prev) => ({
-                  ...prev,
-                  weightUnit: String(defaultUnit.id),
-                }));
-            }
-          }
-
-          if (cuRes.ok) {
-            const data = await cuRes.json();
-            const list = Array.isArray(data.data) ? data.data : [];
-            setCbmUnits(list);
-            if (list.length > 0 && !dimensions.unit) {
-              const defaultUnit =
-                list.find((u: any) => u.code === "CM") || list[0];
-              if (defaultUnit?.id)
-                setDimensions((prev) => ({
-                  ...prev,
-                  unit: String(defaultUnit.id),
-                }));
-            }
-          }
-        } catch (error) {
-          console.error("Failed to fetch reference data", error);
-        }
-      };
-      fetchRefs();
+      if (barcodeTypes.length > 0 && !selectedBarcodeTypeId) {
+        const defaultType =
+          barcodeTypes.find((t) => t.name?.includes("EAN")) || barcodeTypes[0];
+        if (defaultType?.id)
+          setSelectedBarcodeTypeId(String(defaultType.id));
+      }
+      if (weightUnits.length > 0 && !dimensions.weightUnit) {
+        const defaultUnit =
+          weightUnits.find((u) => u.code === "KG") || weightUnits[0];
+        if (defaultUnit?.id)
+          setDimensions((prev) => ({
+            ...prev,
+            weightUnit: String(defaultUnit.id),
+          }));
+      }
+      if (cbmUnits.length > 0 && !dimensions.unit) {
+        const defaultUnit =
+          cbmUnits.find((u) => u.code === "CM") || cbmUnits[0];
+        if (defaultUnit?.id)
+          setDimensions((prev) => ({
+            ...prev,
+            unit: String(defaultUnit.id),
+          }));
+      }
     }
-  }, [open]);
+  }, [open, barcodeTypes, weightUnits, cbmUnits]);
 
   // --- RESET STATE ON OPEN ---
   useEffect(() => {

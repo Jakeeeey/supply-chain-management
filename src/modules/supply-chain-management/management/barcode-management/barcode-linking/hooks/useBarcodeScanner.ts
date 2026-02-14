@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { toast } from "sonner";
-import { Product, Supplier, UpdateBarcodeDTO } from "../types";
+import { Product, Supplier, RefData, UpdateBarcodeDTO } from "../types";
 
 export function useBarcodeScanner() {
   const [allProducts, setAllProducts] = useState<Product[]>([]);
@@ -13,16 +13,31 @@ export function useBarcodeScanner() {
   const itemsPerPage = 15;
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
+  // Reference data (cached at hook level — fetched once on mount)
+  const [barcodeTypes, setBarcodeTypes] = useState<RefData[]>([]);
+  const [weightUnits, setWeightUnits] = useState<RefData[]>([]);
+  const [cbmUnits, setCbmUnits] = useState<RefData[]>([]);
+
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        const [productsRes, suppliersRes] = await Promise.all([
-          fetch("/api/scm/management/barcode-management/barcode-linking"),
-          fetch(
-            "/api/scm/management/barcode-management/barcode-linking?scope=suppliers",
-          ),
-        ]);
+        const [productsRes, suppliersRes, btRes, wuRes, cuRes] =
+          await Promise.all([
+            fetch("/api/scm/management/barcode-management/barcode-linking"),
+            fetch(
+              "/api/scm/management/barcode-management/barcode-linking?scope=suppliers",
+            ),
+            fetch(
+              "/api/scm/management/barcode-management/barcode-linking?scope=barcode_type",
+            ),
+            fetch(
+              "/api/scm/management/barcode-management/barcode-linking?scope=weight_unit",
+            ),
+            fetch(
+              "/api/scm/management/barcode-management/barcode-linking?scope=cbm_unit",
+            ),
+          ]);
 
         if (!productsRes.ok || !suppliersRes.ok)
           throw new Error("Failed to fetch data");
@@ -44,6 +59,20 @@ export function useBarcodeScanner() {
 
         setAllProducts(eligibleProducts);
         setSuppliers(suppliersData.data || []);
+
+        // Parse reference data
+        if (btRes.ok) {
+          const data = await btRes.json();
+          setBarcodeTypes(Array.isArray(data.data) ? data.data : []);
+        }
+        if (wuRes.ok) {
+          const data = await wuRes.json();
+          setWeightUnits(Array.isArray(data.data) ? data.data : []);
+        }
+        if (cuRes.ok) {
+          const data = await cuRes.json();
+          setCbmUnits(Array.isArray(data.data) ? data.data : []);
+        }
       } catch (error) {
         console.error("Fetch error", error);
         toast.error("Failed to load data.");
@@ -144,5 +173,8 @@ export function useBarcodeScanner() {
     setSupplierFilter,
     productFilter,
     setProductFilter,
+    barcodeTypes,
+    weightUnits,
+    cbmUnits,
   };
 }

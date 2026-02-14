@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,7 +31,9 @@ import {
 
 import { useBarcodeScanner } from "./hooks/useBarcodeScanner";
 import { ProductTable } from "./components/ProductTable";
-import { ScannerModal } from "./components/ScannerModal";
+const ScannerModal = React.lazy(() =>
+  import("./components/ScannerModal").then((m) => ({ default: m.ScannerModal }))
+);
 import { BarcodeScannerSkeleton } from "./components/BarcodeScannerSkeleton";
 
 export default function BarCodeScannerModule() {
@@ -53,6 +55,9 @@ export default function BarCodeScannerModule() {
     setSupplierFilter,
     productFilter,
     setProductFilter,
+    barcodeTypes,
+    weightUnits,
+    cbmUnits,
   } = useBarcodeScanner();
 
   // UI States for Comboboxes
@@ -61,6 +66,15 @@ export default function BarCodeScannerModule() {
 
   // Local state for page input
   const [pageInput, setPageInput] = useState(String(currentPage));
+
+  // Debounced search
+  const [searchInput, setSearchInput] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchQuery(searchInput);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   useEffect(() => {
     setPageInput(String(currentPage));
@@ -103,8 +117,8 @@ export default function BarCodeScannerModule() {
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Desc, SKU, or ID..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 className="pl-9 h-10"
               />
             </div>
@@ -126,7 +140,7 @@ export default function BarCodeScannerModule() {
                   <span className="truncate">
                     {supplierFilter && supplierFilter !== "all"
                       ? suppliers.find((s) => String(s.id) === supplierFilter)
-                          ?.supplier_name
+                        ?.supplier_name
                       : "All Suppliers"}
                   </span>
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -199,8 +213,8 @@ export default function BarCodeScannerModule() {
                   <span className="truncate">
                     {productFilter && productFilter !== "all"
                       ? allProducts.find(
-                          (p) => String(p.product_id) === productFilter,
-                        )?.product_name || "Unknown"
+                        (p) => String(p.product_id) === productFilter,
+                      )?.product_name || "Unknown"
                       : "All Products"}
                   </span>
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -229,7 +243,7 @@ export default function BarCodeScannerModule() {
                         />
                         All Products
                       </CommandItem>
-                      {allProducts.slice(0, 50).map((product) => (
+                      {allProducts.map((product) => (
                         <CommandItem
                           key={product.product_id}
                           value={product.product_name || ""}
@@ -284,8 +298,8 @@ export default function BarCodeScannerModule() {
         onEdit={setSelectedProduct}
         isSelectionMode={false} // Selection disabled
         selectedIds={[]}
-        onToggleSelect={() => {}}
-        onToggleAll={() => {}}
+        onToggleSelect={() => { }}
+        onToggleAll={() => { }}
       />
 
       {/* PAGINATION */}
@@ -349,14 +363,19 @@ export default function BarCodeScannerModule() {
         </div>
       )}
 
-      {/* SCANNER MODAL */}
-      <ScannerModal
-        open={!!selectedProduct}
-        product={selectedProduct}
-        allProducts={allProducts}
-        onClose={() => setSelectedProduct(null)}
-        onSave={handleUpdateBarcode}
-      />
+      {/* SCANNER MODAL (Lazy-loaded) */}
+      <Suspense fallback={null}>
+        <ScannerModal
+          open={!!selectedProduct}
+          product={selectedProduct}
+          allProducts={allProducts}
+          barcodeTypes={barcodeTypes}
+          weightUnits={weightUnits}
+          cbmUnits={cbmUnits}
+          onClose={() => setSelectedProduct(null)}
+          onSave={handleUpdateBarcode}
+        />
+      </Suspense>
     </div>
   );
 }

@@ -33,6 +33,12 @@ export interface Product {
   product_per_supplier?: ProductSupplierJunction[];
 }
 
+export interface RefData {
+  id: number;
+  name: string;
+  code?: string;
+}
+
 export interface UpdateBarcodeDTO {
   barcode: string;
   barcode_type_id: number;

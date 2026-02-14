@@ -69,6 +69,15 @@ export default function BarcodeMasterlistModule() {
   const [openSupplier, setOpenSupplier] = useState(false);
   const [pageInput, setPageInput] = useState(String(currentPage));
 
+  // Debounced search
+  const [searchInput, setSearchInput] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchQuery(searchInput);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
   // Print States
   const [showFormatModal, setShowFormatModal] = useState(false);
 
@@ -145,8 +154,8 @@ export default function BarcodeMasterlistModule() {
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Product, SKU, or Barcode..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 className="pl-9 h-10"
               />
             </div>
