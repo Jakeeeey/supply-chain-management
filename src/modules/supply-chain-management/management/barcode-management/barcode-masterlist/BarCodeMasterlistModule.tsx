@@ -162,7 +162,7 @@ export default function BarcodeMasterlistModule() {
           </div>
 
           {/* Supplier */}
-          <div className="flex flex-col gap-2 w-full md:w-[240px]">
+          <div className="flex flex-col gap-2 w-full md:w-[320px]">
             <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
               Supplier
             </Label>
@@ -174,14 +174,16 @@ export default function BarcodeMasterlistModule() {
                   aria-expanded={openSupplier}
                   className="h-10 w-full justify-between font-normal"
                 >
-                  {supplierFilter && supplierFilter !== "all"
-                    ? suppliers.find((s) => String(s.id) === supplierFilter)
-                      ?.supplier_name
-                    : "All Suppliers"}
+                  <span className="truncate">
+                    {supplierFilter && supplierFilter !== "all"
+                      ? suppliers.find((s) => String(s.id) === supplierFilter)
+                        ?.supplier_name
+                      : "All Suppliers"}
+                  </span>
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-[240px] p-0">
+              <PopoverContent className="w-[320px] p-0">
                 <Command>
                   <CommandInput placeholder="Search supplier..." />
                   <CommandList>

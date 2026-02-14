@@ -129,8 +129,8 @@ export async function GET(req: NextRequest) {
         ].join(","),
         limit: "-1",
         "filter[isActive][_eq]": "1",
-        "filter[barcode][_nnull]": "true",
-        "filter[product_code][_nnull]": "true",
+        "filter[barcode][_nempty]": "true",
+        "filter[product_code][_nempty]": "true",
       });
 
       const junctionPromise = fetchDirectus("/items/product_per_supplier", {

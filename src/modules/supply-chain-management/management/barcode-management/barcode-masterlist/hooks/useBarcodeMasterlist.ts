@@ -29,7 +29,17 @@ export function useBarcodeMasterlist() {
           getSuppliers(),
         ]);
 
-        setAllProducts(productsData);
+        // Client-side safety filter: reject empty/dash SKU or empty barcode
+        const validProducts = productsData.filter((p: Product) => {
+          const hasSku =
+            p.product_code &&
+            p.product_code.trim() !== "" &&
+            p.product_code !== "-";
+          const hasBarcode = p.barcode && p.barcode.trim() !== "";
+          return hasSku && hasBarcode;
+        });
+
+        setAllProducts(validProducts);
         setSuppliers(suppliersData);
       } catch (error) {
         console.error("Failed to fetch data", error);
