@@ -12,8 +12,10 @@ import { useReceivingProducts } from "../providers/ReceivingProductsProvider";
 
 function statusBadge(status: string) {
     const s = String(status || "").toUpperCase();
-    if (s === "CLOSED") return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20";
-    if (s === "PARTIAL") return "bg-orange-500/15 text-orange-700 dark:text-orange-300 border border-orange-500/20";
+    if (s === "CLOSED")
+        return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20";
+    if (s === "PARTIAL")
+        return "bg-orange-500/15 text-orange-700 dark:text-orange-300 border border-orange-500/20";
     return "bg-primary/15 text-primary border border-primary/20";
 }
 
@@ -32,12 +34,37 @@ export function AvailableForReceiving() {
     const filtered = React.useMemo(() => {
         const s = q.trim().toLowerCase();
         if (!s) return poList ?? [];
-        return (poList ?? []).filter((x) => {
+        return (poList ?? []).filter((x: any) => {
             const a = String(x?.poNumber ?? "").toLowerCase();
             const b = String(x?.supplierName ?? "").toLowerCase();
             return a.includes(s) || b.includes(s);
         });
     }, [poList, q]);
+
+    function handleSelectPO(po: any) {
+        // ✅ Backward/forward compatible:
+        // - some providers accept (poNumber)
+        // - some accept (poId, poNumber)
+        const fn: any = selectAndVerifyPO as any;
+        if (typeof fn !== "function") return;
+
+        const poId = po?.id;
+        const poNumber = po?.poNumber;
+
+        try {
+            if (fn.length >= 2) {
+                fn(poId, poNumber);
+                return;
+            }
+            // old behavior: verify by PO barcode/number
+            fn(poNumber);
+        } catch {
+            // last fallback
+            try {
+                fn(poNumber);
+            } catch {}
+        }
+    }
 
     return (
         <Card className="p-4">
@@ -96,14 +123,14 @@ export function AvailableForReceiving() {
                         No purchase orders available.
                     </div>
                 ) : (
-                    filtered.map((po) => {
+                    filtered.map((po: any) => {
                         const active = selectedPO?.id === po.id;
 
                         return (
                             <button
                                 key={po.id}
                                 type="button"
-                                onClick={() => selectAndVerifyPO(po.poNumber)}
+                                onClick={() => handleSelectPO(po)}
                                 className={cn(
                                     "w-full text-left rounded-xl border border-border p-3 transition",
                                     "hover:bg-muted/40",
@@ -127,11 +154,27 @@ export function AvailableForReceiving() {
                                         </div>
 
                                         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                            <Badge variant="secondary" className={cn("text-[10px] font-bold", statusBadge(po.status))}>
+                                            <Badge
+                                                variant="secondary"
+                                                className={cn(
+                                                    "text-[10px] font-bold",
+                                                    statusBadge(po.status)
+                                                )}
+                                            >
                                                 {po.status}
                                             </Badge>
-                                            <span>Items: <span className="font-semibold text-foreground">{po.itemsCount}</span></span>
-                                            <span>Branches: <span className="font-semibold text-foreground">{po.branchesCount}</span></span>
+                                            <span>
+                        Items:{" "}
+                                                <span className="font-semibold text-foreground">
+                          {po.itemsCount}
+                        </span>
+                      </span>
+                                            <span>
+                        Branches:{" "}
+                                                <span className="font-semibold text-foreground">
+                          {po.branchesCount}
+                        </span>
+                      </span>
                                         </div>
                                     </div>
 

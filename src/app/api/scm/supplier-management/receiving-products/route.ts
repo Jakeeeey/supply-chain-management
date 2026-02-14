@@ -106,14 +106,14 @@ type ListItem = {
 };
 
 type POItem = {
-    id: string; // porId (purchase_order_receiving.purchase_order_product_id)
+    id: string; // porId
     porId: string;
     productId: string;
     name: string;
     barcode: string;
     uom: string;
-    expectedQty: number; // from tagged RFIDs count
-    receivedQty: number; // from POR.received_quantity (fallback 0)
+    expectedQty: number; // tagged RFIDs count
+    receivedQty: number; // POR.received_quantity
     requiresRfid: true;
     taggedQty: number;
     rfids: string[];
@@ -197,7 +197,7 @@ async function fetchPOHeadersByIds(base: string, poIds: number[]) {
         const url =
             `${base}/items/${PO_COLLECTION}?limit=-1` +
             `&filter[purchase_order_id][_in]=${encodeURIComponent(ids.join(","))}` +
-            `&fields=purchase_order_id,purchase_order_no,date,date_encoded,supplier_name,total_amount,date_received,inventory_status`;
+            `&fields=purchase_order_id,purchase_order_no,date,date_encoded,supplier_name,total_amount,inventory_status`;
         const j = await fetchJson(url);
         rows.push(...(Array.isArray(j?.data) ? j.data : []));
     }
@@ -246,7 +246,12 @@ async function fetchBranchesMap(base: string, branchIds: number[]) {
     for (const b of rows) {
         const id = toNum(b?.id);
         if (!id) continue;
-        map.set(id, toStr(b?.branch_name) || toStr(b?.branch_description) || `Branch ${id}`);
+        map.set(
+            id,
+            toStr(b?.branch_name) ||
+            toStr(b?.branch_description) ||
+            `Branch ${id}`
+        );
     }
 
     return map;
@@ -283,21 +288,6 @@ async function fetchProductsMap(base: string, productIds: number[]) {
 // =====================
 // BUILDERS
 // =====================
-function statusFrom(po: any, porRowsForPo: any[]): POStatus {
-    if (toStr(po?.date_received)) return "CLOSED";
-
-    // PARTIAL if any POR has received_date or receipt_no/receipt_date
-    const partial = (porRowsForPo ?? []).some((r) => {
-        const rd = toStr(r?.received_date);
-        const rn = toStr(r?.receipt_no);
-        const rdt = toStr(r?.receipt_date);
-        const posted = toNum(r?.isPosted) === 1;
-        return Boolean(rd) || Boolean(rn) || Boolean(rdt) || posted;
-    });
-
-    return partial ? "PARTIAL" : "OPEN";
-}
-
 function productDisplayCode(p: any, productId: number) {
     return toStr(p?.barcode) || toStr(p?.product_code) || String(productId);
 }
@@ -315,6 +305,51 @@ function groupRfidsByPorId(rows: any[]) {
     return map;
 }
 
+function buildTaggedCountByPorId(rows: any[]) {
+    const map = new Map<number, number>();
+    for (const r of rows) {
+        const porId = toNum(r?.purchase_order_product_id);
+        if (!porId) continue;
+        map.set(porId, (map.get(porId) ?? 0) + 1);
+    }
+    return map;
+}
+
+/**
+ * ✅ Correct status computation for your flow:
+ * - OPEN: no receipt info and received_quantity=0 across all POR lines
+ * - PARTIAL: some receipt info / received_quantity but not all fully received
+ * - CLOSED: all POR lines fully received (received_quantity >= taggedQty) AND has receipt info
+ */
+function statusFromReceiving(porRowsForPo: any[], taggedCountByPorId: Map<number, number>): POStatus {
+    if (!porRowsForPo?.length) return "OPEN";
+
+    let anyTouched = false;
+    let allDone = true;
+
+    for (const r of porRowsForPo) {
+        const porId = toNum(r?.purchase_order_product_id);
+        const taggedQty = taggedCountByPorId.get(porId) ?? 0;
+        const receivedQty = Math.max(0, toNum(r?.received_quantity ?? 0));
+
+        const hasReceiptInfo =
+            Boolean(toStr(r?.receipt_no)) ||
+            Boolean(toStr(r?.receipt_date)) ||
+            Boolean(toStr(r?.received_date));
+
+        if (hasReceiptInfo || receivedQty > 0) anyTouched = true;
+
+        // "done" only if may taggedQty and receivedQty covers it and receipt info exists
+        const done = taggedQty > 0 && receivedQty >= taggedQty && hasReceiptInfo;
+
+        if (!done) allDone = false;
+    }
+
+    if (allDone) return "CLOSED";
+    if (anyTouched) return "PARTIAL";
+    return "OPEN";
+}
+
 // =====================
 // ROUTES
 // =====================
@@ -325,6 +360,8 @@ export async function GET() {
         // 1) Load all tagged RFIDs
         const receivingItems = await fetchReceivingItems(base);
         if (!receivingItems.length) return ok([] as ListItem[]);
+
+        const taggedCountByPorId = buildTaggedCountByPorId(receivingItems);
 
         // 2) receiving_items -> POR -> PO
         const porIds = receivingItems
@@ -347,10 +384,12 @@ export async function GET() {
 
         // 3) PO headers + suppliers
         const poHeaders = await fetchPOHeadersByIds(base, poIds);
-        const supplierIds = poHeaders.map((p: any) => toNum(p?.supplier_name)).filter(Boolean);
+        const supplierIds = poHeaders
+            .map((p: any) => toNum(p?.supplier_name))
+            .filter(Boolean);
         const supplierMap = await fetchSupplierNames(base, supplierIds);
 
-        // 4) itemsCount = distinct products in POR per PO
+        // 4) counts
         const itemsCountByPo = new Map<number, number>();
         const branchCountByPo = new Map<number, number>();
 
@@ -365,7 +404,7 @@ export async function GET() {
             branchCountByPo.set(poId, Array.from(branches).filter(Boolean).length);
         }
 
-        // 5) Build list
+        // 5) Build list (✅ status based on POR + tagged RFIDs)
         const list: ListItem[] = poHeaders.map((po: any) => {
             const poId = toNum(po?.purchase_order_id);
             const poNumber = toStr(po?.purchase_order_no, String(poId));
@@ -374,7 +413,7 @@ export async function GET() {
             const supplierName = sid ? toStr(supplierMap.get(sid), "—") : "—";
 
             const porForPo = porByPo.get(poId) ?? [];
-            const status = statusFrom(po, porForPo);
+            const status = statusFromReceiving(porForPo, taggedCountByPorId);
 
             return {
                 id: String(poId),
@@ -384,7 +423,7 @@ export async function GET() {
                 totalAmount: toNum(po?.total_amount ?? 0),
                 currency: "PHP",
                 itemsCount: itemsCountByPo.get(poId) ?? 0,
-                branchesCount: branchCountByPo.get(poId) ?? 0, // ✅ real branch count
+                branchesCount: branchCountByPo.get(poId) ?? 0,
             };
         });
 
@@ -412,7 +451,7 @@ export async function POST(req: NextRequest) {
 
             const poUrl =
                 `${base}/items/${PO_COLLECTION}/${encodeURIComponent(String(poId))}` +
-                `?fields=purchase_order_id,purchase_order_no,date,date_encoded,supplier_name,total_amount,date_received,inventory_status`;
+                `?fields=purchase_order_id,purchase_order_no,date,date_encoded,supplier_name,total_amount,inventory_status`;
 
             const pj = await fetchJson(poUrl);
             const po = pj?.data ?? null;
@@ -422,12 +461,16 @@ export async function POST(req: NextRequest) {
             const supplierMap = await fetchSupplierNames(base, sid ? [sid] : []);
             const supplierName = sid ? toStr(supplierMap.get(sid), "—") : "—";
 
-            // POR rows for this PO (this is the real receiving base)
+            // POR rows for this PO
             const porRows = await fetchPORByPOId(base, poId);
-            const porIds = porRows.map((r: any) => toNum(r?.purchase_order_product_id)).filter(Boolean);
+            const porIds = porRows
+                .map((r: any) => toNum(r?.purchase_order_product_id))
+                .filter(Boolean);
 
             // RFIDs under those POR ids
-            const receivingItems = porIds.length ? await fetchReceivingItems(base, porIds) : [];
+            const receivingItems = porIds.length
+                ? await fetchReceivingItems(base, porIds)
+                : [];
             const rfidsByPorId = groupRfidsByPorId(receivingItems);
 
             // products + branches maps
@@ -441,7 +484,8 @@ export async function POST(req: NextRequest) {
             const productsMap = await fetchProductsMap(base, productIds);
             const branchesMap = await fetchBranchesMap(base, branchIds);
 
-            const status = statusFrom(po, porRows);
+            const taggedCountByPorId = buildTaggedCountByPorId(receivingItems);
+            const status = statusFromReceiving(porRows, taggedCountByPorId);
 
             // group items by branch
             const itemsByBranch = new Map<number, POItem[]>();
@@ -454,7 +498,7 @@ export async function POST(req: NextRequest) {
                 const p = pid ? productsMap.get(pid) : null;
                 const rfids = rfidsByPorId.get(porId) ?? [];
 
-                const isReceived =
+                const hasReceiptInfo =
                     Boolean(toStr(r?.received_date)) ||
                     Boolean(toStr(r?.receipt_no)) ||
                     Boolean(toStr(r?.receipt_date));
@@ -466,12 +510,12 @@ export async function POST(req: NextRequest) {
                     name: toStr(p?.product_name, `Product #${pid}`),
                     barcode: productDisplayCode(p, pid),
                     uom: "—",
-                    expectedQty: rfids.length, // expected = tagged RFIDs
+                    expectedQty: rfids.length,
                     receivedQty: Math.max(0, toNum(r?.received_quantity ?? 0)),
                     requiresRfid: true,
                     taggedQty: rfids.length,
                     rfids,
-                    isReceived,
+                    isReceived: hasReceiptInfo,
                 };
 
                 const arr = itemsByBranch.get(bid) ?? [];
@@ -479,13 +523,17 @@ export async function POST(req: NextRequest) {
                 itemsByBranch.set(bid, arr);
             }
 
-            const allocations = Array.from(itemsByBranch.entries()).map(([bid, items]) => ({
-                branch: {
-                    id: bid ? String(bid) : "unassigned",
-                    name: bid ? toStr(branchesMap.get(bid), `Branch ${bid}`) : "Unassigned",
-                },
-                items,
-            }));
+            const allocations = Array.from(itemsByBranch.entries()).map(
+                ([bid, items]) => ({
+                    branch: {
+                        id: bid ? String(bid) : "unassigned",
+                        name: bid
+                            ? toStr(branchesMap.get(bid), `Branch ${bid}`)
+                            : "Unassigned",
+                    },
+                    items,
+                })
+            );
 
             const detail: PurchaseOrderDetail = {
                 id: String(poId),
@@ -502,8 +550,7 @@ export async function POST(req: NextRequest) {
         }
 
         // -------------------------
-        // Backward compat (if UI still calls verify_po)
-        // barcode treated as PO number (purchase_order_no)
+        // Backward compat verify_po
         // -------------------------
         if (action === "verify_po") {
             const barcode = toStr(body?.barcode);
@@ -519,7 +566,6 @@ export async function POST(req: NextRequest) {
             const poId = toNum(row?.purchase_order_id);
             if (!poId) return bad("PO not found.", 404);
 
-            // call open_po logic
             const poReq = { ...req, json: async () => ({ action: "open_po", poId }) } as any;
             return POST(poReq);
         }
@@ -534,7 +580,6 @@ export async function POST(req: NextRequest) {
             if (!poId) return bad("Missing poId.", 400);
             if (!rfid) return bad("Missing rfid.", 400);
 
-            // find RFID
             const riUrl =
                 `${base}/items/${POR_ITEMS_COLLECTION}?limit=1` +
                 `&filter[rfid_code][_eq]=${encodeURIComponent(rfid)}` +
@@ -542,15 +587,18 @@ export async function POST(req: NextRequest) {
 
             const rij = await fetchJson(riUrl);
             const row = Array.isArray(rij?.data) ? rij.data[0] : null;
-            if (!row) return bad("RFID not found. Tag this item first in Tagging of PO.", 404);
+            if (!row)
+                return bad(
+                    "RFID not found. Tag this item first in Tagging of PO.",
+                    404
+                );
 
             const porId = toNum(row?.purchase_order_product_id);
             if (!porId) return bad("RFID record has no purchase_order_product_id.", 400);
 
-            // resolve POR owner + received state
             const porUrl =
                 `${base}/items/${POR_COLLECTION}/${encodeURIComponent(String(porId))}` +
-                `?fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,received_date,receipt_no,receipt_date`;
+                `?fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,received_date,receipt_no,receipt_date,received_quantity`;
 
             const porj = await fetchJson(porUrl);
             const por = porj?.data ?? null;
@@ -562,7 +610,8 @@ export async function POST(req: NextRequest) {
             const alreadyReceived =
                 Boolean(toStr(por?.received_date)) ||
                 Boolean(toStr(por?.receipt_no)) ||
-                Boolean(toStr(por?.receipt_date));
+                Boolean(toStr(por?.receipt_date)) ||
+                Math.max(0, toNum(por?.received_quantity ?? 0)) > 0;
 
             const productId = toNum(por?.product_id ?? row?.product_id);
             const pm = await fetchProductsMap(base, productId ? [productId] : []);
@@ -585,7 +634,7 @@ export async function POST(req: NextRequest) {
         if (action === "save_receipt") {
             const poId = toNum(body?.poId);
             const receiptNo = toStr(body?.receiptNo);
-            const receiptType = toStr(body?.receiptType); // stored? (you can save in POR later if may column)
+            const receiptType = toStr(body?.receiptType);
             const receiptDate = toStr(body?.receiptDate);
             const porCounts = body?.porCounts ?? {};
 
@@ -601,7 +650,6 @@ export async function POST(req: NextRequest) {
 
             if (!entries.length) return bad("No scanned RFIDs to save.", 400);
 
-            // patch each POR row (partial supported because qty can be < tagged)
             for (const it of entries) {
                 if (!it.porId || it.qty <= 0) continue;
 

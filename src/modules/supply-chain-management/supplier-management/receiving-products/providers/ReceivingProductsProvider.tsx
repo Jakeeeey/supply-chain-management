@@ -27,6 +27,7 @@ export type ReceivingPOItem = {
     requiresRfid: true;
     taggedQty: number;
     rfids?: string[];
+    isReceived?: boolean;
 };
 
 export type ReceivingPODetail = {
@@ -62,17 +63,22 @@ type ActivityRow = {
 };
 
 type Ctx = {
-    // left list
+    // ✅ list (keep both naming styles to avoid breaking UI)
     list: ReceivingListItem[];
+    poList: ReceivingListItem[];
+
     listLoading: boolean;
     listError: string;
     refreshList: () => Promise<void>;
-    openPO: (poId: string) => Promise<void>;
 
-    // selection (your workbench expects selectedPO)
+    // ✅ selection
     selectedPO: ReceivingPODetail | null;
 
-    // step 0 compat (optional)
+    // ✅ open helpers (keep both)
+    openPO: (poId: string) => Promise<void>;
+    selectAndVerifyPO: (a: string, b?: string) => Promise<void>;
+
+    // step 0 compat (Scan PO)
     poBarcode: string;
     setPoBarcode: (v: string) => void;
     verifyPO: () => Promise<void>;
@@ -109,7 +115,9 @@ const ReceivingProductsContext = React.createContext<Ctx | null>(null);
 async function asJson(r: Response) {
     const j = await r.json().catch(() => ({}));
     if (!r.ok) {
-        throw new Error(j?.error || j?.errors?.[0]?.message || `Request failed: ${r.status}`);
+        throw new Error(
+            j?.error || j?.errors?.[0]?.message || `Request failed: ${r.status}`
+        );
     }
     return j;
 }
@@ -122,12 +130,24 @@ function todayYMD() {
     return `${yyyy}-${mm}-${dd}`;
 }
 
-export function ReceivingProductsProvider({ children }: { children: React.ReactNode }) {
+function genReceiptNo() {
+    return `REC-${String(Math.floor(Math.random() * 9000) + 1000)}`;
+}
+
+const API_URL = "/api/scm/supplier-management/receiving-products";
+
+export function ReceivingProductsProvider({
+                                              children,
+                                          }: {
+    children: React.ReactNode;
+}) {
     const [list, setList] = React.useState<ReceivingListItem[]>([]);
     const [listLoading, setListLoading] = React.useState(false);
     const [listError, setListError] = React.useState("");
 
-    const [selectedPO, setSelectedPO] = React.useState<ReceivingPODetail | null>(null);
+    const [selectedPO, setSelectedPO] = React.useState<ReceivingPODetail | null>(
+        null
+    );
 
     // step 0 compat
     const [poBarcode, setPoBarcode] = React.useState("");
@@ -142,9 +162,13 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
     const [rfid, setRfid] = React.useState("");
     const [strict, setStrict] = React.useState(true);
     const [scanError, setScanError] = React.useState("");
-    const [lastMatched, setLastMatched] = React.useState<ScanRFIDResult | null>(null);
+    const [lastMatched, setLastMatched] = React.useState<ScanRFIDResult | null>(
+        null
+    );
     const [activity, setActivity] = React.useState<ActivityRow[]>([]);
-    const [scannedCountByPorId, setScannedCountByPorId] = React.useState<Record<string, number>>({});
+    const [scannedCountByPorId, setScannedCountByPorId] = React.useState<
+        Record<string, number>
+    >({});
 
     const [savingReceipt, setSavingReceipt] = React.useState(false);
     const [saveError, setSaveError] = React.useState("");
@@ -153,11 +177,12 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
         setListLoading(true);
         setListError("");
         try {
-            const r = await fetch("/api/scm/supplier-management/receiving-products", { cache: "no-store" });
+            const r = await fetch(API_URL, { cache: "no-store" });
             const j = await asJson(r);
             setList(Array.isArray(j?.data) ? j.data : []);
         } catch (e: any) {
             setListError(String(e?.message ?? e));
+            setList([]);
         } finally {
             setListLoading(false);
         }
@@ -176,61 +201,128 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
         setRfid("");
     }, []);
 
-    const openPO = React.useCallback(
+    // ---------- internal open helpers ----------
+    const openPOById = React.useCallback(
         async (poId: string) => {
             setVerifyError("");
+            setListError("");
             resetSession();
 
-            try {
-                const r = await fetch("/api/scm/supplier-management/receiving-products", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ action: "open_po", poId }),
-                });
-                const j = await asJson(r);
-                setSelectedPO(j?.data ?? null);
+            const id = String(poId ?? "").trim();
+            if (!id) return;
 
-                // auto-fill receipt defaults
-                setReceiptDate(todayYMD());
-                setReceiptNo(`REC-${String(Math.floor(Math.random() * 9000) + 1000)}`);
-                setReceiptType(""); // user must pick
+            const r = await fetch(API_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "open_po", poId: id }),
+            });
+            const j = await asJson(r);
 
-                // keep barcode blank, but set for reference
-                setPoBarcode(j?.data?.poNumber ?? "");
-            } catch (e: any) {
-                setListError(String(e?.message ?? e));
-            }
+            const detail = (j?.data ?? null) as ReceivingPODetail | null;
+            setSelectedPO(detail);
+
+            // auto-fill receipt defaults (per your flow)
+            setReceiptDate(todayYMD());
+            setReceiptNo(genReceiptNo());
+            setReceiptType(""); // user must pick
+
+            // keep barcode in sync for Scan PO step
+            setPoBarcode(detail?.poNumber ?? "");
         },
         [resetSession]
     );
 
-    // optional: verify by PO number if user types
-    const verifyPO = React.useCallback(async () => {
-        setVerifyError("");
-        resetSession();
+    const openPOByBarcode = React.useCallback(
+        async (barcode: string) => {
+            setVerifyError("");
+            setListError("");
+            resetSession();
 
-        const code = String(poBarcode ?? "").trim();
-        if (!code) {
-            setVerifyError("Enter/select PO first.");
-            return;
-        }
+            const code = String(barcode ?? "").trim();
+            if (!code) {
+                setVerifyError("Enter/select PO first.");
+                return;
+            }
 
-        try {
-            const r = await fetch("/api/scm/supplier-management/receiving-products", {
+            const r = await fetch(API_URL, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ action: "verify_po", barcode: code }),
             });
             const j = await asJson(r);
-            setSelectedPO(j?.data ?? null);
+
+            const detail = (j?.data ?? null) as ReceivingPODetail | null;
+            setSelectedPO(detail);
 
             setReceiptDate(todayYMD());
-            setReceiptNo(`REC-${String(Math.floor(Math.random() * 9000) + 1000)}`);
+            setReceiptNo(genReceiptNo());
             setReceiptType("");
+
+            setPoBarcode(code);
+        },
+        [resetSession]
+    );
+
+    // ---------- exposed APIs ----------
+    const openPO = React.useCallback(
+        async (poId: string) => {
+            try {
+                await openPOById(poId);
+            } catch (e: any) {
+                setListError(String(e?.message ?? e));
+            }
+        },
+        [openPOById]
+    );
+
+    /**
+     * ✅ Used by AvailableForReceiving.tsx
+     * Supports:
+     * - selectAndVerifyPO(poNumber)
+     * - selectAndVerifyPO(poId, poNumber)
+     * - selectAndVerifyPO(poId) if item.id is passed
+     */
+    const selectAndVerifyPO = React.useCallback(
+        async (a: string, b?: string) => {
+            try {
+                const first = String(a ?? "").trim();
+                const second = typeof b === "string" ? String(b).trim() : "";
+
+                // If passed (poId, poNumber) -> open by id
+                if (second) {
+                    setPoBarcode(second);
+                    await openPOById(first);
+                    return;
+                }
+
+                // If first matches a list item id, treat as poId
+                const hitById = (list ?? []).find((x) => String(x?.id) === first);
+                if (hitById) {
+                    setPoBarcode(hitById.poNumber);
+                    await openPOById(hitById.id);
+                    return;
+                }
+
+                // Otherwise treat as barcode/po number (verify_po)
+                setPoBarcode(first);
+                await openPOByBarcode(first);
+            } catch (e: any) {
+                // prefer verify error if using barcode, else listError
+                const msg = String(e?.message ?? e);
+                setVerifyError(msg);
+            }
+        },
+        [list, openPOByBarcode, openPOById]
+    );
+
+    // optional: Scan PO step button
+    const verifyPO = React.useCallback(async () => {
+        try {
+            await openPOByBarcode(poBarcode);
         } catch (e: any) {
             setVerifyError(String(e?.message ?? e));
         }
-    }, [poBarcode, resetSession]);
+    }, [openPOByBarcode, poBarcode]);
 
     const scanRFID = React.useCallback(async () => {
         setScanError("");
@@ -249,7 +341,7 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
         }
 
         try {
-            const r = await fetch("/api/scm/supplier-management/receiving-products", {
+            const r = await fetch(API_URL, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ action: "scan_rfid", poId, rfid: value }),
@@ -275,8 +367,14 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
                 return;
             }
 
-            // increment per POR
             const porId = String(data?.porId ?? "");
+            if (!porId) {
+                setScanError("Invalid scan result (missing porId).");
+                setRfid("");
+                return;
+            }
+
+            // increment per POR
             setScannedCountByPorId((prev) => ({
                 ...(prev ?? {}),
                 [porId]: (prev?.[porId] ?? 0) + 1,
@@ -310,11 +408,12 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
         if (!receiptDate.trim()) return setSaveError("Receipt Date is required.");
 
         const counts = scannedCountByPorId ?? {};
-        if (!Object.keys(counts).length) return setSaveError("Scan at least 1 RFID before saving.");
+        if (!Object.keys(counts).length)
+            return setSaveError("Scan at least 1 RFID before saving.");
 
         setSavingReceipt(true);
         try {
-            const r = await fetch("/api/scm/supplier-management/receiving-products", {
+            const r = await fetch(API_URL, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -329,7 +428,10 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
             const j = await asJson(r);
 
             const detail = j?.data?.detail ?? null;
-            if (detail) setSelectedPO(detail);
+            if (detail) {
+                setSelectedPO(detail);
+                setPoBarcode(detail?.poNumber ?? "");
+            }
 
             // refresh list statuses
             refreshList();
@@ -341,22 +443,39 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
         } finally {
             setSavingReceipt(false);
         }
-    }, [selectedPO, receiptNo, receiptType, receiptDate, scannedCountByPorId, refreshList, resetSession]);
+    }, [
+        selectedPO,
+        receiptNo,
+        receiptType,
+        receiptDate,
+        scannedCountByPorId,
+        refreshList,
+        resetSession,
+    ]);
 
     const value: Ctx = {
+        // list
         list,
+        poList: list,
+
         listLoading,
         listError,
         refreshList,
-        openPO,
 
+        // selection
         selectedPO,
 
+        // open helpers
+        openPO,
+        selectAndVerifyPO,
+
+        // scan po
         poBarcode,
-        setPoBarcode,
+        setPoBarcode: (v: string) => setPoBarcode(v),
         verifyPO,
         verifyError,
 
+        // receipt
         receiptNo,
         setReceiptNo,
         receiptType,
@@ -364,6 +483,7 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
         receiptDate,
         setReceiptDate,
 
+        // scan rfid
         rfid,
         setRfid,
         strict,
@@ -381,11 +501,18 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
         saveError,
     };
 
-    return <ReceivingProductsContext.Provider value={value}>{children}</ReceivingProductsContext.Provider>;
+    return (
+        <ReceivingProductsContext.Provider value={value}>
+            {children}
+        </ReceivingProductsContext.Provider>
+    );
 }
 
 export function useReceivingProducts() {
     const ctx = React.useContext(ReceivingProductsContext);
-    if (!ctx) throw new Error("useReceivingProducts must be used within ReceivingProductsProvider");
+    if (!ctx)
+        throw new Error(
+            "useReceivingProducts must be used within ReceivingProductsProvider"
+        );
     return ctx;
 }
