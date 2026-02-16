@@ -62,8 +62,14 @@ type ActivityRow = {
     status: "ok" | "warn";
 };
 
+type ReceiptSavedInfo = {
+    poId: string;
+    receiptNo: string;
+    savedAt: number;
+};
+
 type Ctx = {
-    // ✅ list (keep both naming styles to avoid breaking UI)
+    // ✅ list (keep both naming styles)
     list: ReceivingListItem[];
     poList: ReceivingListItem[];
 
@@ -78,7 +84,7 @@ type Ctx = {
     openPO: (poId: string) => Promise<void>;
     selectAndVerifyPO: (a: string, b?: string) => Promise<void>;
 
-    // step 0 compat (Scan PO)
+    // Scan PO step compat
     poBarcode: string;
     setPoBarcode: (v: string) => void;
     verifyPO: () => Promise<void>;
@@ -104,6 +110,10 @@ type Ctx = {
 
     scannedCountByPorId: Record<string, number>;
 
+    // ✅ NEW: receipt saved signal (non-breaking)
+    receiptSaved: ReceiptSavedInfo | null;
+    clearReceiptSaved: () => void;
+
     scanRFID: () => Promise<void>;
     saveReceipt: () => Promise<void>;
     savingReceipt: boolean;
@@ -115,9 +125,7 @@ const ReceivingProductsContext = React.createContext<Ctx | null>(null);
 async function asJson(r: Response) {
     const j = await r.json().catch(() => ({}));
     if (!r.ok) {
-        throw new Error(
-            j?.error || j?.errors?.[0]?.message || `Request failed: ${r.status}`
-        );
+        throw new Error(j?.error || j?.errors?.[0]?.message || `Request failed: ${r.status}`);
     }
     return j;
 }
@@ -136,18 +144,12 @@ function genReceiptNo() {
 
 const API_URL = "/api/scm/supplier-management/receiving-products";
 
-export function ReceivingProductsProvider({
-                                              children,
-                                          }: {
-    children: React.ReactNode;
-}) {
+export function ReceivingProductsProvider({ children }: { children: React.ReactNode }) {
     const [list, setList] = React.useState<ReceivingListItem[]>([]);
     const [listLoading, setListLoading] = React.useState(false);
     const [listError, setListError] = React.useState("");
 
-    const [selectedPO, setSelectedPO] = React.useState<ReceivingPODetail | null>(
-        null
-    );
+    const [selectedPO, setSelectedPO] = React.useState<ReceivingPODetail | null>(null);
 
     // step 0 compat
     const [poBarcode, setPoBarcode] = React.useState("");
@@ -162,16 +164,16 @@ export function ReceivingProductsProvider({
     const [rfid, setRfid] = React.useState("");
     const [strict, setStrict] = React.useState(true);
     const [scanError, setScanError] = React.useState("");
-    const [lastMatched, setLastMatched] = React.useState<ScanRFIDResult | null>(
-        null
-    );
+    const [lastMatched, setLastMatched] = React.useState<ScanRFIDResult | null>(null);
     const [activity, setActivity] = React.useState<ActivityRow[]>([]);
-    const [scannedCountByPorId, setScannedCountByPorId] = React.useState<
-        Record<string, number>
-    >({});
+    const [scannedCountByPorId, setScannedCountByPorId] = React.useState<Record<string, number>>({});
 
     const [savingReceipt, setSavingReceipt] = React.useState(false);
     const [saveError, setSaveError] = React.useState("");
+
+    // ✅ NEW: success signal for UI
+    const [receiptSaved, setReceiptSaved] = React.useState<ReceiptSavedInfo | null>(null);
+    const clearReceiptSaved = React.useCallback(() => setReceiptSaved(null), []);
 
     const refreshList = React.useCallback(async () => {
         setListLoading(true);
@@ -201,12 +203,12 @@ export function ReceivingProductsProvider({
         setRfid("");
     }, []);
 
-    // ---------- internal open helpers ----------
     const openPOById = React.useCallback(
         async (poId: string) => {
             setVerifyError("");
             setListError("");
             resetSession();
+            setReceiptSaved(null);
 
             const id = String(poId ?? "").trim();
             if (!id) return;
@@ -221,12 +223,10 @@ export function ReceivingProductsProvider({
             const detail = (j?.data ?? null) as ReceivingPODetail | null;
             setSelectedPO(detail);
 
-            // auto-fill receipt defaults (per your flow)
             setReceiptDate(todayYMD());
             setReceiptNo(genReceiptNo());
-            setReceiptType(""); // user must pick
+            setReceiptType("");
 
-            // keep barcode in sync for Scan PO step
             setPoBarcode(detail?.poNumber ?? "");
         },
         [resetSession]
@@ -237,6 +237,7 @@ export function ReceivingProductsProvider({
             setVerifyError("");
             setListError("");
             resetSession();
+            setReceiptSaved(null);
 
             const code = String(barcode ?? "").trim();
             if (!code) {
@@ -263,7 +264,6 @@ export function ReceivingProductsProvider({
         [resetSession]
     );
 
-    // ---------- exposed APIs ----------
     const openPO = React.useCallback(
         async (poId: string) => {
             try {
@@ -275,27 +275,18 @@ export function ReceivingProductsProvider({
         [openPOById]
     );
 
-    /**
-     * ✅ Used by AvailableForReceiving.tsx
-     * Supports:
-     * - selectAndVerifyPO(poNumber)
-     * - selectAndVerifyPO(poId, poNumber)
-     * - selectAndVerifyPO(poId) if item.id is passed
-     */
     const selectAndVerifyPO = React.useCallback(
         async (a: string, b?: string) => {
             try {
                 const first = String(a ?? "").trim();
                 const second = typeof b === "string" ? String(b).trim() : "";
 
-                // If passed (poId, poNumber) -> open by id
                 if (second) {
                     setPoBarcode(second);
                     await openPOById(first);
                     return;
                 }
 
-                // If first matches a list item id, treat as poId
                 const hitById = (list ?? []).find((x) => String(x?.id) === first);
                 if (hitById) {
                     setPoBarcode(hitById.poNumber);
@@ -303,19 +294,15 @@ export function ReceivingProductsProvider({
                     return;
                 }
 
-                // Otherwise treat as barcode/po number (verify_po)
                 setPoBarcode(first);
                 await openPOByBarcode(first);
             } catch (e: any) {
-                // prefer verify error if using barcode, else listError
-                const msg = String(e?.message ?? e);
-                setVerifyError(msg);
+                setVerifyError(String(e?.message ?? e));
             }
         },
         [list, openPOByBarcode, openPOById]
     );
 
-    // optional: Scan PO step button
     const verifyPO = React.useCallback(async () => {
         try {
             await openPOByBarcode(poBarcode);
@@ -329,16 +316,10 @@ export function ReceivingProductsProvider({
         setLastMatched(null);
 
         const poId = selectedPO?.id;
-        if (!poId) {
-            setScanError("Select a PO first.");
-            return;
-        }
+        if (!poId) return setScanError("Select a PO first.");
 
         const value = rfid.trim();
-        if (!value) {
-            setScanError("Scan RFID first.");
-            return;
-        }
+        if (!value) return setScanError("Scan RFID first.");
 
         try {
             const r = await fetch(API_URL, {
@@ -349,7 +330,6 @@ export function ReceivingProductsProvider({
             const j = await asJson(r);
             const data = j?.data as ScanRFIDResult;
 
-            // strict rules (safe)
             if (strict && data?.alreadyReceived) {
                 setActivity((prev) => [
                     {
@@ -374,7 +354,6 @@ export function ReceivingProductsProvider({
                 return;
             }
 
-            // increment per POR
             setScannedCountByPorId((prev) => ({
                 ...(prev ?? {}),
                 [porId]: (prev?.[porId] ?? 0) + 1,
@@ -408,8 +387,7 @@ export function ReceivingProductsProvider({
         if (!receiptDate.trim()) return setSaveError("Receipt Date is required.");
 
         const counts = scannedCountByPorId ?? {};
-        if (!Object.keys(counts).length)
-            return setSaveError("Scan at least 1 RFID before saving.");
+        if (!Object.keys(counts).length) return setSaveError("Scan at least 1 RFID before saving.");
 
         setSavingReceipt(true);
         try {
@@ -433,28 +411,19 @@ export function ReceivingProductsProvider({
                 setPoBarcode(detail?.poNumber ?? "");
             }
 
-            // refresh list statuses
             refreshList();
-
-            // clear session scans
             resetSession();
+
+            // ✅ mark success for UI
+            setReceiptSaved({ poId: String(poId), receiptNo: receiptNo.trim(), savedAt: Date.now() });
         } catch (e: any) {
             setSaveError(String(e?.message ?? e));
         } finally {
             setSavingReceipt(false);
         }
-    }, [
-        selectedPO,
-        receiptNo,
-        receiptType,
-        receiptDate,
-        scannedCountByPorId,
-        refreshList,
-        resetSession,
-    ]);
+    }, [selectedPO, receiptNo, receiptType, receiptDate, scannedCountByPorId, refreshList, resetSession]);
 
     const value: Ctx = {
-        // list
         list,
         poList: list,
 
@@ -462,20 +431,16 @@ export function ReceivingProductsProvider({
         listError,
         refreshList,
 
-        // selection
         selectedPO,
 
-        // open helpers
         openPO,
         selectAndVerifyPO,
 
-        // scan po
         poBarcode,
         setPoBarcode: (v: string) => setPoBarcode(v),
         verifyPO,
         verifyError,
 
-        // receipt
         receiptNo,
         setReceiptNo,
         receiptType,
@@ -483,7 +448,6 @@ export function ReceivingProductsProvider({
         receiptDate,
         setReceiptDate,
 
-        // scan rfid
         rfid,
         setRfid,
         strict,
@@ -495,24 +459,20 @@ export function ReceivingProductsProvider({
 
         scannedCountByPorId: scannedCountByPorId ?? {},
 
+        receiptSaved,
+        clearReceiptSaved,
+
         scanRFID,
         saveReceipt,
         savingReceipt,
         saveError,
     };
 
-    return (
-        <ReceivingProductsContext.Provider value={value}>
-            {children}
-        </ReceivingProductsContext.Provider>
-    );
+    return <ReceivingProductsContext.Provider value={value}>{children}</ReceivingProductsContext.Provider>;
 }
 
 export function useReceivingProducts() {
     const ctx = React.useContext(ReceivingProductsContext);
-    if (!ctx)
-        throw new Error(
-            "useReceivingProducts must be used within ReceivingProductsProvider"
-        );
+    if (!ctx) throw new Error("useReceivingProducts must be used within PostingOfPoProvider");
     return ctx;
 }

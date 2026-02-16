@@ -92,7 +92,10 @@ function ok(data: any, status = 200) {
     return NextResponse.json({ data }, { status });
 }
 function bad(error: string, status = 400, extra?: any) {
-    return NextResponse.json(DEBUG ? { error, debug: extra } : { error }, { status });
+    return NextResponse.json(
+        DEBUG ? { error, debug: extra } : { error },
+        { status }
+    );
 }
 function toStr(v: any, fb = "") {
     const s = String(v ?? "").trim();
@@ -143,7 +146,6 @@ async function fetchSuppliersMapByIds(base: string, supplierIds: number[]) {
     const uniq = Array.from(new Set((supplierIds || []).filter(Boolean)));
     if (!uniq.length) return map;
 
-    // ✅ field-safe: no ap_balance, no name
     const url =
         `${base}/items/${SUPPLIERS_COLLECTION}?limit=-1` +
         `&filter[id][_in]=${encodeURIComponent(uniq.join(","))}` +
@@ -186,7 +188,6 @@ async function fetchProductsMapByIds(base: string, productIds: number[]) {
 // FETCHERS
 // =====================
 async function fetchApprovedPOs(base: string) {
-    // keep your "approved-ish" rules
     const qs = [
         "limit=-1",
         "sort=-date_encoded",
@@ -270,7 +271,7 @@ async function fetchOpenPORowsByPOId(base: string, poId: number) {
 
 type ReceivingItemRow = {
     receiving_item_id: number;
-    purchase_order_product_id: number; // FK -> purchase_order_receiving.purchase_order_product_id
+    purchase_order_product_id: number; // FK -> purchase_order_receiving.purchase_order_product_id (new)
     product_id: number;
     rfid_code: string;
     created_at: string;
@@ -288,14 +289,64 @@ async function fetchReceivingItemsByPORIds(base: string, porIds: number[]) {
     return (j?.data ?? []) as ReceivingItemRow[];
 }
 
-async function isRfidExistsAnywhere(base: string, rfid: string) {
+// ✅ new: fetch existing RFID row (if any)
+async function fetchExistingRfidRow(base: string, rfid: string): Promise<ReceivingItemRow | null> {
     const url =
         `${base}/items/${RECEIVING_ITEMS_COLLECTION}?limit=1` +
+        `&sort=-created_at` +
         `&filter[rfid_code][_eq]=${encodeURIComponent(rfid)}` +
-        `&fields=receiving_item_id`;
+        `&fields=receiving_item_id,purchase_order_product_id,product_id,rfid_code,created_at`;
 
     const j = await fetchJson(url);
-    return Array.isArray(j?.data) && j.data.length > 0;
+    const row = Array.isArray(j?.data) ? j.data[0] : null;
+    return row ?? null;
+}
+
+// ✅ new: resolve owner of existing receiving_item.purchase_order_product_id
+// tries POR first, then POP for backward-compat (in case older data pointed to purchase_order_products)
+async function resolveOwnerOfReceivingItem(base: string, purchaseOrderProductId: number) {
+    const id = toNum(purchaseOrderProductId);
+    if (!id) return null;
+
+    // 1) Try purchase_order_receiving/<id>
+    try {
+        const porUrl =
+            `${base}/items/${PO_RECEIVING_COLLECTION}/${encodeURIComponent(String(id))}` +
+            `?fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,receipt_no,isPosted`;
+        const j = await fetchJson(porUrl);
+        const por = j?.data ?? null;
+
+        const poId = toNum(por?.purchase_order_id);
+        const productId = toNum(por?.product_id);
+        const branchId = toNum(por?.branch_id);
+
+        if (poId && productId && branchId) {
+            return { kind: "POR" as const, poId, productId, branchId };
+        }
+    } catch {
+        // ignore
+    }
+
+    // 2) Try purchase_order_products/<id> (old mapping)
+    try {
+        const popUrl =
+            `${base}/items/${PO_PRODUCTS_COLLECTION}/${encodeURIComponent(String(id))}` +
+            `?fields=purchase_order_product_id,purchase_order_id,product_id,branch_id`;
+        const j2 = await fetchJson(popUrl);
+        const pop = j2?.data ?? null;
+
+        const poId = toNum(pop?.purchase_order_id);
+        const productId = toNum(pop?.product_id);
+        const branchId = toNum(pop?.branch_id);
+
+        if (poId && productId && branchId) {
+            return { kind: "POP" as const, poId, productId, branchId };
+        }
+    } catch {
+        // ignore
+    }
+
+    return null;
 }
 
 // =====================
@@ -310,7 +361,6 @@ async function ensureOpenReceivingRow(args: {
 }) {
     const { base, poId, productId, branchId } = args;
 
-    // try find existing OPEN row (isPosted=0, receipt_no NULL)
     const findUrl =
         `${base}/items/${PO_RECEIVING_COLLECTION}?limit=1` +
         `&sort=-purchase_order_product_id` +
@@ -331,13 +381,11 @@ async function ensureOpenReceivingRow(args: {
         };
     }
 
-    // create new row (required NOT NULL fields per SQL)
     const insertUrl = `${base}/items/${PO_RECEIVING_COLLECTION}`;
     const payload = {
         purchase_order_id: poId,
         product_id: productId,
 
-        // required columns
         branch_id: branchId,
         received_quantity: 0,
         unit_price: args.unitPrice || 0,
@@ -346,8 +394,6 @@ async function ensureOpenReceivingRow(args: {
         withholding_amount: 0,
         total_amount: 0,
         isPosted: 0,
-
-        // optional columns ok to omit: receipt_no, receipt_date, received_date, lot_no, expiry_date, discount_type
     };
 
     dlog("Creating purchase_order_receiving row:", payload);
@@ -376,7 +422,6 @@ async function patchPORReceivedQty(base: string, porId: number, receivedQty: num
 }
 
 async function patchPOProductsReceivedQty(base: string, popId: number, receivedQty: number) {
-    // optional but useful for downstream
     const url = `${base}/items/${PO_PRODUCTS_COLLECTION}/${encodeURIComponent(String(popId))}`;
     await fetchJson(url, {
         method: "PATCH",
@@ -406,7 +451,7 @@ async function updatePOStatus(base: string, poId: number, detail: TaggingPODetai
 }
 
 // =====================
-// DETAIL BUILDER (reads PO + PO_PRODUCTS + OPEN PO_RECEIVING + RECEIVING_ITEMS)
+// DETAIL BUILDER
 // =====================
 async function buildDetail(base: string, poId: number): Promise<TaggingPODetail> {
     const headerUrl =
@@ -431,10 +476,8 @@ async function buildDetail(base: string, poId: number): Promise<TaggingPODetail>
     );
     const productsMap = await fetchProductsMapByIds(base, productIds);
 
-    // open receiving rows (isPosted=0, receipt_no null)
     const openPORows = await fetchOpenPORowsByPOId(base, poId);
 
-    // map (product_id, branch_id) -> porId
     const porByKey = new Map<string, number>();
     const porIds: number[] = [];
     for (const r of openPORows) {
@@ -451,7 +494,6 @@ async function buildDetail(base: string, poId: number): Promise<TaggingPODetail>
 
     const receivingItems = await fetchReceivingItemsByPORIds(base, porIds);
 
-    // count tags per porId
     const taggedByPorId = new Map<number, number>();
     for (const it of receivingItems) {
         const porId = toNum(it.purchase_order_product_id);
@@ -459,7 +501,6 @@ async function buildDetail(base: string, poId: number): Promise<TaggingPODetail>
         taggedByPorId.set(porId, (taggedByPorId.get(porId) ?? 0) + 1);
     }
 
-    // build items based on purchase_order_products (expected), counts based on receiving_items (tagged)
     const items: TaggingPOItem[] = poProducts.map((line) => {
         const pid = toNum(line.product_id);
         const bid = toNum(line.branch_id);
@@ -472,8 +513,7 @@ async function buildDetail(base: string, poId: number): Promise<TaggingPODetail>
         const taggedQty = porId ? taggedByPorId.get(porId) ?? 0 : 0;
 
         return {
-            // keep the SAME item.id strategy as before (POP id) so UI flow doesn't change
-            id: String(line.purchase_order_product_id),
+            id: String(line.purchase_order_product_id), // POP id (keep)
             sku,
             name: p ? productName(p) : `Product #${pid || line.product_id}`,
             expectedQty: Math.max(0, toNum(line.ordered_quantity)),
@@ -525,17 +565,14 @@ function resolvePoProductLine(args: {
         const codes = p ? productCodes(p).map((c) => c.toLowerCase()) : [];
         const hasCodes = codes.length > 0;
 
-        // ✅ strict: match real scan codes when present
         if (hasCodes) {
             if (codes.some((c) => c === scanned)) return ln;
             continue;
         }
 
-        // ✅ if no barcode/product_code exists, allow product_id scan even if strict=true
         if (String(pid).toLowerCase() === scanned) return ln;
     }
 
-    // non-strict fallback: allow product_id match even if codes exist
     if (!args.strict) {
         for (const ln of args.poProducts) {
             const pid = toNum(ln.product_id);
@@ -558,7 +595,6 @@ export async function GET() {
 
         const poProducts = await fetchPOProductsByPOIds(base, poIds);
 
-        // expected totals by PO
         const expectedByPo = new Map<number, number>();
         for (const line of poProducts) {
             const poId = toNum(line.purchase_order_id);
@@ -569,7 +605,6 @@ export async function GET() {
             );
         }
 
-        // tagged totals: count receiving_items under OPEN purchase_order_receiving rows
         const openPORows = await fetchOpenPORowsByPOIds(base, poIds);
         const porIdToPoId = new Map<number, number>();
         const porIds: number[] = [];
@@ -592,7 +627,6 @@ export async function GET() {
             taggedByPo.set(poId, (taggedByPo.get(poId) ?? 0) + 1);
         }
 
-        // supplier names
         const supplierIds = rows.map((r: any) => toNum(r?.supplier_name)).filter(Boolean);
         const suppliersMap = await fetchSuppliersMapByIds(base, supplierIds);
 
@@ -648,10 +682,6 @@ export async function POST(req: NextRequest) {
             if (!sku) return bad("Missing sku/barcode/product_code.", 400);
             if (!rfid) return bad("Missing rfid.", 400);
 
-            // global RFID uniqueness
-            const exists = await isRfidExistsAnywhere(base, rfid);
-            if (exists) return bad("RFID already exists in receiving items.", 400);
-
             // load PO lines + products for matching
             const poProducts = await fetchPOProductsByPOId(base, poId);
             const productIds = Array.from(
@@ -671,7 +701,8 @@ export async function POST(req: NextRequest) {
                     poId,
                     sku,
                     strict,
-                    hint: "Strict requires barcode/product_code match (unless product has no codes, then product_id is allowed).",
+                    hint:
+                        "Strict requires barcode/product_code match (unless product has no codes, then product_id is allowed).",
                 });
             }
             if (!line) return bad(`SKU '${sku}' not found in this PO.`, 400);
@@ -690,6 +721,43 @@ export async function POST(req: NextRequest) {
                 );
             }
 
+            // ✅ RFID idempotency / conflict detection
+            const existing = await fetchExistingRfidRow(base, rfid);
+            if (existing) {
+                const existingLinkId = toNum(existing.purchase_order_product_id);
+                const owner = await resolveOwnerOfReceivingItem(base, existingLinkId);
+
+                if (!owner) {
+                    return bad(
+                        "RFID already exists but owner cannot be resolved. Please contact admin to clean old data.",
+                        409,
+                        { rfid, existingLinkId }
+                    );
+                }
+
+                const sameTarget =
+                    owner.poId === poId &&
+                    owner.productId === productId &&
+                    owner.branchId === branchId;
+
+                // ✅ SAME PO + SAME product + SAME branch => treat as success (no error)
+                if (sameTarget) {
+                    const detail = await buildDetail(base, poId);
+                    return ok(detail);
+                }
+
+                // ❌ conflict with other PO/item
+                return bad(
+                    "RFID already exists and is assigned to a different PO/item.",
+                    409,
+                    {
+                        rfid,
+                        attempted: { poId, productId, branchId },
+                        existingOwner: owner,
+                    }
+                );
+            }
+
             // do not exceed expected qty
             const currentDetail = await buildDetail(base, poId);
             const currentItem = currentDetail.items.find((x) => x.id === String(popId));
@@ -703,7 +771,7 @@ export async function POST(req: NextRequest) {
                 });
             }
 
-            // ✅ Ensure OPEN purchase_order_receiving row exists (THIS FIXES FK)
+            // Ensure OPEN purchase_order_receiving row exists
             const ensured = await ensureOpenReceivingRow({
                 base,
                 poId,
@@ -714,10 +782,10 @@ export async function POST(req: NextRequest) {
 
             const porId = ensured.porId;
 
-            // insert into purchase_order_receiving_items (FK -> purchase_order_receiving.purchase_order_product_id)
+            // insert into purchase_order_receiving_items
             const insertUrl = `${base}/items/${RECEIVING_ITEMS_COLLECTION}`;
             const insertPayload = {
-                purchase_order_product_id: porId, // ✅ correct FK target
+                purchase_order_product_id: porId,
                 product_id: productId,
                 rfid_code: rfid,
             };
@@ -729,7 +797,6 @@ export async function POST(req: NextRequest) {
                 body: JSON.stringify(insertPayload),
             });
 
-            // rebuild detail for updated counts
             const updated = await buildDetail(base, poId);
 
             // update received qty fields for downstream
@@ -739,7 +806,6 @@ export async function POST(req: NextRequest) {
             await patchPORReceivedQty(base, porId, newTagged);
             await patchPOProductsReceivedQty(base, popId, newTagged);
 
-            // update PO status (kept)
             await updatePOStatus(base, poId, updated);
 
             return ok(updated);

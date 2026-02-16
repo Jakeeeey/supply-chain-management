@@ -9,7 +9,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { useReceivingProducts } from "../../providers/ReceivingProductsProvider";
 
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+
 export function ScanProductsStep() {
+    const router = useRouter();
+
     const {
         selectedPO,
         rfid,
@@ -24,13 +29,19 @@ export function ScanProductsStep() {
         savingReceipt,
         scannedCountByPorId,
         saveError,
+
+        receiptSaved,
+        clearReceiptSaved,
     } = useReceivingProducts();
 
-    // ✅ HARD SAFE: always a plain object
+    // ✅ toast once when provider marks saved
+    React.useEffect(() => {
+        if (!receiptSaved) return;
+        toast.success(`Receipt ${receiptSaved.receiptNo} saved successfully.`);
+    }, [receiptSaved?.savedAt]); // depend on savedAt so it won't spam
+
     const safeCounts: Record<string, number> =
-        scannedCountByPorId && typeof scannedCountByPorId === "object"
-            ? scannedCountByPorId
-            : {};
+        scannedCountByPorId && typeof scannedCountByPorId === "object" ? scannedCountByPorId : {};
 
     const allItems = React.useMemo(() => {
         const allocs = Array.isArray(selectedPO?.allocations) ? selectedPO!.allocations : [];
@@ -102,6 +113,41 @@ export function ScanProductsStep() {
                     ) : null}
                 </div>
             </Card>
+
+            {/* ✅ show after save */}
+            {receiptSaved ? (
+                <Card className="p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <div className="text-sm font-semibold">Next step</div>
+                            <div className="text-xs text-muted-foreground">
+                                Receipt saved. Proceed to Posting of PO to post this receipt.
+                            </div>
+                        </div>
+
+                        <div className="flex gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => {
+                                    clearReceiptSaved();
+                                }}
+                            >
+                                Stay here
+                            </Button>
+                            <Button
+                                type="button"
+                                onClick={() => {
+                                    clearReceiptSaved();
+                                    router.push("/scm/supplier-management/posting-of-purchase-order");
+                                }}
+                            >
+                                Go to Posting of PO
+                            </Button>
+                        </div>
+                    </div>
+                </Card>
+            ) : null}
 
             <Card className="p-4">
                 <div className="mb-2 flex items-center justify-between">

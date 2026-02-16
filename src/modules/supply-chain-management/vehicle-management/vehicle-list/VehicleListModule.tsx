@@ -1,4 +1,4 @@
-//src/modules/vehicle-management/vehicle-list/ReceivingProductsModule.tsx
+//src/modules/vehicle-management/vehicle-list/PostingOfProductsModule.tsx
 "use client";
 
 import * as React from "react";

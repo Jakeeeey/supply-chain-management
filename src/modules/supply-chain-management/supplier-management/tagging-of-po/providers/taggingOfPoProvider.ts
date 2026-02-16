@@ -5,7 +5,10 @@ const API = "/api/scm/supplier-management/tagging-of-po";
 
 async function asJson(res: Response) {
     const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json?.error ?? "Request failed");
+    if (!res.ok) {
+        // keep exact message from API (409 will now be meaningful)
+        throw new Error(json?.error ?? `Request failed (${res.status})`);
+    }
     return json?.data;
 }
 
@@ -40,5 +43,8 @@ export async function tagItem(opts: {
             strict: opts.strict,
         }),
     });
+
+    // ✅ If same RFID for same PO/product/branch: API now returns 200 with detail (no error)
+    // ❌ If conflict: API returns 409 with clean message
     return await asJson(res);
 }

@@ -34,37 +34,12 @@ export function AvailableForReceiving() {
     const filtered = React.useMemo(() => {
         const s = q.trim().toLowerCase();
         if (!s) return poList ?? [];
-        return (poList ?? []).filter((x: any) => {
+        return (poList ?? []).filter((x) => {
             const a = String(x?.poNumber ?? "").toLowerCase();
             const b = String(x?.supplierName ?? "").toLowerCase();
             return a.includes(s) || b.includes(s);
         });
     }, [poList, q]);
-
-    function handleSelectPO(po: any) {
-        // ✅ Backward/forward compatible:
-        // - some providers accept (poNumber)
-        // - some accept (poId, poNumber)
-        const fn: any = selectAndVerifyPO as any;
-        if (typeof fn !== "function") return;
-
-        const poId = po?.id;
-        const poNumber = po?.poNumber;
-
-        try {
-            if (fn.length >= 2) {
-                fn(poId, poNumber);
-                return;
-            }
-            // old behavior: verify by PO barcode/number
-            fn(poNumber);
-        } catch {
-            // last fallback
-            try {
-                fn(poNumber);
-            } catch {}
-        }
-    }
 
     return (
         <Card className="p-4">
@@ -123,14 +98,15 @@ export function AvailableForReceiving() {
                         No purchase orders available.
                     </div>
                 ) : (
-                    filtered.map((po: any) => {
+                    filtered.map((po) => {
                         const active = selectedPO?.id === po.id;
 
                         return (
                             <button
                                 key={po.id}
                                 type="button"
-                                onClick={() => handleSelectPO(po)}
+                                // ✅ IMPORTANT: pass (poId, poNumber) so provider uses open_po directly
+                                onClick={() => selectAndVerifyPO(po.id, po.poNumber)}
                                 className={cn(
                                     "w-full text-left rounded-xl border border-border p-3 transition",
                                     "hover:bg-muted/40",
@@ -156,10 +132,7 @@ export function AvailableForReceiving() {
                                         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                                             <Badge
                                                 variant="secondary"
-                                                className={cn(
-                                                    "text-[10px] font-bold",
-                                                    statusBadge(po.status)
-                                                )}
+                                                className={cn("text-[10px] font-bold", statusBadge(po.status))}
                                             >
                                                 {po.status}
                                             </Badge>

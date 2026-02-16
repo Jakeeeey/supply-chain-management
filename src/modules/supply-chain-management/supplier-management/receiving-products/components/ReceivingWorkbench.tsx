@@ -23,10 +23,14 @@ export function ReceivingWorkbench() {
     const { selectedPO } = useReceivingProducts();
     const [step, setStep] = React.useState<0 | 1 | 2>(0);
 
-    // ✅ once a PO is selected/verified, move forward automatically
+    // ✅ only auto-advance from 0 -> 1 when PO becomes available.
+    // ✅ if user is already on step 2, do NOT force back to step 1 on selectedPO refresh.
     React.useEffect(() => {
-        if (selectedPO) setStep(1);
-        else setStep(0);
+        setStep((prev) => {
+            if (!selectedPO) return 0;
+            if (prev === 0) return 1;
+            return prev;
+        });
     }, [selectedPO]);
 
     return (

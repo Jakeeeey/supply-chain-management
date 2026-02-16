@@ -10,6 +10,11 @@ function toNum(v: any): number {
     return Number.isFinite(n) ? n : 0;
 }
 
+function toStr(v: any, fb = ""): string {
+    const s = String(v ?? "").trim();
+    return s ? s : fb;
+}
+
 function unwrapData<T>(json: any): T {
     return (json?.data ?? json) as T;
 }
@@ -18,6 +23,23 @@ function unwrapDeep<T>(json: any): T {
     const a: any = unwrapData<any>(json);
     const b: any = unwrapData<any>(a);
     return (b ?? a ?? json) as T;
+}
+
+function normalizeLine(line: any) {
+    const qty = toNum(line?.ordered_quantity ?? line?.expectedQty ?? line?.qty ?? line?.quantity);
+    const unit = toNum(line?.unit_price ?? line?.unitPrice ?? line?.price);
+    const lineTotal = qty * unit;
+
+    return {
+        ...line,
+        ordered_quantity: qty,
+        expectedQty: qty,
+        unit_price: unit,
+        unitPrice: unit,
+        price: unit,
+        line_total: toNum(line?.line_total) || lineTotal,
+        lineTotal: toNum(line?.lineTotal) || lineTotal,
+    };
 }
 
 export async function fetchPendingApprovalPOs(): Promise<PendingApprovalPO[]> {
@@ -30,6 +52,10 @@ export async function fetchPendingApprovalPOs(): Promise<PendingApprovalPO[]> {
     return rows.map((r) => ({
         ...r,
         id: String(r?.id ?? r?.purchase_order_id ?? ""),
+        poNumber: r?.poNumber ?? r?.purchase_order_no ?? r?.purchase_order_no ?? "",
+        supplierName: r?.supplierName ?? r?.supplier_name ?? r?.supplierName ?? "",
+        branchName: r?.branchName ?? r?.branch_name ?? r?.branch ?? "—",
+        date: r?.date ?? r?.date_encoded ?? "—",
     })) as any;
 }
 
@@ -44,11 +70,26 @@ export async function fetchPurchaseOrderDetail(id: string): Promise<PurchaseOrde
 
     const d: any = unwrapDeep<any>(json) ?? {};
 
-    const gross = toNum(d?.gross_amount ?? d?.grossAmount);
-    const disc = toNum(d?.discounted_amount ?? d?.discountAmount);
-    const vat = toNum(d?.vat_amount ?? d?.vatAmount);
-    const ewt = toNum(d?.withholding_tax_amount ?? d?.ewtGoods);
+    // totals
+    const gross = toNum(d?.gross_amount ?? d?.grossAmount ?? d?.subtotal);
+    let discAmt = toNum(d?.discounted_amount ?? d?.discountAmount ?? d?.discount_amount ?? d?.discount_value);
+
+    let discPct = toNum(d?.discount_percent ?? d?.discountPercent ?? d?.discount_rate ?? d?.discountRate);
+    if (!discAmt && discPct > 0 && gross > 0) discAmt = (gross * discPct) / 100;
+    if (!discPct && discAmt > 0 && gross > 0) discPct = (discAmt / gross) * 100;
+
+    const vat = toNum(d?.vat_amount ?? d?.vatAmount ?? d?.vat);
+    const ewt = toNum(d?.withholding_tax_amount ?? d?.ewtGoods ?? d?.ewt_amount);
     const total = toNum(d?.total_amount ?? d?.total);
+
+    // normalize items & allocations for pricing display
+    const items = Array.isArray(d?.items) ? d.items.map(normalizeLine) : [];
+    const allocations = Array.isArray(d?.allocations)
+        ? d.allocations.map((a: any) => ({
+            ...a,
+            items: Array.isArray(a?.items) ? a.items.map(normalizeLine) : [],
+        }))
+        : [];
 
     return {
         ...d,
@@ -56,18 +97,31 @@ export async function fetchPurchaseOrderDetail(id: string): Promise<PurchaseOrde
         purchase_order_id: d?.purchase_order_id ?? d?.id ?? id,
         purchase_order_no: d?.purchase_order_no ?? d?.poNumber ?? d?.purchase_order_no,
 
+        // branch display
+        branchName: d?.branchName ?? d?.branch_name ?? d?.branch?.name ?? "—",
+
+        // supplier display
+        supplierName: d?.supplierName ?? d?.supplier?.name ?? d?.supplierName ?? "",
+
+        // financials
         gross_amount: gross,
-        discounted_amount: disc,
+        discounted_amount: discAmt,
+        discount_percent: discPct,
         vat_amount: vat,
         withholding_tax_amount: ewt,
         total_amount: total,
 
         // duplicates for safety
         grossAmount: gross,
-        discountAmount: disc,
+        discountAmount: discAmt,
+        discountPercent: discPct,
         vatAmount: vat,
         ewtGoods: ewt,
         total: total,
+
+        // normalized collections
+        items,
+        allocations,
     } as any;
 }
 
