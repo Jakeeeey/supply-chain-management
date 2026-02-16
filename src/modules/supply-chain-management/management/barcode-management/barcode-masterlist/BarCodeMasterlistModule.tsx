@@ -101,8 +101,18 @@ export default function BarcodeMasterlistModule() {
     );
   };
 
-  const handleToggleAll = (ids: string[]) => {
-    setSelectedIds(ids);
+  const handleToggleAll = (pageIds: string[]) => {
+    setSelectedIds((prev) => {
+      const allSelected = pageIds.every((id) => prev.includes(id));
+      if (allSelected) {
+        // Deselect: remove only this page's IDs
+        return prev.filter((id) => !pageIds.includes(id));
+      } else {
+        // Select: merge this page's IDs into existing selection
+        const newIds = pageIds.filter((id) => !prev.includes(id));
+        return [...prev, ...newIds];
+      }
+    });
   };
 
   const handleInitiatePrint = () => {
