@@ -56,6 +56,7 @@ interface ScannerModalProps {
   open: boolean;
   product: Product | null;
   allProducts: Product[];
+  allBarcodes: { product_id: string; barcode: string; product_name: string }[];
   barcodeTypes: RefData[];
   weightUnits: RefData[];
   cbmUnits: RefData[];
@@ -67,6 +68,7 @@ export function ScannerModal({
   open,
   product,
   allProducts,
+  allBarcodes,
   barcodeTypes,
   weightUnits,
   cbmUnits,
@@ -219,13 +221,26 @@ export function ScannerModal({
       return;
     }
 
-    const duplicate = allProducts.find(
+    // Check against ALL existing barcodes (linked products)
+    const duplicateLinked = allBarcodes.find(
+      (b) => b.barcode === barcode && b.product_id !== String(product?.product_id),
+    );
+
+    if (duplicateLinked) {
+      toast.error("Duplicate Barcode!", {
+        description: `This barcode is already assigned to: "${duplicateLinked.product_name}"`,
+      });
+      return;
+    }
+
+    // Also check against unlinked products (same session duplicates)
+    const duplicateUnlinked = allProducts.find(
       (p) => p.barcode === barcode && p.product_id !== product?.product_id,
     );
 
-    if (duplicate) {
-      toast.error(`Conflict Detected!`, {
-        description: `Barcode used by: "${duplicate.product_name}"`,
+    if (duplicateUnlinked) {
+      toast.error("Duplicate Barcode!", {
+        description: `Barcode used by: "${duplicateUnlinked.product_name}"`,
       });
       return;
     }

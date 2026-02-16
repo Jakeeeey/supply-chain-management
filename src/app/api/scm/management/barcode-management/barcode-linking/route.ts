@@ -48,6 +48,36 @@ async function proxyRequest(req: NextRequest, method: string) {
   if (method === "PATCH") {
     const body = await req.json();
     try {
+      // SERVER-SIDE UNIQUENESS CHECK: Query Directus for any other product with this barcode
+      if (body.barcode) {
+        const checkUrl = new URL(`${DIRECTUS_URL}/items/products`);
+        checkUrl.searchParams.append("fields", "product_id,product_name,barcode");
+        checkUrl.searchParams.append("filter[barcode][_eq]", body.barcode);
+        checkUrl.searchParams.append("filter[product_id][_neq]", id!);
+        checkUrl.searchParams.append("filter[isActive][_eq]", "1");
+        checkUrl.searchParams.append("limit", "1");
+
+        const checkRes = await fetch(checkUrl.toString(), {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${ACCESS_TOKEN}`,
+          },
+          cache: "no-store",
+        });
+
+        const checkData = await checkRes.json();
+        if (checkData.data && checkData.data.length > 0) {
+          const conflict = checkData.data[0];
+          return json(
+            {
+              error: `Barcode already assigned to: "${conflict.product_name || conflict.product_id}"`,
+            },
+            409,
+          );
+        }
+      }
+
       const res = await fetch(`${DIRECTUS_URL}/items/products/${id}`, {
         method: "PATCH",
         headers: {

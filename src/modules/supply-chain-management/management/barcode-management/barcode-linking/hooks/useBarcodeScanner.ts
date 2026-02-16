@@ -18,6 +18,9 @@ export function useBarcodeScanner() {
   const [weightUnits, setWeightUnits] = useState<RefData[]>([]);
   const [cbmUnits, setCbmUnits] = useState<RefData[]>([]);
 
+  // All existing barcodes for duplicate checking (includes linked products)
+  const [allBarcodes, setAllBarcodes] = useState<{ product_id: string; barcode: string; product_name: string }[]>([]);
+
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
@@ -45,8 +48,20 @@ export function useBarcodeScanner() {
         const productsData = await productsRes.json();
         const suppliersData = await suppliersRes.json();
 
+        const allProductsRaw: Product[] = productsData.data || [];
+
+        // Extract ALL existing barcodes for duplicate checking
+        const existingBarcodes = allProductsRaw
+          .filter((p: Product) => p.barcode && p.barcode.trim() !== "")
+          .map((p: Product) => ({
+            product_id: String(p.product_id),
+            barcode: p.barcode!,
+            product_name: p.product_name || p.description || "Unknown",
+          }));
+        setAllBarcodes(existingBarcodes);
+
         // STRICT FILTER: Must have SKU, Must NOT have Barcode
-        const eligibleProducts = (productsData.data || []).filter(
+        const eligibleProducts = allProductsRaw.filter(
           (p: Product) => {
             const hasSku =
               p.product_code &&
@@ -141,16 +156,36 @@ export function useBarcodeScanner() {
 
       if (!response.ok) {
         const errData = await response.json();
+        if (response.status === 409) {
+          // Server-side duplicate detected
+          toast.error("Duplicate Barcode!", {
+            description: errData.error || "This barcode is already in use.",
+          });
+          setAllProducts((prev) => [...prev, selectedProduct]);
+          return;
+        }
         throw new Error(errData.error || "Update failed");
       }
+
+      // Add the new barcode to the local duplicate-check list
+      setAllBarcodes((prev) => [
+        ...prev,
+        {
+          product_id: String(selectedProduct.product_id),
+          barcode: payload.barcode,
+          product_name: selectedProduct.product_name || "Unknown",
+        },
+      ]);
 
       toast.success(
         "Barcode & Logistics linked successfully! Moved to Masterlist.",
       );
       setSelectedProduct(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Update failed", error);
-      toast.error("Failed to update barcode in database");
+      toast.error("Failed to update barcode", {
+        description: error.message || "Please try again.",
+      });
       setAllProducts((prev) => [...prev, selectedProduct]);
     }
   };
@@ -176,5 +211,6 @@ export function useBarcodeScanner() {
     barcodeTypes,
     weightUnits,
     cbmUnits,
+    allBarcodes,
   };
 }

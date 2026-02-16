@@ -58,6 +58,7 @@ export default function BarCodeScannerModule() {
     barcodeTypes,
     weightUnits,
     cbmUnits,
+    allBarcodes,
   } = useBarcodeScanner();
 
   // UI States for Comboboxes
@@ -369,6 +370,7 @@ export default function BarCodeScannerModule() {
           open={!!selectedProduct}
           product={selectedProduct}
           allProducts={allProducts}
+          allBarcodes={allBarcodes}
           barcodeTypes={barcodeTypes}
           weightUnits={weightUnits}
           cbmUnits={cbmUnits}
