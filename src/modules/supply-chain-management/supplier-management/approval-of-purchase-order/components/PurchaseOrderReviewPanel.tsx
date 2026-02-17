@@ -299,7 +299,7 @@ export default function PurchaseOrderReviewPanel(props: {
 
     return (
         <>
-            <SonnerToaster richColors position="top-right" closeButton />
+            {/*<SonnerToaster richColors position="top-right" closeButton />*/}
 
             <div
                 className={cn(

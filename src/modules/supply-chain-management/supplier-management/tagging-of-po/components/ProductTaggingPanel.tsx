@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import dynamic from "next/dynamic";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,30 +16,10 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
 
 import { cn } from "@/lib/utils";
 import type { TaggingPODetail, TaggingPOItem } from "../types";
-import {
-    ArrowLeft,
-    BadgeCheck,
-    BadgeX,
-    ScanLine,
-    Radio,
-    Camera,
-} from "lucide-react";
-
-// ✅ webcam barcode scanner (camera)
-// docs: default export is BarcodeScannerComponent
-const BarcodeScannerComponent = dynamic(() => import("react-qr-barcode-scanner"), {
-    ssr: false,
-}) as any;
+import { ArrowLeft, BadgeCheck, BadgeX, ScanLine, Radio } from "lucide-react";
 
 function sumExpected(po: TaggingPODetail) {
     return po.items.reduce((a, b) => a + (Number(b.expectedQty) || 0), 0);
@@ -70,19 +49,11 @@ export default function ProductTaggingPanel(props: {
     const skuRef = React.useRef<HTMLInputElement | null>(null);
     const rfidRef = React.useRef<HTMLInputElement | null>(null);
 
-    // ✅ camera scanner dialog state
-    const [scannerOpen, setScannerOpen] = React.useState(false);
-    const [stopStream, setStopStream] = React.useState(false);
-
     React.useEffect(() => {
         setSku("");
         setRfid("");
         setSaving(false);
         setStrict(true);
-
-        // reset scanner when switching PO
-        setScannerOpen(false);
-        setStopStream(false);
     }, [po?.id]);
 
     const matched: TaggingPOItem | null = React.useMemo(() => {
@@ -121,25 +92,6 @@ export default function ProductTaggingPanel(props: {
         }
     }
 
-    function openScanner() {
-        setStopStream(false);
-        setScannerOpen(true);
-    }
-
-    function closeScanner() {
-        setStopStream(true);
-        setTimeout(() => setScannerOpen(false), 0);
-    }
-
-    function applyScannedSku(scanned: string) {
-        const next = String(scanned ?? "").trim();
-        if (!next) return;
-
-        setSku(next);
-        closeScanner();
-        setTimeout(() => rfidRef.current?.focus(), 50);
-    }
-
     return (
         <div className="w-full min-w-0 space-y-4">
             <div className="flex items-center gap-2">
@@ -165,7 +117,7 @@ export default function ProductTaggingPanel(props: {
                 <div className="grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-4 min-w-0">
                     {/* LEFT */}
                     <div className="min-w-0 space-y-4">
-                        {/* ✅ DARK SCAN PANEL (fixed for light mode using arbitrary colors) */}
+                        {/* ✅ DARK SCAN PANEL */}
                         <div
                             className={cn(
                                 "rounded-2xl border border-border shadow-sm overflow-hidden",
@@ -173,6 +125,7 @@ export default function ProductTaggingPanel(props: {
                             )}
                         >
                             <div className="p-5">
+                                {/* ✅ Header: removed Strict badge + Camera Scan button */}
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="space-y-1">
                                         <div className="text-xs font-black uppercase tracking-widest text-[rgba(248,250,252,0.82)]">
@@ -180,24 +133,8 @@ export default function ProductTaggingPanel(props: {
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center gap-2">
-                                        <Badge
-                                            variant="secondary"
-                                            className="bg-[rgba(255,255,255,0.10)] text-[#F8FAFC] border border-[rgba(255,255,255,0.12)] text-[11px] font-black"
-                                        >
-                                            Strict Validation Active
-                                        </Badge>
-
-                                        <Button
-                                            type="button"
-                                            variant="secondary"
-                                            className="h-8 rounded-xl bg-[rgba(255,255,255,0.10)] text-[#F8FAFC] border border-[rgba(255,255,255,0.12)] hover:bg-[rgba(255,255,255,0.14)]"
-                                            onClick={openScanner}
-                                        >
-                                            <Camera className="h-4 w-4 mr-2" />
-                                            Scan
-                                        </Button>
-                                    </div>
+                                    {/* Right-side actions intentionally removed */}
+                                    <div />
                                 </div>
 
                                 <div className="mt-3 grid grid-cols-1 lg:grid-cols-[1fr_1fr_auto] gap-3 items-start">
@@ -252,7 +189,10 @@ export default function ProductTaggingPanel(props: {
 
                                             <div className="flex items-center gap-2">
                                                 <Switch checked={strict} onCheckedChange={setStrict} id="strict" />
-                                                <Label htmlFor="strict" className="text-xs font-bold text-[rgba(248,250,252,0.78)]">
+                                                <Label
+                                                    htmlFor="strict"
+                                                    className="text-xs font-bold text-[rgba(248,250,252,0.78)]"
+                                                >
                                                     Strict
                                                 </Label>
                                             </div>
@@ -436,53 +376,6 @@ export default function ProductTaggingPanel(props: {
                     </div>
                 </div>
             )}
-
-            {/* ✅ Camera Scanner Dialog (shadcn) */}
-            <Dialog
-                open={scannerOpen}
-                onOpenChange={(o) => {
-                    if (o) openScanner();
-                    else closeScanner();
-                }}
-            >
-                <DialogContent className="sm:max-w-[720px]">
-                    <DialogHeader>
-                        <DialogTitle>Scan SKU Barcode</DialogTitle>
-                        <DialogDescription>
-                            Point the camera at the SKU barcode. This will fill the SKU field automatically.
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="rounded-xl border border-border overflow-hidden bg-black">
-                        <div className="p-2">
-                            <div className="text-xs text-muted-foreground mb-2">
-                                Camera must be allowed. Works on https or localhost.
-                            </div>
-
-                            <div className="w-full">
-                                <BarcodeScannerComponent
-                                    width="100%"
-                                    height={380}
-                                    facingMode="environment"
-                                    stopStream={stopStream}
-                                    onUpdate={(err: any, result: any) => {
-                                        if (result?.text) applyScannedSku(result.text);
-                                    }}
-                                    onError={(error: any) => {
-                                        console.error("Barcode scanner error:", error);
-                                    }}
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="flex justify-end gap-2">
-                        <Button type="button" variant="outline" onClick={closeScanner}>
-                            Close
-                        </Button>
-                    </div>
-                </DialogContent>
-            </Dialog>
         </div>
     );
 }

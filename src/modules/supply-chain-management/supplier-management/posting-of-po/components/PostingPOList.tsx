@@ -6,15 +6,34 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { RefreshCw, FileCheck2, ChevronRight, UploadCloud } from "lucide-react";
 import { usePostingOfPo } from "../providers/PostingOfPoProvider";
+import type { POListItem } from "../types";
 
 function statusBadge(status: string) {
     const s = String(status || "").toUpperCase();
-    if (s === "CLOSED") return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20";
-    if (s === "PARTIAL") return "bg-orange-500/15 text-orange-700 dark:text-orange-300 border border-orange-500/20";
+    if (s === "CLOSED")
+        return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20";
+    if (s === "PARTIAL")
+        return "bg-orange-500/15 text-orange-700 dark:text-orange-300 border border-orange-500/20";
     return "bg-primary/15 text-primary border border-primary/20";
 }
 
@@ -37,6 +56,10 @@ export function PostingPOList() {
         postAllReceipts,
         posting,
     } = usePostingOfPo();
+
+    // ✅ confirm dialog state (for the "Post" button)
+    const [confirmPo, setConfirmPo] = React.useState<POListItem | null>(null);
+    const confirmOpen = Boolean(confirmPo);
 
     const filtered = React.useMemo(() => {
         const s = q.trim().toLowerCase();
@@ -63,6 +86,15 @@ export function PostingPOList() {
         return filtered.slice(start, start + pageSize);
     }, [filtered, page, pageSize]);
 
+    const closeConfirm = React.useCallback(() => setConfirmPo(null), []);
+
+    const runConfirmPost = React.useCallback(async () => {
+        if (!confirmPo) return;
+        // provider handles posting state + refresh + openPO
+        await postAllReceipts(confirmPo.id);
+        closeConfirm();
+    }, [confirmPo, postAllReceipts, closeConfirm]);
+
     return (
         <Card className="p-4">
             <div className="flex items-start justify-between gap-3">
@@ -73,7 +105,13 @@ export function PostingPOList() {
                     </div>
                 </div>
 
-                <Button type="button" variant="outline" size="sm" className="h-8 gap-2" onClick={refreshList}>
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-2"
+                    onClick={refreshList}
+                >
                     <RefreshCw className="h-4 w-4" />
                     Refresh
                 </Button>
@@ -92,7 +130,12 @@ export function PostingPOList() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <Select value={String(pageSize)} onValueChange={(v) => setPageSize((Number(v) === 3 ? 3 : 5) as 3 | 5)}>
+                        <Select
+                            value={String(pageSize)}
+                            onValueChange={(v) =>
+                                setPageSize((Number(v) === 3 ? 3 : 5) as 3 | 5)
+                            }
+                        >
                             <SelectTrigger className="h-8 w-[110px]">
                                 <SelectValue placeholder="Per page" />
                             </SelectTrigger>
@@ -158,12 +201,20 @@ export function PostingPOList() {
                         const canPost = (po.unpostedReceiptsCount ?? 0) > 0;
 
                         return (
-                            <button
+                            // ✅ FIX: not a <button> anymore (prevents nested button + hydration error)
+                            <div
                                 key={po.id}
-                                type="button"
+                                role="button"
+                                tabIndex={0}
                                 onClick={() => openPO(po.id)}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                        e.preventDefault();
+                                        openPO(po.id);
+                                    }
+                                }}
                                 className={cn(
-                                    "w-full text-left rounded-xl border border-border p-3 transition",
+                                    "w-full text-left rounded-xl border border-border p-3 transition outline-none",
                                     "hover:bg-muted/40",
                                     active ? "ring-2 ring-primary/25 bg-muted/30" : "bg-background"
                                 )}
@@ -185,18 +236,41 @@ export function PostingPOList() {
                                         </div>
 
                                         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                            <Badge variant="secondary" className={cn("text-[10px] font-bold", statusBadge(po.status))}>
+                                            <Badge
+                                                variant="secondary"
+                                                className={cn("text-[10px] font-bold", statusBadge(po.status))}
+                                            >
                                                 {po.status}
                                             </Badge>
-                                            <span>Items: <span className="font-semibold text-foreground">{po.itemsCount}</span></span>
-                                            <span>Branches: <span className="font-semibold text-foreground">{po.branchesCount}</span></span>
-                                            <span>Receipts: <span className="font-semibold text-foreground">{po.receiptsCount}</span></span>
-                                            <span>Unposted: <span className="font-semibold text-foreground">{po.unpostedReceiptsCount}</span></span>
+                                            <span>
+                        Items:{" "}
+                                                <span className="font-semibold text-foreground">
+                          {po.itemsCount}
+                        </span>
+                      </span>
+                                            <span>
+                        Branches:{" "}
+                                                <span className="font-semibold text-foreground">
+                          {po.branchesCount}
+                        </span>
+                      </span>
+                                            <span>
+                        Receipts:{" "}
+                                                <span className="font-semibold text-foreground">
+                          {po.receiptsCount}
+                        </span>
+                      </span>
+                                            <span>
+                        Unposted:{" "}
+                                                <span className="font-semibold text-foreground">
+                          {po.unpostedReceiptsCount}
+                        </span>
+                      </span>
                                         </div>
                                     </div>
 
                                     <div className="flex items-center gap-2 shrink-0">
-                                        {/* ✅ requested: button on list to post */}
+                                        {/* ✅ Post button now opens confirm dialog */}
                                         <Button
                                             type="button"
                                             size="sm"
@@ -206,7 +280,7 @@ export function PostingPOList() {
                                             onClick={(e) => {
                                                 e.preventDefault();
                                                 e.stopPropagation();
-                                                postAllReceipts(po.id);
+                                                setConfirmPo(po);
                                             }}
                                         >
                                             <UploadCloud className="h-4 w-4" />
@@ -216,11 +290,54 @@ export function PostingPOList() {
                                         <ChevronRight className="h-4 w-4 text-muted-foreground mt-1" />
                                     </div>
                                 </div>
-                            </button>
+                            </div>
                         );
                     })
                 )}
             </div>
+
+            {/* ✅ Confirm dialog (shadcn) */}
+            <AlertDialog
+                open={confirmOpen}
+                onOpenChange={(o) => {
+                    if (!o) closeConfirm();
+                }}
+            >
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Post Receipt</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Once posted, this receipt cannot be edited. Continue?
+                            {confirmPo?.poNumber ? (
+                                <span className="block mt-2 text-xs text-muted-foreground">
+                  PO: <span className="font-semibold">{confirmPo.poNumber}</span>
+                                    {confirmPo?.supplierName ? (
+                                        <>
+                                            {" "}
+                                            • Supplier:{" "}
+                                            <span className="font-semibold">{confirmPo.supplierName}</span>
+                                        </>
+                                    ) : null}
+                </span>
+                            ) : null}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+
+                    <AlertDialogFooter>
+                        <AlertDialogCancel asChild>
+                            <Button type="button" variant="outline" disabled={posting}>
+                                Cancel
+                            </Button>
+                        </AlertDialogCancel>
+
+                        <AlertDialogAction asChild>
+                            <Button type="button" onClick={runConfirmPost} disabled={posting}>
+                                OK
+                            </Button>
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </Card>
     );
 }

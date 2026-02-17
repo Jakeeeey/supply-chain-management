@@ -4,17 +4,15 @@ import * as React from "react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { useReceivingProducts } from "../providers/ReceivingProductsProvider";
-import { ScanPOStep } from "./steps/ScanPOStep";
+// ❌ removed ScanPOStep (barcode scanner not needed anymore)
+// import { ScanPOStep } from "./steps/ScanPOStep";
 import { ReceiptDetailsStep } from "./steps/ReceiptDetailsStep";
 import { ScanProductsStep } from "./steps/ScanProductsStep";
 
 function StepDot({ active }: { active: boolean }) {
     return (
         <div
-            className={cn(
-                "h-2.5 w-2.5 rounded-full",
-                active ? "bg-primary" : "bg-muted"
-            )}
+            className={cn("h-2.5 w-2.5 rounded-full", active ? "bg-primary" : "bg-muted")}
         />
     );
 }
@@ -52,7 +50,16 @@ export function ReceivingWorkbench() {
 
             <div className="mt-4">
                 {step === 0 ? (
-                    <ScanPOStep />
+                    // ✅ Replaced barcode scanner with a simple instruction state
+                    <div className="rounded-xl border border-dashed border-border bg-muted/10 p-8 text-center">
+                        <div className="text-sm font-semibold text-foreground">
+                            Select a Purchase Order to start receiving
+                        </div>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                            Barcode scanning was removed here because it’s already handled in Tagging of PO.
+                            Please select a PO from the list to continue.
+                        </div>
+                    </div>
                 ) : step === 1 ? (
                     <ReceiptDetailsStep onContinue={() => setStep(2)} />
                 ) : (

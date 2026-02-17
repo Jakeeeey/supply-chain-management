@@ -1,7 +1,11 @@
+// providers/PostingOfProvider.tsx
 "use client";
 
 import * as React from "react";
 import type { POListItem, PurchaseOrder } from "../types";
+
+// ✅ Use the existing global toaster (Sonner) — do NOT mount another Toaster here
+import { toast } from "sonner";
 
 const API = "/api/scm/supplier-management/posting-of-po";
 
@@ -79,69 +83,100 @@ export function PostingOfPoProvider({ children }: { children: React.ReactNode })
         refreshList();
     }, [refreshList]);
 
-    const openPO = React.useCallback(async (poId: string) => {
-        setListError("");
-        setPostError("");
-        clearSuccess();
-        const id = String(poId ?? "").trim();
-        if (!id) return;
+    const openPO = React.useCallback(
+        async (poId: string) => {
+            setListError("");
+            setPostError("");
+            clearSuccess();
+            const id = String(poId ?? "").trim();
+            if (!id) return;
 
-        try {
-            const r = await fetch(API, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action: "open_po", poId: id }),
-            });
-            const data = await asJson(r);
-            setSelectedPO((data ?? null) as PurchaseOrder | null);
-        } catch (e: any) {
-            setListError(String(e?.message ?? e));
-        }
-    }, [clearSuccess]);
+            try {
+                const r = await fetch(API, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "open_po", poId: id }),
+                });
+                const data = await asJson(r);
+                setSelectedPO((data ?? null) as PurchaseOrder | null);
+            } catch (e: any) {
+                setListError(String(e?.message ?? e));
+            }
+        },
+        [clearSuccess]
+    );
 
-    const postReceipt = React.useCallback(async (poId: string, receiptNo: string) => {
-        setPosting(true);
-        setPostError("");
-        clearSuccess();
-        try {
-            const r = await fetch(API, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action: "post_receipt", poId, receiptNo }),
-            });
-            await asJson(r);
+    const postReceipt = React.useCallback(
+        async (poId: string, receiptNo: string) => {
+            setPosting(true);
+            setPostError("");
+            clearSuccess();
 
-            setSuccessMsg("Receipt posted successfully.");
-            await refreshList();
-            await openPO(poId);
-        } catch (e: any) {
-            setPostError(String(e?.message ?? e));
-        } finally {
-            setPosting(false);
-        }
-    }, [openPO, refreshList, clearSuccess]);
+            try {
+                const r = await fetch(API, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "post_receipt", poId, receiptNo }),
+                });
+                await asJson(r);
 
-    const postAllReceipts = React.useCallback(async (poId: string) => {
-        setPosting(true);
-        setPostError("");
-        clearSuccess();
-        try {
-            const r = await fetch(API, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action: "post_all", poId }),
-            });
-            await asJson(r);
+                // ✅ Toast success (global toaster will render it)
+                toast.success("Receipt posted successfully!", {
+                    description: `Receipt ${receiptNo} has been posted.`,
+                });
 
-            setSuccessMsg("All receipts posted successfully.");
-            await refreshList();
-            await openPO(poId);
-        } catch (e: any) {
-            setPostError(String(e?.message ?? e));
-        } finally {
-            setPosting(false);
-        }
-    }, [openPO, refreshList, clearSuccess]);
+                // keep existing banner (don’t remove)
+                setSuccessMsg("Receipt posted successfully.");
+
+                await refreshList();
+                await openPO(poId);
+            } catch (e: any) {
+                const msg = String(e?.message ?? e);
+
+                toast.error("Failed to post receipt", { description: msg });
+                setPostError(msg);
+            } finally {
+                setPosting(false);
+            }
+        },
+        [openPO, refreshList, clearSuccess]
+    );
+
+    const postAllReceipts = React.useCallback(
+        async (poId: string) => {
+            setPosting(true);
+            setPostError("");
+            clearSuccess();
+
+            try {
+                const r = await fetch(API, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "post_all", poId }),
+                });
+                await asJson(r);
+
+                // ✅ Toast success
+                toast.success("Receipts posted successfully!", {
+                    description: "All receipts for this PO have been posted.",
+                });
+
+                // keep existing banner (don’t remove)
+                setSuccessMsg("All receipts posted successfully.");
+
+                await refreshList();
+                await openPO(poId);
+            } catch (e: any) {
+                const msg = String(e?.message ?? e);
+
+                toast.error("Failed to post receipts", { description: msg });
+                setPostError(msg);
+            } finally {
+                setPosting(false);
+            }
+        },
+        [openPO, refreshList, clearSuccess]
+    );
 
     const value: Ctx = {
         list,

@@ -34,6 +34,9 @@ export function ScanProductsStep() {
         clearReceiptSaved,
     } = useReceivingProducts();
 
+    // ✅ local validation for Save Receipt click
+    const [clientSaveError, setClientSaveError] = React.useState("");
+
     // ✅ toast once when provider marks saved
     React.useEffect(() => {
         if (!receiptSaved) return;
@@ -63,6 +66,36 @@ export function ScanProductsStep() {
     const totalScanned = React.useMemo(() => {
         return Object.values(safeCounts).reduce((a, b) => a + (Number(b) || 0), 0);
     }, [safeCounts]);
+
+    // ✅ treat "valid RFID scanned" as having at least 1 verified scan
+    // - Prefer totals derived from scannedCountByPorId (usually increments only on matched/ok)
+    // - Fallback: activity has at least 1 OK entry
+    const hasValidScan = React.useMemo(() => {
+        if (totalScanned > 0) return true;
+        return Array.isArray(activity) && activity.some((a: any) => a?.status === "ok");
+    }, [totalScanned, activity]);
+
+    // ✅ auto-clear client validation once valid scans exist or after save
+    React.useEffect(() => {
+        if (hasValidScan && clientSaveError) setClientSaveError("");
+    }, [hasValidScan, clientSaveError]);
+
+    React.useEffect(() => {
+        if (!receiptSaved) return;
+        if (clientSaveError) setClientSaveError("");
+    }, [receiptSaved?.savedAt, clientSaveError]);
+
+    const handleSaveReceipt = React.useCallback(async () => {
+        // ✅ required validation
+        if (!hasValidScan) {
+            setClientSaveError("Please scan a valid RFID for the product.");
+            return;
+        }
+
+        // keep existing behavior
+        setClientSaveError("");
+        await Promise.resolve(saveReceipt());
+    }, [hasValidScan, saveReceipt]);
 
     return (
         <div className="space-y-4">
@@ -210,10 +243,20 @@ export function ScanProductsStep() {
                     })}
                 </div>
 
-                {saveError ? <div className="mt-3 text-xs text-destructive">{saveError}</div> : null}
+                {/* ✅ validation priority: local click-validation first, then provider saveError */}
+                {clientSaveError ? (
+                    <div className="mt-3 text-xs text-destructive">{clientSaveError}</div>
+                ) : saveError ? (
+                    <div className="mt-3 text-xs text-destructive">{saveError}</div>
+                ) : null}
 
                 <div className="mt-4">
-                    <Button className="w-full" onClick={saveReceipt} disabled={savingReceipt} type="button">
+                    <Button
+                        className="w-full"
+                        onClick={handleSaveReceipt}
+                        disabled={savingReceipt}
+                        type="button"
+                    >
                         {savingReceipt ? "Saving..." : "Save Receipt"}
                     </Button>
                 </div>

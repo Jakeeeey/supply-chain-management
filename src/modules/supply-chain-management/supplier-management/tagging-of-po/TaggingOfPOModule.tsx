@@ -20,12 +20,43 @@ function sumTagged(po: TaggingPODetail) {
 
 function isDuplicateRfidMessage(msg: string) {
     const m = (msg || "").toLowerCase();
-    // match common backend messages
     return (
         (m.includes("rfid") && m.includes("already")) ||
         m.includes("already exists in receiving items") ||
         m.includes("rfid already exists")
     );
+}
+
+// ✅ RFID rules: exactly 24 hex chars
+const RFID_LEN = 24;
+
+/**
+ * Normalize raw RFID input:
+ * - Uppercase
+ * - Extract the FIRST valid 24+ hex sequence (EPC), take first 24 chars
+ * - If multiple EPCs exist in the raw string, we still return the first (to prevent multi-store)
+ */
+function normalizeRfidInput(raw: string): { rfid: string; hadMultiple: boolean } {
+    const up = String(raw ?? "").trim().toUpperCase();
+
+    // Find all sequences of hex length >= 24 (covers multiple tags separated by whitespace/newlines)
+    const matches = up.match(/[0-9A-F]{24,}/g) ?? [];
+    if (matches.length > 0) {
+        const first = matches[0].slice(0, RFID_LEN);
+        return { rfid: first, hadMultiple: matches.length > 1 };
+    }
+
+    // Fallback: strip non-hex and slice
+    const cleaned = up.replace(/[^0-9A-F]/g, "");
+    const sliced = cleaned.slice(0, RFID_LEN);
+    return { rfid: sliced, hadMultiple: cleaned.length > RFID_LEN };
+}
+
+function findItemBySku(detail: TaggingPODetail | null, sku: string) {
+    if (!detail) return null;
+    const key = String(sku ?? "").trim().toLowerCase();
+    if (!key) return null;
+    return detail.items.find((it) => String(it.sku ?? "").trim().toLowerCase() === key) ?? null;
 }
 
 export default function TaggingOfPOModule() {
@@ -55,6 +86,9 @@ export default function TaggingOfPOModule() {
         setToastKey((k) => k + 1); // force restart animation if same toast repeated
         setToastOpen(true);
     }, []);
+
+    // ✅ Prevent burst/multiple saves: lock per PO+SKU while request is in-flight
+    const inFlightLocksRef = React.useRef<Set<string>>(new Set());
 
     const refreshList = React.useCallback(async () => {
         try {
@@ -119,13 +153,14 @@ export default function TaggingOfPOModule() {
     }, []);
 
     const onTagItem = React.useCallback(
-        async (sku: string, rfid: string, strict: boolean) => {
+        async (sku: string, rfidRaw: string, strict: boolean) => {
+            // Normalize RFID to FIRST valid 24-hex EPC only
+            const { rfid, hadMultiple } = normalizeRfidInput(rfidRaw);
+
             if (!selectedId) {
-                // keep old behavior but no crash
                 const msg = "No PO selected.";
                 setError(msg);
                 notify("Cannot tag item", msg);
-                // return whatever we have so UI won't break
                 return (
                     detailRef.current ??
                     (await provider.fetchTaggingPODetail(String(selectedId)).catch(() => null)) ??
@@ -133,12 +168,61 @@ export default function TaggingOfPOModule() {
                 );
             }
 
+            // ✅ If scanner sent multiple tags, we keep ONLY the first (no multi-store)
+            if (hadMultiple) {
+                notify(
+                    "Multiple RFID detected",
+                    `Only the first RFID will be used. RFID must be exactly ${RFID_LEN} hex characters.`
+                );
+            }
+
+            // ✅ RFID must be exactly 24 hex chars
+            if (!rfid || rfid.length !== RFID_LEN) {
+                notify(
+                    "Invalid RFID",
+                    `RFID must be exactly ${RFID_LEN} hexadecimal characters (example: E280F30200000000F1EACFA1).`
+                );
+                return (
+                    detailRef.current ??
+                    (await provider.fetchTaggingPODetail(selectedId).catch(() => null)) ??
+                    ({} as TaggingPODetail)
+                );
+            }
+
+            // ✅ Client-side qty cap (no API call)
+            const cur = detailRef.current;
+            const item = findItemBySku(cur, sku);
+            if (item && Number(item.taggedQty) >= Number(item.expectedQty)) {
+                notify(
+                    "Limit reached",
+                    "Tagging exceeds expected quantity for this SKU. You cannot add more RFID tags."
+                );
+                return (
+                    detailRef.current ??
+                    (await provider.fetchTaggingPODetail(selectedId).catch(() => null)) ??
+                    ({} as TaggingPODetail)
+                );
+            }
+
+            // ✅ Burst protection: only 1 request per PO+SKU at a time
+            const lockKey = `${selectedId}::${String(sku ?? "").trim().toLowerCase()}`;
+            if (inFlightLocksRef.current.has(lockKey)) {
+                // ignore burst calls silently (keep UI stable)
+                return (
+                    detailRef.current ??
+                    (await provider.fetchTaggingPODetail(selectedId).catch(() => null)) ??
+                    ({} as TaggingPODetail)
+                );
+            }
+
+            inFlightLocksRef.current.add(lockKey);
+
             try {
                 setError("");
                 const updated = await provider.tagItem({
                     poId: selectedId,
                     sku,
-                    rfid,
+                    rfid, // ✅ normalized 24-hex only
                     strict,
                 });
 
@@ -147,14 +231,11 @@ export default function TaggingOfPOModule() {
             } catch (e: any) {
                 const msg = String(e?.message ?? e ?? "");
 
-                // ✅ Duplicate RFID: notify only, no hard error UI
                 if (isDuplicateRfidMessage(msg)) {
                     notify(
                         "RFID already exists",
                         "This RFID is already registered. Please attach another RFID for uniqueness of the products."
                     );
-
-                    // do NOT setError (no red banner), just return current detail so UI stays stable
                     return (
                         detailRef.current ??
                         (await provider.fetchTaggingPODetail(selectedId).catch(() => null)) ??
@@ -162,7 +243,6 @@ export default function TaggingOfPOModule() {
                     );
                 }
 
-                // other errors: keep existing banner + also toast
                 setError(msg || "Tagging failed.");
                 notify("Tagging failed", msg || "Please try again.");
 
@@ -171,6 +251,8 @@ export default function TaggingOfPOModule() {
                     (await provider.fetchTaggingPODetail(selectedId).catch(() => null)) ??
                     ({} as TaggingPODetail)
                 );
+            } finally {
+                inFlightLocksRef.current.delete(lockKey);
             }
         },
         [selectedId, onDetailChange, notify]
@@ -194,11 +276,7 @@ export default function TaggingOfPOModule() {
                             </div>
                         </div>
 
-                        <PurchaseOrderList
-                            items={pos}
-                            loading={loadingList}
-                            onTagItems={onTagItems}
-                        />
+                        <PurchaseOrderList items={pos} loading={loadingList} onTagItems={onTagItems} />
                     </div>
                 ) : (
                     <ProductTaggingPanel

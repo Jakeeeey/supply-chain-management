@@ -28,9 +28,7 @@ function getDirectusBase() {
 }
 
 function getServerToken() {
-    return String(
-        process.env.DIRECTUS_STATIC_TOKEN || process.env.DIRECTUS_TOKEN || ""
-    ).trim();
+    return String(process.env.DIRECTUS_STATIC_TOKEN || process.env.DIRECTUS_TOKEN || "").trim();
 }
 
 function buildHeaders() {
@@ -63,8 +61,7 @@ async function fetchJson(url: string, init?: RequestInit) {
 
     const j = await r.json().catch(() => ({}));
     if (!r.ok) {
-        const msg =
-            j?.errors?.[0]?.message || j?.error || `Upstream failed: ${r.status}`;
+        const msg = j?.errors?.[0]?.message || j?.error || `Upstream failed: ${r.status}`;
         throw new Error(msg);
     }
     return j;
@@ -85,6 +82,9 @@ const RECEIVING_ITEMS_COLLECTION = "purchase_order_receiving_items";
 const PO_STATUS_PARTIAL = Number(process.env.PO_STATUS_PARTIAL ?? 2);
 const PO_STATUS_RECEIVED = Number(process.env.PO_STATUS_RECEIVED ?? 3);
 
+// ✅ RFID rules: exactly 24 hex chars
+const RFID_LEN = 24;
+
 // =====================
 // HELPERS
 // =====================
@@ -92,10 +92,7 @@ function ok(data: any, status = 200) {
     return NextResponse.json({ data }, { status });
 }
 function bad(error: string, status = 400, extra?: any) {
-    return NextResponse.json(
-        DEBUG ? { error, debug: extra } : { error },
-        { status }
-    );
+    return NextResponse.json(DEBUG ? { error, debug: extra } : { error }, { status });
 }
 function toStr(v: any, fb = "") {
     const s = String(v ?? "").trim();
@@ -117,6 +114,21 @@ function timeDisplay(iso: string) {
         hour: "2-digit",
         minute: "2-digit",
     });
+}
+
+// ✅ normalize RFID: extract FIRST 24-hex EPC only (prevents multi-tag burst from storing multiple)
+function normalizeRfidServer(raw: string): { rfid: string; hadMultiple: boolean } {
+    const up = toStr(raw).toUpperCase();
+
+    const matches = up.match(/[0-9A-F]{24,}/g) ?? [];
+    if (matches.length > 0) {
+        const first = matches[0].slice(0, RFID_LEN);
+        return { rfid: first, hadMultiple: matches.length > 1 };
+    }
+
+    const cleaned = up.replace(/[^0-9A-F]/g, "");
+    const sliced = cleaned.slice(0, RFID_LEN);
+    return { rfid: sliced, hadMultiple: cleaned.length > RFID_LEN };
 }
 
 // product helpers (scanner priority)
@@ -303,7 +315,6 @@ async function fetchExistingRfidRow(base: string, rfid: string): Promise<Receivi
 }
 
 // ✅ new: resolve owner of existing receiving_item.purchase_order_product_id
-// tries POR first, then POP for backward-compat (in case older data pointed to purchase_order_products)
 async function resolveOwnerOfReceivingItem(base: string, purchaseOrderProductId: number) {
     const id = toNum(purchaseOrderProductId);
     if (!id) return null;
@@ -323,9 +334,7 @@ async function resolveOwnerOfReceivingItem(base: string, purchaseOrderProductId:
         if (poId && productId && branchId) {
             return { kind: "POR" as const, poId, productId, branchId };
         }
-    } catch {
-        // ignore
-    }
+    } catch {}
 
     // 2) Try purchase_order_products/<id> (old mapping)
     try {
@@ -342,9 +351,7 @@ async function resolveOwnerOfReceivingItem(base: string, purchaseOrderProductId:
         if (poId && productId && branchId) {
             return { kind: "POP" as const, poId, productId, branchId };
         }
-    } catch {
-        // ignore
-    }
+    } catch {}
 
     return null;
 }
@@ -385,7 +392,6 @@ async function ensureOpenReceivingRow(args: {
     const payload = {
         purchase_order_id: poId,
         product_id: productId,
-
         branch_id: branchId,
         received_quantity: 0,
         unit_price: args.unitPrice || 0,
@@ -465,15 +471,11 @@ async function buildDetail(base: string, poId: number): Promise<TaggingPODetail>
 
     const supplierId = toNum(header?.supplier_name);
     const suppliersMap = await fetchSuppliersMapByIds(base, supplierId ? [supplierId] : []);
-    const supplierName = supplierId
-        ? toStr(suppliersMap.get(supplierId)?.supplier_name, "—")
-        : "—";
+    const supplierName = supplierId ? toStr(suppliersMap.get(supplierId)?.supplier_name, "—") : "—";
 
     const poProducts = await fetchPOProductsByPOId(base, poId);
 
-    const productIds = Array.from(
-        new Set(poProducts.map((x) => toNum(x.product_id)).filter(Boolean))
-    );
+    const productIds = Array.from(new Set(poProducts.map((x) => toNum(x.product_id)).filter(Boolean)));
     const productsMap = await fetchProductsMapByIds(base, productIds);
 
     const openPORows = await fetchOpenPORowsByPOId(base, poId);
@@ -636,9 +638,7 @@ export async function GET() {
             const taggedItems = taggedByPo.get(poId) ?? 0;
 
             const sid = toNum(r?.supplier_name);
-            const supplierName = sid
-                ? toStr(suppliersMap.get(sid)?.supplier_name, "—")
-                : "—";
+            const supplierName = sid ? toStr(suppliersMap.get(sid)?.supplier_name, "—") : "—";
 
             return {
                 id: String(poId),
@@ -675,18 +675,27 @@ export async function POST(req: NextRequest) {
         if (action === "tag_item") {
             const poId = toNum(body?.poId);
             const sku = toStr(body?.sku);
-            const rfid = toStr(body?.rfid);
+            const rfidRaw = toStr(body?.rfid);
             const strict = Boolean(body?.strict);
 
             if (!poId) return bad("Missing poId.", 400);
             if (!sku) return bad("Missing sku/barcode/product_code.", 400);
-            if (!rfid) return bad("Missing rfid.", 400);
+            if (!rfidRaw) return bad("Missing rfid.", 400);
+
+            // ✅ Normalize RFID: first 24-hex only
+            const { rfid } = normalizeRfidServer(rfidRaw);
+
+            // ✅ Hard validation
+            if (!rfid || rfid.length !== RFID_LEN) {
+                return bad(`Invalid RFID. RFID must be exactly ${RFID_LEN} hexadecimal characters.`, 400, {
+                    rfidRaw,
+                    normalized: rfid,
+                });
+            }
 
             // load PO lines + products for matching
             const poProducts = await fetchPOProductsByPOId(base, poId);
-            const productIds = Array.from(
-                new Set(poProducts.map((x) => toNum(x.product_id)).filter(Boolean))
-            );
+            const productIds = Array.from(new Set(poProducts.map((x) => toNum(x.product_id)).filter(Boolean)));
             const productsMap = await fetchProductsMapByIds(base, productIds);
 
             const line = resolvePoProductLine({
@@ -735,10 +744,7 @@ export async function POST(req: NextRequest) {
                     );
                 }
 
-                const sameTarget =
-                    owner.poId === poId &&
-                    owner.productId === productId &&
-                    owner.branchId === branchId;
+                const sameTarget = owner.poId === poId && owner.productId === productId && owner.branchId === branchId;
 
                 // ✅ SAME PO + SAME product + SAME branch => treat as success (no error)
                 if (sameTarget) {
@@ -746,16 +752,11 @@ export async function POST(req: NextRequest) {
                     return ok(detail);
                 }
 
-                // ❌ conflict with other PO/item
-                return bad(
-                    "RFID already exists and is assigned to a different PO/item.",
-                    409,
-                    {
-                        rfid,
-                        attempted: { poId, productId, branchId },
-                        existingOwner: owner,
-                    }
-                );
+                return bad("RFID already exists and is assigned to a different PO/item.", 409, {
+                    rfid,
+                    attempted: { poId, productId, branchId },
+                    existingOwner: owner,
+                });
             }
 
             // do not exceed expected qty
@@ -787,7 +788,7 @@ export async function POST(req: NextRequest) {
             const insertPayload = {
                 purchase_order_product_id: porId,
                 product_id: productId,
-                rfid_code: rfid,
+                rfid_code: rfid, // ✅ normalized
             };
 
             dlog("Insert receiving_item:", insertPayload);
