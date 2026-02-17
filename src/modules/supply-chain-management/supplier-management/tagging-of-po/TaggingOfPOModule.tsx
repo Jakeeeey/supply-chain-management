@@ -188,9 +188,9 @@ export default function TaggingOfPOModule() {
                 {!selectedId ? (
                     <div className="space-y-3">
                         <div className="space-y-1">
-                            <div className="text-2xl font-black">Purchase Orders</div>
+                            <div className="text-2xl font-black">Tagging Of Purchase Orders</div>
                             <div className="text-sm text-muted-foreground">
-                                Select a PO to begin the inbound process.
+                                Select a Purchase Order to begin the inbound process.
                             </div>
                         </div>
 

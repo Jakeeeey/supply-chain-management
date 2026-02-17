@@ -60,7 +60,11 @@ const PO_PRODUCTS_COLLECTION = "purchase_order_products";
 const SUPPLIERS_COLLECTION = "suppliers";
 const PRODUCTS_COLLECTION = "products";
 
+// optional env override (still supported)
 const BRANCHES_COLLECTION = (process.env.BRANCHES_COLLECTION || "").trim();
+
+// Directus system collection (works with admin/static token)
+const DIRECTUS_RELATIONS_COLLECTION = "directus_relations";
 
 // =====================
 // HELPERS
@@ -82,8 +86,6 @@ function toNum(v: any) {
 function uniqNums(arr: any[]) {
     return Array.from(new Set(arr.map((x) => toNum(x)).filter((n) => Number.isFinite(n) && n > 0)));
 }
-
-// safe-pick helpers (no field assumptions)
 function pickNum(obj: any, keys: string[]) {
     for (const k of keys) {
         if (obj && obj[k] !== undefined && obj[k] !== null && String(obj[k]).trim() !== "") {
@@ -125,7 +127,10 @@ async function fetchSuppliersMapByIds(base: string, supplierIds: number[]) {
 }
 
 async function fetchProductsMapByIds(base: string, productIds: number[]) {
-    const map = new Map<number, { product_id: number; product_name: string; barcode: string; product_code: string }>();
+    const map = new Map<
+        number,
+        { product_id: number; product_name: string; barcode: string; product_code: string }
+    >();
     const ids = uniqNums(productIds);
     if (!ids.length) return map;
 
@@ -149,32 +154,132 @@ async function fetchProductsMapByIds(base: string, productIds: number[]) {
 }
 
 // =====================
-// BRANCH MAP (robust)
+// BRANCH MAP (stronger: relation discovery + pk + label)
 // =====================
-async function tryFetchBranches(
+async function discoverBranchCollection(base: string): Promise<string | ""> {
+    // 1) env override
+    if (BRANCHES_COLLECTION) return BRANCHES_COLLECTION;
+
+    // 2) try Directus relations system table (best)
+    try {
+        const url =
+            `${base}/items/${DIRECTUS_RELATIONS_COLLECTION}?limit=1` +
+            `&filter[collection][_eq]=${encodeURIComponent(PO_PRODUCTS_COLLECTION)}` +
+            `&filter[field][_eq]=branch_id` +
+            `&fields=related_collection,collection,field`;
+
+        const j = await fetchJson(url);
+        const row = Array.isArray(j?.data) ? j.data[0] : null;
+        const rel = toStr(row?.related_collection);
+        if (rel) return rel;
+    } catch {
+        // ignore
+    }
+
+    // 3) fallback candidates
+    return "";
+}
+
+async function tryFetchFieldsMeta(base: string, collection: string) {
+    // Directus endpoint: /fields/{collection}
+    // If not available in your instance/permissions, it will throw and we fallback.
+    const url = `${base}/fields/${encodeURIComponent(collection)}`;
+    const j = await fetchJson(url);
+    return Array.isArray(j?.data) ? j.data : [];
+}
+
+function pickPrimaryKeyField(fieldsMeta: any[]): string {
+    // prefer schema.is_primary_key
+    for (const f of fieldsMeta) {
+        if (f?.schema?.is_primary_key) return toStr(f?.field);
+    }
+    // common fallbacks
+    const candidates = ["id", "branch_id", "company_branch_id", "warehouse_id", "location_id"];
+    for (const c of candidates) {
+        if (fieldsMeta.some((f) => toStr(f?.field) === c)) return c;
+    }
+    return "id";
+}
+
+function pickLabelField(fieldsMeta: any[]): string[] {
+    // Order matters. We return a list of label candidates to try.
+    const labelCandidates = [
+        "branch_name",
+        "name",
+        "division",
+        "division_name",
+        "department",
+        "department_name",
+        "type",
+        "branch_type",
+        "category",
+        "label",
+        "title",
+        "description",
+        "code",
+    ];
+
+    const existing = new Set(fieldsMeta.map((f) => toStr(f?.field)).filter(Boolean));
+    const usable = labelCandidates.filter((x) => existing.has(x));
+    // if nothing matches, still return common ones (querying unknown fields is ok ONLY if Directus ignores them;
+    // but Directus usually errors on unknown fields, so we keep it safe: only existing)
+    return usable.length ? usable : ["name", "branch_name"];
+}
+
+async function tryFetchBranchesByPk(
     base: string,
     collection: string,
     ids: number[],
-    filterKey: "id" | "branch_id",
-    fields: string
+    pk: string,
+    labelFields: string[]
 ) {
+    const safeIds = uniqNums(ids);
+    if (!safeIds.length) return new Map<number, { id: number; name: string }>();
+
+    // Build fields list safely
+    const fields = [pk, ...labelFields].filter(Boolean).join(",");
+
     const url =
         `${base}/items/${collection}?limit=-1` +
-        `&filter[${filterKey}][_in]=${encodeURIComponent(ids.join(","))}` +
+        `&filter[${encodeURIComponent(pk)}][_in]=${encodeURIComponent(safeIds.join(","))}` +
         `&fields=${encodeURIComponent(fields)}`;
 
     const j = await fetchJson(url);
     const rows = Array.isArray(j?.data) ? j.data : [];
-    if (!rows.length) return null;
 
     const map = new Map<number, { id: number; name: string }>();
     for (const r of rows) {
-        const id = toNum(r?.id ?? r?.branch_id);
+        const id = toNum(r?.[pk] ?? r?.id ?? r?.branch_id);
         if (!id) continue;
-        const name = toStr(r?.name ?? r?.branch_name ?? r?.branch ?? `Branch ${id}`);
+
+        // pick best label from available fields
+        let name = "";
+        for (const lf of labelFields) {
+            const v = toStr(r?.[lf]);
+            if (v) {
+                name = v;
+                break;
+            }
+        }
+
+        if (!name) {
+            // broader fallback if labelFields are missing
+            name =
+                toStr(r?.branch_name) ||
+                toStr(r?.name) ||
+                toStr(r?.division_name) ||
+                toStr(r?.division) ||
+                toStr(r?.department_name) ||
+                toStr(r?.department) ||
+                toStr(r?.type) ||
+                toStr(r?.branch_type) ||
+                `Branch ${id}`;
+        }
+
         map.set(id, { id, name });
     }
-    return map.size ? map : null;
+
+    return map;
 }
 
 async function fetchBranchesMapByIds(base: string, branchIds: number[]) {
@@ -182,7 +287,10 @@ async function fetchBranchesMapByIds(base: string, branchIds: number[]) {
     const map = new Map<number, { id: number; name: string }>();
     if (!ids.length) return map;
 
+    const discovered = await discoverBranchCollection(base);
+
     const candidates = [
+        discovered,
         BRANCHES_COLLECTION,
         "branches",
         "branch",
@@ -190,28 +298,28 @@ async function fetchBranchesMapByIds(base: string, branchIds: number[]) {
         "company_branch",
         "branch_list",
         "branch_master",
+        "delivery_branches",
+        "delivery_branch",
         "warehouses",
         "warehouse",
+        "locations",
+        "location",
     ].filter(Boolean);
 
     for (const col of candidates) {
-        const attempts: Array<[("id" | "branch_id"), string]> = [
-            ["id", "id,name,branch_name"],
-            ["id", "id,branch_name,name"],
-            ["branch_id", "branch_id,name,branch_name"],
-            ["branch_id", "branch_id,branch_name,name"],
-        ];
+        try {
+            const meta = await tryFetchFieldsMeta(base, col).catch(() => []);
+            const pk = meta.length ? pickPrimaryKeyField(meta) : "id";
+            const labelFields = meta.length ? pickLabelField(meta) : ["branch_name", "name"];
 
-        for (const [filterKey, fields] of attempts) {
-            try {
-                const got = await tryFetchBranches(base, col, ids, filterKey, fields);
-                if (got) {
-                    for (const [k, v] of got.entries()) map.set(k, v);
-                    if (map.size >= ids.length) return map;
-                }
-            } catch {
-                // ignore
-            }
+            const got = await tryFetchBranchesByPk(base, col, ids, pk, labelFields);
+
+            // merge
+            for (const [k, v] of got.entries()) map.set(k, v);
+
+            if (map.size >= ids.length) return map;
+        } catch {
+            // ignore and try next
         }
     }
 
@@ -243,7 +351,6 @@ type PoHeaderRow = {
 };
 
 async function fetchPendingPOs(base: string): Promise<PoHeaderRow[]> {
-    // keep safe fields only
     const qs = [
         "limit=-1",
         "sort=-date_encoded",
@@ -269,7 +376,7 @@ type PoProductRow = {
 async function fetchPOProductsByPOIds(base: string, poIds: number[]) {
     if (!poIds.length) return [] as PoProductRow[];
 
-    // ✅ include unit_price (this fixes blank price per item)
+    // ✅ include unit_price (fixes blank price per item)
     const url =
         `${base}/items/${PO_PRODUCTS_COLLECTION}?limit=-1` +
         `&filter[purchase_order_id][_in]=${encodeURIComponent(poIds.join(","))}` +
@@ -293,7 +400,7 @@ async function fetchPOProductsByPOId(base: string, poId: number) {
 // DETAIL BUILDER
 // =====================
 async function buildPurchaseOrderDetail(base: string, poId: number) {
-    // ✅ IMPORTANT: do NOT force fields here (to avoid permission errors on unknown discount fields)
+    // ✅ do not force fields (avoid permission errors)
     const headerUrl = `${base}/items/${PO_COLLECTION}/${encodeURIComponent(String(poId))}`;
     const headerJ = await fetchJson(headerUrl);
     const header: any = headerJ?.data ?? null;
@@ -316,7 +423,6 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
     const productIds = uniqNums(lines.map((l) => l.product_id));
     const productsMap = await fetchProductsMapByIds(base, productIds);
 
-    // items
     const items = lines.map((l) => {
         const pid = toNum(l.product_id);
         const p = pid ? productsMap.get(pid) : null;
@@ -328,7 +434,6 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
         const barcode = toStr(p?.barcode) || toStr(p?.product_code) || (pid ? String(pid) : "");
         const name = toStr(p?.product_name, `Product #${pid || l.product_id}`);
 
-        // ✅ add aliases so UI won’t miss it (unit_price/unitPrice/price)
         return {
             id: String(l.purchase_order_product_id),
             purchase_order_product_id: l.purchase_order_product_id,
@@ -336,7 +441,8 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
             productId: String(pid || ""),
             name,
             barcode,
-            uom: toStr((l as any)?.uom, ""), // safe fallback
+            uom: toStr((l as any)?.uom, ""),
+
             ordered_quantity: qty,
             expectedQty: qty,
 
@@ -351,7 +457,6 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
         };
     });
 
-    // allocations grouped by branch
     const allocationsMap = new Map<number, any>();
     for (const it of items) {
         const bid = toNum(it.branch_id);
@@ -366,15 +471,12 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
     }
     const allocations = Array.from(allocationsMap.values());
 
-    // =====================
-    // FINANCIALS + DISCOUNT (derive if needed)
-    // =====================
+    // ===== Financials + discount =====
     const grossComputed = items.reduce((sum, it) => sum + toNum(it.line_total ?? it.lineTotal), 0);
 
     const grossHeader = pickNum(header, ["gross_amount", "grossAmount", "subtotal", "sub_total"]);
     const gross = grossHeader || grossComputed;
 
-    // discount amount
     let discountAmount = pickNum(header, [
         "discounted_amount",
         "discount_amount",
@@ -383,7 +485,6 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
         "discountValue",
     ]);
 
-    // discount percent
     let discountPercent = pickNum(header, [
         "discount_percent",
         "discountPercent",
@@ -393,19 +494,15 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
         "discountPercentage",
     ]);
 
-    // if discount amount missing but percent exists
     if (!discountAmount && discountPercent > 0 && gross > 0) {
         discountAmount = (gross * discountPercent) / 100;
     }
-
-    // if percent missing but amount exists
     if (!discountPercent && discountAmount > 0 && gross > 0) {
         discountPercent = (discountAmount / gross) * 100;
     }
 
     const discountType = pickStr(header, ["discount_type", "discountType", "discount_code", "discountCode"], "");
 
-    // vat / ewt / total (prefer header if present)
     const vatHeader = pickNum(header, ["vat_amount", "vatAmount", "vat"]);
     const ewtHeader = pickNum(header, ["withholding_tax_amount", "withholdingAmount", "ewt_amount", "ewtGoods"]);
     const totalHeader = pickNum(header, ["total_amount", "totalAmount", "total"]);
@@ -426,7 +523,6 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
         supplierName,
         supplier: { id: String(supplierId || ""), name: supplierName },
 
-        // branch fields
         branchName: bs.label,
         branch_name: bs.label,
         branch: { id: bs.id, name: bs.name },
@@ -434,7 +530,6 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
         items,
         allocations,
 
-        // financials (multiple aliases)
         gross_amount: gross,
         grossAmount: gross,
 
@@ -477,7 +572,6 @@ export async function GET(req: NextRequest) {
         const poIds = uniqNums(headers.map((h) => h.purchase_order_id));
         const lines = await fetchPOProductsByPOIds(base, poIds);
 
-        // aggregates for list (includes unit_price now if you want totals by line)
         const totalByPo = new Map<number, number>();
         const qtyByPo = new Map<number, number>();
         const branchesByPo = new Map<number, Set<number>>();
