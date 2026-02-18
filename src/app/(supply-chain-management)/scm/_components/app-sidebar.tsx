@@ -214,6 +214,25 @@ const data = {
         },
       ],
     },
+    {
+      title: "Business Intelligence Analytics",
+      url: "#",
+      icon: BookOpen,
+      items: [
+        {
+          title: "Inventory Performance Dashboard",
+          url: "/scm/business-analytics/inventory-performance-dashboard",
+        },
+        {
+          title: "Stock Health Monitor",
+          url: "/scm/business-analytics/stock-health-monitor",
+        },
+        {
+          title: "Supplier Reliability Scorecard",
+          url: "/scm/business-analytics/supplier-reliability-scorecard",
+        }
+      ]
+    },
   ],
 };
 
