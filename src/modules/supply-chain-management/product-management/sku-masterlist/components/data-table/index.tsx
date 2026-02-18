@@ -6,7 +6,7 @@ import {
   MasterData,
 } from "@/modules/supply-chain-management/product-management/sku-creation/types/sku.schema";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DataTable } from "@/components/ui/data-table";
+import { DataTable } from "@/components/ui/new-data-table";
 import { getMasterlistColumns } from "./columns";
 import { SortingState } from "@tanstack/react-table";
 
