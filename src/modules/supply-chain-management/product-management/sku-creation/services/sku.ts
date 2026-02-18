@@ -160,6 +160,26 @@ export const skuService = {
     );
     const pId = parent.id || parent.product_id;
 
+    // Save supplier to product_draft_per_supplier junction table
+    const sId = (sku as any).product_supplier || (sku as any).supplier_id;
+    if (pId && sId) {
+      try {
+        await request(`${API_BASE_URL}/items/product_draft_per_supplier`, {
+          method: "POST",
+          body: JSON.stringify({
+            product_draft_id: pId,
+            supplier_id: sId,
+          }),
+        });
+        console.log(`[Supplier Draft] Saved Supplier ${sId} for Draft ${pId}`);
+      } catch (err: any) {
+        console.error(
+          `[Supplier Draft] Failed to save supplier for draft:`,
+          err.message,
+        );
+      }
+    }
+
     if (units.length > 1) {
       await Promise.all(
         units.slice(1).map((u, i) =>
@@ -178,6 +198,43 @@ export const skuService = {
       `${API_BASE_URL}/items/product_draft/${id}`,
       { method: "PATCH", body: JSON.stringify(sku) },
     );
+
+    // Sync supplier in product_draft_per_supplier
+    const sId = (sku as any).product_supplier || (sku as any).supplier_id;
+    if (sId) {
+      try {
+        // Find existing record
+        const { data: existing } = await fetchItems<any>(
+          "/items/product_draft_per_supplier",
+          {
+            filter: JSON.stringify({ product_draft_id: { _eq: id } }),
+            limit: 1,
+          },
+        );
+
+        if (existing?.length) {
+          // Update
+          await request(
+            `${API_BASE_URL}/items/product_draft_per_supplier/${existing[0].id}`,
+            {
+              method: "PATCH",
+              body: JSON.stringify({ supplier_id: sId }),
+            },
+          );
+        } else {
+          // Create
+          await request(`${API_BASE_URL}/items/product_draft_per_supplier`, {
+            method: "POST",
+            body: JSON.stringify({ product_draft_id: id, supplier_id: sId }),
+          });
+        }
+      } catch (err: any) {
+        console.error(
+          `[Supplier Sync] Failed to sync supplier for draft ${id}:`,
+          err.message,
+        );
+      }
+    }
 
     if (!data.parent_id) {
       const { data: children } = await fetchItems<any>("/items/product_draft", {
@@ -300,33 +357,47 @@ export const skuService = {
     // 4.5. Link to Supplier (Only for Parent SKUs) - Ensure it's not a child
     const isChild = !!draft.parent_id;
     if (!isChild) {
-      // Resolve Supplier ID from various possible field names or formats
-      const sId = (function () {
-        const rawValue =
-          (draft as any).product_supplier || (draft as any).supplier_id;
-        console.log(
-          `[Supplier Link Debug] Raw supplier value from draft:`,
-          rawValue,
-        );
-        let resolved = null;
-        if (rawValue) {
-          if (typeof rawValue === "object") {
-            resolved = rawValue.id;
-          } else {
-            const num = parseInt(String(rawValue));
-            resolved = isNaN(num) || num === 0 ? null : num;
-          }
-        }
+      // Resolve Supplier ID from the new draft junction table
+      const draftId = draft.id || (draft as any).product_id;
+      let sId: number | null = null;
 
-        // FORCED DEBUG: If sId is missing, use absolute fallback for testing product_id linkage
-        if (!resolved && masterData.suppliers?.length) {
-          resolved = masterData.suppliers[0].id;
+      try {
+        const { data: draftSupplierLink } = await fetchItems<any>(
+          "/items/product_draft_per_supplier",
+          {
+            filter: JSON.stringify({ product_draft_id: { _eq: draftId } }),
+            limit: 1,
+          },
+        );
+
+        if (draftSupplierLink?.length) {
+          sId = draftSupplierLink[0].supplier_id;
           console.log(
-            `[Supplier Link Debug] sId MISSING. Using fallback Supplier ID: ${resolved} for testing product_id linkage.`,
+            `[Supplier Link Debug] Found Supplier ID ${sId} in product_draft_per_supplier for draft ${draftId}`,
+          );
+        } else {
+          // Fallback to various possible field names or formats for backward compatibility
+          const rawValue =
+            (draft as any).product_supplier || (draft as any).supplier_id;
+          if (rawValue) {
+            if (typeof rawValue === "object") {
+              sId = rawValue.id;
+            } else {
+              const num = parseInt(String(rawValue));
+              sId = isNaN(num) || num === 0 ? null : num;
+            }
+          }
+          console.warn(
+            `[Supplier Link Debug] No record found in product_draft_per_supplier. Fell back to raw draft value:`,
+            sId,
           );
         }
-        return resolved;
-      })();
+      } catch (err: any) {
+        console.error(
+          `[Supplier Link Debug] Error fetching from product_draft_per_supplier:`,
+          err.message,
+        );
+      }
 
       // Resolve Master ID as a number
       const resolvedMasterId = (function () {

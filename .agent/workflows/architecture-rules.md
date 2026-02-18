@@ -1,5 +1,5 @@
 ---
-description: Architectural standards for building and refactoring modules in the Financial Management system.
+description: Architectural standards for building and refactoring modules in the [Module Name] Management system.
 ---
 
 # Architecture Rules & Module Standards

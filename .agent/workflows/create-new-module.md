@@ -9,7 +9,7 @@ When the user asks to "Create a new module" for a specific domain (e.g., Invento
 ## 1. Planning Phase
 
 - Reference `.agent/workflows/architecture-rules.md` for the blueprint.
-- Identify the subsystem (default to `financial-management`).
+- Identify the subsystem.
 - Map the provided fields to a Zod schema.
 
 ## 2. Implementation Order (DO ALL STEPS)
@@ -41,8 +41,8 @@ When the user asks to "Create a new module" for a specific domain (e.g., Invento
 ### Step 5: User Interface (`UI`)
 
 - Create `[Module]Page.tsx`.
-- Use `@/app/(financial-management)/fm/_components/DataTableSkeleton` for loading.
-- Use `@/app/(financial-management)/fm/_components/ErrorPage` for errors.
+- Use `@/app/(financial-management)/path_name/_components/DataTableSkeleton` for loading.
+- Use `@/app/(financial-management)/path_name/_components/ErrorPage` for errors.
 - Ensure all formatting (Currency, Date) uses `@/lib/utils`.
 
 ## 3. Completion Checklist

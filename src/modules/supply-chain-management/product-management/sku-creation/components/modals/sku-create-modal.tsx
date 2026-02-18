@@ -1,6 +1,9 @@
 "use client";
 
-import { SKU, MasterData } from "@/modules/supply-chain-management/product-management/sku-creation/types/sku.schema";
+import {
+  SKU,
+  MasterData,
+} from "@/modules/supply-chain-management/product-management/sku-creation/types/sku.schema";
 import {
   Dialog,
   DialogContent,
@@ -20,7 +23,14 @@ interface SKUModalProps {
   loading?: boolean;
 }
 
-export function SKUModal({ open, setOpen, initialData, masterData, onSubmit, loading }: SKUModalProps) {
+export function SKUModal({
+  open,
+  setOpen,
+  initialData,
+  masterData,
+  onSubmit,
+  loading,
+}: SKUModalProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-w-4xl p-0 overflow-hidden">
@@ -30,9 +40,7 @@ export function SKUModal({ open, setOpen, initialData, masterData, onSubmit, loa
               {initialData ? "Edit SKU" : "Register New SKU"}
             </DialogTitle>
             {initialData?.status && (
-              <Badge variant="secondary">
-                {initialData.status}
-              </Badge>
+              <Badge variant="secondary">{initialData.status}</Badge>
             )}
           </div>
           <DialogDescription className="space-y-3">
@@ -46,21 +54,21 @@ export function SKUModal({ open, setOpen, initialData, masterData, onSubmit, loa
                   {initialData.remarks}
                 </p>
               </div>
+            ) : initialData ? (
+              `Manage product details for ${initialData.product_name}.`
             ) : (
-              initialData 
-                ? `Manage product details for ${initialData.product_name}.` 
-                : "Enter product information to register a new SKU."
+              "Enter product information to register a new SKU."
             )}
           </DialogDescription>
         </DialogHeader>
-        <div className="p-6">
-          <SKUForm 
-            initialData={initialData} 
+        <div className="px-4">
+          <SKUForm
+            initialData={initialData}
             masterData={masterData}
             onSubmit={async (data) => {
               await onSubmit(data);
               setOpen(false);
-            }} 
+            }}
             loading={loading}
           />
         </div>

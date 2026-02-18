@@ -34,8 +34,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Combobox } from "@/components/ui/combobox";
 
-// --- Sub-components for Optimization ---
-
 interface FormFieldWrapperProps {
   control: any;
   name: string;
@@ -97,8 +95,6 @@ const SectionHeader = ({ letter, title }: SectionHeaderProps) => (
     <h3 className="text-lg font-semibold">{title}</h3>
   </div>
 );
-
-// --- Main Component ---
 
 interface SKUFormProps {
   initialData?: SKU;
@@ -269,7 +265,7 @@ export function SKUForm({
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit as any)} className="space-y-6">
-        <ScrollArea className="h-[75vh] pr-4">
+        <ScrollArea className="h-[60vh]">
           <div className="max-w-4xl mx-auto space-y-6 pb-10">
             {/* Section A: Core info */}
             <Card className="border-accent/20 bg-card/50">
