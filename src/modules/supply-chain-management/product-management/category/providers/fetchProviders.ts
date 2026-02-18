@@ -1,4 +1,4 @@
-import { UnitApiRow, UnitFormValues } from "../types";
+import { CategoryApiRow, CategoryFormValues } from "../types";
 
 // ✅ Updated Response Type
 type DirectusListResponse<T> = {
@@ -7,7 +7,7 @@ type DirectusListResponse<T> = {
 };
 type DirectusItemResponse<T> = { data: T };
 
-const API_BASE = "/api/scm/management/unit-of-measurement";
+const API_BASE = "/api/scm/product-management/category";
 
 function isJsonResponse(res: Response) {
   const ct = res.headers.get("content-type") || "";
@@ -26,18 +26,18 @@ async function readError(res: Response) {
   }
 }
 
-// ✅ Updated: Accepts page, limit, search
-export async function listUnits(
+// ✅ Updated Function Signature
+export async function listCategories(
   page = 1,
   limit = 12,
   search = "",
-): Promise<{ data: UnitApiRow[]; total: number }> {
+): Promise<{ data: CategoryApiRow[]; total: number }> {
   const res = await fetch(
     `${API_BASE}?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`,
   );
   if (!res.ok) throw new Error(await readError(res));
 
-  const json = (await res.json()) as DirectusListResponse<UnitApiRow>;
+  const json = (await res.json()) as DirectusListResponse<CategoryApiRow>;
 
   return {
     data: json?.data ?? [],
@@ -45,9 +45,13 @@ export async function listUnits(
   };
 }
 
-export async function createUnit(payload: UnitFormValues): Promise<UnitApiRow> {
+export async function createCategory(
+  payload: CategoryFormValues,
+): Promise<CategoryApiRow> {
   const cleanPayload = { ...payload };
-  if ("unit_id" in cleanPayload) delete (cleanPayload as any).unit_id;
+  if ("category_id" in cleanPayload) {
+    delete (cleanPayload as any).category_id;
+  }
 
   const res = await fetch(API_BASE, {
     method: "POST",
@@ -56,14 +60,14 @@ export async function createUnit(payload: UnitFormValues): Promise<UnitApiRow> {
   });
 
   if (!res.ok) throw new Error(await readError(res));
-  const json = (await res.json()) as DirectusItemResponse<UnitApiRow>;
+  const json = (await res.json()) as DirectusItemResponse<CategoryApiRow>;
   return json?.data;
 }
 
-export async function updateUnit(
+export async function updateCategory(
   id: string,
-  payload: UnitFormValues,
-): Promise<UnitApiRow> {
+  payload: CategoryFormValues,
+): Promise<CategoryApiRow> {
   const res = await fetch(`${API_BASE}?id=${id}`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
@@ -71,6 +75,6 @@ export async function updateUnit(
   });
 
   if (!res.ok) throw new Error(await readError(res));
-  const json = (await res.json()) as DirectusItemResponse<UnitApiRow>;
+  const json = (await res.json()) as DirectusItemResponse<CategoryApiRow>;
   return json?.data;
 }

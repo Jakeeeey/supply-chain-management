@@ -1,6 +1,7 @@
 import { Product, Supplier, UpdateBarcodeDTO } from "../types";
 
-const BASE_URL = "/api/scm/management/barcode-management/barcode-linking";
+const BASE_URL =
+  "/api/scm/product-management/barcode-management/barcode-linking";
 
 export async function getProducts(): Promise<Product[]> {
   const res = await fetch(`${BASE_URL}?scope=products`, {

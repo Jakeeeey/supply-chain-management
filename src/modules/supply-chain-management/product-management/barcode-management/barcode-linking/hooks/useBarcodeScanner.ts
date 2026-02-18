@@ -19,7 +19,9 @@ export function useBarcodeScanner() {
   const [cbmUnits, setCbmUnits] = useState<RefData[]>([]);
 
   // All existing barcodes for duplicate checking (includes linked products)
-  const [allBarcodes, setAllBarcodes] = useState<{ product_id: string; barcode: string; product_name: string }[]>([]);
+  const [allBarcodes, setAllBarcodes] = useState<
+    { product_id: string; barcode: string; product_name: string }[]
+  >([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -27,18 +29,20 @@ export function useBarcodeScanner() {
       try {
         const [productsRes, suppliersRes, btRes, wuRes, cuRes] =
           await Promise.all([
-            fetch("/api/scm/management/barcode-management/barcode-linking"),
             fetch(
-              "/api/scm/management/barcode-management/barcode-linking?scope=suppliers",
+              "/api/scm/product-management/barcode-management/barcode-linking",
             ),
             fetch(
-              "/api/scm/management/barcode-management/barcode-linking?scope=barcode_type",
+              "/api/scm/product-management/barcode-management/barcode-linking?scope=suppliers",
             ),
             fetch(
-              "/api/scm/management/barcode-management/barcode-linking?scope=weight_unit",
+              "/api/scm/product-management/barcode-management/barcode-linking?scope=barcode_type",
             ),
             fetch(
-              "/api/scm/management/barcode-management/barcode-linking?scope=cbm_unit",
+              "/api/scm/product-management/barcode-management/barcode-linking?scope=weight_unit",
+            ),
+            fetch(
+              "/api/scm/product-management/barcode-management/barcode-linking?scope=cbm_unit",
             ),
           ]);
 
@@ -61,16 +65,14 @@ export function useBarcodeScanner() {
         setAllBarcodes(existingBarcodes);
 
         // STRICT FILTER: Must have SKU, Must NOT have Barcode
-        const eligibleProducts = allProductsRaw.filter(
-          (p: Product) => {
-            const hasSku =
-              p.product_code &&
-              p.product_code.trim() !== "" &&
-              p.product_code !== "-";
-            const hasBarcode = p.barcode && p.barcode.trim() !== "";
-            return hasSku && !hasBarcode;
-          },
-        );
+        const eligibleProducts = allProductsRaw.filter((p: Product) => {
+          const hasSku =
+            p.product_code &&
+            p.product_code.trim() !== "" &&
+            p.product_code !== "-";
+          const hasBarcode = p.barcode && p.barcode.trim() !== "";
+          return hasSku && !hasBarcode;
+        });
 
         setAllProducts(eligibleProducts);
         setSuppliers(suppliersData.data || []);
@@ -146,7 +148,7 @@ export function useBarcodeScanner() {
     try {
       // FIX: Use the correct barcode-linking path or correct ID query
       const response = await fetch(
-        `/api/scm/management/barcode-management/barcode-linking?id=${selectedProduct.product_id}`,
+        `/api/scm/product-management/barcode-management/barcode-linking?id=${selectedProduct.product_id}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },

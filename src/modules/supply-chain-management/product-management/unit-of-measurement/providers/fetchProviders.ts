@@ -1,13 +1,13 @@
-import { BrandApiRow, BrandFormValues } from "../types";
+import { UnitApiRow, UnitFormValues } from "../types";
 
-// Update response type to include Meta
+// ✅ Updated Response Type
 type DirectusListResponse<T> = {
   data: T[];
   meta?: { filter_count?: number; total_count?: number };
 };
 type DirectusItemResponse<T> = { data: T };
 
-const API_BASE = "/api/scm/management/brand";
+const API_BASE = "/api/scm/product-management/unit-of-measurement";
 
 function isJsonResponse(res: Response) {
   const ct = res.headers.get("content-type") || "";
@@ -26,20 +26,18 @@ async function readError(res: Response) {
   }
 }
 
-// ✅ Accept 'search' param (default empty)
-export async function listBrands(
+// ✅ Updated: Accepts page, limit, search
+export async function listUnits(
   page = 1,
   limit = 12,
   search = "",
-): Promise<{ data: BrandApiRow[]; total: number }> {
-  // Pass search to API route
+): Promise<{ data: UnitApiRow[]; total: number }> {
   const res = await fetch(
     `${API_BASE}?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`,
   );
-
   if (!res.ok) throw new Error(await readError(res));
 
-  const json = (await res.json()) as DirectusListResponse<BrandApiRow>;
+  const json = (await res.json()) as DirectusListResponse<UnitApiRow>;
 
   return {
     data: json?.data ?? [],
@@ -47,11 +45,9 @@ export async function listBrands(
   };
 }
 
-export async function createBrand(
-  payload: BrandFormValues,
-): Promise<BrandApiRow> {
+export async function createUnit(payload: UnitFormValues): Promise<UnitApiRow> {
   const cleanPayload = { ...payload };
-  if ("brand_id" in cleanPayload) delete (cleanPayload as any).brand_id;
+  if ("unit_id" in cleanPayload) delete (cleanPayload as any).unit_id;
 
   const res = await fetch(API_BASE, {
     method: "POST",
@@ -60,14 +56,14 @@ export async function createBrand(
   });
 
   if (!res.ok) throw new Error(await readError(res));
-  const json = (await res.json()) as DirectusItemResponse<BrandApiRow>;
+  const json = (await res.json()) as DirectusItemResponse<UnitApiRow>;
   return json?.data;
 }
 
-export async function updateBrand(
+export async function updateUnit(
   id: string,
-  payload: BrandFormValues,
-): Promise<BrandApiRow> {
+  payload: UnitFormValues,
+): Promise<UnitApiRow> {
   const res = await fetch(`${API_BASE}?id=${id}`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
@@ -75,6 +71,6 @@ export async function updateBrand(
   });
 
   if (!res.ok) throw new Error(await readError(res));
-  const json = (await res.json()) as DirectusItemResponse<BrandApiRow>;
+  const json = (await res.json()) as DirectusItemResponse<UnitApiRow>;
   return json?.data;
 }

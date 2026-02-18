@@ -1,6 +1,7 @@
 import { Product, Supplier } from "../types";
 
-const BASE_URL = "/api/scm/management/barcode-management/barcode-masterlist";
+const BASE_URL =
+  "/api/scm/product-management/barcode-management/barcode-masterlist";
 
 export async function getMasterlistProducts(): Promise<Product[]> {
   // Explicitly passing scope=products to match the route logic clearly

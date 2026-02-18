@@ -48,6 +48,32 @@ const data = {
           title: "SKU Approval Queue",
           url: "/scm/product-management/sku-approval",
         },
+        {
+          title: "Barcoding",
+          url: "/scm/product-management/barcode-management",
+          items: [
+            {
+              title: "Barcode Masterlist",
+              url: "/scm/product-management/barcode-management/barcode-masterlist",
+            },
+            {
+              title: "Barcode Linking",
+              url: "/scm/product-management/barcode-management/barcode-linking",
+            },
+          ],
+        },
+        {
+          title: "Brand",
+          url: "/scm/product-management/brand",
+        },
+        {
+          title: "Category",
+          url: "/scm/product-management/category",
+        },
+        {
+          title: "Unit of Measurement",
+          url: "/scm/product-management/unit-of-measurement",
+        },
       ],
     },
     {
