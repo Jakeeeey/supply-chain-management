@@ -2,45 +2,42 @@
 description: The Project Constitution - Global standards for structure, logic, and UI to prevent technical debt and "ugly" code.
 ---
 
-# 📜 THE PROJECT CONSTITUTION
+# 📜 GLOBAL STANDARDS CONSTITUTION
 
-This document is the "Source of Truth" for the entire repository. Every AI Agent and Developer must adhere to these standards to maintain a premium, scalable system.
+This document serves as the "Source of Truth" for development across the entire system. Adherence is mandatory for all features.
 
-## 1. The Core Philosophy
+## 1. Core Principles
 
-- **Clean Layers**: Component (UI) → Hook (State) → API (Gateway) → Service (Logic) → DB.
-- **Zero-Logic Components**: If a component has more than 5 lines of `useEffect` or `fetch`, move it to a Hook.
-- **Single Responsibility**: One service file per Directus collection.
+- **DRY (Don't Repeat Yourself)**: If an utility or UI component is used in more than two modules, it must move to the global `/lib` or `/components/ui/` directories.
+- **Separation of Concerns**: Keep UI files clean. One file = one responsibility.
+- **Performance First**: Optimistic updates are preferred for standard actions, while high-risk actions must show a distinct loading state.
 
-## 2. Directory "Holy" Structure
+## 2. Directory Governance
 
-Never deviate from this root organization:
+- **`/app/`**: Focused on routing and API entry points.
+- **`/modules/`**: The core "brain" of the application. Everything required for a feature should live here.
+- **`/components/`**: Only for pure, reusable UI elements.
+- **`/lib/`**: For strictly stateless utility functions.
 
-- `/app/api/[subsystem]/[domain]` -> All Backend Endpoints.
-- `/modules/[subsystem]/[domain]` -> The entire Domain logic (Types, Hooks, Services, UI, API Handlers, Providers).
-- `/lib` -> Global Shared Utilities (Formatting, Auth).
-- `/components/ui` -> Pure primitive UI components (Shadcn).
+## 3. Mandatory UI Elements
 
-## 3. Mandatory Global Components
+Every data-driven view MUST implement:
 
-The following MUST be used in every data-driven page:
+- **Skeleton Loaders**: Custom refined loaders that match the expected content shape.
+- **Standard Formatting**: Use the centralized utility functions for all displayed metrics (Currency, Date, Percentage).
+- **Error Boundaries**: Use the global error page for any failed data fetch or component crash.
 
-1. **DataTableSkeleton**: For all loading states.
-2. **ErrorPage**: For all failed API connections.
-3. **formatPHP**: For all currency displays.
-4. **formatDate**: For all date displays.
+## 4. Feature Life-Cycle
 
-## 4. Bootstrapping a New Module (The Law)
+When adding any new capability to the system:
 
-When asked to create a module, ALWAYS generate these 5 layers:
-
-1. `types.schema.ts` (The Contract)
-2. `services/entity.ts` (The Brain)
-3. `api/route.ts` (The Gate)
-4. `hooks/useEntity.ts` (The Bridge)
-5. `providers/` (The State/Context)
-6. `EntityPage.tsx` (The View)
+1. Define the Data Contract (`types/`).
+2. Implement the Business Intelligence (`services/`).
+3. Create the Network Gateway (`api/`).
+4. Build the State Bridge (`hooks/`).
+5. Design the Premium Interface (`components/` & `Page`).
 
 ---
 
-> **Usage**: Run `/initialize` to setup the environment or `/create-module` to expand the system.
+> [!NOTE]
+> Consistency is the key to a premium product. Every module should feel like it was built by the exact same designer and developer.
