@@ -37,10 +37,10 @@ export function PrintFormatModal({
 
         <div className="grid gap-4 py-4">
           <Card
-            className="flex items-center gap-4 p-4 cursor-pointer hover:border-blue-500 hover:bg-blue-50/50 transition-all"
+            className="flex items-center gap-4 p-4 cursor-pointer hover:border-primary hover:bg-muted/50 transition-all"
             onClick={() => onSelectFormat("simple")}
           >
-            <div className="p-3 bg-blue-100 rounded-full text-blue-600">
+            <div className="p-3 bg-primary/10 rounded-full text-primary">
               <QrCode className="h-6 w-6" />
             </div>
             <div>
@@ -52,7 +52,7 @@ export function PrintFormatModal({
           </Card>
 
           <Card
-            className="flex items-center gap-4 p-4 cursor-pointer hover:border-blue-500 hover:bg-blue-50/50 transition-all"
+            className="flex items-center gap-4 p-4 cursor-pointer hover:border-primary hover:bg-muted/50 transition-all"
             onClick={() => onSelectFormat("detailed")}
           >
             <div className="p-3 bg-purple-100 rounded-full text-purple-600">

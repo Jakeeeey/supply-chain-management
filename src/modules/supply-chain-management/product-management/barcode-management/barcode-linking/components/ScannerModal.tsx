@@ -340,7 +340,7 @@ export function ScannerModal({
                   <Layers className="h-3 w-3 mr-1" />
                   {getCategoryName()}
                 </Badge>
-                <Badge className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 text-xs">
+                <Badge className="bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 text-xs">
                   {getUnitName()}
                 </Badge>
               </div>
@@ -360,7 +360,7 @@ export function ScannerModal({
             onClick={() => handleMethodSelect("manual")}
           >
             <CardContent className="p-5 text-center space-y-3">
-              <div className="h-12 w-12 mx-auto rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+              <div className="h-12 w-12 mx-auto rounded-lg bg-primary/10 text-primary flex items-center justify-center">
                 <Keyboard className="h-6 w-6" />
               </div>
               <div>
