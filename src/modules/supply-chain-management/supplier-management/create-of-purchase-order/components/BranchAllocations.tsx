@@ -203,9 +203,9 @@ export function BranchAllocations(props: {
                                                     <td className="p-3 text-right">
                                                         <button
                                                             onClick={() => props.onRemoveItem(branch.branchId, item.id)}
-                                                            className="p-1.5 text-muted-foreground hover:text-destructive transition opacity-0 group-hover:opacity-100"
+                                                            className="p-1.5 text-muted-foreground hover:text-destructive transition"
                                                         >
-                                                            <X className="w-4 h-4" />
+                                                            <Trash2 className="w-4 h-4" />
                                                         </button>
                                                     </td>
                                                 </tr>

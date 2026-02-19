@@ -139,3 +139,135 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
     // Save/Download
     doc.save(`Receipt_${data.receiptNo}.pdf`);
 }
+
+export async function generatePurchaseOrderPDF(data: {
+    poNumber: string;
+    poDate: string;
+    supplierName: string;
+    items: Array<{
+        name: string;
+        barcode: string;
+        orderQty: number;
+        uom: string;
+        price: number;
+        branchName: string;
+    }>;
+    subtotal: number;
+    discount: number;
+    vat: number;
+    ewt: number;
+    total: number;
+}) {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    
+    // PDF-safe currency formatter (using P instead of ₱ which causes encoding issues in jsPDF)
+    const formatMoney = (val: number) => {
+        const formatted = new Intl.NumberFormat("en-PH", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        }).format(val);
+        return `P${formatted}`;
+    };
+
+    // Title
+    doc.setFontSize(22);
+    doc.setTextColor(37, 99, 235); // Blue
+    doc.text("PURCHASE ORDER", pageWidth / 2, 20, { align: "center" });
+
+    doc.setFontSize(9);
+    doc.setTextColor(120, 120, 120);
+    doc.text(`Generated on: ${new Date().toLocaleString()}`, pageWidth - 15, 10, { align: "right" });
+
+    // Header Info Box
+    doc.setDrawColor(220, 220, 220);
+    doc.line(15, 30, pageWidth - 15, 30);
+
+    doc.setFontSize(11);
+    doc.setTextColor(0, 0, 0);
+    doc.setFont("helvetica", "bold");
+    doc.text("PO Number:", 15, 40);
+    doc.setFont("helvetica", "normal");
+    doc.text(data.poNumber || "N/A", 45, 40);
+
+    doc.setFont("helvetica", "bold");
+    doc.text("Supplier:", 15, 47);
+    doc.setFont("helvetica", "normal");
+    doc.text(data.supplierName || "N/A", 45, 47);
+
+    doc.setFont("helvetica", "bold");
+    doc.text("Date:", 130, 40);
+    doc.setFont("helvetica", "normal");
+    doc.text(data.poDate || "N/A", 150, 40);
+
+    doc.line(15, 55, pageWidth - 15, 55);
+
+    // Items Table
+    const tableRows = data.items.map(it => [
+        it.name,
+        it.barcode,
+        it.branchName,
+        it.orderQty,
+        it.uom,
+        formatMoney(it.price),
+        formatMoney(it.price * it.orderQty)
+    ]);
+
+    autoTable(doc, {
+        startY: 60,
+        head: [["Product Name", "SKU", "Branch", "Qty", "UOM", "Price", "Total"]],
+        body: tableRows,
+        theme: "grid",
+        headStyles: { fillColor: [37, 99, 235], textColor: 255, fontSize: 9, halign: 'left' },
+        styles: { fontSize: 8, cellPadding: 2 },
+        columnStyles: {
+            0: { cellWidth: 45 },
+            1: { cellWidth: 25 },
+            2: { cellWidth: 30 },
+            3: { cellWidth: 15, halign: "center" },
+            4: { cellWidth: 15, halign: "center" },
+            5: { cellWidth: 25, halign: "right" },
+            6: { cellWidth: 25, halign: "right" }
+        }
+    });
+
+    const lastY = (doc as any).lastAutoTable.finalY + 10;
+
+    // Financial Summary
+    const summaryX = pageWidth - 80;
+    doc.setFontSize(9);
+    
+    // Subtotal
+    doc.setFont("helvetica", "normal");
+    doc.text("Gross Amount:", summaryX, lastY);
+    doc.text(formatMoney(data.subtotal), pageWidth - 15, lastY, { align: "right" });
+
+    // Discount
+    doc.text("Discount:", summaryX, lastY + 5);
+    doc.setTextColor(220, 38, 38); // Red for discount
+    doc.text(`-${formatMoney(data.discount)}`, pageWidth - 15, lastY + 5, { align: "right" });
+    doc.setTextColor(0, 0, 0);
+
+    // Net Amount (derived)
+    const netAmount = data.subtotal - data.discount;
+    doc.text("Net Amount:", summaryX, lastY + 10);
+    doc.text(formatMoney(netAmount), pageWidth - 15, lastY + 10, { align: "right" });
+
+    // VAT
+    doc.text("VAT:", summaryX, lastY + 15);
+    doc.text(formatMoney(data.vat), pageWidth - 15, lastY + 15, { align: "right" });
+
+    // EWT
+    doc.text("EWT Goods (1%):", summaryX, lastY + 20);
+    doc.text(formatMoney(data.ewt), pageWidth - 15, lastY + 20, { align: "right" });
+
+    // Total
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.line(summaryX, lastY + 23, pageWidth - 15, lastY + 23);
+    doc.text("TOTAL:", summaryX, lastY + 30);
+    doc.setTextColor(37, 99, 235); // Blue
+    doc.text(formatMoney(data.total), pageWidth - 15, lastY + 30, { align: "right" });
+
+    doc.save(`PO_${data.poNumber}.pdf`);
+}

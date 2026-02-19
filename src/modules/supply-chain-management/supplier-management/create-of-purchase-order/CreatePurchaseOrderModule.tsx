@@ -178,7 +178,7 @@ function SupplierSelect(props: {
 
     return (
         <div className="space-y-1.5 w-full min-w-0">
-            <div className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
+            <div className="text-xs font-bold uppercase text-muted-foreground tracking-tight">
                 Supplier
             </div>
 
@@ -316,7 +316,7 @@ function BranchMultiSelect(props: {
 
     return (
         <div className="space-y-1.5 w-full min-w-0">
-            <div className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
+            <div className="text-xs font-bold uppercase text-muted-foreground tracking-tight">
                 Delivery Branches
             </div>
 
@@ -980,11 +980,7 @@ export default function CreatePurchaseOrderModule() {
                                 </ItemContent>
                             </Item>
                         </div>
-                    ) : (
-                        <Button type="button" variant="outline" className="h-11 rounded-xl w-full" disabled>
-                            Ready
-                        </Button>
-                    )}
+                    ) : null}
                 </div>
             </div>
 

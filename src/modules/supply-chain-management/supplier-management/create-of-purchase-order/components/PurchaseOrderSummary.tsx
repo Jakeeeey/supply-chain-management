@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 import { Info, CheckCircle2, AlertTriangle } from "lucide-react";
+import { POPreviewModal } from "./POPreviewModal";
 
 type Notice = {
     variant: "success" | "error" | "info";
@@ -99,6 +100,7 @@ export function PurchaseOrderSummary(props: {
     const [isSubmitting, setIsSubmitting] = React.useState(false);
     const [locked, setLocked] = React.useState(false);
     const [notice, setNotice] = React.useState<Notice | null>(null);
+    const [previewOpen, setPreviewOpen] = React.useState(false);
 
     // ✅ kapag new PO number => new transaction (unlock)
     React.useEffect(() => {
@@ -194,12 +196,6 @@ export function PurchaseOrderSummary(props: {
                             <AlertDescription>{notice.description}</AlertDescription>
                         ) : null}
                     </Alert>
-
-                    <div className="mt-2 flex justify-end">
-                        <Button variant="outline" onClick={() => setNotice(null)} className="h-8">
-                            Dismiss
-                        </Button>
-                    </div>
                 </div>
             ) : null}
 
@@ -207,7 +203,7 @@ export function PurchaseOrderSummary(props: {
                 {/* LEFT COLUMN */}
                 <div className="flex flex-col h-[550px] border border-border rounded-xl bg-muted/5 overflow-hidden">
                     <div className="px-4 py-3 border-b border-border bg-muted/30 shrink-0">
-                        <p className="text-sm font-bold text-foreground uppercase tracking-tight">
+                        <p className="text-sm font-black text-foreground uppercase tracking-tight">
                             Order Details
                         </p>
                     </div>
@@ -317,7 +313,7 @@ export function PurchaseOrderSummary(props: {
                     {/* Products */}
                     <div className="flex-1 flex flex-col border border-border rounded-xl bg-card overflow-hidden shadow-sm">
                         <div className="px-4 py-3 border-b border-border bg-muted/50 shrink-0 flex justify-between items-center">
-                            <p className="text-sm font-bold text-foreground">
+                            <p className="text-sm font-black text-foreground uppercase tracking-tight">
                                 Products ({props.allItemsFlat.length})
                             </p>
                             <span className="text-[10px] font-bold text-muted-foreground bg-background px-2 py-0.5 rounded border uppercase">
@@ -395,34 +391,34 @@ export function PurchaseOrderSummary(props: {
 
                     {/* Financial Summary */}
                     <div className="p-5 border border-border rounded-xl bg-muted/30 space-y-3 shrink-0">
-                        <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                        <div className="text-sm font-black uppercase tracking-tight text-foreground">
                             Financial Summary
                         </div>
 
                         <div className="flex justify-between text-xs">
-                            <span className="text-muted-foreground font-medium uppercase">Gross Amount</span>
+                            <span className="text-muted-foreground font-bold uppercase">Gross Amount</span>
                             <span className="font-bold text-foreground">{money.format(grossAmount)}</span>
                         </div>
 
                         <div className="flex justify-between text-xs">
-                            <span className="text-muted-foreground font-medium uppercase">Discount</span>
+                            <span className="text-muted-foreground font-bold uppercase">Discount</span>
                             <span className="font-bold text-emerald-600 dark:text-emerald-400">
                                 -{money.format(discountAmount)}
                             </span>
                         </div>
 
                         <div className="flex justify-between text-xs border-b border-border/50 pb-3">
-                            <span className="text-muted-foreground font-medium uppercase">Net Amount</span>
+                            <span className="text-muted-foreground font-bold uppercase">Net Amount</span>
                             <span className="font-bold text-foreground">{money.format(netAmount)}</span>
                         </div>
 
                         <div className="flex justify-between text-xs">
-                            <span className="text-muted-foreground font-medium uppercase">VAT</span>
+                            <span className="text-muted-foreground font-bold uppercase">VAT</span>
                             <span className="font-bold text-foreground">{money.format(vatAmount)}</span>
                         </div>
 
                         <div className="flex justify-between text-xs">
-                            <span className="text-muted-foreground font-medium uppercase">EWT Goods (1%)</span>
+                            <span className="text-muted-foreground font-bold uppercase">EWT Goods (1%)</span>
                             <span className="font-bold text-foreground">{money.format(ewtGoods)}</span>
                         </div>
 
@@ -434,57 +430,95 @@ export function PurchaseOrderSummary(props: {
                                 {money.format(totalAmount)}
                             </span>
                         </div>
+
+                        {/* ✅ Action Buttons moved under the Total */}
+                        <div className="pt-4 flex flex-col gap-3">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setPreviewOpen(true)}
+                                className="w-full h-11 rounded-xl font-bold uppercase tracking-wider border-primary/20 hover:bg-primary/5 transition-all text-foreground"
+                            >
+                                Review & Print
+                            </Button>
+
+                            <AlertDialog
+                                open={confirmOpen}
+                                onOpenChange={(o) => {
+                                    if (isSubmitting) return;
+                                    setConfirmOpen(o);
+                                }}
+                            >
+                                <Button
+                                    type="button"
+                                    variant="default"
+                                    disabled={disabled}
+                                    onClick={() => setConfirmOpen(true)}
+                                    className={cn(
+                                        "w-full h-11 rounded-xl font-bold uppercase tracking-wider transition-all",
+                                        locked
+                                            ? "bg-emerald-600/10 text-emerald-700 dark:text-emerald-400 border border-emerald-600/20 disabled:opacity-100 cursor-default"
+                                            : "bg-blue-600 hover:bg-blue-700 text-white hover:-translate-y-[1px] hover:shadow-lg active:translate-y-0 active:scale-[0.98]",
+                                        isSubmitting ? "opacity-70" : ""
+                                    )}
+                                >
+                                    {isSubmitting ? "Saving..." : locked ? "Saved" : "Save Purchase Order"}
+                                </Button>
+
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>Are you sure this is the final Purchase Order?</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                            This will create and post the Purchase Order record. Please confirm before proceeding.
+                                        </AlertDialogDescription>
+                                    </AlertDialogHeader>
+
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel asChild>
+                                            <Button type="button" variant="outline" disabled={isSubmitting}>
+                                                Cancel
+                                            </Button>
+                                        </AlertDialogCancel>
+
+                                        <AlertDialogAction asChild>
+                                            <Button type="button" onClick={runSave} disabled={disabled} className="bg-blue-600 hover:bg-blue-700 text-white">
+                                                Confirm &amp; Save
+                                            </Button>
+                                        </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {/* ACTION */}
-            <div className="mt-8 flex justify-end border-t border-border pt-6">
-                <AlertDialog
-                    open={confirmOpen}
-                    onOpenChange={(o) => {
-                        if (isSubmitting) return;
-                        setConfirmOpen(o);
-                    }}
-                >
-                    <Button
-                        type="button"
-                        variant="outline"
-                        disabled={disabled}
-                        onClick={() => setConfirmOpen(true)}
-                        className={cn(
-                            "h-11 rounded-xl px-6 font-bold uppercase tracking-wider",
-                            "transition-all hover:-translate-y-[1px] hover:shadow-sm active:translate-y-0 active:scale-[0.98]",
-                            locked ? "cursor-not-allowed opacity-70" : ""
-                        )}
-                    >
-                        {isSubmitting ? "Saving..." : locked ? "Saved" : "Save Purchase Order"}
-                    </Button>
 
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle>Are you sure this is the final Purchase Order?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                This will create and post the Purchase Order record. Please confirm before proceeding.
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-
-                        <AlertDialogFooter>
-                            <AlertDialogCancel asChild>
-                                <Button type="button" variant="outline" disabled={isSubmitting}>
-                                    Cancel
-                                </Button>
-                            </AlertDialogCancel>
-
-                            <AlertDialogAction asChild>
-                                <Button type="button" onClick={runSave} disabled={disabled}>
-                                    Confirm &amp; Save
-                                </Button>
-                            </AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-            </div>
+            <POPreviewModal
+                isOpen={previewOpen}
+                onClose={() => setPreviewOpen(false)}
+                onConfirmSave={runSave}
+                isSubmitting={isSubmitting}
+                locked={locked}
+                data={{
+                    poNumber: props.poNumber,
+                    poDate: props.poDate,
+                    supplierName: props.supplier?.name || "N/A",
+                    items: props.allItemsFlat.map(x => ({
+                        name: x.item.name,
+                        barcode: x.item.sku,
+                        orderQty: x.item.orderQty,
+                        uom: x.item.selectedUom,
+                        price: x.item.price,
+                        branchName: x.branchName
+                    })),
+                    subtotal: props.subtotal,
+                    discount: props.discount,
+                    vat: props.tax,
+                    ewt: props.ewtGoods ?? (props.subtotal - props.discount) * 0.01,
+                    total: props.total
+                }}
+            />
         </div>
     );
 }
