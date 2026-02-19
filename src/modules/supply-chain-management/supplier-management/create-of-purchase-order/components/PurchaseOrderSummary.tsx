@@ -4,6 +4,7 @@
 import * as React from "react";
 import type { BranchAllocation, CartItem, Supplier } from "../types";
 import { buildMoneyFormatter, cn } from "../utils/calculations";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -129,14 +130,30 @@ export function PurchaseOrderSummary(props: {
                     : "Your purchase order has been saved successfully.",
             });
 
+            // ✅ Global toast
+            if (alreadyExists) {
+                toast.info("Purchase order already exists", {
+                    description: "This PO number is already in the database. No duplicate was created.",
+                });
+            } else {
+                toast.success("Purchase order created!", {
+                    description: "Your purchase order has been saved successfully.",
+                });
+            }
+
             // ✅ lock to prevent double submit
             setLocked(true);
         } catch (e: any) {
+            const errMsg = String(e?.message ?? e ?? "Unknown error");
             setNotice({
                 variant: "error",
                 title: "Failed to create purchase order",
-                description: String(e?.message ?? e ?? "Unknown error"),
+                description: errMsg,
             });
+
+            // ✅ Global toast error
+            toast.error("Failed to create purchase order", { description: errMsg });
+
             setLocked(false);
         } finally {
             setIsSubmitting(false);

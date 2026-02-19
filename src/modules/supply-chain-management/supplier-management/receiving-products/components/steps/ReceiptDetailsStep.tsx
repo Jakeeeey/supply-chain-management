@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
     Select,
     SelectContent,
@@ -19,6 +20,13 @@ const RECEIPT_TYPES = [
     { value: "SI-CASH", label: "Cash Sales Invoice [SI-CASH]" },
     { value: "DR", label: "Delivery Receipt [DR]" },
 ];
+
+function statusBadgeClasses(status?: string) {
+    const s = String(status || "").toUpperCase();
+    if (s === "CLOSED") return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20";
+    if (s === "PARTIAL") return "bg-orange-500/15 text-orange-700 dark:text-orange-300 border border-orange-500/20";
+    return "bg-primary/15 text-primary border border-primary/20";
+}
 
 export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
     const {
@@ -42,6 +50,23 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
         return Array.from(new Set(names)).join(", ");
     }, [selectedPO]);
 
+    const progress = React.useMemo(() => {
+        const allocs = Array.isArray(selectedPO?.allocations) ? selectedPO!.allocations : [];
+        const items = allocs.flatMap((a) => (Array.isArray(a?.items) ? a.items : []));
+        const totalTagged = items.reduce((acc, it: any) => acc + (Number(it?.taggedQty) || 0), 0);
+        const totalReceived = items.reduce((acc, it: any) => acc + (Number(it?.receivedQty) || 0), 0);
+        return { totalTagged, totalReceived };
+    }, [selectedPO]);
+
+    const receiptHint = React.useMemo(() => {
+        if (!selectedPO) return "";
+        const { totalTagged, totalReceived } = progress;
+        if (totalTagged <= 0) return "";
+        if (totalReceived >= totalTagged) return "This PO appears fully received already.";
+        if (totalReceived > 0) return "This will be a partial receiving receipt (continuation is allowed).";
+        return "This will start receiving for this PO.";
+    }, [selectedPO, progress]);
+
     const handleContinue = () => {
         setLocalError("");
         if (!selectedPO) return setLocalError("Select a PO first.");
@@ -54,7 +79,15 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
     return (
         <div className="space-y-4">
             <Card className="p-4">
-                <div className="text-sm font-semibold">Selected PO Details</div>
+                <div className="flex items-start justify-between gap-3">
+                    <div className="text-sm font-semibold">Selected PO Details</div>
+                    {selectedPO?.status ? (
+                        <Badge variant="secondary" className={statusBadgeClasses(selectedPO.status)}>
+                            {selectedPO.status}
+                        </Badge>
+                    ) : null}
+                </div>
+
                 <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                     <div className="text-muted-foreground">PO Number</div>
                     <div className="text-right font-medium">{selectedPO?.poNumber ?? "—"}</div>
@@ -64,7 +97,16 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
 
                     <div className="text-muted-foreground">Delivery Branches</div>
                     <div className="text-right font-medium">{branchesLabel}</div>
+
+                    <div className="text-muted-foreground">Receiving Progress</div>
+                    <div className="text-right font-medium">
+                        {progress.totalReceived} / {progress.totalTagged}
+                    </div>
                 </div>
+
+                {receiptHint ? (
+                    <div className="mt-3 text-xs text-muted-foreground">{receiptHint}</div>
+                ) : null}
             </Card>
 
             <Card className="p-4">

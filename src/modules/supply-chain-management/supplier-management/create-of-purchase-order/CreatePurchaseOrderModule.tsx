@@ -20,6 +20,7 @@ import {
 } from "./utils/calculations";
 
 import * as provider from "./providers/purchaseOrderProvider";
+import { toast } from "sonner";
 
 import { BranchAllocations } from "./components/BranchAllocations";
 
@@ -753,8 +754,20 @@ export default function CreatePurchaseOrderModule() {
             prev.map((b) => (b.branchId === branchId ? { ...b, items: normalized as any } : b))
         );
 
+        // ✅ Toast: confirm product selection
+        const branchLabel = allocations.find((x) => x.branchId === branchId)?.branchName ?? "branch";
+        if (normalized.length > 0) {
+            toast.success(`Products confirmed for ${branchLabel}`, {
+                description: `${normalized.length} product${normalized.length !== 1 ? "s" : ""} added to the order.`,
+            });
+        } else {
+            toast.info(`Products cleared for ${branchLabel}`, {
+                description: "No products were selected for this branch.",
+            });
+        }
+
         setPickerOpen(false);
-    }, [pickerBranchId, tempCart, defaultNoDiscountId]);
+    }, [pickerBranchId, tempCart, defaultNoDiscountId, allocations]);
 
     // Summary
     const allItemsFlat = React.useMemo(() => {

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import * as React from "react";
 import { Badge } from "@/components/ui/badge";
@@ -55,11 +55,9 @@ function branchLabel(branch: any) {
     if (code !== "—" && name !== "—") return `${code} — ${name}`;
     if (name !== "—") return name;
 
-    // if numeric/raw, do NOT show id
     return "—";
 }
 
-/** ✅ prefers helper text from API, otherwise uses expanded object */
 function branchLabelFromRow(row: any) {
     const helper = safeStr(
         row?.branch_name_text ?? row?.branchNameText ?? row?.branchName ?? "",
@@ -115,11 +113,11 @@ function getPaginationModel(totalPages: number, currentPage: number) {
 }
 
 export default function PendingApprovalList({
-                                                items,
-                                                selectedId,
-                                                onSelect,
-                                                disabled,
-                                            }: Props) {
+    items,
+    selectedId,
+    onSelect,
+    disabled,
+}: Props) {
     const [page, setPage] = React.useState(1);
 
     const totalPages = React.useMemo(

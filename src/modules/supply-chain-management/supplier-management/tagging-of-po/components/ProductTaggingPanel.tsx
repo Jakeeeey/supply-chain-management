@@ -4,8 +4,6 @@ import * as React from "react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -41,7 +39,6 @@ export default function ProductTaggingPanel(props: {
 }) {
     const po = props.po;
 
-    const [strict, setStrict] = React.useState(true);
     const [sku, setSku] = React.useState("");
     const [rfid, setRfid] = React.useState("");
     const [saving, setSaving] = React.useState(false);
@@ -53,7 +50,6 @@ export default function ProductTaggingPanel(props: {
         setSku("");
         setRfid("");
         setSaving(false);
-        setStrict(true);
     }, [po?.id]);
 
     const matched: TaggingPOItem | null = React.useMemo(() => {
@@ -63,14 +59,15 @@ export default function ProductTaggingPanel(props: {
         return po.items.find((x) => x.sku.toLowerCase() === s) ?? null;
     }, [po, sku]);
 
+    // ✅ Strict toggle removed: still show clear feedback if SKU is not part of PO
     const skuRejected = React.useMemo(() => {
         const s = sku.trim();
         if (!s) return false;
-        if (!strict) return false;
         return !matched;
-    }, [sku, strict, matched]);
+    }, [sku, matched]);
 
-    const canTag = Boolean(matched && rfid.trim() && !saving && !(strict && skuRejected));
+    // ✅ Tagging requires matched SKU + scanned RFID
+    const canTag = Boolean(matched && rfid.trim() && !saving);
 
     const totalExpected = po ? sumExpected(po) : 0;
     const totalTagged = po ? sumTagged(po) : 0;
@@ -81,7 +78,10 @@ export default function ProductTaggingPanel(props: {
 
         try {
             setSaving(true);
-            const updated = await props.onTagItem(sku.trim(), rfid.trim(), strict);
+
+            // ✅ Strict UI removed, but keep strict enforcement ON internally (safer; prevents duplicates/over-tagging)
+            const updated = await props.onTagItem(sku.trim(), rfid.trim(), true);
+
             props.onChange(updated);
 
             // keep SKU (scanner usually repeats SKU), clear RFID
@@ -125,7 +125,7 @@ export default function ProductTaggingPanel(props: {
                             )}
                         >
                             <div className="p-5">
-                                {/* ✅ Header: removed Strict badge + Camera Scan button */}
+                                {/* Header */}
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="space-y-1">
                                         <div className="text-xs font-black uppercase tracking-widest text-[rgba(248,250,252,0.82)]">
@@ -186,16 +186,8 @@ export default function ProductTaggingPanel(props: {
                                             <div className="text-xs font-black uppercase tracking-widest text-[rgba(248,250,252,0.82)]">
                                                 2. Scan RFID Tag
                                             </div>
-
-                                            <div className="flex items-center gap-2">
-                                                <Switch checked={strict} onCheckedChange={setStrict} id="strict" />
-                                                <Label
-                                                    htmlFor="strict"
-                                                    className="text-xs font-bold text-[rgba(248,250,252,0.78)]"
-                                                >
-                                                    Strict
-                                                </Label>
-                                            </div>
+                                            {/* ✅ Strict toggle removed */}
+                                            <div />
                                         </div>
 
                                         <Input

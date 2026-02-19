@@ -11,16 +11,18 @@ import { useReceivingProducts } from "../../providers/ReceivingProductsProvider"
 
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { Printer, Eye } from "lucide-react";
+import { generateOfficialSupplierReceiptV5 } from "../../utils/printUtils";
+import { ReceiptPreviewModal } from "../ReceiptPreviewModal";
 
 export function ScanProductsStep() {
     const router = useRouter();
+    const [previewOpen, setPreviewOpen] = React.useState(false);
 
     const {
         selectedPO,
         rfid,
         setRfid,
-        strict,
-        setStrict,
         scanRFID,
         scanError,
         lastMatched,
@@ -86,16 +88,27 @@ export function ScanProductsStep() {
     }, [receiptSaved?.savedAt, clientSaveError]);
 
     const handleSaveReceipt = React.useCallback(async () => {
-        // ✅ required validation
-        if (!hasValidScan) {
-            setClientSaveError("Please scan a valid RFID for the product.");
+        // ✅ 1. Check if already fully received
+        const status = (selectedPO?.status || "").toUpperCase();
+        if (status === "CLOSED" || status === "RECEIVED") {
+            setClientSaveError("you already save the receipt");
             return;
         }
 
-        // keep existing behavior
+        // ✅ 2. Check for partial behavior
+        if (!hasValidScan) {
+            if (status === "PARTIAL") {
+                setClientSaveError("you can save receipt once for partial next is when the rfid is verified for fully received you can scan again ang save receipt");
+            } else {
+                setClientSaveError("Please scan a valid RFID for the product.");
+            }
+            return;
+        }
+
+        // ✅ 3. Proceed to save if scans are present
         setClientSaveError("");
         await Promise.resolve(saveReceipt());
-    }, [hasValidScan, saveReceipt]);
+    }, [hasValidScan, saveReceipt, selectedPO?.status]);
 
     return (
         <div className="space-y-4">
@@ -107,11 +120,15 @@ export function ScanProductsStep() {
                             Scan RFID again to verify it belongs to this PO. Barcode is not required here.
                         </div>
                     </div>
-
-                    <div className="flex items-center gap-2">
-                        <div className="text-xs text-muted-foreground">Strict</div>
-                        <Switch checked={strict} onCheckedChange={setStrict} />
-                    </div>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        className="hidden sm:flex gap-2 border-primary/20 hover:bg-primary/5"
+                        onClick={() => setPreviewOpen(true)}
+                    >
+                        <Eye className="h-4 w-4" />
+                        Review & Print
+                    </Button>
                 </div>
 
                 <div className="mt-4 space-y-3">
@@ -131,15 +148,20 @@ export function ScanProductsStep() {
                     </Button>
 
                     {lastMatched ? (
-                        <div className="rounded-lg border p-4">
+                        <div className="rounded-xl border bg-primary/5 p-4 border-primary/10 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
                             <div className="flex items-start justify-between gap-3">
-                                <div>
-                                    <div className="text-xs font-medium text-muted-foreground">MATCHED PRODUCT</div>
-                                    <div className="text-base font-semibold">{lastMatched.productName}</div>
-                                    <div className="mt-1 text-xs text-muted-foreground">SKU: {lastMatched.sku}</div>
+                                <div className="space-y-1">
+                                    <div className="text-[10px] font-black text-primary uppercase tracking-widest">Matched Piece</div>
+                                    <div className="text-base font-black tracking-tight">{lastMatched.productName}</div>
+                                    <div className="text-xs font-mono text-muted-foreground bg-background px-2 py-0.5 rounded border inline-block">
+                                        ID: {lastMatched.sku}
+                                    </div>
                                 </div>
-                                <Badge variant={lastMatched.alreadyReceived ? "secondary" : "outline"}>
-                                    {lastMatched.alreadyReceived ? "Already Received" : "Verified"}
+                                <Badge 
+                                    variant={lastMatched.alreadyReceived ? "secondary" : "default"}
+                                    className={lastMatched.alreadyReceived ? "" : "bg-green-600 hover:bg-green-700"}
+                                >
+                                    {lastMatched.alreadyReceived ? "Already Counted" : "Verified OK"}
                                 </Badge>
                             </div>
                         </div>
@@ -149,33 +171,55 @@ export function ScanProductsStep() {
 
             {/* ✅ show after save */}
             {receiptSaved ? (
-                <Card className="p-4">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                            <div className="text-sm font-semibold">Next step</div>
-                            <div className="text-xs text-muted-foreground">
-                                Receipt saved. Proceed to Posting of PO to post this receipt.
+                <Card className="p-4 border-2 border-primary/20 shadow-lg">
+                    <div className="flex flex-col gap-4">
+                        <div className="flex items-center justify-between border-b pb-4">
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <h3 className="text-lg font-bold">Receipt Saved Successfully!</h3>
+                                    <Badge 
+                                        variant={receiptSaved.isFullyReceived ? "default" : "secondary"}
+                                        className={receiptSaved.isFullyReceived ? "bg-green-600 hover:bg-green-700" : "bg-orange-500 hover:bg-orange-600 text-white"}
+                                    >
+                                        {receiptSaved.isFullyReceived ? "FULLY RECEIVED" : "PARTIALLY RECEIVED"}
+                                    </Badge>
+                                </div>
+                                <p className="text-sm text-muted-foreground mt-1">
+                                    Receipt No: <span className="font-mono font-bold text-foreground">{receiptSaved.receiptNo}</span> • {receiptSaved.receiptDate}
+                                </p>
                             </div>
                         </div>
 
-                        <div className="flex gap-2">
+                        <div className="space-y-4">
+                            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Contents of this receipt:</div>
+                            <ScrollArea className="max-h-[200px] rounded-md border p-4 bg-muted/30">
+                                <div className="space-y-4">
+                                    {receiptSaved.items.map((it, idx) => (
+                                        <div key={idx} className="flex flex-col gap-1 pb-3 border-b last:border-0">
+                                            <div className="flex items-center justify-between">
+                                                <div className="font-medium text-sm">{it.name}</div>
+                                                <Badge variant="outline" className="text-[10px] font-mono">
+                                                    SKU: {it.barcode}
+                                                </Badge>
+                                            </div>
+                                            <div className="text-xs text-muted-foreground flex justify-between">
+                                                <span>RFIDs: {it.rfids.join(", ")}</span>
+                                                <span className="font-semibold text-primary">Qty: {it.receivedQtyNow}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </ScrollArea>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-3 pt-2">
                             <Button
                                 type="button"
-                                variant="outline"
-                                onClick={() => {
-                                    clearReceiptSaved();
-                                }}
+                                className="flex-1 gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+                                onClick={() => setPreviewOpen(true)}
                             >
-                                Stay here
-                            </Button>
-                            <Button
-                                type="button"
-                                onClick={() => {
-                                    clearReceiptSaved();
-                                    router.push("/scm/supplier-management/posting-of-purchase-order");
-                                }}
-                            >
-                                Go to Posting of PO
+                                <Eye className="h-4 w-4" />
+                                Review & Print
                             </Button>
                         </div>
                     </div>
@@ -233,9 +277,9 @@ export function ScanProductsStep() {
                             <div key={porId} className="flex items-center justify-between gap-3">
                                 <div className="min-w-0">
                                     <div className="truncate text-sm font-medium">{it.name}</div>
-                                    <div className="text-xs text-muted-foreground">{it.branchName}</div>
+                                    <div className="text-[10px] tabular-nums text-muted-foreground/70">SKU: {it.barcode} • {it.branchName}</div>
                                 </div>
-                                <div className="text-sm">
+                                <div className="text-sm font-semibold text-primary">
                                     {scanned} / {expected}
                                 </div>
                             </div>
@@ -277,8 +321,14 @@ export function ScanProductsStep() {
 
                                 return (
                                     <div key={porId} className="rounded-md border p-3">
-                                        <div className="text-sm font-medium">{it.name}</div>
-                                        <div className="text-xs text-muted-foreground mb-2">
+                                        <div className="flex items-center justify-between mb-1">
+                                            <div className="text-sm font-medium">{it.name}</div>
+                                            <Badge variant="outline" className="text-[10px] border-primary/20 bg-primary/5">
+                                                SKU: {it.barcode}
+                                            </Badge>
+                                        </div>
+                                        <div className="text-xs text-muted-foreground mb-2 flex items-center gap-2">
+                                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-primary/40" />
                                             {it.branchName} • Tagged: {Number(it.taggedQty) || 0}
                                         </div>
 
@@ -300,6 +350,34 @@ export function ScanProductsStep() {
                     </ScrollArea>
                 </div>
             </Card>
+            {/* Modal should be mountable if we have a current selectedPO or a receiptSaved */}
+            {(receiptSaved || selectedPO) && (
+                <ReceiptPreviewModal
+                    isOpen={previewOpen}
+                    onClose={() => setPreviewOpen(false)}
+                    data={receiptSaved || {
+                        poId: selectedPO?.id || "",
+                        receiptNo: "PREVIEW",
+                        receiptDate: new Date().toLocaleDateString(),
+                        receiptType: "PREVIEW",
+                        isFullyReceived: totalScanned === totalTagged,
+                        savedAt: Date.now(),
+                        items: allItems.map(it => ({
+                            name: it.name,
+                            barcode: it.barcode,
+                            productId: (it as any).productId || "",
+                            expectedQty: Number(it.taggedQty) || 0,
+                            receivedQtyAtStart: 0,
+                            receivedQtyNow: safeCounts[String(it.porId ?? it.id)] ?? 0,
+                            rfids: (activity || [])
+                                .filter((a: any) => a.productId === (it as any).productId && a.status === "ok")
+                                .map((a: any) => a.rfid)
+                        }))
+                    }}
+                    poNumber={selectedPO?.poNumber || "N/A"}
+                    supplierName={selectedPO?.supplier?.name || "N/A"}
+                />
+            )}
         </div>
     );
 }

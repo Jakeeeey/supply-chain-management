@@ -1,4 +1,4 @@
-export type POStatus = "OPEN" | "PARTIAL" | "CLOSED";
+export type POStatus = "OPEN" | "PARTIAL" | "RECEIVED" | "CLOSED";
 
 export type POListItem = {
     id: string;

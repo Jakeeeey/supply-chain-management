@@ -75,12 +75,8 @@ const PO_PRODUCTS_COLLECTION = "purchase_order_products";
 const SUPPLIERS_COLLECTION = "suppliers";
 const PRODUCTS_COLLECTION = "products";
 
-// IMPORTANT: based on your SQL FK
 const PO_RECEIVING_COLLECTION = "purchase_order_receiving";
 const RECEIVING_ITEMS_COLLECTION = "purchase_order_receiving_items";
-
-const PO_STATUS_PARTIAL = Number(process.env.PO_STATUS_PARTIAL ?? 2);
-const PO_STATUS_RECEIVED = Number(process.env.PO_STATUS_RECEIVED ?? 3);
 
 // ✅ RFID rules: exactly 24 hex chars
 const RFID_LEN = 24;
@@ -116,7 +112,13 @@ function timeDisplay(iso: string) {
     });
 }
 
-// ✅ normalize RFID: extract FIRST 24-hex EPC only (prevents multi-tag burst from storing multiple)
+function chunk<T>(arr: T[], size: number) {
+    const out: T[][] = [];
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+    return out;
+}
+
+// ✅ normalize RFID: extract FIRST 24-hex EPC only
 function normalizeRfidServer(raw: string): { rfid: string; hadMultiple: boolean } {
     const up = toStr(raw).toUpperCase();
 
@@ -131,12 +133,10 @@ function normalizeRfidServer(raw: string): { rfid: string; hadMultiple: boolean 
     return { rfid: sliced, hadMultiple: cleaned.length > RFID_LEN };
 }
 
-// product helpers (scanner priority)
 function productName(p: any) {
     return toStr(p?.product_name) || toStr(p?.name) || "Unknown";
 }
 function productPrimaryScan(p: any) {
-    // scanner usually uses barcode; fallback product_code; else blank
     return toStr(p?.barcode) || toStr(p?.product_code) || "";
 }
 function productCodes(p: any) {
@@ -151,7 +151,7 @@ function keyProdBranch(productId: number, branchId: number) {
 }
 
 // =====================
-// MAP FETCHERS (permission-safe)
+// MAP FETCHERS
 // =====================
 async function fetchSuppliersMapByIds(base: string, supplierIds: number[]) {
     const map = new Map<number, any>();
@@ -216,7 +216,7 @@ async function fetchApprovedPOs(base: string) {
 }
 
 type PoProductRow = {
-    purchase_order_product_id: number;
+    purchase_order_product_id: number; // POP id
     purchase_order_id: number;
     product_id: number;
     ordered_quantity: number;
@@ -227,13 +227,16 @@ type PoProductRow = {
 
 async function fetchPOProductsByPOIds(base: string, poIds: number[]) {
     if (!poIds.length) return [] as PoProductRow[];
-    const url =
-        `${base}/items/${PO_PRODUCTS_COLLECTION}?limit=-1` +
-        `&filter[purchase_order_id][_in]=${encodeURIComponent(poIds.join(","))}` +
-        `&fields=purchase_order_product_id,purchase_order_id,product_id,ordered_quantity,received,branch_id,unit_price`;
-
-    const j = await fetchJson(url);
-    return (j?.data ?? []) as PoProductRow[];
+    const rows: PoProductRow[] = [];
+    for (const ids of chunk(Array.from(new Set(poIds)), 250)) {
+        const url =
+            `${base}/items/${PO_PRODUCTS_COLLECTION}?limit=-1` +
+            `&filter[purchase_order_id][_in]=${encodeURIComponent(ids.join(","))}` +
+            `&fields=purchase_order_product_id,purchase_order_id,product_id,ordered_quantity,received,branch_id,unit_price`;
+        const j = await fetchJson(url);
+        rows.push(...((j?.data ?? []) as PoProductRow[]));
+    }
+    return rows;
 }
 
 async function fetchPOProductsByPOId(base: string, poId: number) {
@@ -247,7 +250,7 @@ async function fetchPOProductsByPOId(base: string, poId: number) {
 }
 
 type PORow = {
-    purchase_order_product_id: number; // PK (AUTO_INCREMENT)
+    purchase_order_product_id: number; // POR id (PK)
     purchase_order_id: number;
     product_id: number;
     branch_id: number;
@@ -258,15 +261,17 @@ type PORow = {
 
 async function fetchOpenPORowsByPOIds(base: string, poIds: number[]) {
     if (!poIds.length) return [] as PORow[];
-    const url =
-        `${base}/items/${PO_RECEIVING_COLLECTION}?limit=-1` +
-        `&filter[purchase_order_id][_in]=${encodeURIComponent(poIds.join(","))}` +
-        `&filter[isPosted][_eq]=0` +
-        `&filter[receipt_no][_null]=true` +
-        `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,isPosted,receipt_no,received_quantity`;
-
-    const j = await fetchJson(url);
-    return (j?.data ?? []) as PORow[];
+    const rows: PORow[] = [];
+    for (const ids of chunk(Array.from(new Set(poIds)), 250)) {
+        const url =
+            `${base}/items/${PO_RECEIVING_COLLECTION}?limit=-1` +
+            `&filter[purchase_order_id][_in]=${encodeURIComponent(ids.join(","))}` +
+            `&filter[isPosted][_eq]=0` +
+            `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,isPosted,receipt_no,received_quantity`;
+        const j = await fetchJson(url);
+        rows.push(...((j?.data ?? []) as PORow[]));
+    }
+    return rows;
 }
 
 async function fetchOpenPORowsByPOId(base: string, poId: number) {
@@ -274,7 +279,6 @@ async function fetchOpenPORowsByPOId(base: string, poId: number) {
         `${base}/items/${PO_RECEIVING_COLLECTION}?limit=-1` +
         `&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}` +
         `&filter[isPosted][_eq]=0` +
-        `&filter[receipt_no][_null]=true` +
         `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,isPosted,receipt_no,received_quantity`;
 
     const j = await fetchJson(url);
@@ -283,25 +287,27 @@ async function fetchOpenPORowsByPOId(base: string, poId: number) {
 
 type ReceivingItemRow = {
     receiving_item_id: number;
-    purchase_order_product_id: number; // FK -> purchase_order_receiving.purchase_order_product_id (new)
+    purchase_order_product_id: number; // can be POR id OR POP id (legacy)
     product_id: number;
     rfid_code: string;
     created_at: string;
 };
 
-async function fetchReceivingItemsByPORIds(base: string, porIds: number[]) {
-    if (!porIds.length) return [] as ReceivingItemRow[];
-    const url =
-        `${base}/items/${RECEIVING_ITEMS_COLLECTION}?limit=-1` +
-        `&sort=-created_at` +
-        `&filter[purchase_order_product_id][_in]=${encodeURIComponent(porIds.join(","))}` +
-        `&fields=receiving_item_id,purchase_order_product_id,product_id,rfid_code,created_at`;
-
-    const j = await fetchJson(url);
-    return (j?.data ?? []) as ReceivingItemRow[];
+async function fetchReceivingItemsByLinkIds(base: string, linkIds: number[]) {
+    if (!linkIds.length) return [] as ReceivingItemRow[];
+    const out: ReceivingItemRow[] = [];
+    for (const ids of chunk(Array.from(new Set(linkIds)).filter(Boolean), 250)) {
+        const url =
+            `${base}/items/${RECEIVING_ITEMS_COLLECTION}?limit=-1` +
+            `&sort=-created_at` +
+            `&filter[purchase_order_product_id][_in]=${encodeURIComponent(ids.join(","))}` +
+            `&fields=receiving_item_id,purchase_order_product_id,product_id,rfid_code,created_at`;
+        const j = await fetchJson(url);
+        out.push(...((j?.data ?? []) as ReceivingItemRow[]));
+    }
+    return out;
 }
 
-// ✅ new: fetch existing RFID row (if any)
 async function fetchExistingRfidRow(base: string, rfid: string): Promise<ReceivingItemRow | null> {
     const url =
         `${base}/items/${RECEIVING_ITEMS_COLLECTION}?limit=1` +
@@ -314,12 +320,11 @@ async function fetchExistingRfidRow(base: string, rfid: string): Promise<Receivi
     return row ?? null;
 }
 
-// ✅ new: resolve owner of existing receiving_item.purchase_order_product_id
 async function resolveOwnerOfReceivingItem(base: string, purchaseOrderProductId: number) {
     const id = toNum(purchaseOrderProductId);
     if (!id) return null;
 
-    // 1) Try purchase_order_receiving/<id>
+    // 1) Try POR
     try {
         const porUrl =
             `${base}/items/${PO_RECEIVING_COLLECTION}/${encodeURIComponent(String(id))}` +
@@ -336,7 +341,7 @@ async function resolveOwnerOfReceivingItem(base: string, purchaseOrderProductId:
         }
     } catch {}
 
-    // 2) Try purchase_order_products/<id> (old mapping)
+    // 2) Try POP (legacy)
     try {
         const popUrl =
             `${base}/items/${PO_PRODUCTS_COLLECTION}/${encodeURIComponent(String(id))}` +
@@ -375,8 +380,7 @@ async function ensureOpenReceivingRow(args: {
         `&filter[product_id][_eq]=${encodeURIComponent(String(productId))}` +
         `&filter[branch_id][_eq]=${encodeURIComponent(String(branchId))}` +
         `&filter[isPosted][_eq]=0` +
-        `&filter[receipt_no][_null]=true` +
-        `&fields=purchase_order_product_id,received_quantity`;
+        `&fields=purchase_order_product_id,received_quantity,receipt_no`;
 
     const found = await fetchJson(findUrl);
     const row = Array.isArray(found?.data) ? found.data[0] : null;
@@ -389,17 +393,25 @@ async function ensureOpenReceivingRow(args: {
     }
 
     const insertUrl = `${base}/items/${PO_RECEIVING_COLLECTION}`;
-    const payload = {
+    const payload: any = {
         purchase_order_id: poId,
         product_id: productId,
         branch_id: branchId,
+
+        // ✅ Tagging should not mark as received
         received_quantity: 0,
+
         unit_price: args.unitPrice || 0,
         discounted_amount: 0,
         vat_amount: 0,
         withholding_amount: 0,
         total_amount: 0,
         isPosted: 0,
+
+        // ✅ force null to avoid "" default
+        receipt_no: null,
+        receipt_date: null,
+        received_date: null,
     };
 
     dlog("Creating purchase_order_receiving row:", payload);
@@ -419,45 +431,8 @@ async function ensureOpenReceivingRow(args: {
     return { porId, receivedQty: 0, created: true };
 }
 
-async function patchPORReceivedQty(base: string, porId: number, receivedQty: number) {
-    const url = `${base}/items/${PO_RECEIVING_COLLECTION}/${encodeURIComponent(String(porId))}`;
-    await fetchJson(url, {
-        method: "PATCH",
-        body: JSON.stringify({ received_quantity: Math.max(0, Math.floor(receivedQty)) }),
-    }).catch(() => {});
-}
-
-async function patchPOProductsReceivedQty(base: string, popId: number, receivedQty: number) {
-    const url = `${base}/items/${PO_PRODUCTS_COLLECTION}/${encodeURIComponent(String(popId))}`;
-    await fetchJson(url, {
-        method: "PATCH",
-        body: JSON.stringify({ received: Math.max(0, Math.floor(receivedQty)) }),
-    }).catch(() => {});
-}
-
-async function updatePOStatus(base: string, poId: number, detail: TaggingPODetail) {
-    const totalExpected = detail.items.reduce((a, b) => a + (b.expectedQty || 0), 0);
-    const totalTagged = detail.items.reduce((a, b) => a + (b.taggedQty || 0), 0);
-
-    if (!totalExpected) return;
-
-    const patch: any = {};
-    if (totalTagged >= totalExpected) {
-        patch.inventory_status = PO_STATUS_RECEIVED;
-        patch.date_received = nowISO();
-    } else if (totalTagged > 0) {
-        patch.inventory_status = PO_STATUS_PARTIAL;
-        patch.date_received = null;
-    } else {
-        return;
-    }
-
-    const url = `${base}/items/${PO_COLLECTION}/${encodeURIComponent(String(poId))}`;
-    await fetchJson(url, { method: "PATCH", body: JSON.stringify(patch) }).catch(() => {});
-}
-
 // =====================
-// DETAIL BUILDER
+// DETAIL BUILDER (POR+POP compatibility)
 // =====================
 async function buildDetail(base: string, poId: number): Promise<TaggingPODetail> {
     const headerUrl =
@@ -478,29 +453,42 @@ async function buildDetail(base: string, poId: number): Promise<TaggingPODetail>
     const productIds = Array.from(new Set(poProducts.map((x) => toNum(x.product_id)).filter(Boolean)));
     const productsMap = await fetchProductsMapByIds(base, productIds);
 
-    const openPORows = await fetchOpenPORowsByPOId(base, poId);
+    // POR rows (unposted)
+    const porRows = await fetchOpenPORowsByPOId(base, poId);
 
-    const porByKey = new Map<string, number>();
+    // Build linkId -> product::branch map (POR + POP)
+    const porIdToKey = new Map<number, string>();
     const porIds: number[] = [];
-    for (const r of openPORows) {
+    for (const r of porRows) {
         const porId = toNum(r.purchase_order_product_id);
         const pid = toNum(r.product_id);
         const bid = toNum(r.branch_id);
         if (!porId || !pid || !bid) continue;
-        const k = keyProdBranch(pid, bid);
-        if (!porByKey.has(k)) {
-            porByKey.set(k, porId);
-            porIds.push(porId);
-        }
+        porIdToKey.set(porId, keyProdBranch(pid, bid));
+        porIds.push(porId);
     }
 
-    const receivingItems = await fetchReceivingItemsByPORIds(base, porIds);
+    const popIdToKey = new Map<number, string>();
+    const popIds: number[] = [];
+    for (const ln of poProducts) {
+        const popId = toNum(ln.purchase_order_product_id);
+        const pid = toNum(ln.product_id);
+        const bid = toNum(ln.branch_id);
+        if (!popId || !pid || !bid) continue;
+        popIdToKey.set(popId, keyProdBranch(pid, bid));
+        popIds.push(popId);
+    }
 
-    const taggedByPorId = new Map<number, number>();
+    // ✅ Fetch receiving items by BOTH POR ids and POP ids (compat)
+    const receivingItems = await fetchReceivingItemsByLinkIds(base, [...porIds, ...popIds]);
+
+    // Count tags per key (product::branch)
+    const taggedByKey = new Map<string, number>();
     for (const it of receivingItems) {
-        const porId = toNum(it.purchase_order_product_id);
-        if (!porId) continue;
-        taggedByPorId.set(porId, (taggedByPorId.get(porId) ?? 0) + 1);
+        const linkId = toNum(it.purchase_order_product_id);
+        const key = porIdToKey.get(linkId) || popIdToKey.get(linkId);
+        if (!key) continue;
+        taggedByKey.set(key, (taggedByKey.get(key) ?? 0) + 1);
     }
 
     const items: TaggingPOItem[] = poProducts.map((line) => {
@@ -511,8 +499,8 @@ async function buildDetail(base: string, poId: number): Promise<TaggingPODetail>
         const scan = p ? productPrimaryScan(p) : "";
         const sku = scan || toStr(p?.product_code) || String(pid || line.product_id);
 
-        const porId = pid && bid ? porByKey.get(keyProdBranch(pid, bid)) : undefined;
-        const taggedQty = porId ? taggedByPorId.get(porId) ?? 0 : 0;
+        const key = pid && bid ? keyProdBranch(pid, bid) : "";
+        const taggedQty = key ? taggedByKey.get(key) ?? 0 : 0;
 
         return {
             id: String(line.purchase_order_product_id), // POP id (keep)
@@ -601,17 +589,14 @@ export async function GET() {
         for (const line of poProducts) {
             const poId = toNum(line.purchase_order_id);
             if (!poId) continue;
-            expectedByPo.set(
-                poId,
-                (expectedByPo.get(poId) ?? 0) + Math.max(0, toNum(line.ordered_quantity))
-            );
+            expectedByPo.set(poId, (expectedByPo.get(poId) ?? 0) + Math.max(0, toNum(line.ordered_quantity)));
         }
 
-        const openPORows = await fetchOpenPORowsByPOIds(base, poIds);
+        // POR rows (unposted) for tag counting
+        const porRows = await fetchOpenPORowsByPOIds(base, poIds);
         const porIdToPoId = new Map<number, number>();
         const porIds: number[] = [];
-
-        for (const r of openPORows) {
+        for (const r of porRows) {
             const porId = toNum(r.purchase_order_product_id);
             const poId = toNum(r.purchase_order_id);
             if (!porId || !poId) continue;
@@ -619,12 +604,24 @@ export async function GET() {
             porIds.push(porId);
         }
 
-        const receivingItems = await fetchReceivingItemsByPORIds(base, porIds);
+        // POP ids mapping (legacy)
+        const popIdToPoId = new Map<number, number>();
+        const popIds: number[] = [];
+        for (const ln of poProducts) {
+            const popId = toNum(ln.purchase_order_product_id);
+            const poId = toNum(ln.purchase_order_id);
+            if (!popId || !poId) continue;
+            popIdToPoId.set(popId, poId);
+            popIds.push(popId);
+        }
+
+        // ✅ Fetch receiving_items by BOTH POR ids and POP ids
+        const receivingItems = await fetchReceivingItemsByLinkIds(base, [...porIds, ...popIds]);
 
         const taggedByPo = new Map<number, number>();
         for (const it of receivingItems) {
-            const porId = toNum(it.purchase_order_product_id);
-            const poId = porIdToPoId.get(porId);
+            const linkId = toNum(it.purchase_order_product_id);
+            const poId = porIdToPoId.get(linkId) ?? popIdToPoId.get(linkId);
             if (!poId) continue;
             taggedByPo.set(poId, (taggedByPo.get(poId) ?? 0) + 1);
         }
@@ -682,10 +679,8 @@ export async function POST(req: NextRequest) {
             if (!sku) return bad("Missing sku/barcode/product_code.", 400);
             if (!rfidRaw) return bad("Missing rfid.", 400);
 
-            // ✅ Normalize RFID: first 24-hex only
             const { rfid } = normalizeRfidServer(rfidRaw);
 
-            // ✅ Hard validation
             if (!rfid || rfid.length !== RFID_LEN) {
                 return bad(`Invalid RFID. RFID must be exactly ${RFID_LEN} hexadecimal characters.`, 400, {
                     rfidRaw,
@@ -693,25 +688,18 @@ export async function POST(req: NextRequest) {
                 });
             }
 
-            // load PO lines + products for matching
             const poProducts = await fetchPOProductsByPOId(base, poId);
             const productIds = Array.from(new Set(poProducts.map((x) => toNum(x.product_id)).filter(Boolean)));
             const productsMap = await fetchProductsMapByIds(base, productIds);
 
-            const line = resolvePoProductLine({
-                sku,
-                strict,
-                poProducts,
-                productsMap,
-            });
+            const line = resolvePoProductLine({ sku, strict, poProducts, productsMap });
 
             if (strict && !line) {
                 return bad(`Invalid SKU '${sku}' for this PO.`, 400, {
                     poId,
                     sku,
                     strict,
-                    hint:
-                        "Strict requires barcode/product_code match (unless product has no codes, then product_id is allowed).",
+                    hint: "Strict requires barcode/product_code match (unless product has no codes, then product_id is allowed).",
                 });
             }
             if (!line) return bad(`SKU '${sku}' not found in this PO.`, 400);
@@ -745,8 +733,6 @@ export async function POST(req: NextRequest) {
                 }
 
                 const sameTarget = owner.poId === poId && owner.productId === productId && owner.branchId === branchId;
-
-                // ✅ SAME PO + SAME product + SAME branch => treat as success (no error)
                 if (sameTarget) {
                     const detail = await buildDetail(base, poId);
                     return ok(detail);
@@ -766,29 +752,19 @@ export async function POST(req: NextRequest) {
             const taggedQty = currentItem?.taggedQty ?? 0;
 
             if (taggedQty + 1 > expectedQty) {
-                return bad("Tagging exceeds expected quantity for this SKU.", 400, {
-                    expectedQty,
-                    taggedQty,
-                });
+                return bad("Tagging exceeds expected quantity for this SKU.", 400, { expectedQty, taggedQty });
             }
 
-            // Ensure OPEN purchase_order_receiving row exists
-            const ensured = await ensureOpenReceivingRow({
-                base,
-                poId,
-                productId,
-                branchId,
-                unitPrice,
-            });
-
+            // Ensure unposted purchase_order_receiving row exists (receipt fields forced to NULL)
+            const ensured = await ensureOpenReceivingRow({ base, poId, productId, branchId, unitPrice });
             const porId = ensured.porId;
 
-            // insert into purchase_order_receiving_items
+            // insert into purchase_order_receiving_items (✅ always POR id going forward)
             const insertUrl = `${base}/items/${RECEIVING_ITEMS_COLLECTION}`;
             const insertPayload = {
                 purchase_order_product_id: porId,
                 product_id: productId,
-                rfid_code: rfid, // ✅ normalized
+                rfid_code: rfid,
             };
 
             dlog("Insert receiving_item:", insertPayload);
@@ -799,16 +775,6 @@ export async function POST(req: NextRequest) {
             });
 
             const updated = await buildDetail(base, poId);
-
-            // update received qty fields for downstream
-            const updatedItem = updated.items.find((x) => x.id === String(popId));
-            const newTagged = toNum(updatedItem?.taggedQty);
-
-            await patchPORReceivedQty(base, porId, newTagged);
-            await patchPOProductsReceivedQty(base, popId, newTagged);
-
-            await updatePOStatus(base, poId, updated);
-
             return ok(updated);
         }
 

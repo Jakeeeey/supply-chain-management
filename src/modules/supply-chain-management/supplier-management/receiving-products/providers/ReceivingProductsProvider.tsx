@@ -62,9 +62,23 @@ type ActivityRow = {
     status: "ok" | "warn";
 };
 
-type ReceiptSavedInfo = {
+export type SavedItem = {
+    productId: string;
+    name: string;
+    barcode: string;
+    expectedQty: number;
+    receivedQtyAtStart: number;
+    receivedQtyNow: number;
+    rfids: string[];
+};
+
+export type ReceiptSavedInfo = {
     poId: string;
     receiptNo: string;
+    receiptType: string;
+    receiptDate: string;
+    items: SavedItem[];
+    isFullyReceived: boolean;
     savedAt: number;
 };
 
@@ -101,8 +115,6 @@ type Ctx = {
     // rfid scan
     rfid: string;
     setRfid: (v: string) => void;
-    strict: boolean;
-    setStrict: (v: boolean) => void;
     scanError: string;
 
     lastMatched: ScanRFIDResult | null;
@@ -162,7 +174,6 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
 
     // scan
     const [rfid, setRfid] = React.useState("");
-    const [strict, setStrict] = React.useState(true);
     const [scanError, setScanError] = React.useState("");
     const [lastMatched, setLastMatched] = React.useState<ScanRFIDResult | null>(null);
     const [activity, setActivity] = React.useState<ActivityRow[]>([]);
@@ -210,6 +221,9 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
             resetSession();
             setReceiptSaved(null);
 
+            // ✅ avoid stale PO if server blocks or errors
+            setSelectedPO(null);
+
             const id = String(poId ?? "").trim();
             if (!id) return;
 
@@ -238,6 +252,9 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
             setListError("");
             resetSession();
             setReceiptSaved(null);
+
+            // ✅ avoid stale PO if server blocks or errors
+            setSelectedPO(null);
 
             const code = String(barcode ?? "").trim();
             if (!code) {
@@ -330,7 +347,8 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
             const j = await asJson(r);
             const data = j?.data as ScanRFIDResult;
 
-            if (strict && data?.alreadyReceived) {
+            // Warn if already received, but don't block
+            if (data?.alreadyReceived) {
                 setActivity((prev) => [
                     {
                         id: `${Date.now()}-${Math.random()}`,
@@ -341,10 +359,7 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
                     },
                     ...prev,
                 ]);
-                setScanError("RFID already received. (Strict mode)");
-                setRfid("");
-                setLastMatched(data);
-                return;
+                // We show the match but don't error out hard anymore
             }
 
             const porId = String(data?.porId ?? "");
@@ -375,7 +390,7 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
         } catch (e: any) {
             setScanError(String(e?.message ?? e));
         }
-    }, [selectedPO, rfid, strict]);
+    }, [selectedPO, rfid]);
 
     const saveReceipt = React.useCallback(async () => {
         setSaveError("");
@@ -391,13 +406,15 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
 
         setSavingReceipt(true);
         try {
+            const oldReceiptNo = receiptNo.trim();
+
             const r = await fetch(API_URL, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     action: "save_receipt",
                     poId,
-                    receiptNo: receiptNo.trim(),
+                    receiptNo: oldReceiptNo,
                     receiptType: receiptType.trim(),
                     receiptDate: receiptDate.trim(),
                     porCounts: counts,
@@ -411,11 +428,52 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
                 setPoBarcode(detail?.poNumber ?? "");
             }
 
+            // ✅ gather items for printing (All items in PO, with their current statuses)
+            const allocs = Array.isArray(detail?.allocations) ? detail.allocations : [];
+            const allItems = allocs.flatMap((a: any) => Array.isArray(a?.items) ? a.items : []);
+            
+            // Calculate if fully received across all items
+            const countsMap = counts || {};
+            const isFullyReceivedNow = allItems.every((it: any) => {
+                const scannedNow = Number(countsMap[it.id] || 0);
+                return (Number(it.receivedQty) + scannedNow) >= Number(it.expectedQty);
+            });
+
+            const savedItems: SavedItem[] = allItems.map((it: any) => {
+                const scannedNow = Number(countsMap[it.id] || 0);
+                const itemRfids = activity
+                    .filter((a: any) => a.status === "ok" && a.productName === it.name)
+                    .map((a: any) => a.rfid);
+
+                return {
+                    productId: it.productId,
+                    name: it.name,
+                    barcode: it.barcode,
+                    expectedQty: Number(it.expectedQty),
+                    receivedQtyAtStart: Number(it.receivedQty) - scannedNow, // already matched in detail
+                    receivedQtyNow: scannedNow,
+                    rfids: itemRfids
+                };
+            });
+
+            // ✅ mark success for UI
+            setReceiptSaved({
+                poId: String(poId),
+                receiptNo: oldReceiptNo,
+                receiptType: receiptType.trim(),
+                receiptDate: receiptDate.trim(),
+                items: savedItems,
+                isFullyReceived: isFullyReceivedNow,
+                savedAt: Date.now()
+            });
+
             refreshList();
             resetSession();
 
-            // ✅ mark success for UI
-            setReceiptSaved({ poId: String(poId), receiptNo: receiptNo.trim(), savedAt: Date.now() });
+            // ✅ IMPORTANT: prepare a new receipt immediately (supports multiple receipts)
+            setReceiptDate(todayYMD());
+            setReceiptNo(genReceiptNo());
+            setReceiptType("");
         } catch (e: any) {
             setSaveError(String(e?.message ?? e));
         } finally {
@@ -450,8 +508,6 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
 
         rfid,
         setRfid,
-        strict,
-        setStrict,
         scanError,
 
         lastMatched,
@@ -473,6 +529,6 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
 
 export function useReceivingProducts() {
     const ctx = React.useContext(ReceivingProductsContext);
-    if (!ctx) throw new Error("useReceivingProducts must be used within PostingOfPoProvider");
+    if (!ctx) throw new Error("useReceivingProducts must be used within ReceivingProductsProvider");
     return ctx;
 }

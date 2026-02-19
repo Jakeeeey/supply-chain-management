@@ -12,7 +12,7 @@ import { useReceivingProducts } from "../providers/ReceivingProductsProvider";
 
 function statusBadge(status: string) {
     const s = String(status || "").toUpperCase();
-    if (s === "CLOSED")
+    if (s === "CLOSED" || s === "RECEIVED")
         return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20";
     if (s === "PARTIAL")
         return "bg-orange-500/15 text-orange-700 dark:text-orange-300 border border-orange-500/20";
