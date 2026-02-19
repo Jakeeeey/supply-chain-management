@@ -106,9 +106,9 @@ export function ProductTable({
             products.map((product) => {
               const unitName =
                 typeof product.unit_of_measurement === "object" &&
-                product.unit_of_measurement
+                  product.unit_of_measurement
                   ? (product.unit_of_measurement as Unit).unit_shortcut ||
-                    (product.unit_of_measurement as Unit).unit_name
+                  (product.unit_of_measurement as Unit).unit_name
                   : "PCS";
 
               const displayName = product.description || product.product_name;
@@ -137,7 +137,7 @@ export function ProductTable({
 
                   {/* SKU Code */}
                   <TableCell
-                    className="font-medium text-blue-600 cursor-pointer"
+                    className="font-medium text-primary cursor-pointer"
                     onClick={() => onEdit(product)}
                   >
                     {product.product_code || "-"}
@@ -157,7 +157,7 @@ export function ProductTable({
                   <TableCell>
                     <Badge
                       variant="secondary"
-                      className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200"
+                      className="bg-primary/10 text-primary hover:bg-primary/20 border-primary/20"
                     >
                       {inventoryType}
                     </Badge>

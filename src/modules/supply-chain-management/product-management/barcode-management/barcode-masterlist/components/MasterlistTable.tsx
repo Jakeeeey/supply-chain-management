@@ -36,7 +36,7 @@ export function MasterlistTable({
   };
 
   return (
-    <div className="rounded-md border bg-white">
+    <div className="rounded-md border bg-card">
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/50">
@@ -113,7 +113,7 @@ export function MasterlistTable({
                       />
                     </TableCell>
                   )}
-                  <TableCell className="font-medium text-blue-600">
+                  <TableCell className="font-medium text-primary">
                     {product.product_code}
                   </TableCell>
                   <TableCell className="font-mono font-semibold">
@@ -127,7 +127,7 @@ export function MasterlistTable({
                   <TableCell>
                     <Badge
                       variant="secondary"
-                      className="bg-blue-50 text-blue-700 border-blue-200"
+                      className="bg-primary/10 text-primary border-primary/20"
                     >
                       Regular
                     </Badge>

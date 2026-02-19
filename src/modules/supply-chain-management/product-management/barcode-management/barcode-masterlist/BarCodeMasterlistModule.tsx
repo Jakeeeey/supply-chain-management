@@ -141,10 +141,10 @@ export default function BarcodeMasterlistModule() {
   if (isLoading) return <BarcodeScannerSkeleton />;
 
   return (
-    <div className="space-y-6 p-6 w-full bg-slate-50/50 min-h-screen">
+    <div className="space-y-6 p-6 w-full bg-muted/30 min-h-screen">
       {/* HEADER */}
       <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">
           Barcode Master List
         </h1>
         <p className="text-muted-foreground">
@@ -153,7 +153,7 @@ export default function BarcodeMasterlistModule() {
       </div>
 
       {/* FILTERS */}
-      <div className="bg-white p-4 rounded-lg border shadow-sm flex flex-col xl:flex-row gap-6 items-end justify-between">
+      <div className="bg-card p-4 rounded-lg border shadow-sm flex flex-col xl:flex-row gap-6 items-end justify-between">
         <div className="flex flex-col md:flex-row gap-4 w-full xl:w-auto">
           {/* Search */}
           <div className="flex flex-col gap-2 w-full md:w-[280px]">
@@ -260,7 +260,7 @@ export default function BarcodeMasterlistModule() {
                 <Button
                   onClick={handleInitiatePrint}
                   disabled={selectedIds.length === 0}
-                  className="bg-blue-600 hover:bg-blue-700 h-10 shadow-sm"
+                  className="bg-primary hover:bg-primary/90 h-10 shadow-sm"
                 >
                   <Printer className="mr-2 h-4 w-4" /> Print (
                   {selectedIds.length})

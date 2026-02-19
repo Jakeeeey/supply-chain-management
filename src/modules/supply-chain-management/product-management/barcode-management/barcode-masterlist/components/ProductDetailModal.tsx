@@ -86,7 +86,7 @@ export function ProductDetailModal({
                 >
                   SKU: {product.product_code}
                 </Badge>
-                <Badge className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 text-xs">
+                <Badge className="bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 text-xs">
                   Regular Inventory
                 </Badge>
                 <Badge

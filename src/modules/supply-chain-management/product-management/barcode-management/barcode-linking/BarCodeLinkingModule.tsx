@@ -94,10 +94,10 @@ export default function BarCodeScannerModule() {
   if (isLoading) return <BarcodeScannerSkeleton />;
 
   return (
-    <div className="space-y-6 p-6 w-full bg-slate-50/50 min-h-screen">
+    <div className="space-y-6 p-6 w-full bg-muted/30 min-h-screen">
       {/* HEADER */}
       <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">
           Barcode Linking
         </h1>
         <p className="text-muted-foreground">
@@ -106,7 +106,7 @@ export default function BarCodeScannerModule() {
       </div>
 
       {/* FILTER BAR */}
-      <div className="bg-white p-4 rounded-lg border shadow-sm flex flex-col xl:flex-row gap-6 items-end justify-between">
+      <div className="bg-card p-4 rounded-lg border shadow-sm flex flex-col xl:flex-row gap-6 items-end justify-between">
         {/* LEFT SIDE: FILTERS */}
         <div className="flex flex-col md:flex-row gap-4 w-full xl:w-auto">
           {/* SEARCH */}
