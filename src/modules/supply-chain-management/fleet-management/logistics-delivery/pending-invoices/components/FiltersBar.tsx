@@ -46,7 +46,7 @@ export function FiltersBar({
           </Select>
         </div>
 
-        <Button onClick={onExport} className="bg-slate-900 text-white hover:bg-slate-800 shrink-0">
+        <Button onClick={onExport} variant="default" className="shrink-0">
           <Download className="mr-2 h-4 w-4" />
           Export
         </Button>

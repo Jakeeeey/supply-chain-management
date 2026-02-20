@@ -17,7 +17,7 @@ function ReadonlyField({ label, value, className }: { label: string; value: Reac
   return (
     <div className={`space-y-1 ${className ?? ""}`}>
       <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">{label}</div>
-      <div className="flex min-h-[2.25rem] w-full items-center rounded-md bg-slate-50 border border-slate-200 px-3 py-1 text-sm text-slate-800">
+      <div className="flex min-h-[2.25rem] w-full items-center rounded-md bg-muted/50 border px-3 py-1 text-sm">
         {value || "-"}
       </div>
     </div>
@@ -30,7 +30,7 @@ function InvoiceDetailsSkeleton() {
   return (
     <div className="space-y-6">
       {/* Header block */}
-      <div className="bg-white p-5 rounded-lg border shadow-sm space-y-4">
+      <div className="bg-card p-5 rounded-lg border dark:border-white/60 shadow-sm space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="md:col-span-3 space-y-2">
             <Skeleton className="h-3 w-28" />
@@ -63,8 +63,8 @@ function InvoiceDetailsSkeleton() {
 
       {/* Table + Summary */}
       <div className="flex flex-col xl:flex-row gap-6">
-        <div className="flex-1 rounded-lg border bg-white shadow-sm overflow-hidden min-h-[300px]">
-          <div className="bg-slate-100 px-4 py-3 border-b">
+        <div className="flex-1 rounded-lg border dark:border-white/60 bg-card shadow-sm overflow-hidden min-h-[300px]">
+          <div className="bg-muted/50 px-4 py-3 border-b">
             <Skeleton className="h-4 w-56" />
           </div>
           <div className="p-4 space-y-3">
@@ -74,9 +74,9 @@ function InvoiceDetailsSkeleton() {
           </div>
         </div>
 
-        <Card className="w-full xl:w-[320px] shadow-sm h-fit">
-          <CardHeader className="bg-slate-50 py-3 border-b">
-            <ShadCardTitle className="text-sm font-semibold text-blue-700">Summary</ShadCardTitle>
+        <Card className="w-full xl:w-[320px] shadow-sm h-fit dark:border-white/60">
+          <CardHeader className="bg-muted/50 py-3 border-b">
+            <ShadCardTitle className="text-sm font-semibold text-primary">Summary</ShadCardTitle>
           </CardHeader>
           <CardContent className="space-y-3 pt-4">
             {Array.from({ length: 6 }).map((_, i) => (
@@ -90,8 +90,8 @@ function InvoiceDetailsSkeleton() {
               <Skeleton className="h-5 w-16" />
               <Skeleton className="h-5 w-24" />
             </div>
-            <Separator className="bg-slate-200 h-[2px]" />
-            <div className="flex items-center justify-between">
+            <Separator />
+            <div className="flex items-center justify-between font-bold">
               <Skeleton className="h-6 w-20" />
               <Skeleton className="h-6 w-28" />
             </div>
@@ -131,16 +131,16 @@ export function InvoiceDetailsDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-[95vw] md:max-w-[1300px] h-[90vh] flex flex-col p-0 gap-0 bg-white">
-        <DialogHeader className="px-6 py-4 border-b bg-white shrink-0 flex flex-row items-center justify-between">
-          <DialogTitle className="text-blue-600 text-xl font-bold">Invoice #{invoiceNo ?? ""}</DialogTitle>
+      <DialogContent className="max-w-[95vw] md:max-w-[1300px] h-[90vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="px-6 py-4 border-b shrink-0 flex flex-row items-center justify-between">
+          <DialogTitle className="text-primary text-xl font-bold">Invoice #{invoiceNo ?? ""}</DialogTitle>
 
           {/* Keep badges only when header exists */}
           {h && (
             <div className="flex gap-2">
-              <Badge className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1">{h.status || "Unknown"}</Badge>
+              <Badge className="px-3 py-1 font-semibold">{h.status || "Unknown"}</Badge>
               {h.dispatch_plan && h.dispatch_plan !== "unlinked" && (
-                <Badge variant="outline" className="border-blue-200 text-blue-700 bg-blue-50">
+                <Badge variant="outline" className="border-primary/20 text-primary bg-primary/10">
                   Plan: {h.dispatch_plan}
                 </Badge>
               )}
@@ -148,12 +148,12 @@ export function InvoiceDetailsDialog({
           )}
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto bg-slate-50/50 p-6">
+        <div className="flex-1 overflow-y-auto bg-muted/10 p-6">
           {loading && <InvoiceDetailsSkeleton />}
 
           {!loading && data && h && (
             <div className="space-y-6">
-              <div className="bg-white p-5 rounded-lg border shadow-sm space-y-4">
+              <div className="bg-card p-5 rounded-lg border dark:border-white/60 shadow-sm space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <ReadonlyField label="Customer Name" value={h.customer_name} className="md:col-span-3" />
                   <ReadonlyField label="No." value={h.invoice_no} />
@@ -174,75 +174,75 @@ export function InvoiceDetailsDialog({
               </div>
 
               <div className="flex flex-col xl:flex-row gap-6">
-                <div className="flex-1 rounded-lg border bg-white shadow-sm overflow-hidden min-h-[300px]">
+                <div className="flex-1 rounded-lg border dark:border-white/60 bg-card shadow-sm overflow-hidden min-h-[300px]">
                   <Table>
-                    <TableHeader className="bg-slate-100">
+                    <TableHeader className="bg-muted/50">
                       <TableRow>
-                        <TableHead className="text-xs font-semibold uppercase text-slate-600">Code</TableHead>
-                        <TableHead className="text-xs font-semibold uppercase text-slate-600">Description</TableHead>
-                        <TableHead className="text-xs font-semibold uppercase text-slate-600 text-center">Unit</TableHead>
-                        <TableHead className="text-xs font-semibold uppercase text-slate-600 text-right">Qty</TableHead>
-                        <TableHead className="text-xs font-semibold uppercase text-slate-600 text-right">Price</TableHead>
-                        <TableHead className="text-xs font-semibold uppercase text-slate-600 text-right">Gross</TableHead>
-                        <TableHead className="text-xs font-semibold uppercase text-slate-600 text-center">Disc Type</TableHead>
-                        <TableHead className="text-xs font-semibold uppercase text-slate-600 text-right">Disc Amt</TableHead>
-                        <TableHead className="text-xs font-semibold uppercase text-slate-600 text-right">Net Total</TableHead>
+                        <TableHead className="text-xs font-semibold uppercase text-muted-foreground">Code</TableHead>
+                        <TableHead className="text-xs font-semibold uppercase text-muted-foreground">Description</TableHead>
+                        <TableHead className="text-xs font-semibold uppercase text-muted-foreground text-center">Unit</TableHead>
+                        <TableHead className="text-xs font-semibold uppercase text-muted-foreground text-right">Qty</TableHead>
+                        <TableHead className="text-xs font-semibold uppercase text-muted-foreground text-right">Price</TableHead>
+                        <TableHead className="text-xs font-semibold uppercase text-muted-foreground text-right">Gross</TableHead>
+                        <TableHead className="text-xs font-semibold uppercase text-muted-foreground text-center">Disc Type</TableHead>
+                        <TableHead className="text-xs font-semibold uppercase text-muted-foreground text-right">Disc Amt</TableHead>
+                        <TableHead className="text-xs font-semibold uppercase text-muted-foreground text-right">Net Total</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {data.lines.map((l) => (
-                        <TableRow key={String(l.id)} className="hover:bg-slate-50">
-                          <TableCell className="font-medium text-slate-700">{l.product_id ?? "-"}</TableCell>
-                          <TableCell className="text-slate-600">{l.product_name ?? "-"}</TableCell>
+                        <TableRow key={String(l.id)} className="hover:bg-muted/50">
+                          <TableCell className="font-medium">{l.product_id ?? "-"}</TableCell>
+                          <TableCell className="text-muted-foreground">{l.product_name ?? "-"}</TableCell>
                           <TableCell className="text-center">{l.unit ?? "-"}</TableCell>
                           <TableCell className="text-right">{l.qty}</TableCell>
-                          <TableCell className="text-right text-slate-500">{money(l.price)}</TableCell>
-                          <TableCell className="text-right text-slate-500">{money(l.gross)}</TableCell>
-                          <TableCell className="text-center text-xs text-slate-400">{l.disc_type || "-"}</TableCell>
-                          <TableCell className="text-right text-slate-500">{money(l.disc_amt)}</TableCell>
-                          <TableCell className="text-right font-semibold text-slate-900">{money(l.net_total)}</TableCell>
+                          <TableCell className="text-right text-muted-foreground">{money(l.price)}</TableCell>
+                          <TableCell className="text-right text-muted-foreground">{money(l.gross)}</TableCell>
+                          <TableCell className="text-center text-xs text-muted-foreground/60">{l.disc_type || "-"}</TableCell>
+                          <TableCell className="text-right text-muted-foreground">{money(l.disc_amt)}</TableCell>
+                          <TableCell className="text-right font-bold">{money(l.net_total)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
                 </div>
 
-                <Card className="w-full xl:w-[320px] shadow-sm h-fit">
-                  <CardHeader className="bg-slate-50 py-3 border-b">
-                    <ShadCardTitle className="text-sm font-semibold text-blue-700">Summary</ShadCardTitle>
+                <Card className="w-full xl:w-[320px] shadow-sm h-fit dark:border-white/60">
+                  <CardHeader className="bg-muted/50 py-3 border-b">
+                    <ShadCardTitle className="text-sm font-semibold text-primary">Summary</ShadCardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3 pt-4 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-slate-500">Gross Amount</span>
+                      <span className="text-muted-foreground">Gross Amount</span>
                       <span>{money(data.summary.gross)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-500">Discount</span>
+                      <span className="text-muted-foreground">Discount</span>
                       <span>{money(data.summary.discount)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-500">Vatable</span>
+                      <span className="text-muted-foreground">Vatable</span>
                       <span>{money(data.summary.vatable)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-500">Memo</span>
+                      <span className="text-muted-foreground">Memo</span>
                       <span>0.00</span>
                     </div>
                     <Separator />
-                    <div className="flex justify-between text-blue-600 font-medium">
+                    <div className="flex justify-between text-primary font-medium">
                       <span>Net</span>
                       <span>{money(data.summary.net)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-500">VAT</span>
+                      <span className="text-muted-foreground">VAT</span>
                       <span>{money(data.summary.vat)}</span>
                     </div>
-                    <Separator className="bg-slate-200 h-[2px]" />
-                    <div className="flex justify-between font-bold text-lg text-slate-900">
+                    <Separator className="h-[2px]" />
+                    <div className="flex justify-between font-bold text-lg">
                       <span>TOTAL</span>
                       <span>{money(data.summary.total)}</span>
                     </div>
-                    <div className="flex justify-between font-medium text-red-600">
+                    <div className="flex justify-between font-medium text-destructive">
                       <span>Balance</span>
                       <span>{money(data.summary.balance)}</span>
                     </div>

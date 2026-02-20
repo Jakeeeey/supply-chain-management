@@ -11,7 +11,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts"
 
 export function SalesTrendCard(props: { loading: boolean; chartData: ChartEntry[] }) {
   return (
-    <Card className="border bg-card shadow-sm">
+    <Card className="border bg-card shadow-sm dark:border-white/60">
       <CardHeader className="pb-2">
         <CardTitle className="text-base font-semibold">Sales Revenue Trend</CardTitle>
       </CardHeader>

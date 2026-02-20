@@ -45,7 +45,7 @@ function SearchableSelect({
   return (
     <Popover open={open} onOpenChange={setOpen} modal={true}>
       <PopoverTrigger asChild>
-        <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between font-normal text-slate-900 bg-white border-slate-200">
+        <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between font-normal">
           {value === "All" ? label : options.find((opt) => opt.value === value)?.label || label}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -216,27 +216,27 @@ export function ExportDialog({ open, onClose, options }: { open: boolean; onClos
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-[700px] p-0 overflow-visible gap-0 bg-white">
+      <DialogContent className="max-w-[700px] p-0 overflow-visible gap-0">
         <DialogHeader className="p-6 pb-4 border-b">
-          <DialogTitle className="text-xl font-bold text-slate-900">What needs to be printed?</DialogTitle>
-          <p className="text-sm text-slate-500 mt-1">Filters select the criteria for the printed report.</p>
+          <DialogTitle className="text-xl font-bold">What needs to be printed?</DialogTitle>
+          <p className="text-sm text-muted-foreground mt-1">Filters select the criteria for the printed report.</p>
         </DialogHeader>
 
         <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2">
-            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">Salesman</label>
+            <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Salesman</label>
             <SearchableSelect label="All Salesmen" placeholder="Search salesman..." value={salesmanId} onChange={setSalesmanId} options={salesmanOptions} />
           </div>
 
           <div className="space-y-2">
-            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">Customer</label>
+            <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Customer</label>
             <SearchableSelect label="All Customers" placeholder="Search customer..." value={customerCode} onChange={setCustomerCode} options={customerOptions} />
           </div>
 
           <div className="md:col-span-2 space-y-2">
-            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">Status</label>
+            <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Status</label>
             <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger className="bg-white border-slate-200">
+              <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -250,14 +250,14 @@ export function ExportDialog({ open, onClose, options }: { open: boolean; onClos
           </div>
 
           <div className="md:col-span-2 space-y-2">
-            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">Date Range</label>
+            <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Date Range</label>
             <div className="flex flex-wrap gap-2">
               {["All Time", "Today", "Tomorrow", "This Week", "This Month", "This Year", "Custom"].map((p) => (
                 <Button
                   key={p}
                   variant={preset === p ? "default" : "outline"}
                   onClick={() => setPreset(p as Preset)}
-                  className={preset === p ? "bg-slate-900 hover:bg-slate-800 text-white" : "bg-white border-slate-200 text-slate-600"}
+                  className={preset === p ? "" : "text-muted-foreground"}
                   size="sm"
                 >
                   {p}
@@ -274,11 +274,11 @@ export function ExportDialog({ open, onClose, options }: { open: boolean; onClos
           </div>
         </div>
 
-        <DialogFooter className="bg-slate-50 p-4 border-t gap-3">
-          <Button variant="outline" onClick={onClose} className="border-slate-300">
+        <DialogFooter className="bg-muted/30 p-4 border-t gap-3">
+          <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={handleExport} disabled={isExporting} className="bg-slate-900 hover:bg-slate-800 text-white gap-2 min-w-[140px]">
+          <Button onClick={handleExport} disabled={isExporting} className="gap-2 min-w-[140px]">
             {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
             Print Report
           </Button>

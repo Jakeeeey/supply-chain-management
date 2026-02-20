@@ -20,7 +20,7 @@ function StatCard({
   loading?: boolean;
 }) {
   return (
-    <Card className="shadow-sm">
+    <Card className="shadow-sm border dark:border-white/60">
       <CardContent className="flex items-center justify-between p-5">
         <div className="space-y-2">
           <div className="text-xs text-muted-foreground">{title}</div>
@@ -61,11 +61,11 @@ export function DashboardCards({
 
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
-      <StatCard title="Total Pending Invoices" value={kpis.total_count} icon={FileText} accent="text-blue-600" />
+      <StatCard title="Total Pending Invoices" value={kpis.total_count} icon={FileText} accent="text-primary" />
       <StatCard title="Unlinked" value={kpis.by_status.Unlinked.count} icon={Link2} />
-      <StatCard title="For Dispatch" value={kpis.by_status["For Dispatch"].count} icon={Send} accent="text-blue-600" />
-      <StatCard title="Inbound" value={kpis.by_status.Inbound.count} icon={Package} accent="text-orange-600" />
-      <StatCard title="Cleared" value={kpis.by_status.Cleared.count} icon={CheckCircle2} accent="text-green-600" />
+      <StatCard title="For Dispatch" value={kpis.by_status["For Dispatch"].count} icon={Send} accent="text-primary" />
+      <StatCard title="Inbound" value={kpis.by_status.Inbound.count} icon={Package} accent="text-orange-500" />
+      <StatCard title="Cleared" value={kpis.by_status.Cleared.count} icon={CheckCircle2} accent="text-emerald-500" />
     </div>
   );
 }

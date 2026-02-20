@@ -18,7 +18,7 @@ export default function ChartsPanel(props: {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <Card className="shadow-sm">
+      <Card className="shadow-sm dark:border-white/60">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl font-semibold">
             <span>📊</span> Active Status Distribution
@@ -27,7 +27,7 @@ export default function ChartsPanel(props: {
         <CardContent className="pt-0">
           <div className="h-[300px]">
             {props.loading ? (
-              <div className="h-full w-full rounded-lg border bg-background p-4">
+              <div className="h-full w-full rounded-lg border bg-background p-4 dark:border-white/60">
                 <div className="flex h-full flex-col items-center justify-center gap-3">
                   <Skeleton className="h-40 w-40 rounded-full" />
                   <div className="flex w-full max-w-[360px] flex-wrap items-center justify-center gap-3">
@@ -73,7 +73,7 @@ export default function ChartsPanel(props: {
         </CardContent>
       </Card>
 
-      <Card className="shadow-sm">
+      <Card className="shadow-sm dark:border-white/60">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl font-semibold">
             <span>📈</span> Weekly Trend
@@ -82,7 +82,7 @@ export default function ChartsPanel(props: {
         <CardContent className="pt-0">
           <div className="h-[300px]">
             {props.loading ? (
-              <div className="h-full w-full rounded-lg border bg-background p-4">
+              <div className="h-full w-full rounded-lg border bg-background p-4 dark:border-white/60">
                 <div className="flex h-full flex-col justify-between">
                   <div className="flex items-center justify-between">
                     <Skeleton className="h-3 w-16" />

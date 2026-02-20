@@ -85,7 +85,7 @@ export default function DispatchTable(props: {
   const canNext = props.currentPage < props.totalPages;
 
   return (
-    <Card className="shadow-sm">
+    <Card className="shadow-sm dark:border-white/60">
       <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <CardTitle className="flex items-center gap-2 text-xl font-semibold">
           <span>📑</span> Active Dispatch Plans
