@@ -195,6 +195,10 @@ const data = {
           title: "Physical Inventory",
           url: "/scm/inventory-management/physical-inventory",
         },
+        {
+          title: "Branch Management",
+          url: "/scm/inventory-management/branch-management",
+        },
       ],
     },
     {
