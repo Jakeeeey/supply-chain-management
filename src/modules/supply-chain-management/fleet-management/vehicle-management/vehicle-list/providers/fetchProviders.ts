@@ -71,7 +71,7 @@ export async function listDispatchPlans(): Promise<DispatchPlanApiRow[]> {
 
 export async function listDispatchPlansByVehicle(vehicleId: number): Promise<DispatchPlanApiRow[]> {
   const res = await fetch(
-    `/api/vehicle-management/scm/fleet-management/vehicle-list/dispatch-plans?limit=-1&vehicle_id=${encodeURIComponent(
+    `/api/scm/fleet-management/vehicle-management/vehicle-list/dispatch-plans?limit=-1&vehicle_id=${encodeURIComponent(
       String(vehicleId)
     )}`
   );
