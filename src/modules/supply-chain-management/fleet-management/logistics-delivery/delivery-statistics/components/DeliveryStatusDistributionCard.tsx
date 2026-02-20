@@ -16,7 +16,7 @@ export function DeliveryStatusDistributionCard(props: {
   counts: DeliveryStatusCount[]
 }) {
   return (
-    <Card className="border bg-card shadow-sm">
+    <Card className="border bg-card shadow-sm dark:border-white/60">
       <CardHeader className="pb-2">
         <CardTitle className="text-base font-semibold">Status Distribution</CardTitle>
       </CardHeader>

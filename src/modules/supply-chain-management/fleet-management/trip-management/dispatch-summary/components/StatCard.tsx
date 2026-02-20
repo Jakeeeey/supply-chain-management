@@ -14,7 +14,7 @@ export default function StatCard(props: {
   const Icon = props.icon;
 
   return (
-    <Card className="shadow-sm">
+    <Card className="shadow-sm dark:border-white/60">
       {/* Match Image #1: compact height + centered content */}
       <CardContent className="flex h-[88px] items-center justify-between px-6">
         {/* Left text */}

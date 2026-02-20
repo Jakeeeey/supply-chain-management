@@ -36,7 +36,7 @@ export function LogisticsFilter({
     }
 
     return (
-        <div className="bg-card text-card-foreground border rounded-lg shadow p-6 mb-6">
+        <div className="bg-card text-card-foreground border rounded-lg shadow p-6 mb-6 dark:border-white/60">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="space-y-2">
                     <Label className="text-sm font-medium">Search</Label>

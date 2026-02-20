@@ -21,7 +21,7 @@ import { money } from "../utils/money";
 
 function ChartCardSkeleton({ title }: { title: string }) {
   return (
-    <Card className="shadow-sm border-slate-200">
+    <Card className="shadow-sm border dark:border-white/60">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-semibold">{title}</CardTitle>
       </CardHeader>
@@ -58,7 +58,7 @@ function ChartCardSkeleton({ title }: { title: string }) {
 
 function BarCardSkeleton({ title }: { title: string }) {
   return (
-    <Card className="shadow-sm border-slate-200">
+    <Card className="shadow-sm border dark:border-white/60">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-semibold">{title}</CardTitle>
       </CardHeader>
@@ -69,7 +69,7 @@ function BarCardSkeleton({ title }: { title: string }) {
           <Skeleton className="h-[110px] w-14 rounded-md" />
           <Skeleton className="h-[170px] w-14 rounded-md" />
         </div>
-        <div className="mt-2 text-right text-xs text-slate-500 border-t pt-2">
+        <div className="mt-2 text-right text-xs text-muted-foreground border-t pt-2">
           <span>Total Amount:</span>{" "}
           <Skeleton className="inline-block h-5 w-28 align-middle ml-2" />
         </div>
@@ -112,7 +112,7 @@ export function StatusCharts({
 
   return (
     <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-      <Card className="shadow-sm border-slate-200">
+      <Card className="shadow-sm border dark:border-white/60">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold">Pending Invoice Status Distribution</CardTitle>
         </CardHeader>
@@ -131,7 +131,7 @@ export function StatusCharts({
         </CardContent>
       </Card>
 
-      <Card className="shadow-sm border-slate-200">
+      <Card className="shadow-sm border dark:border-white/60">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold">Pending Invoice Volume by Status</CardTitle>
         </CardHeader>
@@ -139,7 +139,7 @@ export function StatusCharts({
           <div className="h-[240px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={barData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                 <XAxis dataKey="name" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} dy={10} />
                 <YAxis
                   tick={{ fontSize: 11 }}
@@ -157,8 +157,8 @@ export function StatusCharts({
             </ResponsiveContainer>
           </div>
 
-          <div className="mt-2 text-right text-xs text-slate-500 border-t pt-2">
-            Total Amount: <span className="font-bold text-slate-900 text-sm ml-1">{money(kpis.total_amount)}</span>
+          <div className="mt-2 text-right text-xs text-muted-foreground border-t pt-2">
+            Total Amount: <span className="font-bold text-foreground text-sm ml-1">{money(kpis.total_amount)}</span>
           </div>
         </CardContent>
       </Card>

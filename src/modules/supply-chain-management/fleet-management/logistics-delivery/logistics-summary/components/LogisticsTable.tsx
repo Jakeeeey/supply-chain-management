@@ -48,7 +48,7 @@ export function LogisticsTable({
     )
 
     return (
-        <div className="bg-card text-card-foreground border rounded-lg shadow overflow-hidden">
+        <div className="bg-card text-card-foreground border rounded-lg shadow overflow-hidden dark:border-white/60">
             <div className="overflow-x-auto">
                 <Table className="min-w-[1200px]">
                     <TableHeader className="bg-muted/50">

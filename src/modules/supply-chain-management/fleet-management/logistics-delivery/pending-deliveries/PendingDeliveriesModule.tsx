@@ -500,7 +500,7 @@ export default function PendingDeliveriesModule() {
             </div>
 
             {/* Dashboard Filters */}
-            <Card className="shadow-sm">
+            <Card className="shadow-sm dark:border-white/60">
                 <CardContent className="p-6">
                     <div className="flex flex-col xl:flex-row gap-6">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-grow">
@@ -670,7 +670,7 @@ export default function PendingDeliveriesModule() {
                     { label: "For Loading", value: statusTotals.loading, color: "orange" },
                     { label: "For Shipping", value: statusTotals.shipping, color: "green" },
                 ].map((bucket) => (
-                    <Card key={bucket.label} className="shadow-sm border-none shadow-none ring-1 ring-border">
+                    <Card key={bucket.label} className="shadow-sm border-none shadow-none ring-1 ring-border dark:ring-white/60">
                         <CardContent className="p-4 flex items-center justify-between">
                             <div>
                                 <p className="text-xs font-medium text-muted-foreground">{bucket.label}</p>
@@ -688,7 +688,7 @@ export default function PendingDeliveriesModule() {
 
             {/* Stats Dashboard */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card className="shadow-sm border-none shadow-none ring-1 ring-border">
+                <Card className="shadow-sm border-none shadow-none ring-1 ring-border dark:ring-white/60">
                     <CardContent className="p-6 flex items-center justify-between">
                         <div>
                             <p className="text-sm font-medium text-muted-foreground">Active Clusters</p>
@@ -702,7 +702,7 @@ export default function PendingDeliveriesModule() {
                     </CardContent>
                 </Card>
 
-                <Card className="shadow-sm border-none shadow-none ring-1 ring-border">
+                <Card className="shadow-sm border-none shadow-none ring-1 ring-border dark:ring-white/60">
                     <CardContent className="p-6 flex items-center justify-between">
                         <div>
                             <p className="text-sm font-medium text-muted-foreground">Pending Orders</p>
@@ -716,7 +716,7 @@ export default function PendingDeliveriesModule() {
                     </CardContent>
                 </Card>
 
-                <Card className="shadow-sm border-none shadow-none ring-1 ring-border">
+                <Card className="shadow-sm border-none shadow-none ring-1 ring-border dark:ring-white/60">
                     <CardContent className="p-6 flex items-center justify-between">
                         <div>
                             <p className="text-sm font-medium text-muted-foreground">Total Pending Amount</p>
@@ -736,7 +736,7 @@ export default function PendingDeliveriesModule() {
             </div>
 
             {/* Table Section */}
-            <Card className="shadow-sm overflow-hidden">
+            <Card className="shadow-sm overflow-hidden dark:border-white/60">
                 <div className="overflow-x-auto">
                     <Table className="border-collapse">
                         <TableHeader className="bg-muted/40 text-[10px] uppercase font-semibold">

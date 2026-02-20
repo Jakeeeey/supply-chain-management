@@ -16,7 +16,7 @@ export function DeliveryTrendsCard(props: {
   filterType: FilterType
 }) {
   return (
-    <Card className="border bg-card shadow-sm">
+    <Card className="border bg-card shadow-sm dark:border-white/60">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-base font-semibold">Delivery Trends</CardTitle>
         <Badge variant="secondary" className="text-xs">

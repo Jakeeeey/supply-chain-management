@@ -22,7 +22,7 @@ export function DeliveryStatisticsFilters(props: {
   return (
     <div className="flex items-center gap-2">
       {/* Single pill container like screenshot */}
-      <div className="flex h-10 items-center rounded-xl border bg-card px-2 shadow-sm">
+      <div className="flex h-10 items-center rounded-xl border bg-card px-2 shadow-sm dark:border-white/60">
         <div className="flex items-center gap-2 pr-2">
           <Calendar className="h-4 w-4 text-muted-foreground" />
         </div>

@@ -32,7 +32,7 @@ export function DeliveryStatisticsSummaryCards(props: {
   return (
     <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
       {/* Fulfilled */}
-      <Card className="rounded-2xl border bg-card shadow-sm">
+      <Card className="rounded-2xl border bg-card shadow-sm dark:border-white/60">
         <CardContent className="p-6">
           <div className="mb-6 flex items-start justify-between">
             <div className="grid h-12 w-12 place-items-center rounded-xl bg-emerald-500/10">

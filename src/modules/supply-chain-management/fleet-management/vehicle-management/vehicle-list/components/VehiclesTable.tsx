@@ -61,7 +61,7 @@ function VehiclesCardsSkeleton({ rows = 6 }: { rows?: number }) {
       {Array.from({ length: rows }).map((_, i) => (
         <div
           key={`csk-${i}`}
-          className="rounded-lg border bg-background p-4"
+          className="rounded-lg border bg-background p-4 dark:border-white/60"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-2">
@@ -99,7 +99,7 @@ function VehicleCard({
   onViewHistory: (row: VehicleRow) => void;
 }) {
   return (
-    <div className="rounded-lg border bg-background p-4">
+    <div className="rounded-lg border bg-background p-4 dark:border-white/60">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold">{row.plateNo}</div>
@@ -149,13 +149,13 @@ export function VehiclesTable({
   onViewHistory: (row: VehicleRow) => void;
 }) {
   return (
-    <div className="rounded-lg border bg-background">
+    <div className="rounded-lg border bg-background dark:border-white/60">
       {/* ✅ Mobile (true responsive): Card list */}
       <div className="p-3 md:hidden">
         {loading ? (
           <VehiclesCardsSkeleton rows={6} />
         ) : rows.length === 0 ? (
-          <div className="rounded-lg border bg-background p-6 text-center text-sm text-muted-foreground">
+          <div className="rounded-lg border bg-background p-6 text-center text-sm text-muted-foreground dark:border-white/60">
             No vehicles found.
           </div>
         ) : (

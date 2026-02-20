@@ -76,7 +76,7 @@ export default function PendingInvoicesModule() {
       <DashboardCards kpis={data?.kpis} loading={loading && !data?.kpis} />
       <StatusCharts kpis={data?.kpis} loading={loading && !data?.kpis} />
 
-      <Card className="shadow-sm border-slate-200">
+      <Card className="shadow-sm border dark:border-white/60">
         <CardContent className="p-6 space-y-4">
           <FiltersBar filters={filters} setFilters={setFilters} options={options} onExport={() => setExportOpen(true)} />
 

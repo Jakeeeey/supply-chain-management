@@ -11,7 +11,7 @@ function JobOrdersSkeleton({ rows = 2 }: { rows?: number }) {
   return (
     <div className="grid gap-4">
       {Array.from({ length: rows }).map((_, i) => (
-        <Card key={`josk-${i}`}>
+        <Card key={`josk-${i}`} className="dark:border-white/60">
           <CardContent className="p-5">
             <div className="space-y-3">
               <Skeleton className="h-4 w-32" />
@@ -60,7 +60,7 @@ export default function JobOrdersTab({ vehicle }: { vehicle: VehicleRow }) {
   if (loading) return <JobOrdersSkeleton rows={2} />;
 
   return (
-    <Card>
+    <Card className="dark:border-white/60">
       <CardContent className="p-6">
         <div className="text-sm font-semibold">Job Orders</div>
         <div className="mt-2 text-sm text-muted-foreground">
