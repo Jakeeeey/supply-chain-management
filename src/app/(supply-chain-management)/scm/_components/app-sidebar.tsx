@@ -34,37 +34,25 @@ const data = {
       title: "Product Management",
       url: "#",
       icon: SquareTerminal,
-      isActive: true,
+      isActive: false,
       items: [
         {
           title: "SKU Masterlist",
           url: "/scm/product-management/sku-masterlist",
         },
         {
-            title: "Management",
-            url: "#",
-            icon: SquareTerminal,
-            isActive: false,
-            items: [
-                { title: "SKU Creation", url: "/scm/management/sku-creation" },
-                { title: "Brand", url: "/scm/management/brand" },
-                { title: "Category", url: "/scm/management/category" },
-                { title: "Unit of Measurement", url: "/scm/management/unit-of-measurement" },
-            ],
+          title: "Management",
+          url: "#",
+          icon: SquareTerminal,
+          isActive: false,
+          items: [
+            { title: "SKU Creation", url: "/scm/management/sku-creation" },
+            { title: "Brand", url: "/scm/management/brand" },
+            { title: "Category", url: "/scm/management/category" },
+            { title: "Unit of Measurement", url: "/scm/management/unit-of-measurement" },
+          ],
         },
         {
-            title: "Supplier Management",
-            url: "#",
-            icon: SquareTerminal,
-            isActive: false,
-            items: [
-                { title: "Create Purchase Order", url: "/scm/supplier-management/purchase-order" },
-                { title: "Approval of PO", url: "/scm/supplier-management/approval-of-purchase-order" },
-                { title: "Receiving Products", url: "/scm/supplier-management/receiving-products" },
-                { title: "Posting Of PO", url: "/scm/supplier-management/posting-of-purchase-order" }
-            ],
-        },
-        {    
           title: "SKU Registration",
           url: "/scm/product-management/sku-creation",
         },
@@ -87,40 +75,6 @@ const data = {
           ],
         },
         {
-            title: "Fleet Management",
-            url: "#",
-            icon: BookOpen,
-            isActive: false,
-            items: [
-                {
-                    title: "Vehicle Management",
-                    url: "#",
-                    items: [
-                        { title: "Vehicle List", url: "/scm/fleet-management/vehicle-management/vehicle-list" },
-                    ]
-                },
-                { title: "Driver Management", url: "#" },
-                { 
-                    title: "Trip Management",
-                    url: "#",
-                    items: [
-                        { title: "Dispatch Summary", url: "/scm/fleet-management/trip-management/dispatch-summary" },
-                    ]
-                },
-                {
-                    title: "Logistics and Deliveries",
-                    url: "#",
-                    items: [
-                        { title: "Delivery Statistics", url: "/scm/fleet-management/logistics-deliveries/delivery-statistics" },
-                        { title: "Logistics Summary", url: "/scm/fleet-management/logistics-deliveries/logistics-summary" },
-                        { title: "Pending Deliveries", url: "/scm/fleet-management/logistics-deliveries/pending-deliveries" },
-                        { title: "Pending Invoices", url: "/scm/fleet-management/logistics-deliveries/pending-invoices" },
-                    ]
-                },
-                { title: "Fleet Inventory", url: "#" },
-            ],
-          },
-        {
           title: "Brand",
           url: "/scm/product-management/brand",
         },
@@ -138,7 +92,7 @@ const data = {
       title: "Supplier Management",
       url: "#",
       icon: SquareTerminal,
-      isActive: true,
+      isActive: false,
       items: [
         {
           title: "Create Purchase Order",
@@ -181,14 +135,33 @@ const data = {
       title: "Fleet Management",
       url: "#",
       icon: BookOpen,
+      isActive: false,
       items: [
         {
           title: "Vehicle Management",
-          url: "/scm/fleet-management/vehicle-management/vehicle-list",
+          url: "#",
+          items: [
+            { title: "Vehicle List", url: "/scm/fleet-management/vehicle-management/vehicle-list" },
+          ]
         },
         { title: "Driver Management", url: "#" },
-        { title: "Trip and Dispatch Management", url: "#" },
-        { title: "Logistics and Deliveries", url: "#" },
+        {
+          title: "Trip Management",
+          url: "#",
+          items: [
+            { title: "Dispatch Summary", url: "/scm/fleet-management/trip-management/dispatch-summary" },
+          ]
+        },
+        {
+          title: "Logistics and Deliveries",
+          url: "#",
+          items: [
+            { title: "Delivery Statistics", url: "/scm/fleet-management/logistics-deliveries/delivery-statistics" },
+            { title: "Logistics Summary", url: "/scm/fleet-management/logistics-deliveries/logistics-summary" },
+            { title: "Pending Deliveries", url: "/scm/fleet-management/logistics-deliveries/pending-deliveries" },
+            { title: "Pending Invoices", url: "/scm/fleet-management/logistics-deliveries/pending-invoices" },
+          ]
+        },
         { title: "Fleet Inventory", url: "#" },
       ],
     },
@@ -244,7 +217,7 @@ const data = {
       ],
     },
     {
-      title: "Returns & Revers Logistics",
+      title: "Returns & Reverse Logistics",
       url: "#",
       icon: BookOpen,
       items: [
