@@ -37,7 +37,7 @@ export function LogisticsTable({
 
     const ThSortable = ({ label, columnKey, align = 'left', className = '' }: { label: string, columnKey: SortKey, align?: 'left' | 'right', className?: string }) => (
         <TableHead
-            className={`text-${align} text-xs font-bold text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none ${className}`}
+            className={`text-${align} text-xs font-bold text-muted-foreground uppercase cursor-pointer hover:bg-muted select-none ${className}`}
             onClick={() => onSort(columnKey)}
         >
             <div className={`flex items-center ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
@@ -48,10 +48,10 @@ export function LogisticsTable({
     )
 
     return (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="bg-card text-card-foreground border rounded-lg shadow overflow-hidden">
             <div className="overflow-x-auto">
                 <Table className="min-w-[1200px]">
-                    <TableHeader className="bg-gray-50">
+                    <TableHeader className="bg-muted/50">
                         <TableRow>
                             <ThSortable label="Truck Plate" columnKey="truckPlate" className="min-w-[150px]" />
                             <ThSortable label="Driver" columnKey="driver" className="min-w-[200px]" />
@@ -78,7 +78,7 @@ export function LogisticsTable({
                             ))
                         ) : error ? (
                             <TableRow>
-                                <TableCell colSpan={9} className="px-6 py-12 text-center text-red-500">{error}</TableCell>
+                                <TableCell colSpan={9} className="px-6 py-12 text-center text-destructive">{error}</TableCell>
                             </TableRow>
                         ) : data.length === 0 ? (
                             <TableRow>
@@ -119,36 +119,36 @@ export function LogisticsTable({
                                 }
 
                                 return (
-                                    <TableRow key={`${row.truckPlate}-${index}`} className="hover:bg-gray-50/50">
+                                    <TableRow key={`${row.truckPlate}-${index}`} className="hover:bg-muted/50">
                                         {isFirstRowOfTruck && (
-                                            <TableCell rowSpan={truckRowSpan} className="align-top bg-white font-medium border-r">
+                                            <TableCell rowSpan={truckRowSpan} className="align-top bg-card font-medium border-r">
                                                 {row.truckPlate}
                                             </TableCell>
                                         )}
                                         {isFirstRowOfDriver && (
-                                            <TableCell rowSpan={driverRowSpan} className="align-top bg-white border-r">
+                                            <TableCell rowSpan={driverRowSpan} className="align-top bg-card border-r">
                                                 {row.driver}
                                             </TableCell>
                                         )}
                                         {isFirstRowOfCluster && (
-                                            <TableCell rowSpan={clusterRowSpan} className="align-top bg-white font-medium text-gray-700 border-r">
+                                            <TableCell rowSpan={clusterRowSpan} className="align-top bg-card font-medium text-muted-foreground border-r">
                                                 {row.clusterName}
                                             </TableCell>
                                         )}
                                         <TableCell className="border-r whitespace-nowrap">{row.customerName}</TableCell>
-                                        <TableCell className="text-right text-green-700 border-r whitespace-nowrap">
+                                        <TableCell className="text-right text-emerald-500 border-r whitespace-nowrap">
                                             {row.fulfilled > 0 ? formatCurrency(row.fulfilled) : '-'}
                                         </TableCell>
-                                        <TableCell className="text-right text-red-700 border-r whitespace-nowrap">
+                                        <TableCell className="text-right text-destructive border-r whitespace-nowrap">
                                             {row.notFulfilled > 0 ? formatCurrency(row.notFulfilled) : '-'}
                                         </TableCell>
-                                        <TableCell className="text-right text-orange-700 border-r whitespace-nowrap">
+                                        <TableCell className="text-right text-orange-500 border-r whitespace-nowrap">
                                             {row.fulfilledWithReturns > 0 ? formatCurrency(row.fulfilledWithReturns) : '-'}
                                         </TableCell>
-                                        <TableCell className="text-right text-yellow-700 border-r whitespace-nowrap">
+                                        <TableCell className="text-right text-yellow-500 border-r whitespace-nowrap">
                                             {row.fulfilledWithConcerns > 0 ? formatCurrency(row.fulfilledWithConcerns) : '-'}
                                         </TableCell>
-                                        <TableCell className="text-right font-bold text-gray-900 whitespace-nowrap">
+                                        <TableCell className="text-right font-bold text-foreground whitespace-nowrap">
                                             {formatCurrency(row.rowTotal)}
                                         </TableCell>
                                     </TableRow>

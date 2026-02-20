@@ -42,7 +42,7 @@ export function PrintModal({
                 <div className="space-y-4 py-4">
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <Label className="text-xs font-bold text-gray-500 uppercase">Cluster</Label>
+                            <Label className="text-xs font-bold text-muted-foreground uppercase">Cluster</Label>
                             <Select
                                 value={filters.cluster}
                                 onValueChange={(val) => setFilters(prev => ({ ...prev, cluster: val }))}
@@ -58,7 +58,7 @@ export function PrintModal({
                         </div>
 
                         <div className="space-y-2">
-                            <Label className="text-xs font-bold text-gray-500 uppercase">Customer</Label>
+                            <Label className="text-xs font-bold text-muted-foreground uppercase">Customer</Label>
                             <Select
                                 value={filters.customer}
                                 onValueChange={(val) => setFilters(prev => ({ ...prev, customer: val }))}
@@ -75,7 +75,7 @@ export function PrintModal({
                     </div>
 
                     <div className="space-y-2">
-                        <Label className="text-xs font-bold text-gray-500 uppercase">Driver</Label>
+                        <Label className="text-xs font-bold text-muted-foreground uppercase">Driver</Label>
                         <Select
                             value={filters.driver}
                             onValueChange={(val) => setFilters(prev => ({ ...prev, driver: val }))}
@@ -91,7 +91,7 @@ export function PrintModal({
                     </div>
 
                     <div className="space-y-2">
-                        <Label className="text-xs font-bold text-gray-500 uppercase">Status</Label>
+                        <Label className="text-xs font-bold text-muted-foreground uppercase">Status</Label>
                         <Select
                             value={filters.status}
                             onValueChange={(val) => setFilters(prev => ({ ...prev, status: val as PrintStatus }))}
@@ -107,11 +107,11 @@ export function PrintModal({
                                 <SelectItem value="concerns">With Concerns</SelectItem>
                             </SelectContent>
                         </Select>
-                        <p className="text-[10px] text-gray-400">If a specific status is selected, only that column will be printed.</p>
+                        <p className="text-[10px] text-muted-foreground">If a specific status is selected, only that column will be printed.</p>
                     </div>
 
                     <div className="space-y-2">
-                        <Label className="text-xs font-bold text-gray-500 uppercase">Date Range</Label>
+                        <Label className="text-xs font-bold text-muted-foreground uppercase">Date Range</Label>
                         <div className="flex gap-1 flex-wrap">
                             {(['yesterday', 'today', 'tomorrow', 'this-week', 'this-month', 'this-year', 'custom'] as PrintDateRange[]).map((range) => (
                                 <Button
@@ -130,7 +130,7 @@ export function PrintModal({
                     {filters.dateRange === 'custom' && (
                         <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
                             <div className="space-y-1">
-                                <Label className="text-[10px] text-gray-500">From</Label>
+                                <Label className="text-[10px] text-muted-foreground">From</Label>
                                 <Input
                                     type="date"
                                     value={filters.customFrom}
@@ -139,7 +139,7 @@ export function PrintModal({
                                 />
                             </div>
                             <div className="space-y-1">
-                                <Label className="text-[10px] text-gray-500">To</Label>
+                                <Label className="text-[10px] text-muted-foreground">To</Label>
                                 <Input
                                     type="date"
                                     value={filters.customTo}

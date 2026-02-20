@@ -36,10 +36,10 @@ export function LogisticsFilter({
     }
 
     return (
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <div className="bg-card text-card-foreground border rounded-lg shadow p-6 mb-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                    <Label className="text-sm font-medium text-gray-700">Search</Label>
+                    <Label className="text-sm font-medium">Search</Label>
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                         <Input
@@ -70,7 +70,7 @@ export function LogisticsFilter({
             </div>
 
             {dateRange === 'custom' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-100">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t">
                     <div className="space-y-2">
                         <Label className="text-sm font-medium text-gray-700">From Date</Label>
                         <Input

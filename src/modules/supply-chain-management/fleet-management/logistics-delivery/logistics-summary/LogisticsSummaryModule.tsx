@@ -441,8 +441,8 @@ export default function LogisticsSummaryModule() {
         <div className="p-8 relative">
             <div className="mb-8 flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                 <div>
-                    <h1 className="text-gray-900 mb-2 text-2xl font-semibold">Logistics Summary</h1>
-                    <p className="text-gray-600">Comprehensive delivery tracking and performance overview</p>
+                    <h1 className="text-foreground mb-2 text-2xl font-semibold">Logistics Summary</h1>
+                    <p className="text-muted-foreground">Comprehensive delivery tracking and performance overview</p>
                 </div>
                 <Button
                     variant="outline"
@@ -485,7 +485,7 @@ export default function LogisticsSummaryModule() {
             />
 
             {/* Pagination Footer */}
-            <div className="bg-gray-50 px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 rounded-b-lg">
+            <div className="bg-muted/30 px-4 py-3 flex items-center justify-between border-t sm:px-6 rounded-b-lg">
                 <div className="flex-1 flex justify-between items-center">
                     <Button
                         variant="outline"
@@ -496,8 +496,8 @@ export default function LogisticsSummaryModule() {
                     >
                         <ChevronLeft className="w-4 h-4" /> Previous
                     </Button>
-                    <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                        {loading && <Loader2 className="w-3 h-3 animate-spin text-blue-500" />}
+                    <span className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                        {loading && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
                         Page {currentPage} of {totalPages || 1}
                     </span>
                     <Button
