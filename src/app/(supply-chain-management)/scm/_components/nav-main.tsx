@@ -112,7 +112,14 @@ export function NavMain({ items }: { items: NavNode[] }) {
         return initial
     })
 
+    const [mounted, setMounted] = React.useState(false)
+
     React.useEffect(() => {
+        setMounted(true)
+    }, [])
+
+    React.useEffect(() => {
+        if (!mounted) return
         setOpenMap((prev) => {
             let changed = false
             const next = { ...prev }
@@ -141,6 +148,8 @@ export function NavMain({ items }: { items: NavNode[] }) {
             return changed ? next : prev
         })
     }, [pathname, items])
+
+    if (!mounted) return null
 
     return (
         <SidebarGroup className="overflow-x-hidden">
