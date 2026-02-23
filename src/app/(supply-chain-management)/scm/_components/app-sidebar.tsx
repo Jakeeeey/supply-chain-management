@@ -195,6 +195,10 @@ const data = {
           title: "Physical Inventory",
           url: "/scm/inventory-management/physical-inventory",
         },
+        {
+          title: "Branch Management",
+          url: "/scm/inventory-management/branch-management",
+        },
       ],
     },
     {
@@ -251,6 +255,23 @@ const data = {
         {
           title: "Product Ledger",
           url: "/scm/traceability-compliance/product-ledger",
+        },
+      ],
+    },
+    {
+      title: "Logistics",
+      url: "#",
+      icon: BookOpen,
+      items: [
+        {
+          title: "Vehicle Management",
+          url: "#",
+          items: [
+            { title: "Vehicle Type", url: "/scm/logistics/vehicle-management/vehicle-type" },
+            { title: "Fuel Type", url: "/scm/logistics/vehicle-management/fuel-type" },
+            { title: "Category", url: "/scm/logistics/vehicle-management/category" },
+            { title: "Engine Type", url: "/scm/logistics/vehicle-management/engine-type" },
+          ]
         },
       ],
     },
