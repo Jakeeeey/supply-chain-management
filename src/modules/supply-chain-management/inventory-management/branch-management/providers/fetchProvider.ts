@@ -50,3 +50,27 @@ export async function fetchBarangays(cityCode: string): Promise<Barangay[]> {
     if (!res.ok) return [];
     return res.json();
 }
+
+export async function updateBranch(id: number, branchData: any): Promise<any> {
+    const res = await fetch("/api/scm/inventory-management/branch-management", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, ...branchData }),
+    });
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.details || "Failed to update branch");
+    }
+    return res.json();
+}
+
+export async function deleteBranch(id: number): Promise<any> {
+    const res = await fetch(`/api/scm/inventory-management/branch-management?id=${id}`, {
+        method: "DELETE",
+    });
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.details || "Failed to delete branch");
+    }
+    return res.json();
+}

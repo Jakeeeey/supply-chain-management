@@ -129,3 +129,131 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Internal Server Error", details: err.message }, { status: 500 });
     }
 }
+export async function PATCH(req: NextRequest) {
+    try {
+        const body = await req.json();
+        const { id, ...updateData } = body;
+
+        if (!id) {
+            return NextResponse.json({ error: "Branch ID is required" }, { status: 400 });
+        }
+
+        // 1. Fetch current branch to check if it's a "Normal" branch
+        const currentRes = await fetch(`${DIRECTUS_BASE}/items/branches/${id}`, {
+            headers: directusHeaders(),
+        });
+
+        if (!currentRes.ok) {
+            const err = await currentRes.text();
+            return NextResponse.json({ error: "Failed to fetch current branch", details: err }, { status: currentRes.status });
+        }
+
+        const currentData = await currentRes.json();
+        const currentBranch = currentData.data;
+
+        // Convert boolean to number for Directus
+        if (updateData.isMoving !== undefined) updateData.isMoving = updateData.isMoving ? 1 : 0;
+        if (updateData.isActive !== undefined) updateData.isActive = updateData.isActive ? 1 : 0;
+
+        // 2. Update the target branch
+        const res = await fetch(`${DIRECTUS_BASE}/items/branches/${id}`, {
+            method: "PATCH",
+            headers: directusHeaders(),
+            body: JSON.stringify(updateData),
+        });
+
+        if (!res.ok) {
+            const err = await res.text();
+            return NextResponse.json({ error: "Failed to update branch", details: err }, { status: res.status });
+        }
+
+        // 3. Sync with Bad Stock branch if this is a "Normal" branch
+        if (currentBranch.isBadStock == 0) {
+            const oldCode = currentBranch.branch_code;
+            const badStockCode = `${oldCode}-BS`;
+
+            // Find the Bad Stock branch
+            const findBSRes = await fetch(`${DIRECTUS_BASE}/items/branches?filter[branch_code][_eq]=${badStockCode}`, {
+                headers: directusHeaders(),
+            });
+
+            if (findBSRes.ok) {
+                const bsData = await findBSRes.json();
+                if (bsData.data && bsData.data.length > 0) {
+                    const badStockId = bsData.data[0].id;
+
+                    const bsUpdate: any = { ...updateData };
+                    if (updateData.branch_name) bsUpdate.branch_name = `${updateData.branch_name} - Bad Stock`;
+                    if (updateData.branch_code) bsUpdate.branch_code = `${updateData.branch_code}-BS`;
+                    if (updateData.branch_description) bsUpdate.branch_description = `Bad Stock for ${updateData.branch_description}`;
+
+                    await fetch(`${DIRECTUS_BASE}/items/branches/${badStockId}`, {
+                        method: "PATCH",
+                        headers: directusHeaders(),
+                        body: JSON.stringify(bsUpdate),
+                    });
+                }
+            }
+        }
+
+        const data = await res.json();
+        return NextResponse.json({ success: true, data: data.data });
+    } catch (err: any) {
+        return NextResponse.json({ error: "Internal Server Error", details: err.message }, { status: 500 });
+    }
+}
+
+export async function DELETE(req: NextRequest) {
+    try {
+        const { searchParams } = new URL(req.url);
+        const id = searchParams.get("id");
+
+        if (!id) {
+            return NextResponse.json({ error: "Branch ID is required" }, { status: 400 });
+        }
+
+        // 1. Fetch current branch to check if it's a "Normal" branch
+        const currentRes = await fetch(`${DIRECTUS_BASE}/items/branches/${id}`, {
+            headers: directusHeaders(),
+        });
+
+        if (!currentRes.ok) {
+            const err = await currentRes.text();
+            return NextResponse.json({ error: "Failed to fetch current branch", details: err }, { status: currentRes.status });
+        }
+
+        const currentData = await currentRes.json();
+        const currentBranch = currentData.data;
+
+        // 2. Identify paired Bad Stock branch if deleting a "Normal" branch
+        let idsToDelete = [id];
+        if (currentBranch.isBadStock == 0) {
+            const badStockCode = `${currentBranch.branch_code}-BS`;
+            const findBSRes = await fetch(`${DIRECTUS_BASE}/items/branches?filter[branch_code][_eq]=${badStockCode}`, {
+                headers: directusHeaders(),
+            });
+            if (findBSRes.ok) {
+                const bsData = await findBSRes.json();
+                if (bsData.data && bsData.data.length > 0) {
+                    idsToDelete.push(bsData.data[0].id);
+                }
+            }
+        }
+
+        // 3. Delete identified records
+        const deleteRes = await fetch(`${DIRECTUS_BASE}/items/branches`, {
+            method: "DELETE",
+            headers: directusHeaders(),
+            body: JSON.stringify(idsToDelete),
+        });
+
+        if (!deleteRes.ok) {
+            const err = await deleteRes.text();
+            return NextResponse.json({ error: "Failed to delete branch(es)", details: err }, { status: deleteRes.status });
+        }
+
+        return NextResponse.json({ success: true, message: "Branch(es) deleted successfully" });
+    } catch (err: any) {
+        return NextResponse.json({ error: "Internal Server Error", details: err.message }, { status: 500 });
+    }
+}
