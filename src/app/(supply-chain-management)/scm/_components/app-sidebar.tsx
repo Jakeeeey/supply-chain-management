@@ -259,6 +259,23 @@ const data = {
       ],
     },
     {
+      title: "Logistics",
+      url: "#",
+      icon: BookOpen,
+      items: [
+        {
+          title: "Vehicle Management",
+          url: "#",
+          items: [
+            { title: "Vehicle Type", url: "/scm/logistics/vehicle-management/vehicle-type" },
+            { title: "Fuel Type", url: "/scm/logistics/vehicle-management/fuel-type" },
+            { title: "Category", url: "/scm/logistics/vehicle-management/category" },
+            { title: "Engine Type", url: "/scm/logistics/vehicle-management/engine-type" },
+          ]
+        },
+      ],
+    },
+    {
       title: "Reporting & KPIs",
       url: "#",
       icon: Settings2,
