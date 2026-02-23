@@ -72,6 +72,7 @@ export function VehicleHistoryDialog({
           lg:w-[1100px]
           max-w-none
           sm:max-w-none
+          dark:border-white/60
         "
       >
         {/* Header */}
@@ -133,7 +134,7 @@ export function VehicleHistoryDialog({
                   </TabsContent>
 
                   <TabsContent value="job_orders" className="mt-0">
-                    <JobOrdersTab />
+                    <JobOrdersTab vehicle={vehicle} />
                   </TabsContent>
                 </div>
               </ScrollArea>
