@@ -12,7 +12,11 @@ export function useBranchManagement() {
 
     // Filters
     const [searchQuery, setSearchQuery] = React.useState("");
-    const [filterType, setFilterType] = React.useState<"All" | "Badstock">("All");
+    const [filterType, setFilterType] = React.useState<"All" | "Active" | "Inactive" | "Moving" | "Not Moving" | "Badstock">("All");
+
+    // Pagination
+    const [currentPage, setCurrentPage] = React.useState(1);
+    const itemsPerPage = 10;
 
     const loadData = React.useCallback(async () => {
         setLoading(true);
@@ -32,19 +36,28 @@ export function useBranchManagement() {
         loadData();
     }, [loadData]);
 
+    // Reset to page 1 when search or filter changes
+    React.useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, filterType]);
+
     const filteredBranches = React.useMemo(() => {
         return branches.filter((b) => {
-            // Filter by type
-            if (filterType === "Badstock") {
-                if (!b.isBadStock) return false;
-            } else {
-                // In "All", maybe we should show all? Or just non-badstock?
-                // Usually "All" means everything, but the prompt says 
-                // "Filter of Badstock, and All". 
-                // I'll assume "All" means non-badstock by default or literally all.
-                // Let's look at the UI screenshot... 
-                // In the screenshot there is "Badstock" and "All".
-                // I'll show all in "All".
+            // Filter by status
+            const active = b.isActive === 1 || b.isActive === true;
+            const moving = b.isMoving === 1 || b.isMoving === true;
+            const badstock = b.isBadStock === 1 || b.isBadStock === true;
+
+            if (filterType === "Active") {
+                if (!active || badstock) return false;
+            } else if (filterType === "Inactive") {
+                if (active || badstock) return false;
+            } else if (filterType === "Moving") {
+                if (!moving || badstock) return false;
+            } else if (filterType === "Not Moving") {
+                if (moving || badstock) return false;
+            } else if (filterType === "Badstock") {
+                if (!badstock) return false;
             }
 
             // Search
@@ -62,6 +75,8 @@ export function useBranchManagement() {
         });
     }, [branches, searchQuery, filterType]);
 
+    const totalPages = Math.ceil(filteredBranches.length / itemsPerPage);
+
     return {
         branches: filteredBranches,
         users,
@@ -71,6 +86,10 @@ export function useBranchManagement() {
         setSearchQuery,
         filterType,
         setFilterType,
+        currentPage,
+        setCurrentPage,
+        totalPages,
+        itemsPerPage,
         refresh: loadData,
     };
 }

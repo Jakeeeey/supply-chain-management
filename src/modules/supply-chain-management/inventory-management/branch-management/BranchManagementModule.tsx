@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Plus, Search, Building2, SlidersHorizontal } from "lucide-react";
+import { Plus, Building2, SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +14,8 @@ import {
 import { useBranchManagement } from "./hooks/useBranchManagement";
 import { BranchTable } from "./components/BranchTable";
 import { BranchModal } from "./components/BranchModal";
+import { toast } from "sonner";
+import type { Branch } from "./types";
 
 export default function BranchManagementModule() {
     const {
@@ -26,9 +28,30 @@ export default function BranchManagementModule() {
         filterType,
         setFilterType,
         refresh,
+        currentPage,
+        setCurrentPage,
+        totalPages,
+        itemsPerPage,
     } = useBranchManagement();
 
+    const slicedBranches = React.useMemo(() => {
+        const start = (currentPage - 1) * itemsPerPage;
+        return branches.slice(start, start + itemsPerPage);
+    }, [branches, currentPage, itemsPerPage]);
+
     const [isModalOpen, setIsModalOpen] = React.useState(false);
+    const [editingBranch, setEditingBranch] = React.useState<Branch | null>(null);
+
+    const handleAdd = () => {
+        setEditingBranch(null);
+        setIsModalOpen(true);
+    };
+
+    const handleEdit = (branch: Branch) => {
+        setEditingBranch(branch);
+        setIsModalOpen(true);
+    };
+
 
     return (
         <div className="flex flex-col space-y-8 p-6 lg:p-8 max-w-[1600px] mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -45,7 +68,7 @@ export default function BranchManagementModule() {
                 </div>
 
                 <Button
-                    onClick={() => setIsModalOpen(true)}
+                    onClick={handleAdd}
                     className="rounded-xl px-6 h-12 font-bold shadow-lg shadow-primary/20 hover:shadow-primary/30 active:scale-[0.98] transition-all"
                 >
                     <Plus className="mr-2 h-5 w-5" />
@@ -56,44 +79,41 @@ export default function BranchManagementModule() {
             {/* Filters & Search Section */}
             <div className="bg-card/40 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row items-center gap-6">
                 <div className="relative flex-1 w-full group">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
                     <Input
                         placeholder="Search Branches (Name, Code, Province, City)..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-11 h-12 bg-muted/30 border-input rounded-xl focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:border-ring transition-all outline-none"
+                        className="h-12 bg-background border-input rounded-xl transition-all outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0 focus-visible:border-ring"
                     />
                 </div>
 
                 <div className="flex items-center gap-3 w-full md:w-auto">
-                    <div className="p-2 border border-white/5 bg-muted/30 rounded-lg flex items-center gap-1">
-                        <Button
-                            variant={filterType === "All" ? "default" : "ghost"}
-                            onClick={() => setFilterType("All")}
-                            className={`h-9 px-6 rounded-md font-bold text-xs uppercase tracking-wider transition-all ${filterType === "All" ? "" : "hover:bg-white/5"}`}
-                        >
-                            All
-                        </Button>
-                        <Button
-                            variant={filterType === "Badstock" ? "destructive" : "ghost"}
-                            onClick={() => setFilterType("Badstock")}
-                            className={`h-9 px-6 rounded-md font-bold text-xs uppercase tracking-wider transition-all ${filterType === "Badstock" ? "" : "hover:bg-red-500/10 hover:text-red-500"}`}
-                        >
-                            Badstock
-                        </Button>
-                    </div>
+                    <Select value={filterType} onValueChange={(value: any) => setFilterType(value)}>
+                        <SelectTrigger className="w-[160px] h-12 bg-background border border-input rounded-xl font-medium focus:ring-2 focus:ring-ring/40 focus:border-ring transition-all outline-none group shadow-sm hover:border-primary/50">
+                            <SlidersHorizontal className="mr-2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                            <SelectValue placeholder="All Status" />
+                        </SelectTrigger>
+                        <SelectContent align="end" className="rounded-xl border border-input bg-popover text-popover-foreground shadow-xl ring-1 ring-black/5 dark:ring-white/5">
+                            <SelectItem value="All" className="font-bold text-[10px] uppercase tracking-wider py-3 focus:bg-primary/5 cursor-pointer">All Branches</SelectItem>
+                            <SelectItem value="Active" className="font-bold text-[10px] uppercase tracking-wider py-3 text-emerald-600 dark:text-emerald-400 focus:bg-emerald-50/50 dark:focus:bg-emerald-500/10 cursor-pointer">Active</SelectItem>
+                            <SelectItem value="Inactive" className="font-bold text-[10px] uppercase tracking-wider py-3 text-slate-500 dark:text-slate-400 focus:bg-slate-50/50 dark:focus:bg-slate-500/10 cursor-pointer">Inactive</SelectItem>
+                            <SelectItem value="Moving" className="font-bold text-[10px] uppercase tracking-wider py-3 text-amber-600 dark:text-amber-400 focus:bg-amber-50/50 dark:focus:bg-amber-500/10 cursor-pointer">Moving</SelectItem>
+                            <SelectItem value="Not Moving" className="font-bold text-[10px] uppercase tracking-wider py-3 text-slate-400 dark:text-slate-500 focus:bg-slate-50/50 dark:focus:bg-slate-500/10 cursor-pointer">Not Moving</SelectItem>
+                            <SelectItem value="Badstock" className="font-bold text-[10px] uppercase tracking-wider py-3 text-red-600 dark:text-red-400 focus:bg-red-50/50 dark:focus:bg-red-500/10 cursor-pointer">Badstock</SelectItem>
+                        </SelectContent>
+                    </Select>
 
-                    <div className="h-10 w-px bg-white/10 mx-1 hidden md:block" />
+                    <div className="h-10 w-px bg-border mx-1 hidden md:block" />
 
                     <Select defaultValue="name">
-                        <SelectTrigger className="w-[180px] h-12 bg-muted/30 border-input rounded-xl font-medium focus:ring-2 focus:ring-ring/40 focus:border-ring transition-all outline-none">
+                        <SelectTrigger className="w-[180px] h-12 bg-background border border-input rounded-xl font-medium focus:ring-2 focus:ring-ring/40 focus:border-ring transition-all outline-none shadow-sm hover:border-primary/50">
                             <SlidersHorizontal className="mr-2 h-4 w-4 text-muted-foreground" />
                             <SelectValue placeholder="Sort By" />
                         </SelectTrigger>
-                        <SelectContent align="end" className="rounded-xl">
-                            <SelectItem value="name">Branch Name</SelectItem>
-                            <SelectItem value="code">Branch Code</SelectItem>
-                            <SelectItem value="date">Date Added</SelectItem>
+                        <SelectContent align="end" className="rounded-xl border border-input bg-popover text-popover-foreground shadow-xl ring-1 ring-black/5 dark:ring-white/5">
+                            <SelectItem value="name" className="font-bold text-[10px] uppercase tracking-wider py-3 focus:bg-primary/5 cursor-pointer">Branch Name</SelectItem>
+                            <SelectItem value="code" className="font-bold text-[10px] uppercase tracking-wider py-3 focus:bg-primary/5 cursor-pointer">Branch Code</SelectItem>
+                            <SelectItem value="date" className="font-bold text-[10px] uppercase tracking-wider py-3 focus:bg-primary/5 cursor-pointer">Date Added</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
@@ -110,14 +130,26 @@ export default function BranchManagementModule() {
                         </Button>
                     </div>
                 ) : (
-                    <BranchTable branches={branches} users={users} loading={loading} />
+                    <BranchTable
+                        branches={slicedBranches}
+                        users={users}
+                        loading={loading}
+                        onEdit={handleEdit}
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        onPageChange={setCurrentPage}
+                    />
                 )}
             </div>
 
             {/* Registration Modal */}
             <BranchModal
                 isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
+                onClose={() => {
+                    setIsModalOpen(false);
+                    setEditingBranch(null);
+                }}
+                editingBranch={editingBranch}
                 users={users}
                 onSuccess={refresh}
             />
