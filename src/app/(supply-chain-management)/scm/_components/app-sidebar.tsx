@@ -42,6 +42,7 @@ const data = {
                 { title: "Tagging Of PO", url: "/scm/supplier-management/tagging-of-po" },
                 { title: "Receiving Products", url: "/scm/supplier-management/receiving-products" },
                 { title: "Posting Of PO", url: "/scm/supplier-management/posting-of-purchase-order" },
+                { title: "Purchase Order Summary", url: "/scm/supplier-management/purchase-order-summary" },
 
             ],
         },
