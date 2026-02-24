@@ -231,6 +231,18 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }
         }
     }
 
+    const onInvalid = (errors: any) => {
+        const messages = Object.values(errors)
+            .map((err: any) => err.message)
+            .filter(Boolean);
+
+        if (messages.length > 0) {
+            // Uniq messages to avoid double toasts for same error type if any
+            const uniqueMessages = Array.from(new Set(messages));
+            uniqueMessages.forEach((msg: any) => toast.error(msg));
+        }
+    };
+
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
             <DialogContent className="max-w-[95vw] md:max-w-[800px] bg-background border-white/10 shadow-2xl p-0 flex flex-col gap-0 overflow-hidden outline-none">
@@ -243,7 +255,7 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }
 
                 <div className="flex-1 overflow-y-auto max-h-[80vh] bg-background">
                     <Form {...form}>
-                        <form onSubmit={form.handleSubmit(onSubmit)} className="p-6 space-y-6">
+                        <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="p-6 space-y-6">
                             {/* Branch Identity Section */}
                             <div className="bg-card p-5 rounded-lg border dark:border-white/10 shadow-sm space-y-4">
                                 <div className="flex items-center gap-2 pb-2 border-b border-white/5">
@@ -529,7 +541,7 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }
                         </Button>
                         <Button
                             type="submit"
-                            onClick={form.handleSubmit(onSubmit)}
+                            onClick={form.handleSubmit(onSubmit, onInvalid)}
                             disabled={isSubmitting}
                             className="flex-1 sm:flex-none h-9 text-xs font-bold min-w-[140px] shadow-lg shadow-primary/20"
                         >
