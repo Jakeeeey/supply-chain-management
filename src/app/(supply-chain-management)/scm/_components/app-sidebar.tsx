@@ -41,18 +41,6 @@ const data = {
           url: "/scm/product-management/sku-masterlist",
         },
         {
-          title: "Management",
-          url: "#",
-          icon: SquareTerminal,
-          isActive: false,
-          items: [
-            { title: "SKU Creation", url: "/scm/management/sku-creation" },
-            { title: "Brand", url: "/scm/management/brand" },
-            { title: "Category", url: "/scm/management/category" },
-            { title: "Unit of Measurement", url: "/scm/management/unit-of-measurement" },
-          ],
-        },
-        {
           title: "SKU Registration",
           url: "/scm/product-management/sku-creation",
         },
