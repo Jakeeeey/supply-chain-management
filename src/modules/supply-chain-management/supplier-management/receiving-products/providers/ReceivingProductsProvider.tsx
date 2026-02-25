@@ -58,6 +58,8 @@ type ActivityRow = {
     id: string;
     rfid: string;
     productName: string;
+    productId: string;
+    porId: string;
     time: string;
     status: "ok" | "warn";
 };
@@ -127,6 +129,7 @@ type Ctx = {
     clearReceiptSaved: () => void;
 
     scanRFID: () => Promise<void>;
+    removeActivity: (id: string) => void;
     saveReceipt: () => Promise<void>;
     savingReceipt: boolean;
     saveError: string;
@@ -328,6 +331,28 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
         }
     }, [openPOByBarcode, poBarcode]);
 
+    const removeActivity = React.useCallback((id: string) => {
+        setActivity((prev) => {
+            const row = prev.find((a) => a.id === id);
+            if (!row) return prev;
+
+            // If removing an "ok" scan, also decrement the scannedCountByPorId
+            if (row.status === "ok" && row.porId) {
+                setScannedCountByPorId((counts) => {
+                    const current = counts[row.porId] ?? 0;
+                    if (current <= 1) {
+                        const next = { ...counts };
+                        delete next[row.porId];
+                        return next;
+                    }
+                    return { ...counts, [row.porId]: current - 1 };
+                });
+            }
+
+            return prev.filter((a) => a.id !== id);
+        });
+    }, []);
+
     const scanRFID = React.useCallback(async () => {
         setScanError("");
         setLastMatched(null);
@@ -339,6 +364,17 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
         if (!value) return setScanError("Scan RFID first.");
 
         try {
+            // ✅ Block duplicate: if same RFID already verified as "ok" in this session
+            const alreadyVerifiedInSession = activity.some(
+                (a) => a.rfid === value && a.status === "ok"
+            );
+            if (alreadyVerifiedInSession) {
+                setScanError(
+                    `This RFID (${value.slice(-6).toUpperCase()}) is already verified in this session. Remove it from the activity log if it was scanned by mistake.`
+                );
+                return;
+            }
+
             const r = await fetch(API_URL, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -347,24 +383,28 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
             const j = await asJson(r);
             const data = j?.data as ScanRFIDResult;
 
-            // Warn if already received, but don't block
+            const porId = String(data?.porId ?? "");
+            if (!porId) {
+                setScanError("Invalid scan result (missing porId).");
+                setRfid("");
+                return;
+            }
+
+            // Already received (posted) — show warn only, do NOT increment count
             if (data?.alreadyReceived) {
                 setActivity((prev) => [
                     {
                         id: `${Date.now()}-${Math.random()}`,
                         rfid: data.rfid,
                         productName: data.productName,
+                        productId: data.productId ?? "",
+                        porId,
                         time: data.time || new Date().toISOString(),
                         status: "warn",
                     },
                     ...prev,
                 ]);
-                // We show the match but don't error out hard anymore
-            }
-
-            const porId = String(data?.porId ?? "");
-            if (!porId) {
-                setScanError("Invalid scan result (missing porId).");
+                setScanError("This RFID is already received. It was not counted again.");
                 setRfid("");
                 return;
             }
@@ -379,6 +419,8 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
                     id: `${Date.now()}-${Math.random()}`,
                     rfid: data.rfid,
                     productName: data.productName,
+                    productId: data.productId ?? "",
+                    porId,
                     time: data.time || new Date().toISOString(),
                     status: "ok",
                 },
@@ -390,7 +432,7 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
         } catch (e: any) {
             setScanError(String(e?.message ?? e));
         }
-    }, [selectedPO, rfid]);
+    }, [selectedPO, rfid, activity]);
 
     const saveReceipt = React.useCallback(async () => {
         setSaveError("");
@@ -519,6 +561,7 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
         clearReceiptSaved,
 
         scanRFID,
+        removeActivity,
         saveReceipt,
         savingReceipt,
         saveError,
