@@ -12,6 +12,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { NavUser } from "../../_components/nav-user"; // Relative path base sa iyong example
 
 import { cookies } from "next/headers";
+import { getDirectusBase, directusHeaders } from "@/lib/directus";
 
 import PurchaseOrderSummaryModule from "@/modules/supply-chain-management/supplier-management/purchase-order-summary/PurchaseOrderSummaryModule";
 import { Supplier } from "./types";
@@ -65,11 +66,14 @@ function buildHeaderUserFromToken(token: string | null | undefined) {
 // --- Data Fetching ---
 async function getData() {
     try {
+        const base = getDirectusBase();
+        const headers = directusHeaders();
+
         const [poRes, supRes, payRes, transRes] = await Promise.all([
-            fetch("http://100.110.197.61:8056/items/purchase_order?limit=-1", { cache: "no-store" }),
-            fetch("http://100.110.197.61:8056/items/suppliers?limit=-1", { cache: "no-store" }),
-            fetch("http://100.110.197.61:8056/items/payment_status?limit=-1", { cache: "no-store" }),
-            fetch("http://100.110.197.61:8056/items/transaction_status?limit=-1", { cache: "no-store" })
+            fetch(`${base}/items/purchase_order?limit=-1`, { cache: "no-store", headers }),
+            fetch(`${base}/items/suppliers?limit=-1`, { cache: "no-store", headers }),
+            fetch(`${base}/items/payment_status?limit=-1`, { cache: "no-store", headers }),
+            fetch(`${base}/items/transaction_status?limit=-1`, { cache: "no-store", headers })
         ]);
 
         const pos = await poRes.json();

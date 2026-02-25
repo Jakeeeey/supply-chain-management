@@ -1,58 +1,9 @@
 // src/app/api/scm/supplier-management/posting-of-po/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { getDirectusBase, directusFetch as fetchJson } from "@/lib/directus";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-// =====================
-// DIRECTUS CONFIG
-// =====================
-function getDirectusBase() {
-    const raw =
-        process.env.NEXT_PUBLIC_API_BASE_URL ||
-        process.env.DIRECTUS_URL ||
-        process.env.NEXT_PUBLIC_DIRECTUS_URL ||
-        "http://100.110.197.61:8056";
-
-    const cleaned = String(raw || "").trim().replace(/\/$/, "");
-    if (!/^https?:\/\//i.test(cleaned)) return `http://${cleaned}`;
-    return cleaned;
-}
-
-function getServerToken() {
-    return String(process.env.DIRECTUS_STATIC_TOKEN || process.env.DIRECTUS_TOKEN || "").trim();
-}
-
-function buildHeaders() {
-    const token = getServerToken();
-    if (!token) {
-        throw new Error(
-            "DIRECTUS_STATIC_TOKEN (or DIRECTUS_TOKEN) is missing. Add it to .env.local then restart."
-        );
-    }
-    return {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-    };
-}
-
-async function fetchJson(url: string, init?: RequestInit) {
-    const r = await fetch(url, {
-        ...init,
-        headers: {
-            ...(buildHeaders() as any),
-            ...(init?.headers ?? {}),
-        },
-        cache: "no-store",
-    });
-
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) {
-        const msg = j?.errors?.[0]?.message || j?.error || `Upstream failed: ${r.status}`;
-        throw new Error(msg);
-    }
-    return j;
-}
 
 // =====================
 // HELPERS
@@ -584,7 +535,7 @@ export async function GET() {
 
         const candidatePoIds = Array.from(
             new Set(porCandidates.map((r: any) => toNum(r?.purchase_order_id)).filter(Boolean))
-        );
+        ) as number[];
         if (!candidatePoIds.length) return ok([] as PostingListItem[]);
 
         const poHeaders = await fetchPOHeadersByIds(base, candidatePoIds);

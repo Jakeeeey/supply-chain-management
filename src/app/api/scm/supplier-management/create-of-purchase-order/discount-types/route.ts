@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getDirectusBase, getDirectusToken } from "@/lib/directus";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,18 +27,14 @@ function deriveDiscountPercentFromCode(codeRaw: string): number {
 
 export async function GET() {
     try {
-        const DIRECTUS_URL =
-            process.env.NEXT_PUBLIC_DIRECTUS_URL ||
-            process.env.DIRECTUS_URL ||
-            "http://100.110.197.61:8056";
+        const base = getDirectusBase();
+        const TOKEN = getDirectusToken();
 
-        const TOKEN = process.env.DIRECTUS_TOKEN; // optional
-
-        const url = `${DIRECTUS_URL}/items/discount_type?limit=-1&fields=id,discount_type,total_percent`;
+        const url = `${base}/items/discount_type?limit=-1&fields=id,discount_type,total_percent`;
 
         const res = await fetch(url, {
             cache: "no-store",
-            headers: TOKEN ? { Authorization: `Bearer ${TOKEN}` } : undefined,
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${TOKEN}` },
         });
 
         if (!res.ok) {

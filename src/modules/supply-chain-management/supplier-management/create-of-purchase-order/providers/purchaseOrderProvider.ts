@@ -24,7 +24,7 @@ async function fetchData<T>(url: string, init?: RequestInit): Promise<T> {
     return json as T;
 }
 
-const BASE = "/api/scm/supplier-management/purchase-order";
+const BASE = "/api/scm/supplier-management/create-of-purchase-order";
 
 export async function fetchSuppliers() {
     return fetchData<any[]>(`${BASE}/suppliers`);
