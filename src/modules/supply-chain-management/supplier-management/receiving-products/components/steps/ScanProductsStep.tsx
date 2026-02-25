@@ -11,7 +11,7 @@ import { useReceivingProducts } from "../../providers/ReceivingProductsProvider"
 
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Printer, Eye } from "lucide-react";
+import { Printer, Eye, Trash2 } from "lucide-react";
 import { generateOfficialSupplierReceiptV5 } from "../../utils/printUtils";
 import { ReceiptPreviewModal } from "../ReceiptPreviewModal";
 
@@ -31,6 +31,7 @@ export function ScanProductsStep() {
         savingReceipt,
         scannedCountByPorId,
         saveError,
+        removeActivity,
 
         receiptSaved,
         clearReceiptSaved,
@@ -243,13 +244,27 @@ export function ScanProductsStep() {
                                 <div className="space-y-2">
                                     {activity.map((a) => (
                                         <div key={a.id} className="flex items-center justify-between gap-3 text-xs">
-                                            <div className="min-w-0">
+                                            <div className="min-w-0 flex-1">
                                                 <div className="truncate font-medium">{a.productName}</div>
-                                                <div className="truncate text-muted-foreground">{a.rfid}</div>
+                                                <div className="truncate text-muted-foreground font-mono">{a.rfid}</div>
                                             </div>
-                                            <Badge variant={a.status === "ok" ? "outline" : "secondary"}>
-                                                {a.status === "ok" ? "OK" : "WARN"}
-                                            </Badge>
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <Badge variant={a.status === "ok" ? "outline" : "secondary"}
+                                                    className={a.status === "ok" ? "border-green-500/40 text-green-600 bg-green-500/5" : ""}
+                                                >
+                                                    {a.status === "ok" ? "OK" : "WARN"}
+                                                </Badge>
+                                                {a.status === "ok" && (
+                                                    <button
+                                                        type="button"
+                                                        title="Remove this scan"
+                                                        onClick={() => removeActivity(a.id)}
+                                                        className="text-muted-foreground hover:text-destructive transition-colors p-0.5 rounded"
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>

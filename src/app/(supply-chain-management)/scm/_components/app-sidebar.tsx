@@ -84,11 +84,15 @@ const data = {
       items: [
         {
           title: "Create Purchase Order",
-          url: "/scm/supplier-management/purchase-order",
+          url: "/scm/supplier-management/create-of-purchase-order",
         },
         {
           title: "Approval of PO",
           url: "/scm/supplier-management/approval-of-purchase-order",
+        },
+        {
+          title: "Tagging of PO",
+          url: "/scm/supplier-management/tagging-of-po",
         },
         {
           title: "Receiving Products",
@@ -98,6 +102,10 @@ const data = {
           title: "Posting Of PO",
           url: "/scm/supplier-management/posting-of-purchase-order",
         },
+        {
+          title: "PurchaseOrderSummary",
+          url: "/scm/supplier-management/purchase-order-summary",
+        }
       ],
     },
     {

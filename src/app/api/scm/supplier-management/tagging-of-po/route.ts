@@ -1,5 +1,6 @@
 // src/app/api/scm/supplier-management/tagging-of-po/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { getDirectusBase, directusFetch } from "@/lib/directus";
 
 import type {
     TaggablePOListItem,
@@ -11,60 +12,13 @@ import type {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// =====================
-// DIRECTUS CONFIG (.env.local dependent)
-// =====================
-function getDirectusBase() {
-    const raw =
-        process.env.NEXT_PUBLIC_API_BASE_URL ||
-        process.env.DIRECTUS_URL ||
-        process.env.NEXT_PUBLIC_DIRECTUS_URL ||
-        "";
-
-    const cleaned = String(raw || "").trim().replace(/\/$/, "");
-    if (!cleaned) return "http://100.110.197.61:8056"; // last-resort fallback
-    if (!/^https?:\/\//i.test(cleaned)) return `http://${cleaned}`;
-    return cleaned;
-}
-
-function getServerToken() {
-    return String(process.env.DIRECTUS_STATIC_TOKEN || process.env.DIRECTUS_TOKEN || "").trim();
-}
-
-function buildHeaders() {
-    const token = getServerToken();
-    if (!token) {
-        throw new Error(
-            "DIRECTUS_STATIC_TOKEN (or DIRECTUS_TOKEN) is missing. Add it to .env.local then restart dev server."
-        );
-    }
-    return {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-    };
-}
-
 const DEBUG = process.env.DEBUG_TAGGING_PO === "1";
 function dlog(...args: any[]) {
     if (DEBUG) console.log("[tagging-of-po]", ...args);
 }
 
 async function fetchJson(url: string, init?: RequestInit) {
-    const r = await fetch(url, {
-        ...init,
-        headers: {
-            ...(buildHeaders() as any),
-            ...(init?.headers ?? {}),
-        },
-        cache: "no-store",
-    });
-
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) {
-        const msg = j?.errors?.[0]?.message || j?.error || `Upstream failed: ${r.status}`;
-        throw new Error(msg);
-    }
-    return j;
+    return directusFetch(url, init);
 }
 
 // =====================
@@ -124,7 +78,7 @@ function normalizeRfidServer(raw: string): { rfid: string; hadMultiple: boolean 
 
     const matches = up.match(/[0-9A-F]{24,}/g) ?? [];
     if (matches.length > 0) {
-        const first = matches[0].slice(0, RFID_LEN);
+        const first = (matches[0] ?? "").slice(0, RFID_LEN);
         return { rfid: first, hadMultiple: matches.length > 1 };
     }
 
