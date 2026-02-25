@@ -15,7 +15,7 @@ import { NavUser } from "../../../_components/nav-user";
 import { cookies } from "next/headers";
 
 // ✅ Wire the module you asked for
-import VehicleListModule from "@/modules/supply-chain-management/vehicle-management/vehicle-list/VehicleListModule"
+import VehicleListModule from "@/modules/supply-chain-management/fleet-management/vehicle-management/vehicle-list/VehicleListModule"
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
