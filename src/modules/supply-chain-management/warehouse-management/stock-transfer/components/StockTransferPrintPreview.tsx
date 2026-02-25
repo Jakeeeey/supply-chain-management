@@ -106,7 +106,10 @@ export default function StockTransferPrintPreview({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
-      <DialogContent className="max-w-4xl w-[95vw] h-[90vh] flex flex-col gap-0 p-0 overflow-hidden">
+      <DialogContent
+        className="flex flex-col gap-0 p-0 overflow-hidden"
+        style={{ width: '90vw', maxWidth: '90vw', height: '95vh' }}
+      >
 
         {/* ── Header ── */}
         <DialogHeader className="px-6 py-4 border-b border-border shrink-0">

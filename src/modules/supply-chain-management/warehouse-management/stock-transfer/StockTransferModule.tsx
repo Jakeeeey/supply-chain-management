@@ -1,13 +1,6 @@
 'use client';
 
 import React, { KeyboardEvent, useState } from 'react';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Loader2, RefreshCcw, CheckCircle2, Printer, ScanLine } from 'lucide-react';
@@ -15,6 +8,7 @@ import { toast } from 'sonner';
 import { useStockTransfer, getBranchLabel } from './hooks/useStockTransfer';
 import StockTransferTable from './components/StockTransferTable';
 import StockTransferPrintPreview from './components/StockTransferPrintPreview';
+import { BranchCombobox } from './components/BranchCombobox';
 
 export default function StockTransferModule() {
   const {
@@ -96,22 +90,12 @@ export default function StockTransferModule() {
               {loading ? (
                 <div className="h-10 rounded-md bg-muted/30 animate-pulse" />
               ) : (
-                <Select value={sourceBranch} onValueChange={setSourceBranch}>
-                  <SelectTrigger className="h-10 text-sm bg-background border-border">
-                    <SelectValue placeholder="Select source branch" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {branches.length > 0 ? (
-                      branches.map((b) => (
-                        <SelectItem key={b.id} value={b.id.toString()}>
-                          {getBranchLabel(b)}
-                        </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="main">Main Warehouse</SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
+                <BranchCombobox
+                  branches={branches}
+                  value={sourceBranch}
+                  onChange={setSourceBranch}
+                  placeholder="Select source branch"
+                />
               )}
             </div>
 
@@ -123,22 +107,12 @@ export default function StockTransferModule() {
               {loading ? (
                 <div className="h-10 rounded-md bg-muted/30 animate-pulse" />
               ) : (
-                <Select value={targetBranch} onValueChange={setTargetBranch}>
-                  <SelectTrigger className="h-10 text-sm bg-background border-border">
-                    <SelectValue placeholder="Select target branch" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {branches.length > 0 ? (
-                      branches.map((b) => (
-                        <SelectItem key={b.id} value={b.id.toString()}>
-                          {getBranchLabel(b)}
-                        </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="main">Main Warehouse</SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
+                <BranchCombobox
+                  branches={branches}
+                  value={targetBranch}
+                  onChange={setTargetBranch}
+                  placeholder="Select target branch"
+                />
               )}
             </div>
 

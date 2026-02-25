@@ -83,21 +83,22 @@ export function generateStockTransferPDF(data: StockTransferPDFData): jsPDF {
   doc.setTextColor(120, 120, 120);
   doc.text('DATE REQUESTED', col1x, y);
   doc.text('STATUS', col2x, y);
-  y += 4;
+  y += 4; // tight but clear gap between label and badge
 
+  // Left value: Date Requested
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(0, 0, 0);
   doc.text(leadDate || '—', col1x, y);
 
-  // Status badge
+  // Status badge — starts at value row, no upward offset
   const isReceived = status?.toLowerCase() === 'received';
   const badgeText = status || 'Pending';
   const badgePad = { x: 3, y: 1.5 };
   const badgeW = doc.getTextWidth(badgeText) + badgePad.x * 2;
   const badgeH = 6;
   const badgeX = col2x;
-  const badgeY = y - 4.5;
+  const badgeY = y - 1; // top of badge aligns with value baseline area
 
   doc.setFillColor(isReceived ? 209 : 254, isReceived ? 250 : 249, isReceived ? 229 : 195);
   doc.setDrawColor(isReceived ? 6 : 113, isReceived ? 95 : 63, isReceived ? 70 : 18);
