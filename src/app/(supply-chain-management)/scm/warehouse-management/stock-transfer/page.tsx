@@ -1,4 +1,4 @@
-// src/app/dashboard/page.tsx
+// src/app/(supply-chain-management)/scm/warehouse-management/stock-transfer/page.tsx
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -11,7 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { NavUser } from "../../_components/nav-user"
-import ComingSoon from "@/app/(supply-chain-management)/scm/_components/ComingSoon";
+import StockTransferModule from "@/modules/supply-chain-management/warehouse-management/stock-transfer"
 
 const headerUser = {
     name: "Jake Dave M. De Guzman",
@@ -48,7 +48,7 @@ export default function Page() {
             </header>
 
             <ScrollArea className="min-h-0 flex-1">
-                <ComingSoon />
+                <StockTransferModule />
             </ScrollArea>
         </div>
     )

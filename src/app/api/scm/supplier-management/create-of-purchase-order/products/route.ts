@@ -1,31 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getDirectusBase, directusHeaders } from "@/lib/directus";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function getDirectusBase() {
-    const raw =
-        process.env.DIRECTUS_URL ||
-        process.env.NEXT_PUBLIC_DIRECTUS_URL ||
-        "http://100.110.197.61:8056";
-
-    if (!/^https?:\/\//i.test(raw)) return `http://${raw}`;
-    return raw.replace(/\/$/, "");
-}
-
-function buildUpstreamHeaders(req: NextRequest) {
-    const h: Record<string, string> = { "Content-Type": "application/json" };
-
-    const envToken = process.env.DIRECTUS_TOKEN;
-    if (envToken) {
-        h.Authorization = `Bearer ${envToken}`;
-        return h;
-    }
-
-    const incomingAuth = req.headers.get("authorization");
-    if (incomingAuth) h.Authorization = incomingAuth;
-
-    return h;
+function buildUpstreamHeaders(): Record<string, string> {
+    return directusHeaders();
 }
 
 function unique<T>(arr: T[]) {
@@ -41,7 +21,7 @@ export async function GET(req: NextRequest) {
         const idsParam = url.searchParams.get("ids");
         const limit = url.searchParams.get("limit") ?? "-1";
 
-        const headers = buildUpstreamHeaders(req);
+        const headers = buildUpstreamHeaders();
 
         // 1) If supplierId provided: fetch product_per_supplier then fetch products
         if (supplierId) {

@@ -1,5 +1,6 @@
 // ✅ FILE: src/app/api/scm/supplier-management/purchase-order/product-supplier-links/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { getDirectusBase, getDirectusToken } from "@/lib/directus";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,22 +22,18 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ data: [] });
         }
 
-        const DIRECTUS_URL =
-            process.env.NEXT_PUBLIC_DIRECTUS_URL ||
-            process.env.DIRECTUS_URL ||
-            "http://100.110.197.61:8056";
-
-        const TOKEN = process.env.DIRECTUS_TOKEN; // optional
+        const base = getDirectusBase();
+        const TOKEN = getDirectusToken();
 
         const url =
-            `${DIRECTUS_URL}/items/product_per_supplier` +
+            `${base}/items/product_per_supplier` +
             `?filter[supplier_id][_eq]=${encodeURIComponent(supplierId)}` +
             `&fields=id,product_id,supplier_id,discount_type` +
             `&limit=-1`;
 
         const res = await fetch(url, {
             cache: "no-store",
-            headers: TOKEN ? { Authorization: `Bearer ${TOKEN}` } : undefined,
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${TOKEN}` },
         });
 
         if (!res.ok) {

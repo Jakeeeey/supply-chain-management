@@ -856,17 +856,7 @@ export default function CreatePurchaseOrderModule() {
                 }),
             };
 
-            const res = await fetch("/api/scm/supplier-management/purchase-order", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-            });
-
-            const json = await res.json().catch(() => ({}));
-
-            if (!res.ok) {
-                throw new Error(json?.error || "Failed to create purchase order");
-            }
+            const json = await provider.createPurchaseOrder(payload);
 
             console.log("PO RESPONSE:", json?.data ?? json);
             return json;

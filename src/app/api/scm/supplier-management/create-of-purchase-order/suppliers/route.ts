@@ -1,35 +1,12 @@
 // src/app/api/suppliers/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { getDirectusBase, directusHeaders } from "@/lib/directus";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function getDirectusBase() {
-    const raw =
-        process.env.DIRECTUS_URL ||
-        process.env.NEXT_PUBLIC_DIRECTUS_URL ||
-        "http://100.110.197.61:8056";
-
-    // ensure has scheme
-    if (!/^https?:\/\//i.test(raw)) return `http://${raw}`;
-    return raw.replace(/\/$/, "");
-}
-
-function buildUpstreamHeaders(req: NextRequest) {
-    const h: Record<string, string> = { "Content-Type": "application/json" };
-
-    // Prefer explicit env token if present
-    const envToken = process.env.DIRECTUS_TOKEN;
-    if (envToken) {
-        h.Authorization = `Bearer ${envToken}`;
-        return h;
-    }
-
-    // Otherwise forward incoming Authorization if present
-    const incomingAuth = req.headers.get("authorization");
-    if (incomingAuth) h.Authorization = incomingAuth;
-
-    return h;
+function buildUpstreamHeaders(): Record<string, string> {
+    return directusHeaders();
 }
 
 export async function GET(req: NextRequest) {
@@ -45,7 +22,7 @@ export async function GET(req: NextRequest) {
         upstreamUrl.searchParams.set("filter[supplier_type][_eq]", "TRADE");
 
         const res = await fetch(upstreamUrl.toString(), {
-            headers: buildUpstreamHeaders(req),
+            headers: buildUpstreamHeaders(),
             cache: "no-store",
         });
 

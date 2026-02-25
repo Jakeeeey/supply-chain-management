@@ -1,25 +1,12 @@
 // src/app/api/scm/supplier-management/purchase-order/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { getDirectusBase, getDirectusToken } from "@/lib/directus";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** ✅ .env.local dependent base (single source of truth) */
-function getDirectusBase() {
-    const raw =
-        process.env.NEXT_PUBLIC_API_BASE_URL ||
-        process.env.DIRECTUS_URL ||
-        process.env.NEXT_PUBLIC_DIRECTUS_URL ||
-        "http://100.110.197.61:8056";
-
-    const cleaned = String(raw || "").trim().replace(/\/$/, "");
-    if (!/^https?:\/\//i.test(cleaned)) return `http://${cleaned}`;
-    return cleaned;
-}
-
-/** ✅ ALWAYS use server/static token for writes */
 function getServerToken() {
-    return String(process.env.DIRECTUS_STATIC_TOKEN || process.env.DIRECTUS_TOKEN || "").trim();
+    return getDirectusToken();
 }
 
 function now() {
