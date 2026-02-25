@@ -129,26 +129,44 @@ const data = {
           title: "Vehicle Management",
           url: "#",
           items: [
-            { title: "Vehicle List", url: "/scm/fleet-management/vehicle-management/vehicle-list" },
-          ]
+            {
+              title: "Vehicle List",
+              url: "/scm/fleet-management/vehicle-management/vehicle-list",
+            },
+          ],
         },
         { title: "Driver Management", url: "#" },
         {
           title: "Trip Management",
           url: "#",
           items: [
-            { title: "Dispatch Summary", url: "/scm/fleet-management/trip-management/dispatch-summary" },
-          ]
+            {
+              title: "Dispatch Summary",
+              url: "/scm/fleet-management/trip-management/dispatch-summary",
+            },
+          ],
         },
         {
           title: "Logistics and Deliveries",
           url: "#",
           items: [
-            { title: "Delivery Statistics", url: "/scm/fleet-management/logistics-deliveries/delivery-statistics" },
-            { title: "Logistics Summary", url: "/scm/fleet-management/logistics-deliveries/logistics-summary" },
-            { title: "Pending Deliveries", url: "/scm/fleet-management/logistics-deliveries/pending-deliveries" },
-            { title: "Pending Invoices", url: "/scm/fleet-management/logistics-deliveries/pending-invoices" },
-          ]
+            {
+              title: "Delivery Statistics",
+              url: "/scm/fleet-management/logistics-deliveries/delivery-statistics",
+            },
+            {
+              title: "Logistics Summary",
+              url: "/scm/fleet-management/logistics-deliveries/logistics-summary",
+            },
+            {
+              title: "Pending Deliveries",
+              url: "/scm/fleet-management/logistics-deliveries/pending-deliveries",
+            },
+            {
+              title: "Pending Invoices",
+              url: "/scm/fleet-management/logistics-deliveries/pending-invoices",
+            },
+          ],
         },
         { title: "Fleet Inventory", url: "#" },
       ],
@@ -255,11 +273,23 @@ const data = {
           title: "Vehicle Management",
           url: "#",
           items: [
-            { title: "Vehicle Type", url: "/scm/logistics/vehicle-management/vehicle-type" },
-            { title: "Fuel Type", url: "/scm/logistics/vehicle-management/fuel-type" },
-            { title: "Category", url: "/scm/logistics/vehicle-management/category" },
-            { title: "Engine Type", url: "/scm/logistics/vehicle-management/engine-type" },
-          ]
+            {
+              title: "Vehicle Type",
+              url: "/scm/logistics/vehicle-management/vehicle-type",
+            },
+            {
+              title: "Fuel Type",
+              url: "/scm/logistics/vehicle-management/fuel-type",
+            },
+            {
+              title: "Category",
+              url: "/scm/logistics/vehicle-management/category",
+            },
+            {
+              title: "Engine Type",
+              url: "/scm/logistics/vehicle-management/engine-type",
+            },
+          ],
         },
       ],
     },
@@ -296,8 +326,8 @@ const data = {
         {
           title: "Supplier Reliability Scorecard",
           url: "/scm/business-analytics/supplier-reliability-scorecard",
-        }
-      ]
+        },
+      ],
     },
   ],
 };
