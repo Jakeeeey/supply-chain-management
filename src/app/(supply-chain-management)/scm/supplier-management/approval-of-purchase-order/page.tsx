@@ -1,4 +1,4 @@
-// src/app/(supply-chain-management)/scm/supplier-management/purchase-order/page.tsx
+// src/app/(supply-chain-management)/scm/supplier-management/approval-of-purchase-order/page.tsx
 
 import {
     Breadcrumb,
@@ -15,7 +15,7 @@ import { NavUser } from "../../_components/nav-user";
 
 import { cookies } from "next/headers";
 
-import ComingSoon from "../../_components/ComingSoon"
+import ApprovalPurchaseOrderModule from "@/modules/supply-chain-management/supplier-management/approval-of-purchase-order/ApprovalPurchaseOrderModule";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,20 +49,8 @@ function pickString(obj: any, keys: string[]): string {
 function buildHeaderUserFromToken(token: string | null | undefined) {
     const payload = token ? decodeJwtPayload(token) : null;
 
-    const first = pickString(payload, [
-        "Firstname",
-        "FirstName",
-        "firstName",
-        "firstname",
-        "first_name",
-    ]);
-    const last = pickString(payload, [
-        "LastName",
-        "Lastname",
-        "lastName",
-        "lastname",
-        "last_name",
-    ]);
+    const first = pickString(payload, ["Firstname", "FirstName", "firstName", "firstname", "first_name"]);
+    const last = pickString(payload, ["LastName", "Lastname", "lastName", "lastname", "last_name"]);
     const email = pickString(payload, ["email", "Email"]);
 
     const name = [first, last].filter(Boolean).join(" ") || email || "User";
@@ -75,7 +63,6 @@ function buildHeaderUserFromToken(token: string | null | undefined) {
 }
 
 export default async function Page() {
-    // ✅ Next.js cookies() is async
     const cookieStore = await cookies();
     const token = cookieStore.get(COOKIE_NAME)?.value ?? null;
 
@@ -83,35 +70,27 @@ export default async function Page() {
 
     return (
         <div className="flex h-full min-h-0 flex-col">
-            {/* ===== Header ===== */}
             <header
                 className="
-                    sticky top-2 z-50 relative
-                    flex h-16 shrink-0 items-center justify-between
-                    border-b bg-background shadow-sm
-                    before:content-[''] before:absolute before:inset-x-0
-                    before:-top-2 before:h-2 before:bg-background
-                "
+          sticky top-2 z-50 relative
+          flex h-16 shrink-0 items-center justify-between
+          border-b bg-background shadow-sm
+          before:content-[''] before:absolute before:inset-x-0
+          before:-top-2 before:h-2 before:bg-background
+        "
             >
                 <div className="flex h-full items-center gap-2 px-4">
                     <SidebarTrigger className="-ml-1" />
-                    <Separator
-                        orientation="vertical"
-                        className="mr-2 data-[orientation=vertical]:h-4"
-                    />
+                    <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
 
                     <Breadcrumb>
                         <BreadcrumbList>
                             <BreadcrumbItem className="hidden md:block">
-                                <BreadcrumbLink href="#">
-                                    Supplier Management
-                                </BreadcrumbLink>
+                                <BreadcrumbLink href="#">Supplier Management</BreadcrumbLink>
                             </BreadcrumbItem>
                             <BreadcrumbSeparator className="hidden md:block" />
                             <BreadcrumbItem>
-                                <BreadcrumbPage>
-                                    Approval of Purchase Order
-                                </BreadcrumbPage>
+                                <BreadcrumbPage>Approval of Purchase Order</BreadcrumbPage>
                             </BreadcrumbItem>
                         </BreadcrumbList>
                     </Breadcrumb>
@@ -122,11 +101,9 @@ export default async function Page() {
                 </div>
             </header>
 
-            {/* ===== Content ===== */}
             <ScrollArea className="min-h-0 flex-1">
                 <div className="p-4">
-                    {/* ✅ Purchase Order UI (Create / Approval / Receiving / Posting) */}
-                    <ComingSoon />
+                    <ApprovalPurchaseOrderModule />
                 </div>
             </ScrollArea>
         </div>

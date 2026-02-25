@@ -48,6 +48,7 @@
     "lucide-react": "^0.563.0",
     "next": "16.1.4",
     "next-themes": "^0.4.6",
+    "radix-ui": "^1.4.3",
     "react": "19.2.3",
     "react-barcode": "^1.6.1",
     "react-day-picker": "^9.13.0",

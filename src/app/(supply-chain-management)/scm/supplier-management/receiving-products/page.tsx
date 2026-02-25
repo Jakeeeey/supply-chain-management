@@ -1,4 +1,4 @@
-// src/app/(supply-chain-management)/scm/supplier-management/purchase-order/page.tsx
+// src/app/(supply-chain-management)/scm/supplier-management/receiving-products/page.tsx
 
 import {
     Breadcrumb,
@@ -15,7 +15,7 @@ import { NavUser } from "../../_components/nav-user";
 
 import { cookies } from "next/headers";
 
-import ComingSoon from "../../_components/ComingSoon"
+import ReceivingProductsModule from "@/modules/supply-chain-management/supplier-management/receiving-products/ReceivingProductsModule";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -126,7 +126,7 @@ export default async function Page() {
             <ScrollArea className="min-h-0 flex-1">
                 <div className="p-4">
                     {/* ✅ Purchase Order UI (Create / Approval / Receiving / Posting) */}
-                    <ComingSoon />
+                    <ReceivingProductsModule />
                 </div>
             </ScrollArea>
         </div>
