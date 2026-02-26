@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { toast } from "sonner";
 import { Product, Supplier } from "../types";
 import {
@@ -10,6 +10,7 @@ export function useBarcodeMasterlist() {
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -20,37 +21,39 @@ export function useBarcodeMasterlist() {
   const itemsPerPage = 15;
 
   // --- FETCH DATA ---
-  useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      try {
-        const [productsData, suppliersData] = await Promise.all([
-          getMasterlistProducts(),
-          getSuppliers(),
-        ]);
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [productsData, suppliersData] = await Promise.all([
+        getMasterlistProducts(),
+        getSuppliers(),
+      ]);
 
-        // Client-side safety filter: reject empty/dash SKU or empty barcode
-        const validProducts = productsData.filter((p: Product) => {
-          const hasSku =
-            p.product_code &&
-            p.product_code.trim() !== "" &&
-            p.product_code !== "-";
-          const hasBarcode = p.barcode && p.barcode.trim() !== "";
-          return hasSku && hasBarcode;
-        });
+      // Client-side safety filter: reject empty/dash SKU or empty barcode
+      const validProducts = productsData.filter((p: Product) => {
+        const hasSku =
+          p.product_code &&
+          p.product_code.trim() !== "" &&
+          p.product_code !== "-";
+        const hasBarcode = p.barcode && p.barcode.trim() !== "";
+        return hasSku && hasBarcode;
+      });
 
-        setAllProducts(validProducts);
-        setSuppliers(suppliersData);
-      } catch (error) {
-        console.error("Failed to fetch data", error);
-        toast.error("Failed to load masterlist data.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchData();
+      setAllProducts(validProducts);
+      setSuppliers(suppliersData);
+    } catch (err: any) {
+      console.error("Failed to fetch data", err);
+      setError(err.message || "Failed to load masterlist data.");
+      toast.error("Failed to load masterlist data.");
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   // --- FILTERING ---
   const filteredProducts = useMemo(() => {
@@ -103,5 +106,7 @@ export function useBarcodeMasterlist() {
     setSearchQuery,
     supplierFilter,
     setSupplierFilter,
+    error,
+    refresh: fetchData,
   };
 }

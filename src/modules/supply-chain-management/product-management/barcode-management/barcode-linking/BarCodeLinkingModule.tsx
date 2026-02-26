@@ -35,6 +35,7 @@ const ScannerModal = React.lazy(() =>
   import("./components/ScannerModal").then((m) => ({ default: m.ScannerModal }))
 );
 import { BarcodeScannerSkeleton } from "./components/BarcodeScannerSkeleton";
+import ErrorPage from "@/components/shared/ErrorPage";
 
 export default function BarCodeScannerModule() {
   const {
@@ -59,6 +60,8 @@ export default function BarCodeScannerModule() {
     weightUnits,
     cbmUnits,
     allBarcodes,
+    error,
+    refresh,
   } = useBarcodeScanner();
 
   // UI States for Comboboxes
@@ -92,6 +95,17 @@ export default function BarCodeScannerModule() {
   };
 
   if (isLoading) return <BarcodeScannerSkeleton />;
+
+  if (error) {
+    return (
+      <ErrorPage
+        code="Connection Error"
+        title="Barcode Linking Unreachable"
+        message={error}
+        reset={refresh}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6 p-6 w-full bg-muted/30 min-h-screen">

@@ -44,6 +44,7 @@ import { PrintFormatModal, openPrintTab } from "./components/PrintModal";
 // ✅ NEW: Import Detail Modal
 import { ProductDetailModal } from "./components/ProductDetailModal";
 import { Product } from "./types";
+import ErrorPage from "@/components/shared/ErrorPage";
 
 export default function BarcodeMasterlistModule() {
   const {
@@ -59,6 +60,8 @@ export default function BarcodeMasterlistModule() {
     setSearchQuery,
     supplierFilter,
     setSupplierFilter,
+    error,
+    refresh,
   } = useBarcodeMasterlist();
 
   // Selection & Printing State
@@ -139,6 +142,17 @@ export default function BarcodeMasterlistModule() {
   };
 
   if (isLoading) return <BarcodeScannerSkeleton />;
+
+  if (error) {
+    return (
+      <ErrorPage
+        code="Connection Error"
+        title="Barcode Masterlist Unreachable"
+        message={error}
+        reset={refresh}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6 p-6 w-full bg-muted/30 min-h-screen">

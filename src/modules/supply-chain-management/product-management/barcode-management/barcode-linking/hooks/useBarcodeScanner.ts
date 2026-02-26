@@ -6,6 +6,7 @@ export function useBarcodeScanner() {
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [supplierFilter, setSupplierFilter] = useState("all");
   const [productFilter, setProductFilter] = useState("all");
@@ -23,82 +24,85 @@ export function useBarcodeScanner() {
     { product_id: string; barcode: string; product_name: string }[]
   >([]);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      try {
-        const [productsRes, suppliersRes, btRes, wuRes, cuRes] =
-          await Promise.all([
-            fetch(
-              "/api/scm/product-management/barcode-management/barcode-linking",
-            ),
-            fetch(
-              "/api/scm/product-management/barcode-management/barcode-linking?scope=suppliers",
-            ),
-            fetch(
-              "/api/scm/product-management/barcode-management/barcode-linking?scope=barcode_type",
-            ),
-            fetch(
-              "/api/scm/product-management/barcode-management/barcode-linking?scope=weight_unit",
-            ),
-            fetch(
-              "/api/scm/product-management/barcode-management/barcode-linking?scope=cbm_unit",
-            ),
-          ]);
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [productsRes, suppliersRes, btRes, wuRes, cuRes] =
+        await Promise.all([
+          fetch(
+            "/api/scm/product-management/barcode-management/barcode-linking",
+          ),
+          fetch(
+            "/api/scm/product-management/barcode-management/barcode-linking?scope=suppliers",
+          ),
+          fetch(
+            "/api/scm/product-management/barcode-management/barcode-linking?scope=barcode_type",
+          ),
+          fetch(
+            "/api/scm/product-management/barcode-management/barcode-linking?scope=weight_unit",
+          ),
+          fetch(
+            "/api/scm/product-management/barcode-management/barcode-linking?scope=cbm_unit",
+          ),
+        ]);
 
-        if (!productsRes.ok || !suppliersRes.ok)
-          throw new Error("Failed to fetch data");
+      if (!productsRes.ok || !suppliersRes.ok)
+        throw new Error("Failed to fetch data");
 
-        const productsData = await productsRes.json();
-        const suppliersData = await suppliersRes.json();
+      const productsData = await productsRes.json();
+      const suppliersData = await suppliersRes.json();
 
-        const allProductsRaw: Product[] = productsData.data || [];
+      const allProductsRaw: Product[] = productsData.data || [];
 
-        // Extract ALL existing barcodes for duplicate checking
-        const existingBarcodes = allProductsRaw
-          .filter((p: Product) => p.barcode && p.barcode.trim() !== "")
-          .map((p: Product) => ({
-            product_id: String(p.product_id),
-            barcode: p.barcode!,
-            product_name: p.product_name || p.description || "Unknown",
-          }));
-        setAllBarcodes(existingBarcodes);
+      // Extract ALL existing barcodes for duplicate checking
+      const existingBarcodes = allProductsRaw
+        .filter((p: Product) => p.barcode && p.barcode.trim() !== "")
+        .map((p: Product) => ({
+          product_id: String(p.product_id),
+          barcode: p.barcode!,
+          product_name: p.product_name || p.description || "Unknown",
+        }));
+      setAllBarcodes(existingBarcodes);
 
-        // STRICT FILTER: Must have SKU, Must NOT have Barcode
-        const eligibleProducts = allProductsRaw.filter((p: Product) => {
-          const hasSku =
-            p.product_code &&
-            p.product_code.trim() !== "" &&
-            p.product_code !== "-";
-          const hasBarcode = p.barcode && p.barcode.trim() !== "";
-          return hasSku && !hasBarcode;
-        });
+      // STRICT FILTER: Must have SKU, Must NOT have Barcode
+      const eligibleProducts = allProductsRaw.filter((p: Product) => {
+        const hasSku =
+          p.product_code &&
+          p.product_code.trim() !== "" &&
+          p.product_code !== "-";
+        const hasBarcode = p.barcode && p.barcode.trim() !== "";
+        return hasSku && !hasBarcode;
+      });
 
-        setAllProducts(eligibleProducts);
-        setSuppliers(suppliersData.data || []);
+      setAllProducts(eligibleProducts);
+      setSuppliers(suppliersData.data || []);
 
-        // Parse reference data
-        if (btRes.ok) {
-          const data = await btRes.json();
-          setBarcodeTypes(Array.isArray(data.data) ? data.data : []);
-        }
-        if (wuRes.ok) {
-          const data = await wuRes.json();
-          setWeightUnits(Array.isArray(data.data) ? data.data : []);
-        }
-        if (cuRes.ok) {
-          const data = await cuRes.json();
-          setCbmUnits(Array.isArray(data.data) ? data.data : []);
-        }
-      } catch (error) {
-        console.error("Fetch error", error);
-        toast.error("Failed to load data.");
-      } finally {
-        setIsLoading(false);
+      // Parse reference data
+      if (btRes.ok) {
+        const data = await btRes.json();
+        setBarcodeTypes(Array.isArray(data.data) ? data.data : []);
       }
-    };
-    fetchData();
+      if (wuRes.ok) {
+        const data = await wuRes.json();
+        setWeightUnits(Array.isArray(data.data) ? data.data : []);
+      }
+      if (cuRes.ok) {
+        const data = await cuRes.json();
+        setCbmUnits(Array.isArray(data.data) ? data.data : []);
+      }
+    } catch (err: any) {
+      console.error("Fetch error", err);
+      setError(err.message || "Failed to load barcode linking data.");
+      toast.error("Failed to load data.");
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const filteredProducts = useMemo(() => {
     return allProducts.filter((product) => {
@@ -214,5 +218,7 @@ export function useBarcodeScanner() {
     weightUnits,
     cbmUnits,
     allBarcodes,
+    error,
+    refresh: fetchData,
   };
 }
