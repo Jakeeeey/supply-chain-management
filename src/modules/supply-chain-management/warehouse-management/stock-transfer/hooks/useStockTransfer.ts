@@ -20,6 +20,7 @@ interface UseStockTransferReturn {
   updateQty: (rfid: string, qty: number) => void;
   reset: () => void;
   confirmTransfer: () => void;
+  isTransferConfirmed: boolean;
   orderNo: string;
   status: string;
 }
@@ -57,6 +58,7 @@ export function useStockTransfer(): UseStockTransferReturn {
   const [leadDate, setLeadDate] = useState('');
   const [rfidInput, setRfidInput] = useState('');
   const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
+  const [isTransferConfirmed, setIsTransferConfirmed] = useState(false);
 
   useEffect(() => {
     async function fetchData() {
@@ -134,11 +136,13 @@ export function useStockTransfer(): UseStockTransferReturn {
     setLeadDate('');
     setRfidInput('');
     setScannedItems([]);
+    setIsTransferConfirmed(false);
   }, []);
 
   const confirmTransfer = useCallback(() => {
     // Placeholder — wire real POST in future iteration
     console.log('Confirming transfer:', { sourceBranch, targetBranch, leadDate, scannedItems });
+    setIsTransferConfirmed(true);
   }, [sourceBranch, targetBranch, leadDate, scannedItems]);
 
   // Derive orderNo and status from the first successfully matched scanned item
@@ -163,6 +167,7 @@ export function useStockTransfer(): UseStockTransferReturn {
     updateQty,
     reset,
     confirmTransfer,
+    isTransferConfirmed,
     orderNo: firstMatch?.order_no ?? '',
     status: firstMatch?.status ?? '',
   };

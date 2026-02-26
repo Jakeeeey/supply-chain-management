@@ -120,7 +120,7 @@ export function generateStockTransferPDF(data: StockTransferPDFData): jsPDF {
     item.unit,
     String(item.qtyAvailable),
     String(item.unitQty),
-    `\u20b1${item.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
+    `PHP ${item.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
   ]);
 
   autoTable(doc, {
@@ -129,7 +129,7 @@ export function generateStockTransferPDF(data: StockTransferPDFData): jsPDF {
     head: [['No.', 'RFID', 'Product Name', 'Description', 'Unit', 'Qty Available', 'Qty (Custom)', 'Total Amount']],
     body: rows.length > 0 ? rows : [['', 'No items scanned.', '', '', '', '', '', '']],
     foot: rows.length > 0
-      ? [['', '', '', '', '', '', 'GRAND TOTAL', `\u20b1${grandTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`]]
+      ? [['', '', '', '', '', '', 'GRAND TOTAL', `PHP ${grandTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`]]
       : [],
     styles: {
       fontSize: 8,

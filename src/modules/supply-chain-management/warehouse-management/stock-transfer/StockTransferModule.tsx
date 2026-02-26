@@ -3,6 +3,16 @@
 import React, { KeyboardEvent, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Loader2, RefreshCcw, CheckCircle2, Printer, ScanLine } from 'lucide-react';
 import { toast } from 'sonner';
 import { useStockTransfer, getBranchLabel } from './hooks/useStockTransfer';
@@ -27,11 +37,13 @@ export default function StockTransferModule() {
     updateQty,
     reset,
     confirmTransfer,
+    isTransferConfirmed,
     orderNo,
     status,
   } = useStockTransfer();
 
   const [showPreview, setShowPreview] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   /* ── Helpers ─────────────────────────────────────────── */
   const sourceBranchLabel = branches.find((b) => b.id.toString() === sourceBranch)
@@ -43,10 +55,20 @@ export default function StockTransferModule() {
     : targetBranch || '—';
 
   const onRfidKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') handleRfidScan();
+    if (e.key !== 'Enter') return;
+    const trimmed = rfidInput.trim();
+    if (trimmed.length === 0) return;
+    if (trimmed.length !== 24) {
+      toast.error('Invalid RFID', {
+        description: `RFID must be exactly 24 characters. Current length: ${trimmed.length}.`,
+      });
+      return;
+    }
+    handleRfidScan();
   };
 
-  const handleConfirm = () => {
+  /** Validate then open the confirmation dialog */
+  const handleConfirmClick = () => {
     if (!sourceBranch || !targetBranch || !leadDate) {
       toast.error('Incomplete Form', {
         description: 'Please fill out Source Branch, Target Branch, and Lead Date.',
@@ -59,9 +81,15 @@ export default function StockTransferModule() {
       });
       return;
     }
+    setShowConfirmDialog(true);
+  };
+
+  /** Called when user clicks "Yes, Confirm" inside the dialog */
+  const handleConfirmFinal = () => {
     confirmTransfer();
-    toast.success('Transfer Confirmed', {
-      description: `${scannedItems.length} product(s) queued for transfer.`,
+    setShowConfirmDialog(false);
+    toast.success('Stock Transfer Confirmed', {
+      description: `${scannedItems.length} product(s) have been queued for transfer.`,
     });
   };
 
@@ -167,13 +195,21 @@ export default function StockTransferModule() {
             <RefreshCcw className="w-4 h-4" />
             Reset
           </Button>
-          <Button
-            onClick={handleConfirm}
-            className="gap-2 bg-foreground text-background hover:bg-foreground/90 shadow-none font-bold"
-          >
-            <CheckCircle2 className="w-4 h-4" />
-            Confirm Transfer
-          </Button>
+          <div className="flex flex-col items-end gap-1">
+            <Button
+              onClick={handleConfirmClick}
+              disabled={isTransferConfirmed}
+              className="gap-2 bg-foreground text-background hover:bg-foreground/90 shadow-none font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              Confirm Transfer
+            </Button>
+            {isTransferConfirmed && (
+              <p className="text-[11px] text-muted-foreground text-right max-w-[260px]">
+                You need to create a new source and target to be able to confirm another stock transfer.
+              </p>
+            )}
+          </div>
         </div>
 
         {/* ── Print Document ── */}
@@ -188,6 +224,28 @@ export default function StockTransferModule() {
           </Button>
         </div>
       </div>
+
+      {/* ── Confirm Transfer Dialog ── */}
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Stock Transfer</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure this is the final stock transfer? This action will save the transfer record
+              and cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmFinal}
+              className="bg-foreground text-background hover:bg-foreground/90"
+            >
+              Yes, Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── Print Preview Dialog ── */}
       <StockTransferPrintPreview
