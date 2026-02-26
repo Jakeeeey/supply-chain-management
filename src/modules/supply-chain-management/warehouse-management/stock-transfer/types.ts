@@ -32,5 +32,6 @@ export type ScannedItem = {
   unit: string;
   qtyAvailable: number;
   unitQty: number;
+  unitPrice: number;
   totalAmount: number;
 };

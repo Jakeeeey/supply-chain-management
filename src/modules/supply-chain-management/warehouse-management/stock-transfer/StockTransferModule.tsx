@@ -190,12 +190,20 @@ export default function StockTransferModule() {
         )}
 
         {/* ── Action Row ── */}
-        <div className="flex items-center justify-end gap-3">
-          <Button variant="outline" onClick={reset} className="gap-2 border-border shadow-none">
-            <RefreshCcw className="w-4 h-4" />
-            Reset
-          </Button>
-          <div className="flex flex-col items-end gap-1">
+        <div className="flex flex-col items-end gap-1">
+          <div className="flex items-center gap-3">
+            <Button variant="outline" onClick={reset} className="gap-2 border-border shadow-none">
+              <RefreshCcw className="w-4 h-4" />
+              Reset
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handlePrint}
+              className="gap-2 border-border shadow-none"
+            >
+              <Printer className="w-4 h-4" />
+              Print Document
+            </Button>
             <Button
               onClick={handleConfirmClick}
               disabled={isTransferConfirmed}
@@ -204,24 +212,12 @@ export default function StockTransferModule() {
               <CheckCircle2 className="w-4 h-4" />
               Confirm Transfer
             </Button>
-            {isTransferConfirmed && (
-              <p className="text-[11px] text-muted-foreground text-right max-w-[260px]">
-                You need to create a new source and target to be able to confirm another stock transfer.
-              </p>
-            )}
           </div>
-        </div>
-
-        {/* ── Print Document ── */}
-        <div className="flex justify-center pt-2">
-          <Button
-            variant="outline"
-            onClick={handlePrint}
-            className="gap-2 border-border shadow-none text-sm"
-          >
-            <Printer className="w-4 h-4" />
-            Print Document
-          </Button>
+          {isTransferConfirmed && (
+            <p className="text-[11px] text-muted-foreground text-right max-w-[320px]">
+              You need to create a new source and target to be able to confirm another stock transfer.
+            </p>
+          )}
         </div>
       </div>
 

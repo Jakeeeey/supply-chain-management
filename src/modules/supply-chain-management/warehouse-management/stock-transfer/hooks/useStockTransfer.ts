@@ -90,6 +90,10 @@ export function useStockTransfer(): UseStockTransferReturn {
     const match = lookupProduct(rfid, stockTransfers);
 
     if (match) {
+      const unitPrice =
+        match.ordered_quantity > 0
+          ? parseFloat((match.amount / match.ordered_quantity).toFixed(4))
+          : 0;
       const newItem: ScannedItem = {
         rfid,
         productId: match.product_id,
@@ -97,8 +101,9 @@ export function useStockTransfer(): UseStockTransferReturn {
         description: match.order_no,
         unit: 'box',
         qtyAvailable: match.ordered_quantity,
-        unitQty: match.ordered_quantity,
-        totalAmount: match.amount,
+        unitQty: 0,
+        unitPrice,
+        totalAmount: 0,
       };
       setScannedItems((prev) => [...prev, newItem]);
     } else {
@@ -110,7 +115,8 @@ export function useStockTransfer(): UseStockTransferReturn {
         description: '—',
         unit: '—',
         qtyAvailable: 0,
-        unitQty: 1,
+        unitQty: 0,
+        unitPrice: 0,
         totalAmount: 0,
       };
       setScannedItems((prev) => [...prev, newItem]);
@@ -123,9 +129,9 @@ export function useStockTransfer(): UseStockTransferReturn {
     setScannedItems((prev) =>
       prev.map((item) => {
         if (item.rfid !== rfid) return item;
-        // Recalculate total amount proportionally
-        const unitCost = item.qtyAvailable > 0 ? item.totalAmount / item.unitQty : 0;
-        return { ...item, unitQty: qty, totalAmount: parseFloat((unitCost * qty).toFixed(2)) };
+        // Use the stored unit price so total calculates correctly even from qty=0
+        const total = parseFloat((item.unitPrice * qty).toFixed(2));
+        return { ...item, unitQty: qty, totalAmount: total };
       })
     );
   }, []);
