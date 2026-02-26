@@ -8,10 +8,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox"; // Shadcn Checkbox
-import { ChevronRight } from "lucide-react";
 import { Product, Unit } from "../types";
 
 interface ProductTableProps {
@@ -89,14 +87,13 @@ export function ProductTable({
             <TableHead>Inventory Type</TableHead>
             <TableHead>UOM</TableHead>
             <TableHead>Attributes</TableHead>
-            <TableHead className="text-right">Action</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {products.length === 0 ? (
             <TableRow>
               <TableCell
-                colSpan={isSelectionMode ? 7 : 6}
+                colSpan={isSelectionMode ? 6 : 5}
                 className="text-center h-24 text-muted-foreground"
               >
                 No products found matching your filters.
@@ -171,18 +168,6 @@ export function ProductTable({
                   {/* Attributes */}
                   <TableCell className="text-muted-foreground text-sm font-mono">
                     {attributes}
-                  </TableCell>
-
-                  {/* Action */}
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground"
-                      onClick={() => onEdit(product)}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
                   </TableCell>
                 </TableRow>
               );

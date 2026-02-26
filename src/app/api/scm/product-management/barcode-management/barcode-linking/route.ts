@@ -99,6 +99,7 @@ async function proxyRequest(req: NextRequest, method: string) {
       const data = await fetchDirectus("/items/suppliers", {
         fields: "id,supplier_name,supplier_shortcut",
         "filter[isActive][_eq]": "1",
+        "filter[supplier_type][_eq]": "TRADE",
         limit: "-1",
         sort: "supplier_name",
       });
