@@ -1,20 +1,16 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
-import { useBundles } from "@/modules/supply-chain-management/product-management/bundling/hooks/useBundles";
-import { getDraftColumns } from "./components/columns";
+import { useBundles } from "./hooks/useBundles";
+import { BundleCreationTable } from "./components/data-table";
 import { BundleCreateModal } from "./components/modals/bundle-create-modal";
 import { BulkActionsModal } from "./components/modals/bulk-actions-modal";
-import { DataTable } from "@/components/ui/new-data-table";
 import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import ErrorPage from "@/components/shared/ErrorPage";
 import { Button } from "@/components/ui/button";
 import { Plus, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import {
-  BundleDraft,
-  BundleDraftFormValues,
-} from "@/modules/supply-chain-management/product-management/bundling/types/bundle.schema";
+import { BundleDraft, BundleDraftFormValues } from "./types/bundle.schema";
 
 /**
  * Bundle Creation Page — Manages DRAFT bundles.
@@ -103,18 +99,6 @@ export default function BundleCreationPage() {
     setSelectedRows(rows);
   }, []);
 
-  // ─── Table Columns ──────────────────────────────
-
-  const columns = useMemo(
-    () =>
-      getDraftColumns({
-        masterData,
-        onSubmit: handleSubmit,
-        onDelete: handleDelete,
-      }),
-    [masterData],
-  );
-
   // ─── Render ─────────────────────────────────────
 
   if (isLoading && !draftData.length) return <ModuleSkeleton />;
@@ -133,19 +117,20 @@ export default function BundleCreationPage() {
       </div>
 
       {/* Data Table */}
-      <DataTable
-        columns={columns}
+      <BundleCreationTable
         data={draftData}
-        searchKey="bundle_name"
-        isLoading={isLoading}
-        manualPagination
-        pageCount={Math.ceil(draftTotal / draftLimit)}
-        pagination={{ pageIndex: draftPage, pageSize: draftLimit }}
-        onPaginationChange={(p) => {
+        totalCount={draftTotal}
+        pageIndex={draftPage}
+        pageSize={draftLimit}
+        onPaginationChange={(p: { pageIndex: number; pageSize: number }) => {
           setDraftPage(p.pageIndex);
           setDraftLimit(p.pageSize);
         }}
-        onSearch={(v) => setSearch(v)}
+        masterData={masterData}
+        isLoading={isLoading}
+        onSubmit={handleSubmit}
+        onDelete={handleDelete}
+        onSearch={(v: string) => setSearch(v)}
         onSelectionChange={handleSelectionChange}
         actionComponent={
           <div className="flex items-center gap-2">

@@ -13,7 +13,7 @@ import { NavUser } from "../../_components/nav-user";
 
 import { cookies } from "next/headers";
 
-import { BundleApprovalPage } from "@/modules/supply-chain-management/product-management/bundling";
+import BundleApprovalPage from "@/modules/supply-chain-management/product-management/bundling/bundle-approval/BundleApprovalPage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

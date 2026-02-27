@@ -12,10 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import {
-  BundleDraft,
-  BundleMasterData,
-} from "@/modules/supply-chain-management/product-management/bundling/types/bundle.schema";
+import { bundleService } from "../../services/bundle";
+import { BundleDraft, BundleMasterData } from "../../types/bundle.schema";
 import { Package, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 
 interface BundleViewModalProps {

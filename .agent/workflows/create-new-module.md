@@ -9,7 +9,8 @@ When the user asks to "Create a new module" for a specific domain (e.g., Invento
 ## 1. Planning Phase
 
 - Reference `.agent/workflows/architecture-rules.md` for the blueprint.
-- Identify the subsystem.
+- Identify the subsystem and logical sub-modules (e.g., Creation, Approval, Masterlist).
+- **Pro Tip**: If the module has distinct lifecycle states, follow the **Granular Sub-Module Architecture** standard.
 - Map the provided fields to a Zod schema.
 
 ## 2. Implementation Order (DO ALL STEPS)

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { bundleService } from "@/modules/supply-chain-management/product-management/bundling/services/bundle";
+import { bundleService } from "@/modules/supply-chain-management/product-management/bundling/bundle-creation/services/bundle";
 
 export const runtime = "nodejs";
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { bundleService } from "@/modules/supply-chain-management/product-management/bundling/services/bundle";
-import { bundleDraftSchema } from "@/modules/supply-chain-management/product-management/bundling/types/bundle.schema";
+import { bundleService } from "@/modules/supply-chain-management/product-management/bundling/bundle-creation/services/bundle";
+import { bundleDraftSchema } from "@/modules/supply-chain-management/product-management/bundling/bundle-creation/types/bundle.schema";
 
 export const runtime = "nodejs";
 

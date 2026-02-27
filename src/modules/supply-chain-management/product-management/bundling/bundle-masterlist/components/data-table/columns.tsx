@@ -1,30 +1,26 @@
 "use client";
 
 import { ColumnDef } from "@tanstack/react-table";
-import {
-  BundleDraft,
-  BundleMasterData,
-} from "@/modules/supply-chain-management/product-management/bundling/types/bundle.schema";
+import { Bundle, BundleMasterData } from "../../types/bundle.schema";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Eye } from "lucide-react";
+import { DataTableColumnHeader } from "./table-column-header";
 
 interface ColumnOptions {
   masterData: BundleMasterData | null;
-  onView: (draft: BundleDraft) => void;
 }
 
 /**
- * Column definitions for the Bundle Approval (pending) DataTable.
+ * Column definitions for the Bundle Masterlist (approved) DataTable.
  */
-export function getApprovalColumns({
+export function getMasterlistColumns({
   masterData,
-  onView,
-}: ColumnOptions): ColumnDef<BundleDraft>[] {
+}: ColumnOptions): ColumnDef<Bundle>[] {
   return [
     {
       accessorKey: "bundle_sku",
-      header: "Bundle Code",
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} label="Bundle Code" />
+      ),
       cell: ({ row }) => (
         <span className="font-mono text-xs font-semibold text-primary">
           {row.original.bundle_sku}
@@ -33,7 +29,9 @@ export function getApprovalColumns({
     },
     {
       accessorKey: "bundle_name",
-      header: "Bundle Name",
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} label="Bundle Name" />
+      ),
       cell: ({ row }) => (
         <span className="font-medium">{row.original.bundle_name}</span>
       ),
@@ -51,27 +49,15 @@ export function getApprovalColumns({
       },
     },
     {
-      accessorKey: "draft_status",
+      accessorKey: "status",
       header: "Status",
       cell: ({ row }) => (
-        <Badge variant="secondary" className="bg-amber-500/10 text-amber-600">
-          {row.original.draft_status}
+        <Badge
+          variant="secondary"
+          className="bg-emerald-500/10 text-emerald-600"
+        >
+          {row.original.status}
         </Badge>
-      ),
-    },
-    {
-      id: "actions",
-      header: () => <div className="text-right">Actions</div>,
-      cell: ({ row }) => (
-        <div className="text-right">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onView(row.original)}
-          >
-            <Eye className="mr-2 h-4 w-4" /> View
-          </Button>
-        </div>
       ),
     },
   ];

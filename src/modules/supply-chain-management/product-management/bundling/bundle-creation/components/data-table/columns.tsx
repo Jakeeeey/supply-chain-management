@@ -1,10 +1,7 @@
 "use client";
 
 import { ColumnDef } from "@tanstack/react-table";
-import {
-  BundleDraft,
-  BundleMasterData,
-} from "@/modules/supply-chain-management/product-management/bundling/types/bundle.schema";
+import { BundleDraft, BundleMasterData } from "../../types/bundle.schema";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -15,6 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { DataTableColumnHeader } from "./table-column-header";
 
 interface ColumnOptions {
   masterData: BundleMasterData | null;
@@ -55,7 +53,9 @@ export function getDraftColumns({
     },
     {
       accessorKey: "bundle_sku",
-      header: "Bundle Code",
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} label="Bundle Code" />
+      ),
       cell: ({ row }) => (
         <span className="font-mono text-xs font-semibold text-primary">
           {row.original.bundle_sku}
@@ -64,7 +64,9 @@ export function getDraftColumns({
     },
     {
       accessorKey: "bundle_name",
-      header: "Bundle Name",
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} label="Bundle Name" />
+      ),
       cell: ({ row }) => (
         <span className="font-medium">{row.original.bundle_name}</span>
       ),

@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { bundleService } from "../../services/bundle";
 import {
   bundleDraftSchema,
   BundleDraftFormValues,
   BundleMasterData,
-} from "@/modules/supply-chain-management/product-management/bundling/types/bundle.schema";
+} from "../../types/bundle.schema";
 import {
   Dialog,
   DialogContent,
@@ -179,7 +180,7 @@ export function BundleCreateModal({
                     </div>
 
                     <div className="space-y-3">
-                      {fields.map((fieldItem, index) => (
+                      {fields.map((fieldItem: any, index: number) => (
                         <div
                           key={fieldItem.id}
                           className="flex flex-row items-end gap-2 p-3 border rounded-lg bg-background/50"

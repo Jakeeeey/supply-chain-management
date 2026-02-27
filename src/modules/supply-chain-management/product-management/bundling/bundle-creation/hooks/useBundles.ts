@@ -6,7 +6,8 @@ import {
   Bundle,
   BundleMasterData,
   BundleDraftFormValues,
-} from "@/modules/supply-chain-management/product-management/bundling/types/bundle.schema";
+} from "../types/bundle.schema";
+import { bundleService } from "../services/bundle";
 
 /**
  * Central hook for the Bundling module.

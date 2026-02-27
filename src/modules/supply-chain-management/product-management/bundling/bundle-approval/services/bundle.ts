@@ -5,14 +5,16 @@
  */
 
 import {
-  BundleDraft,
   Bundle,
-  BundleMasterData,
-  BundleDraftFormValues,
-  PaginatedBundles,
+  BundleDraft,
+  BundleItem,
+  BundleStatus,
   BundleType,
   ProductOption,
-} from "@/modules/supply-chain-management/product-management/bundling/types/bundle.schema";
+  BundleDraftFormValues,
+  BundleMasterData,
+  PaginatedBundles,
+} from "../types/bundle.schema";
 import { fetchItems, request, API_BASE_URL } from "./bundle-api";
 
 export const bundleService = {
@@ -208,7 +210,7 @@ export const bundleService = {
     const bundleSku = await this.generateBundleCode(values.bundle_name);
 
     // Create the draft bundle record
-    const { data: draft } = await request<{ data: any }>(
+    const { data: draft } = await request<{ data: BundleDraft }>(
       `${API_BASE_URL}/items/product_bundles_draft`,
       {
         method: "POST",
@@ -226,7 +228,7 @@ export const bundleService = {
     // Create the associated bundle items
     if (values.items.length > 0) {
       await Promise.all(
-        values.items.map((item) =>
+        values.items.map((item: BundleItem) =>
           request(`${API_BASE_URL}/items/product_bundle_items_draft`, {
             method: "POST",
             body: JSON.stringify({

@@ -1,9 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
-import { useBundles } from "@/modules/supply-chain-management/product-management/bundling/hooks/useBundles";
-import { getMasterlistColumns } from "./components/columns";
-import { DataTable } from "@/components/ui/new-data-table";
+import { useBundles } from "./hooks/useBundles";
+import { BundleMasterlistTable } from "./components/data-table";
 import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import ErrorPage from "@/components/shared/ErrorPage";
 
@@ -26,13 +25,6 @@ export default function BundleMasterlistPage() {
     refresh,
   } = useBundles();
 
-  // ─── Table Columns ──────────────────────────────
-
-  const columns = useMemo(
-    () => getMasterlistColumns({ masterData }),
-    [masterData],
-  );
-
   // ─── Render ─────────────────────────────────────
 
   if (isLoading && !approvedData.length) return <ModuleSkeleton />;
@@ -49,19 +41,18 @@ export default function BundleMasterlistPage() {
       </div>
 
       {/* Data Table */}
-      <DataTable
-        columns={columns}
+      <BundleMasterlistTable
         data={approvedData}
-        searchKey="bundle_name"
-        isLoading={isLoading}
-        manualPagination
-        pageCount={Math.ceil(approvedTotal / approvedLimit)}
-        pagination={{ pageIndex: approvedPage, pageSize: approvedLimit }}
-        onPaginationChange={(p) => {
+        totalCount={approvedTotal}
+        pageIndex={approvedPage}
+        pageSize={approvedLimit}
+        onPaginationChange={(p: { pageIndex: number; pageSize: number }) => {
           setApprovedPage(p.pageIndex);
           setApprovedLimit(p.pageSize);
         }}
-        onSearch={(v) => setSearch(v)}
+        masterData={masterData}
+        isLoading={isLoading}
+        onSearch={(v: string) => setSearch(v)}
       />
     </div>
   );

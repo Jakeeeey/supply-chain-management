@@ -1,14 +1,13 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
-import { useBundles } from "@/modules/supply-chain-management/product-management/bundling/hooks/useBundles";
-import { getApprovalColumns } from "./components/columns";
+import { useBundles } from "./hooks/useBundles";
+import { BundleApprovalTable } from "./components/data-table";
 import { BundleViewModal } from "./components/modals/bundle-view-modal";
-import { DataTable } from "@/components/ui/new-data-table";
 import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import ErrorPage from "@/components/shared/ErrorPage";
 import { toast } from "sonner";
-import { BundleDraft } from "@/modules/supply-chain-management/product-management/bundling/types/bundle.schema";
+import { BundleDraft } from "./types/bundle.schema";
 
 /**
  * Bundle Approval Page — Displays bundles pending approval.
@@ -67,17 +66,6 @@ export default function BundleApprovalPage() {
     [fetchDraftDetails],
   );
 
-  // ─── Table Columns ──────────────────────────────
-
-  const columns = useMemo(
-    () =>
-      getApprovalColumns({
-        masterData,
-        onView: handleView,
-      }),
-    [masterData, handleView],
-  );
-
   // ─── Render ─────────────────────────────────────
 
   if (isLoading && !pendingData.length) return <ModuleSkeleton />;
@@ -96,19 +84,19 @@ export default function BundleApprovalPage() {
       </div>
 
       {/* Data Table */}
-      <DataTable
-        columns={columns}
+      <BundleApprovalTable
         data={pendingData}
-        searchKey="bundle_name"
-        isLoading={isLoading}
-        manualPagination
-        pageCount={Math.ceil(pendingTotal / pendingLimit)}
-        pagination={{ pageIndex: pendingPage, pageSize: pendingLimit }}
-        onPaginationChange={(p) => {
+        totalCount={pendingTotal}
+        pageIndex={pendingPage}
+        pageSize={pendingLimit}
+        onPaginationChange={(p: { pageIndex: number; pageSize: number }) => {
           setPendingPage(p.pageIndex);
           setPendingLimit(p.pageSize);
         }}
-        onSearch={(v) => setSearch(v)}
+        masterData={masterData}
+        isLoading={isLoading}
+        onView={handleView}
+        onSearch={(v: string) => setSearch(v)}
       />
 
       {/* View Modal */}

@@ -8,7 +8,7 @@ All system components must follow this domain-driven architecture to maintain co
 
 ## 1. Directory Structure
 
-Every module must reside in `src/modules/[subsystem]/[module-name]/` and maintain this hierarchy:
+Every module must reside in `src/modules/[subsystem]/[module-name]/` and maintain this hierarchy for simple modules:
 
 ```text
 ├── api/                # Module-specific API handlers
@@ -19,6 +19,29 @@ Every module must reside in `src/modules/[subsystem]/[module-name]/` and maintai
 ├── types/ or types.ts   # Zod schemas and TypeScript interfaces
 └── [Module]Page.tsx     # Main entry point for the module
 ```
+
+### 1.1 Granular Sub-Module Architecture
+
+For complex modules with distinct lifecycle states (e.g., Draft → Approval → Masterlist), use a granular sub-module structure. Each feature area resides in its own sub-directory with internal layers:
+
+```text
+/module/sub-module-name/
+├── components/          # UI Components (DataTable, Forms, Modals)
+│   ├── data-table/      # (columns, index (DataTable), data-table-header)
+│   ├── modals/          # (modals)
+│   └── forms/           # (forms)
+├── hooks/               # Custom React hooks (Data fetching & state)
+├── services/            # Pure TypeScript business logic
+├── utils/               # Helpers
+├── types/ or types.ts   # Zod schemas and TypeScript interfaces
+└── [Module]Page.tsx     # Main entry point for the module
+```
+
+**Example (Bundling Module):**
+
+- `/bundling/bundle-creation/`
+- `/bundling/bundle-approval/`
+- `/bundling/bundle-masterlist/`
 
 ## 2. The Data Flow Protocol
 
