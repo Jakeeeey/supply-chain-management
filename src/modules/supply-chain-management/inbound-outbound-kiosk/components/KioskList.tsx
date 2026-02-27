@@ -89,7 +89,7 @@ export function KioskList({ plans, loading, onSuccess }: KioskListProps) {
                                     <div className="space-y-1">
                                         <div className={`flex items-center gap-2 ${iconColor}`}>
                                             <Truck className="h-4 w-4" />
-                                            <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">PDP Number</span>
+                                            <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">DP Number</span>
                                         </div>
                                         <h3 className={`text-2xl font-black tracking-tight transition-colors ${titleColor}`}>
                                             {plan.doc_no}

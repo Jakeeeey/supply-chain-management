@@ -36,7 +36,7 @@ export function KioskSearch({
                         onValueChange={onStatusChange}
                         className="w-full lg:w-auto"
                     >
-                        <TabsList className="bg-muted/50 dark:bg-muted/10 p-1 h-11 rounded-xl w-full lg:w-auto flex overflow-x-auto no-scrollbar" variant="line">
+                        <TabsList className="bg-muted/50 dark:bg-muted/10 p-1 h-11 rounded-xl w-full lg:w-auto flex overflow-x-auto no-scrollbar">
                             <TabsTrigger value="All Statuses" className="rounded-lg px-6 data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all text-xs font-bold uppercase tracking-wider">
                                 All Statuses
                             </TabsTrigger>

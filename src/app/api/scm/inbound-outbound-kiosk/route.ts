@@ -6,7 +6,7 @@ const AUTH_TOKEN = process.env.DIRECTUS_STATIC_TOKEN || "";
 export async function GET() {
     try {
         // Fetch post_dispatch_plan
-        const planRes = await fetch(`${DIRECTUS_URL}/items/post_dispatch_plan?limit=-1`, {
+        const planRes = await fetch(`${DIRECTUS_URL}/items/post_dispatch_plan?limit=-1&sort=-date_encoded`, {
             headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
         });
         const plans = await planRes.json();
