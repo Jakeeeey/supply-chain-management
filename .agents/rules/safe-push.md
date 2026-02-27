@@ -2,9 +2,10 @@
 trigger: always_on
 ---
 
-[Important Notes]: Ask user for confirmation if the code is ready for product!
+[Important Notes]: Ask user for confirmation if the code is ready for production!
 
 # Safe Push & PR Workflow
+
 Stage changes, sync with master, push safely, and create/update a PR.
 
 ## Steps
@@ -18,5 +19,3 @@ Stage changes, sync with master, push safely, and create/update a PR.
    - If no PR exists, run `gh pr create --fill`.
    - If a PR exists, notify the user that the PR has been updated.
 6. **Done**: Confirm to the user that the code is live and the PR is ready.
-
-

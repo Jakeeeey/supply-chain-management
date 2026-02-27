@@ -63,6 +63,24 @@ const data = {
           ],
         },
         {
+          title: "Bundling",
+          url: "#",
+          items: [
+            {
+              title: "Bundle Creation",
+              url: "/scm/product-management/bundle-creation",
+            },
+            {
+              title: "Bundle Approval",
+              url: "/scm/product-management/bundle-approval",
+            },
+            {
+              title: "Bundle Masterlist",
+              url: "/scm/product-management/bundle-masterlist",
+            },
+          ],
+        },
+        {
           title: "Brand",
           url: "/scm/product-management/brand",
         },
@@ -105,7 +123,7 @@ const data = {
         {
           title: "PurchaseOrderSummary",
           url: "/scm/supplier-management/purchase-order-summary",
-        }
+        },
       ],
     },
     {
