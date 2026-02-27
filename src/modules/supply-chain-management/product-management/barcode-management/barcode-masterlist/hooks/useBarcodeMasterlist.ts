@@ -4,6 +4,7 @@ import { Product, Supplier } from "../types";
 import {
   getMasterlistProducts,
   getSuppliers,
+  getMasterlistBundles,
 } from "../providers/fetchProviders";
 
 export function useBarcodeMasterlist() {
@@ -25,22 +26,46 @@ export function useBarcodeMasterlist() {
     setIsLoading(true);
     setError(null);
     try {
-      const [productsData, suppliersData] = await Promise.all([
+      const [productsData, suppliersData, bundlesData] = await Promise.all([
         getMasterlistProducts(),
         getSuppliers(),
+        getMasterlistBundles(),
       ]);
 
       // Client-side safety filter: reject empty/dash SKU or empty barcode
-      const validProducts = productsData.filter((p: Product) => {
-        const hasSku =
-          p.product_code &&
-          p.product_code.trim() !== "" &&
-          p.product_code !== "-";
-        const hasBarcode = p.barcode && p.barcode.trim() !== "";
-        return hasSku && hasBarcode;
-      });
+      const validProducts: Product[] = productsData
+        .filter((p: Product) => {
+          const hasSku =
+            p.product_code &&
+            p.product_code.trim() !== "" &&
+            p.product_code !== "-";
+          const hasBarcode = p.barcode && p.barcode.trim() !== "";
+          return hasSku && hasBarcode;
+        })
+        .map((p) => ({ ...p, record_type: "product" as const }));
 
-      setAllProducts(validProducts);
+      // Normalize bundles to Product shape
+      const validBundles: Product[] = bundlesData.map((b: any) => ({
+        product_id: String(b.id),
+        product_code: b.bundle_sku || "",
+        product_name: b.bundle_name || "",
+        description: b.bundle_name || "",
+        barcode: b.barcode_value || null,
+        barcode_date: b.barcode_date || null,
+        product_category: b.bundle_type_id?.name || "Bundle",
+        unit_of_measurement: null,
+        product_per_supplier: [],
+        barcode_type_id: b.barcode_type_id || null,
+        weight: b.weight ? Number(b.weight) : null,
+        weight_unit_id: b.weight_unit_id || null,
+        cbm_length: b.cbm_length ? Number(b.cbm_length) : null,
+        cbm_width: b.cbm_width ? Number(b.cbm_width) : null,
+        cbm_height: b.cbm_height ? Number(b.cbm_height) : null,
+        cbm_unit_id: b.cbm_unit_id || null,
+        record_type: "bundle" as const,
+      }));
+
+      setAllProducts([...validProducts, ...validBundles]);
       setSuppliers(suppliersData);
     } catch (err: any) {
       console.error("Failed to fetch data", err);

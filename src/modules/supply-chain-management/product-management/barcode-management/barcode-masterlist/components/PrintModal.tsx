@@ -9,7 +9,8 @@ import {
 } from "@/components/ui/dialog";
 import { Card } from "@/components/ui/card";
 import { QrCode, FileText } from "lucide-react";
-import { Product, Category } from "../types";
+import { Product, Category, BundleItem } from "../types";
+import { getBundleItems } from "../providers/fetchProviders";
 
 // =============================================================================
 // MODAL: SELECT FORMAT
@@ -61,7 +62,8 @@ export function PrintFormatModal({
             <div>
               <h4 className="font-semibold">Barcode with Details</h4>
               <p className="text-sm text-muted-foreground">
-                Table format: includes CBM (L×W×H), Weight, Category
+                Regular: Product Name, SKU, Category, Barcode. Bundle: Name,
+                Components, Barcode.
               </p>
             </div>
           </Card>
@@ -99,11 +101,6 @@ function getBarcodeJsFormat(product: Product): string {
   return "CODE128";
 }
 
-function formatDecimal(value: number | null | undefined): string {
-  if (value == null) return "–";
-  return Number(value).toFixed(2);
-}
-
 function escapeHtml(str: string): string {
   return str
     .replace(/&/g, "&amp;")
@@ -112,9 +109,93 @@ function escapeHtml(str: string): string {
     .replace(/"/g, "&quot;");
 }
 
-// --- Main function ---
+// --- Build barcode cell ---
 
-export function openPrintTab(
+function buildBarcodeCell(barcodeValue: string, barcodeFormat: string): string {
+  return barcodeValue
+    ? `<svg class="barcode-svg" data-value="${escapeHtml(barcodeValue)}" data-format="${barcodeFormat}"></svg>`
+    : `<span style="color:#999;font-style:italic;">–</span>`;
+}
+
+// --- Build rows ---
+
+/**
+ * SIMPLE format row (same for both regular and bundle):
+ * SKU Code | Description | Barcode
+ */
+function buildSimpleRow(p: Product): string {
+  const sku = escapeHtml(p.product_code || "");
+  const desc = escapeHtml(p.description || p.product_name || "");
+  const barcodeCell = buildBarcodeCell(p.barcode || "", getBarcodeJsFormat(p));
+
+  return `
+    <tr>
+      <td style="font-weight:500;white-space:nowrap;">${sku}</td>
+      <td>${desc}</td>
+      <td class="barcode-cell">${barcodeCell}</td>
+    </tr>
+  `;
+}
+
+/**
+ * DETAILED format for REGULAR products:
+ * Product Name | SKU Code | Category | Barcode
+ */
+function buildDetailedRegularRow(p: Product): string {
+  const name = escapeHtml(p.description || p.product_name || "");
+  const sku = escapeHtml(p.product_code || "");
+  const category = escapeHtml(getCategoryName(p));
+  const barcodeCell = buildBarcodeCell(p.barcode || "", getBarcodeJsFormat(p));
+
+  return `
+    <tr>
+      <td>${name}</td>
+      <td style="font-weight:500;white-space:nowrap;">${sku}</td>
+      <td style="text-align:center;">${category}</td>
+      <td class="barcode-cell">${barcodeCell}</td>
+    </tr>
+  `;
+}
+
+/**
+ * DETAILED format for BUNDLES:
+ * Bundle Name | Components (Product Name, SKU Code, Quantity) | Barcode
+ */
+function buildDetailedBundleRow(p: Product, items: BundleItem[]): string {
+  const bundleName = escapeHtml(p.description || p.product_name || "");
+  const barcodeCell = buildBarcodeCell(p.barcode || "", getBarcodeJsFormat(p));
+
+  const componentsHtml =
+    items.length > 0
+      ? `
+    <ol style="margin:0;padding-left:18px;font-size:12px;line-height:1.8;">
+      ${items
+        .map(
+          (item, idx) =>
+            `<li style="margin-bottom:2px;">${escapeHtml(item.product_name)} &nbsp;&bull;&nbsp; <span style="font-family:monospace;font-size:11px;">${escapeHtml(item.product_code)}</span> &nbsp;&bull;&nbsp; Qty: <strong>${item.quantity}</strong></li>`,
+        )
+        .join("")}
+    </ol>
+  `
+      : `<span style="color:#999;font-style:italic;">No components</span>`;
+
+  return `
+    <tr style="background:#fffbeb;">
+      <td>
+        <div style="font-weight:600;">
+          ${bundleName}
+          <span style="display:inline-block;padding:1px 6px;background:#f59e0b20;color:#d97706;border-radius:4px;font-size:10px;font-weight:600;vertical-align:middle;margin-left:6px;">Bundle</span>
+        </div>
+      </td>
+      <td colspan="2">${componentsHtml}</td>
+      <td class="barcode-cell">${barcodeCell}</td>
+    </tr>
+  `;
+}
+
+// --- Main function (async to fetch bundle items) ---
+
+export async function openPrintTab(
   products: Product[],
   format: "simple" | "detailed",
 ) {
@@ -124,62 +205,50 @@ export function openPrintTab(
   const dateStr = new Date().toLocaleDateString();
   const itemCount = products.length;
 
-  // Build table header
-  const baseHeaders = `
+  // Pre-fetch bundle items for all bundles in detailed mode
+  const bundleItemsMap = new Map<string, BundleItem[]>();
+  if (isDetailed) {
+    const bundleProducts = products.filter(
+      (p) => p.record_type === "bundle",
+    );
+    const results = await Promise.all(
+      bundleProducts.map(async (p) => {
+        try {
+          const items = await getBundleItems(p.product_id);
+          return { id: p.product_id, items };
+        } catch {
+          return { id: p.product_id, items: [] };
+        }
+      }),
+    );
+    results.forEach((r) => bundleItemsMap.set(r.id, r.items));
+  }
+
+  // Build headers based on format
+  const headers = isDetailed
+    ? `
+    <th>Product Name</th>
+    <th>SKU Code</th>
+    <th style="text-align:center;">Category</th>
+    <th style="text-align:center;">Barcode</th>
+  `
+    : `
     <th>SKU Code</th>
     <th>Description</th>
     <th style="text-align:center;">Barcode</th>
   `;
 
-  const detailedHeaders = isDetailed
-    ? `
-    <th style="text-align:center;">CBM (L)</th>
-    <th style="text-align:center;">CBM (W)</th>
-    <th style="text-align:center;">CBM (H)</th>
-    <th style="text-align:center;">Weight</th>
-    <th style="text-align:center;">Category</th>
-  `
-    : "";
-
   // Build table rows
   const rows = products
     .map((p) => {
-      const sku = escapeHtml(p.product_code || "");
-      const desc = escapeHtml(p.description || p.product_name || "");
-      const barcodeValue = p.barcode || "";
-      const barcodeFormat = getBarcodeJsFormat(p);
-
-      const barcodeCell = barcodeValue
-        ? `<svg class="barcode-svg" data-value="${escapeHtml(barcodeValue)}" data-format="${barcodeFormat}"></svg>`
-        : `<span style="color:#999;font-style:italic;">–</span>`;
-
-      let detailedCells = "";
-      if (isDetailed) {
-        const cbmUnit = p.cbm_unit_id?.code || p.cbm_unit_id?.name || "";
-        const weightUnit = p.weight_unit_id?.code || p.weight_unit_id?.name || "";
-
-        const cbmL = p.cbm_length != null ? `${formatDecimal(p.cbm_length)} ${cbmUnit}` : "–";
-        const cbmW = p.cbm_width != null ? `${formatDecimal(p.cbm_width)} ${cbmUnit}` : "–";
-        const cbmH = p.cbm_height != null ? `${formatDecimal(p.cbm_height)} ${cbmUnit}` : "–";
-        const weightDisplay = p.weight != null ? `${Number(p.weight).toFixed(2)} ${weightUnit}` : "–";
-
-        detailedCells = `
-          <td style="text-align:center;">${escapeHtml(cbmL)}</td>
-          <td style="text-align:center;">${escapeHtml(cbmW)}</td>
-          <td style="text-align:center;">${escapeHtml(cbmH)}</td>
-          <td style="text-align:center;">${escapeHtml(weightDisplay)}</td>
-          <td style="text-align:center;">${escapeHtml(getCategoryName(p))}</td>
-        `;
+      if (!isDetailed) {
+        return buildSimpleRow(p);
       }
-
-      return `
-        <tr>
-          <td style="font-weight:500;white-space:nowrap;">${sku}</td>
-          <td>${desc}</td>
-          <td class="barcode-cell">${barcodeCell}</td>
-          ${detailedCells}
-        </tr>
-      `;
+      if (p.record_type === "bundle") {
+        const items = bundleItemsMap.get(p.product_id) || [];
+        return buildDetailedBundleRow(p, items);
+      }
+      return buildDetailedRegularRow(p);
     })
     .join("");
 
@@ -257,7 +326,6 @@ export function openPrintTab(
       width: 100%;
       border-collapse: collapse;
       font-size: 13px;
-      ${isDetailed ? "table-layout: fixed;" : ""}
     }
 
     thead th {
@@ -309,7 +377,6 @@ export function openPrintTab(
 
       table {
         width: 100% !important;
-        ${isDetailed ? "table-layout: fixed;" : ""}
       }
     }
   </style>
@@ -330,8 +397,7 @@ export function openPrintTab(
   <table>
     <thead>
       <tr>
-        ${baseHeaders}
-        ${detailedHeaders}
+        ${headers}
       </tr>
     </thead>
     <tbody>

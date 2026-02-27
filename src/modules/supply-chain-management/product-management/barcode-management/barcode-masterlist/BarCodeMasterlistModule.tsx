@@ -123,9 +123,9 @@ export default function BarcodeMasterlistModule() {
     setShowFormatModal(true);
   };
 
-  const handleFormatSelected = (format: "simple" | "detailed") => {
+  const handleFormatSelected = async (format: "simple" | "detailed") => {
     setShowFormatModal(false);
-    openPrintTab(selectedProductsData, format);
+    await openPrintTab(selectedProductsData, format);
   };
 
   const selectedProductsData = allProducts.filter((p) =>

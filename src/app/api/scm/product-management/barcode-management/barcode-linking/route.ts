@@ -47,17 +47,19 @@ async function proxyRequest(req: NextRequest, method: string) {
   // HANDLE PATCH (Update Barcode)
   if (method === "PATCH") {
     const body = await req.json();
+    const recordType = url.searchParams.get("record_type") || "product";
     try {
-      // SERVER-SIDE UNIQUENESS CHECK: Query Directus for any other product with this barcode
-      if (body.barcode) {
-        const checkUrl = new URL(`${DIRECTUS_URL}/items/products`);
-        checkUrl.searchParams.append("fields", "product_id,product_name,barcode");
-        checkUrl.searchParams.append("filter[barcode][_eq]", body.barcode);
-        checkUrl.searchParams.append("filter[product_id][_neq]", id!);
-        checkUrl.searchParams.append("filter[isActive][_eq]", "1");
-        checkUrl.searchParams.append("limit", "1");
+      // SERVER-SIDE UNIQUENESS CHECK: Query both products AND bundles for this barcode
+      const barcodeToCheck = recordType === "bundle" ? body.barcode_value : body.barcode;
+      if (barcodeToCheck) {
+        // Check products table
+        const checkProductUrl = new URL(`${DIRECTUS_URL}/items/products`);
+        checkProductUrl.searchParams.append("fields", "product_id,product_name,barcode");
+        checkProductUrl.searchParams.append("filter[barcode][_eq]", barcodeToCheck);
+        checkProductUrl.searchParams.append("filter[isActive][_eq]", "1");
+        checkProductUrl.searchParams.append("limit", "1");
 
-        const checkRes = await fetch(checkUrl.toString(), {
+        const checkProductRes = await fetch(checkProductUrl.toString(), {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
@@ -65,20 +67,45 @@ async function proxyRequest(req: NextRequest, method: string) {
           },
           cache: "no-store",
         });
-
-        const checkData = await checkRes.json();
-        if (checkData.data && checkData.data.length > 0) {
-          const conflict = checkData.data[0];
+        const checkProductData = await checkProductRes.json();
+        if (checkProductData.data && checkProductData.data.length > 0) {
+          const conflict = checkProductData.data[0];
           return json(
-            {
-              error: `Barcode already assigned to: "${conflict.product_name || conflict.product_id}"`,
-            },
+            { error: `Barcode already assigned to product: "${conflict.product_name || conflict.product_id}"` },
+            409,
+          );
+        }
+
+        // Check bundles table
+        const checkBundleUrl = new URL(`${DIRECTUS_URL}/items/product_bundles`);
+        checkBundleUrl.searchParams.append("fields", "id,bundle_name,barcode_value");
+        checkBundleUrl.searchParams.append("filter[barcode_value][_eq]", barcodeToCheck);
+        if (recordType === "bundle") {
+          checkBundleUrl.searchParams.append("filter[id][_neq]", id!);
+        }
+        checkBundleUrl.searchParams.append("limit", "1");
+
+        const checkBundleRes = await fetch(checkBundleUrl.toString(), {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${ACCESS_TOKEN}`,
+          },
+          cache: "no-store",
+        });
+        const checkBundleData = await checkBundleRes.json();
+        if (checkBundleData.data && checkBundleData.data.length > 0) {
+          const conflict = checkBundleData.data[0];
+          return json(
+            { error: `Barcode already assigned to bundle: "${conflict.bundle_name || conflict.id}"` },
             409,
           );
         }
       }
 
-      const res = await fetch(`${DIRECTUS_URL}/items/products/${id}`, {
+      // Determine which collection to PATCH
+      const patchCollection = recordType === "bundle" ? "product_bundles" : "products";
+      const res = await fetch(`${DIRECTUS_URL}/items/${patchCollection}/${id}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -125,6 +152,36 @@ async function proxyRequest(req: NextRequest, method: string) {
         limit: "-1",
       });
       return json({ data });
+    } else if (scope === "bundles") {
+      // Fetch ALL bundles without barcodes (no status filter — temporary)
+      // Also fetch barcode_type ref data for server-side resolution
+      const [bundles, barcodeTypes] = await Promise.all([
+        fetchDirectus("/items/product_bundles", {
+          fields: "id,bundle_sku,bundle_name,bundle_type_id.name,barcode_value,barcode_type_id,barcode_date,weight,weight_unit_id,cbm_length,cbm_width,cbm_height,cbm_unit_id,unit_of_measurement",
+          "filter[barcode_value][_null]": "true",
+          limit: "-1",
+        }),
+        fetchDirectus("/items/barcode_type", {
+          fields: "id,name",
+          "filter[is_active][_eq]": "1",
+          limit: "-1",
+        }),
+      ]);
+
+      // Build lookup map for barcode types
+      const btMap = new Map<number, { id: number; name: string }>();
+      barcodeTypes.forEach((bt: any) => btMap.set(bt.id, { id: bt.id, name: bt.name }));
+
+      // Manually resolve barcode_type_id integers to objects
+      const resolved = bundles.map((b: any) => ({
+        ...b,
+        barcode_type_id:
+          typeof b.barcode_type_id === "number"
+            ? btMap.get(b.barcode_type_id) || null
+            : b.barcode_type_id || null,
+      }));
+
+      return json({ data: resolved });
     } else {
       // 1. Fetch Products (FIXED: product_code instead of sku_code)
       const productsPromise = fetchDirectus("/items/products", {

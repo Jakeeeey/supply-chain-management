@@ -109,7 +109,8 @@ export function ProductTable({
                   : "PCS";
 
               const displayName = product.description || product.product_name;
-              const inventoryType = "Regular";
+              const isBundle = product.record_type === "bundle";
+              const inventoryType = isBundle ? "Bundle" : "Regular";
               const attributes = "-";
 
               const isSelected = selectedIds.includes(
@@ -154,7 +155,11 @@ export function ProductTable({
                   <TableCell>
                     <Badge
                       variant="secondary"
-                      className="bg-primary/10 text-primary hover:bg-primary/20 border-primary/20"
+                      className={
+                        isBundle
+                          ? "bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 border-amber-500/20"
+                          : "bg-primary/10 text-primary hover:bg-primary/20 border-primary/20"
+                      }
                     >
                       {inventoryType}
                     </Badge>

@@ -63,6 +63,19 @@ export interface Product {
   cbm_width?: number | null;
   cbm_height?: number | null;
   cbm_unit_id?: CbmUnit | null;
+
+  /** Runtime-only discriminator: "product" or "bundle" */
+  record_type?: "product" | "bundle";
+
+  /** Bundle items — only populated for bundles in the detail modal */
+  bundle_items?: BundleItem[];
+}
+
+export interface BundleItem {
+  id: number;
+  product_code: string;
+  product_name: string;
+  quantity: number;
 }
 
 export const getSupplierName = (p: Product): string => {

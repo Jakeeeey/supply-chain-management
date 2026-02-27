@@ -315,12 +315,14 @@ export function ScannerModal({
   // ============================
   const renderProfileStep = () => (
     <div className="space-y-6 py-2">
-      {/* Product Identity Card */}
+      {/* Product/Bundle Identity Card */}
       <Card>
         <CardContent className="p-5">
           <div className="flex items-start gap-4">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-              <Package className="h-5 w-5 text-primary" />
+            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${product?.record_type === "bundle" ? "bg-amber-500/10" : "bg-primary/10"
+              }`}>
+              <Package className={`h-5 w-5 ${product?.record_type === "bundle" ? "text-amber-500" : "text-primary"
+                }`} />
             </div>
             <div className="space-y-2 min-w-0 flex-1">
               <p className="text-sm font-semibold text-foreground leading-snug">
@@ -331,18 +333,26 @@ export function ScannerModal({
                   variant="outline"
                   className="font-mono text-xs text-muted-foreground"
                 >
-                  {product?.product_code}
+                  {product?.record_type === "bundle" ? "BDL" : "SKU"}: {product?.product_code}
                 </Badge>
-                <Badge
-                  variant="secondary"
-                  className="text-xs"
-                >
-                  <Layers className="h-3 w-3 mr-1" />
-                  {getCategoryName()}
-                </Badge>
-                <Badge className="bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 text-xs">
-                  {getUnitName()}
-                </Badge>
+                {product?.record_type === "bundle" ? (
+                  <Badge className="bg-amber-500/10 text-amber-600 border-amber-500/20 hover:bg-amber-500/20 text-xs">
+                    Bundle
+                  </Badge>
+                ) : (
+                  <>
+                    <Badge
+                      variant="secondary"
+                      className="text-xs"
+                    >
+                      <Layers className="h-3 w-3 mr-1" />
+                      {getCategoryName()}
+                    </Badge>
+                    <Badge className="bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 text-xs">
+                      {getUnitName()}
+                    </Badge>
+                  </>
+                )}
               </div>
             </div>
           </div>

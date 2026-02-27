@@ -98,6 +98,69 @@ export async function GET(req: NextRequest) {
       return json({ data });
     }
 
+    if (scope === "bundles") {
+      // Fetch ALL bundles WITH barcodes (no status filter — temporary)
+      // Also fetch barcode_type ref data for server-side resolution
+      const [bundles, barcodeTypes] = await Promise.all([
+        fetchDirectus("/items/product_bundles", {
+          fields: [
+            "id",
+            "bundle_sku",
+            "bundle_name",
+            "bundle_type_id.name",
+            "barcode_value",
+            "barcode_type_id",
+            "barcode_date",
+            "weight",
+            "weight_unit_id.id",
+            "weight_unit_id.code",
+            "weight_unit_id.name",
+            "cbm_length",
+            "cbm_width",
+            "cbm_height",
+            "cbm_unit_id.id",
+            "cbm_unit_id.code",
+            "cbm_unit_id.name",
+            "unit_of_measurement",
+          ].join(","),
+          "filter[barcode_value][_nempty]": "true",
+          limit: "-1",
+        }),
+        fetchDirectus("/items/barcode_type", {
+          fields: "id,name",
+          "filter[is_active][_eq]": "1",
+          limit: "-1",
+        }),
+      ]);
+
+      // Build lookup map for barcode types
+      const btMap = new Map<number, { id: number; name: string }>();
+      barcodeTypes.forEach((bt: any) => btMap.set(bt.id, { id: bt.id, name: bt.name }));
+
+      // Manually resolve barcode_type_id integers to objects
+      const resolved = bundles.map((b: any) => ({
+        ...b,
+        barcode_type_id:
+          typeof b.barcode_type_id === "number"
+            ? btMap.get(b.barcode_type_id) || null
+            : b.barcode_type_id || null,
+      }));
+
+      return json({ data: resolved });
+    }
+
+    if (scope === "bundle_items") {
+      const bundleId = url.searchParams.get("bundle_id");
+      if (!bundleId) return json({ error: "bundle_id required" }, 400);
+
+      const data = await fetchDirectus("/items/product_bundle_items", {
+        fields: "id,quantity,product_id.product_id,product_id.product_code,product_id.product_name",
+        "filter[bundle_id][_eq]": bundleId,
+        limit: "-1",
+      });
+      return json({ data });
+    }
+
     // ---------------------------------------------------------
     // 2. PRODUCT LIST (Default)
     // Only runs if scope is empty or explicitly "products"

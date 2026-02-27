@@ -31,6 +31,9 @@ export interface Product {
   product_category: Category | string | null;
   unit_of_measurement: Unit | string | null;
   product_per_supplier?: ProductSupplierJunction[];
+
+  /** Runtime-only discriminator: "product" or "bundle" */
+  record_type?: "product" | "bundle";
 }
 
 export interface RefData {
