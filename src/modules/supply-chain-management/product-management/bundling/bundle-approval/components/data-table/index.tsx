@@ -19,6 +19,8 @@ interface BundleApprovalTableProps {
   isLoading: boolean;
   onView: (draft: BundleDraft) => void;
   onSearch: (value: string) => void;
+  onSelectionChange?: (selectedRows: BundleDraft[]) => void;
+  actionComponent?: React.ReactNode;
 }
 
 export function BundleApprovalTable({
@@ -31,6 +33,8 @@ export function BundleApprovalTable({
   isLoading,
   onView,
   onSearch,
+  onSelectionChange,
+  actionComponent,
 }: BundleApprovalTableProps) {
   const columns = React.useMemo(
     () =>
@@ -52,6 +56,8 @@ export function BundleApprovalTable({
       pagination={{ pageIndex, pageSize }}
       onPaginationChange={onPaginationChange}
       onSearch={onSearch}
+      onSelectionChange={onSelectionChange}
+      actionComponent={actionComponent}
     />
   );
 }
