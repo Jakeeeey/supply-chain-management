@@ -35,7 +35,9 @@ export function useInboundOutboundKiosk() {
             const isAllowedStatus = plan.status === "For Dispatch" || plan.status === "For Inbound";
             if (!isAllowedStatus) return false;
 
-            const matchesSearch = plan.doc_no.toLowerCase().includes(search.toLowerCase());
+            const matchesSearch =
+                plan.doc_no.toLowerCase().includes(search.toLowerCase()) ||
+                plan.driver_name.toLowerCase().includes(search.toLowerCase());
             const matchesStatus = statusFilter === "All Statuses" || plan.status === statusFilter;
             return matchesSearch && matchesStatus;
         });
