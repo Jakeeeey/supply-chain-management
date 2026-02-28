@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   Table,
   TableBody,
@@ -31,11 +33,12 @@ import { ScannedItem } from '../types';
 interface StockTransferTableProps {
   items: ScannedItem[];
   onQtyChange: (rfid: string, qty: number) => void;
+  onDelete: (rfid: string) => void;
 }
 
 const PAGE_SIZE_OPTIONS = [10, 20, 40, 50, 100];
 
-export default function StockTransferTable({ items, onQtyChange }: StockTransferTableProps) {
+export default function StockTransferTable({ items, onQtyChange, onDelete }: StockTransferTableProps) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -92,6 +95,7 @@ export default function StockTransferTable({ items, onQtyChange }: StockTransfer
             <TableHead className="font-bold text-foreground text-[11px] uppercase tracking-wider text-right">
               Total Amount
             </TableHead>
+            <TableHead className="w-12" />
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -135,12 +139,23 @@ export default function StockTransferTable({ items, onQtyChange }: StockTransfer
                 <TableCell className="text-xs font-bold text-foreground text-right py-3">
                   ₱{item.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                 </TableCell>
+                <TableCell className="py-2 text-center">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => onDelete(item.rfid)}
+                    title="Remove item"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </TableCell>
               </TableRow>
             ))
           ) : (
             <TableRow>
               <TableCell
-                colSpan={8}
+                colSpan={9}
                 className="h-32 text-center text-muted-foreground text-sm italic"
               >
                 No products added. Scan RFID to add products to transfer.

@@ -7,6 +7,7 @@ interface UseStockTransferReturn {
   stockTransfers: StockTransfer[];
   branches: Branch[];
   loading: boolean;
+  confirming: boolean;
   sourceBranch: string;
   setSourceBranch: (v: string) => void;
   targetBranch: string;
@@ -18,8 +19,9 @@ interface UseStockTransferReturn {
   scannedItems: ScannedItem[];
   handleRfidScan: () => void;
   updateQty: (rfid: string, qty: number) => void;
+  removeItem: (rfid: string) => void;
   reset: () => void;
-  confirmTransfer: () => void;
+  confirmTransfer: () => Promise<void>;
   isTransferConfirmed: boolean;
   orderNo: string;
   status: string;
@@ -59,6 +61,8 @@ export function useStockTransfer(): UseStockTransferReturn {
   const [rfidInput, setRfidInput] = useState('');
   const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
   const [isTransferConfirmed, setIsTransferConfirmed] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [transferStatus, setTransferStatus] = useState('');
 
   useEffect(() => {
     async function fetchData() {
@@ -136,6 +140,10 @@ export function useStockTransfer(): UseStockTransferReturn {
     );
   }, []);
 
+  const removeItem = useCallback((rfid: string) => {
+    setScannedItems((prev) => prev.filter((item) => item.rfid !== rfid));
+  }, []);
+
   const reset = useCallback(() => {
     setSourceBranch('');
     setTargetBranch('');
@@ -143,15 +151,31 @@ export function useStockTransfer(): UseStockTransferReturn {
     setRfidInput('');
     setScannedItems([]);
     setIsTransferConfirmed(false);
+    setTransferStatus('');
   }, []);
 
-  const confirmTransfer = useCallback(() => {
-    // Placeholder — wire real POST in future iteration
-    console.log('Confirming transfer:', { sourceBranch, targetBranch, leadDate, scannedItems });
-    setIsTransferConfirmed(true);
+  const confirmTransfer = useCallback(async () => {
+    setConfirming(true);
+    try {
+      const res = await fetch('/api/scm/warehouse-management/stock-transfer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceBranch, targetBranch, leadDate, scannedItems }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err?.error ?? 'Failed to save transfer');
+      }
+
+      setIsTransferConfirmed(true);
+      setTransferStatus('requested');
+    } finally {
+      setConfirming(false);
+    }
   }, [sourceBranch, targetBranch, leadDate, scannedItems]);
 
-  // Derive orderNo and status from the first successfully matched scanned item
+  // Derive orderNo from the first successfully matched scanned item
   const firstMatch = scannedItems.length > 0
     ? stockTransfers.find((t) => t.remarks?.toLowerCase() === scannedItems[0].rfid.toLowerCase() || t.order_no?.toLowerCase() === scannedItems[0].rfid.toLowerCase())
     : undefined;
@@ -160,6 +184,7 @@ export function useStockTransfer(): UseStockTransferReturn {
     stockTransfers,
     branches,
     loading,
+    confirming,
     sourceBranch,
     setSourceBranch,
     targetBranch,
@@ -171,11 +196,12 @@ export function useStockTransfer(): UseStockTransferReturn {
     scannedItems,
     handleRfidScan,
     updateQty,
+    removeItem,
     reset,
     confirmTransfer,
     isTransferConfirmed,
     orderNo: firstMatch?.order_no ?? '',
-    status: firstMatch?.status ?? '',
+    status: transferStatus,
   };
 }
 

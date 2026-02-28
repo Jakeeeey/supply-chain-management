@@ -24,6 +24,7 @@ export default function StockTransferModule() {
   const {
     branches,
     loading,
+    confirming,
     sourceBranch,
     setSourceBranch,
     targetBranch,
@@ -35,6 +36,7 @@ export default function StockTransferModule() {
     scannedItems,
     handleRfidScan,
     updateQty,
+    removeItem,
     reset,
     confirmTransfer,
     isTransferConfirmed,
@@ -85,12 +87,18 @@ export default function StockTransferModule() {
   };
 
   /** Called when user clicks "Yes, Confirm" inside the dialog */
-  const handleConfirmFinal = () => {
-    confirmTransfer();
+  const handleConfirmFinal = async () => {
     setShowConfirmDialog(false);
-    toast.success('Stock Transfer Confirmed', {
-      description: `${scannedItems.length} product(s) have been queued for transfer.`,
-    });
+    try {
+      await confirmTransfer();
+      toast.success('Stock Transfer Confirmed', {
+        description: `Transfer saved to database with status "requested".`,
+      });
+    } catch (err) {
+      toast.error('Transfer Failed', {
+        description: err instanceof Error ? err.message : 'Could not save to database.',
+      });
+    }
   };
 
   const handlePrint = () => setShowPreview(true);
@@ -186,7 +194,7 @@ export default function StockTransferModule() {
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <StockTransferTable items={scannedItems} onQtyChange={updateQty} />
+          <StockTransferTable items={scannedItems} onQtyChange={updateQty} onDelete={removeItem} />
         )}
 
         {/* ── Action Row ── */}
@@ -206,11 +214,15 @@ export default function StockTransferModule() {
             </Button>
             <Button
               onClick={handleConfirmClick}
-              disabled={isTransferConfirmed}
+              disabled={isTransferConfirmed || confirming}
               className="gap-2 bg-foreground text-background hover:bg-foreground/90 shadow-none font-bold disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <CheckCircle2 className="w-4 h-4" />
-              Confirm Transfer
+              {confirming ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4" />
+              )}
+              {confirming ? 'Saving...' : 'Confirm Transfer'}
             </Button>
           </div>
           {isTransferConfirmed && (
