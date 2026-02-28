@@ -86,14 +86,13 @@ export function ProductTable({
             <TableHead className="min-w-[300px]">Product Name</TableHead>
             <TableHead>Inventory Type</TableHead>
             <TableHead>UOM</TableHead>
-            <TableHead>Attributes</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {products.length === 0 ? (
             <TableRow>
               <TableCell
-                colSpan={isSelectionMode ? 6 : 5}
+                colSpan={isSelectionMode ? 5 : 4}
                 className="text-center h-24 text-muted-foreground"
               >
                 No products found matching your filters.
@@ -111,7 +110,7 @@ export function ProductTable({
               const displayName = product.description || product.product_name;
               const isBundle = product.record_type === "bundle";
               const inventoryType = isBundle ? "Bundle" : "Regular";
-              const attributes = "-";
+
 
               const isSelected = selectedIds.includes(
                 String(product.product_id),
@@ -170,10 +169,6 @@ export function ProductTable({
                     {unitName}
                   </TableCell>
 
-                  {/* Attributes */}
-                  <TableCell className="text-muted-foreground text-sm font-mono">
-                    {attributes}
-                  </TableCell>
                 </TableRow>
               );
             })
