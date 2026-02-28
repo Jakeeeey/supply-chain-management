@@ -37,16 +37,40 @@ const data = {
       isActive: false,
       items: [
         {
-          title: "SKU Masterlist",
-          url: "/scm/product-management/sku-masterlist",
+          title: "SKU",
+          url: "/scm/product-management/sku",
+          items: [
+            {
+              title: "SKU Masterlist",
+              url: "/scm/product-management/sku/sku-masterlist",
+            },
+            {
+              title: "SKU Registration",
+              url: "/scm/product-management/sku/sku-creation",
+            },
+            {
+              title: "SKU Approval Queue",
+              url: "/scm/product-management/sku/sku-approval",
+            },
+          ],
         },
         {
-          title: "SKU Registration",
-          url: "/scm/product-management/sku-creation",
-        },
-        {
-          title: "SKU Approval Queue",
-          url: "/scm/product-management/sku-approval",
+          title: "Bundling",
+          url: "#",
+          items: [
+            {
+              title: "Bundle Creation",
+              url: "/scm/product-management/bundle-creation",
+            },
+            {
+              title: "Bundle Approval",
+              url: "/scm/product-management/bundle-approval",
+            },
+            {
+              title: "Bundle Masterlist",
+              url: "/scm/product-management/bundle-masterlist",
+            },
+          ],
         },
         {
           title: "Barcoding",
@@ -105,7 +129,7 @@ const data = {
         {
           title: "PurchaseOrderSummary",
           url: "/scm/supplier-management/purchase-order-summary",
-        }
+        },
       ],
     },
     {
@@ -336,6 +360,11 @@ const data = {
           url: "/scm/business-analytics/supplier-reliability-scorecard",
         },
       ],
+    },
+    {
+      title: "Inbound/Outbound Kiosk",
+      url: "/scm/inbound-outbound-kiosk",
+      icon: BookOpen,
     },
   ],
 };

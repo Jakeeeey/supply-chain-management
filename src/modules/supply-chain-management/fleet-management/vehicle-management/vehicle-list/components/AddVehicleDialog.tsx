@@ -59,8 +59,7 @@ export function AddVehicleDialog({
     mileageKm: "",
     fuelTypeId: null,
     engineTypeId: null,
-    lastMaintenanceDate: "",
-    nextMaintenanceDate: "",
+    rfid: "",
     imageFile: null,
   });
 
@@ -92,7 +91,10 @@ export function AddVehicleDialog({
     requiredOk(form.plateNumber) &&
     requiredOk(form.vehicleName) &&
     requiredOk(form.year) &&
-    form.typeId !== null;
+    form.typeId !== null &&
+    requiredOk(form.rfid) &&
+    form.fuelTypeId !== null &&
+    form.engineTypeId !== null;
 
   function set<K extends keyof CreateVehicleForm>(k: K, v: CreateVehicleForm[K]) {
     setForm((p) => ({ ...p, [k]: v }));
@@ -104,6 +106,9 @@ export function AddVehicleDialog({
     if (!requiredOk(form.vehicleName)) missing.push("Vehicle Name");
     if (!requiredOk(form.year)) missing.push("Year");
     if (form.typeId === null) missing.push("Type");
+    if (!requiredOk(form.rfid)) missing.push("RFID");
+    if (form.fuelTypeId === null) missing.push("Fuel Type");
+    if (form.engineTypeId === null) missing.push("Engine Type");
     return missing;
   }
 
@@ -174,6 +179,8 @@ export function AddVehicleDialog({
     if (form.fuelTypeId !== null) payload.fuel_type = form.fuelTypeId;
     if (form.engineTypeId !== null) payload.engine_type = form.engineTypeId;
 
+    if (form.rfid.trim()) payload.rfid_code = form.rfid.trim();
+
     // ✅ reuse vehicles.image
     if (imageId) payload.image = imageId;
 
@@ -193,8 +200,7 @@ export function AddVehicleDialog({
         mileageKm: "",
         fuelTypeId: null,
         engineTypeId: null,
-        lastMaintenanceDate: "",
-        nextMaintenanceDate: "",
+        rfid: "",
         imageFile: null,
       });
 
@@ -311,12 +317,14 @@ export function AddVehicleDialog({
               </div>
 
               <div className="grid gap-2">
-                <Label>Fuel Type</Label>
+                <Label>
+                  Fuel Type <span className="text-destructive">*</span>
+                </Label>
                 <Select
                   value={form.fuelTypeId === null ? "" : String(form.fuelTypeId)}
                   onValueChange={(v) => set("fuelTypeId", v ? Number(v) : null)}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className={touched && form.fuelTypeId === null ? "ring-1 ring-destructive" : ""}>
                     <SelectValue placeholder="Select Fuel Type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -330,12 +338,14 @@ export function AddVehicleDialog({
               </div>
 
               <div className="grid gap-2">
-                <Label>Engine Type</Label>
+                <Label>
+                  Engine Type <span className="text-destructive">*</span>
+                </Label>
                 <Select
                   value={form.engineTypeId === null ? "" : String(form.engineTypeId)}
                   onValueChange={(v) => set("engineTypeId", v ? Number(v) : null)}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className={touched && form.engineTypeId === null ? "ring-1 ring-destructive" : ""}>
                     <SelectValue placeholder="Select Engine Type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -348,22 +358,15 @@ export function AddVehicleDialog({
                 </Select>
               </div>
 
-              {/* keep your date inputs (UI) */}
               <div className="grid gap-2">
-                <Label>Last Maintenance Date</Label>
+                <Label>
+                  RFID <span className="text-destructive">*</span>
+                </Label>
                 <Input
-                  type="date"
-                  value={form.lastMaintenanceDate || ""}
-                  onChange={(e) => set("lastMaintenanceDate", e.target.value)}
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <Label>Next Maintenance Date</Label>
-                <Input
-                  type="date"
-                  value={form.nextMaintenanceDate || ""}
-                  onChange={(e) => set("nextMaintenanceDate", e.target.value)}
+                  value={form.rfid}
+                  onChange={(e) => set("rfid", e.target.value)}
+                  className={touched && !requiredOk(form.rfid) ? "ring-1 ring-destructive" : ""}
+                  placeholder="Enter RFID code"
                 />
               </div>
             </div>

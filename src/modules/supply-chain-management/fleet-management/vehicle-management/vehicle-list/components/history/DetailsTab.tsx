@@ -111,7 +111,6 @@ export default function DetailsTab({ vehicle }: { vehicle: VehicleRow }) {
         <>
           <SectionSkeleton rows={6} />
           <SectionSkeleton rows={4} />
-          <SectionSkeleton rows={4} />
         </>
       ) : (
         <>
@@ -164,18 +163,6 @@ export default function DetailsTab({ vehicle }: { vehicle: VehicleRow }) {
                 <Field label="Current Mileage" value={mileage} />
                 <Field label="Fuel Type" value={fuelType} />
                 <Field label="Current Driver" value={vehicle.driverName || "N/A"} />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Maintenance Information */}
-          <Card>
-            <CardContent className="p-6">
-              <div className="text-sm font-semibold">Maintenance Information</div>
-
-              <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2">
-                <Field label="Last Maintenance Date" value={lastMaint} />
-                <Field label="Next Maintenance Date" value={nextMaint} />
               </div>
             </CardContent>
           </Card>
