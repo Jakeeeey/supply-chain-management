@@ -10,11 +10,11 @@ interface ModuleSkeletonProps {
   hasTabs?: boolean;
 }
 
-export function ModuleSkeleton({ 
-  rowCount = 5, 
-  columnCount = 6, 
+export function ModuleSkeleton({
+  rowCount = 5,
+  columnCount = 6,
   hasActions = true,
-  hasTabs = false
+  hasTabs = false,
 }: ModuleSkeletonProps) {
   return (
     <div className="animate-in fade-in duration-500">
@@ -44,26 +44,34 @@ export function ModuleSkeleton({
         </div>
 
         {/* Table Structure */}
-        <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+        <div className="rounded-xl border bg-card shadow-xs overflow-hidden">
           {/* Table Header */}
           <div className="h-14 bg-muted/5 border-b flex items-center px-6 gap-4">
             {Array.from({ length: columnCount }).map((_, i) => (
-              <Skeleton key={i} className={`h-4 ${i === 0 ? 'w-40' : 'w-24'}`} />
+              <Skeleton
+                key={i}
+                className={`h-4 ${i === 0 ? "w-40" : "w-24"}`}
+              />
             ))}
           </div>
-          
+
           {/* Table Rows */}
           <div className="divide-y divide-border/50">
             {Array.from({ length: rowCount }).map((_, rowIndex) => (
-              <div key={rowIndex} className="h-[72px] flex items-center px-6 gap-4">
+              <div
+                key={rowIndex}
+                className="h-[72px] flex items-center px-6 gap-4"
+              >
                 {Array.from({ length: columnCount }).map((_, colIndex) => (
-                  <Skeleton 
-                    key={colIndex} 
+                  <Skeleton
+                    key={colIndex}
                     className={`h-4 ${
-                      colIndex === 0 ? 'w-48' : 
-                      colIndex === columnCount - 1 ? 'w-8 ml-auto' : 
-                      'w-24'
-                    } rounded-md`} 
+                      colIndex === 0
+                        ? "w-48"
+                        : colIndex === columnCount - 1
+                          ? "w-8 ml-auto"
+                          : "w-24"
+                    } rounded-md`}
                   />
                 ))}
               </div>
