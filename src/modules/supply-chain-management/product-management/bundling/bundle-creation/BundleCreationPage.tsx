@@ -12,10 +12,7 @@ import { Plus, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { BundleDraft, BundleDraftFormValues } from "./types/bundle.schema";
 
-/**
- * Bundle Creation Page — Manages DRAFT bundles.
- * Provides CRUD, bulk submit/delete, and a creation modal.
- */
+
 export default function BundleCreationPage() {
   const {
     draftData,
@@ -37,7 +34,6 @@ export default function BundleCreationPage() {
     bulkDeleteDrafts,
   } = useBundles();
 
-  // UI State
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedRows, setSelectedRows] = useState<BundleDraft[]>([]);
   const [bulkAction, setBulkAction] = useState<"submit" | "delete" | null>(
@@ -45,7 +41,6 @@ export default function BundleCreationPage() {
   );
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // ─── Handlers ───────────────────────────────────
 
   const handleCreate = async (values: BundleDraftFormValues) => {
     try {
@@ -99,22 +94,12 @@ export default function BundleCreationPage() {
     setSelectedRows(rows);
   }, []);
 
-  // ─── Render ─────────────────────────────────────
 
   if (isLoading && !draftData.length) return <ModuleSkeleton />;
   if (error) return <ErrorPage message={error} reset={refresh} />;
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">
-          Bundle Creation
-        </h1>
-        <p className="text-muted-foreground">
-          Create and manage product bundle drafts.
-        </p>
-      </div>
 
       {/* Data Table */}
       <BundleCreationTable

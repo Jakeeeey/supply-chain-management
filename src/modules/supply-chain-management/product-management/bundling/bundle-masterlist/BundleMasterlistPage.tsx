@@ -6,9 +6,6 @@ import { BundleMasterlistTable } from "./components/data-table";
 import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import ErrorPage from "@/components/shared/ErrorPage";
 
-/**
- * Bundle Masterlist Page — Read-only view of all approved bundles.
- */
 export default function BundleMasterlistPage() {
   const {
     approvedData,
@@ -24,8 +21,6 @@ export default function BundleMasterlistPage() {
     setSearch,
     refresh,
   } = useBundles();
-
-  // ─── Render ─────────────────────────────────────
 
   if (isLoading && !approvedData.length) return <ModuleSkeleton />;
   if (error) return <ErrorPage message={error} reset={refresh} />;

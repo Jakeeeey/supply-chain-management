@@ -11,10 +11,6 @@ import { toast } from "sonner";
 import { BundleDraft } from "./types/bundle.schema";
 import { CheckCircle2, XCircle } from "lucide-react";
 
-/**
- * Bundle Approval Page — Displays bundles pending approval.
- * Provides View action to inspect details and approve/reject.
- */
 export default function BundleApprovalPage() {
   const {
     pendingData,
@@ -34,12 +30,9 @@ export default function BundleApprovalPage() {
     fetchDraftDetails,
   } = useBundles();
 
-  // UI State
   const [selectedDraft, setSelectedDraft] = useState<BundleDraft | null>(null);
   const [selectedRows, setSelectedRows] = useState<BundleDraft[]>([]);
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
-
-  // ─── Handlers ───────────────────────────────────
 
   const handleApprove = async (id: number | string) => {
     try {
@@ -100,8 +93,6 @@ export default function BundleApprovalPage() {
     setSelectedRows(rows);
   }, []);
 
-  // ─── Render ─────────────────────────────────────
-
   if (isLoading && !pendingData.length) return <ModuleSkeleton />;
   if (error) return <ErrorPage message={error} reset={refresh} />;
 
@@ -133,16 +124,6 @@ export default function BundleApprovalPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">
-          Bundle Approval Queue
-        </h1>
-        <p className="text-muted-foreground">
-          Review and approve or reject submitted bundle requests.
-        </p>
-      </div>
-
       {/* Data Table */}
       <BundleApprovalTable
         data={pendingData}

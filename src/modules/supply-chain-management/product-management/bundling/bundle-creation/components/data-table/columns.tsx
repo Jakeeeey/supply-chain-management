@@ -57,7 +57,7 @@ export function getDraftColumns({
         <DataTableColumnHeader column={column} label="Bundle Code" />
       ),
       cell: ({ row }) => (
-        <span className="font-mono text-xs font-semibold text-primary">
+        <span className="px-1 py-0.5 bg-muted rounded text-xs font-mono font-medium">
           {row.original.bundle_sku}
         </span>
       ),
