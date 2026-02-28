@@ -447,20 +447,39 @@ export async function openPrintTab(
   </table>
 
   <script>
-    document.querySelectorAll('.barcode-svg').forEach(function(el) {
-      try {
-        JsBarcode(el, el.dataset.value, {
-          format: el.dataset.format,
-          width: ${isDetailed ? 1 : 1.2},
-          height: ${isDetailed ? 35 : 45},
-          fontSize: ${isDetailed ? 10 : 12},
-          margin: 0,
-          displayValue: true,
+    function renderBarcodes() {
+      document.querySelectorAll('.barcode-svg').forEach(function(el) {
+        try {
+          JsBarcode(el, el.dataset.value, {
+            format: el.dataset.format,
+            width: ${isDetailed ? 1 : 1.2},
+            height: ${isDetailed ? 35 : 45},
+            fontSize: ${isDetailed ? 10 : 12},
+            margin: 0,
+            displayValue: true,
+          });
+        } catch (e) {
+          el.outerHTML = '<span style="color:#999;font-style:italic;">Invalid barcode</span>';
+        }
+      });
+    }
+
+    // Wait for JsBarcode CDN to fully load before rendering
+    function waitForJsBarcode(retries) {
+      if (typeof JsBarcode !== 'undefined') {
+        renderBarcodes();
+      } else if (retries > 0) {
+        setTimeout(function() { waitForJsBarcode(retries - 1); }, 200);
+      } else {
+        // CDN failed to load after all retries
+        document.querySelectorAll('.barcode-svg').forEach(function(el) {
+          el.outerHTML = '<span style="color:#999;font-style:italic;">Barcode library failed to load</span>';
         });
-      } catch (e) {
-        el.outerHTML = '<span style="color:#999;font-style:italic;">Invalid barcode</span>';
       }
-    });
+    }
+
+    // Use window.onload to ensure all resources (including CDN script) are loaded
+    window.onload = function() { waitForJsBarcode(25); };
   <\/script>
 </body>
 </html>`;
