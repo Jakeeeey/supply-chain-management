@@ -47,10 +47,10 @@ export function useBundles() {
     try {
       const [draftRes, pendingRes, approvedRes, masterRes] = await Promise.all([
         fetch(
-          `/api/scm/product-management/bundling?type=drafts&status=Draft&limit=${draftLimit}&offset=${draftPage * draftLimit}&search=${encodeURIComponent(search)}`,
+          `/api/scm/product-management/bundling?type=drafts&status=DRAFT&limit=${draftLimit}&offset=${draftPage * draftLimit}&search=${encodeURIComponent(search)}`,
         ).then((r) => r.json()),
         fetch(
-          `/api/scm/product-management/bundling?type=for_approval&status=For approval&limit=${pendingLimit}&offset=${pendingPage * pendingLimit}&search=${encodeURIComponent(search)}`,
+          `/api/scm/product-management/bundling?type=for_approval&status=FOR_APPROVAL&limit=${pendingLimit}&offset=${pendingPage * pendingLimit}&search=${encodeURIComponent(search)}`,
         ).then((r) => r.json()),
         fetch(
           `/api/scm/product-management/bundling?type=approved&limit=${approvedLimit}&offset=${approvedPage * approvedLimit}&search=${encodeURIComponent(search)}`,

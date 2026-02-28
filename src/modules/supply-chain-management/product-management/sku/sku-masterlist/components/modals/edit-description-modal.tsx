@@ -11,8 +11,20 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Info, FileText, Tag, Package, Factory, LayoutGrid, Barcode, Box } from "lucide-react";
-import { SKU, MasterData } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
+import {
+  Info,
+  FileText,
+  Tag,
+  Package,
+  Factory,
+  LayoutGrid,
+  Barcode,
+  Box,
+} from "lucide-react";
+import {
+  SKU,
+  MasterData,
+} from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
 import { CellHelpers } from "../../../sku-creation/utils/sku-helpers";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -25,6 +37,29 @@ interface EditDescriptionModalProps {
   masterData: MasterData | null;
 }
 
+const InfoItem = ({
+  label,
+  value,
+  icon: Icon,
+}: {
+  label: string;
+  value: string | number;
+  icon: any;
+}) => (
+  <div className="space-y-1.5 p-3 rounded-lg bg-muted/30 border border-muted-foreground/5 transition-colors hover:bg-muted/50">
+    <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+      <Icon className="h-3 w-3 text-primary/60" />
+      {label}
+    </div>
+    <div
+      className="text-sm font-semibold text-foreground/90 truncate"
+      title={String(value)}
+    >
+      {value || "—"}
+    </div>
+  </div>
+);
+
 export function EditDescriptionModal({
   sku,
   isOpen,
@@ -36,10 +71,22 @@ export function EditDescriptionModal({
   const [description, setDescription] = useState("");
 
   useEffect(() => {
-    if (sku) {
-      setDescription(sku.description || "");
+    if (!isOpen) {
+      const timer = setTimeout(() => {
+        setDescription("");
+      }, 0);
+      return () => clearTimeout(timer);
     }
-  }, [sku]);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (sku && isOpen) {
+      const timer = setTimeout(() => {
+        setDescription(sku.description || "");
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [sku, isOpen]);
 
   const handleSave = async () => {
     if (!sku) return;
@@ -48,31 +95,23 @@ export function EditDescriptionModal({
     onClose();
   };
 
-  const InfoItem = ({ label, value, icon: Icon }: { label: string, value: string | number, icon: any }) => (
-    <div className="space-y-1.5 p-3 rounded-lg bg-muted/30 border border-muted-foreground/5 transition-colors hover:bg-muted/50">
-      <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-        <Icon className="h-3 w-3 text-primary/60" />
-        {label}
-      </div>
-      <div className="text-sm font-semibold text-foreground/90 truncate" title={String(value)}>
-        {value || "—"}
-      </div>
-    </div>
-  );
-
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[650px] p-0 overflow-hidden border-none">
         <DialogHeader className="p-6 pb-4 bg-background border-b">
           <div className="flex justify-between items-start">
             <div className="space-y-1">
-              <DialogTitle className="text-xl font-bold tracking-tight">Product Details & Maintenance</DialogTitle>
+              <DialogTitle className="text-xl font-bold tracking-tight">
+                Product Details & Maintenance
+              </DialogTitle>
               <div className="flex items-center gap-2">
                 <p className="text-xs font-mono text-primary font-bold uppercase tracking-wider bg-primary/10 px-2 py-0.5 rounded">
                   {sku?.product_code || "SKU-CODE"}
                 </p>
                 <div className="h-1 w-1 rounded-full bg-muted-foreground/30" />
-                <span className="text-xs text-muted-foreground font-medium">{sku?.inventory_type || "Regular"} Product</span>
+                <span className="text-xs text-muted-foreground font-medium">
+                  {sku?.inventory_type || "Regular"} Product
+                </span>
               </div>
             </div>
           </div>
@@ -83,23 +122,59 @@ export function EditDescriptionModal({
             {/* Header Data Summary */}
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               <div className="col-span-2 md:col-span-3">
-                <InfoItem label="Product Name" value={sku?.product_name || "—"} icon={Package} />
+                <InfoItem
+                  label="Product Name"
+                  value={sku?.product_name || "—"}
+                  icon={Package}
+                />
               </div>
-              <InfoItem label="Category" value={CellHelpers.renderMasterText(sku?.product_category, masterData?.categories)} icon={LayoutGrid} />
-              <InfoItem label="Brand" value={CellHelpers.renderMasterText(sku?.product_brand, masterData?.brands)} icon={Tag} />
-              <InfoItem label="Supplier" value={CellHelpers.renderMasterText(sku?.product_supplier, masterData?.suppliers)} icon={Factory} />
-              
-              {sku?.barcode && <InfoItem label="Barcode" value={sku.barcode} icon={Barcode} />}
-              {sku?.flavor && <InfoItem label="Flavor" value={sku.flavor} icon={Box} />}
-              {sku?.size && <InfoItem label="Size" value={sku.size} icon={Box} />}
+              <InfoItem
+                label="Category"
+                value={CellHelpers.renderMasterText(
+                  sku?.product_category,
+                  masterData?.categories,
+                )}
+                icon={LayoutGrid}
+              />
+              <InfoItem
+                label="Brand"
+                value={CellHelpers.renderMasterText(
+                  sku?.product_brand,
+                  masterData?.brands,
+                )}
+                icon={Tag}
+              />
+              <InfoItem
+                label="Supplier"
+                value={CellHelpers.renderMasterText(
+                  sku?.product_supplier,
+                  masterData?.suppliers,
+                )}
+                icon={Factory}
+              />
+
+              {sku?.barcode && (
+                <InfoItem label="Barcode" value={sku.barcode} icon={Barcode} />
+              )}
+              {sku?.flavor && (
+                <InfoItem label="Flavor" value={sku.flavor} icon={Box} />
+              )}
+              {sku?.size && (
+                <InfoItem label="Size" value={sku.size} icon={Box} />
+              )}
             </div>
 
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <Label htmlFor="description" className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
+                <Label
+                  htmlFor="description"
+                  className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest"
+                >
                   Description (Editable)
                 </Label>
-                <span className="text-[10px] text-primary/60 font-medium">Click to edit</span>
+                <span className="text-[10px] text-primary/60 font-medium">
+                  Click to edit
+                </span>
               </div>
               <Textarea
                 id="description"
@@ -120,7 +195,10 @@ export function EditDescriptionModal({
                   Data Integrity Guard Active:
                 </p>
                 <p className="text-[11px] text-amber-800/60 leading-relaxed">
-                  Only the <span className="font-bold">Description</span> can be modified for active master records. All primary identifier fields are locked to maintain synchronization across supply chain modules.
+                  Only the <span className="font-bold">Description</span> can be
+                  modified for active master records. All primary identifier
+                  fields are locked to maintain synchronization across supply
+                  chain modules.
                 </p>
               </div>
             </div>
@@ -128,12 +206,17 @@ export function EditDescriptionModal({
         </ScrollArea>
 
         <DialogFooter className="p-6 bg-muted/30 border-t flex flex-row items-center justify-end gap-3">
-          <Button variant="ghost" onClick={onClose} disabled={isLoading} className="font-semibold text-muted-foreground hover:text-foreground">
+          <Button
+            variant="ghost"
+            onClick={onClose}
+            disabled={isLoading}
+            className="font-semibold text-muted-foreground hover:text-foreground"
+          >
             Cancel
           </Button>
-          <Button 
-            onClick={handleSave} 
-            disabled={isLoading} 
+          <Button
+            onClick={handleSave}
+            disabled={isLoading}
             className="px-8 bg-primary hover:bg-primary/90 text-white font-bold"
           >
             {isLoading ? "Saving Changes..." : "Save Changes"}

@@ -1,4 +1,4 @@
-import { SKU, MasterData } from "../types/sku.schema";
+import { SKU } from "../types/sku.schema";
 
 // --- SKU String Generation Helpers ---
 

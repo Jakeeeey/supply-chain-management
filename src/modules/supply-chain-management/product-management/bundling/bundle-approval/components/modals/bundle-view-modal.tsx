@@ -164,7 +164,7 @@ export function BundleViewModal({
                   </p>
                   <Badge
                     variant="secondary"
-                    className="bg-amber-500/10 text-amber-600"
+                    className="bg-amber-500/10 text-amber-600 capitalize"
                   >
                     {draft.draft_status}
                   </Badge>

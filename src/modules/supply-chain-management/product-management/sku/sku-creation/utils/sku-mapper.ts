@@ -1,5 +1,3 @@
-import { SKU } from "../types/sku.schema";
-
 /**
  * Normalizes raw master data from various Directus collections into a standard format
  */

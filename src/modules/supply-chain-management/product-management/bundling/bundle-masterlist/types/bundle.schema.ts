@@ -4,11 +4,12 @@ import { z } from "zod";
 // Drafts: Draft, For approval, Error, Processed
 // Approved: Approved
 export const BundleStatusSchema = z.enum([
-  "Draft",
-  "For approval",
-  "Error",
-  "Processed",
-  "Approved",
+  "DRAFT",
+  "FOR_APPROVAL",
+  "ERROR",
+  "PROCESSED",
+  "APPROVED",
+  "REJECTED",
 ]);
 export type BundleStatus = z.infer<typeof BundleStatusSchema>;
 

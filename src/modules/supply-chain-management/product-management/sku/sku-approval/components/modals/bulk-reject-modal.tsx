@@ -41,14 +41,27 @@ export function BulkRejectModal({
   >({});
 
   useEffect(() => {
+    if (!isOpen) {
+      const timer = setTimeout(() => {
+        setCommonRemarks("");
+        setIndividualRemarks({});
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
+
+  // Update individual remarks when selectedSKUs filter/selection changes
+  useEffect(() => {
     if (isOpen) {
-      setCommonRemarks("");
       const initial: Record<string, string> = {};
       selectedSKUs.forEach((sku) => {
         const id = String((sku as any).id || sku.product_id);
-        initial[id] = "";
+        initial[id] = individualRemarks[id] || "";
       });
-      setIndividualRemarks(initial);
+      const timer = setTimeout(() => {
+        setIndividualRemarks(initial);
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [isOpen, selectedSKUs]);
 
@@ -178,8 +191,8 @@ export function BulkRejectModal({
           <div className="flex items-start gap-2 p-3 bg-destructive/5 rounded-lg border border-destructive/20">
             <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
             <p className="text-[11px] text-destructive/80">
-              Rejection will return these items to "Draft" status. Users will
-              see your remarks as the reason for rejection.
+              Rejection will return these items to &quot;Draft&quot; status.
+              Users will see your remarks as the reason for rejection.
             </p>
           </div>
         </div>

@@ -4,12 +4,10 @@ import { ColumnDef } from "@tanstack/react-table";
 import {
   SKU,
   MasterData,
-  SKUStatus,
 } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Edit,
   Trash2,
   Send,
   CheckCircle,

@@ -5,7 +5,6 @@ import { BundleDraft } from "@/modules/supply-chain-management/product-managemen
 import { DataTable } from "@/components/ui/new-data-table";
 import { getDraftColumns } from "./columns";
 import { BundleMasterData } from "../../types/bundle.schema";
-import { DataTableColumnHeader } from "./table-column-header";
 
 interface BundleCreationTableProps {
   data: BundleDraft[];

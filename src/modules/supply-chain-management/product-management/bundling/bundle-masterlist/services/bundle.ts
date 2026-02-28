@@ -8,7 +8,6 @@ import {
   Bundle,
   BundleDraft,
   BundleItem,
-  BundleStatus,
   BundleType,
   ProductOption,
   BundleDraftFormValues,
@@ -88,8 +87,36 @@ export const bundleService = {
       totalCount = 0;
     }
 
-    const seq = String(totalCount + 1).padStart(4, "0");
-    return `${prefix}-${seq}`.toUpperCase();
+    let seqNum = totalCount + 1;
+    let finalCode =
+      `${prefix}-${String(seqNum).padStart(4, "0")}`.toUpperCase();
+
+    // Safety Loop: Check if code already exists in EITHER collection
+    let isUnique = false;
+    let attempts = 0;
+    while (!isUnique && attempts < 10) {
+      const [inDraft, inApproved] = await Promise.all([
+        fetchItems<any>("/items/product_bundles_draft", {
+          filter: JSON.stringify({ bundle_sku: { _eq: finalCode } }),
+          limit: 1,
+        }),
+        fetchItems<any>("/items/product_bundles", {
+          filter: JSON.stringify({ bundle_sku: { _eq: finalCode } }),
+          limit: 1,
+        }),
+      ]);
+
+      if (inDraft.data?.length === 0 && inApproved.data?.length === 0) {
+        isUnique = true;
+      } else {
+        seqNum++;
+        finalCode =
+          `${prefix}-${String(seqNum).padStart(4, "0")}`.toUpperCase();
+        attempts++;
+      }
+    }
+
+    return finalCode;
   },
 
   // ─── Drafts (CRUD) ─────────────────────────────────────────
@@ -218,7 +245,7 @@ export const bundleService = {
           bundle_sku: bundleSku,
           bundle_name: values.bundle_name,
           bundle_type_id: values.bundle_type_id,
-          draft_status: "Draft",
+          draft_status: "DRAFT",
         }),
       },
     );
@@ -295,7 +322,7 @@ export const bundleService = {
   async submitForApproval(id: number | string) {
     await request(`${API_BASE_URL}/items/product_bundles_draft/${id}`, {
       method: "PATCH",
-      body: JSON.stringify({ draft_status: "For approval" }),
+      body: JSON.stringify({ draft_status: "FOR_APPROVAL" }),
     });
     return true;
   },
@@ -315,6 +342,30 @@ export const bundleService = {
 
     if (!draft) throw new Error("Draft bundle not found");
 
+    // 1.5. Validate all component SKUs are still active
+    const { data: draftItems } = await fetchItems<any>(
+      "/items/product_bundle_items_draft",
+      {
+        filter: JSON.stringify({ bundle_draft_id: { _eq: id } }),
+        fields:
+          "product_id.product_name,product_id.isActive,product_id.product_code",
+      },
+    );
+
+    const inactiveItems = draftItems?.filter(
+      (item: any) => item.product_id?.isActive === 0,
+    );
+    if (inactiveItems?.length) {
+      const names = inactiveItems
+        .map(
+          (i: any) => i.product_id?.product_name || i.product_id?.product_code,
+        )
+        .join(", ");
+      throw new Error(
+        `Cannot approve bundle. The following component SKUs are inactive: ${names}`,
+      );
+    }
+
     // Create master record in product_bundles
     const { data: masterBundle } = await request<{ data: any }>(
       `${API_BASE_URL}/items/product_bundles`,
@@ -327,7 +378,7 @@ export const bundleService = {
             typeof draft.bundle_type_id === "object"
               ? draft.bundle_type_id?.id
               : draft.bundle_type_id,
-          status: "Approved",
+          status: "APPROVED",
         }),
       },
     );
@@ -368,7 +419,7 @@ export const bundleService = {
       // Fallback: mark as APPROVED if delete fails
       await request(`${API_BASE_URL}/items/product_bundles_draft/${id}`, {
         method: "PATCH",
-        body: JSON.stringify({ draft_status: "Approved" }),
+        body: JSON.stringify({ draft_status: "APPROVED" }),
       });
     }
 
@@ -382,7 +433,7 @@ export const bundleService = {
   async rejectDraft(id: number | string) {
     await request(`${API_BASE_URL}/items/product_bundles_draft/${id}`, {
       method: "PATCH",
-      body: JSON.stringify({ draft_status: "Draft" }),
+      body: JSON.stringify({ draft_status: "REJECTED" }),
     });
     return true;
   },

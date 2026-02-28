@@ -32,14 +32,14 @@ export async function GET(req: NextRequest) {
       const result = await bundleService.fetchDrafts(
         limit,
         offset,
-        "For approval",
+        "FOR_APPROVAL",
         search,
       );
       return NextResponse.json(result);
     }
 
     // Default: drafts
-    const status = searchParams.get("status") || "Draft";
+    const status = searchParams.get("status") || "DRAFT";
     const result = await bundleService.fetchDrafts(
       limit,
       offset,

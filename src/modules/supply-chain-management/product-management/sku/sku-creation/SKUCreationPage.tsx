@@ -8,21 +8,14 @@ import { SKUModal } from "@/modules/supply-chain-management/product-management/s
 import { Button } from "@/components/ui/button";
 import { SKU } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
 import { toast } from "sonner";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import ErrorPage from "@/components/shared/ErrorPage";
 import { BulkDraftActionsModal } from "./components/modals/bulk-draft-actions-modal";
-import { Send, Trash2 } from "lucide-react";
 
 export default function SKUCreationModule() {
   const {
     approvedData,
-    approvedTotal,
-    approvedPage,
     setApprovedPage,
-    approvedLimit,
-    setApprovedLimit,
-
     draftData,
     draftsTotal,
     draftsPage,
@@ -31,7 +24,6 @@ export default function SKUCreationModule() {
     setDraftsLimit,
     draftsSorting,
     setDraftsSorting,
-
     masterData,
     isLoading,
     error,
@@ -40,11 +32,9 @@ export default function SKUCreationModule() {
     updateDraft,
     submitForApproval,
     bulkSubmitForApproval,
-    approveSKU,
     deleteDraft,
     bulkDeleteDrafts,
     checkDuplicate,
-    rejectSKU,
     setSearch,
   } = useSKUs();
 
@@ -72,7 +62,6 @@ export default function SKUCreationModule() {
   const handleSearch = useCallback(
     (v: string) => {
       setSearch(v);
-      // When searching, we keep pages as they are or reset them? Typically reset.
       setApprovedPage(0);
       setDraftsPage(0);
     },
@@ -206,24 +195,6 @@ export default function SKUCreationModule() {
       });
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleApproveAndActivate = async (id: number | string) => {
-    try {
-      await approveSKU(id);
-      toast.success("SKU Activated and Master Record Created");
-    } catch (err: any) {
-      toast.error("Activation failed: " + err.message);
-    }
-  };
-
-  const handleReject = async (id: number | string) => {
-    try {
-      await rejectSKU(id);
-      toast.success("Record returned to Draft status");
-    } catch (err: any) {
-      toast.error("Process failed: " + err.message);
     }
   };
 

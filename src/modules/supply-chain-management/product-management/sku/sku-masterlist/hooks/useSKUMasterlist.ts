@@ -7,7 +7,6 @@ import {
 } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
 import { SortingState } from "@tanstack/react-table";
 import { CellHelpers } from "../../sku-creation/utils/sku-helpers";
-import { skuService } from "../../sku-creation/services/sku";
 import { toast } from "sonner";
 
 export function useSKUMasterlist() {
@@ -21,7 +20,6 @@ export function useSKUMasterlist() {
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mounted, setMounted] = useState(false);
 
   const refresh = useCallback(async () => {
     setIsLoading(true);
@@ -32,8 +30,8 @@ export function useSKUMasterlist() {
         fetch(
           `/api/scm/product-management/sku?type=approved&limit=${limit}&offset=${page * limit}&search=${encodeURIComponent(search)}&sort=${sort}`,
         ).then((res) => res.json()),
-        fetch("/api/scm/product-management/sku?type=master").then(
-          (res) => res.json(),
+        fetch("/api/scm/product-management/sku?type=master").then((res) =>
+          res.json(),
         ),
       ]);
 

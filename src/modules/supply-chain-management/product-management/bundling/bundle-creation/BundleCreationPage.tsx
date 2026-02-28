@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useBundles } from "./hooks/useBundles";
 import { BundleCreationTable } from "./components/data-table";
 import { BundleCreateModal } from "./components/modals/bundle-create-modal";
@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Plus, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { BundleDraft, BundleDraftFormValues } from "./types/bundle.schema";
-
 
 export default function BundleCreationPage() {
   const {
@@ -24,7 +23,6 @@ export default function BundleCreationPage() {
     masterData,
     isLoading,
     error,
-    search,
     setSearch,
     refresh,
     createDraft,
@@ -40,7 +38,6 @@ export default function BundleCreationPage() {
     null,
   );
   const [isProcessing, setIsProcessing] = useState(false);
-
 
   const handleCreate = async (values: BundleDraftFormValues) => {
     try {
@@ -94,13 +91,11 @@ export default function BundleCreationPage() {
     setSelectedRows(rows);
   }, []);
 
-
   if (isLoading && !draftData.length) return <ModuleSkeleton />;
   if (error) return <ErrorPage message={error} reset={refresh} />;
 
   return (
     <div className="space-y-6">
-
       {/* Data Table */}
       <BundleCreationTable
         data={draftData}

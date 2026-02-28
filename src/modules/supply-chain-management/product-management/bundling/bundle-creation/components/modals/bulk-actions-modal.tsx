@@ -8,7 +8,6 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { bundleService } from "../../services/bundle";
 import { Button } from "@/components/ui/button";
 import { BundleDraft } from "../../types/bundle.schema";
 import { ScrollArea } from "@/components/ui/scroll-area";

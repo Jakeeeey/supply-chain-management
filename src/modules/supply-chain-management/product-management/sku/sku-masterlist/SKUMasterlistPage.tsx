@@ -34,7 +34,10 @@ export default function SKUMasterlistModule() {
   const [selectedRows, setSelectedRows] = useState<SKU[]>([]);
 
   useEffect(() => {
-    setMounted(true);
+    const timer = setTimeout(() => {
+      setMounted(true);
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const handlePagination = useCallback(

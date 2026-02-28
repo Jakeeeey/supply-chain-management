@@ -354,115 +354,110 @@ export const skuService = {
       );
     }
 
-    // 4.5. Link to Supplier (Only for Parent SKUs) - Ensure it's not a child
-    const isChild = !!draft.parent_id;
-    if (!isChild) {
-      // Resolve Supplier ID from the new draft junction table
-      const draftId = draft.id || (draft as any).product_id;
-      let sId: number | null = null;
+    // 4.5. Link to Supplier (For Parent AND Child SKUs)
+    // Resolve Supplier ID from the new draft junction table
+    const draftId = draft.id || (draft as any).product_id;
+    let sId: number | null = null;
 
+    try {
+      const { data: draftSupplierLink } = await fetchItems<any>(
+        "/items/product_draft_per_supplier",
+        {
+          filter: JSON.stringify({ product_draft_id: { _eq: draftId } }),
+          limit: 1,
+        },
+      );
+
+      if (draftSupplierLink?.length) {
+        sId = draftSupplierLink[0].supplier_id;
+        console.log(
+          `[Supplier Link Debug] Found Supplier ID ${sId} in product_draft_per_supplier for draft ${draftId}`,
+        );
+      } else {
+        // Fallback to various possible field names or formats for backward compatibility
+        const rawValue =
+          (draft as any).product_supplier || (draft as any).supplier_id;
+        if (rawValue) {
+          if (typeof rawValue === "object") {
+            sId = rawValue.id;
+          } else {
+            const num = parseInt(String(rawValue));
+            sId = isNaN(num) || num === 0 ? null : num;
+          }
+        }
+        console.warn(
+          `[Supplier Link Debug] No record found in product_draft_per_supplier. Fell back to raw draft value:`,
+          sId,
+        );
+      }
+    } catch (err: any) {
+      console.error(
+        `[Supplier Link Debug] Error fetching from product_draft_per_supplier:`,
+        err.message,
+      );
+    }
+
+    // Resolve Master ID as a number
+    const resolvedMasterId = (function () {
+      if (!finalMasterId) return null;
+      const num = parseInt(String(finalMasterId));
+      return isNaN(num) ? null : num;
+    })();
+
+    console.log(
+      `[Supplier Link Debug] Resolved sId: ${sId}, resolvedMasterId: ${resolvedMasterId}`,
+    );
+
+    if (sId && resolvedMasterId) {
       try {
-        const { data: draftSupplierLink } = await fetchItems<any>(
-          "/items/product_draft_per_supplier",
+        // Check if this specific link already exists to avoid duplicates
+        const { data: existingLink } = await fetchItems<any>(
+          "/items/product_per_supplier",
           {
-            filter: JSON.stringify({ product_draft_id: { _eq: draftId } }),
+            filter: JSON.stringify({
+              _and: [
+                { product_id: { _eq: resolvedMasterId } },
+                { supplier_id: { _eq: sId } },
+              ],
+            }),
             limit: 1,
           },
         );
 
-        if (draftSupplierLink?.length) {
-          sId = draftSupplierLink[0].supplier_id;
+        if (!existingLink || existingLink.length === 0) {
           console.log(
-            `[Supplier Link Debug] Found Supplier ID ${sId} in product_draft_per_supplier for draft ${draftId}`,
+            `[Supplier Link Debug] No existing link. Creating for Product ${resolvedMasterId} and Supplier ${sId}...`,
           );
-        } else {
-          // Fallback to various possible field names or formats for backward compatibility
-          const rawValue =
-            (draft as any).product_supplier || (draft as any).supplier_id;
-          if (rawValue) {
-            if (typeof rawValue === "object") {
-              sId = rawValue.id;
-            } else {
-              const num = parseInt(String(rawValue));
-              sId = isNaN(num) || num === 0 ? null : num;
-            }
-          }
-          console.warn(
-            `[Supplier Link Debug] No record found in product_draft_per_supplier. Fell back to raw draft value:`,
-            sId,
-          );
-        }
-      } catch (err: any) {
-        console.error(
-          `[Supplier Link Debug] Error fetching from product_draft_per_supplier:`,
-          err.message,
-        );
-      }
-
-      // Resolve Master ID as a number
-      const resolvedMasterId = (function () {
-        if (!finalMasterId) return null;
-        const num = parseInt(String(finalMasterId));
-        return isNaN(num) ? null : num;
-      })();
-
-      console.log(
-        `[Supplier Link Debug] Resolved sId: ${sId}, resolvedMasterId: ${resolvedMasterId}, isChild: ${isChild}`,
-      );
-
-      if (sId && resolvedMasterId) {
-        try {
-          // Check if this specific link already exists to avoid duplicates
-          const { data: existingLink } = await fetchItems<any>(
-            "/items/product_per_supplier",
+          const linkRes = await request<any>(
+            `${API_BASE_URL}/items/product_per_supplier`,
             {
-              filter: JSON.stringify({
-                _and: [
-                  { product_id: { _eq: resolvedMasterId } },
-                  { supplier_id: { _eq: sId } },
-                ],
+              method: "POST",
+              body: JSON.stringify({
+                product_id: resolvedMasterId,
+                supplier_id: sId,
+                discount_type: null,
               }),
-              limit: 1,
             },
           );
-
-          if (!existingLink || existingLink.length === 0) {
-            console.log(
-              `[Supplier Link Debug] No existing link. Creating for Product ${resolvedMasterId} and Supplier ${sId}...`,
-            );
-            const linkRes = await request<any>(
-              `${API_BASE_URL}/items/product_per_supplier`,
-              {
-                method: "POST",
-                body: JSON.stringify({
-                  product_id: resolvedMasterId,
-                  supplier_id: sId,
-                  discount_type: null,
-                }),
-              },
-            );
-            console.log(`[Supplier Link Debug] POST Success. Result:`, linkRes);
-          } else {
-            console.log(
-              `[Supplier Link Debug] Link already exists for Product ${resolvedMasterId} and Supplier ${sId}`,
-            );
-          }
-        } catch (linkErr: any) {
-          console.error("[Supplier Link Debug] Error:", linkErr.message);
+          console.log(`[Supplier Link Debug] POST Success. Result:`, linkRes);
+        } else {
+          console.log(
+            `[Supplier Link Debug] Link already exists for Product ${resolvedMasterId} and Supplier ${sId}`,
+          );
         }
-      } else {
-        console.log(
-          `[Supplier Link Debug] SKIPPING linkage: sId=${sId}, masterId=${resolvedMasterId}`,
-        );
+      } catch (linkErr: any) {
+        console.error("[Supplier Link Debug] Error:", linkErr.message);
       }
+    } else {
+      console.log(
+        `[Supplier Link Debug] SKIPPING linkage: sId=${sId}, masterId=${resolvedMasterId}`,
+      );
     }
 
     // 5. "Adoption Logic": If this was a Parent, look for existing orphans to adopt
     if (!draft.parent_id) {
       const toId = (val: any) =>
         val && typeof val === "object" ? val.id : val;
-      const bId = toId(draft.product_brand);
-      const cId = toId(draft.product_category);
 
       const orphanConditions: any[] = [
         { product_name: { _eq: draft.product_name } },
@@ -536,6 +531,34 @@ export const skuService = {
     return true;
   },
   async deleteDraft(id: number | string) {
+    // 1. Clean up supplier junction records for this draft
+    try {
+      const { data: existing } = await fetchItems<any>(
+        "/items/product_draft_per_supplier",
+        {
+          filter: JSON.stringify({ product_draft_id: { _eq: id } }),
+          limit: -1,
+        },
+      );
+      if (existing?.length) {
+        await Promise.all(
+          existing.map((record) =>
+            request(
+              `${API_BASE_URL}/items/product_draft_per_supplier/${record.id}`,
+              {
+                method: "DELETE",
+              },
+            ),
+          ),
+        );
+      }
+    } catch (err: any) {
+      console.error(
+        `[Cleanup] Failed to clean up supplier junction for draft ${id}: ${err.message}`,
+      );
+    }
+
+    // 2. Delete the draft itself
     await request(`${API_BASE_URL}/items/product_draft/${id}`, {
       method: "DELETE",
     });

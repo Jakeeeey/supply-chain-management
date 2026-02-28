@@ -6,7 +6,6 @@ import {
   SKU,
   MasterData,
 } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
-import { Skeleton } from "@/components/ui/skeleton";
 import { DataTable } from "@/components/ui/new-data-table";
 import { getColumns } from "./columns";
 import { SortingState } from "@tanstack/react-table";
@@ -55,7 +54,6 @@ export function SKUTable({
   onSubmitForApproval,
   onApprove,
   onReject,
-  title,
   manualPagination = true,
   onSearch,
   onSelectionChange,

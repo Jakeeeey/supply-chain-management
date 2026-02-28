@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo } from "react";
 import { useBundles } from "./hooks/useBundles";
 import { BundleMasterlistTable } from "./components/data-table";
 import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
@@ -17,7 +16,6 @@ export default function BundleMasterlistPage() {
     masterData,
     isLoading,
     error,
-    search,
     setSearch,
     refresh,
   } = useBundles();

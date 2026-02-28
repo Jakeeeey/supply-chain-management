@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { RefreshCcw } from "lucide-react";
 import { useSKUs } from "@/modules/supply-chain-management/product-management/sku/sku-creation/hooks/useSKUs";
 import { ApprovalTable } from "@/modules/supply-chain-management/product-management/sku/sku-approval/components/data-table";
 import { Button } from "@/components/ui/button";
@@ -13,7 +12,6 @@ import { RejectRemarksModal } from "@/modules/supply-chain-management/product-ma
 import { SKU } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
 import { BulkApproveModal } from "@/modules/supply-chain-management/product-management/sku/sku-approval/components/modals/bulk-approve-modal";
 import { BulkRejectModal } from "@/modules/supply-chain-management/product-management/sku/sku-approval/components/modals/bulk-reject-modal";
-import { CheckCircle, XCircle } from "lucide-react";
 
 export default function SKUApprovalPage() {
   const {
