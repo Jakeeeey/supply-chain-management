@@ -37,28 +37,20 @@ const data = {
       isActive: false,
       items: [
         {
-          title: "SKU Masterlist",
-          url: "/scm/product-management/sku-masterlist",
-        },
-        {
-          title: "SKU Registration",
-          url: "/scm/product-management/sku-creation",
-        },
-        {
-          title: "SKU Approval Queue",
-          url: "/scm/product-management/sku-approval",
-        },
-        {
-          title: "Barcoding",
-          url: "/scm/product-management/barcode-management",
+          title: "SKU",
+          url: "/scm/product-management/sku",
           items: [
             {
-              title: "Barcode Masterlist",
-              url: "/scm/product-management/barcode-management/barcode-masterlist",
+              title: "SKU Masterlist",
+              url: "/scm/product-management/sku/sku-masterlist",
             },
             {
-              title: "Barcode Linking",
-              url: "/scm/product-management/barcode-management/barcode-linking",
+              title: "SKU Registration",
+              url: "/scm/product-management/sku/sku-creation",
+            },
+            {
+              title: "SKU Approval Queue",
+              url: "/scm/product-management/sku/sku-approval",
             },
           ],
         },
@@ -77,6 +69,20 @@ const data = {
             {
               title: "Bundle Masterlist",
               url: "/scm/product-management/bundle-masterlist",
+            },
+          ],
+        },
+        {
+          title: "Barcoding",
+          url: "/scm/product-management/barcode-management",
+          items: [
+            {
+              title: "Barcode Masterlist",
+              url: "/scm/product-management/barcode-management/barcode-masterlist",
+            },
+            {
+              title: "Barcode Linking",
+              url: "/scm/product-management/barcode-management/barcode-linking",
             },
           ],
         },
