@@ -18,6 +18,9 @@ export async function GET() {
     }),
   ]);
 
+  if (salesmenRes instanceof NextResponse) return salesmenRes;
+  if (customersRes instanceof NextResponse) return customersRes;
+
   return NextResponse.json({
     salesmen: (salesmenRes.data ?? []).map((s) => ({
       id: s.id,

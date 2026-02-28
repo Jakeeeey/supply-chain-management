@@ -1,5 +1,5 @@
 ---
-trigger: always_on
+trigger: manual
 ---
 
 [Important Notes]: Ask user for confirmation if the code is ready for production!

@@ -361,6 +361,11 @@ const data = {
         },
       ],
     },
+    {
+      title: "Inbound/Outbound Kiosk",
+      url: "/scm/inbound-outbound-kiosk",
+      icon: BookOpen,
+    },
   ],
 };
 
