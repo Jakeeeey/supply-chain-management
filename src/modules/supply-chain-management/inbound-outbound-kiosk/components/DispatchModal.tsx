@@ -489,43 +489,46 @@ export function DispatchModal({ plan, open, onOpenChange, onSuccess }: DispatchM
 
             {/* Role Selection Secondary Dialog */}
             <Dialog open={isRoleModalOpen} onOpenChange={setIsRoleModalOpen}>
-                <DialogContent className="max-w-[440px] rounded-[32px] p-0 overflow-hidden shadow-[0_32px_64px_-12px_rgba(0,0,0,0.3)] border-none">
-                    <div className="bg-amber-500 h-2 w-full" />
-                    <div className="p-10 space-y-8 bg-background">
-                        <div className="text-center space-y-4">
-                            <div className="h-20 w-20 bg-amber-500/10 rounded-[24px] flex items-center justify-center mx-auto mb-2 border border-amber-500/20 shadow-sm">
-                                <User className="h-10 w-10 text-amber-600" />
+                <DialogContent className="max-w-[440px] rounded-[32px] p-0 overflow-hidden shadow-[0_32px_128px_-12px_rgba(0,0,0,0.6)] border border-border/10 bg-background">
+                    <div className="bg-amber-500 h-2 w-full animate-pulse" />
+                    <div className="p-10 space-y-10">
+                        <div className="text-center space-y-6">
+                            <div className="h-24 w-24 bg-amber-500/10 rounded-[32px] flex items-center justify-center mx-auto mb-4 border-2 border-amber-500/20 shadow-xl shadow-amber-500/5 transition-transform hover:scale-110 duration-500">
+                                <User className="h-12 w-12 text-amber-600" />
                             </div>
-                            <div className="space-y-1">
-                                <DialogTitle className="text-3xl font-black tracking-tight">Assign Position</DialogTitle>
-                                <p className="text-base text-muted-foreground leading-relaxed">
-                                    Identify <span className="font-bold text-foreground underline decoration-amber-500/30 underline-offset-8">{subUser?.name}</span> as:
+                            <div className="space-y-2">
+                                <DialogTitle className="text-3xl font-black tracking-tight text-foreground">Assign Position</DialogTitle>
+                                <p className="text-sm font-medium text-muted-foreground/80 leading-relaxed px-4">
+                                    Identify <span className="font-black text-foreground border-b-2 border-amber-500/40 pb-0.5">{subUser?.name}</span> as:
                                 </p>
                             </div>
                         </div>
 
                         <div className="grid grid-cols-1 gap-4">
                             <Button
-                                className="h-20 rounded-2xl font-black uppercase tracking-[0.2em] !bg-emerald-600 hover:!bg-emerald-700 !text-white shadow-2xl shadow-emerald-500/40 border-none transition-all hover:scale-[1.02] active:scale-[0.98] text-lg"
+                                className="h-24 rounded-2xl font-black uppercase tracking-[0.2em] !bg-emerald-600 hover:!bg-emerald-700 !text-white shadow-xl shadow-emerald-500/30 border-none transition-all hover:scale-[1.02] active:scale-[0.98] text-lg flex flex-col items-center justify-center gap-1 group"
                                 onClick={() => handleRoleSelect("Driver")}
                             >
-                                Assigned as Driver
+                                <span className="group-hover:scale-110 transition-transform">Assigned as Driver</span>
+                                <span className="text-[10px] opacity-60 font-medium tracking-widest lowercase">Primary Vehicle Control</span>
                             </Button>
                             <Button
-                                className="h-20 rounded-2xl font-black uppercase tracking-[0.2em] !bg-red-600 hover:!bg-red-700 !text-white shadow-2xl shadow-red-500/40 border-none transition-all hover:scale-[1.02] active:scale-[0.98] text-lg"
+                                className="h-24 rounded-2xl font-black uppercase tracking-[0.2em] !bg-rose-600 hover:!bg-rose-700 !text-white shadow-xl shadow-rose-500/30 border-none transition-all hover:scale-[1.02] active:scale-[0.98] text-lg flex flex-col items-center justify-center gap-1 group"
                                 onClick={() => handleRoleSelect("Helper")}
                             >
-                                Assigned as Helper
+                                <span className="group-hover:scale-110 transition-transform">Assigned as Helper</span>
+                                <span className="text-[10px] opacity-60 font-medium tracking-widest lowercase">Support & Verification</span>
                             </Button>
                         </div>
 
-                        <Button
-                            variant="ghost"
-                            className="w-full h-12 text-xs font-black uppercase tracking-[0.3em] text-muted-foreground/40 hover:text-destructive transition-colors hover:bg-destructive/5 rounded-xl"
-                            onClick={() => setIsRoleModalOpen(false)}
-                        >
-                            Discard Changes
-                        </Button>
+                        <div className="pt-2 text-center">
+                            <button
+                                className="text-[10px] font-black uppercase tracking-[0.4em] text-muted-foreground/30 hover:text-destructive transition-all hover:tracking-[0.5em] py-2 px-8 rounded-full hover:bg-destructive/5"
+                                onClick={() => setIsRoleModalOpen(false)}
+                            >
+                                Discard Identity Change
+                            </button>
+                        </div>
                     </div>
                 </DialogContent>
             </Dialog>
