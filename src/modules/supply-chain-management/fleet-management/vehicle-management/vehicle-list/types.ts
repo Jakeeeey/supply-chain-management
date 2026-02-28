@@ -25,6 +25,7 @@ export type VehiclesApiRow = {
   vehicle_id: number;
   vehicle_plate: string;
   vehicle_type: number | null;
+  rfid_code?: string | null;
   status: string | null;
 
   // ✅ new columns based on your DB reference/API
@@ -124,9 +125,7 @@ export type CreateVehicleForm = {
   fuelTypeId?: number | null;
   engineTypeId?: number | null;
 
-  // keep your date inputs (UI), but we won’t send unless you confirm field names
-  lastMaintenanceDate?: string;
-  nextMaintenanceDate?: string;
+  rfid: string;
 
   // ✅ file upload
   imageFile?: File | null;
