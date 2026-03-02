@@ -3,12 +3,12 @@
 import { useState, useMemo, useCallback } from "react";
 import { useBundles } from "./hooks/useBundles";
 import { BundleApprovalTable } from "./components/data-table";
-import { BundleViewModal } from "./components/modals/bundle-view-modal";
+import { BundleViewModal } from "../components/modals/bundle-view-modal";
 import { Button } from "@/components/ui/button";
 import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import ErrorPage from "@/components/shared/ErrorPage";
 import { toast } from "sonner";
-import { BundleDraft } from "./types/bundle.schema";
+import { BundleDraft } from "../types/bundle.schema";
 import { CheckCircle2, XCircle } from "lucide-react";
 
 export default function BundleApprovalPage() {

@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { BundleDraft, BundleMasterData } from "../../../types/bundle.schema";
+import { BundleDraft, BundleMasterData } from "../../types/bundle.schema";
 import { Package, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 
 interface BundleViewModalProps {
@@ -20,15 +20,15 @@ interface BundleViewModalProps {
   onClose: () => void;
   draft: BundleDraft | null;
   masterData: BundleMasterData | null;
-  onApprove: (id: number | string) => Promise<void>;
-  onReject: (id: number | string) => Promise<void>;
+  onApprove?: (id: number | string) => Promise<void>;
+  onReject?: (id: number | string) => Promise<void>;
   fetchDetails: (id: number | string) => Promise<any>;
+  previewMode?: boolean;
 }
 
 /**
- * Modal for viewing a bundle's details during the approval workflow.
- * Shows bundle info, product list, and approve/reject buttons
- * with confirmation step.
+ * Shared modal for viewing a bundle's details.
+ * Supports "Preview Mode" for the Creation module and "Action Mode" for the Approval module.
  */
 export function BundleViewModal({
   open,
@@ -38,6 +38,7 @@ export function BundleViewModal({
   onApprove,
   onReject,
   fetchDetails,
+  previewMode = false,
 }: BundleViewModalProps) {
   const [details, setDetails] = useState<any>(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
@@ -60,7 +61,7 @@ export function BundleViewModal({
   }, [open, draft?.id, fetchDetails]);
 
   const handleAction = async () => {
-    if (!confirmAction || !draft) return;
+    if (!confirmAction || !draft || !onApprove || !onReject) return;
     setIsProcessing(true);
     const id = draft.id;
     try {
@@ -78,8 +79,9 @@ export function BundleViewModal({
 
   const getTypeName = () => {
     const raw = draft?.bundle_type_id;
-    if (typeof raw === "object" && raw !== null) return raw.name || "-";
-    const found = masterData?.bundleTypes.find((t) => t.id == raw);
+    if (typeof raw === "object" && raw !== null)
+      return (raw as any).name || "-";
+    const found = masterData?.bundleTypes.find((t) => t.id == (raw as any));
     return found?.name || "-";
   };
 
@@ -103,8 +105,8 @@ export function BundleViewModal({
           </DialogTitle>
         </DialogHeader>
 
-        {/* Confirmation View */}
-        {confirmAction ? (
+        {/* Confirmation View (only if not previewMode) */}
+        {!previewMode && confirmAction ? (
           <div className="space-y-4 py-4">
             <div className="text-center space-y-2">
               {confirmAction === "approve" ? (
@@ -227,17 +229,21 @@ export function BundleViewModal({
 
             <DialogFooter className="gap-2">
               <Button variant="ghost" onClick={onClose}>
-                Close
+                {previewMode ? "Done" : "Close"}
               </Button>
-              <Button
-                variant="destructive"
-                onClick={() => setConfirmAction("reject")}
-              >
-                <XCircle className="mr-2 h-4 w-4" /> Reject
-              </Button>
-              <Button onClick={() => setConfirmAction("approve")}>
-                <CheckCircle2 className="mr-2 h-4 w-4" /> Approve
-              </Button>
+              {!previewMode && (
+                <>
+                  <Button
+                    variant="destructive"
+                    onClick={() => setConfirmAction("reject")}
+                  >
+                    <XCircle className="mr-2 h-4 w-4" /> Reject
+                  </Button>
+                  <Button onClick={() => setConfirmAction("approve")}>
+                    <CheckCircle2 className="mr-2 h-4 w-4" /> Approve
+                  </Button>
+                </>
+              )}
             </DialogFooter>
           </>
         )}

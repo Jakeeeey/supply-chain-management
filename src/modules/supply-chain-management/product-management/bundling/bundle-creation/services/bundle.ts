@@ -187,40 +187,81 @@ export const bundleService = {
     limit: number = 10,
     offset: number = 0,
     search?: string,
+    status?: string,
+    typeId?: number,
   ): Promise<PaginatedBundles> {
-    const filter: any = { _and: [] };
+    const masterFilter: any = { _and: [] };
+    const draftFilter: any = { _and: [{ draft_status: { _eq: "REJECTED" } }] };
 
     if (search) {
-      filter._and.push({
+      const searchFilter = {
         _or: [
           { bundle_name: { _icontains: search } },
           { bundle_sku: { _icontains: search } },
         ],
-      });
+      };
+      masterFilter._and.push(searchFilter);
+      draftFilter._and.push(searchFilter);
     }
 
-    const params: Record<string, any> = {
-      limit,
-      offset,
-      fields: "*.*",
-      meta: "filter_count",
-      sort: "-id",
-    };
-
-    if (filter._and.length > 0) {
-      params.filter = JSON.stringify(filter);
+    if (typeId) {
+      masterFilter._and.push({ bundle_type_id: { _eq: typeId } });
+      draftFilter._and.push({ bundle_type_id: { _eq: typeId } });
     }
 
-    const { data, meta } = await fetchItems<Bundle>(
-      "/items/product_bundles",
-      params,
-    );
+    // Logic:
+    // If status is 'REJECTED' or empty/undefined (all), we fetch from drafts collection.
+    // If status is 'APPROVED' or empty/undefined (all), we fetch from master collection.
+
+    const fetchMaster = !status || status === "APPROVED" || status === "ALL";
+    const fetchRejected = !status || status === "REJECTED" || status === "ALL";
+
+    let results: any[] = [];
+    let totalCount = 0;
+
+    const [masterRes, draftRes] = await Promise.all([
+      fetchMaster
+        ? fetchItems<Bundle>("/items/product_bundles", {
+            limit: limit,
+            offset: offset,
+            fields: "*.*",
+            meta: "filter_count",
+            sort: "-id",
+            filter:
+              masterFilter._and.length > 0
+                ? JSON.stringify(masterFilter)
+                : undefined,
+          })
+        : Promise.resolve({ data: [], meta: { filter_count: 0 } }),
+      fetchRejected
+        ? fetchItems<BundleDraft>("/items/product_bundles_draft", {
+            limit: limit,
+            offset: offset,
+            fields: "*.*",
+            meta: "filter_count",
+            sort: "-id",
+            filter: JSON.stringify(draftFilter),
+          })
+        : Promise.resolve({ data: [], meta: { filter_count: 0 } }),
+    ]);
+
+    // Merge results
+    // Prioritize Rejected items (draftRes.data) before Master items
+    results = [...(draftRes.data || []), ...(masterRes.data || [])];
+    totalCount =
+      (masterRes.meta?.filter_count || 0) + (draftRes.meta?.filter_count || 0);
+
+    // If both were fetched, we might have too many items per 'limit'.
+    // We'll slice them for the UI consistency.
+    if (results.length > limit) {
+      results = results.slice(0, limit);
+    }
 
     return {
-      data: data || [],
+      data: results,
       meta: {
-        total_count: meta?.filter_count || 0,
-        filter_count: meta?.filter_count || 0,
+        total_count: totalCount,
+        filter_count: totalCount,
       },
     };
   },

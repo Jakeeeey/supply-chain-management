@@ -38,11 +38,25 @@ export const productOptionSchema = z.object({
 export type ProductOption = z.infer<typeof productOptionSchema>;
 
 // --- Draft Bundle Schema (for creation form validation) ---
-export const bundleDraftSchema = z.object({
-  bundle_name: z.string().min(1, "Bundle name is required"),
-  bundle_type_id: z.number().min(1, "Bundle type is required"),
-  items: z.array(bundleItemSchema).min(1, "At least one product is required"),
-});
+export const bundleDraftSchema = z
+  .object({
+    bundle_name: z.string().min(1, "Bundle name is required"),
+    bundle_type_id: z.number().min(1, "Bundle type is required"),
+    items: z.array(bundleItemSchema).min(1, "At least one product is required"),
+  })
+  .refine(
+    (data) => {
+      const totalItems = data.items.reduce(
+        (sum, item) => sum + item.quantity,
+        0,
+      );
+      return totalItems > 1;
+    },
+    {
+      message: "A bundle must contain more than one product in total",
+      path: ["items"],
+    },
+  );
 export type BundleDraftFormValues = z.infer<typeof bundleDraftSchema>;
 
 // --- Bundle Record (Master & Draft) ---
