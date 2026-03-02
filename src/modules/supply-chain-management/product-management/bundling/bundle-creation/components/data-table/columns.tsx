@@ -1,7 +1,7 @@
 "use client";
 
 import { ColumnDef } from "@tanstack/react-table";
-import { BundleDraft, BundleMasterData } from "../../types/bundle.schema";
+import { BundleDraft, BundleMasterData } from "../../../types/bundle.schema";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -84,11 +84,11 @@ export function getDraftColumns({
       },
     },
     {
-      accessorKey: "draft_status",
+      accessorKey: "status",
       header: "Status",
       cell: ({ row }) => (
         <Badge variant="outline" className="capitalize">
-          {row.original.draft_status}
+          {row.original.status}
         </Badge>
       ),
     },

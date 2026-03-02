@@ -25,8 +25,8 @@ interface SKUTableProps {
   masterData: MasterData | null;
   isLoading: boolean;
   onEdit?: (sku: SKU) => void;
-  onDelete?: (id: number | string) => void;
-  onSubmitForApproval?: (id: number | string) => void;
+  onDelete?: (sku: SKU) => void;
+  onSubmitForApproval?: (sku: SKU) => void;
   onApprove?: (id: number | string) => void;
   onReject?: (id: number | string) => void;
   title: string;

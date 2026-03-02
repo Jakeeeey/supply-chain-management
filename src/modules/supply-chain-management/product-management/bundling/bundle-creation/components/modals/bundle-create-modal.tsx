@@ -8,7 +8,9 @@ import {
   bundleDraftSchema,
   BundleDraftFormValues,
   BundleMasterData,
-} from "../../types/bundle.schema";
+  ProductOption,
+  BundleType,
+} from "../../../types/bundle.schema";
 import {
   Dialog,
   DialogContent,
@@ -79,12 +81,12 @@ export function BundleCreateModal({
 
   // Filter products: only isActive === 1
   const activeProducts = (masterData?.products || []).filter(
-    (p) => p.isActive === 1,
+    (p: ProductOption) => p.isActive === 1,
   );
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-[90vw] sm:w-fit min-w-[min(100vw-2rem,500px)] max-h-[90vh] overflow-hidden flex flex-col p-6">
+      <DialogContent className="w-full sm:max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" /> Create New Bundle
@@ -98,7 +100,6 @@ export function BundleCreateModal({
           >
             <ScrollArea className="flex-1 min-h-0">
               <div className="space-y-6 pr-3">
-                {/* Section A: Bundle Information */}
                 <Card className="border-accent/20 bg-card/50">
                   <CardContent className="pt-6 space-y-4">
                     <div className="flex items-center gap-2 mb-2">
@@ -144,7 +145,7 @@ export function BundleCreateModal({
                             <FormControl>
                               <Combobox
                                 options={(masterData?.bundleTypes || []).map(
-                                  (t) => ({
+                                  (t: BundleType) => ({
                                     value: t.id.toString(),
                                     label: t.name,
                                   }),
@@ -163,8 +164,6 @@ export function BundleCreateModal({
                     </div>
                   </CardContent>
                 </Card>
-
-                {/* Section B: Bundled Products */}
                 <Card className="border-accent/20 bg-card/50">
                   <CardContent className="pt-6 space-y-4">
                     <div className="flex items-center gap-2 mb-2">
@@ -185,7 +184,6 @@ export function BundleCreateModal({
                           key={fieldItem.id}
                           className="flex flex-row items-end gap-2 p-3 border rounded-lg bg-background/50"
                         >
-                          {/* Product Select — grows to fill available space */}
                           <div className="flex-1 min-w-0">
                             <FormField
                               control={form.control}
@@ -197,10 +195,12 @@ export function BundleCreateModal({
                                   </FormLabel>
                                   <FormControl>
                                     <Combobox
-                                      options={activeProducts.map((p) => ({
-                                        value: p.product_id.toString(),
-                                        label: `${p.product_name} (${p.product_code})`,
-                                      }))}
+                                      options={activeProducts.map(
+                                        (p: ProductOption) => ({
+                                          value: p.product_id.toString(),
+                                          label: `${p.product_name} (${p.product_code})`,
+                                        }),
+                                      )}
                                       value={field.value?.toString() || ""}
                                       onValueChange={(v) =>
                                         field.onChange(v ? parseInt(v) : 0)
@@ -214,7 +214,6 @@ export function BundleCreateModal({
                             />
                           </div>
 
-                          {/* Quantity — fixed width, never shrinks */}
                           <div className="w-16 shrink-0">
                             <FormField
                               control={form.control}
@@ -242,7 +241,6 @@ export function BundleCreateModal({
                             />
                           </div>
 
-                          {/* Remove button — fixed width, aligned to bottom */}
                           <div className="shrink-0">
                             {fields.length > 1 ? (
                               <Button
@@ -255,7 +253,6 @@ export function BundleCreateModal({
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             ) : (
-                              /* Placeholder keeps layout stable when only 1 row */
                               <div className="h-9 w-9" />
                             )}
                           </div>
