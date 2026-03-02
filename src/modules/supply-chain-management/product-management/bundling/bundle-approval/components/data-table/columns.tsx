@@ -76,11 +76,11 @@ export function getApprovalColumns({
       },
     },
     {
-      accessorKey: "status",
+      accessorKey: "draft_status",
       header: "Status",
       cell: ({ row }) => (
         <Badge variant="secondary" className="bg-amber-500/10 text-amber-600">
-          {row.original.status}
+          {row.original.draft_status}
         </Badge>
       ),
     },

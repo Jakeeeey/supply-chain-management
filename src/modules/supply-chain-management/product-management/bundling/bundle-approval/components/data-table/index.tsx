@@ -1,10 +1,13 @@
 "use client";
 
 import React from "react";
-import { BundleDraft, BundleMasterData } from "../../types/bundle.schema";
 import { DataTable } from "@/components/ui/new-data-table";
 import { getApprovalColumns } from "./columns";
 import { DataTableColumnHeader } from "./table-column-header";
+import {
+  BundleDraft,
+  BundleMasterData,
+} from "@/modules/supply-chain-management/product-management/bundling/types/bundle.schema";
 
 interface BundleApprovalTableProps {
   data: BundleDraft[];

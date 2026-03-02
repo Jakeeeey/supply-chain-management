@@ -167,7 +167,7 @@ export function BundleViewModal({
                     variant="secondary"
                     className="bg-amber-500/10 text-amber-600 capitalize"
                   >
-                    {draft.status}
+                    {draft.draft_status}
                   </Badge>
                 </div>
                 <div className="col-span-2">
