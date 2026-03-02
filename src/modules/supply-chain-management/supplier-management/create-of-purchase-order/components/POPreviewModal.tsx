@@ -21,16 +21,23 @@ interface POPreviewModalProps {
     onConfirmSave?: () => void | Promise<any>;
     isSubmitting?: boolean;
     locked?: boolean;
+    isInvoice?: boolean;
     data: {
         poNumber: string;
         poDate: string;
         supplierName: string;
         items: Array<{
             name: string;
+            brand: string;
+            category: string;
             barcode: string;
             orderQty: number;
             uom: string;
             price: number;
+            grossAmount: number;
+            discountType: string;
+            discountAmount: number;
+            netAmount: number;
             branchName: string;
         }>;
         subtotal: number;
@@ -47,12 +54,13 @@ export function POPreviewModal({
     onConfirmSave,
     isSubmitting,
     locked,
+    isInvoice,
     data 
 }: POPreviewModalProps) {
     const money = React.useMemo(() => buildMoneyFormatter(), []);
 
     const handleDownloadOnly = () => {
-        generatePurchaseOrderPDF(data);
+        generatePurchaseOrderPDF({ ...data, isInvoice: !!isInvoice });
     };
 
     const handleSaveAndDownload = async () => {
@@ -61,13 +69,13 @@ export function POPreviewModal({
                 // Trigger save and wait for it
                 await onConfirmSave();
                 // If it didn't throw, download the PDF
-                generatePurchaseOrderPDF(data);
+                generatePurchaseOrderPDF({ ...data, isInvoice: !!isInvoice });
             } catch (err) {
                 // parent usually handles the toast for error
                 console.error("Failed to save PO:", err);
             }
         } else {
-            generatePurchaseOrderPDF(data);
+            generatePurchaseOrderPDF({ ...data, isInvoice: !!isInvoice });
         }
     };
 
@@ -82,7 +90,7 @@ export function POPreviewModal({
             <DialogContent
                 style={{
                     maxWidth: "96vw",
-                    width: "75rem",
+                    width: "90rem", // Increased from 75rem
                     height: "94vh",
                     maxHeight: "90vh",
                 }}
@@ -98,7 +106,7 @@ export function POPreviewModal({
                             <div className="space-y-1">
                                 <DialogTitle className="text-xl font-black uppercase tracking-tight flex items-center gap-2">
                                     <Printer className="h-5 w-5 text-primary" />
-                                    Purchase Order Preview
+                                    {isInvoice ? "Invoice Preview" : "Purchase Order Preview"}
                                 </DialogTitle>
                                 <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">
                                     Review document content before printing
@@ -159,39 +167,63 @@ export function POPreviewModal({
 
                     <div className="flex-1 px-6 pb-6 overflow-hidden flex flex-col min-h-0">
                         <div className="flex-1 border border-border rounded-2xl overflow-hidden bg-background flex flex-col shadow-sm">
-                            {/* TABLE HEADER */}
-                            <div className="bg-muted/50 border-b border-border px-4 py-2 shrink-0 grid grid-cols-12 gap-4 text-[10px] font-black uppercase tracking-wider text-muted-foreground">
-                                <div className="col-span-12 sm:col-span-5">Product Details</div>
-                                <div className="hidden sm:block col-span-3 text-center sm:text-left">Branch</div>
-                                <div className="hidden sm:block col-span-2 text-center">Qty</div>
-                                <div className="hidden sm:block col-span-2 text-right">Total</div>
-                            </div>
-                            
                             <div 
                                 style={scrollbarStyle} 
-                                className="flex-1 overflow-y-auto custom-scrollbar"
+                                className="flex-1 overflow-auto custom-scrollbar"
                             >
-                                <div className="divide-y divide-border/50">
-                                    {data.items.map((item, idx) => (
-                                        <div key={idx} className="px-4 py-3 grid grid-cols-12 gap-2 items-center hover:bg-muted/30 transition-colors">
-                                            <div className="col-span-12 sm:col-span-5">
-                                                <p className="text-[11px] font-black text-foreground leading-tight uppercase tracking-tight">{item.name}</p>
-                                                <p className="text-[9px] font-mono font-bold text-muted-foreground mt-0.5">SKU: {item.barcode}</p>
-                                            </div>
-                                            <div className="col-span-6 sm:col-span-3 flex items-center gap-1.5 overflow-hidden">
-                                                <MapPin className="h-3 w-3 text-primary/60 shrink-0" />
-                                                <span className="text-[10px] font-bold truncate uppercase tracking-tighter text-foreground/80">{item.branchName}</span>
-                                            </div>
-                                            <div className="col-span-3 sm:col-span-2 text-center bg-muted/50 rounded-lg py-1 px-2 border border-border/50 shadow-sm">
-                                                <div className="text-[11px] font-black tabular-nums leading-none text-foreground">{item.orderQty}</div>
-                                                <div className="text-[8px] text-muted-foreground uppercase font-black tracking-tighter mt-0.5">{item.uom}</div>
-                                            </div>
-                                            <div className="col-span-3 sm:col-span-2 text-right">
-                                                <div className="text-[11px] font-black tabular-nums leading-none text-primary italic">{money.format(item.price * item.orderQty)}</div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+                                <table className="w-full border-collapse">
+                                    <thead className="sticky top-0 z-10 bg-muted border-b border-border">
+                                        <tr className="text-[9px] font-black uppercase tracking-wider text-muted-foreground">
+                                            <th className="px-4 py-3 text-left font-black">Brand</th>
+                                            <th className="px-4 py-3 text-left font-black">Category</th>
+                                            <th className="px-4 py-3 text-left font-black">Product Name</th>
+                                            <th className="px-4 py-3 text-right font-black">Price</th>
+                                            <th className="px-4 py-3 text-center font-black">UOM</th>
+                                            <th className="px-4 py-3 text-center font-black">Qty</th>
+                                            <th className="px-4 py-3 text-right font-black">Gross</th>
+                                            <th className="px-4 py-3 text-center font-black">Disc (Type/Amt)</th>
+                                            <th className="px-4 py-3 text-right font-black">Net</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-border/50">
+                                        {data.items.map((item, idx) => (
+                                            <tr key={idx} className="hover:bg-muted/30 transition-colors group">
+                                                <td className="px-4 py-3 text-[9px] font-bold text-foreground/70 uppercase whitespace-nowrap overflow-hidden text-ellipsis max-w-[80px]">
+                                                    {item.brand || "—"}
+                                                </td>
+                                                <td className="px-4 py-3 text-[9px] font-bold text-foreground/70 uppercase whitespace-nowrap overflow-hidden text-ellipsis max-w-[80px]">
+                                                    {item.category || "—"}
+                                                </td>
+                                                <td className="px-4 py-3 text-[9px] font-black text-foreground uppercase tracking-tight max-w-[200px]">
+                                                    <div className="truncate" title={item.name}>{item.name}</div>
+                                                </td>
+                                                <td className="px-4 py-3 text-[9px] text-right font-bold text-foreground/80 whitespace-nowrap">
+                                                    {money.format(item.price).replace("PHP", "").trim()}
+                                                </td>
+                                                <td className="px-4 py-3 text-center">
+                                                    <span className="inline-flex px-1.5 py-0.5 bg-secondary text-secondary-foreground text-[7px] font-black rounded uppercase">
+                                                        {item.uom}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3 text-[9px] text-center font-black whitespace-nowrap">
+                                                    {item.orderQty}
+                                                </td>
+                                                <td className="px-4 py-3 text-[9px] text-right font-bold text-muted-foreground whitespace-nowrap">
+                                                    {money.format(item.grossAmount).replace("PHP", "").trim()}
+                                                </td>
+                                                <td className="px-4 py-3 text-center">
+                                                    <div className="flex flex-col leading-tight">
+                                                        <span className="text-[7px] font-black text-emerald-600 dark:text-emerald-400 truncate max-w-[70px] mx-auto">{item.discountType}</span>
+                                                        <span className="text-[8px] font-bold text-emerald-600/70">{money.format(item.discountAmount).replace("PHP", "").trim()}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3 text-[9px] text-right font-black text-primary whitespace-nowrap">
+                                                    {money.format(item.netAmount).replace("PHP", "").trim()}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
@@ -206,8 +238,8 @@ export function POPreviewModal({
                                 <span className="text-foreground">{money.format(data.subtotal)}</span>
                             </div>
                             <div className="flex justify-between items-center text-xs uppercase font-bold text-destructive gap-10">
-                                <span>Total Discount:</span>
-                                <span>-{money.format(data.discount)}</span>
+                                <span>Discount:</span>
+                                <span>{money.format(data.discount)}</span>
                             </div>
                             <Separator className="my-1.5 bg-border/60" />
                             <div className="flex justify-between items-center text-xs uppercase font-bold text-foreground gap-10">
@@ -216,21 +248,31 @@ export function POPreviewModal({
                             </div>
                         </div>
                         
-                        <div className="space-y-1.5 text-right min-w-[170px]">
-                            <div className="flex justify-between items-center text-xs uppercase font-bold text-muted-foreground gap-10">
-                                <span>VAT (12%):</span>
-                                <span className="text-foreground">{money.format(data.vat)}</span>
+                        {isInvoice && (
+                            <div className="space-y-1.5 text-right min-w-[170px]">
+                                <div className="flex justify-between items-center text-xs uppercase font-bold text-muted-foreground gap-10">
+                                    <span>VAT (12%):</span>
+                                    <span className="text-foreground">{money.format(data.vat)}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-xs uppercase font-bold text-muted-foreground gap-10">
+                                    <span>EWT (1%):</span>
+                                    <span className="text-foreground">{money.format(data.ewt)}</span>
+                                </div>
+                                <Separator className="my-1.5 bg-border/60" />
+                                <div className="flex justify-between items-center text-sm font-bold text-primary italic uppercase tracking-tighter gap-10">
+                                    <span className="shrink-0">Total Payable Amount:</span>
+                                    <span className="text-2xl tabular-nums tracking-tighter">{money.format(data.total)}</span>
+                                </div>
                             </div>
-                            <div className="flex justify-between items-center text-xs uppercase font-bold text-muted-foreground gap-10">
-                                <span>EWT (1%):</span>
-                                <span className="text-foreground">{money.format(data.ewt)}</span>
+                        )}
+                        {!isInvoice && (
+                            <div className="space-y-1.5 text-right min-w-[170px]">
+                                <div className="flex justify-between items-center text-sm font-bold text-primary italic uppercase tracking-tighter gap-10">
+                                    <span className="shrink-0">Total Payable Amount:</span>
+                                    <span className="text-2xl tabular-nums tracking-tighter">{money.format(data.subtotal - data.discount)}</span>
+                                </div>
                             </div>
-                            <Separator className="my-1.5 bg-border/60" />
-                            <div className="flex justify-between items-center text-sm font-bold text-primary italic uppercase tracking-tighter gap-10">
-                                <span className="shrink-0">Total Payable:</span>
-                                <span className="text-2xl tabular-nums tracking-tighter">{money.format(data.total)}</span>
-                            </div>
-                        </div>
+                        )}
                     </div>
 
                     <DialogFooter className="px-6 py-5 bg-background border-t border-border flex flex-row items-center justify-center gap-4 sm:gap-6 shrink-0">

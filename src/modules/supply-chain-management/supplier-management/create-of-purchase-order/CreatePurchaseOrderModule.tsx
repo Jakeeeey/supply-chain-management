@@ -1061,6 +1061,7 @@ export default function CreatePurchaseOrderModule() {
                 total={financials.total}
                 onSave={onSave}
                 canSave={canSave}
+                discountTypes={discountTypes}
             />
 
             <ProductPickerDialog
