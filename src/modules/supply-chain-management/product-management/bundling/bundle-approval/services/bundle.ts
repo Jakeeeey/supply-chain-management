@@ -138,7 +138,7 @@ export const bundleService = {
     const filter: any = { _and: [] };
 
     if (status) {
-      filter._and.push({ status: { _eq: status } });
+      filter._and.push({ draft_status: { _eq: status } });
     }
 
     if (search) {
@@ -245,7 +245,7 @@ export const bundleService = {
           bundle_sku: bundleSku,
           bundle_name: values.bundle_name,
           bundle_type_id: values.bundle_type_id,
-          status: "DRAFT",
+          draft_status: "DRAFT",
         }),
       },
     );
@@ -322,7 +322,7 @@ export const bundleService = {
   async submitForApproval(id: number | string) {
     await request(`${API_BASE_URL}/items/product_bundles_draft/${id}`, {
       method: "PATCH",
-      body: JSON.stringify({ status: "FOR_APPROVAL" }),
+      body: JSON.stringify({ draft_status: "FOR_APPROVAL" }),
     });
     return true;
   },
@@ -419,7 +419,7 @@ export const bundleService = {
       // Fallback: mark as APPROVED if delete fails
       await request(`${API_BASE_URL}/items/product_bundles_draft/${id}`, {
         method: "PATCH",
-        body: JSON.stringify({ status: "APPROVED" }),
+        body: JSON.stringify({ draft_status: "APPROVED" }),
       });
     }
 
@@ -433,7 +433,7 @@ export const bundleService = {
   async rejectDraft(id: number | string) {
     await request(`${API_BASE_URL}/items/product_bundles_draft/${id}`, {
       method: "PATCH",
-      body: JSON.stringify({ status: "REJECTED" }),
+      body: JSON.stringify({ draft_status: "REJECTED" }),
     });
     return true;
   },

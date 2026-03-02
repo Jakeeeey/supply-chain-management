@@ -62,10 +62,10 @@ export const bundleSchema = z.object({
 });
 export type Bundle = z.infer<typeof bundleSchema>;
 
-// --- Standardized BundleDraft record to use 'status' instead of 'draft_status' ---
+// --- Standardized BundleDraft record to use 'draft_status' as per backend ---
 export const bundleDraftRecordSchema = z.object({
   ...bundleBaseFields,
-  status: BundleStatusSchema,
+  draft_status: BundleStatusSchema,
 });
 export type BundleDraft = z.infer<typeof bundleDraftRecordSchema>;
 

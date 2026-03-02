@@ -84,11 +84,11 @@ export function getDraftColumns({
       },
     },
     {
-      accessorKey: "status",
+      accessorKey: "draft_status",
       header: "Status",
       cell: ({ row }) => (
         <Badge variant="outline" className="capitalize">
-          {row.original.status}
+          {row.original.draft_status}
         </Badge>
       ),
     },

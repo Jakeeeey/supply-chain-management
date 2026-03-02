@@ -1,10 +1,9 @@
 "use client";
 
 import React from "react";
-import { BundleDraft } from "@/modules/supply-chain-management/product-management/bundling/types/bundle.schema";
+import { BundleDraft, BundleMasterData } from "@/modules/supply-chain-management/product-management/bundling/types/bundle.schema";
 import { DataTable } from "@/components/ui/new-data-table";
 import { getDraftColumns } from "./columns";
-import { BundleMasterData } from "../../types/bundle.schema";
 
 interface BundleCreationTableProps {
   data: BundleDraft[];
