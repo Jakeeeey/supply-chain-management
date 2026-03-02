@@ -1,7 +1,7 @@
 "use client";
 
 import { ColumnDef } from "@tanstack/react-table";
-import { Bundle, BundleMasterData } from "../../types/bundle.schema";
+import { Bundle, BundleMasterData } from "../../../types/bundle.schema";
 import { Badge } from "@/components/ui/badge";
 import { DataTableColumnHeader } from "./table-column-header";
 
@@ -44,21 +44,28 @@ export function getMasterlistColumns({
         if (typeof raw === "object" && raw !== null) {
           return raw.name || "-";
         }
-        const found = masterData?.bundleTypes.find((t) => t.id == raw);
+        const found = masterData?.bundleTypes.find((t: any) => t.id == raw);
         return found?.name || "-";
       },
     },
     {
       accessorKey: "status",
       header: "Status",
-      cell: ({ row }) => (
-        <Badge
-          variant="secondary"
-          className="bg-emerald-500/10 text-emerald-600"
-        >
-          {row.original.status}
-        </Badge>
-      ),
+      cell: ({ row }) => {
+        const isRejected = (row.original as any).draft_status === "REJECTED";
+        return (
+          <Badge
+            variant="secondary"
+            className={
+              isRejected
+                ? "bg-destructive/10 text-destructive"
+                : "bg-emerald-500/10 text-emerald-600"
+            }
+          >
+            {isRejected ? "REJECTED" : "APPROVED"}
+          </Badge>
+        );
+      },
     },
   ];
 }

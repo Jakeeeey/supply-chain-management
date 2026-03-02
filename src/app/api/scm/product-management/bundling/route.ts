@@ -24,7 +24,15 @@ export async function GET(req: NextRequest) {
     }
 
     if (type === "approved") {
-      const result = await bundleService.fetchApproved(limit, offset, search);
+      const statusFilter = searchParams.get("status") || "ALL";
+      const typeFilter = searchParams.get("typeId");
+      const result = await bundleService.fetchApproved(
+        limit,
+        offset,
+        search,
+        statusFilter,
+        typeFilter ? parseInt(typeFilter) : undefined,
+      );
       return NextResponse.json(result);
     }
 

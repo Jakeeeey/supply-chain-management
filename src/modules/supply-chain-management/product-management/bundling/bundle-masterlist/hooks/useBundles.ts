@@ -6,7 +6,7 @@ import {
   Bundle,
   BundleMasterData,
   BundleDraftFormValues,
-} from "../types/bundle.schema";
+} from "../../types/bundle.schema";
 
 /**
  * Central hook for the Bundling module.
@@ -38,6 +38,8 @@ export function useBundles() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
 
   // ─── Fetch All Data ──────────────────────────
   const refresh = useCallback(async () => {
@@ -52,7 +54,7 @@ export function useBundles() {
           `/api/scm/product-management/bundling?type=for_approval&status=FOR_APPROVAL&limit=${pendingLimit}&offset=${pendingPage * pendingLimit}&search=${encodeURIComponent(search)}`,
         ).then((r) => r.json()),
         fetch(
-          `/api/scm/product-management/bundling?type=approved&limit=${approvedLimit}&offset=${approvedPage * approvedLimit}&search=${encodeURIComponent(search)}`,
+          `/api/scm/product-management/bundling?type=approved&limit=${approvedLimit}&offset=${approvedPage * approvedLimit}&search=${encodeURIComponent(search)}&status=${statusFilter}${typeFilter !== "all" ? `&typeId=${typeFilter}` : ""}`,
         ).then((r) => r.json()),
         fetch("/api/scm/product-management/bundling?type=master").then((r) =>
           r.json(),
@@ -87,6 +89,8 @@ export function useBundles() {
     approvedLimit,
     approvedPage,
     search,
+    statusFilter,
+    typeFilter,
   ]);
 
   useEffect(() => {
@@ -241,6 +245,10 @@ export function useBundles() {
     error,
     search,
     setSearch,
+    statusFilter,
+    setStatusFilter,
+    typeFilter,
+    setTypeFilter,
     refresh,
 
     // Mutations

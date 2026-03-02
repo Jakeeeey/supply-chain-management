@@ -4,13 +4,14 @@ import { useState, useCallback } from "react";
 import { useBundles } from "./hooks/useBundles";
 import { BundleCreationTable } from "./components/data-table";
 import { BundleCreateModal } from "./components/modals/bundle-create-modal";
+import { BundleViewModal } from "../components/modals/bundle-view-modal";
 import { BulkActionsModal } from "./components/modals/bulk-actions-modal";
 import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import ErrorPage from "@/components/shared/ErrorPage";
 import { Button } from "@/components/ui/button";
 import { Plus, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { BundleDraft, BundleDraftFormValues } from "./types/bundle.schema";
+import { BundleDraft, BundleDraftFormValues } from "../types/bundle.schema";
 
 export default function BundleCreationPage() {
   const {
@@ -30,9 +31,11 @@ export default function BundleCreationPage() {
     submitForApproval,
     bulkSubmitForApproval,
     bulkDeleteDrafts,
+    fetchDraftDetails,
   } = useBundles();
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [selectedDraft, setSelectedDraft] = useState<BundleDraft | null>(null);
   const [selectedRows, setSelectedRows] = useState<BundleDraft[]>([]);
   const [bulkAction, setBulkAction] = useState<"submit" | "delete" | null>(
     null,
@@ -48,6 +51,17 @@ export default function BundleCreationPage() {
       toast.error(err.message || "Failed to create bundle");
     }
   };
+
+  const handleView = useCallback((draft: BundleDraft) => {
+    setSelectedDraft(draft);
+  }, []);
+
+  const handleFetchDetails = useCallback(
+    async (id: number | string) => {
+      return await fetchDraftDetails(id);
+    },
+    [fetchDraftDetails],
+  );
 
   const handleSubmit = async (id: number | string) => {
     try {
@@ -110,6 +124,7 @@ export default function BundleCreationPage() {
         isLoading={isLoading}
         onSubmit={handleSubmit}
         onDelete={handleDelete}
+        onView={handleView}
         onSearch={(v: string) => setSearch(v)}
         onSelectionChange={handleSelectionChange}
         actionComponent={
@@ -158,6 +173,16 @@ export default function BundleCreationPage() {
         items={selectedRows}
         onConfirm={handleBulkConfirm}
         loading={isProcessing}
+      />
+
+      {/* View Modal */}
+      <BundleViewModal
+        open={selectedDraft !== null}
+        onClose={() => setSelectedDraft(null)}
+        draft={selectedDraft}
+        masterData={masterData}
+        fetchDetails={handleFetchDetails}
+        previewMode
       />
     </div>
   );
