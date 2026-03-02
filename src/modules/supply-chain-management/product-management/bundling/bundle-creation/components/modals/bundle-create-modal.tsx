@@ -18,6 +18,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Form,
   FormControl,
@@ -30,7 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, Trash2, Package } from "lucide-react";
+import { Plus, Trash2, Package, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -83,6 +84,13 @@ export function BundleCreateModal({
   const activeProducts = (masterData?.products || []).filter(
     (p: ProductOption) => p.isActive === 1,
   );
+
+  const items = form.watch("items") || [];
+  const totalQuantity = items.reduce(
+    (sum: number, item: any) => sum + (Number(item.quantity) || 0),
+    0,
+  );
+  const showWarning = items.length === 1 && totalQuantity <= 1;
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -164,6 +172,18 @@ export function BundleCreateModal({
                     </div>
                   </CardContent>
                 </Card>
+
+                {showWarning && (
+                  <Alert variant="destructive" className="bg-destructive/10">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Invalid Bundle</AlertTitle>
+                    <AlertDescription>
+                      A bundle must contain more than one product in total.
+                      Please add another product or increase the quantity.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 <Card className="border-accent/20 bg-card/50">
                   <CardContent className="pt-6 space-y-4">
                     <div className="flex items-center gap-2 mb-2">
