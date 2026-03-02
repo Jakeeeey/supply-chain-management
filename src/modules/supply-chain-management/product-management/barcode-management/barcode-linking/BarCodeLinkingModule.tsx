@@ -131,7 +131,7 @@ export default function BarCodeScannerModule() {
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Desc, SKU, or ID..."
+                placeholder="Product Name, SKU, or ID..."
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 className="pl-9 h-10"

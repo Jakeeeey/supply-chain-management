@@ -1,74 +1,108 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Plus, MoreHorizontal, Pencil, Search } from "lucide-react";
+import { Plus, MoreHorizontal, Pencil } from "lucide-react";
 import { toast } from "sonner";
+import { ColumnDef } from "@tanstack/react-table";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Skeleton } from "@/components/ui/skeleton";
-// ✅ Pagination Imports
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-} from "@/components/ui/pagination";
+import { DataTable } from "@/components/ui/new-data-table";
+import ErrorPage from "@/components/shared/ErrorPage";
 
 import { UnitApiRow } from "./types";
 import { listUnits } from "./providers/fetchProviders";
 import { UnitDialog } from "./components/UnitDialog";
 
+// =============================================================================
+// COLUMN DEFINITIONS
+// =============================================================================
+
+function buildColumns(onEdit: (row: UnitApiRow) => void): ColumnDef<UnitApiRow>[] {
+  return [
+    {
+      accessorKey: "unit_name",
+      header: "Unit Name",
+      cell: ({ row }) => (
+        <span className="font-medium">{row.original.unit_name}</span>
+      ),
+      meta: { label: "Unit Name" },
+    },
+    {
+      accessorKey: "unit_shortcut",
+      header: "Shortcut",
+      cell: ({ row }) => row.original.unit_shortcut || "-",
+      meta: { label: "Shortcut" },
+    },
+    {
+      accessorKey: "sku_code",
+      header: "SKU Code",
+      cell: ({ row }) => row.original.sku_code || "-",
+      meta: { label: "SKU Code" },
+    },
+    {
+      accessorKey: "order",
+      header: "Order",
+      cell: ({ row }) => row.original.order ?? "-",
+      meta: { label: "Order" },
+    },
+    {
+      id: "actions",
+      header: () => <div className="text-right">Actions</div>,
+      enableHiding: false,
+      cell: ({ row }) => (
+        <div className="text-right">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onEdit(row.original)}>
+                <Pencil className="mr-2 h-4 w-4" /> Edit
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ),
+    },
+  ];
+}
+
+// =============================================================================
+// MODULE
+// =============================================================================
+
 export default function UnitOfMeasurementModule() {
   const [data, setData] = useState<UnitApiRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // ✅ Search & Pagination State
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [page, setPage] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
-
-  const LIMIT = 12;
-
+  // Dialog State
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedUnit, setSelectedUnit] = useState<UnitApiRow | null>(null);
 
-  // 1. Debounce Effect
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedSearch(search);
-      setPage(1);
-    }, 500);
-    return () => clearTimeout(handler);
-  }, [search]);
-
-  // 2. Fetch Data
+  // Fetch ALL data (client-side pagination)
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await listUnits(page, LIMIT, debouncedSearch);
+      setError(null);
+      const res = await listUnits(1, -1); // Fetch all
       setData(res.data);
-      setTotalCount(res.total);
-    } catch (err) {
+    } catch (err: any) {
+      console.error("Failed to load units", err);
+      setError(err.message || "Failed to load units.");
       toast.error("Failed to load units");
     } finally {
       setLoading(false);
     }
-  }, [page, debouncedSearch]);
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -84,126 +118,35 @@ export default function UnitOfMeasurementModule() {
     setIsDialogOpen(true);
   };
 
-  const totalPages = Math.ceil(totalCount / LIMIT);
+  const columns = buildColumns(handleEdit);
+
+  // Error State
+  if (error && !loading) {
+    return (
+      <ErrorPage
+        code="Connection Error"
+        title="Units Unreachable"
+        message={error}
+        reset={fetchData}
+      />
+    );
+  }
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="relative w-64">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search units..."
-            className="pl-8"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <Button onClick={handleCreate}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Unit
-        </Button>
-      </div>
-
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Unit Name</TableHead>
-              <TableHead>Shortcut</TableHead>
-              <TableHead>SKU Code</TableHead>
-              <TableHead>Order</TableHead>
-              <TableHead className="w-25 text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell>
-                    <Skeleton className="h-6 w-37.5" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-6 w-12.5" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-6 w-12.5" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-6 w-12.5" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-6 w-8 ml-auto" />
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : data.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center">
-                  {search ? "No units match your search." : "No units found."}
-                </TableCell>
-              </TableRow>
-            ) : (
-              data.map((row) => (
-                <TableRow key={row.unit_id}>
-                  <TableCell className="font-medium">{row.unit_name}</TableCell>
-                  <TableCell>{row.unit_shortcut}</TableCell>
-                  <TableCell>{row.sku_code || "-"}</TableCell>
-                  <TableCell>{row.order ?? "-"}</TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleEdit(row)}>
-                          <Pencil className="mr-2 h-4 w-4" /> Edit
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      {/* Pagination Controls */}
-      {totalPages > 1 && (
-        <Pagination className="justify-end">
-          <PaginationContent>
-            <PaginationItem>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                Previous
-              </Button>
-            </PaginationItem>
-
-            <PaginationItem>
-              <span className="text-sm text-muted-foreground px-2">
-                Page {page} of {totalPages}
-              </span>
-            </PaginationItem>
-
-            <PaginationItem>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              >
-                Next
-              </Button>
-            </PaginationItem>
-          </PaginationContent>
-        </Pagination>
-      )}
+      <DataTable
+        columns={columns}
+        data={data}
+        searchKey="unit_name"
+        isLoading={loading}
+        emptyTitle="No units found"
+        emptyDescription="Create your first unit of measurement to get started."
+        actionComponent={
+          <Button onClick={handleCreate}>
+            <Plus className="mr-2 h-4 w-4" /> New Unit
+          </Button>
+        }
+      />
 
       <UnitDialog
         open={isDialogOpen}
