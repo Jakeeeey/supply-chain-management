@@ -12,8 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { bundleService } from "../../services/bundle";
-import { BundleDraft, BundleMasterData } from "../../types/bundle.schema";
+import { BundleDraft, BundleMasterData } from "../../../types/bundle.schema";
 import { Package, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 
 interface BundleViewModalProps {
@@ -48,11 +47,12 @@ export function BundleViewModal({
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
-    if (open && draft?.id) {
+    const id = draft?.id;
+    if (open && id) {
       setIsLoadingDetails(true);
       setDetails(null);
       setConfirmAction(null);
-      fetchDetails(draft.id)
+      fetchDetails(id)
         .then((d) => setDetails(d))
         .catch(() => setDetails(null))
         .finally(() => setIsLoadingDetails(false));
@@ -62,11 +62,12 @@ export function BundleViewModal({
   const handleAction = async () => {
     if (!confirmAction || !draft) return;
     setIsProcessing(true);
+    const id = draft.id;
     try {
       if (confirmAction === "approve") {
-        await onApprove(draft.id);
+        await onApprove(id);
       } else {
-        await onReject(draft.id);
+        await onReject(id);
       }
       onClose();
     } finally {
@@ -166,7 +167,7 @@ export function BundleViewModal({
                     variant="secondary"
                     className="bg-amber-500/10 text-amber-600 capitalize"
                   >
-                    {draft.draft_status}
+                    {draft.status}
                   </Badge>
                 </div>
                 <div className="col-span-2">
