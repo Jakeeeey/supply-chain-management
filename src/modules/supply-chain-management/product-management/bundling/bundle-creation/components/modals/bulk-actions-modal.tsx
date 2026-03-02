@@ -9,10 +9,10 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { BundleDraft } from "../../types/bundle.schema";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, Trash2, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { BundleDraft } from "@/modules/supply-chain-management/product-management/bundling/types/bundle.schema";
 
 interface BulkActionsModalProps {
   open: boolean;

@@ -246,10 +246,12 @@ export const bundleService = {
     ]);
 
     // Merge results
-    // Prioritize Rejected items (draftRes.data) before Master items
     results = [...(draftRes.data || []), ...(masterRes.data || [])];
     totalCount =
       (masterRes.meta?.filter_count || 0) + (draftRes.meta?.filter_count || 0);
+
+    // Sort by ID descending to ensure latest items (either rejected or approved) are at the top
+    results.sort((a, b) => (b.id || 0) - (a.id || 0));
 
     // If both were fetched, we might have too many items per 'limit'.
     // We'll slice them for the UI consistency.

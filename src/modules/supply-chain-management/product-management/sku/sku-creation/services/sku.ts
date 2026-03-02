@@ -82,13 +82,15 @@ export const skuService = {
   },
 
   async fetchMasterData(): Promise<MasterData> {
-    const fetchResilient = async (names: string[]) => {
+    const fetchResilient = async (
+      names: string[],
+    ): Promise<{ data: any[] }> => {
       for (const name of names) {
         try {
           const res = await fetchItems<any>(`/items/${name}`, { limit: -1 });
           if (res.data?.length) return res;
         } catch (e) {
-          console.warn(`Fetch failed for ${name}:`, e);
+          console.warn(`[SKU Service] Fetch failed for ${name}:`, e);
         }
       }
       return { data: [] };
@@ -109,7 +111,7 @@ export const skuService = {
     };
   },
 
-  async createDraft(sku: SKU) {
+  async createDraft(sku: SKU): Promise<any> {
     const { units: rawUnits = [], ...baseData } = sku;
     const units =
       rawUnits.length > 0
@@ -138,7 +140,11 @@ export const skuService = {
       ),
     );
 
-    const createPayload = (u: any, code: string, pId: any = null) => ({
+    const createPayload = (
+      u: any,
+      code: string,
+      pId: number | string | null = null,
+    ) => ({
       ...baseData,
       status: "DRAFT",
       isActive: 1,
@@ -161,7 +167,7 @@ export const skuService = {
     const pId = parent.id || parent.product_id;
 
     // Save supplier to product_draft_per_supplier junction table
-    const sId = (sku as any).product_supplier || (sku as any).supplier_id;
+    const sId = sku.product_supplier;
     if (pId && sId) {
       try {
         await request(`${API_BASE_URL}/items/product_draft_per_supplier`, {
@@ -171,10 +177,9 @@ export const skuService = {
             supplier_id: sId,
           }),
         });
-        console.log(`[Supplier Draft] Saved Supplier ${sId} for Draft ${pId}`);
       } catch (err: any) {
         console.error(
-          `[Supplier Draft] Failed to save supplier for draft:`,
+          `[SKU Service] Failed to save supplier for draft ${pId}:`,
           err.message,
         );
       }
@@ -193,17 +198,16 @@ export const skuService = {
     return parent;
   },
 
-  async updateDraft(id: number | string, sku: Partial<SKU>) {
+  async updateDraft(id: number | string, sku: Partial<SKU>): Promise<SKU> {
     const { data } = await request<{ data: SKU }>(
       `${API_BASE_URL}/items/product_draft/${id}`,
       { method: "PATCH", body: JSON.stringify(sku) },
     );
 
     // Sync supplier in product_draft_per_supplier
-    const sId = (sku as any).product_supplier || (sku as any).supplier_id;
+    const sId = sku.product_supplier;
     if (sId) {
       try {
-        // Find existing record
         const { data: existing } = await fetchItems<any>(
           "/items/product_draft_per_supplier",
           {
@@ -213,7 +217,6 @@ export const skuService = {
         );
 
         if (existing?.length) {
-          // Update
           await request(
             `${API_BASE_URL}/items/product_draft_per_supplier/${existing[0].id}`,
             {
@@ -222,7 +225,6 @@ export const skuService = {
             },
           );
         } else {
-          // Create
           await request(`${API_BASE_URL}/items/product_draft_per_supplier`, {
             method: "POST",
             body: JSON.stringify({ product_draft_id: id, supplier_id: sId }),
@@ -230,14 +232,14 @@ export const skuService = {
         }
       } catch (err: any) {
         console.error(
-          `[Supplier Sync] Failed to sync supplier for draft ${id}:`,
+          `[SKU Service] Failed to sync supplier for draft ${id}:`,
           err.message,
         );
       }
     }
 
     if (!data.parent_id) {
-      const { data: children } = await fetchItems<any>("/items/product_draft", {
+      const { data: children } = await fetchItems<SKU>("/items/product_draft", {
         filter: JSON.stringify({ parent_id: { _eq: id } }),
         limit: -1,
       });
@@ -277,7 +279,10 @@ export const skuService = {
     return data;
   },
 
-  async approveDraft(id: number | string, masterData: MasterData) {
+  async approveDraft(
+    id: number | string,
+    masterData: MasterData,
+  ): Promise<boolean> {
     // 1. Fetch only the specific draft
     const { data: draft } = await request<{ data: SKU }>(
       `${API_BASE_URL}/items/product_draft/${id}?fields=*.*`,
@@ -285,132 +290,146 @@ export const skuService = {
 
     if (!draft) throw new Error("Draft record not found");
 
-    let pMasterId: number | null = null;
-
-    // 2. If it's a child, find the specific master record using the Parent's Product Code
-    if (draft.parent_id) {
-      // Handle both expanded object and plain ID cases
-      let parentCode = (draft.parent_id as any)?.product_code;
-
-      if (!parentCode) {
-        const parentId =
-          typeof draft.parent_id === "object"
-            ? (draft.parent_id as any).id
-            : draft.parent_id;
-
-        const { data: pDraft } = await request<{ data: any }>(
-          `${API_BASE_URL}/items/product_draft/${parentId}`,
-        );
-        parentCode = pDraft?.product_code;
-      }
-
-      if (parentCode) {
-        const { data: realParent } = await fetchItems<any>("/items/products", {
-          filter: JSON.stringify({ product_code: { _eq: parentCode } }),
-          limit: 1,
-        });
-
-        if (realParent?.length) {
-          pMasterId = realParent[0].id || realParent[0].product_id;
-        }
-      }
-    }
+    // 2. Resolve Parent Master ID (if any)
+    const pMasterId = await this.resolveParentMasterId(draft);
 
     // 3. Generate or use existing code
     const code =
       draft.product_code || (await generateSKUCode(draft, masterData));
 
-    // 4. Check if a master record for THIS specific code already exists (Upsert logic)
-    const { data: existing } = await fetchItems<any>("/items/products", {
+    // 4. Upsert Master records
+    const finalMasterId = await this.upsertMasterProduct(
+      draft,
+      pMasterId,
+      code,
+    );
+
+    // 5. Link to supplier
+    await this.syncSupplierLink(draft, finalMasterId);
+
+    // 6. Handle orphan child adoptions
+    await this.handleOrphanAdoption(finalMasterId, code, draft);
+
+    // 7. Cleanup only THIS draft
+    await this.cleanupDraft(draft);
+
+    return true;
+  },
+
+  /**
+   * Internal helper to find the master product ID of a parent draft
+   */
+  async resolveParentMasterId(draft: SKU): Promise<number | string | null> {
+    if (!draft.parent_id) return null;
+
+    let parentCode = (draft.parent_id as any)?.product_code;
+
+    if (!parentCode) {
+      const parentId =
+        typeof draft.parent_id === "object"
+          ? (draft.parent_id as any).id
+          : draft.parent_id;
+
+      const { data: pDraft } = await request<{ data: SKU }>(
+        `${API_BASE_URL}/items/product_draft/${parentId}`,
+      );
+      parentCode = pDraft?.product_code;
+    }
+
+    if (parentCode) {
+      const { data: realParent } = await fetchItems<SKU>("/items/products", {
+        filter: JSON.stringify({ product_code: { _eq: parentCode } }),
+        limit: 1,
+      });
+
+      if (realParent?.length) {
+        return realParent[0].id || realParent[0].product_id || null;
+      }
+    }
+    return null;
+  },
+
+  /**
+   * Internal helper to Create or Update the master product record
+   */
+  async upsertMasterProduct(
+    draft: SKU,
+    pMasterId: number | string | null,
+    code: string,
+  ): Promise<number | string> {
+    const { data: existing } = await fetchItems<SKU>("/items/products", {
       filter: JSON.stringify({ product_code: { _eq: code } }),
       limit: 1,
     });
 
     const targetId = existing?.[0]?.id || existing?.[0]?.product_id;
-    const payload = prepareSKUPayload(draft, pMasterId, code);
-    let finalMasterId: number | string;
+    const resolvedPMasterId =
+      typeof pMasterId === "string" ? parseInt(pMasterId) : pMasterId;
+    const payload = prepareSKUPayload(draft, resolvedPMasterId, code);
 
     if (targetId) {
       await request(`${API_BASE_URL}/items/products/${targetId}`, {
         method: "PATCH",
         body: JSON.stringify(payload),
       });
-      finalMasterId = targetId;
-      console.log(
-        `[Supplier Link Debug] Updated existing product. finalMasterId: ${finalMasterId}`,
-      );
+      console.log(`[SKU Service] Updated existing product ID: ${targetId}`);
+      return targetId;
     } else {
-      const res: any = await request<{ data: any }>(
-        `${API_BASE_URL}/items/products`,
-        {
-          method: "POST",
-          body: JSON.stringify(payload),
-        },
-      );
-      finalMasterId = res.data.id || res.data.product_id;
-      console.log(
-        `[Supplier Link Debug] Created new product. finalMasterId: ${finalMasterId}, res.data:`,
-        res.data,
-      );
+      const res: {
+        data: { id: number | string; product_id: number | string };
+      } = await request<{ data: any }>(`${API_BASE_URL}/items/products`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      const newId = res.data.id || res.data.product_id;
+      console.log(`[SKU Service] Created new master product ID: ${newId}`);
+      return newId;
     }
+  },
 
-    // 4.5. Link to Supplier (For Parent AND Child SKUs)
-    // Resolve Supplier ID from the new draft junction table
+  /**
+   * Internal helper to link SKU to a supplier in the junction table
+   */
+  async syncSupplierLink(
+    draft: SKU,
+    finalMasterId: number | string,
+  ): Promise<void> {
     const draftId = draft.id || (draft as any).product_id;
     let sId: number | null = null;
 
     try {
-      const { data: draftSupplierLink } = await fetchItems<any>(
-        "/items/product_draft_per_supplier",
-        {
-          filter: JSON.stringify({ product_draft_id: { _eq: draftId } }),
-          limit: 1,
-        },
-      );
+      const { data: draftSupplierLink } = await fetchItems<{
+        supplier_id: number;
+      }>("/items/product_draft_per_supplier", {
+        filter: JSON.stringify({ product_draft_id: { _eq: draftId } }),
+        limit: 1,
+      });
 
       if (draftSupplierLink?.length) {
         sId = draftSupplierLink[0].supplier_id;
-        console.log(
-          `[Supplier Link Debug] Found Supplier ID ${sId} in product_draft_per_supplier for draft ${draftId}`,
-        );
       } else {
-        // Fallback to various possible field names or formats for backward compatibility
-        const rawValue =
-          (draft as any).product_supplier || (draft as any).supplier_id;
+        const rawValue = draft.product_supplier;
         if (rawValue) {
           if (typeof rawValue === "object") {
-            sId = rawValue.id;
+            sId = (rawValue as any).id;
           } else {
             const num = parseInt(String(rawValue));
             sId = isNaN(num) || num === 0 ? null : num;
           }
         }
-        console.warn(
-          `[Supplier Link Debug] No record found in product_draft_per_supplier. Fell back to raw draft value:`,
-          sId,
-        );
       }
     } catch (err: any) {
-      console.error(
-        `[Supplier Link Debug] Error fetching from product_draft_per_supplier:`,
-        err.message,
-      );
+      console.error(`[SKU Service] Error fetching junction link:`, err.message);
     }
 
-    // Resolve Master ID as a number
     const resolvedMasterId = (function () {
       if (!finalMasterId) return null;
       const num = parseInt(String(finalMasterId));
       return isNaN(num) ? null : num;
     })();
 
-    console.log(
-      `[Supplier Link Debug] Resolved sId: ${sId}, resolvedMasterId: ${resolvedMasterId}`,
-    );
-
     if (sId && resolvedMasterId) {
       try {
-        // Check if this specific link already exists to avoid duplicates
         const { data: existingLink } = await fetchItems<any>(
           "/items/product_per_supplier",
           {
@@ -425,60 +444,52 @@ export const skuService = {
         );
 
         if (!existingLink || existingLink.length === 0) {
+          await request<any>(`${API_BASE_URL}/items/product_per_supplier`, {
+            method: "POST",
+            body: JSON.stringify({
+              product_id: resolvedMasterId,
+              supplier_id: sId,
+              discount_type: null,
+            }),
+          });
           console.log(
-            `[Supplier Link Debug] No existing link. Creating for Product ${resolvedMasterId} and Supplier ${sId}...`,
-          );
-          const linkRes = await request<any>(
-            `${API_BASE_URL}/items/product_per_supplier`,
-            {
-              method: "POST",
-              body: JSON.stringify({
-                product_id: resolvedMasterId,
-                supplier_id: sId,
-                discount_type: null,
-              }),
-            },
-          );
-          console.log(`[Supplier Link Debug] POST Success. Result:`, linkRes);
-        } else {
-          console.log(
-            `[Supplier Link Debug] Link already exists for Product ${resolvedMasterId} and Supplier ${sId}`,
+            `[SKU Service] Linked Product ${resolvedMasterId} to Supplier ${sId}`,
           );
         }
       } catch (linkErr: any) {
-        console.error("[Supplier Link Debug] Error:", linkErr.message);
+        console.error("[SKU Service] Linkage error:", linkErr.message);
       }
-    } else {
-      console.log(
-        `[Supplier Link Debug] SKIPPING linkage: sId=${sId}, masterId=${resolvedMasterId}`,
-      );
     }
+  },
 
-    // 5. "Adoption Logic": If this was a Parent, look for existing orphans to adopt
+  /**
+   * Internal helper to match existing orphan SKUs to a new Parent SKU
+   */
+  async handleOrphanAdoption(
+    finalMasterId: number | string,
+    code: string,
+    draft: SKU,
+  ): Promise<void> {
     if (!draft.parent_id) {
-      const toId = (val: any) =>
-        val && typeof val === "object" ? val.id : val;
-
       const orphanConditions: any[] = [
         { product_name: { _eq: draft.product_name } },
         { parent_id: { _null: true } },
         { product_id: { _neq: finalMasterId } },
       ];
 
-      // Match by code prefix if possible for higher precision
       const codeBase = code.substring(0, 10);
       if (codeBase && codeBase.length >= 5) {
         orphanConditions.push({ product_code: { _starts_with: codeBase } });
       }
 
-      const { data: orphans } = await fetchItems<any>("/items/products", {
+      const { data: orphans } = await fetchItems<SKU>("/items/products", {
         filter: JSON.stringify({ _and: orphanConditions }),
         limit: -1,
       });
 
       if (orphans?.length) {
         console.log(
-          `Parent ${finalMasterId} adopting ${orphans.length} orphans...`,
+          `[SKU Service] Parent ${finalMasterId} adopting ${orphans.length} orphans...`,
         );
         await Promise.all(
           orphans.map((orphan) => {
@@ -491,17 +502,13 @@ export const skuService = {
         );
       }
     }
-
-    // 6. Cleanup only THIS draft
-    await this.cleanupDraft(draft);
-    return true;
   },
 
   /**
    * Helper to mark draft as active or delete it after approval
    */
-  async cleanupDraft(draft: any) {
-    const dId = draft.id || draft.product_id;
+  async cleanupDraft(draft: SKU): Promise<void> {
+    const dId = draft.id || (draft as any).product_id;
     try {
       await request(`${API_BASE_URL}/items/product_draft/${dId}`, {
         method: "PATCH",
@@ -512,28 +519,33 @@ export const skuService = {
         await request(`${API_BASE_URL}/items/product_draft/${dId}`, {
           method: "DELETE",
         });
-      } catch (delErr: any) {}
+      } catch (delErr: any) {
+        console.error(
+          `[SKU Service] Failed to delete draft ${dId} after approval:`,
+          delErr.message,
+        );
+      }
     }
   },
 
-  async submitForApproval(id: number | string) {
+  async submitForApproval(id: number | string): Promise<boolean> {
     await request(`${API_BASE_URL}/items/product_draft/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ status: "FOR_APPROVAL" }),
     });
     return true;
   },
-  async rejectDraft(id: number | string, remarks?: string) {
+  async rejectDraft(id: number | string, remarks?: string): Promise<boolean> {
     await request(`${API_BASE_URL}/items/product_draft/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ status: "REJECTED", remarks }),
     });
     return true;
   },
-  async deleteDraft(id: number | string) {
+  async deleteDraft(id: number | string): Promise<boolean> {
     // 1. Clean up supplier junction records for this draft
     try {
-      const { data: existing } = await fetchItems<any>(
+      const { data: existing } = await fetchItems<{ id: number }>(
         "/items/product_draft_per_supplier",
         {
           filter: JSON.stringify({ product_draft_id: { _eq: id } }),
@@ -554,7 +566,7 @@ export const skuService = {
       }
     } catch (err: any) {
       console.error(
-        `[Cleanup] Failed to clean up supplier junction for draft ${id}: ${err.message}`,
+        `[SKU Service] Cleanup failed for draft ${id}: ${err.message}`,
       );
     }
 
@@ -572,11 +584,16 @@ export const skuService = {
     ]);
     return approved.data?.length > 0 || drafts.data?.length > 0;
   },
-  async updateProductStatus(id: number | string, isActive: boolean) {
+  async updateProductStatus(
+    id: number | string,
+    isActive: boolean,
+  ): Promise<any> {
     const val = isActive ? 1 : 0;
     const status = isActive ? "ACTIVE" : "INACTIVE";
 
-    console.log(`Updating Product ${id}: isActive=${val}, status=${status}`);
+    console.log(
+      `[SKU Service] Updating Product ${id}: isActive=${val}, status=${status}`,
+    );
 
     return request(`${API_BASE_URL}/items/products/${id}`, {
       method: "PATCH",
@@ -586,7 +603,10 @@ export const skuService = {
       }),
     });
   },
-  async bulkUpdateProductStatus(ids: (number | string)[], isActive: boolean) {
+  async bulkUpdateProductStatus(
+    ids: (number | string)[],
+    isActive: boolean,
+  ): Promise<any> {
     const url = `${API_BASE_URL}/items/products`;
     const val = isActive ? 1 : 0;
     const status = isActive ? "ACTIVE" : "INACTIVE";
@@ -599,11 +619,6 @@ export const skuService = {
         status: status,
       },
     };
-
-    console.log(
-      `Directus Bulk Update [PATCH] ${url}:`,
-      JSON.stringify(payload),
-    );
 
     return request(url, {
       method: "PATCH",
