@@ -86,35 +86,44 @@ export function BranchAllocations(props: {
                                     <table className="min-w-[980px] w-full text-sm border-separate border-spacing-0">
                                         <thead className="bg-muted/50">
                                         <tr>
-                                            <th className="p-3 text-left text-xs font-bold uppercase text-muted-foreground border-b border-border">
-                                                Item
+                                            <th className="p-3 text-left text-[10px] font-bold uppercase text-muted-foreground border-b border-border w-12">
+                                                #
                                             </th>
-                                            <th className="p-3 text-left text-xs font-bold uppercase text-muted-foreground border-b border-border">
-                                                ID
+                                            <th className="p-3 text-left text-[10px] font-bold uppercase text-muted-foreground border-b border-border">
+                                                Brand
                                             </th>
-                                            <th className="p-3 text-right text-xs font-bold uppercase text-muted-foreground border-b border-border">
-                                                Price / Box
+                                            <th className="p-3 text-left text-[10px] font-bold uppercase text-muted-foreground border-b border-border">
+                                                Category
                                             </th>
-                                            <th className="p-3 text-center text-xs font-bold uppercase text-muted-foreground border-b border-border">
+                                            <th className="p-3 text-left text-[10px] font-bold uppercase text-muted-foreground border-b border-border">
+                                                Product Name
+                                            </th>
+                                            <th className="p-3 text-right text-[10px] font-bold uppercase text-muted-foreground border-b border-border">
+                                                Unit Price
+                                            </th>
+                                            <th className="p-3 text-center text-[10px] font-bold uppercase text-muted-foreground border-b border-border">
                                                 UOM
                                             </th>
-                                            <th className="p-3 text-center text-xs font-bold uppercase text-muted-foreground border-b border-border">
-                                                Discount (Fixed)
+                                            <th className="p-3 text-center text-[10px] font-bold uppercase text-muted-foreground border-b border-border">
+                                                Qty
                                             </th>
-                                            <th className="p-3 text-center text-xs font-bold uppercase text-muted-foreground border-b border-border">
-                                                Qty (Boxes)
+                                            <th className="p-3 text-right text-[10px] font-bold uppercase text-muted-foreground border-b border-border">
+                                                Gross Amount
                                             </th>
-                                            <th className="p-3 text-right text-xs font-bold uppercase text-muted-foreground border-b border-border">
-                                                Total
+                                            <th className="p-3 text-center text-[10px] font-bold uppercase text-muted-foreground border-b border-border">
+                                                Discount
                                             </th>
-                                            <th className="p-3 text-right text-xs font-bold uppercase text-muted-foreground border-b border-border">
-                                                Actions
+                                            <th className="p-3 text-right text-[10px] font-bold uppercase text-muted-foreground border-b border-border">
+                                                Net Amount
+                                            </th>
+                                            <th className="p-3 text-right text-[10px] font-bold uppercase text-muted-foreground border-b border-border">
+                                                Action
                                             </th>
                                         </tr>
                                         </thead>
 
                                         <tbody className="divide-y divide-border">
-                                        {branch.items.slice(0, 10).map((item: any) => {
+                                        {branch.items.slice(0, 10).map((item: any, idx) => {
                                             const dtId = String(item?.discountTypeId ?? "");
                                             const dt = dtId ? discountTypeById.get(dtId) : undefined;
 
@@ -127,38 +136,43 @@ export function BranchAllocations(props: {
                                             const discountLabel =
                                                 code && pct > 0 ? `${code} (${pct.toFixed(2)}%)` : code || "—";
 
+                                            const grossAmount = item.price * item.orderQty;
+                                            const netAmount = grossAmount * (1 - pct / 100);
+
                                             return (
                                                 <tr
                                                     key={item.id}
-                                                    className="hover:bg-muted/30 transition-colors group"
+                                                    className="hover:bg-muted/30 transition-colors group text-xs"
                                                 >
+                                                    <td className="p-3 text-muted-foreground font-mono">
+                                                        {idx + 1}
+                                                    </td>
+
                                                     <td className="p-3 font-medium text-foreground">
+                                                        {item.brand || "—"}
+                                                    </td>
+
+                                                    <td className="p-3 text-muted-foreground">
+                                                        {item.category || "—"}
+                                                    </td>
+
+                                                    <td className="p-3 font-semibold text-foreground">
                                                         <div className="flex flex-col">
                                                             <span>{item.name}</span>
-                                                            {Number(item?.unitsPerBox ?? 1) > 1 ? (
-                                                                <span className="text-[10px] text-muted-foreground">
-                                    {Number(item?.unitsPerBox)} pcs / BOX
-                                  </span>
-                                                            ) : null}
+                                                            <span className="text-[9px] text-muted-foreground uppercase font-mono">
+                                                                ID: {item.id}
+                                                            </span>
                                                         </div>
                                                     </td>
 
-                                                    <td className="p-3 font-mono text-[10px] text-muted-foreground uppercase">
-                                                        {item.id}
-                                                    </td>
-
-                                                    <td className="p-3 text-right">{money.format(item.price)}</td>
-
-                                                    <td className="p-3 text-center">
-                              <span className="px-2 py-0.5 bg-secondary text-secondary-foreground text-[10px] font-bold rounded uppercase">
-                                BOX
-                              </span>
+                                                    <td className="p-3 text-right font-medium">
+                                                        {money.format(item.price)}
                                                     </td>
 
                                                     <td className="p-3 text-center">
-                              <span className="inline-flex px-2 py-1 rounded-lg text-[10px] font-bold border border-border bg-muted/40">
-                                {discountLabel}
-                              </span>
+                                                        <span className="px-1.5 py-0.5 bg-secondary text-secondary-foreground text-[9px] font-bold rounded uppercase">
+                                                            {item.uom || "BOX"}
+                                                        </span>
                                                     </td>
 
                                                     <td className="p-3">
@@ -171,15 +185,15 @@ export function BranchAllocations(props: {
                                                                         item.orderQty - 1
                                                                     )
                                                                 }
-                                                                className="w-7 h-7 flex items-center justify-center rounded border border-input bg-background hover:bg-muted disabled:opacity-30"
+                                                                className="w-6 h-6 flex items-center justify-center rounded border border-input bg-background hover:bg-muted disabled:opacity-30"
                                                                 disabled={item.orderQty <= 1}
                                                             >
                                                                 <Minus className="w-3 h-3" />
                                                             </button>
 
-                                                            <span className="w-8 text-center font-bold text-sm">
-                                  {item.orderQty}
-                                </span>
+                                                            <span className="w-6 text-center font-bold">
+                                                                {item.orderQty}
+                                                            </span>
 
                                                             <button
                                                                 onClick={() =>
@@ -189,15 +203,25 @@ export function BranchAllocations(props: {
                                                                         item.orderQty + 1
                                                                     )
                                                                 }
-                                                                className="w-7 h-7 flex items-center justify-center rounded border border-input bg-background hover:bg-muted"
+                                                                className="w-6 h-6 flex items-center justify-center rounded border border-input bg-background hover:bg-muted"
                                                             >
                                                                 <Plus className="w-3 h-3" />
                                                             </button>
                                                         </div>
                                                     </td>
 
+                                                    <td className="p-3 text-right font-medium text-muted-foreground">
+                                                        {money.format(grossAmount)}
+                                                    </td>
+
+                                                    <td className="p-3 text-center">
+                                                        <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold border border-border bg-muted/40">
+                                                            {discountLabel}
+                                                        </span>
+                                                    </td>
+
                                                     <td className="p-3 text-right font-bold text-primary">
-                                                        {money.format(item.price * item.orderQty)}
+                                                        {money.format(netAmount)}
                                                     </td>
 
                                                     <td className="p-3 text-right">

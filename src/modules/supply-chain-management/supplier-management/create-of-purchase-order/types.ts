@@ -17,6 +17,7 @@ export type Product = {
     id: string;
     name: string;
     sku: string;
+    brand: string;
     category: string;
 
     // ✅ price is now "PRICE PER BOX"
@@ -41,6 +42,7 @@ export type Product = {
 export type CartItem = Product & {
     orderQty: number;      // ✅ qty in BOXES
     selectedUom: string;   // "BOX"
+    brand: string;
 };
 
 export type BranchAllocation = {
