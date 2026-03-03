@@ -103,3 +103,38 @@ export type PurchaseOrderDetail = {
     ewtGoods?: any;
     total?: any;
 };
+export type Supplier = {
+    id: string;
+    name: string;
+    terms?: string | null;
+    apBalance?: number;
+    raw?: any;
+};
+
+export type Branch = {
+    id: number;
+    name: string;
+    code?: string;
+    raw?: any;
+};
+
+export type Product = {
+    id: string;
+    name: string;
+    sku: string;
+    brand: string;
+    category: string;
+    price: number;
+    uom: string;
+    availableUoms?: string[];
+    raw?: any;
+};
+
+export type CartItem = Product & {
+    orderQty: number;
+    selectedUom: string;
+};
+
+export type CartLineItem = CartItem & {
+    branchId: number;
+};

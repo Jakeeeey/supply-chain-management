@@ -66,3 +66,7 @@ export type ReceiptTypeOption = {
     code: string;
     label: string;
 };
+export type PostingPODetail = PurchaseOrder & {
+    postingReady?: boolean;
+    [key: string]: any;
+};

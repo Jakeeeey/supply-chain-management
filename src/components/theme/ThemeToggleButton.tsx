@@ -6,7 +6,7 @@ import { useTheme } from "next-themes";
 import { Moon, Sun } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils/cn";
+import { cn } from "@/lib/utils";
 
 export default function ThemeToggleButton({
                                               variant = "outline",
