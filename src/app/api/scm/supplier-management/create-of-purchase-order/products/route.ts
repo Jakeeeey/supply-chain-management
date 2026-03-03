@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
             }
 
             const productsUrl =
-                `${base}/items/products?limit=-1&filter[product_id][_in]=${encodeURIComponent(
+                `${base}/items/products?limit=-1&fields=*,product_category.*,product_brand.*&filter[product_id][_in]=${encodeURIComponent(
                     productIds.join(",")
                 )}`;
 
@@ -99,7 +99,7 @@ export async function GET(req: NextRequest) {
             if (ids.length === 0) return NextResponse.json({ data: [] });
 
             const productsUrl =
-                `${base}/items/products?limit=-1&filter[product_id][_in]=${encodeURIComponent(
+                `${base}/items/products?limit=-1&fields=*,product_category.*,product_brand.*&filter[product_id][_in]=${encodeURIComponent(
                     ids.join(",")
                 )}`;
 

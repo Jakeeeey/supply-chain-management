@@ -108,6 +108,17 @@ function normalizeProduct(raw: RawProduct, fixedDiscountTypeId: string): Product
                 : "Uncategorized")
         ) || "Uncategorized";
 
+    const brand =
+        String(
+            raw?.brand ??
+            raw?.product_brand_name ??
+            raw?.product_brand?.name ??
+            raw?.product_brand?.brand_name ??
+            (raw?.product_brand !== undefined
+                ? `Brand ${raw.product_brand}`
+                : "No Brand")
+        ) || "No Brand";
+
     const baseUnitPrice =
         Number(
             raw?.priceA ??
@@ -154,6 +165,7 @@ function normalizeProduct(raw: RawProduct, fixedDiscountTypeId: string): Product
         id,
         name,
         sku,
+        brand,
         category,
         price: pricePerBox,
         uom: "BOX",
@@ -1049,6 +1061,7 @@ export default function CreatePurchaseOrderModule() {
                 total={financials.total}
                 onSave={onSave}
                 canSave={canSave}
+                discountTypes={discountTypes}
             />
 
             <ProductPickerDialog

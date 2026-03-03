@@ -144,12 +144,19 @@ export async function generatePurchaseOrderPDF(data: {
     poNumber: string;
     poDate: string;
     supplierName: string;
+    isInvoice?: boolean;
     items: Array<{
         name: string;
+        brand: string;
+        category: string;
         barcode: string;
         orderQty: number;
         uom: string;
         price: number;
+        grossAmount: number;
+        discountType: string;
+        discountAmount: number;
+        netAmount: number;
         branchName: string;
     }>;
     subtotal: number;
@@ -161,7 +168,7 @@ export async function generatePurchaseOrderPDF(data: {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     
-    // PDF-safe currency formatter (using P instead of ₱ which causes encoding issues in jsPDF)
+    // PDF-safe currency formatter
     const formatMoney = (val: number) => {
         const formatted = new Intl.NumberFormat("en-PH", {
             minimumFractionDigits: 2,
@@ -173,7 +180,8 @@ export async function generatePurchaseOrderPDF(data: {
     // Title
     doc.setFontSize(22);
     doc.setTextColor(37, 99, 235); // Blue
-    doc.text("PURCHASE ORDER", pageWidth / 2, 20, { align: "center" });
+    const title = data.isInvoice ? "INVOICE" : "PURCHASE ORDER";
+    doc.text(title, pageWidth / 2, 20, { align: "center" });
 
     doc.setFontSize(9);
     doc.setTextColor(120, 120, 120);
@@ -186,7 +194,7 @@ export async function generatePurchaseOrderPDF(data: {
     doc.setFontSize(11);
     doc.setTextColor(0, 0, 0);
     doc.setFont("helvetica", "bold");
-    doc.text("PO Number:", 15, 40);
+    doc.text(`${data.isInvoice ? "Invoice" : "PO"} Number:`, 15, 40);
     doc.setFont("helvetica", "normal");
     doc.text(data.poNumber || "N/A", 45, 40);
 
@@ -204,34 +212,39 @@ export async function generatePurchaseOrderPDF(data: {
 
     // Items Table
     const tableRows = data.items.map(it => [
+        it.brand || "—",
+        it.category || "—",
         it.name,
-        it.barcode,
-        it.branchName,
-        it.orderQty,
+        formatMoney(it.price).replace("P", ""),
         it.uom,
-        formatMoney(it.price),
-        formatMoney(it.price * it.orderQty)
+        it.orderQty,
+        formatMoney(it.grossAmount).replace("P", ""),
+        `${it.discountType}\n${formatMoney(it.discountAmount).replace("P", "")}`,
+        formatMoney(it.netAmount).replace("P", ""),
     ]);
 
     autoTable(doc, {
         startY: 60,
-        head: [["Product Name", "SKU", "Branch", "Qty", "UOM", "Price", "Total"]],
+        head: [["Brand", "Category", "Product Name", "Price", "UOM", "Qty", "Gross", "Discount", "Net"]],
         body: tableRows,
         theme: "grid",
-        headStyles: { fillColor: [37, 99, 235], textColor: 255, fontSize: 9, halign: 'left' },
-        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [37, 99, 235], textColor: 255, fontSize: 7, halign: 'left' },
+        styles: { fontSize: 6.5, cellPadding: 1.5 },
         columnStyles: {
-            0: { cellWidth: 45 },
-            1: { cellWidth: 25 },
-            2: { cellWidth: 30 },
-            3: { cellWidth: 15, halign: "center" },
-            4: { cellWidth: 15, halign: "center" },
-            5: { cellWidth: 25, halign: "right" },
-            6: { cellWidth: 25, halign: "right" }
+            0: { cellWidth: 20 },
+            1: { cellWidth: 20 },
+            2: { cellWidth: 40 },
+            3: { cellWidth: 15, halign: "right" },
+            4: { cellWidth: 12, halign: "center" },
+            5: { cellWidth: 10, halign: "center" },
+            6: { cellWidth: 20, halign: "right" },
+            7: { cellWidth: 25, halign: "right" },
+            8: { cellWidth: 20, halign: "right" }
         }
     });
 
-    const lastY = (doc as any).lastAutoTable.finalY + 10;
+    const lastAutoTable = (doc as any).lastAutoTable;
+    const lastY = lastAutoTable ? lastAutoTable.finalY + 10 : 150;
 
     // Financial Summary
     const summaryX = pageWidth - 80;
@@ -245,7 +258,7 @@ export async function generatePurchaseOrderPDF(data: {
     // Discount
     doc.text("Discount:", summaryX, lastY + 5);
     doc.setTextColor(220, 38, 38); // Red for discount
-    doc.text(`-${formatMoney(data.discount)}`, pageWidth - 15, lastY + 5, { align: "right" });
+    doc.text(`${formatMoney(data.discount)}`, pageWidth - 15, lastY + 5, { align: "right" });
     doc.setTextColor(0, 0, 0);
 
     // Net Amount (derived)
@@ -253,21 +266,27 @@ export async function generatePurchaseOrderPDF(data: {
     doc.text("Net Amount:", summaryX, lastY + 10);
     doc.text(formatMoney(netAmount), pageWidth - 15, lastY + 10, { align: "right" });
 
-    // VAT
-    doc.text("VAT:", summaryX, lastY + 15);
-    doc.text(formatMoney(data.vat), pageWidth - 15, lastY + 15, { align: "right" });
+    let finalY = lastY + 10;
 
-    // EWT
-    doc.text("EWT Goods (1%):", summaryX, lastY + 20);
-    doc.text(formatMoney(data.ewt), pageWidth - 15, lastY + 20, { align: "right" });
+    if (data.isInvoice) {
+        // VAT
+        doc.text("VAT:", summaryX, lastY + 15);
+        doc.text(formatMoney(data.vat), pageWidth - 15, lastY + 15, { align: "right" });
+
+        // EWT
+        doc.text("EWT (1%):", summaryX, lastY + 20);
+        doc.text(formatMoney(data.ewt), pageWidth - 15, lastY + 20, { align: "right" });
+        
+        finalY = lastY + 20;
+    }
 
     // Total
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
-    doc.line(summaryX, lastY + 23, pageWidth - 15, lastY + 23);
-    doc.text("TOTAL:", summaryX, lastY + 30);
+    doc.line(summaryX, finalY + 3, pageWidth - 15, finalY + 3);
+    doc.text("TOTAL PAYABLE:", summaryX, finalY + 10);
     doc.setTextColor(37, 99, 235); // Blue
-    doc.text(formatMoney(data.total), pageWidth - 15, lastY + 30, { align: "right" });
+    doc.text(formatMoney(data.isInvoice ? data.total : netAmount), pageWidth - 15, finalY + 10, { align: "right" });
 
-    doc.save(`PO_${data.poNumber}.pdf`);
+    doc.save(`${data.isInvoice ? "Invoice" : "PO"}_${data.poNumber}.pdf`);
 }
