@@ -3,7 +3,6 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { X } from "lucide-react";
 
 import type { TaggablePOListItem, TaggingPODetail } from "./types";
 import * as provider from "./providers/taggingOfPoProvider";
@@ -83,8 +82,8 @@ export default function TaggingOfPOModule() {
             setError("");
             const data = await provider.fetchTaggablePOs();
             setPos(data);
-        } catch (e: any) {
-            setError(String(e?.message ?? e));
+        } catch (e: unknown) {
+            setError(String((e as Error)?.message ?? e));
         } finally {
             setLoadingList(false);
         }
@@ -102,8 +101,8 @@ export default function TaggingOfPOModule() {
             const d = await provider.fetchTaggingPODetail(id);
             setDetail(d);
             detailRef.current = d;
-        } catch (e: any) {
-            setError(String(e?.message ?? e));
+        } catch (e: unknown) {
+            setError(String((e as Error)?.message ?? e));
         } finally {
             setLoadingDetail(false);
         }
@@ -220,8 +219,8 @@ export default function TaggingOfPOModule() {
 
                 onDetailChange(updated);
                 return updated;
-            } catch (e: any) {
-                const msg = String(e?.message ?? e ?? "");
+            } catch (e: unknown) {
+                const msg = String((e as Error)?.message ?? e ?? "");
 
                 if (isDuplicateRfidMessage(msg)) {
                     toast.error("RFID already exists", {
