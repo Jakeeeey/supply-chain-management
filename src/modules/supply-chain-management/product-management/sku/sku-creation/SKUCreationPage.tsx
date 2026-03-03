@@ -319,7 +319,7 @@ export default function SKUCreationModule() {
               Delete Product Draft?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{skuToDelete?.product_name}"?
+              Are you sure you want to delete {skuToDelete?.product_name}?
               This will permanently remove the draft record from the system.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -348,7 +348,7 @@ export default function SKUCreationModule() {
               Duplicate Name Warning
             </AlertDialogTitle>
             <AlertDialogDescription>
-              A product with the name "{duplicateWarning.sku?.product_name}"
+              A product with the name {duplicateWarning.sku?.product_name}
               already exists in the system. Are you sure you want to create a
               duplicate SKU?
             </AlertDialogDescription>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useBundles } from "../hooks/useBundles";
 import { BundleApprovalTable } from "./components/data-table";
 import { BundleViewModal } from "../components/modals/bundle-view-modal";
@@ -22,7 +22,6 @@ export default function BundleApprovalPage() {
     masterData,
     isLoading,
     error,
-    search,
     setSearch,
     refresh,
     approveDraft,

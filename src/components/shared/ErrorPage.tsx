@@ -2,15 +2,14 @@
 
 import React from "react";
 import Link from "next/link";
-import { MoveLeft, Home, RefreshCcw, AlertTriangle } from "lucide-react";
+import { Home, RefreshCcw, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { 
-  Card, 
-  CardContent, 
-  CardDescription, 
-  CardFooter, 
-  CardHeader, 
-  CardTitle 
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
 } from "@/components/ui/card";
 
 interface ErrorPageProps {
@@ -24,7 +23,7 @@ export default function ErrorPage({
   code = "500",
   title = "Internal Server Error",
   message = "Something went wrong on our end. We're working to fix it as soon as possible.",
-  reset
+  reset,
 }: ErrorPageProps) {
   return (
     <div className="min-h-[80vh] flex items-center justify-center p-4 bg-background transition-colors duration-500">
@@ -48,7 +47,7 @@ export default function ErrorPage({
 
         <CardContent className="pb-6">
           {reset ? (
-            <Button 
+            <Button
               onClick={() => reset()}
               size="lg"
               className="w-full font-semibold shadow-sm hover:scale-[1.02] transition-transform"
@@ -57,7 +56,7 @@ export default function ErrorPage({
               Try Again
             </Button>
           ) : (
-            <Button 
+            <Button
               asChild
               variant="default"
               size="lg"
@@ -70,12 +69,6 @@ export default function ErrorPage({
             </Button>
           )}
         </CardContent>
-
-        <CardFooter className="pt-0 justify-center">
-          <p className="text-[10px] text-muted-foreground/40 font-mono uppercase tracking-[0.2em]">
-            System Error Reference: {Math.random().toString(36).substring(7).toUpperCase()}
-          </p>
-        </CardFooter>
       </Card>
     </div>
   );
