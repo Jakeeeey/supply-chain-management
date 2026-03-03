@@ -47,6 +47,28 @@ export function ScanProductsStep() {
     const [historyIdx, setHistoryIdx] = React.useState(0);
     const ITEMS_PER_PAGE = 5;
 
+    // ✅ Lot & Expiry mandatory inputs
+    const [lotNumbers, setLotNumbers] = React.useState<Record<string, string>>({});
+    const [expiryDates, setExpiryDates] = React.useState<Record<string, string>>({});
+
+    // Sync from selectedPO if data exists (per item)
+    React.useEffect(() => {
+        if (!selectedPO?.allocations) return;
+        const newLots: Record<string, string> = {};
+        const newExpiries: Record<string, string> = {};
+        
+        selectedPO.allocations.forEach(a => {
+            a.items.forEach(it => {
+                const porId = String((it as any).porId ?? it.id);
+                if ((it as any).lot_no) newLots[porId] = (it as any).lot_no;
+                if ((it as any).expiry_date) newExpiries[porId] = (it as any).expiry_date;
+            });
+        });
+        
+        setLotNumbers(prev => ({ ...newLots, ...prev }));
+        setExpiryDates(prev => ({ ...newExpiries, ...prev }));
+    }, [selectedPO?.id]);
+
     // ✅ toast once when provider marks saved
     React.useEffect(() => {
         if (!receiptSaved) return;
@@ -113,9 +135,32 @@ export function ScanProductsStep() {
             return;
         }
 
+        // ✅ Validation: Lot & Expiry for scanned items
+        const missingLotOrExpiry: string[] = [];
+        allItems.forEach(it => {
+            const porId = String(it.porId ?? it.id);
+            const scanned = safeCounts[porId] ?? 0;
+            if (scanned > 0) {
+                const lot = lotNumbers[porId] || "";
+                const exp = expiryDates[porId] || "";
+                if (!lot.trim() || !exp.trim()) missingLotOrExpiry.push(it.name);
+            }
+        });
+
+        if (missingLotOrExpiry.length > 0) {
+            toast.warning(`Lot Number and Expiry Date are required for: ${missingLotOrExpiry.slice(0, 3).join(", ")}${missingLotOrExpiry.length > 3 ? "..." : ""}`);
+            setClientSaveError("Lot Number and Expiry Date are required for all scanned items.");
+            return;
+        }
+
         setClientSaveError("");
-        await Promise.resolve(saveReceipt());
-    }, [hasValidScan, saveReceipt, selectedPO?.status]);
+        const metaData: Record<string, { lotNo: string; expiryDate: string }> = {};
+        Object.keys(lotNumbers).forEach(id => {
+            metaData[id] = { lotNo: lotNumbers[id], expiryDate: expiryDates[id] };
+        });
+
+        await Promise.resolve(saveReceipt(metaData));
+    }, [hasValidScan, saveReceipt, selectedPO?.status, allItems, safeCounts, lotNumbers, expiryDates]);
 
     // ✅ Match History
     const okMatches = React.useMemo(() => {
@@ -350,6 +395,8 @@ export function ScanProductsStep() {
                             <TableRow>
                                 <TableHead className="text-[10px] h-8 font-black uppercase tracking-wider bg-muted/50">Date</TableHead>
                                 <TableHead className="text-[10px] h-8 font-black uppercase tracking-wider text-left bg-muted/50">Product Name</TableHead>
+                                <TableHead className="text-[10px] h-8 font-black uppercase tracking-wider text-left bg-muted/50">Lot Number</TableHead>
+                                <TableHead className="text-[10px] h-8 font-black uppercase tracking-wider text-left bg-muted/50">Expiry</TableHead>
                                 <TableHead className="text-[10px] h-8 font-black uppercase tracking-wider text-center bg-muted/50">PO Qty</TableHead>
                                 <TableHead className="text-[10px] h-8 font-black uppercase tracking-wider text-center bg-muted/50">Received</TableHead>
                                 <TableHead className="text-[10px] h-8 font-black uppercase tracking-wider text-right bg-muted/50">Unit Price</TableHead>
@@ -375,6 +422,22 @@ export function ScanProductsStep() {
                                         <TableCell className="max-w-[150px]">
                                             <div className="truncate text-[11px] font-bold">{it.name}</div>
                                             <div className="text-[9px] text-muted-foreground font-mono">SKU: {it.barcode}</div>
+                                        </TableCell>
+                                        <TableCell className="min-w-[120px]">
+                                            <Input
+                                                className="h-8 text-[11px] font-bold uppercase"
+                                                placeholder="Lot #"
+                                                value={lotNumbers[porId] || ""}
+                                                onChange={(e) => setLotNumbers(prev => ({ ...prev, [porId]: e.target.value }))}
+                                            />
+                                        </TableCell>
+                                        <TableCell className="min-w-[140px]">
+                                            <Input
+                                                type="date"
+                                                className="h-8 text-[11px] font-bold"
+                                                value={expiryDates[porId] || ""}
+                                                onChange={(e) => setExpiryDates(prev => ({ ...prev, [porId]: e.target.value }))}
+                                            />
                                         </TableCell>
                                         <TableCell className="text-center font-bold text-xs">{expected}</TableCell>
                                         <TableCell className="text-center">
@@ -402,7 +465,7 @@ export function ScanProductsStep() {
                         </TableBody>
                         <TableFooter className="bg-muted/30 sticky bottom-0 z-20 shadow-sm border-t">
                             <TableRow>
-                                <TableCell colSpan={7} className="text-right text-[10px] font-black uppercase tracking-widest bg-muted/30">Grand Total</TableCell>
+                                <TableCell colSpan={9} className="text-right text-[10px] font-black uppercase tracking-widest bg-muted/30">Grand Total</TableCell>
                                 <TableCell className="text-right font-black text-xs text-primary font-mono bg-muted/30">
                                     {allItems.reduce((sum: number, it: any) => {
                                         const expected = Number(it.expectedQty || it.taggedQty || 0);

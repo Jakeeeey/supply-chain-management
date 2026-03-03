@@ -147,7 +147,7 @@ function chunk<T>(arr: T[], size: number) {
 // FETCHERS
 // =====================
 const POR_SAFE_FIELDS =
-    "purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted";
+    "purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted,lot_no,expiry_date";
 
 async function fetchApprovedNotReceivedPOs(base: string) {
     const qs = [
@@ -841,6 +841,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             const receiptType = toStr(body?.receiptType); // kept
             const receiptDate = toStr(body?.receiptDate);
             const porCounts = body?.porCounts ?? {};
+            const porMetaData = body?.porMetaData ?? {};
 
             if (!poId) return bad("Missing poId.", 400);
             if (!receiptNo) return bad("Receipt Number is required.", 400);
@@ -883,6 +884,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
                 const cap = expectedQty > 0 ? expectedQty : taggedQty;
                 const nextReceived = Math.min(cap, currentReceived + it.qty);
 
+                const metadata = porMetaData[String(it.porId)] || {};
+                const lotNo = toStr(metadata.lotNo);
+                const expiry = ymdToIsoDate(toStr(metadata.expiryDate));
+
                 const patchUrl = `${base}/items/${POR_COLLECTION}/${encodeURIComponent(String(it.porId))}`;
                 await fetchJson(patchUrl, {
                     method: "PATCH",
@@ -892,6 +897,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
                         received_date: nowISO(),
                         received_quantity: nextReceived,
                         isPosted: 0,
+                        ...(lotNo ? { lot_no: lotNo } : {}),
+                        ...(expiry ? { expiry_date: expiry } : {}),
                     }),
                 });
             }
