@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useBundles } from "./hooks/useBundles";
+import { useBundles } from "../hooks/useBundles";
 import { BundleCreationTable } from "./components/data-table";
 import { BundleCreateModal } from "./components/modals/bundle-create-modal";
 import { BundleViewModal } from "../components/modals/bundle-view-modal";
