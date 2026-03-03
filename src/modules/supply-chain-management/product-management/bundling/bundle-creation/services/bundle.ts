@@ -25,15 +25,16 @@ export const bundleService = {
    * @returns {Promise<BundleMasterData>} Bundle types and active products
    */
   async fetchMasterData(): Promise<BundleMasterData> {
-    const [typesRes, productsRes] = await Promise.all([
-      fetchItems<any>("/items/product_bundle_types", { limit: -1 }),
-      fetchItems<any>("/items/products", {
-        limit: -1,
-        "filter[isActive][_eq]": 1,
-        fields: "product_id,product_name,product_code,isActive",
-        sort: "product_name",
-      }),
-    ]);
+    // Fetch sequentially to avoid exhausting DB connections
+    const typesRes = await fetchItems<any>("/items/product_bundle_types", {
+      limit: -1,
+    });
+    const productsRes = await fetchItems<any>("/items/products", {
+      limit: -1,
+      "filter[isActive][_eq]": 1,
+      fields: "product_id,product_name,product_code,isActive",
+      sort: "product_name",
+    });
 
     const bundleTypes: BundleType[] = (typesRes.data || []).map((t: any) => ({
       id: Number(t.id),
@@ -219,39 +220,42 @@ export const bundleService = {
     let results: any[] = [];
     let totalCount = 0;
 
-    const [masterRes, draftRes] = await Promise.all([
-      fetchMaster
-        ? fetchItems<Bundle>("/items/product_bundles", {
-            limit: limit,
-            offset: offset,
-            fields: "*.*",
-            meta: "filter_count",
-            sort: "-id",
-            filter:
-              masterFilter._and.length > 0
-                ? JSON.stringify(masterFilter)
-                : undefined,
-          })
-        : Promise.resolve({ data: [], meta: { filter_count: 0 } }),
-      fetchRejected
-        ? fetchItems<BundleDraft>("/items/product_bundles_draft", {
-            limit: limit,
-            offset: offset,
-            fields: "*.*",
-            meta: "filter_count",
-            sort: "-id",
-            filter: JSON.stringify(draftFilter),
-          })
-        : Promise.resolve({ data: [], meta: { filter_count: 0 } }),
-    ]);
+    const masterRes = fetchMaster
+      ? await fetchItems<Bundle>("/items/product_bundles", {
+          limit: limit,
+          offset: offset,
+          fields: "*.*",
+          meta: "filter_count",
+          sort: "updated_at",
+          filter:
+            masterFilter._and.length > 0
+              ? JSON.stringify(masterFilter)
+              : undefined,
+        })
+      : { data: [], meta: { filter_count: 0 } };
+
+    const draftRes = fetchRejected
+      ? await fetchItems<BundleDraft>("/items/product_bundles_draft", {
+          limit: limit,
+          offset: offset,
+          fields: "*.*",
+          meta: "filter_count",
+          sort: "created_at",
+          filter: JSON.stringify(draftFilter),
+        })
+      : { data: [], meta: { filter_count: 0 } };
 
     // Merge results
     results = [...(draftRes.data || []), ...(masterRes.data || [])];
     totalCount =
       (masterRes.meta?.filter_count || 0) + (draftRes.meta?.filter_count || 0);
 
-    // Sort by ID descending to ensure latest items (either rejected or approved) are at the top
-    results.sort((a, b) => (b.id || 0) - (a.id || 0));
+    // Sort by updated_at descending so the most recently modified items appear first
+    results.sort((a, b) => {
+      const dateA = new Date(a.updated_at || a.created_at || 0).getTime();
+      const dateB = new Date(b.updated_at || b.created_at || 0).getTime();
+      return dateB - dateA;
+    });
 
     // If both were fetched, we might have too many items per 'limit'.
     // We'll slice them for the UI consistency.

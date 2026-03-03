@@ -1,6 +1,6 @@
 "use client";
 
-import { useBundles } from "./hooks/useBundles";
+import { useBundles } from "../hooks/useBundles";
 import { BundleMasterlistTable } from "./components/data-table";
 import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import ErrorPage from "@/components/shared/ErrorPage";

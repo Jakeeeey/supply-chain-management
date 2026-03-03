@@ -80,7 +80,7 @@ export function getApprovalColumns({
       header: "Status",
       cell: ({ row }) => (
         <Badge variant="secondary" className="bg-amber-500/10 text-amber-600">
-          {row.original.draft_status}
+          For approval
         </Badge>
       ),
     },

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { bundleService } from "../services/bundle";
 import {
   BundleDraft,
   Bundle,
@@ -10,95 +9,87 @@ import {
 } from "@/modules/supply-chain-management/product-management/bundling/types/bundle.schema";
 
 /**
- * Central hook for the Bundling module.
- * Manages all data slices (drafts, pending approval, approved) and
- * exposes mutation methods for CRUD and status transitions.
- * @returns State and actions for the bundling module
+ * Centralized hook for the Bundling module.
+ * Optimizes fetching by using a single 'type=all' request for initial data.
  */
 export function useBundles() {
-  // ─── Draft State ─────────────────────────────
   const [draftData, setDraftData] = useState<BundleDraft[]>([]);
   const [draftTotal, setDraftTotal] = useState(0);
   const [draftPage, setDraftPage] = useState(0);
   const [draftLimit, setDraftLimit] = useState(10);
 
-  // ─── Pending Approval State ──────────────────
   const [pendingData, setPendingData] = useState<BundleDraft[]>([]);
   const [pendingTotal, setPendingTotal] = useState(0);
   const [pendingPage, setPendingPage] = useState(0);
   const [pendingLimit, setPendingLimit] = useState(10);
 
-  // ─── Approved State ──────────────────────────
   const [approvedData, setApprovedData] = useState<Bundle[]>([]);
   const [approvedTotal, setApprovedTotal] = useState(0);
   const [approvedPage, setApprovedPage] = useState(0);
   const [approvedLimit, setApprovedLimit] = useState(10);
 
-  // ─── Shared State ────────────────────────────
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [typeFilter, setTypeFilter] = useState<string | undefined>(undefined);
+
   const [masterData, setMasterData] = useState<BundleMasterData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
-  // ─── Fetch All Data ──────────────────────────
   const refresh = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const [draftRes, pendingRes, approvedRes, masterRes] = await Promise.all([
-        fetch(
-          `/api/scm/product-management/bundling?type=drafts&status=DRAFT&limit=${draftLimit}&offset=${draftPage * draftLimit}&search=${encodeURIComponent(search)}`,
-        ).then((r) => r.json()),
-        fetch(
-          `/api/scm/product-management/bundling?type=for_approval&status=FOR_APPROVAL&limit=${pendingLimit}&offset=${pendingPage * pendingLimit}&search=${encodeURIComponent(search)}`,
-        ).then((r) => r.json()),
-        fetch(
-          `/api/scm/product-management/bundling?type=approved&limit=${approvedLimit}&offset=${approvedPage * approvedLimit}&search=${encodeURIComponent(search)}`,
-        ).then((r) => r.json()),
-        fetch("/api/scm/product-management/bundling?type=master").then((r) =>
-          r.json(),
-        ),
-      ]);
+      const typeFilterId =
+        typeFilter && typeFilter !== "all" ? parseInt(typeFilter) : undefined;
+      const draftOffset = draftPage * draftLimit;
+      const pendingOffset = pendingPage * pendingLimit;
+      const approvedOffset = approvedPage * approvedLimit;
+      const response = await fetch(
+        `/api/scm/product-management/bundling?type=all` +
+          `&draftLimit=${draftLimit}&draftOffset=${draftOffset}` +
+          `&pendingLimit=${pendingLimit}&pendingOffset=${pendingOffset}` +
+          `&approvedLimit=${approvedLimit}&approvedOffset=${approvedOffset}` +
+          `&search=${encodeURIComponent(search)}` +
+          `&status=${statusFilter}${typeFilterId ? `&typeId=${typeFilterId}` : ""}`,
+      );
+      const res = await response.json();
 
-      if (draftRes.error) throw new Error(draftRes.error);
-      if (pendingRes.error) throw new Error(pendingRes.error);
-      if (approvedRes.error) throw new Error(approvedRes.error);
-      if (masterRes.error) throw new Error(masterRes.error);
+      if (res.error) throw new Error(res.error);
 
-      setDraftData(draftRes.data || []);
-      setDraftTotal(draftRes.meta?.total_count || 0);
+      // Map response data
+      setDraftData(res.drafts?.data || []);
+      setDraftTotal(res.drafts?.meta?.total_count || 0);
 
-      setPendingData(pendingRes.data || []);
-      setPendingTotal(pendingRes.meta?.total_count || 0);
+      setPendingData(res.pending?.data || []);
+      setPendingTotal(res.pending?.meta?.total_count || 0);
 
-      setApprovedData(approvedRes.data || []);
-      setApprovedTotal(approvedRes.meta?.total_count || 0);
+      setApprovedData(res.approved?.data || []);
+      setApprovedTotal(res.approved?.meta?.total_count || 0);
 
-      setMasterData(masterRes.data || null);
+      setMasterData(res.master || null);
     } catch (err: any) {
       setError(err.message);
     } finally {
       setIsLoading(false);
     }
   }, [
-    draftLimit,
     draftPage,
-    pendingLimit,
+    draftLimit,
     pendingPage,
-    approvedLimit,
+    pendingLimit,
     approvedPage,
+    approvedLimit,
     search,
+    statusFilter,
+    typeFilter,
   ]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  // ─── Mutations ─────────────────────────────────
-
-  /**
-   * Creates a new bundle draft from validated form data.
-   */
+  // Mutations
   const createDraft = async (values: BundleDraftFormValues) => {
     const response = await fetch("/api/scm/product-management/bundling", {
       method: "POST",
@@ -111,9 +102,6 @@ export function useBundles() {
     return result.data;
   };
 
-  /**
-   * Deletes a draft bundle by ID.
-   */
   const deleteDraft = async (id: number | string) => {
     const response = await fetch(`/api/scm/product-management/bundling/${id}`, {
       method: "DELETE",
@@ -124,9 +112,6 @@ export function useBundles() {
     return true;
   };
 
-  /**
-   * Bulk-deletes multiple draft bundles.
-   */
   const bulkDeleteDrafts = async (ids: (number | string)[]) => {
     await Promise.all(
       ids.map((id) =>
@@ -138,9 +123,6 @@ export function useBundles() {
     await refresh();
   };
 
-  /**
-   * Submits a single draft for approval.
-   */
   const submitForApproval = async (id: number | string) => {
     const response = await fetch(`/api/scm/product-management/bundling/${id}`, {
       method: "POST",
@@ -152,28 +134,17 @@ export function useBundles() {
     await refresh();
   };
 
-  /**
-   * Bulk-submits multiple drafts for approval.
-   */
   const bulkSubmitForApproval = async (ids: (number | string)[]) => {
     for (const id of ids) {
-      const response = await fetch(
-        `/api/scm/product-management/bundling/${id}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "submit" }),
-        },
-      );
-      const result = await response.json();
-      if (result.error) throw new Error(result.error);
+      await fetch(`/api/scm/product-management/bundling/${id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "submit" }),
+      });
     }
     await refresh();
   };
 
-  /**
-   * Approves a single draft bundle, creating a master record.
-   */
   const approveDraft = async (id: number | string) => {
     const response = await fetch(`/api/scm/product-management/bundling/${id}`, {
       method: "POST",
@@ -185,9 +156,6 @@ export function useBundles() {
     await refresh();
   };
 
-  /**
-   * Rejects a draft bundle, returning it to DRAFT status.
-   */
   const rejectDraft = async (id: number | string) => {
     const response = await fetch(`/api/scm/product-management/bundling/${id}`, {
       method: "POST",
@@ -199,9 +167,6 @@ export function useBundles() {
     await refresh();
   };
 
-  /**
-   * Fetches a single draft's full details (including items).
-   */
   const fetchDraftDetails = async (id: number | string) => {
     const response = await fetch(
       `/api/scm/product-management/bundling/${id}?type=draft`,
@@ -212,39 +177,34 @@ export function useBundles() {
   };
 
   return {
-    // Draft
     draftData,
     draftTotal,
     draftPage,
     setDraftPage,
     draftLimit,
     setDraftLimit,
-
-    // Pending
     pendingData,
     pendingTotal,
     pendingPage,
     setPendingPage,
     pendingLimit,
     setPendingLimit,
-
-    // Approved
     approvedData,
     approvedTotal,
     approvedPage,
     setApprovedPage,
     approvedLimit,
     setApprovedLimit,
-
-    // Shared
+    statusFilter,
+    setStatusFilter,
+    typeFilter,
+    setTypeFilter,
     masterData,
     isLoading,
     error,
     search,
     setSearch,
     refresh,
-
-    // Mutations
     createDraft,
     deleteDraft,
     bulkDeleteDrafts,

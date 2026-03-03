@@ -4,10 +4,13 @@ import { bundleDraftSchema } from "@/modules/supply-chain-management/product-man
 
 export const runtime = "nodejs";
 
+const CACHE_TTL = 60000; // 60 seconds
+let cachedMasterData: { data: any; timestamp: number } | null = null;
+
 /**
  * GET /api/scm/product-management/bundling
  * Query params:
- *   type: "drafts" | "approved" | "master" | "for_approval"
+ *   type: "drafts" | "approved" | "master" | "for_approval" | "all"
  *   limit, offset, search, status
  */
 export async function GET(req: NextRequest) {
@@ -18,8 +21,63 @@ export async function GET(req: NextRequest) {
     const offset = parseInt(searchParams.get("offset") || "0");
     const search = searchParams.get("search") || undefined;
 
+    if (type === "all") {
+      const now = Date.now();
+      const statusFilter = searchParams.get("status") || "ALL";
+      const typeFilter = searchParams.get("typeId");
+
+      const draftLimit = parseInt(searchParams.get("draftLimit") || "10");
+      const draftOffset = parseInt(searchParams.get("draftOffset") || "0");
+      const pendingLimit = parseInt(searchParams.get("pendingLimit") || "10");
+      const pendingOffset = parseInt(searchParams.get("pendingOffset") || "0");
+      const approvedLimit = parseInt(searchParams.get("approvedLimit") || "10");
+      const approvedOffset = parseInt(
+        searchParams.get("approvedOffset") || "0",
+      );
+
+      // Fetch sequentially to avoid exhausting Directus DB connection pool
+      const drafts = await bundleService.fetchDrafts(
+        draftLimit,
+        draftOffset,
+        "DRAFT",
+        search,
+      );
+      const pending = await bundleService.fetchDrafts(
+        pendingLimit,
+        pendingOffset,
+        "FOR_APPROVAL",
+        search,
+      );
+      const approved = await bundleService.fetchApproved(
+        approvedLimit,
+        approvedOffset,
+        search,
+        statusFilter,
+        typeFilter ? parseInt(typeFilter) : undefined,
+      );
+      const master =
+        cachedMasterData && now - cachedMasterData.timestamp < CACHE_TTL
+          ? cachedMasterData.data
+          : await bundleService.fetchMasterData().then((data) => {
+              cachedMasterData = { data, timestamp: now };
+              return data;
+            });
+
+      return NextResponse.json({
+        drafts,
+        pending,
+        approved,
+        master,
+      });
+    }
+
     if (type === "master") {
+      const now = Date.now();
+      if (cachedMasterData && now - cachedMasterData.timestamp < CACHE_TTL) {
+        return NextResponse.json({ data: cachedMasterData.data });
+      }
       const data = await bundleService.fetchMasterData();
+      cachedMasterData = { data, timestamp: now };
       return NextResponse.json({ data });
     }
 
