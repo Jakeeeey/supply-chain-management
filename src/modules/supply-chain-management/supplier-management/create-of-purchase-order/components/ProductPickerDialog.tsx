@@ -105,14 +105,13 @@ export function ProductPickerDialog(props: {
                                 Search Products
                             </label>
                             <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                                 <input
                                     type="text"
                                     placeholder="Search by SKU or Product Name..."
                                     value={props.searchQuery}
                                     onChange={(e) => props.onSearchChange(e.target.value)}
                                     className={cn(
-                                        "w-full h-10 pl-10 pr-4 rounded-lg outline-none text-xs shadow-sm",
+                                        "w-full h-10 pl-3 pr-4 rounded-lg outline-none text-xs shadow-sm",
                                         "bg-background text-foreground border border-border",
                                         "focus:ring-2 focus:ring-primary/20",
                                         "placeholder:text-muted-foreground/60"
