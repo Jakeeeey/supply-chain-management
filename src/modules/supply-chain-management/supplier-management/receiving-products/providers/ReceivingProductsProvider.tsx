@@ -28,6 +28,10 @@ export type ReceivingPOItem = {
     taggedQty: number;
     rfids?: string[];
     isReceived?: boolean;
+    unitPrice?: number;
+    discountType?: string;
+    discountAmount?: number;
+    netAmount?: number;
 };
 
 export type ReceivingPODetail = {
@@ -370,7 +374,7 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
             );
             if (alreadyVerifiedInSession) {
                 setScanError(
-                    `This RFID (${value.slice(-6).toUpperCase()}) is already verified in this session. Remove it from the activity log if it was scanned by mistake.`
+                    `Already scanned RFID (${value.slice(-6).toUpperCase()}) cannot be duplicated.`
                 );
                 return;
             }

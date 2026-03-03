@@ -1,2 +1,2 @@
 export { default } from "./PostingOfProductsModule";
-export { PostingOfProductsModule } from "./PostingOfProductsModule";
+export { default as PostingOfProductsModule } from "./PostingOfProductsModule";
