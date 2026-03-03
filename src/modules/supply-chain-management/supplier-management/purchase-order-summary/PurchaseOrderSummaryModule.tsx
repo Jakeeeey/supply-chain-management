@@ -48,9 +48,6 @@ export default function PurchaseOrderSummaryModule({
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, filterSupplier, filterInvStatus, filterPayStatus, filterTransType, pageSize, dateFrom, dateTo]);
 
   const getInventoryStatusColor = (status: string) => {
     const s = status?.toLowerCase() || "";
@@ -144,7 +141,7 @@ export default function PurchaseOrderSummaryModule({
                 placeholder="Search by PO number, supplier, transaction type, or remarks..." 
                 className="h-11 bg-muted/20 border-border focus-visible:ring-1"
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
               />
             </div>
           </div>
@@ -155,7 +152,7 @@ export default function PurchaseOrderSummaryModule({
               {/* Supplier */}
               <div className="space-y-1.5">
                 <span className="text-[9px] font-bold uppercase text-muted-foreground/70 ml-1">Supplier</span>
-                <Select value={filterSupplier} onValueChange={setFilterSupplier}>
+                <Select value={filterSupplier} onValueChange={(v) => { setFilterSupplier(v); setCurrentPage(1); }}>
                   <SelectTrigger className="h-10 text-xs bg-background border-border">
                     <SelectValue placeholder="All Suppliers" />
                   </SelectTrigger>
@@ -169,7 +166,7 @@ export default function PurchaseOrderSummaryModule({
               {/* Transaction Type */}
               <div className="space-y-1.5">
                 <span className="text-[9px] font-bold uppercase text-muted-foreground/70 ml-1">Transaction Type</span>
-                <Select value={filterTransType} onValueChange={setFilterTransType}>
+                <Select value={filterTransType} onValueChange={(v) => { setFilterTransType(v); setCurrentPage(1); }}>
                   <SelectTrigger className="h-10 text-xs bg-background border-border">
                     <SelectValue placeholder="All Types" />
                   </SelectTrigger>
@@ -184,7 +181,7 @@ export default function PurchaseOrderSummaryModule({
               {/* Inventory Status */}
               <div className="space-y-1.5">
                 <span className="text-[9px] font-bold uppercase text-muted-foreground/70 ml-1">Inventory Status</span>
-                <Select value={filterInvStatus} onValueChange={setFilterInvStatus}>
+                <Select value={filterInvStatus} onValueChange={(v) => { setFilterInvStatus(v); setCurrentPage(1); }}>
                   <SelectTrigger className="h-10 text-xs bg-background border-border">
                     <SelectValue placeholder="All Statuses" />
                   </SelectTrigger>
@@ -198,7 +195,7 @@ export default function PurchaseOrderSummaryModule({
               {/* Payment Status */}
               <div className="space-y-1.5">
                 <span className="text-[9px] font-bold uppercase text-muted-foreground/70 ml-1">Payment Status</span>
-                <Select value={filterPayStatus} onValueChange={setFilterPayStatus}>
+                <Select value={filterPayStatus} onValueChange={(v) => { setFilterPayStatus(v); setCurrentPage(1); }}>
                   <SelectTrigger className="h-10 text-xs bg-background border-border">
                     <SelectValue placeholder="All Statuses" />
                   </SelectTrigger>
@@ -219,7 +216,7 @@ export default function PurchaseOrderSummaryModule({
                         type="date" 
                         className="pl-8 h-10 text-xs bg-background border-border" 
                         value={dateFrom}
-                        onChange={(e) => setDateFrom(e.target.value)}
+                        onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
                       />
                    </div>
                    <div className="text-muted-foreground text-xs">—</div>
@@ -229,7 +226,7 @@ export default function PurchaseOrderSummaryModule({
                         type="date" 
                         className="pl-8 h-10 text-xs bg-background border-border" 
                         value={dateTo}
-                        onChange={(e) => setDateTo(e.target.value)}
+                        onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
                       />
                    </div>
                 </div>

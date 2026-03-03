@@ -493,10 +493,10 @@ export function ScanProductsStep() {
                     data={receiptSaved || {
                         poId: selectedPO?.id || "",
                         receiptNo: "PREVIEW",
-                        receiptDate: new Date().toLocaleDateString(),
+                        receiptDate: "PREVIEW",
                         receiptType: "PREVIEW",
                         isFullyReceived: totalScanned === totalTagged,
-                        savedAt: Date.now(),
+                        savedAt: 0,
                         items: allItems.map(it => ({
                             name: it.name,
                             barcode: it.barcode,
