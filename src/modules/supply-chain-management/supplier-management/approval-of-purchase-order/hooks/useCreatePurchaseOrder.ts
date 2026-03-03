@@ -1,5 +1,5 @@
 import * as React from "react";
-import * as provider from "../providers/approvalPurchaseOrderProvider";
+import * as provider from "../../create-of-purchase-order/providers/purchaseOrderProvider";
 import type { Branch, CartItem, CartLineItem, Product, Supplier } from "../types";
 
 function normalizeSupplier(raw: any): Supplier {
@@ -55,6 +55,7 @@ function normalizeProduct(raw: any): Product {
         id,
         name: raw?.product_name ?? raw?.name ?? "(No Name)",
         sku: raw?.product_code ?? raw?.sku ?? "",
+        brand: raw?.brand ?? raw?.brand_name ?? "—",
         category: extractCategory(raw),
         price: Number(raw?.price_per_unit ?? raw?.price ?? 0),
         uom,
