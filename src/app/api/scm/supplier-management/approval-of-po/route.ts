@@ -12,6 +12,8 @@ const PO_COLLECTION = "purchase_order";
 const PO_PRODUCTS_COLLECTION = "purchase_order_products";
 const SUPPLIERS_COLLECTION = "suppliers";
 const PRODUCTS_COLLECTION = "products";
+const UNITS_COLLECTION = "units";
+const PRODUCT_SUPPLIER_COLLECTION = "product_per_supplier";
 
 // optional env override (still supported)
 const BRANCHES_COLLECTION = (process.env.BRANCHES_COLLECTION || "").trim();
@@ -82,7 +84,14 @@ async function fetchSuppliersMapByIds(base: string, supplierIds: number[]) {
 async function fetchProductsMapByIds(base: string, productIds: number[]) {
     const map = new Map<
         number,
-        { product_id: number; product_name: string; barcode: string; product_code: string }
+        {
+            product_id: number;
+            product_name: string;
+            barcode: string;
+            product_code: string;
+            unit_of_measurement: any;
+            parent_id: number | null;
+        }
     >();
     const ids = uniqNums(productIds);
     if (!ids.length) return map;
@@ -90,7 +99,7 @@ async function fetchProductsMapByIds(base: string, productIds: number[]) {
     const url =
         `${base}/items/${PRODUCTS_COLLECTION}?limit=-1` +
         `&filter[product_id][_in]=${encodeURIComponent(ids.join(","))}` +
-        `&fields=product_id,product_name,barcode,product_code`;
+        `&fields=product_id,product_name,barcode,product_code,unit_of_measurement,parent_id`;
 
     const j = await fetchJson(url);
     for (const p of j?.data ?? []) {
@@ -101,7 +110,28 @@ async function fetchProductsMapByIds(base: string, productIds: number[]) {
             product_name: toStr(p?.product_name, `Product ${id}`),
             barcode: toStr(p?.barcode),
             product_code: toStr(p?.product_code),
+            unit_of_measurement: p?.unit_of_measurement,
+            parent_id: toNum(p?.parent_id) || null,
         });
+    }
+    return map;
+}
+
+async function fetchUnitsMapByIds(base: string, unitIds: any[]) {
+    const map = new Map<number, { id: number; unit_shortcut: string }>();
+    const ids = uniqNums(unitIds);
+    if (!ids.length) return map;
+
+    const url =
+        `${base}/items/${UNITS_COLLECTION}?limit=-1` +
+        `&filter[unit_id][_in]=${encodeURIComponent(ids.join(","))}` +
+        `&fields=unit_id,unit_shortcut`;
+
+    const j = await fetchJson(url);
+    for (const u of j?.data ?? []) {
+        const id = toNum(u?.unit_id);
+        if (!id) continue;
+        map.set(id, { id, unit_shortcut: toStr(u?.unit_shortcut, "—") });
     }
     return map;
 }
@@ -349,6 +379,28 @@ async function fetchPOProductsByPOId(base: string, poId: number) {
     return (j?.data ?? []) as PoProductRow[];
 }
 
+async function fetchProductSupplierLinks(base: string, productIds: number[]) {
+    const map = new Map<number, { supplier_id: number; discount_type: any }>();
+    const ids = uniqNums(productIds);
+    if (!ids.length) return map;
+
+    const url =
+        `${base}/items/${PRODUCT_SUPPLIER_COLLECTION}?limit=-1` +
+        `&filter[product_id][_in]=${encodeURIComponent(ids.join(","))}` +
+        `&fields=product_id,supplier_id,discount_type`;
+
+    const j = await fetchJson(url);
+    for (const link of j?.data ?? []) {
+        const pid = toNum(link?.product_id);
+        if (!pid) continue;
+        map.set(pid, {
+            supplier_id: toNum(link?.supplier_id),
+            discount_type: link?.discount_type,
+        });
+    }
+    return map;
+}
+
 // =====================
 // DETAIL BUILDER
 // =====================
@@ -365,7 +417,12 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
 
     const supplierId = toNum(header?.supplier_name);
     const suppliersMap = await fetchSuppliersMapByIds(base, supplierId ? [supplierId] : []);
-    const supplierName = supplierId ? toStr(suppliersMap.get(supplierId)?.supplier_name, "—") : "—";
+    const supplierLabels = new Map<number, string>();
+    for (const [id, s] of suppliersMap) {
+        supplierLabels.set(id, toStr(s?.supplier_name, "—"));
+    }
+
+    const supplierName = supplierId ? supplierLabels.get(supplierId) || "—" : "—";
 
     const lines = await fetchPOProductsByPOId(base, poId);
 
@@ -375,6 +432,14 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
 
     const productIds = uniqNums(lines.map((l) => l.product_id));
     const productsMap = await fetchProductsMapByIds(base, productIds);
+
+    const unitIds = uniqNums([
+        ...lines.map((l: any) => l.unit_of_measurement),
+        ...Array.from(productsMap.values()).map((p) => p.unit_of_measurement),
+    ]);
+    const unitsMap = await fetchUnitsMapByIds(base, unitIds);
+
+    const productLinksMap = await fetchProductSupplierLinks(base, productIds);
 
     const items = lines.map((l) => {
         const pid = toNum(l.product_id);
@@ -394,10 +459,21 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
             productId: String(pid || ""),
             name,
             barcode,
-            uom: toStr((l as any)?.uom, ""),
+            uom:
+                unitsMap.get(toNum((l as any)?.unit_of_measurement))?.unit_shortcut ||
+                unitsMap.get(toNum(p?.unit_of_measurement))?.unit_shortcut ||
+                toStr((l as any)?.unit_of_measurement) ||
+                toStr(p?.unit_of_measurement) ||
+                "—",
+
+            // Link supplier info if parent_id is null
+            link_supplier_id: p?.parent_id === null ? productLinksMap.get(pid)?.supplier_id || null : null,
+            link_discount_type: p?.parent_id === null ? productLinksMap.get(pid)?.discount_type || null : null,
 
             ordered_quantity: qty,
             expectedQty: qty,
+            qty,
+            quantity: qty,
 
             unit_price: unit,
             unitPrice: unit,

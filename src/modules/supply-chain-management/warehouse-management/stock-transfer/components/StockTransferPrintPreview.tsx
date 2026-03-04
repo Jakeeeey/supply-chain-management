@@ -35,13 +35,17 @@ export default function StockTransferPrintPreview({
   scannedItems,
 }: StockTransferPrintPreviewProps) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [generating, setGenerating] = useState(false);
+  const [generating, setGenerating] = useState(open);
+  const [prevOpen, setPrevOpen] = useState(open);
+
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    setGenerating(open);
+  }
 
   /** Re-generate PDF blob URL whenever props change and dialog is open */
   useEffect(() => {
     if (!open) return;
-
-    setGenerating(true);
 
     // Small defer so the dialog renders first before heavy PDF work
     const timer = setTimeout(() => {

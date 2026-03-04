@@ -170,7 +170,7 @@ export default function ProductTaggingPanel(props: {
                                                 <BadgeX className="h-5 w-5 shrink-0" />
                                                 <div>
                                                     <div className="font-black">
-                                                        REJECTED: SKU '{sku.trim()}' is NOT listed in this PO.
+                                                        REJECTED: SKU &apos;{sku.trim()}&apos; is NOT listed in this PO.
                                                     </div>
                                                     <div className="text-xs mt-1 opacity-90">
                                                         Please scan a valid SKU.

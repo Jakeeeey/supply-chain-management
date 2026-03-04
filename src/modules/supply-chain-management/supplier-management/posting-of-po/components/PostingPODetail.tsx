@@ -10,7 +10,6 @@ import { usePostingOfPo } from "../providers/PostingOfPoProvider";
 import { money } from "../utils/format";
 import { ProductsReceivingStatusCard } from "./cards/ProductsReceivingStatusCard";
 import { ReceiptsCard } from "./cards/ReceiptsCard";
-import { ConfirmPostAllReceiptsDialog } from "./dialogs/ConfirmPostReceiptDialog";
 
 function statusBadge(status: string) {
     const s = String(status || "").toUpperCase();
@@ -20,8 +19,7 @@ function statusBadge(status: string) {
 }
 
 export function PostingPODetail() {
-    const { selectedPO, postAllReceipts, posting, postError, successMsg, clearSuccess } = usePostingOfPo();
-    const [openAll, setOpenAll] = React.useState(false);
+    const { selectedPO, posting, postError, successMsg, clearSuccess } = usePostingOfPo();
 
     if (!selectedPO) {
         return (
@@ -64,16 +62,6 @@ export function PostingPODetail() {
             </span>
                     </div>
                 </div>
-
-                <Button
-                    type="button"
-                    className="h-9 gap-2"
-                    disabled={!canPostAll || posting}
-                    onClick={() => setOpenAll(true)}
-                >
-                    <UploadCloud className="h-4 w-4" />
-                    Post All
-                </Button>
             </div>
 
             {successMsg ? (
@@ -97,17 +85,6 @@ export function PostingPODetail() {
                 <ProductsReceivingStatusCard />
                 <ReceiptsCard />
             </div>
-
-            <ConfirmPostAllReceiptsDialog
-                open={openAll}
-                onOpenChange={setOpenAll}
-                count={unposted.length}
-                loading={posting}
-                onConfirm={async () => {
-                    setOpenAll(false);
-                    await postAllReceipts(selectedPO.id);
-                }}
-            />
         </Card>
     );
 }

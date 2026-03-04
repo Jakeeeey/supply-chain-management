@@ -92,6 +92,8 @@ export function NavUser({ user, onLogout }: NavUserProps) {
         }
     }, [loggingOut, onLogout, router])
 
+    if (!mounted) return null
+
     return (
         <SidebarMenu>
             <SidebarMenuItem>

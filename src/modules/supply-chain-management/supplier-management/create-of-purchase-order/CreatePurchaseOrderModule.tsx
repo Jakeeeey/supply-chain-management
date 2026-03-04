@@ -914,7 +914,7 @@ export default function CreatePurchaseOrderModule() {
         const half = Math.floor(maxDots / 2);
 
         let start = Math.max(1, current - half);
-        let end = Math.min(total, start + maxDots - 1);
+        const end = Math.min(total, start + maxDots - 1);
         start = Math.max(1, end - maxDots + 1);
 
         const pages: number[] = [];
