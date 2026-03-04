@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -42,10 +42,12 @@ export default function StockTransferTable({ items, onQtyChange, onDelete }: Sto
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  /* Reset to page 1 whenever items list or page size changes */
-  useEffect(() => {
+  const [prevItemsLength, setPrevItemsLength] = useState(items.length);
+
+  if (items.length !== prevItemsLength) {
+    setPrevItemsLength(items.length);
     setPage(1);
-  }, [items.length, pageSize]);
+  }
 
   const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
   const start = (page - 1) * pageSize;
@@ -176,7 +178,10 @@ export default function StockTransferTable({ items, onQtyChange, onDelete }: Sto
             </span>
             <Select
               value={String(pageSize)}
-              onValueChange={(v) => setPageSize(Number(v))}
+              onValueChange={(v) => {
+                setPageSize(Number(v));
+                setPage(1);
+              }}
             >
               <SelectTrigger className="h-8 w-[80px] text-xs border-border shadow-none">
                 <SelectValue />

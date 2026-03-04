@@ -32,6 +32,8 @@ export type ReceivingPOItem = {
     discountType?: string;
     discountAmount?: number;
     netAmount?: number;
+    lot_no?: string;
+    expiry_date?: string;
 };
 
 export type ReceivingPODetail = {
@@ -134,7 +136,7 @@ type Ctx = {
 
     scanRFID: () => Promise<void>;
     removeActivity: (id: string) => void;
-    saveReceipt: () => Promise<void>;
+    saveReceipt: (porMetaData?: Record<string, { lotNo: string; expiryDate: string }>) => Promise<void>;
     savingReceipt: boolean;
     saveError: string;
 };
@@ -438,7 +440,7 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
         }
     }, [selectedPO, rfid, activity]);
 
-    const saveReceipt = React.useCallback(async () => {
+    const saveReceipt = React.useCallback(async (porMetaData?: Record<string, { lotNo: string; expiryDate: string }>) => {
         setSaveError("");
 
         const poId = selectedPO?.id;
@@ -464,6 +466,7 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
                     receiptType: receiptType.trim(),
                     receiptDate: receiptDate.trim(),
                     porCounts: counts,
+                    porMetaData: porMetaData ?? {},
                 }),
             });
             const j = await asJson(r);

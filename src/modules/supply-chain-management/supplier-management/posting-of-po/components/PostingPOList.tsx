@@ -55,7 +55,6 @@ export function PostingPOList() {
         pageSize,
         setPageSize,
 
-        postAllReceipts,
         posting,
     } = usePostingOfPo();
 
@@ -88,14 +87,6 @@ export function PostingPOList() {
         return filtered.slice(start, start + pageSize);
     }, [filtered, page, pageSize]);
 
-    const closeConfirm = React.useCallback(() => setConfirmPo(null), []);
-
-    const runConfirmPost = React.useCallback(async () => {
-        if (!confirmPo) return;
-        // provider handles posting state + refresh + openPO
-        await postAllReceipts(confirmPo.id);
-        closeConfirm();
-    }, [confirmPo, postAllReceipts, closeConfirm]);
 
     return (
         <Card className="p-4">
@@ -272,23 +263,6 @@ export function PostingPOList() {
                                     </div>
 
                                     <div className="flex items-center gap-2 shrink-0">
-                                        {/* ✅ Post button now opens confirm dialog */}
-                                        <Button
-                                            type="button"
-                                            size="sm"
-                                            variant={canPost ? "default" : "outline"}
-                                            className="h-8 gap-2"
-                                            disabled={!canPost || posting}
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                                setConfirmPo(po);
-                                            }}
-                                        >
-                                            <UploadCloud className="h-4 w-4" />
-                                            Post
-                                        </Button>
-
                                         <ChevronRight className="h-4 w-4 text-muted-foreground mt-1" />
                                     </div>
                                 </div>
@@ -298,48 +272,6 @@ export function PostingPOList() {
                 )}
             </div>
 
-            {/* ✅ Confirm dialog (shadcn) */}
-            <AlertDialog
-                open={confirmOpen}
-                onOpenChange={(o) => {
-                    if (!o) closeConfirm();
-                }}
-            >
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Post Receipt</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Once posted, this receipt cannot be edited. Continue?
-                            {confirmPo?.poNumber ? (
-                                <span className="block mt-2 text-xs text-muted-foreground">
-                  PO: <span className="font-semibold">{confirmPo.poNumber}</span>
-                                    {confirmPo?.supplierName ? (
-                                        <>
-                                            {" "}
-                                            • Supplier:{" "}
-                                            <span className="font-semibold">{confirmPo.supplierName}</span>
-                                        </>
-                                    ) : null}
-                </span>
-                            ) : null}
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-
-                    <AlertDialogFooter>
-                        <AlertDialogCancel asChild>
-                            <Button type="button" variant="outline" disabled={posting}>
-                                Cancel
-                            </Button>
-                        </AlertDialogCancel>
-
-                        <AlertDialogAction asChild>
-                            <Button type="button" onClick={runConfirmPost} disabled={posting}>
-                                OK
-                            </Button>
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
         </Card>
     );
 }
