@@ -1,24 +1,16 @@
 "use client";
 
-import { useState } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { bundleService } from "../../services/bundle";
-import {
-  bundleDraftSchema,
-  BundleDraftFormValues,
-  BundleMasterData,
-  ProductOption,
-  BundleType,
-} from "../../../types/bundle.schema";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Combobox } from "@/components/ui/combobox";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Form,
   FormControl,
@@ -28,12 +20,18 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Combobox } from "@/components/ui/combobox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, Trash2, Package, AlertTriangle } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { AlertTriangle, Loader2, Package, Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { useFieldArray, useForm } from "react-hook-form";
+import {
+  BundleDraftFormValues,
+  bundleDraftSchema,
+  BundleMasterData,
+  BundleType,
+  ProductOption,
+} from "../../../types/bundle.schema";
 
 interface BundleCreateModalProps {
   open: boolean;
@@ -94,7 +92,7 @@ export function BundleCreateModal({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="w-full sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-full sm:max-w-4xl max-h-[90vh] overflow-y-auto bg-background">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" /> Create New Bundle
@@ -104,13 +102,13 @@ export function BundleCreateModal({
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(handleSubmit)}
-            className="flex flex-col flex-1 min-h-0 gap-6"
+            className="flex flex-col flex-1 min-h-0 gap-4"
           >
             <ScrollArea className="flex-1 min-h-0">
-              <div className="space-y-6 pr-3">
-                <Card className="border-accent/20 bg-card/50">
-                  <CardContent className="pt-6 space-y-4">
-                    <div className="flex items-center gap-2 mb-2">
+              <div>
+                <Card className="border-none shadow-none bg-background">
+                  <CardContent className="space-y-4">
+                    {/* <div className="flex items-center gap-2 mb-2">
                       <Badge
                         variant="outline"
                         className="h-6 w-6 rounded-full flex items-center justify-center p-0 bg-primary text-primary-foreground border-none"
@@ -120,7 +118,7 @@ export function BundleCreateModal({
                       <h3 className="text-lg font-semibold">
                         Bundle Information
                       </h3>
-                    </div>
+                    </div> */}
 
                     <div className="space-y-4">
                       <FormField
@@ -172,21 +170,9 @@ export function BundleCreateModal({
                     </div>
                   </CardContent>
                 </Card>
-
-                {showWarning && (
-                  <Alert variant="destructive" className="bg-destructive/10">
-                    <AlertTriangle className="h-4 w-4" />
-                    <AlertTitle>Invalid Bundle</AlertTitle>
-                    <AlertDescription>
-                      A bundle must contain more than one product in total.
-                      Please add another product or increase the quantity.
-                    </AlertDescription>
-                  </Alert>
-                )}
-
-                <Card className="border-accent/20 bg-card/50">
-                  <CardContent className="pt-6 space-y-4">
-                    <div className="flex items-center gap-2 mb-2">
+                <Card className="border-none shadow-none bg-background">
+                  <CardContent className="space-y-4">
+                    {/* <div className="flex items-center gap-2 mb-2">
                       <Badge
                         variant="outline"
                         className="h-6 w-6 rounded-full flex items-center justify-center p-0 bg-primary text-primary-foreground border-none"
@@ -196,7 +182,7 @@ export function BundleCreateModal({
                       <h3 className="text-lg font-semibold">
                         Bundled Products
                       </h3>
-                    </div>
+                    </div> */}
 
                     <div className="space-y-3">
                       {fields.map((fieldItem: any, index: number) => (
@@ -281,7 +267,7 @@ export function BundleCreateModal({
 
                       <Button
                         type="button"
-                        variant="outline"
+                        variant="default"
                         onClick={() => append({ product_id: 0, quantity: 1 })}
                         className="w-full"
                       >
@@ -291,6 +277,16 @@ export function BundleCreateModal({
                   </CardContent>
                 </Card>
               </div>
+              {showWarning && form.formState.submitCount > 0 && (
+                <Alert variant="destructive" className="bg-background">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Invalid Bundle</AlertTitle>
+                  <AlertDescription>
+                    A bundle must contain more than one product in total. Please
+                    add another product or increase the quantity.
+                  </AlertDescription>
+                </Alert>
+              )}
             </ScrollArea>
 
             <DialogFooter className="shrink-0 pt-2 border-t">
@@ -306,7 +302,11 @@ export function BundleCreateModal({
                 Cancel
               </Button>
               <Button type="submit" disabled={isSubmitting || loading}>
-                {isSubmitting ? "Creating..." : "Create Bundle Draft"}
+                {isSubmitting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Create"
+                )}
               </Button>
             </DialogFooter>
           </form>

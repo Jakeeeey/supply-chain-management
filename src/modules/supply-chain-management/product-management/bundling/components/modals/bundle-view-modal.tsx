@@ -1,19 +1,19 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { CheckCircle2, Loader2, Package, XCircle } from "lucide-react";
+import { useEffect, useState } from "react";
 import { BundleDraft, BundleMasterData } from "../../types/bundle.schema";
-import { Package, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 
 interface BundleViewModalProps {
   open: boolean;
@@ -212,7 +212,7 @@ export function BundleViewModal({
                               {getProductName(productId)}
                             </span>
                             <Badge variant="outline">
-                              Qty: {item.quantity}
+                              Qty: {Number(item.quantity)}
                             </Badge>
                           </div>
                         );

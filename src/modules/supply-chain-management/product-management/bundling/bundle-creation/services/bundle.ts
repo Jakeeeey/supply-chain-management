@@ -7,14 +7,14 @@
 import {
   Bundle,
   BundleDraft,
-  BundleItem,
-  BundleType,
-  ProductOption,
   BundleDraftFormValues,
+  BundleItem,
   BundleMasterData,
+  BundleType,
   PaginatedBundles,
+  ProductOption,
 } from "../../types/bundle.schema";
-import { fetchItems, request, API_BASE_URL } from "./bundle-api";
+import { API_BASE_URL, fetchItems, request } from "./bundle-api";
 
 export const bundleService = {
   // ─── Master Data ──────────────────────────────────────────
@@ -281,6 +281,29 @@ export const bundleService = {
    * @returns The created draft record
    */
   async createDraft(values: BundleDraftFormValues) {
+    // 0. Enforce unique bundle name
+    const [nameInDraft, nameInMaster] = await Promise.all([
+      fetchItems<any>("/items/product_bundles_draft", {
+        filter: JSON.stringify({
+          bundle_name: { _eq: values.bundle_name.trim() },
+        }),
+        limit: 1,
+      }),
+      fetchItems<any>("/items/product_bundles", {
+        filter: JSON.stringify({
+          bundle_name: { _eq: values.bundle_name.trim() },
+        }),
+        limit: 1,
+      }),
+    ]);
+
+    if (nameInDraft.data?.length > 0 || nameInMaster.data?.length > 0) {
+      throw new Error(
+        "A bundle with this name already exists. Please choose a unique name.",
+      );
+    }
+
+    // 1. Generate code and create draft
     const bundleSku = await this.generateBundleCode(values.bundle_name);
 
     // Create the draft bundle record
