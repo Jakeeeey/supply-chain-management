@@ -8,6 +8,7 @@ function normalizeSupplier(raw: any): Supplier {
         name: raw?.supplier_name ?? raw?.name ?? "—",
         terms: raw?.payment_terms ?? raw?.terms ?? null,
         apBalance: Number(raw?.apBalance ?? raw?.ap_balance ?? raw?.ap_balance_total ?? 0),
+        supplierType: String(raw?.supplier_type ?? raw?.supplierType ?? "TRADE").toUpperCase(),
         raw,
     };
 }
@@ -78,6 +79,7 @@ export const useCreatePurchaseOrder = () => {
     const [allProducts, setAllProducts] = React.useState<Product[]>([]);
     const [supplierLinks, setSupplierLinks] = React.useState<any[]>([]);
 
+    const [selectedSupplierType, setSelectedSupplierType] = React.useState<"ALL" | "TRADE" | "NON-TRADE">("TRADE");
     const [selectedSupplierId, setSelectedSupplierId] = React.useState<string>("");
     const [selectedBranchIds, setSelectedBranchIds] = React.useState<number[]>([]);
     const [cart, setCart] = React.useState<CartLineItem[]>([]);
@@ -109,6 +111,12 @@ export const useCreatePurchaseOrder = () => {
         };
         loadData();
     }, []);
+
+    // 1.5) Filtered Suppliers
+    const filteredSuppliers = React.useMemo(() => {
+        if (selectedSupplierType === "ALL") return suppliers;
+        return suppliers.filter((s) => s.supplierType === selectedSupplierType);
+    }, [suppliers, selectedSupplierType]);
 
     // 2) Supplier links
     React.useEffect(() => {
@@ -245,9 +253,13 @@ export const useCreatePurchaseOrder = () => {
         setStep,
         isLoading,
 
-        suppliers,
+        suppliers: filteredSuppliers,
+        allSuppliers: suppliers, // for debugging if needed
         branches,
         availableProducts,
+
+        selectedSupplierType,
+        setSelectedSupplierType,
 
         selectedSupplier,
         setSelectedSupplierId,

@@ -195,7 +195,7 @@ export function BranchAllocations(props: {
                                                             </span>
                                                         </td>
                                                         <td className="px-3 py-3 text-right font-bold text-emerald-600/80 text-[10px]">
-                                                            -{money.format(discAmount).replace("PHP", "").trim()}
+                                                            {money.format(discAmount).replace("PHP", "").trim()}
                                                         </td>
                                                         <td className="px-3 py-3 text-right font-black text-primary text-[11px] tracking-tighter">
                                                             {money.format(netAmount).replace("PHP", "").trim()}
