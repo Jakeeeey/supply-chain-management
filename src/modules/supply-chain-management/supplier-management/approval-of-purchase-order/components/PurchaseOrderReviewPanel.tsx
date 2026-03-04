@@ -368,10 +368,6 @@ export default function PurchaseOrderReviewPanel(props: {
                                     </div>
                                     <div className="mt-2">
                                         <div className="text-sm font-bold text-foreground truncate">{supplierName}</div>
-                                        <div className="text-xs text-muted-foreground mt-1">
-                                            A/P Balance:{" "}
-                                            <span className="text-foreground font-medium">{fmt.format(apBalance)}</span>
-                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -476,14 +472,8 @@ export default function PurchaseOrderReviewPanel(props: {
                                         PO not marked as invoice - Accounts payable will not be affected
                                     </div>
                                 ) : (
-                                    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs">
-                                        <div className="flex items-center justify-between gap-3">
-                                            <span className="font-bold text-primary">Total Accounts Payable (after approval):</span>
-                                            <span className="font-black text-primary">{fmt.format(apBalance + totalAmount)}</span>
-                                        </div>
-                                        <div className="mt-1 text-[11px] text-primary/80">
-                                            Current: {fmt.format(apBalance)} + This PO: {fmt.format(totalAmount)}
-                                        </div>
+                                    <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-[11px] text-primary/70 italic">
+                                        Note: This Purchase Order is marked as an invoice and will affect accounts payable.
                                     </div>
                                 )}
                             </div>
