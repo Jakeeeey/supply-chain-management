@@ -520,7 +520,7 @@ export function DispatchModal({ plan, open, onOpenChange, onSuccess }: DispatchM
                 open={showSummaryModal}
                 onOpenChange={setShowSummaryModal}
                 plan={plan}
-                onConfirm={handleConfirm}
+                onConfirm={(_, remarks) => handleConfirm(undefined, remarks)}
                 isConfirming={isConfirming}
             />
 
