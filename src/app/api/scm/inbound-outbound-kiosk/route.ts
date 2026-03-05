@@ -1,11 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const DIRECTUS_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://goatedcodoer:8056";
-const AUTH_TOKEN = process.env.DIRECTUS_STATIC_TOKEN || "";
+const DIRECTUS_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+const AUTH_TOKEN = process.env.DIRECTUS_STATIC_TOKEN;
 
-export async function GET() {
+export async function GET(req: NextRequest) {
     try {
+        const url = new URL(req.url);
+        const planId = url.searchParams.get("plan_id");
+
+        if (planId) {
+            const invoicesRes = await fetch(`${DIRECTUS_URL}/items/post_dispatch_invoices?limit=-1&filter[post_dispatch_plan_id][_eq]=${planId}`, {
+                headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
+            });
+            const invoices = await invoicesRes.json();
+            return NextResponse.json(invoices.data || []);
+        }
+
         // Fetch post_dispatch_plan
+
         const planRes = await fetch(`${DIRECTUS_URL}/items/post_dispatch_plan?limit=-1&sort=-date_encoded`, {
             headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
         });
@@ -94,6 +106,42 @@ export async function GET() {
         return NextResponse.json({ error: "Failed to fetch data" }, { status: 500 });
     }
 }
+
+export async function POST(req: NextRequest) {
+    try {
+        const url = new URL(req.url);
+        const path = url.pathname.split('/').pop();
+        const action = url.searchParams.get("action");
+        const body = await req.json();
+
+        if (path === 'sales-invoices' || action === 'sales-invoices') {
+            const { invoice_ids } = body;
+            const filter = invoice_ids.length > 0 ? `filter[invoice_id][_in]=${invoice_ids.join(',')}` : '';
+            const res = await fetch(`${DIRECTUS_URL}/items/sales_invoice?limit=-1&${filter}`, {
+                headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
+            });
+            const data = await res.json();
+            return NextResponse.json(data.data || []);
+        }
+
+        if (path === 'customers' || action === 'customers') {
+            const { customer_codes } = body;
+            const filter = customer_codes.length > 0 ? `filter[customer_code][_in]=${customer_codes.join(',')}` : '';
+            const res = await fetch(`${DIRECTUS_URL}/items/customer?limit=-1&${filter}`, {
+                headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
+            });
+            const data = await res.json();
+            return NextResponse.json(data.data || []);
+        }
+
+
+        return NextResponse.json({ error: "Not Found" }, { status: 404 });
+    } catch (error) {
+        console.error("POST Error in inbound-outbound-kiosk:", error);
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    }
+}
+
 
 export async function PATCH(req: NextRequest) {
     try {
@@ -189,7 +237,71 @@ export async function PATCH(req: NextRequest) {
             });
         }
 
+        // 3. Update Sales Order status to "En Route" if status is "For Inbound" (meaning it was just dispatched)
+        const normalizedStatus = (status || "").trim().toLowerCase();
+        if (normalizedStatus === "for inbound") {
+            try {
+                console.log(`[KIOSK_PATCH] Triggering Sales Order updates for Plan: ${plan_id}`);
+
+                // Get all invoices for this plan
+                const invoicesRes = await fetch(`${DIRECTUS_URL}/items/post_dispatch_invoices?limit=-1&filter[post_dispatch_plan_id][_eq]=${plan_id}`, {
+                    headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
+                });
+                const invoicesData = await invoicesRes.json();
+                const invoices = invoicesData.data || [];
+                const invoiceIds = invoices.map((inv: any) => inv.invoice_id);
+
+                console.log(`[KIOSK_PATCH] Found ${invoiceIds.length} invoices:`, invoiceIds);
+
+                if (invoiceIds.length > 0) {
+                    // Get unique order_nos from sales_invoices (Note: si.order_id contains the SO number)
+                    const salesInvoicesRes = await fetch(`${DIRECTUS_URL}/items/sales_invoice?limit=-1&filter[invoice_id][_in]=${invoiceIds.join(',')}`, {
+                        headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
+                    });
+                    const siData = await salesInvoicesRes.json();
+                    const salesInvoices = siData.data || [];
+                    const orderNos = Array.from(new Set(salesInvoices.map((si: any) => si.order_id).filter(Boolean)));
+
+                    console.log(`[KIOSK_PATCH] Found ${orderNos.length} unique orders to update:`, orderNos);
+
+                    if (orderNos.length > 0) {
+                        // Batch update sales orders to "En Route" using order_no filter
+                        const filterObj = {
+                            "order_no": {
+                                "_in": orderNos
+                            }
+                        };
+                        const batchUrl = `${DIRECTUS_URL}/items/sales_order`;
+
+                        const batchRes = await fetch(batchUrl, {
+                            method: "PATCH",
+                            headers: {
+                                "Authorization": `Bearer ${AUTH_TOKEN}`,
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify({
+                                query: { filter: filterObj },
+                                data: { order_status: "En Route" }
+                            })
+                        });
+
+
+                        if (!batchRes.ok) {
+                            const errorText = await batchRes.text();
+                            console.error(`[KIOSK_PATCH] Batch update failed: ${batchRes.status}`, errorText);
+                        } else {
+                            console.log(`[KIOSK_PATCH] Batch update successful.`);
+                        }
+                    }
+                }
+
+            } catch (soError) {
+                console.error("[KIOSK_PATCH] Critical error during sales order update chain:", soError);
+            }
+        }
+
         return NextResponse.json({ success: true });
+
     } catch (error) {
         console.error("PATCH Error in inbound-outbound-kiosk:", error);
         return NextResponse.json({ error: "Internal server error" }, { status: 500 });

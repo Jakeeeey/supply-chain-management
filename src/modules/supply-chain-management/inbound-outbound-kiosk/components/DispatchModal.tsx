@@ -8,7 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { KioskDispatchPlan } from "../types";
 import { format } from "date-fns";
-import { Calendar, Truck, User, Fingerprint, CheckCircle2 } from "lucide-react";
+import { Calendar, Truck, User, Fingerprint, CheckCircle2, ArrowRight } from "lucide-react";
+import { DispatchSummaryModal } from "./DispatchSummaryModal";
+
 
 import { toast } from "sonner";
 
@@ -29,6 +31,8 @@ export function DispatchModal({ plan, open, onOpenChange, onSuccess }: DispatchM
     const [isLookingUp, setIsLookingUp] = React.useState(false);
     const [subUser, setSubUser] = React.useState<{ user_id: number; name: string; rfid: string } | null>(null);
     const [isRoleModalOpen, setIsRoleModalOpen] = React.useState(false);
+    const [showSummaryModal, setShowSummaryModal] = React.useState(false);
+
 
     // Overrides for substitution
     const [driverOverride, setDriverOverride] = React.useState<{ name: string; rfid: string; id: number } | null>(null);
@@ -46,7 +50,9 @@ export function DispatchModal({ plan, open, onOpenChange, onSuccess }: DispatchM
             setDriverOverride(null);
             setHelperOverrides([]);
             setIsConfirming(false);
+            setShowSummaryModal(false);
         }
+
     }, [open]);
 
     // Focus management effect
@@ -268,7 +274,12 @@ export function DispatchModal({ plan, open, onOpenChange, onSuccess }: DispatchM
     );
 
     const handleConfirm = async () => {
+        if (isDispatch && !showSummaryModal) {
+            setShowSummaryModal(true);
+            return;
+        }
         setIsConfirming(true);
+
         try {
             const nextStatus = isDispatch ? "For Inbound" : isInbound ? "For Clearance" : plan.status;
 
@@ -480,14 +491,28 @@ export function DispatchModal({ plan, open, onOpenChange, onSuccess }: DispatchM
                                 onClick={handleConfirm}
                                 disabled={isConfirming || !canConfirm}
                             >
-                                {isConfirming ? "Processing..." : isDispatch ? "Confirm Dispatch" : isInbound ? "Confirm Arrival" : "Process"}
+                                {isConfirming ? "Processing..." : isDispatch ? (
+                                    <>
+                                        Next
+                                        <ArrowRight className="ml-2 h-4 w-4" />
+                                    </>
+                                ) : isInbound ? "Confirm Arrival" : "Process"}
                             </Button>
                         </div>
                     </div>
                 </DialogContent>
             </Dialog>
 
+            <DispatchSummaryModal
+                open={showSummaryModal}
+                onOpenChange={setShowSummaryModal}
+                plan={plan}
+                onConfirm={handleConfirm}
+                isConfirming={isConfirming}
+            />
+
             {/* Role Selection Secondary Dialog */}
+
             <Dialog open={isRoleModalOpen} onOpenChange={setIsRoleModalOpen}>
                 <DialogContent className="max-w-[440px] rounded-[32px] p-0 overflow-hidden shadow-[0_32px_128px_-12px_rgba(0,0,0,0.6)] border border-border/10 bg-background">
                     <div className="bg-amber-500 h-2 w-full animate-pulse" />

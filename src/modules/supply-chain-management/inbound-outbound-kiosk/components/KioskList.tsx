@@ -40,7 +40,7 @@ export function KioskList({ plans, loading, onSuccess }: KioskListProps) {
                 </div>
                 <h3 className="text-xl font-semibold mb-1">No Dispatch Found</h3>
                 <p className="text-muted-foreground max-w-xs">
-                    Try adjusting your search or filters to find what you're looking for.
+                    Try adjusting your search or filters to find what you&apos;re looking for.
                 </p>
             </div>
         );
