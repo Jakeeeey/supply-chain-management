@@ -146,7 +146,7 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
     try {
         const body = await req.json();
-        const { plan_id, status, driver_id, driver_verified, helper_verified_rfids, time_of_dispatch, time_of_arrival } = body;
+        const { plan_id, status, driver_id, driver_verified, helper_verified_rfids, time_of_dispatch, time_of_arrival, deliveryStatuses, remarks } = body;
 
         if (!plan_id || !status) {
             return NextResponse.json({ error: "plan_id and status are required" }, { status: 400 });
@@ -163,7 +163,8 @@ export async function PATCH(req: NextRequest) {
                 status,
                 ...(time_of_dispatch && { time_of_dispatch }),
                 ...(time_of_arrival && { time_of_arrival }),
-                ...(driver_id && { driver_id })
+                ...(driver_id && { driver_id }),
+                ...(remarks !== undefined && { remarks })
             })
         });
 
@@ -297,6 +298,97 @@ export async function PATCH(req: NextRequest) {
 
             } catch (soError) {
                 console.error("[KIOSK_PATCH] Critical error during sales order update chain:", soError);
+            }
+        } else if (normalizedStatus === "for clearance") {
+            try {
+                console.log(`[KIOSK_PATCH] Triggering Arrival Updates for Plan: ${plan_id}`);
+
+                // 1. Get all invoices for this plan
+                const invoicesRes = await fetch(`${DIRECTUS_URL}/items/post_dispatch_invoices?limit=-1&filter[post_dispatch_plan_id][_eq]=${plan_id}`, {
+                    headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
+                });
+                const invoicesData = await invoicesRes.json();
+                const invoices = invoicesData.data || [];
+
+                if (invoices.length > 0) {
+                    const invoiceIds = invoices.map((inv: any) => inv.invoice_id);
+
+                    // 2. Get sales invoices to map to customer_code and order_id
+                    const salesInvoicesRes = await fetch(`${DIRECTUS_URL}/items/sales_invoice?limit=-1&filter[invoice_id][_in]=${invoiceIds.join(',')}`, {
+                        headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
+                    });
+                    const siData = await salesInvoicesRes.json();
+                    const salesInvoices = siData.data || [];
+
+                    // Map invoice_id -> post_dispatch_invoices.id
+                    const postDispatchMap = new Map();
+                    invoices.forEach((inv: any) => postDispatchMap.set(inv.invoice_id, inv.id));
+
+                    const updates: any[] = [];
+                    for (const si of salesInvoices) {
+                        const customerCode = si.customer_code;
+                        const orderId = si.order_id;
+                        const invId = si.invoice_id;
+                        const pdInvId = postDispatchMap.get(invId);
+
+                        const statusMapping = deliveryStatuses ? deliveryStatuses[customerCode] : null;
+
+                        let pdInvStatus = "Fulfilled";
+                        let soStatus = "Delivered";
+
+                        if (statusMapping === "not_delivered") {
+                            pdInvStatus = "Not Fulfilled";
+                            soStatus = "Not Fulfilled";
+                        } else if (statusMapping === "has_concern") {
+                            pdInvStatus = "Fulfilled With Concerns";
+                            soStatus = "Delivered";
+                        } else if (statusMapping === "has_return") {
+                            pdInvStatus = "Fulfilled With Returns";
+                            soStatus = "Delivered";
+                        }
+
+                        if (pdInvId) {
+                            updates.push({ type: "pdi", id: pdInvId, data: { status: pdInvStatus } });
+                        }
+                        if (orderId) {
+                            updates.push({ type: "so", order_no: orderId, data: { order_status: soStatus } });
+                        }
+                    }
+
+                    // 3. Perform Post Dispatch Invoices Updates
+                    const pdiUpdates = updates.filter(u => u.type === 'pdi').map(u => ({ id: u.id, ...u.data }));
+                    if (pdiUpdates.length > 0) {
+                        await fetch(`${DIRECTUS_URL}/items/post_dispatch_invoices`, {
+                            method: "PATCH",
+                            headers: { "Authorization": `Bearer ${AUTH_TOKEN}`, "Content-Type": "application/json" },
+                            body: JSON.stringify(pdiUpdates) // Directus accepts array of objects with id for batch update
+                        });
+                    }
+
+                    // 4. Perform Sales Order Updates (grouped by status)
+                    const soStatusGroups: Record<string, string[]> = { "Delivered": [], "Not Fulfilled": [] };
+                    updates.filter(u => u.type === 'so').forEach(so => {
+                        const st = so.data.order_status;
+                        if (!soStatusGroups[st]) soStatusGroups[st] = [];
+                        soStatusGroups[st].push(so.order_no);
+                    });
+
+                    for (const [st, ordNos] of Object.entries(soStatusGroups)) {
+                        if (ordNos.length > 0) {
+                            await fetch(`${DIRECTUS_URL}/items/sales_order`, {
+                                method: "PATCH",
+                                headers: { "Authorization": `Bearer ${AUTH_TOKEN}`, "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    query: { filter: { "order_no": { "_in": ordNos } } },
+                                    data: { order_status: st }
+                                })
+                            });
+                        }
+                    }
+                    console.log(`[KIOSK_PATCH] Arrival updates successful.`);
+                }
+            } catch (arrivalError) {
+                console.error("[KIOSK_PATCH] Critical error during arrival update chain:", arrivalError);
             }
         }
 

@@ -10,6 +10,8 @@ import { KioskDispatchPlan } from "../types";
 import { format } from "date-fns";
 import { Calendar, Truck, User, Fingerprint, CheckCircle2, ArrowRight } from "lucide-react";
 import { DispatchSummaryModal } from "./DispatchSummaryModal";
+import { ArrivalDetailsModal } from "./ArrivalDetailsModal";
+
 
 
 import { toast } from "sonner";
@@ -32,6 +34,8 @@ export function DispatchModal({ plan, open, onOpenChange, onSuccess }: DispatchM
     const [subUser, setSubUser] = React.useState<{ user_id: number; name: string; rfid: string } | null>(null);
     const [isRoleModalOpen, setIsRoleModalOpen] = React.useState(false);
     const [showSummaryModal, setShowSummaryModal] = React.useState(false);
+    const [showArrivalSummaryModal, setShowArrivalSummaryModal] = React.useState(false);
+
 
 
     // Overrides for substitution
@@ -51,7 +55,9 @@ export function DispatchModal({ plan, open, onOpenChange, onSuccess }: DispatchM
             setHelperOverrides([]);
             setIsConfirming(false);
             setShowSummaryModal(false);
+            setShowArrivalSummaryModal(false);
         }
+
 
     }, [open]);
 
@@ -273,9 +279,13 @@ export function DispatchModal({ plan, open, onOpenChange, onSuccess }: DispatchM
             : driverChecked
     );
 
-    const handleConfirm = async () => {
+    const handleConfirm = async (deliveryStatuses?: Record<string, string | null>, remarks?: string) => {
         if (isDispatch && !showSummaryModal) {
             setShowSummaryModal(true);
+            return;
+        }
+        if (isInbound && !showArrivalSummaryModal) {
+            setShowArrivalSummaryModal(true);
             return;
         }
         setIsConfirming(true);
@@ -293,7 +303,9 @@ export function DispatchModal({ plan, open, onOpenChange, onSuccess }: DispatchM
                     helper_ids: helperOverrides.map(h => h.id), // Send all new helpers
                     driver_verified: driverChecked,
                     helper_verified_rfids: verifiedHelperRfids, // Send all verified RFIDs (original + overrides)
-                    [isDispatch ? "time_of_dispatch" : "time_of_arrival"]: new Date().toISOString() // Correct timestamp field based on mode
+                    [isDispatch ? "time_of_dispatch" : "time_of_arrival"]: new Date().toISOString(), // Correct timestamp field based on mode
+                    deliveryStatuses,
+                    remarks
                 })
             });
 
@@ -488,15 +500,16 @@ export function DispatchModal({ plan, open, onOpenChange, onSuccess }: DispatchM
                                     ? `!text-white ${isDispatch ? "!bg-emerald-600 shadow-emerald-500/40" : "!bg-red-600 shadow-red-500/40"} cursor-pointer`
                                     : "bg-muted text-muted-foreground opacity-40 pointer-events-none"
                                     }`}
-                                onClick={handleConfirm}
+                                onClick={() => handleConfirm()}
                                 disabled={isConfirming || !canConfirm}
                             >
-                                {isConfirming ? "Processing..." : isDispatch ? (
+                                {isConfirming ? "Processing..." : (isDispatch || isInbound) ? (
                                     <>
                                         Next
                                         <ArrowRight className="ml-2 h-4 w-4" />
                                     </>
-                                ) : isInbound ? "Confirm Arrival" : "Process"}
+                                ) : "Process"}
+
                             </Button>
                         </div>
                     </div>
@@ -510,6 +523,15 @@ export function DispatchModal({ plan, open, onOpenChange, onSuccess }: DispatchM
                 onConfirm={handleConfirm}
                 isConfirming={isConfirming}
             />
+
+            <ArrivalDetailsModal
+                open={showArrivalSummaryModal}
+                onOpenChange={setShowArrivalSummaryModal}
+                plan={plan}
+                onConfirm={handleConfirm}
+                isConfirming={isConfirming}
+            />
+
 
             {/* Role Selection Secondary Dialog */}
 
