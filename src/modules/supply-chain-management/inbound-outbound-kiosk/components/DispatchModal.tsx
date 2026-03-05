@@ -146,6 +146,7 @@ export function DispatchModal({ plan, open, onOpenChange, onSuccess }: DispatchM
             // 1. Check if matches assigned Driver
             if (plan.driver_rfid && cleanRfidLower === plan.driver_rfid.toLowerCase()) {
                 setDriverChecked(true);
+                setDriverOverride(null);
                 setRfid("");
                 toast.success("Driver Verified", {
                     description: plan.driver_name
@@ -221,10 +222,16 @@ export function DispatchModal({ plan, open, onOpenChange, onSuccess }: DispatchM
         if (role === "Driver") {
             setDriverOverride({ name: subUser.name, rfid: subUser.rfid, id: subUser.user_id });
             setDriverChecked(true);
+            toast.success("Driver Substituted", {
+                description: `${subUser.name} is now the assigned driver.`
+            });
         } else {
             // Append another helper instead of substituting
             setHelperOverrides(prev => [...prev, { name: subUser.name, rfid: subUser.rfid, id: subUser.user_id }]);
             setVerifiedHelperRfids(prev => Array.from(new Set([...prev, subUser.rfid])));
+            toast.success("Helper Added", {
+                description: `${subUser.name} has been added as a helper.`
+            });
         }
 
         setIsRoleModalOpen(false);
