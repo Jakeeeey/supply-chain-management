@@ -188,6 +188,7 @@ function SupplierSelect(props: {
     disabled?: boolean;
 }) {
     const [open, setOpen] = React.useState(false);
+    const popoverId = React.useId();
 
     return (
         <div className="space-y-1.5 w-full min-w-0">
@@ -195,7 +196,7 @@ function SupplierSelect(props: {
                 Supplier
             </div>
 
-            <Popover open={open} onOpenChange={setOpen}>
+            <Popover open={open} onOpenChange={setOpen} contentId={popoverId}>
                 <PopoverTrigger asChild>
                     <Button
                         type="button"
@@ -306,6 +307,7 @@ function BranchMultiSelect(props: {
     disabled?: boolean;
 }) {
     const [open, setOpen] = React.useState(false);
+    const popoverId = React.useId();
 
     const selected = React.useMemo(() => new Set(props.value), [props.value]);
 
@@ -324,7 +326,7 @@ function BranchMultiSelect(props: {
                 Delivery Branches
             </div>
 
-            <Popover open={open} onOpenChange={setOpen}>
+            <Popover open={open} onOpenChange={setOpen} contentId={popoverId}>
                 <PopoverTrigger asChild>
                     <Button
                         type="button"
