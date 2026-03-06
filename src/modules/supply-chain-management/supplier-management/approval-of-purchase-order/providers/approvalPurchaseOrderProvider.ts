@@ -34,9 +34,12 @@ function normalizeLine(line: any) {
         ...line,
         ordered_quantity: qty,
         expectedQty: qty,
+        qty: qty,
+        quantity: qty,
         unit_price: unit,
         unitPrice: unit,
         price: unit,
+        uom: toStr(line?.uom, "—"),
         line_total: toNum(line?.line_total) || lineTotal,
         lineTotal: toNum(line?.lineTotal) || lineTotal,
     };

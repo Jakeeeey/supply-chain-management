@@ -19,8 +19,46 @@ function toStr(v: any, fb = "") {
     return s ? s : fb;
 }
 function toNum(v: any) {
-    const n = Number(String(v ?? "").replace(/,/g, ""));
+    const n = parseFloat(String(v ?? "").replace(/,/g, ""));
     return Number.isFinite(n) ? n : 0;
+}
+function pickNum(obj: any, keys: string[]) {
+    for (const k of keys) {
+        if (obj && obj[k] !== undefined && obj[k] !== null) {
+            const n = toNum(obj[k]);
+            if (n !== 0) return n;
+        }
+    }
+    return 0;
+}
+function pickStr(obj: any, keys: string[], fb = "") {
+    for (const k of keys) {
+        if (obj && obj[k] !== undefined && obj[k] !== null) {
+            const s = String(obj[k]).trim();
+            if (s) return s;
+        }
+    }
+    return fb;
+}
+
+/**
+ * Sequential: total = 1 - Π(1 - pi/100)
+ */
+function deriveDiscountPercentFromCode(codeRaw: string): number {
+    const code = String(codeRaw ?? "").trim().toUpperCase();
+
+    if (!code || code === "NO DISCOUNT" || code === "D0") return 0;
+
+    const nums = (code.match(/\d+(?:\.\d+)?/g) ?? [])
+        .map((s) => Number(s))
+        .filter((n) => Number.isFinite(n) && n > 0 && n <= 100);
+
+    if (!nums.length) return 0;
+
+    const netFactor = nums.reduce((acc, p) => acc * (1 - p / 100), 1);
+    const combined = (1 - netFactor) * 100;
+
+    return Math.max(0, Math.min(100, Number(combined.toFixed(4))));
 }
 function nowISO() {
     return new Date().toISOString();
@@ -109,7 +147,7 @@ function chunk<T>(arr: T[], size: number) {
 // FETCHERS
 // =====================
 const POR_SAFE_FIELDS =
-    "purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted";
+    "purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted,lot_no,expiry_date";
 
 async function fetchApprovedNotReceivedPOs(base: string) {
     const qs = [
@@ -173,7 +211,7 @@ async function fetchPOProductsByPOIds(base: string, poIds: number[]) {
         const url =
             `${base}/items/${PO_PRODUCTS_COLLECTION}?limit=-1` +
             `&filter[purchase_order_id][_in]=${encodeURIComponent(ids.join(","))}` +
-            `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,ordered_quantity`;
+            `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,ordered_quantity,unit_price,total_amount`;
         const j = await fetchJson(url);
         rows.push(...(Array.isArray(j?.data) ? j.data : []));
     }
@@ -184,7 +222,7 @@ async function fetchPOProductsByPOId(base: string, poId: number) {
     const url =
         `${base}/items/${PO_PRODUCTS_COLLECTION}?limit=-1` +
         `&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}` +
-        `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,ordered_quantity`;
+        `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,ordered_quantity,unit_price,total_amount`;
     const j = await fetchJson(url);
     return (Array.isArray(j?.data) ? j.data : []) as PoProductRow[];
 }
@@ -538,12 +576,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             const poId = toNum(body?.poId);
             if (!poId) return bad("Missing poId.", 400);
 
+            // ✅ Fetch header using wildcard fields to avoid "field not found" errors
             const poUrl =
                 `${base}/items/${PO_COLLECTION}/${encodeURIComponent(String(poId))}` +
-                `?fields=purchase_order_id,purchase_order_no,date,date_encoded,supplier_name,total_amount,date_received,inventory_status`;
-
-            const pj = await fetchJson(poUrl);
-            const po = pj?.data ?? null;
+                `?fields=*,discount_type.*`;
+ 
+             const pj = await fetchJson(poUrl);
+             const po: any = pj?.data ?? null;
             if (!po) return bad("PO not found.", 404);
 
             const lines = await fetchPOProductsByPOId(base, poId);
@@ -584,6 +623,31 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
                 recByPor.set(porId, effectiveReceivedQty(r));
             }
 
+            // ✅ Resolve discount from header (robust pick)
+            let discountPercent = pickNum(po, ["discount_percent", "discountPercent", "discount_rate", "discount_percentage"]);
+            
+            // If header percent is zero, try to get from the discount_type relation (if populated)
+            if (!discountPercent && po?.discount_type?.total_percent) {
+                discountPercent = toNum(po.discount_type.total_percent);
+            }
+
+            const discountAmountHeader = pickNum(po, ["discounted_amount", "discount_amount", "discountAmount", "discount_value"]);
+            const grossAmountHeader = pickNum(po, ["gross_amount", "grossAmount", "subtotal", "sub_total"]);
+
+            if (!discountPercent && discountAmountHeader > 0 && grossAmountHeader > 0) {
+                discountPercent = (discountAmountHeader / grossAmountHeader) * 100;
+            }
+
+            const discountTypeLabel =
+                toStr(po?.discount_type?.discount_type) ||
+                pickStr(po, ["discount_type", "discountType", "discount_code", "discountCode"]) ||
+                (discountPercent > 0 ? `${discountPercent.toFixed(2)}% Off` : "No Discount");
+
+            // ✅ Last resort: if label found but percent 0, try to derive from label
+            if (discountPercent === 0 && discountTypeLabel && discountTypeLabel !== "No Discount") {
+                discountPercent = deriveDiscountPercentFromCode(discountTypeLabel);
+            }
+
             const itemsByBranch = new Map<number, POItem[]>();
 
             for (const ln of lines) {
@@ -608,7 +672,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
                 // Pick a stable POR id for UI (first is ok)
                 const primaryPorId = porIdsForLine[0];
 
-                const item: POItem = {
+                const unitPrice = toNum((ln as any)?.unit_price);
+                const unitDiscount = unitPrice * (discountPercent / 100);
+
+                const item: any = {
                     id: String(primaryPorId),
                     porId: String(primaryPorId),
                     productId: String(pid),
@@ -621,6 +688,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
                     taggedQty,
                     rfids,
                     isReceived,
+                    unitPrice,
+                    discountType: discountTypeLabel,
+                    discountAmount: unitDiscount,
+                    netAmount: receivedQty * (unitPrice - unitDiscount),
                 };
 
                 const arr = itemsByBranch.get(bid) ?? [];
@@ -770,6 +841,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             const receiptType = toStr(body?.receiptType); // kept
             const receiptDate = toStr(body?.receiptDate);
             const porCounts = body?.porCounts ?? {};
+            const porMetaData = body?.porMetaData ?? {};
 
             if (!poId) return bad("Missing poId.", 400);
             if (!receiptNo) return bad("Receipt Number is required.", 400);
@@ -812,6 +884,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
                 const cap = expectedQty > 0 ? expectedQty : taggedQty;
                 const nextReceived = Math.min(cap, currentReceived + it.qty);
 
+                const metadata = porMetaData[String(it.porId)] || {};
+                const lotNo = toStr(metadata.lotNo);
+                const expiry = ymdToIsoDate(toStr(metadata.expiryDate));
+
                 const patchUrl = `${base}/items/${POR_COLLECTION}/${encodeURIComponent(String(it.porId))}`;
                 await fetchJson(patchUrl, {
                     method: "PATCH",
@@ -821,6 +897,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
                         received_date: nowISO(),
                         received_quantity: nextReceived,
                         isPosted: 0,
+                        ...(lotNo ? { lot_no: lotNo } : {}),
+                        ...(expiry ? { expiry_date: expiry } : {}),
                     }),
                 });
             }

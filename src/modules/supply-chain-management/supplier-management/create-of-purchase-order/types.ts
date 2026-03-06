@@ -5,6 +5,15 @@ export type Supplier = {
     name: string;
     terms: string;
     apBalance: number;
+    supplierType: string;
+    raw?: any;
+};
+
+export type Branch = {
+    id: number;
+    name: string;
+    code?: string;
+    raw?: any;
 };
 
 export type DiscountType = {
@@ -22,7 +31,7 @@ export type Product = {
 
     // ✅ price is now "PRICE PER BOX"
     price: number;
-
+    raw?: any;
     // ✅ Always BOX in UI
     uom: string; // "BOX"
     uomId?: number; // 11
@@ -49,4 +58,7 @@ export type BranchAllocation = {
     branchId: string;
     branchName: string;
     items: CartItem[];
+};
+export type CartLineItem = CartItem & {
+    branchId: number;
 };

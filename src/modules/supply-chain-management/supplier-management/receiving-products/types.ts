@@ -23,6 +23,10 @@ export type POItem = {
     expectedQty: number;
     receivedQty: number;
     requiresRfid?: boolean;
+    unitPrice?: number;
+    discountType?: string;
+    discountAmount?: number;
+    netAmount?: number;
 };
 
 export type POBranchAllocation = {

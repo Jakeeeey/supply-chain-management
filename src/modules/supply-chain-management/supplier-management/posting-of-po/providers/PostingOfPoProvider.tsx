@@ -26,9 +26,9 @@ type Ctx = {
     q: string;
     setQ: (v: string) => void;
     page: number;
-    setPage: (v: number) => void;
-    pageSize: 3 | 5;
-    setPageSize: (v: 3 | 5) => void;
+    setPage: React.Dispatch<React.SetStateAction<number>>;
+    pageSize: number;
+    setPageSize: React.Dispatch<React.SetStateAction<number>>;
 
     // selection
     selectedPO: PurchaseOrder | null;
@@ -56,7 +56,7 @@ export function PostingOfPoProvider({ children }: { children: React.ReactNode })
 
     const [q, setQ] = React.useState("");
     const [page, setPage] = React.useState(1);
-    const [pageSize, setPageSize] = React.useState<3 | 5>(5);
+    const [pageSize, setPageSize] = React.useState<number>(5);
 
     const [posting, setPosting] = React.useState(false);
     const [postError, setPostError] = React.useState("");

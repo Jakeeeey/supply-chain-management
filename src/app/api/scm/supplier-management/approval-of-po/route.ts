@@ -12,6 +12,8 @@ const PO_COLLECTION = "purchase_order";
 const PO_PRODUCTS_COLLECTION = "purchase_order_products";
 const SUPPLIERS_COLLECTION = "suppliers";
 const PRODUCTS_COLLECTION = "products";
+const UNITS_COLLECTION = "units";
+const PRODUCT_SUPPLIER_COLLECTION = "product_per_supplier";
 
 // optional env override (still supported)
 const BRANCHES_COLLECTION = (process.env.BRANCHES_COLLECTION || "").trim();
@@ -82,7 +84,16 @@ async function fetchSuppliersMapByIds(base: string, supplierIds: number[]) {
 async function fetchProductsMapByIds(base: string, productIds: number[]) {
     const map = new Map<
         number,
-        { product_id: number; product_name: string; barcode: string; product_code: string }
+        {
+            product_id: number;
+            product_name: string;
+            barcode: string;
+            product_code: string;
+            unit_of_measurement: any;
+            parent_id: number | null;
+            category: string;
+            brand: string;
+        }
     >();
     const ids = uniqNums(productIds);
     if (!ids.length) return map;
@@ -90,7 +101,7 @@ async function fetchProductsMapByIds(base: string, productIds: number[]) {
     const url =
         `${base}/items/${PRODUCTS_COLLECTION}?limit=-1` +
         `&filter[product_id][_in]=${encodeURIComponent(ids.join(","))}` +
-        `&fields=product_id,product_name,barcode,product_code`;
+        `&fields=product_id,product_name,barcode,product_code,unit_of_measurement,parent_id,product_category.category_name,product_brand.brand_name`;
 
     const j = await fetchJson(url);
     for (const p of j?.data ?? []) {
@@ -101,7 +112,30 @@ async function fetchProductsMapByIds(base: string, productIds: number[]) {
             product_name: toStr(p?.product_name, `Product ${id}`),
             barcode: toStr(p?.barcode),
             product_code: toStr(p?.product_code),
+            unit_of_measurement: p?.unit_of_measurement,
+            parent_id: toNum(p?.parent_id) || null,
+            category: toStr(p?.product_category?.category_name, "—"),
+            brand: toStr(p?.product_brand?.brand_name, "—"),
         });
+    }
+    return map;
+}
+
+async function fetchUnitsMapByIds(base: string, unitIds: any[]) {
+    const map = new Map<number, { id: number; unit_shortcut: string }>();
+    const ids = uniqNums(unitIds);
+    if (!ids.length) return map;
+
+    const url =
+        `${base}/items/${UNITS_COLLECTION}?limit=-1` +
+        `&filter[unit_id][_in]=${encodeURIComponent(ids.join(","))}` +
+        `&fields=unit_id,unit_shortcut`;
+
+    const j = await fetchJson(url);
+    for (const u of j?.data ?? []) {
+        const id = toNum(u?.unit_id);
+        if (!id) continue;
+        map.set(id, { id, unit_shortcut: toStr(u?.unit_shortcut, "—") });
     }
     return map;
 }
@@ -324,6 +358,9 @@ type PoProductRow = {
     ordered_quantity: number;
     unit_price?: string | number | null;
     branch_id?: number | null;
+    total_amount?: string | number | null;
+    discounted_price?: string | number | null;
+    approved_price?: string | number | null;
 };
 
 async function fetchPOProductsByPOIds(base: string, poIds: number[]) {
@@ -333,7 +370,7 @@ async function fetchPOProductsByPOIds(base: string, poIds: number[]) {
     const url =
         `${base}/items/${PO_PRODUCTS_COLLECTION}?limit=-1` +
         `&filter[purchase_order_id][_in]=${encodeURIComponent(poIds.join(","))}` +
-        `&fields=purchase_order_product_id,purchase_order_id,product_id,ordered_quantity,unit_price,branch_id`;
+        `&fields=purchase_order_product_id,purchase_order_id,product_id,ordered_quantity,unit_price,branch_id,total_amount,discounted_price,approved_price`;
 
     const j = await fetchJson(url);
     return (j?.data ?? []) as PoProductRow[];
@@ -343,18 +380,40 @@ async function fetchPOProductsByPOId(base: string, poId: number) {
     const url =
         `${base}/items/${PO_PRODUCTS_COLLECTION}?limit=-1` +
         `&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}` +
-        `&fields=purchase_order_product_id,purchase_order_id,product_id,ordered_quantity,unit_price,branch_id`;
+        `&fields=purchase_order_product_id,purchase_order_id,product_id,ordered_quantity,unit_price,branch_id,total_amount,discounted_price,approved_price`;
 
     const j = await fetchJson(url);
     return (j?.data ?? []) as PoProductRow[];
+}
+
+async function fetchProductSupplierLinks(base: string, productIds: number[]) {
+    const map = new Map<number, { supplier_id: number; discount_type: any }>();
+    const ids = uniqNums(productIds);
+    if (!ids.length) return map;
+
+    const url =
+        `${base}/items/${PRODUCT_SUPPLIER_COLLECTION}?limit=-1` +
+        `&filter[product_id][_in]=${encodeURIComponent(ids.join(","))}` +
+        `&fields=product_id,supplier_id,discount_type.id,discount_type.discount_type,discount_type.total_percent`;
+
+    const j = await fetchJson(url);
+    for (const link of j?.data ?? []) {
+        const pid = toNum(link?.product_id);
+        if (!pid) continue;
+        map.set(pid, {
+            supplier_id: toNum(link?.supplier_id),
+            discount_type: link?.discount_type,
+        });
+    }
+    return map;
 }
 
 // =====================
 // DETAIL BUILDER
 // =====================
 async function buildPurchaseOrderDetail(base: string, poId: number) {
-    // ✅ do not force fields (avoid permission errors)
-    const headerUrl = `${base}/items/${PO_COLLECTION}/${encodeURIComponent(String(poId))}`;
+    // ✅ Expand discount_type on header
+    const headerUrl = `${base}/items/${PO_COLLECTION}/${encodeURIComponent(String(poId))}?fields=*,discount_type.*`;
     const headerJ = await fetchJson(headerUrl);
     const header: any = headerJ?.data ?? null;
     if (!header?.purchase_order_id) throw new Error("PO not found.");
@@ -365,7 +424,12 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
 
     const supplierId = toNum(header?.supplier_name);
     const suppliersMap = await fetchSuppliersMapByIds(base, supplierId ? [supplierId] : []);
-    const supplierName = supplierId ? toStr(suppliersMap.get(supplierId)?.supplier_name, "—") : "—";
+    const supplierLabels = new Map<number, string>();
+    for (const [id, s] of suppliersMap) {
+        supplierLabels.set(id, toStr(s?.supplier_name, "—"));
+    }
+
+    const supplierName = supplierId ? supplierLabels.get(supplierId) || "—" : "—";
 
     const lines = await fetchPOProductsByPOId(base, poId);
 
@@ -375,6 +439,40 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
 
     const productIds = uniqNums(lines.map((l) => l.product_id));
     const productsMap = await fetchProductsMapByIds(base, productIds);
+
+    const unitIds = uniqNums([
+        ...lines.map((l: any) => l.unit_of_measurement),
+        ...Array.from(productsMap.values()).map((p) => p.unit_of_measurement),
+    ]);
+    const unitsMap = await fetchUnitsMapByIds(base, unitIds);
+
+    const productLinksMap = await fetchProductSupplierLinks(base, productIds);
+
+    // ===== Pre-calculate Header Financials for Fallback =====
+    const tempItems = lines.map((l) => {
+        const qty = Math.max(0, toNum(l.ordered_quantity));
+        const unit = toNum(l.unit_price);
+        return { lineTotal: qty * unit };
+    });
+    const grossComputed = tempItems.reduce((sum, it) => sum + it.lineTotal, 0);
+    const grossHeader = pickNum(header, ["gross_amount", "grossAmount", "subtotal", "sub_total"]);
+    const headerGross = grossHeader || grossComputed;
+
+    let headerDiscAmount = pickNum(header, ["discounted_amount", "discount_amount", "discountAmount", "discount_value", "discountValue"]);
+    let headerDiscPct = pickNum(header, ["discount_percent", "discountPercent", "discount_rate", "discountRate", "discount_percentage", "discountPercentage"]);
+
+    if (!headerDiscAmount && headerDiscPct > 0 && headerGross > 0) {
+        headerDiscAmount = (headerGross * headerDiscPct) / 100;
+    }
+    if (!headerDiscPct && headerDiscAmount > 0 && headerGross > 0) {
+        headerDiscPct = (headerDiscAmount / headerGross) * 100;
+    }
+
+    const headerDiscTypeName = toStr(
+        header?.discount_type?.discount_type || 
+        pickStr(header, ["discount_type", "discountType", "discount_code", "discountCode"]),
+        headerDiscAmount > 0 ? "PO Discount" : ""
+    );
 
     const items = lines.map((l) => {
         const pid = toNum(l.product_id);
@@ -387,6 +485,35 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
         const barcode = toStr(p?.barcode) || toStr(p?.product_code) || (pid ? String(pid) : "");
         const name = toStr(p?.product_name, `Product #${pid || l.product_id}`);
 
+        const linkData = productLinksMap.get(pid);
+        
+        // Helper to extract name/percent from expanded or primitive discount_type
+        const getDiscInfo = (dt: any) => {
+            if (!dt) return null;
+            if (typeof dt === "object") {
+                return { name: toStr(dt.discount_type), pct: toNum(dt.total_percent) };
+            }
+            return null;
+        };
+
+        const itemDisc = getDiscInfo((l as any).discount_type);
+        const linkDisc = getDiscInfo(linkData?.discount_type);
+
+        const resolvedDiscountType = itemDisc?.name || linkDisc?.name || headerDiscTypeName || "—";
+        const discountPct = itemDisc?.pct || linkDisc?.pct || headerDiscPct || 0;
+
+        const grossVal = toNum((l as any).gross) || lineTotal;
+        let netVal = toNum(l.total_amount) || toNum((l as any).net) || 0;
+        
+        // Calculate net if missing or if it matches gross (fallback to header discount)
+        if ((netVal === 0 || netVal === grossVal) && discountPct > 0) {
+            netVal = grossVal * (1 - discountPct / 100);
+        } else if (netVal === 0) {
+            netVal = grossVal;
+        }
+
+        const discAmt = Math.max(0, grossVal - netVal);
+
         return {
             id: String(l.purchase_order_product_id),
             purchase_order_product_id: l.purchase_order_product_id,
@@ -394,17 +521,35 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
             productId: String(pid || ""),
             name,
             barcode,
-            uom: toStr((l as any)?.uom, ""),
+            brand: (p as any)?.brand || "—",
+            category: (p as any)?.category || "—",
+            uom:
+                unitsMap.get(toNum((l as any)?.unit_of_measurement))?.unit_shortcut ||
+                unitsMap.get(toNum(p?.unit_of_measurement))?.unit_shortcut ||
+                toStr((l as any)?.unit_of_measurement) ||
+                toStr(p?.unit_of_measurement) ||
+                "—",
+
+            // Link supplier info if parent_id is null
+            link_supplier_id: p?.parent_id === null ? linkData?.supplier_id || null : null,
+            link_discount_type: resolvedDiscountType !== "—" ? resolvedDiscountType : null,
 
             ordered_quantity: qty,
             expectedQty: qty,
+            qty,
+            quantity: qty,
 
             unit_price: unit,
             unitPrice: unit,
             price: unit,
 
-            line_total: lineTotal,
-            lineTotal,
+            gross: grossVal,
+            discount_type: resolvedDiscountType,
+            discount_amount: discAmt,
+            net: netVal,
+
+            line_total: netVal,
+            lineTotal: netVal,
 
             branch_id: toNum(l.branch_id),
         };
@@ -424,45 +569,14 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
     }
     const allocations = Array.from(allocationsMap.values());
 
-    // ===== Financials + discount =====
-    const grossComputed = items.reduce((sum, it) => sum + toNum(it.line_total ?? it.lineTotal), 0);
-
-    const grossHeader = pickNum(header, ["gross_amount", "grossAmount", "subtotal", "sub_total"]);
-    const gross = grossHeader || grossComputed;
-
-    let discountAmount = pickNum(header, [
-        "discounted_amount",
-        "discount_amount",
-        "discountAmount",
-        "discount_value",
-        "discountValue",
-    ]);
-
-    let discountPercent = pickNum(header, [
-        "discount_percent",
-        "discountPercent",
-        "discount_rate",
-        "discountRate",
-        "discount_percentage",
-        "discountPercentage",
-    ]);
-
-    if (!discountAmount && discountPercent > 0 && gross > 0) {
-        discountAmount = (gross * discountPercent) / 100;
-    }
-    if (!discountPercent && discountAmount > 0 && gross > 0) {
-        discountPercent = (discountAmount / gross) * 100;
-    }
-
-    const discountType = pickStr(header, ["discount_type", "discountType", "discount_code", "discountCode"], "");
-
+    // ===== Final Financials for View =====
     const vatHeader = pickNum(header, ["vat_amount", "vatAmount", "vat"]);
     const ewtHeader = pickNum(header, ["withholding_tax_amount", "withholdingAmount", "ewt_amount", "ewtGoods"]);
     const totalHeader = pickNum(header, ["total_amount", "totalAmount", "total"]);
 
-    const vat = vatHeader || (gross - discountAmount) * 0.12;
+    const vat = vatHeader || (headerGross - headerDiscAmount) * 0.12;
     const ewt = ewtHeader || 0;
-    const total = totalHeader || gross - discountAmount + vat - ewt;
+    const total = totalHeader || headerGross - headerDiscAmount + vat - ewt;
 
     return {
         id: String(poId),
@@ -483,17 +597,17 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
         items,
         allocations,
 
-        gross_amount: gross,
-        grossAmount: gross,
+        gross_amount: headerGross,
+        grossAmount: headerGross,
 
-        discounted_amount: discountAmount,
-        discountAmount: discountAmount,
+        discounted_amount: headerDiscAmount,
+        discountAmount: headerDiscAmount,
 
-        discount_percent: discountPercent,
-        discountPercent: discountPercent,
+        discount_percent: headerDiscPct,
+        discountPercent: headerDiscPct,
 
-        discount_type: discountType,
-        discountType: discountType,
+        discount_type: headerDiscTypeName,
+        discountType: headerDiscTypeName,
 
         vat_amount: vat,
         vatAmount: vat,

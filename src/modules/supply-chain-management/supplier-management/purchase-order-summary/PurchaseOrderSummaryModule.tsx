@@ -17,10 +17,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, ChevronRight, ChevronLeft, FilterX, ListFilter } from "lucide-react";
+import { Search, ChevronRight, ChevronLeft, FilterX, ListFilter, Printer, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PurchaseOrder, Supplier, StatusRef } from "./types";
+import { generatePOSummaryPDF } from "./utils/generatePOSummaryPDF";
 
 interface Props {
   poData: PurchaseOrder[];
@@ -43,10 +44,10 @@ export default function PurchaseOrderSummaryModule({
   
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, filterSupplier, filterInvStatus, filterPayStatus, filterTransType, pageSize]);
 
   const getInventoryStatusColor = (status: string) => {
     const s = status?.toLowerCase() || "";
@@ -68,18 +69,22 @@ export default function PurchaseOrderSummaryModule({
   const filteredData = useMemo(() => {
     return poData.filter((item) => {
       const searchLower = searchTerm.toLowerCase();
+      const supplierName = suppliers.find(s => s.id === item.supplier_name)?.supplier_name || "";
       const matchesSearch = 
         (item.purchase_order_no || "").toLowerCase().includes(searchLower) ||
-        (item.remark || "").toLowerCase().includes(searchLower);
+        (item.remark || "").toLowerCase().includes(searchLower) ||
+        supplierName.toLowerCase().includes(searchLower);
 
       const matchesSupplier = filterSupplier === "all" || item.supplier_name?.toString() === filterSupplier;
       const matchesInv = filterInvStatus === "all" || item.inventory_status?.toString() === filterInvStatus;
       const matchesPay = filterPayStatus === "all" || item.payment_status?.toString() === filterPayStatus;
       const matchesTrans = filterTransType === "all" || item.transaction_type?.toString() === filterTransType;
       
-      return matchesSearch && matchesSupplier && matchesInv && matchesPay && matchesTrans;
+      const matchesDate = (!dateFrom || item.date >= dateFrom) && (!dateTo || item.date <= dateTo);
+      
+      return matchesSearch && matchesSupplier && matchesInv && matchesPay && matchesTrans && matchesDate;
     });
-  }, [searchTerm, filterSupplier, filterInvStatus, filterPayStatus, filterTransType, poData]);
+  }, [searchTerm, filterSupplier, filterInvStatus, filterPayStatus, filterTransType, poData, dateFrom, dateTo, suppliers]);
 
   const totalPages = Math.ceil(filteredData.length / pageSize) || 1;
   const currentData = useMemo(() => {
@@ -93,6 +98,8 @@ export default function PurchaseOrderSummaryModule({
     setFilterInvStatus("all");
     setFilterPayStatus("all");
     setFilterTransType("all");
+    setDateFrom("");
+    setDateTo("");
     setCurrentPage(1);
   };
 
@@ -105,14 +112,24 @@ export default function PurchaseOrderSummaryModule({
             <ListFilter className="w-4 h-4 text-primary" />
             <h2 className="text-sm font-bold tracking-tight text-foreground uppercase">Search & Filters</h2>
           </div>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={resetFilters} 
-            className="h-8 text-[10px] font-bold uppercase text-muted-foreground hover:text-destructive gap-1.5"
-          >
-            <FilterX className="w-3.5 h-3.5" /> Reset Filters
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => generatePOSummaryPDF(filteredData, suppliers)}
+                className="h-8 text-[10px] font-bold uppercase gap-1.5 border-primary/20 text-primary hover:bg-primary/5"
+            >
+                <Printer className="w-3.5 h-3.5" /> Print Summary
+            </Button>
+            <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={resetFilters} 
+                className="h-8 text-[10px] font-bold uppercase text-muted-foreground hover:text-destructive gap-1.5"
+            >
+                <FilterX className="w-3.5 h-3.5" /> Reset Filters
+            </Button>
+          </div>
         </div>
         
         <div className="space-y-6">
@@ -120,12 +137,11 @@ export default function PurchaseOrderSummaryModule({
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Search</label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input 
                 placeholder="Search by PO number, supplier, transaction type, or remarks..." 
-                className="pl-10 h-11 bg-muted/20 border-border focus-visible:ring-1"
+                className="h-11 bg-muted/20 border-border focus-visible:ring-1"
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
               />
             </div>
           </div>
@@ -136,7 +152,7 @@ export default function PurchaseOrderSummaryModule({
               {/* Supplier */}
               <div className="space-y-1.5">
                 <span className="text-[9px] font-bold uppercase text-muted-foreground/70 ml-1">Supplier</span>
-                <Select value={filterSupplier} onValueChange={setFilterSupplier}>
+                <Select value={filterSupplier} onValueChange={(v) => { setFilterSupplier(v); setCurrentPage(1); }}>
                   <SelectTrigger className="h-10 text-xs bg-background border-border">
                     <SelectValue placeholder="All Suppliers" />
                   </SelectTrigger>
@@ -150,7 +166,7 @@ export default function PurchaseOrderSummaryModule({
               {/* Transaction Type */}
               <div className="space-y-1.5">
                 <span className="text-[9px] font-bold uppercase text-muted-foreground/70 ml-1">Transaction Type</span>
-                <Select value={filterTransType} onValueChange={setFilterTransType}>
+                <Select value={filterTransType} onValueChange={(v) => { setFilterTransType(v); setCurrentPage(1); }}>
                   <SelectTrigger className="h-10 text-xs bg-background border-border">
                     <SelectValue placeholder="All Types" />
                   </SelectTrigger>
@@ -165,7 +181,7 @@ export default function PurchaseOrderSummaryModule({
               {/* Inventory Status */}
               <div className="space-y-1.5">
                 <span className="text-[9px] font-bold uppercase text-muted-foreground/70 ml-1">Inventory Status</span>
-                <Select value={filterInvStatus} onValueChange={setFilterInvStatus}>
+                <Select value={filterInvStatus} onValueChange={(v) => { setFilterInvStatus(v); setCurrentPage(1); }}>
                   <SelectTrigger className="h-10 text-xs bg-background border-border">
                     <SelectValue placeholder="All Statuses" />
                   </SelectTrigger>
@@ -179,7 +195,7 @@ export default function PurchaseOrderSummaryModule({
               {/* Payment Status */}
               <div className="space-y-1.5">
                 <span className="text-[9px] font-bold uppercase text-muted-foreground/70 ml-1">Payment Status</span>
-                <Select value={filterPayStatus} onValueChange={setFilterPayStatus}>
+                <Select value={filterPayStatus} onValueChange={(v) => { setFilterPayStatus(v); setCurrentPage(1); }}>
                   <SelectTrigger className="h-10 text-xs bg-background border-border">
                     <SelectValue placeholder="All Statuses" />
                   </SelectTrigger>
@@ -188,6 +204,32 @@ export default function PurchaseOrderSummaryModule({
                     {paymentStatuses.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.status}</SelectItem>)}
                   </SelectContent>
                 </Select>
+              </div>
+
+              {/* Date Requested Range */}
+              <div className="space-y-1.5 lg:col-span-2">
+                <span className="text-[9px] font-bold uppercase text-muted-foreground/70 ml-1">Date Requested (From - To)</span>
+                <div className="flex items-center gap-2">
+                   <div className="relative flex-1">
+                      <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+                      <Input 
+                        type="date" 
+                        className="pl-8 h-10 text-xs bg-background border-border" 
+                        value={dateFrom}
+                        onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
+                      />
+                   </div>
+                   <div className="text-muted-foreground text-xs">—</div>
+                   <div className="relative flex-1">
+                      <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+                      <Input 
+                        type="date" 
+                        className="pl-8 h-10 text-xs bg-background border-border" 
+                        value={dateTo}
+                        onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
+                      />
+                   </div>
+                </div>
               </div>
             </div>
           </div>
@@ -204,6 +246,7 @@ export default function PurchaseOrderSummaryModule({
               <TableHead className="font-bold text-foreground text-[11px] uppercase tracking-wider">Supplier Name</TableHead>
               <TableHead className="font-bold text-foreground text-[11px] uppercase tracking-wider">Date Requested</TableHead>
               <TableHead className="font-bold text-foreground text-[11px] uppercase tracking-wider">Remarks</TableHead>
+              <TableHead className="font-bold text-foreground text-[11px] uppercase tracking-wider text-right">Total Amount</TableHead>
               <TableHead className="font-bold text-foreground text-[11px] uppercase tracking-wider text-center">Inventory Status</TableHead>
               <TableHead className="font-bold text-foreground text-[11px] uppercase tracking-wider text-center">Payment Status</TableHead>
             </TableRow>
@@ -227,6 +270,9 @@ export default function PurchaseOrderSummaryModule({
                       {/* GINAGAMIT NA ANG FIELD NA 'remark' MULA SA API */}
                       {po.remark || "--"}
                     </TableCell>
+                    <TableCell className="text-right text-xs font-bold font-mono text-foreground">
+                      {Number(po.total_amount ?? po.total ?? po.net_amount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </TableCell>
                     <TableCell className="text-center">
                       <Badge variant="outline" className={`${getInventoryStatusColor(invStatusText)} px-2.5 py-1 text-[10px] font-black border rounded-md shadow-none uppercase`}>
                         {invStatusText}
@@ -242,7 +288,7 @@ export default function PurchaseOrderSummaryModule({
               })
             ) : (
               <TableRow>
-                <TableCell colSpan={7} className="h-32 text-center text-muted-foreground text-sm italic">
+                <TableCell colSpan={8} className="h-32 text-center text-muted-foreground text-sm italic">
                   No purchase orders found matching your filters.
                 </TableCell>
               </TableRow>

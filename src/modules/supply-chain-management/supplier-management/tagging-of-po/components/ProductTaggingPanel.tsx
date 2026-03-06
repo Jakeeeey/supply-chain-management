@@ -170,7 +170,7 @@ export default function ProductTaggingPanel(props: {
                                                 <BadgeX className="h-5 w-5 shrink-0" />
                                                 <div>
                                                     <div className="font-black">
-                                                        REJECTED: SKU '{sku.trim()}' is NOT listed in this PO.
+                                                        REJECTED: SKU &apos;{sku.trim()}&apos; is NOT listed in this PO.
                                                     </div>
                                                     <div className="text-xs mt-1 opacity-90">
                                                         Please scan a valid SKU.
@@ -193,8 +193,12 @@ export default function ProductTaggingPanel(props: {
                                         <Input
                                             ref={rfidRef}
                                             value={rfid}
-                                            onChange={(e) => setRfid(e.target.value)}
+                                            onChange={(e) => {
+                                                const val = e.target.value.substring(0, 24);
+                                                setRfid(val);
+                                            }}
                                             placeholder="Scan RFID..."
+                                            maxLength={24}
                                             className={cn(
                                                 "h-12 rounded-xl",
                                                 "bg-[rgba(255,255,255,0.06)] border-[rgba(255,255,255,0.12)] text-[#F8FAFC]",
