@@ -21,7 +21,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Filter, Cuboid } from "lucide-react";
+import { Filter, Cuboid, Layers, Users } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 interface StockConversionTableProps {
   data: StockConversionProduct[];
@@ -32,19 +34,30 @@ export function StockConversionTable({ data, onConvertClick }: StockConversionTa
   const [brandFilter, setBrandFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [unitFilter, setUnitFilter] = useState("all");
+  const [supplierFilter, setSupplierFilter] = useState("all");
+  const [isGrouped, setIsGrouped] = useState(false);
 
   const uniqueBrands = useMemo(() => Array.from(new Set(data.map(d => d.brand))), [data]);
   const uniqueCategories = useMemo(() => Array.from(new Set(data.map(d => d.category))), [data]);
   const uniqueUnits = useMemo(() => Array.from(new Set(data.map(d => d.currentUnit))), [data]);
+  const uniqueSuppliers = useMemo(() => Array.from(new Set(data.map(d => d.supplierName || "No Supplier"))), [data]);
 
   const filteredData = useMemo(() => {
-    return data.filter(item => {
+    let result = data.filter(item => {
       const matchBrand = brandFilter === "all" || item.brand === brandFilter;
       const matchCat = categoryFilter === "all" || item.category === categoryFilter;
       const matchUnit = unitFilter === "all" || item.currentUnit === unitFilter;
-      return matchBrand && matchCat && matchUnit;
+      const matchSupplier = supplierFilter === "all" || (item.supplierName || "No Supplier") === supplierFilter;
+      return matchBrand && matchCat && matchUnit && matchSupplier;
     });
-  }, [data, brandFilter, categoryFilter, unitFilter]);
+
+    if (isGrouped) {
+      // Sort by family so they appear together
+      result = [...result].sort((a, b) => (a.family || "").localeCompare(b.family || ""));
+    }
+
+    return result;
+  }, [data, brandFilter, categoryFilter, unitFilter, supplierFilter, isGrouped]);
 
   const columns = useMemo(() => getColumns(onConvertClick), [onConvertClick]);
 
@@ -66,7 +79,7 @@ export function StockConversionTable({ data, onConvertClick }: StockConversionTa
       <CardHeader className="flex flex-row items-center justify-between py-4 pb-2">
          <div className="flex items-center gap-2">
             <Cuboid className="w-5 h-5 text-blue-600" />
-            <CardTitle className="text-xl font-semibold tracking-tight">Stock Conversion Management</CardTitle>
+            <CardTitle className="text-xl font-semibold tracking-tight">Stock Conversion</CardTitle>
          </div>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col gap-4 overflow-hidden pt-4">
@@ -77,6 +90,24 @@ export function StockConversionTable({ data, onConvertClick }: StockConversionTa
              Filters:
            </div>
            
+           <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-foreground flex items-center gap-1">
+                <Users className="w-3.5 h-3.5 text-muted-foreground" />
+                Supplier:
+              </span>
+              <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+                <SelectTrigger className="w-[180px] bg-background">
+                  <SelectValue placeholder="All Suppliers" />
+                </SelectTrigger>
+                <SelectContent position="popper" className="z-50 bg-background">
+                  <SelectItem value="all">All Suppliers</SelectItem>
+                  {uniqueSuppliers.map(s => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+           </div>
+
            <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-foreground">Brand:</span>
               <Select value={brandFilter} onValueChange={setBrandFilter}>
@@ -110,7 +141,7 @@ export function StockConversionTable({ data, onConvertClick }: StockConversionTa
            <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-foreground">Unit:</span>
               <Select value={unitFilter} onValueChange={setUnitFilter}>
-                <SelectTrigger className="w-[180px] bg-background">
+                <SelectTrigger className="w-[150px] bg-background">
                   <SelectValue placeholder="All Units" />
                 </SelectTrigger>
                 <SelectContent position="popper" className="z-50 bg-background">
@@ -120,6 +151,20 @@ export function StockConversionTable({ data, onConvertClick }: StockConversionTa
                   ))}
                 </SelectContent>
               </Select>
+           </div>
+
+           <div className="h-4 w-px bg-border mx-2" />
+
+           <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="group-family" 
+                checked={isGrouped} 
+                onCheckedChange={(checked) => setIsGrouped(!!checked)}
+              />
+              <Label htmlFor="group-family" className="text-sm font-medium flex items-center gap-1 cursor-pointer">
+                <Layers className="w-4 h-4 text-blue-500" />
+                Group by Family
+              </Label>
            </div>
         </div>
 

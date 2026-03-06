@@ -10,6 +10,10 @@ export const getColumns = (
   onConvertClick: (product: StockConversionProduct) => void
 ): ColumnDef<StockConversionProduct>[] => [
   {
+    accessorKey: "supplierName",
+    header: "SUPPLIER",
+  },
+  {
     accessorKey: "brand",
     header: "BRAND",
   },

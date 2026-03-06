@@ -12,10 +12,12 @@ export type RFIDTag = z.infer<typeof rfidTagSchema>;
 export const stockConversionProductSchema = z.object({
   productId: z.number(),
   supplierId: z.number().optional(),
+  supplierName: z.string().optional(),
   brand: z.string(),
   category: z.string(),
   productCode: z.string().optional(),
   productDescription: z.string(),
+  family: z.string().optional(),
   unitOfBox: z.number().optional(), // e.g. 24 pieces
   pieces: z.number().optional(),
   tie: z.number().optional(),
@@ -31,6 +33,7 @@ export const stockConversionProductSchema = z.object({
       unitId: z.number(),
       name: z.string(),
       conversionFactor: z.number().optional(), // multiplier vs base unit
+      targetProductId: z.number().optional(),
   })).optional(),
 });
 

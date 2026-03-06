@@ -78,7 +78,7 @@ export async function fetchStockList(token?: string): Promise<StockConversionPro
     const startTime = Date.now();
 
     // Fetch all required data in parallel
-    const [prodRes, unitRes, brandRes, catRes, supplierRes, invRes] = await Promise.all([
+    const [prodRes, unitRes, brandRes, catRes, supplierRes, invRes, supplierListRes] = await Promise.all([
       fetchWithTimeout(`${DIRECTUS_API}/items/products?limit=-1&fields=*.*`, { headers: getHeaders(), cache: "no-store" }),
       fetchWithTimeout(`${DIRECTUS_API}/items/units?limit=-1`, { headers: getHeaders(), cache: "no-store" }),
       fetchWithTimeout(`${DIRECTUS_API}/items/brand?limit=-1`, { headers: getHeaders(), cache: "no-store" }),
@@ -89,7 +89,8 @@ export async function fetchStockList(token?: string): Promise<StockConversionPro
             console.warn("[Stock-Conversion] Spring Inventory fetch failed:", e.message);
             return null;
           })
-        : Promise.resolve(null)
+        : Promise.resolve(null),
+      fetchWithTimeout(`${DIRECTUS_API}/items/suppliers?limit=-1`, { headers: getHeaders(), cache: "no-store" })
     ]);
 
     console.log(`[Stock-Conversion] All requests returned in ${Date.now() - startTime}ms`);
@@ -129,6 +130,14 @@ export async function fetchStockList(token?: string): Promise<StockConversionPro
        });
     }
 
+    const supplierIdNameMap = new Map<number, string>();
+    if (supplierListRes && supplierListRes.ok) {
+        const slJson = await supplierListRes.json();
+        (slJson.data || []).forEach((s: any) => {
+            supplierIdNameMap.set(Number(s.id || s.supplier_id), s.supplier_name || s.name || "Unknown");
+        });
+    }
+
     const invMap = new Map<number, number>();
     if (invRes && invRes.ok) {
        const invJson = await invRes.json();
@@ -160,10 +169,10 @@ export async function fetchStockList(token?: string): Promise<StockConversionPro
       }
     });
 
-    // Group products (family) by the parent's product_id
+    // Group products (family) by the parent's product_id or product_name
     const productGroups = new Map<string, any[]>();
     products.forEach((p: any) => {
-      const key = p.parent_id ? String(p.parent_id) : String(p.product_id || p.id);
+      const key = p.parent_id ? `PID-${p.parent_id}` : `NAME-${p.product_name || p.id}`;
       if (!productGroups.has(key)) productGroups.set(key, []);
       productGroups.get(key)!.push(p);
     });
@@ -197,7 +206,7 @@ export async function fetchStockList(token?: string): Promise<StockConversionPro
          : rawCategory;
       
       // Determine available target units from variants (the whole family)
-      const key = p.parent_id ? String(p.parent_id) : String(p.product_id || p.id);
+      const key = p.parent_id ? `PID-${p.parent_id}` : `NAME-${p.product_name || p.id}`;
       const familyGroup = productGroups.get(key) || [];
       const availableUnits = familyGroup
         .filter((v: any) => {
@@ -236,10 +245,12 @@ export async function fetchStockList(token?: string): Promise<StockConversionPro
       result.push({
         productId: p.product_id || p.id,
         supplierId: supplierId,
+        supplierName: supplierId ? supplierIdNameMap.get(Number(supplierId)) : "No Supplier",
         brand: brandMap.get(Number(brandId)) || (typeof rawBrand === 'object' && rawBrand?.brand_name ? rawBrand.brand_name : "Unknown Brand"),
         category: catMap.get(Number(categoryId)) || (typeof rawCategory === 'object' && rawCategory?.category_name ? rawCategory.category_name : "Unknown Category"),
         productCode: p.product_code || inheritP.product_code,
         productDescription: p.description || p.product_name || inheritP.description || inheritP.product_name || "",
+        family: key,
         unitOfBox: familyGroup.find(v => {
            const vu = typeof v.unit_of_measurement === 'object' ? v.unit_of_measurement.unit_id : v.unit_of_measurement; 
            return unitMap.get(Number(vu))?.toLowerCase() === 'box'
