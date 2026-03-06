@@ -196,7 +196,7 @@ function SupplierSelect(props: {
                 Supplier
             </div>
 
-            <Popover open={open} onOpenChange={setOpen} contentId={popoverId}>
+            <Popover open={open} onOpenChange={setOpen}>
                 <PopoverTrigger asChild>
                     <Button
                         type="button"
@@ -326,7 +326,7 @@ function BranchMultiSelect(props: {
                 Delivery Branches
             </div>
 
-            <Popover open={open} onOpenChange={setOpen} contentId={popoverId}>
+            <Popover open={open} onOpenChange={setOpen}>
                 <PopoverTrigger asChild>
                     <Button
                         type="button"
