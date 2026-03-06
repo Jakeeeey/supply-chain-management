@@ -226,7 +226,7 @@ export async function DELETE(req: NextRequest) {
         const currentBranch = currentData.data;
 
         // 2. Identify paired Bad Stock branch if deleting a "Normal" branch
-        let idsToDelete = [id];
+        const idsToDelete = [id];
         if (currentBranch.isBadStock == 0) {
             const badStockCode = `${currentBranch.branch_code}-BS`;
             const findBSRes = await fetch(`${DIRECTUS_BASE}/items/branches?filter[branch_code][_eq]=${badStockCode}`, {

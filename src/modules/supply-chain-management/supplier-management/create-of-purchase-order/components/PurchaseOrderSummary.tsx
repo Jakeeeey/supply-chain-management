@@ -279,12 +279,6 @@ export function PurchaseOrderSummary(props: {
                                     <span className="text-[10px] font-medium text-muted-foreground mb-1 uppercase tracking-wider">Entity Name</span>
                                     <p className="text-sm font-black text-foreground tracking-tight">{props.supplier?.name || "—"}</p>
                                 </div>
-                                <div className="pt-3 border-t border-border/50">
-                                    <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Current A/P Balance</p>
-                                    <p className="text-lg font-black text-foreground tracking-tighter">
-                                        {props.supplier ? money.format(props.supplier.apBalance) : "—"}
-                                    </p>
-                                </div>
                             </div>
                         </div>
 

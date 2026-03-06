@@ -193,8 +193,12 @@ export default function ProductTaggingPanel(props: {
                                         <Input
                                             ref={rfidRef}
                                             value={rfid}
-                                            onChange={(e) => setRfid(e.target.value)}
+                                            onChange={(e) => {
+                                                const val = e.target.value.substring(0, 24);
+                                                setRfid(val);
+                                            }}
                                             placeholder="Scan RFID..."
+                                            maxLength={24}
                                             className={cn(
                                                 "h-12 rounded-xl",
                                                 "bg-[rgba(255,255,255,0.06)] border-[rgba(255,255,255,0.12)] text-[#F8FAFC]",

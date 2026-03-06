@@ -243,7 +243,7 @@ export default function LogisticsSummaryModule() {
                 })
             }
 
-            let allDeliveries = allRecords.flatMap(record =>
+            const allDeliveries = allRecords.flatMap(record =>
                 record.deliveries.map(d => {
                     const fulfilled = parseCurrency(d.fulfilled)
                     const notFulfilled = parseCurrency(d.notFulfilled)

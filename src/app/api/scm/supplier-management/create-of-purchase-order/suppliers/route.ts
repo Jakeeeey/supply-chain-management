@@ -16,10 +16,9 @@ export async function GET(req: NextRequest) {
 
         const limit = url.searchParams.get("limit") ?? "-1";
 
-        // ✅ ALWAYS filter to TRADE suppliers only
+        // ✅ Allow TRADE and NON-TRADE suppliers
         const upstreamUrl = new URL(`${base}/items/suppliers`);
         upstreamUrl.searchParams.set("limit", limit);
-        upstreamUrl.searchParams.set("filter[supplier_type][_eq]", "TRADE");
 
         const res = await fetch(upstreamUrl.toString(), {
             headers: buildUpstreamHeaders(),

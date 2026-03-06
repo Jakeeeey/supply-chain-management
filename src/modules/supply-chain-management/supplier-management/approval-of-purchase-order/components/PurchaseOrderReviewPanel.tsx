@@ -25,6 +25,15 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+    Pagination,
+    PaginationContent,
+    PaginationEllipsis,
+    PaginationItem,
+    PaginationLink,
+    PaginationNext,
+    PaginationPrevious,
+} from "@/components/ui/pagination";
 import { cn } from "@/lib/utils";
 
 import type { PurchaseOrderDetail, PaymentTerm } from "../types";
@@ -123,9 +132,15 @@ function formatBranches(raw: any): string {
 type NormalizedLine = {
     key: string;
     name: string;
+    brand: string;
+    category: string;
     uom: string;
     qty: number;
     price: number;
+    gross: number;
+    discountType: string;
+    discountAmount: number;
+    net: number;
     total: number;
 };
 
@@ -134,11 +149,17 @@ function normalizeLines(rawItems: any[]): NormalizedLine[] {
     return rawItems.map((it: any, idx: number) => {
         const key = String(it?.po_item_id ?? it?.id ?? idx);
         const name = safeStr(it?.item_name ?? it?.name ?? it?.product_name ?? `Item ${idx + 1}`);
+        const brand = safeStr(it?.brand ?? "—");
+        const category = safeStr(it?.category ?? "—");
         const uom = safeStr(it?.uom ?? it?.unit ?? "—");
         const qty = Math.max(0, toNum(it?.qty ?? it?.quantity ?? 0));
         const price = Math.max(0, toNum(it?.unit_price ?? it?.price ?? 0));
-        const total = toNum(it?.line_total) || Math.max(0, qty * price);
-        return { key, name, uom, qty, price, total };
+        const gross = toNum(it?.gross) || Math.max(0, qty * price);
+        const discountType = safeStr(it?.discount_type ?? "—");
+        const discountAmount = Math.abs(toNum(it?.discount_amount ?? 0));
+        const net = toNum(it?.net) || Math.max(0, gross - discountAmount);
+        const total = toNum(it?.line_total) || net;
+        return { key, name, brand, category, uom, qty, price, gross, discountType, discountAmount, net, total };
     });
 }
 
@@ -158,9 +179,12 @@ export default function PurchaseOrderReviewPanel(props: {
     const [paymentTerm, setPaymentTerm] = React.useState<PaymentTerm>("cash_on_delivery");
     const [termsDays, setTermsDays] = React.useState<number>(30);
 
-    // ✅ confirm dialog state
     const [confirmOpen, setConfirmOpen] = React.useState(false);
     const [submitting, setSubmitting] = React.useState(false);
+
+    // ✅ Pagination state
+    const [currentPage, setCurrentPage] = React.useState(1);
+    const [pageSize, setPageSize] = React.useState(10);
 
     const poAny: any = React.useMemo(() => unwrap(props.po), [props.po]);
 
@@ -172,6 +196,9 @@ export default function PurchaseOrderReviewPanel(props: {
         // reset confirm state when switching PO
         setConfirmOpen(false);
         setSubmitting(false);
+
+        // Reset pagination
+        setCurrentPage(1);
     }, [poAny?.purchase_order_id ?? poAny?.id ?? null]);
 
     /**
@@ -228,6 +255,12 @@ export default function PurchaseOrderReviewPanel(props: {
     }, [poAny]);
 
     const lines = React.useMemo(() => normalizeLines(poAny?.items ?? []), [poAny]);
+
+    const totalPages = Math.ceil(lines.length / pageSize);
+    const currentLines = React.useMemo(() => {
+        const start = (currentPage - 1) * pageSize;
+        return lines.slice(start, start + pageSize);
+    }, [lines, currentPage, pageSize]);
 
     const grossDirect = toNum(poAny?.gross_amount ?? poAny?.grossAmount);
     const discountAmount = toNum(poAny?.discounted_amount ?? poAny?.discountAmount);
@@ -368,10 +401,6 @@ export default function PurchaseOrderReviewPanel(props: {
                                     </div>
                                     <div className="mt-2">
                                         <div className="text-sm font-bold text-foreground truncate">{supplierName}</div>
-                                        <div className="text-xs text-muted-foreground mt-1">
-                                            A/P Balance:{" "}
-                                            <span className="text-foreground font-medium">{fmt.format(apBalance)}</span>
-                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -396,25 +425,138 @@ export default function PurchaseOrderReviewPanel(props: {
                                         {lines.length} item(s)
                                     </Badge>
                                 </div>
-
                                 {lines.length ? (
-                                    <ScrollArea className="max-h-56 pr-2">
-                                        <div className="space-y-2">
-                                            {lines.map((l) => (
-                                                <div key={l.key} className="rounded-lg border border-border bg-background p-3">
-                                                    <div className="flex items-start justify-between gap-3">
-                                                        <div className="min-w-0">
-                                                            <div className="text-sm font-bold text-foreground truncate">{l.name}</div>
-                                                            <div className="text-[11px] text-muted-foreground mt-1">
-                                                                UOM: {l.uom} • Qty: {l.qty} • Unit Price: {fmt.format(l.price)}
-                                                            </div>
-                                                        </div>
-                                                        <div className="text-sm font-black text-foreground">{fmt.format(l.total)}</div>
-                                                    </div>
-                                                </div>
-                                            ))}
+                                    <div className="rounded-lg border border-border bg-background overflow-hidden">
+                                        <div className="overflow-auto max-h-[400px]">
+                                            <table className="w-full text-left text-xs border-separate border-spacing-0">
+                                                <thead className="sticky top-0 z-10 bg-muted/90 backdrop-blur-sm shadow-sm">
+                                                    <tr>
+                                                        <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground border-b border-border">Brand</th>
+                                                        <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground border-b border-border">Category</th>
+                                                        <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground border-b border-border">Product Name</th>
+                                                        <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground text-right border-b border-border">Price</th>
+                                                        <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground border-b border-border">UOM</th>
+                                                        <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground text-right border-b border-border">Qty</th>
+                                                        <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground text-right border-b border-border">Gross</th>
+                                                        <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground border-b border-border">Discount Type</th>
+                                                        <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground text-right border-b border-border">Discount</th>
+                                                        <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground text-right border-b border-border">Net</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-border/50">
+                                                    {currentLines.map((l) => (
+                                                        <tr key={l.key} className="hover:bg-muted/30 transition-colors">
+                                                            <td className="px-3 py-2 text-muted-foreground border-b border-border/10">{l.brand}</td>
+                                                            <td className="px-3 py-2 text-muted-foreground border-b border-border/10">{l.category}</td>
+                                                            <td className="px-3 py-2 font-bold text-foreground border-b border-border/10">{l.name}</td>
+                                                            <td className="px-3 py-2 text-right tabular-nums border-b border-border/10">{fmt.format(l.price)}</td>
+                                                            <td className="px-3 py-2 text-muted-foreground border-b border-border/10">{l.uom}</td>
+                                                            <td className="px-3 py-2 text-right tabular-nums font-medium border-b border-border/10">{l.qty}</td>
+                                                            <td className="px-3 py-2 text-right tabular-nums font-medium border-b border-border/10">{fmt.format(l.gross)}</td>
+                                                            <td className="px-3 py-2 text-muted-foreground uppercase border-b border-border/10">{l.discountType}</td>
+                                                            <td className="px-3 py-2 text-right tabular-nums font-medium text-emerald-600 dark:text-emerald-400 border-b border-border/10">
+                                                                {fmt.format(l.discountAmount)}
+                                                            </td>
+                                                            <td className="px-3 py-2 text-right tabular-nums font-black text-foreground border-b border-border/10">{fmt.format(l.net)}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
                                         </div>
-                                    </ScrollArea>
+
+                                        {/* ✅ Pagination Controls */}
+                                        <div className="border-t border-border p-3 flex flex-col sm:flex-row items-center justify-between gap-4 bg-muted/20">
+                                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                <span>Rows per page:</span>
+                                                <Select
+                                                    value={String(pageSize)}
+                                                    onValueChange={(v) => {
+                                                        setPageSize(Number(v));
+                                                        setCurrentPage(1);
+                                                    }}
+                                                >
+                                                    <SelectTrigger className="h-8 w-[70px]">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {[10, 20, 30, 50, 100].map((size) => (
+                                                            <SelectItem key={size} value={String(size)}>
+                                                                {size}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                <span className="ml-2">
+                                                    Showing {(currentPage - 1) * pageSize + 1} to{" "}
+                                                    {Math.min(currentPage * pageSize, lines.length)} of{" "}
+                                                    {lines.length} items
+                                                </span>
+                                            </div>
+
+                                            {totalPages > 1 && (
+                                                <Pagination className="w-auto mx-0">
+                                                    <PaginationContent>
+                                                        <PaginationItem>
+                                                            <PaginationPrevious
+                                                                href="#"
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    if (currentPage > 1) setCurrentPage((p) => p - 1);
+                                                                }}
+                                                                className={cn(
+                                                                    "h-8 px-2 cursor-pointer",
+                                                                    currentPage === 1 && "pointer-events-none opacity-50"
+                                                                )}
+                                                            />
+                                                        </PaginationItem>
+                                                        
+                                                        <div className="flex items-center gap-1">
+                                                            {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                                                .filter(p => {
+                                                                    return p === 1 || p === totalPages || (p >= currentPage - 1 && p <= currentPage + 1);
+                                                                })
+                                                                .map((p, i, arr) => (
+                                                                    <React.Fragment key={p}>
+                                                                        {i > 0 && arr[i-1] !== p - 1 && (
+                                                                            <PaginationItem>
+                                                                                <PaginationEllipsis />
+                                                                            </PaginationItem>
+                                                                        )}
+                                                                        <PaginationItem>
+                                                                            <PaginationLink
+                                                                                href="#"
+                                                                                className="h-8 w-8 cursor-pointer"
+                                                                                isActive={currentPage === p}
+                                                                                onClick={(e) => {
+                                                                                    e.preventDefault();
+                                                                                    setCurrentPage(p);
+                                                                                }}
+                                                                            >
+                                                                                {p}
+                                                                            </PaginationLink>
+                                                                        </PaginationItem>
+                                                                    </React.Fragment>
+                                                                ))}
+                                                        </div>
+
+                                                        <PaginationItem>
+                                                            <PaginationNext
+                                                                href="#"
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    if (currentPage < totalPages) setCurrentPage((p) => p + 1);
+                                                                }}
+                                                                className={cn(
+                                                                    "h-8 px-2 cursor-pointer",
+                                                                    currentPage === totalPages && "pointer-events-none opacity-50"
+                                                                )}
+                                                            />
+                                                        </PaginationItem>
+                                                    </PaginationContent>
+                                                </Pagination>
+                                            )}
+                                        </div>
+                                    </div>
                                 ) : (
                                     <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
                                         No product lines found for this PO.
@@ -476,14 +618,8 @@ export default function PurchaseOrderReviewPanel(props: {
                                         PO not marked as invoice - Accounts payable will not be affected
                                     </div>
                                 ) : (
-                                    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs">
-                                        <div className="flex items-center justify-between gap-3">
-                                            <span className="font-bold text-primary">Total Accounts Payable (after approval):</span>
-                                            <span className="font-black text-primary">{fmt.format(apBalance + totalAmount)}</span>
-                                        </div>
-                                        <div className="mt-1 text-[11px] text-primary/80">
-                                            Current: {fmt.format(apBalance)} + This PO: {fmt.format(totalAmount)}
-                                        </div>
+                                    <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-[11px] text-primary/70 italic">
+                                        Note: This Purchase Order is marked as an invoice and will affect accounts payable.
                                     </div>
                                 )}
                             </div>
