@@ -204,23 +204,6 @@ const data = {
       ],
     },
     {
-      title: "Item & Master Data Management",
-      url: "#",
-      icon: BookOpen,
-      items: [
-        {
-          title: "Raw Materials",
-          url: "/scm/item-master-data-management/raw-materials",
-        },
-      ],
-    },
-    {
-      title: "Receiving & Put-Away",
-      url: "#",
-      icon: BookOpen,
-      items: [{ title: "Receiving", url: "/scm/receiving-put-away/receiving" }],
-    },
-    {
       title: "Inventory Management",
       url: "#",
       icon: BookOpen,
@@ -236,63 +219,6 @@ const data = {
         {
           title: "Branch Management",
           url: "/scm/inventory-management/branch-management",
-        },
-      ],
-    },
-    {
-      title: "Order Fulfillment & Distribution",
-      url: "#",
-      icon: BookOpen,
-      items: [
-        {
-          title: "Sales Order",
-          url: "/scm/order-fulfillment-distribution/sales-order",
-        },
-        {
-          title: "Sales Transaction",
-          url: "/scm/order-fulfillment-distribution/sales-transaction",
-        },
-        {
-          title: "Site Sales",
-          url: "/scm/order-fulfillment-distribution/site-sales",
-        },
-      ],
-    },
-    {
-      title: "Returns & Reverse Logistics",
-      url: "#",
-      icon: BookOpen,
-      items: [
-        {
-          title: "Sales Return",
-          url: "/scm/returns-reverse-logistics/sales-return",
-        },
-        {
-          title: "Bad Order Transfer",
-          url: "/scm/returns-reverse-logistics/bad-order-stock-transfer",
-        },
-        {
-          title: "Returns to Supplier",
-          url: "/scm/returns-reverse-logistics/returns-to-supplier",
-        },
-      ],
-    },
-    {
-      title: "Traceability & Compliance",
-      url: "#",
-      icon: BookOpen,
-      items: [
-        {
-          title: "Audit Inventory",
-          url: "/scm/traceability-compliance/audit-inventory",
-        },
-        {
-          title: "Post Delivery Audit",
-          url: "/scm/traceability-compliance/post-delivery-audit",
-        },
-        {
-          title: "Product Ledger",
-          url: "/scm/traceability-compliance/product-ledger",
         },
       ],
     },
@@ -326,23 +252,6 @@ const data = {
       ],
     },
     {
-      title: "Reporting & KPIs",
-      url: "#",
-      icon: Settings2,
-      items: [
-        {
-          title: "Inventory Reports",
-          url: "/scm/reporting-kpi/inventory-reports",
-        },
-        { title: "Sales Report", url: "/scm/reporting-kpi/sales-report" },
-        { title: "PO Summary", url: "/scm/reporting-kpi/po-summary" },
-        {
-          title: "Bad Product Summary",
-          url: "/scm/reporting-kpi/bad-product-summary",
-        },
-      ],
-    },
-    {
       title: "Business Intelligence Analytics",
       url: "#",
       icon: BookOpen,
@@ -362,9 +271,23 @@ const data = {
       ],
     },
     {
-      title: "Inbound/Outbound Kiosk",
-      url: "/scm/inbound-outbound-kiosk",
+      title: "Transfers",
+      url: "#",
       icon: BookOpen,
+      items: [
+        {
+          title: "Stock Withdrawal",
+          url: "/scm/transfers/stock-withdrawal",
+        },
+        {
+          title: "Bad Stock Transfer",
+          url: "/scm/transfers/bad-stock-transfer",
+        },
+        {
+          title: "Stock Conversion",
+          url: "/scm/transfers/stock-conversion",
+        },
+      ],
     },
   ],
 };

@@ -309,7 +309,7 @@ export default function PendingDeliveriesModule() {
         });
 
         const tableStartY = statusY + statusCardH + 8;
-        let tableHeader = ["Cluster", "Customer", "Salesman", "Date"];
+        const tableHeader = ["Cluster", "Customer", "Salesman", "Date"];
         const statusMap = [
             { label: "For Approval", key: "approval" as keyof TableRow },
             { label: "For Conso", key: "consolidation" as keyof TableRow },
