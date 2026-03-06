@@ -1,16 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { Plus, RefreshCcw, AlertTriangle, Trash2 } from "lucide-react";
-import { useSKUs } from "@/modules/supply-chain-management/product-management/sku/sku-creation/hooks/useSKUs";
-import { SKUTable } from "@/modules/supply-chain-management/product-management/sku/sku-creation/components/data-table";
-import { SKUModal } from "@/modules/supply-chain-management/product-management/sku/sku-creation/components/modals/sku-create-modal";
-import { Button } from "@/components/ui/button";
-import { SKU } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
-import { toast } from "sonner";
-import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import ErrorPage from "@/components/shared/ErrorPage";
-import { BulkDraftActionsModal } from "./components/modals/bulk-draft-actions-modal";
+import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,6 +12,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { SKUTable } from "@/modules/supply-chain-management/product-management/sku/sku-creation/components/data-table";
+import { SKUModal } from "@/modules/supply-chain-management/product-management/sku/sku-creation/components/modals/sku-create-modal";
+import { useSKUs } from "@/modules/supply-chain-management/product-management/sku/sku-creation/hooks/useSKUs";
+import { SKU } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
+import { AlertTriangle, Plus, RefreshCcw, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
+import { BulkDraftActionsModal } from "./components/modals/bulk-draft-actions-modal";
 
 export default function SKUCreationModule() {
   const {
@@ -57,7 +57,6 @@ export default function SKUCreationModule() {
   const [saving, setSaving] = useState(false);
   const [mounted, setMounted] = useState(false);
 
-  // New Dialog States
   const [skuToDelete, setSkuToDelete] = useState<SKU | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<{
     open: boolean;
@@ -68,7 +67,6 @@ export default function SKUCreationModule() {
     setMounted(true);
   }, []);
 
-  // Standardized ID Resolver
   const resolveId = useCallback(
     (sku: SKU | undefined | null): number | null => {
       if (!sku) return null;
@@ -319,8 +317,8 @@ export default function SKUCreationModule() {
               Delete Product Draft?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete {skuToDelete?.product_name}?
-              This will permanently remove the draft record from the system.
+              Are you sure you want to delete {skuToDelete?.product_name}? This
+              will permanently remove the draft record from the system.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

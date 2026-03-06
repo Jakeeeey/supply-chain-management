@@ -32,6 +32,7 @@ For complex modules with distinct lifecycle states (e.g., Draft → Approval →
 │   └── forms/           # (forms)
 ├── hooks/               # Custom React hooks (Data fetching & state)
 ├── services/            # Pure TypeScript business logic
+├── providers/           # Context providers for shared state (only use if necessary ex: date filtering that use of all sub-module inside the parent module)
 ├── utils/               # Helpers
 ├── types/ or types.ts   # Zod schemas and TypeScript interfaces
 └── [Module]Page.tsx     # Main entry point for the module
