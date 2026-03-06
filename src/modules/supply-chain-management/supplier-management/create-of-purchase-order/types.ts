@@ -5,6 +5,7 @@ export type Supplier = {
     name: string;
     terms: string;
     apBalance: number;
+    supplierType: string;
     raw?: any;
 };
 

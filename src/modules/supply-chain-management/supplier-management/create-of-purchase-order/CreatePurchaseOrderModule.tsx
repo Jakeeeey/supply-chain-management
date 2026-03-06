@@ -68,6 +68,7 @@ function normalizeSupplier(raw: RawSupplier): Supplier {
         name: String(raw?.supplier_name ?? raw?.name ?? "—"),
         terms: String(raw?.payment_terms ?? raw?.delivery_terms ?? ""),
         apBalance: Number(raw?.apBalance ?? raw?.ap_balance ?? 0) || 0,
+        supplierType: String(raw?.supplier_type ?? raw?.supplierType ?? "TRADE").toUpperCase(),
     };
 }
 
@@ -187,6 +188,7 @@ function SupplierSelect(props: {
     disabled?: boolean;
 }) {
     const [open, setOpen] = React.useState(false);
+    const popoverId = React.useId();
 
     return (
         <div className="space-y-1.5 w-full min-w-0">
@@ -194,7 +196,7 @@ function SupplierSelect(props: {
                 Supplier
             </div>
 
-            <Popover open={open} onOpenChange={setOpen}>
+            <Popover open={open} onOpenChange={setOpen} contentId={popoverId}>
                 <PopoverTrigger asChild>
                     <Button
                         type="button"
@@ -258,9 +260,6 @@ function SupplierSelect(props: {
                                                             <div className="text-xs font-bold truncate">
                                                                 {s.name}
                                                             </div>
-                                                            <div className="text-[10px] text-muted-foreground truncate">
-                                                                A/P: {s.apBalance.toLocaleString()}
-                                                            </div>
                                                         </div>
 
                                                         <Badge
@@ -286,13 +285,7 @@ function SupplierSelect(props: {
             </Popover>
 
             {props.value ? (
-                <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
-          <span className="truncate">
-            A/P Balance:{" "}
-              <span className="font-bold text-foreground">
-              {props.value.apBalance.toLocaleString()}
-            </span>
-          </span>
+                <div className="flex items-center justify-end gap-2 text-[10px] text-muted-foreground">
                     <button
                         type="button"
                         onClick={() => props.onChange(null)}
@@ -314,6 +307,7 @@ function BranchMultiSelect(props: {
     disabled?: boolean;
 }) {
     const [open, setOpen] = React.useState(false);
+    const popoverId = React.useId();
 
     const selected = React.useMemo(() => new Set(props.value), [props.value]);
 
@@ -332,7 +326,7 @@ function BranchMultiSelect(props: {
                 Delivery Branches
             </div>
 
-            <Popover open={open} onOpenChange={setOpen}>
+            <Popover open={open} onOpenChange={setOpen} contentId={popoverId}>
                 <PopoverTrigger asChild>
                     <Button
                         type="button"
@@ -477,6 +471,9 @@ export default function CreatePurchaseOrderModule() {
     const [allocations, setAllocations] = React.useState<BranchAllocation[]>([]);
 
     const [allProducts, setAllProducts] = React.useState<Product[]>([]);
+
+    const [selectedSupplierType, setSelectedSupplierType] = React.useState<"ALL" | "TRADE" | "NON-TRADE">("TRADE");
+
     const [pickerOpen, setPickerOpen] = React.useState(false);
     const [pickerBranchId, setPickerBranchId] = React.useState<string>("");
 
@@ -547,6 +544,11 @@ export default function CreatePurchaseOrderModule() {
             alive = false;
         };
     }, []);
+
+    const filteredSuppliers = React.useMemo(() => {
+        if (selectedSupplierType === "ALL") return suppliers;
+        return suppliers.filter((s) => s.supplierType === selectedSupplierType.toUpperCase());
+    }, [suppliers, selectedSupplierType]);
 
     // supplier change: fetch products + product_per_supplier links then merge discountTypeId
     React.useEffect(() => {
@@ -924,20 +926,67 @@ export default function CreatePurchaseOrderModule() {
 
     return (
         <div className="w-full min-w-0 space-y-6">
-            <div className="space-y-1">
-                <div className="text-xl font-black text-foreground">Create Purchase Order</div>
-                <div className="text-sm text-muted-foreground">
-                    Configure your supplier and branch allocations below.
+            <div className="flex items-center justify-between gap-4">
+                <div className="space-y-1 text-left">
+                    <div className="text-xl font-black text-foreground">Create Purchase Order</div>
+                    <div className="text-sm text-muted-foreground">
+                        Configure your supplier and branch allocations below.
+                    </div>
                 </div>
+
+                {/* Loader shifted to Top Right */}
+                {isLoading || isSaving ? (
+                    <div className="shrink-0 flex items-center gap-3 px-4 py-2 bg-muted/30 rounded-2xl border border-border/50 shadow-sm animate-in fade-in slide-in-from-right-2 duration-300">
+                        <Spinner className="h-4 w-4" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                            {isSaving ? "Saving Order..." : "Loading Data..."}
+                        </span>
+                    </div>
+                ) : null}
             </div>
 
             <Separator />
 
-            {/* ✅ Responsive controls */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 w-full min-w-0">
+            {/* ✅ Optimized 3-Column Layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-end w-full min-w-0">
+                {/* 1) SUPPLIER TYPE FILTER (3/12) */}
+                <div className="lg:col-span-3 min-w-0 space-y-1.5 flex flex-col justify-end">
+                    <div className="text-[10px] font-black uppercase text-muted-foreground tracking-widest ml-1">
+                        Supplier Type
+                    </div>
+                    <div className="flex gap-1 bg-muted/40 p-1 rounded-xl border border-border/40 h-11 items-center backdrop-blur-sm">
+                        {["TRADE", "NON-TRADE", "ALL"].map((type) => {
+                            const active = selectedSupplierType === type;
+                            return (
+                                <button
+                                    key={type}
+                                    type="button"
+                                    onClick={() => {
+                                        setSelectedSupplierType(type as any);
+                                        if (selectedSupplier && type !== "ALL" && selectedSupplier.supplierType !== type) {
+                                            setSelectedSupplier(null);
+                                            setAllocations([]);
+                                            setSelectedBranchIds([]);
+                                        }
+                                    }}
+                                    className={cn(
+                                        "flex-1 h-full px-2 text-[9px] font-black uppercase tracking-tighter rounded-lg transition-all duration-200",
+                                        active
+                                            ? "bg-primary text-primary-foreground shadow-md scale-[1.02]"
+                                            : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                                    )}
+                                >
+                                    {type.replace("-", " ")}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* 2) SUPPLIER SELECT (4/12) */}
                 <div className="lg:col-span-4 min-w-0">
                     <SupplierSelect
-                        suppliers={suppliers}
+                        suppliers={filteredSuppliers}
                         value={selectedSupplier}
                         onChange={(s) => {
                             setSelectedSupplier(s);
@@ -951,38 +1000,14 @@ export default function CreatePurchaseOrderModule() {
                     />
                 </div>
 
-                <div className="lg:col-span-6 min-w-0">
+                {/* 3) DELIVERY BRANCHES (5/12) */}
+                <div className="lg:col-span-5 min-w-0">
                     <BranchMultiSelect
                         branches={branches}
                         value={selectedBranchIds}
                         onChange={setSelectedBranchIds}
                         disabled={isLoading || isSaving}
                     />
-                </div>
-
-                {/* ✅ Loader updated */}
-                <div className="lg:col-span-2 min-w-0 flex items-end">
-                    {isLoading || isSaving ? (
-                        <div className="w-full [--radius:1rem]">
-                            <Item variant="muted" className="h-11 rounded-xl">
-                                <ItemMedia>
-                                    <Spinner />
-                                </ItemMedia>
-
-                                <ItemContent>
-                                    <ItemTitle className="line-clamp-1">
-                                        {isSaving ? "Saving purchase order..." : "Loading Please WAIT..."}
-                                    </ItemTitle>
-                                </ItemContent>
-
-                                <ItemContent className="flex-none justify-end">
-                  <span className="text-sm tabular-nums">
-                    {isSaving ? "Please wait" : "Fetching"}
-                  </span>
-                                </ItemContent>
-                            </Item>
-                        </div>
-                    ) : null}
                 </div>
             </div>
 
