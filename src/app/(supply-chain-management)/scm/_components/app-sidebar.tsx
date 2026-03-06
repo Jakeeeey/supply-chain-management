@@ -151,11 +151,11 @@ const data = {
                     items: [
                         {
                             title: "Pre Dispatch Plan",
-                            url: "/scm/warehouse-management/pre-dispatch-plan",
+                            url: "/scm/warehouse-management/consolidation/pre-dispatch-plan",
                         },
                         {
                             title: "Delivery Picking",
-                            url: "/scm/warehouse-management/delivery-picking",
+                            url: "/scm/warehouse-management/consolidation/delivery-picking",
                         },
                         {
                             title: "Withdrawals Picking",
