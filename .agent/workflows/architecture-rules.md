@@ -57,6 +57,6 @@ For complex modules with distinct lifecycle states (e.g., Draft → Approval →
 
 ## 4. Quality Guardrails
 
-- **Complexity Limit**: If a service file exceeds 300 lines, split it by logical sub-responsibility.
+- **Complexity Limit**: Avoid "Feature Monoliths". If a service exceeds 300 lines or a hook manages state for 3+ major tables, split it. See [/anti-monolith-standard](file:///c:/Users/elija/supply-chain-management/.agent/workflows/anti-monolith-standard.md) for heuristics.
 - **Validation First**: No data should enter the Service layer without being verified by a Zod schema.
 - **Fail Gracefully**: Every API call should have a `try/catch` block that reports errors to a central logging utility or a user-facing toast.
