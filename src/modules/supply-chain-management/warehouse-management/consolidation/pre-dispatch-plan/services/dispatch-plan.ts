@@ -72,17 +72,26 @@ export const dispatchPlanService = {
    * @returns {Promise<string>} Generated dispatch number (e.g., "PDP-01080")
    */
   async generateDispatchNo(): Promise<string> {
-    const result = await fetchItems<{ dispatch_id: number }>(
+    const result = await fetchItems<{ dispatch_no: string }>(
       "/items/dispatch_plan",
       {
-        sort: "-dispatch_id",
-        fields: "dispatch_id",
+        sort: "-dispatch_no",
+        fields: "dispatch_no",
         limit: 1,
       },
     );
 
-    const lastId = result.data?.[0]?.dispatch_id || 0;
-    const nextNum = lastId + 1;
+    const lastNo = result.data?.[0]?.dispatch_no;
+    let nextNum = 1;
+
+    if (lastNo) {
+      // Extract number from PDP-XXXXX format
+      const match = lastNo.match(/PDP-(\d+)/);
+      if (match) {
+        nextNum = parseInt(match[1]) + 1;
+      }
+    }
+
     return `PDP-${String(nextNum).padStart(5, "0")}`;
   },
 
