@@ -10,6 +10,7 @@ export function useBarcodeScanner() {
   const [searchQuery, setSearchQuery] = useState("");
   const [supplierFilter, setSupplierFilter] = useState("all");
   const [productFilter, setProductFilter] = useState("all");
+  const [recordTypeFilter, setRecordTypeFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -148,9 +149,12 @@ export function useBarcodeScanner() {
       const matchesProduct =
         productFilter === "all" || String(product.product_id) === productFilter;
 
-      return matchesSearch && matchesSupplier && matchesProduct;
+      const matchesRecordType =
+        recordTypeFilter === "all" || product.record_type === recordTypeFilter;
+
+      return matchesSearch && matchesSupplier && matchesProduct && matchesRecordType;
     });
-  }, [allProducts, searchQuery, supplierFilter, productFilter]);
+  }, [allProducts, searchQuery, supplierFilter, productFilter, recordTypeFilter]);
 
   const totalItems = filteredProducts.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
@@ -161,7 +165,7 @@ export function useBarcodeScanner() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, supplierFilter, productFilter]);
+  }, [searchQuery, supplierFilter, productFilter, recordTypeFilter]);
 
   // ✅ FIXED: Correct URL and DTO Payload — now bundle-aware
   const handleUpdateBarcode = async (payload: UpdateBarcodeDTO) => {
@@ -257,6 +261,8 @@ export function useBarcodeScanner() {
     setSupplierFilter,
     productFilter,
     setProductFilter,
+    recordTypeFilter,
+    setRecordTypeFilter,
     barcodeTypes,
     weightUnits,
     cbmUnits,

@@ -16,6 +16,13 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -56,6 +63,8 @@ export default function BarCodeScannerModule() {
     setSupplierFilter,
     productFilter,
     setProductFilter,
+    recordTypeFilter,
+    setRecordTypeFilter,
     barcodeTypes,
     weightUnits,
     cbmUnits,
@@ -288,6 +297,23 @@ export default function BarCodeScannerModule() {
                 </Command>
               </PopoverContent>
             </Popover>
+          </div>
+
+          {/* INVENTORY TYPE FILTER */}
+          <div className="flex flex-col gap-2 w-full md:w-[150px]">
+            <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+              Inventory Type
+            </Label>
+            <Select value={recordTypeFilter} onValueChange={setRecordTypeFilter}>
+              <SelectTrigger className="h-10">
+                <SelectValue placeholder="All Types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="product">Regular</SelectItem>
+                <SelectItem value="bundle">Bundle</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 

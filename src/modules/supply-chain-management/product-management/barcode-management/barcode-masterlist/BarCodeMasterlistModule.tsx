@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsRight,
+  History,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -43,6 +44,7 @@ import { BarcodeScannerSkeleton } from "./components/BarcodeScannerSkeleton";
 import { PrintFormatModal, openPrintTab } from "./components/PrintModal";
 // ✅ NEW: Import Detail Modal
 import { ProductDetailModal } from "./components/ProductDetailModal";
+import { BarcodeHistoryModal } from "./components/BarcodeHistoryModal";
 import { Product } from "./types";
 import ErrorPage from "@/components/shared/ErrorPage";
 
@@ -60,6 +62,8 @@ export default function BarcodeMasterlistModule() {
     setSearchQuery,
     supplierFilter,
     setSupplierFilter,
+    recordTypeFilter,
+    setRecordTypeFilter,
     error,
     refresh,
   } = useBarcodeMasterlist();
@@ -83,6 +87,9 @@ export default function BarcodeMasterlistModule() {
 
   // Print States
   const [showFormatModal, setShowFormatModal] = useState(false);
+
+  // History Modal State
+  const [showHistory, setShowHistory] = useState(false);
 
   // ✅ NEW: Detail Modal State
   const [viewProduct, setViewProduct] = useState<Product | null>(null);
@@ -256,10 +263,38 @@ export default function BarcodeMasterlistModule() {
               </PopoverContent>
             </Popover>
           </div>
+
+          {/* Inventory Type */}
+          <div className="flex flex-col gap-2 w-full md:w-[150px]">
+            <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+              Inventory Type
+            </Label>
+            <Select value={recordTypeFilter} onValueChange={setRecordTypeFilter}>
+              <SelectTrigger className="h-10">
+                <SelectValue placeholder="All Types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="product">Regular</SelectItem>
+                <SelectItem value="bundle">Bundle</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {/* ACTIONS */}
         <div className="flex items-end gap-3 w-full xl:w-auto justify-end">
+          <div className="flex flex-col gap-2">
+            <div className="h-4 hidden md:block"></div>
+            <Button
+              variant="outline"
+              onClick={() => setShowHistory(true)}
+              className="gap-2 h-10"
+            >
+              <History className="h-4 w-4 text-muted-foreground" /> View History
+            </Button>
+          </div>
+
           <div className="flex flex-col gap-2">
             <div className="h-4 hidden md:block"></div>
             {isSelectionMode ? (
@@ -387,6 +422,12 @@ export default function BarcodeMasterlistModule() {
         open={!!viewProduct}
         product={viewProduct}
         onClose={() => setViewProduct(null)}
+      />
+
+      {/* History Modal */}
+      <BarcodeHistoryModal
+        open={showHistory}
+        onClose={() => setShowHistory(false)}
       />
     </div>
   );

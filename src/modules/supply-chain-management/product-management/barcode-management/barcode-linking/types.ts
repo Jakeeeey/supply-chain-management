@@ -56,4 +56,8 @@ export interface UpdateBarcodeDTO {
   // Weight
   weight?: number;
   weight_unit_id?: number;
+
+  // Audit
+  updated_by?: number;
+  updated_at?: string;
 }

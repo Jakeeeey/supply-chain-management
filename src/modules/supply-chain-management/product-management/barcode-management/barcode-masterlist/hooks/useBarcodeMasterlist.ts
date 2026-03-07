@@ -16,6 +16,7 @@ export function useBarcodeMasterlist() {
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [supplierFilter, setSupplierFilter] = useState("all");
+  const [recordTypeFilter, setRecordTypeFilter] = useState("all");
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -102,9 +103,12 @@ export function useBarcodeMasterlist() {
               String(junction.supplier_id.id) === supplierFilter,
           ));
 
-      return matchesSearch && matchesSupplier;
+      const matchesRecordType =
+        recordTypeFilter === "all" || product.record_type === recordTypeFilter;
+
+      return matchesSearch && matchesSupplier && matchesRecordType;
     });
-  }, [allProducts, searchQuery, supplierFilter]);
+  }, [allProducts, searchQuery, supplierFilter, recordTypeFilter]);
 
   // --- PAGINATION ---
   const totalItems = filteredProducts.length;
@@ -116,7 +120,7 @@ export function useBarcodeMasterlist() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, supplierFilter]);
+  }, [searchQuery, supplierFilter, recordTypeFilter]);
 
   return {
     products,
@@ -131,6 +135,8 @@ export function useBarcodeMasterlist() {
     setSearchQuery,
     supplierFilter,
     setSupplierFilter,
+    recordTypeFilter,
+    setRecordTypeFilter,
     error,
     refresh: fetchData,
   };

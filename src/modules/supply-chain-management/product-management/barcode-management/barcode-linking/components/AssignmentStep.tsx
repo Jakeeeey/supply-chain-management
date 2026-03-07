@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import BarcodeScannerComponent from "react-qr-barcode-scanner";
 import Barcode from "react-barcode";
 import { Button } from "@/components/ui/button";
@@ -97,14 +97,45 @@ export function AssignmentStep({
     const getSelectedBarcodeTypeName = () =>
         barcodeTypes.find((t) => String(t.id) === selectedBarcodeTypeId)?.name || "EAN-13";
 
-    const handleScan = (err: any, result: any) => {
-        if (err?.name === "NotAllowedError")
-            setCameraError("Camera permission denied.");
-        if (result && result.getText() !== barcode) {
-            setBarcode(result.getText());
-            setScanSuccess(true);
+    // --- SCANNER SUPPORT (refs prevent stale closures in camera callback) ---
+    const scannerInputRef = useRef<HTMLInputElement>(null);
+    const [scanBuffer, setScanBuffer] = useState("");
+    const scanSuccessRef = useRef(scanSuccess);
+    scanSuccessRef.current = scanSuccess;
+
+    // Auto-focus the hidden input when Scan tab is active and not yet scanned
+    useEffect(() => {
+        if (activeTab === "scan" && !scanSuccess) {
+            const timer = setTimeout(() => scannerInputRef.current?.focus(), 100);
+            return () => clearTimeout(timer);
+        }
+    }, [activeTab, scanSuccess]);
+
+    // Handle hardware scanner: buffer chars, commit on Enter
+    const handleHardwareKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            if (scanBuffer.trim()) {
+                setBarcode(scanBuffer.trim());
+                setScanSuccess(true);
+                setScanBuffer("");
+            }
+            scannerInputRef.current?.focus();
         }
     };
+
+    // Camera scan handler — uses ref so callback is stable and never stale
+    const handleScan = useCallback((err: any, result: any) => {
+        if (err?.name === "NotAllowedError") return;
+        if (result && !scanSuccessRef.current) {
+            const value = result.getText().trim();
+            if (value) {
+                setBarcode(value);
+                setScanSuccess(true);
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [setBarcode, setScanSuccess]);
 
     return (
         <ScrollArea className="h-full">
@@ -197,6 +228,17 @@ export function AssignmentStep({
                                         autoFocus
                                     />
                                 </div>
+                                {barcode && (
+                                    <div className="flex flex-col items-center justify-center p-4 border border-dashed rounded-lg bg-muted/20 min-h-[80px] animate-in fade-in zoom-in duration-300">
+                                        <Barcode
+                                            value={barcode}
+                                            format={getSelectedBarcodeTypeName().includes("EAN") ? "EAN13" : "CODE128"}
+                                            width={1.5}
+                                            height={50}
+                                            fontSize={14}
+                                        />
+                                    </div>
+                                )}
                             </TabsContent>
 
                             {/* Scan Tab */}
@@ -218,7 +260,7 @@ export function AssignmentStep({
                                             <div className="absolute top-0 right-0 w-8 h-8 border-r-4 border-t-4 border-primary rounded-tr-lg" />
                                             <div className="absolute bottom-0 left-0 w-8 h-8 border-l-4 border-b-4 border-primary rounded-bl-lg" />
                                             <div className="absolute bottom-0 right-0 w-8 h-8 border-r-4 border-b-4 border-primary rounded-br-lg" />
-                                            {scanSuccess && (
+                                            {scanSuccess && barcode && (
                                                 <div className="animate-in zoom-in duration-300 bg-white/20 backdrop-blur-sm p-3 rounded-full">
                                                     <CheckCircle2 className="w-10 h-10 text-green-400 drop-shadow-lg" />
                                                 </div>
@@ -229,15 +271,56 @@ export function AssignmentStep({
                                         </p>
                                     </div>
                                 </div>
+
+                                {/* Hardware scanner input — focusable but visually hidden */}
+                                <input
+                                    ref={scannerInputRef}
+                                    type="text"
+                                    className="sr-only"
+                                    tabIndex={-1}
+                                    aria-label="Hardware barcode scanner input"
+                                    value={scanBuffer}
+                                    onChange={(e) => setScanBuffer(e.target.value)}
+                                    onKeyDown={handleHardwareKeyDown}
+                                    onBlur={() => {
+                                        // Re-focus if still on scan tab (keeps scanner ready)
+                                        if (activeTab === "scan" && !scanSuccess) {
+                                            setTimeout(() => scannerInputRef.current?.focus(), 50);
+                                        }
+                                    }}
+                                />
+
                                 <div className="w-full flex items-center justify-between p-3 rounded-lg border bg-muted/30">
                                     <div className="flex items-center gap-2">
                                         <ScanLine className="h-4 w-4 text-muted-foreground" />
                                         <span className="text-xs font-medium text-muted-foreground">Scanned:</span>
                                     </div>
-                                    <span className={`font-mono text-sm font-bold ${barcode ? "text-green-600" : "text-muted-foreground"}`}>
-                                        {barcode || "Waiting..."}
-                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        <span className={`font-mono text-sm font-bold ${barcode ? "text-green-600" : "text-muted-foreground"}`}>
+                                            {barcode || "Waiting..."}
+                                        </span>
+                                        {barcode && (
+                                            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => {
+                                                setBarcode("");
+                                                setScanSuccess(false);
+                                            }}>
+                                                <RefreshCcw className="mr-1 h-3 w-3" /> Rescan
+                                            </Button>
+                                        )}
+                                    </div>
                                 </div>
+
+                                {barcode && (
+                                    <div className="w-full flex flex-col items-center justify-center p-4 border border-dashed rounded-lg bg-muted/20 min-h-[80px] animate-in fade-in zoom-in duration-300">
+                                        <Barcode
+                                            value={barcode}
+                                            format={getSelectedBarcodeTypeName().includes("EAN") ? "EAN13" : "CODE128"}
+                                            width={1.5}
+                                            height={50}
+                                            fontSize={14}
+                                        />
+                                    </div>
+                                )}
                             </TabsContent>
 
                             {/* Generate Tab */}

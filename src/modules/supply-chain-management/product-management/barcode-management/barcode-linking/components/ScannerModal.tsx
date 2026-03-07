@@ -1,6 +1,4 @@
-"use client";
-
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -12,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 
 import { Product, RefData, UpdateBarcodeDTO } from "../types";
-import { generateEAN13, generateCode128 } from "../utils/barcodeUtils";
+import { generateEAN13, generateCode128, detectBarcodeType } from "../utils/barcodeUtils";
 import { validateAndBuildPayload } from "../utils/validationUtils";
 import { ProfileStep } from "./ProfileStep";
 import { AssignmentStep } from "./AssignmentStep";
@@ -41,7 +39,7 @@ export function ScannerModal({
   onSave,
 }: ScannerModalProps) {
   const [step, setStep] = useState<"profile" | "assignment">("profile");
-  const [barcode, setBarcode] = useState("");
+  const [barcode, setBarcodeRaw] = useState("");
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("manual");
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -56,6 +54,25 @@ export function ScannerModal({
     weight: "",
     weightUnit: "",
   });
+
+  // --- SYNCHRONOUS DETECTION ON BARCODE CHANGE ---
+  const handleBarcodeChange = useCallback((value: string) => {
+    const trimmed = value.trim();
+    setBarcodeRaw(trimmed);
+
+    if (trimmed && barcodeTypes.length > 0) {
+      const detectedName = detectBarcodeType(trimmed);
+      if (detectedName !== "UNKNOWN") {
+        const normalize = (s: string) => s.replace(/[-\s]/g, "").toLowerCase();
+        const matchingType = barcodeTypes.find(
+          (t) => normalize(t.name || "") === normalize(detectedName)
+        );
+        if (matchingType?.id) {
+          setSelectedBarcodeTypeId(String(matchingType.id));
+        }
+      }
+    }
+  }, [barcodeTypes]);
 
   // --- SET DEFAULTS FROM CACHED REF DATA ---
   useEffect(() => {
@@ -83,7 +100,7 @@ export function ScannerModal({
   // --- RESET STATE ON OPEN ---
   useEffect(() => {
     if (open && product) {
-      setBarcode(product.barcode || "");
+      setBarcodeRaw(product.barcode || "");
       setScanSuccess(false);
       setCameraError(null);
       setStep("profile");
@@ -96,7 +113,7 @@ export function ScannerModal({
         weight: "",
       }));
     } else {
-      setBarcode("");
+      setBarcodeRaw("");
     }
   }, [open, product]);
 
@@ -110,7 +127,7 @@ export function ScannerModal({
     const typeName =
       barcodeTypes.find((t) => String(t.id) === selectedBarcodeTypeId)?.name || "EAN-13";
     const newCode = typeName.includes("EAN-13") ? generateEAN13() : generateCode128();
-    setBarcode(newCode);
+    handleBarcodeChange(newCode);
     setScanSuccess(true);
   };
 
@@ -162,7 +179,7 @@ export function ScannerModal({
             <AssignmentStep
               product={product}
               barcode={barcode}
-              setBarcode={setBarcode}
+              setBarcode={handleBarcodeChange}
               activeTab={activeTab}
               setActiveTab={setActiveTab}
               scanSuccess={scanSuccess}

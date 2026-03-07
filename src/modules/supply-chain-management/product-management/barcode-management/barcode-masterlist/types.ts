@@ -99,3 +99,15 @@ export const getSupplierName = (p: Product): string => {
 
   return names.length > 0 ? names.join(", ") : "-";
 };
+
+export interface BarcodeHistoryEntry {
+  id: string;
+  sku_code: string;
+  name: string;
+  barcode_value: string;
+  barcode_type_id: { id: number; name: string } | null;
+  barcode_date: string | null;
+  updated_by: { id: number; first_name: string; last_name: string } | null;
+  updated_at: string | null;
+  record_type: "Regular" | "Bundle";
+}

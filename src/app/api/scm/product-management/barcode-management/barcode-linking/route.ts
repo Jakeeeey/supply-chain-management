@@ -37,6 +37,19 @@ async function fetchDirectus(endpoint: string, params: Record<string, string>) {
   return json.data;
 }
 
+// Decode JWT payload without verification (for extracting user_id)
+function decodeJwtPayload(token: string): any | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    let b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    while (b64.length % 4) b64 += "=";
+    return JSON.parse(Buffer.from(b64, "base64").toString("utf8"));
+  } catch {
+    return null;
+  }
+}
+
 async function proxyRequest(req: NextRequest, method: string) {
   if (!DIRECTUS_URL) return json({ error: "Missing Base URL" }, 500);
 
@@ -48,6 +61,25 @@ async function proxyRequest(req: NextRequest, method: string) {
   if (method === "PATCH") {
     const body = await req.json();
     const recordType = url.searchParams.get("record_type") || "product";
+
+    // Extract user ID from JWT cookie for audit trail
+    const token = req.cookies.get("vos_access_token")?.value;
+    const jwtPayload = token ? decodeJwtPayload(token) : null;
+    const userId = jwtPayload?.user_id ?? jwtPayload?.userId ?? jwtPayload?.sub ?? null;
+
+    // Inject audit fields
+    if (userId) body.updated_by = typeof userId === "string" ? parseInt(userId) : userId;
+    // Save as PHT (UTC+8) — Directus stores datetime without timezone info,
+    // so we must provide the value already in Philippine Standard Time
+    body.updated_at = new Date().toLocaleString("sv-SE", {
+      timeZone: "Asia/Manila",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }).replace(" ", "T");
     try {
       // SERVER-SIDE UNIQUENESS CHECK: Query both products AND bundles for this barcode
       const barcodeToCheck = recordType === "bundle" ? body.barcode_value : body.barcode;
