@@ -1,0 +1,629 @@
+"use client";
+
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { cn } from "@/lib/utils";
+import {
+  DispatchPlanFormValues,
+  DispatchPlanMasterData,
+  SalesOrderOption,
+} from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/types/dispatch-plan.schema";
+import { MapPin, Package, Save, Search, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+
+interface PDPCreateModalProps {
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (values: DispatchPlanFormValues) => Promise<void>;
+  masterData: DispatchPlanMasterData | null;
+  availableOrders: SalesOrderOption[];
+  isLoadingOrders: boolean;
+  onClusterChange: (clusterId: number) => void;
+}
+
+/**
+ * Full-screen creation modal for Pre Dispatch Plans.
+ * Features Trip Configuration form, Available Deliveries panel,
+ * Detailed Trip Manifest table, and Vehicle Capacity progress bar.
+ */
+export function PDPCreateModal({
+  open,
+  onClose,
+  onSubmit,
+  masterData,
+  availableOrders,
+  isLoadingOrders,
+  onClusterChange,
+}: PDPCreateModalProps) {
+  // ─── Form State ───────────────────────────────────
+  const [driverId, setDriverId] = useState<number | null>(null);
+  const [clusterId, setClusterId] = useState<number | null>(null);
+  const [branchId, setBranchId] = useState<number | null>(null);
+  const [dispatchDate, setDispatchDate] = useState<string>(
+    new Date().toISOString().split("T")[0],
+  );
+  const [remarks, setRemarks] = useState("");
+  const [vehicleId, setVehicleId] = useState<number | null>(null);
+  const [orderSearch, setOrderSearch] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  // ─── Manifest State (selected orders) ─────────────
+  const [manifestOrders, setManifestOrders] = useState<SalesOrderOption[]>([]);
+
+  // Reset state when modal opens
+  useEffect(() => {
+    if (open) {
+      setDriverId(null);
+      setClusterId(null);
+      setBranchId(null);
+      setDispatchDate(new Date().toISOString().split("T")[0]);
+      setRemarks("");
+      setVehicleId(null);
+      setOrderSearch("");
+      setManifestOrders([]);
+    }
+  }, [open]);
+
+  // ─── Vehicle / Capacity ───────────────────────────
+  // Find the selected vehicle from master data
+  const selectedVehicle = useMemo(() => {
+    if (!vehicleId || !masterData?.vehicles?.length) return undefined;
+    return masterData.vehicles.find((v) => v.vehicle_id === vehicleId);
+  }, [vehicleId, masterData]);
+
+  const vehicleCapacity = useMemo(() => {
+    if (!selectedVehicle) return 0;
+    const cap = selectedVehicle.maximum_weight ?? selectedVehicle.minimum_load;
+    if (!cap) return 0;
+    return typeof cap === "number" ? cap : parseFloat(cap) || 0;
+  }, [selectedVehicle]);
+
+  // ─── Computed Values ──────────────────────────────
+  const totalWeight = useMemo(
+    () => manifestOrders.reduce((sum, o) => sum + (o.total_weight || 0), 0),
+    [manifestOrders],
+  );
+
+  const totalAmount = useMemo(
+    () =>
+      manifestOrders.reduce(
+        (sum, o) => sum + (o.net_amount ?? o.total_amount ?? 0),
+        0,
+      ),
+    [manifestOrders],
+  );
+
+  const isOverCapacity = useMemo(() => {
+    if (!vehicleCapacity) return false;
+    return totalWeight > vehicleCapacity;
+  }, [totalWeight, vehicleCapacity]);
+
+  const capacityPercentage = useMemo(() => {
+    if (!vehicleCapacity) return 0;
+    return Math.min((totalWeight / vehicleCapacity) * 100, 100);
+  }, [totalWeight, vehicleCapacity]);
+
+  // ─── Filtered Available Orders ────────────────────
+  const manifestOrderIds = useMemo(
+    () => new Set(manifestOrders.map((o) => o.order_id)),
+    [manifestOrders],
+  );
+
+  const filteredAvailable = useMemo(() => {
+    let orders = availableOrders.filter(
+      (o) => !manifestOrderIds.has(o.order_id),
+    );
+    if (orderSearch) {
+      const q = orderSearch.toLowerCase();
+      orders = orders.filter(
+        (o) =>
+          o.order_no?.toLowerCase().includes(q) ||
+          o.customer_name?.toLowerCase().includes(q) ||
+          o.store_name?.toLowerCase().includes(q),
+      );
+    }
+    return orders;
+  }, [availableOrders, manifestOrderIds, orderSearch]);
+
+  // ─── Cluster Selection Handler ────────────────────
+  const handleClusterChange = (value: string) => {
+    const id = Number(value);
+    setClusterId(id);
+    setManifestOrders([]); // Reset manifest when cluster changes
+    onClusterChange(id);
+  };
+
+  // ─── Add Order to Manifest ────────────────────────
+  const handleAddOrder = (order: SalesOrderOption) => {
+    setManifestOrders((prev) => [...prev, order]);
+  };
+
+  // ─── Remove Order from Manifest ───────────────────
+  const handleRemoveOrder = (orderId: number) => {
+    setManifestOrders((prev) => prev.filter((o) => o.order_id !== orderId));
+  };
+
+  // ─── Save Plan ────────────────────────────────────
+  const handleSave = async () => {
+    if (!driverId) return toast.error("Please select a driver.");
+    if (!clusterId) return toast.error("Please select a target cluster.");
+    if (!branchId) return toast.error("Please select a source branch.");
+    if (!vehicleId) return toast.error("Please select a vehicle.");
+    if (!dispatchDate) return toast.error("Please set a dispatch date.");
+    if (manifestOrders.length === 0)
+      return toast.error("Please add at least one sales order.");
+    if (isOverCapacity)
+      return toast.error("Total weight exceeds vehicle capacity.");
+
+    setIsSaving(true);
+    try {
+      await onSubmit({
+        driver_id: driverId,
+        cluster_id: clusterId,
+        branch_id: branchId,
+        vehicle_id: vehicleId,
+        dispatch_date: dispatchDate,
+        remarks,
+        sales_order_ids: manifestOrders.map((o) => o.order_id),
+      });
+      toast.success("Pre-dispatch plan created successfully!");
+      onClose();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save plan.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // ─── Driver Display Name ──────────────────────────
+  const getDriverLabel = (driver: {
+    user_fname: string;
+    user_mname?: string | null;
+    user_lname: string;
+  }) => {
+    return [driver.user_fname, driver.user_mname, driver.user_lname]
+      .filter(Boolean)
+      .join(" ");
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="w-full sm:max-w-8xl h-[95vh] max-h-[95vh] flex flex-col p-0 gap-0 overflow-hidden">
+        <DialogHeader className="px-6 py-4 border-b shrink-0">
+          <DialogTitle className="text-xl font-semibold">
+            Trip Configuration
+          </DialogTitle>
+        </DialogHeader>
+
+        {/* ─── Trip Configuration Form ─────────────── */}
+        <div className="px-6 py-4 border-b shrink-0">
+          <div className="grid grid-cols-6 gap-4">
+            {/* Assigned Driver */}
+            <div className="space-y-1.5">
+              <Label htmlFor="pdp-driver">
+                Assigned Driver <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={driverId ? String(driverId) : ""}
+                onValueChange={(v) => setDriverId(Number(v))}
+              >
+                <SelectTrigger id="pdp-driver">
+                  <SelectValue placeholder="Select driver" />
+                </SelectTrigger>
+                <SelectContent>
+                  {masterData?.drivers?.map((driver) => (
+                    <SelectItem
+                      key={driver.user_id}
+                      value={String(driver.user_id)}
+                    >
+                      {getDriverLabel(driver)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Vehicle Selection */}
+            <div className="space-y-1.5">
+              <Label htmlFor="pdp-vehicle">
+                Vehicle <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={vehicleId ? String(vehicleId) : ""}
+                onValueChange={(v) => setVehicleId(Number(v))}
+              >
+                <SelectTrigger id="pdp-vehicle">
+                  <SelectValue placeholder="Select vehicle" />
+                </SelectTrigger>
+                <SelectContent>
+                  {masterData?.vehicles?.map((vehicle) => (
+                    <SelectItem
+                      key={vehicle.vehicle_id}
+                      value={String(vehicle.vehicle_id)}
+                    >
+                      {vehicle.vehicle_plate}
+                      {vehicle.vehicle_type ? ` (${vehicle.vehicle_type})` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedVehicle && (
+                <p className="text-xs text-muted-foreground">
+                  Max Capacity: {vehicleCapacity.toLocaleString()} kg
+                </p>
+              )}
+            </div>
+
+            {/* Target Cluster */}
+            <div className="space-y-1.5">
+              <Label htmlFor="pdp-cluster">
+                Target Cluster <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={clusterId ? String(clusterId) : ""}
+                onValueChange={handleClusterChange}
+              >
+                <SelectTrigger id="pdp-cluster">
+                  <SelectValue placeholder="Select cluster" />
+                </SelectTrigger>
+                <SelectContent>
+                  {masterData?.clusters?.map((cluster) => (
+                    <SelectItem key={cluster.id} value={String(cluster.id)}>
+                      {cluster.cluster_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Source Branch */}
+            <div className="space-y-1.5">
+              <Label htmlFor="pdp-branch">
+                Source Branch <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={branchId ? String(branchId) : ""}
+                onValueChange={(v) => setBranchId(Number(v))}
+              >
+                <SelectTrigger id="pdp-branch">
+                  <SelectValue placeholder="Select branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  {masterData?.branches?.map((branch) => (
+                    <SelectItem key={branch.id} value={String(branch.id)}>
+                      {branch.branch_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Dispatch Date */}
+            <div className="space-y-1.5">
+              <Label htmlFor="pdp-date">
+                Dispatch Date <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="pdp-date"
+                type="date"
+                value={dispatchDate}
+                onChange={(e) => setDispatchDate(e.target.value)}
+              />
+            </div>
+
+            {/* Remarks */}
+            <div className="space-y-1.5">
+              <Label htmlFor="pdp-remarks">Remarks (Optional)</Label>
+              <Input
+                id="pdp-remarks"
+                placeholder="e.g., Priority delivery"
+                value={remarks}
+                onChange={(e) => setRemarks(e.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* ─── Main Content: Available + Manifest ─── */}
+        <div className="flex-1 flex min-h-0 overflow-hidden bg-background">
+          {/* Left Panel: Available Deliveries */}
+          <div className="w-[400px] border-r flex flex-col shrink-0 min-h-0">
+            <div className="px-4 py-3 border-b shrink-0">
+              <h3 className="font-semibold text-sm flex items-center gap-2">
+                <Package className="h-4 w-4" />
+                Available Deliveries
+              </h3>
+              {clusterId && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Showing orders for{" "}
+                  {masterData?.clusters?.find((c) => c.id === clusterId)
+                    ?.cluster_name || "selected cluster"}
+                </p>
+              )}
+              <div className="relative mt-2">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search orders..."
+                  className="pl-9 h-9"
+                  value={orderSearch}
+                  onChange={(e) => setOrderSearch(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <ScrollArea className="flex-1 min-h-0">
+              <div className="p-2 space-y-2">
+                {!clusterId ? (
+                  <div className="text-center py-8 text-muted-foreground text-sm">
+                    Select a target cluster to view available orders
+                  </div>
+                ) : isLoadingOrders ? (
+                  <div className="text-center py-8 text-muted-foreground text-sm">
+                    Loading orders...
+                  </div>
+                ) : filteredAvailable.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground text-sm">
+                    No available orders for this cluster
+                  </div>
+                ) : (
+                  filteredAvailable.map((order) => (
+                    <div
+                      key={order.order_id}
+                      className="border rounded-lg p-3 hover:bg-accent/50 cursor-pointer transition-colors"
+                      onClick={() => handleAddOrder(order)}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-primary">
+                              {order.order_no}
+                            </span>
+                            {order.po_no && (
+                              <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground font-medium">
+                                PO: {order.po_no}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-foreground">
+                            {order.customer_name || order.store_name || "—"}
+                          </p>
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <MapPin className="h-3 w-3" />
+                            {[order.city, order.province]
+                              .filter(Boolean)
+                              .join(", ") || "—"}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold">
+                            ₱
+                            {(
+                              order.allocated_amount ??
+                              order.net_amount ??
+                              order.total_amount ??
+                              0
+                            ).toLocaleString("en-PH", {
+                              minimumFractionDigits: 2,
+                            })}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1 font-medium">
+                            {order.total_weight?.toLocaleString() || 0} kg
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="px-4 py-2 text-xs text-muted-foreground">
+                {filteredAvailable.length} order(s) available
+              </div>
+            </ScrollArea>
+          </div>
+
+          {/* Right Panel: Detailed Trip Manifest */}
+          <div className="flex-1 flex flex-col min-w-0">
+            <div className="px-4 py-3 border-b shrink-0">
+              <h3 className="font-semibold text-sm">Detailed Trip Manifest</h3>
+              <p className="text-xs text-muted-foreground">
+                Drag orders here or click to add to the delivery route
+              </p>
+            </div>
+
+            <ScrollArea className="flex-1 min-h-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">#</TableHead>
+                    <TableHead>SO Number</TableHead>
+                    <TableHead>PO Number</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Destination</TableHead>
+                    <TableHead className="text-right">Weight (kg)</TableHead>
+                    <TableHead className="text-right">Amount (₱)</TableHead>
+                    <TableHead className="w-16 text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {manifestOrders.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={6}
+                        className="text-center py-12 text-muted-foreground"
+                      >
+                        Click on available orders to add them to the delivery
+                        manifest
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    manifestOrders.map((order, index) => (
+                      <TableRow key={order.order_id}>
+                        <TableCell className="font-medium text-muted-foreground">
+                          {index + 1}
+                        </TableCell>
+                        <TableCell className="font-semibold text-primary">
+                          {order.order_no}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {order.po_no || "—"}
+                        </TableCell>
+                        <TableCell>
+                          {order.customer_name || order.store_name || "—"}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {[order.city, order.province]
+                            .filter(Boolean)
+                            .join(", ") || "—"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {order.total_weight?.toLocaleString() || 0}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {(
+                            order.allocated_amount ??
+                            order.net_amount ??
+                            order.total_amount ??
+                            0
+                          ).toLocaleString("en-PH", {
+                            minimumFractionDigits: 2,
+                          })}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            onClick={() => handleRemoveOrder(order.order_id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                  {manifestOrders.length > 0 && (
+                    <TableRow className="bg-muted/30 font-semibold">
+                      <TableCell colSpan={5} className="text-right">
+                        Totals:
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {totalWeight.toLocaleString()} kg
+                      </TableCell>
+                      <TableCell className="text-right">
+                        ₱
+                        {totalAmount.toLocaleString("en-PH", {
+                          minimumFractionDigits: 2,
+                        })}
+                      </TableCell>
+                      <TableCell />
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+
+            {/* Bottom Info */}
+            <div className="px-4 py-2 border-t text-sm text-muted-foreground shrink-0">
+              {manifestOrders.length} order(s) in manifest &nbsp;&bull;&nbsp;
+              Total Value:{" "}
+              <span className="font-semibold text-foreground">
+                ₱
+                {totalAmount.toLocaleString("en-PH", {
+                  minimumFractionDigits: 2,
+                })}
+              </span>
+              &nbsp;&bull;&nbsp; Total Weight:{" "}
+              <span className="font-semibold text-foreground">
+                {totalWeight.toLocaleString()} kg
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* ─── Footer: Capacity Bar + Actions ──────── */}
+        <Separator />
+        <div className="px-6 py-4 flex items-center gap-6 shrink-0">
+          {/* Vehicle Capacity */}
+          <div className="flex-1 space-y-1.5">
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-medium">Vehicle Capacity</span>
+              <span
+                className={cn(
+                  "font-semibold",
+                  isOverCapacity ? "text-destructive" : "text-muted-foreground",
+                )}
+              >
+                {totalWeight.toLocaleString()} /{" "}
+                {vehicleCapacity > 0
+                  ? `${vehicleCapacity.toLocaleString()} kg`
+                  : "N/A"}
+              </span>
+            </div>
+            <Progress
+              value={capacityPercentage}
+              className={cn(
+                "h-2.5",
+                isOverCapacity &&
+                  "[&>[data-slot=progress-indicator]]:bg-destructive",
+              )}
+            />
+            {vehicleCapacity > 0 && (
+              <p
+                className={cn(
+                  "text-xs font-medium",
+                  isOverCapacity ? "text-destructive" : "text-muted-foreground",
+                )}
+              >
+                {isOverCapacity
+                  ? "⚠️ Over Capacity!"
+                  : `${capacityPercentage.toFixed(0)}% capacity`}
+              </p>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-3">
+            <Button variant="outline" onClick={onClose} disabled={isSaving}>
+              <X className="mr-2 h-4 w-4" />
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={isSaving || isOverCapacity}
+              className={cn(isOverCapacity && "opacity-50 cursor-not-allowed")}
+            >
+              <Save className="mr-2 h-4 w-4" />
+              {isSaving ? "Saving..." : "Save Plan"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
