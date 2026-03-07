@@ -84,6 +84,24 @@ export function getPDPMasterlistColumns({
       cell: ({ row }) => <span>{row.original.outlet_count ?? 0} order(s)</span>,
     },
     {
+      id: "weight",
+      header: "Weight",
+      cell: ({ row }) => {
+        const weight = row.original.total_weight || 0;
+        const capacity = row.original.capacity_percentage || 0;
+        return (
+          <div className="flex flex-col">
+            <span className="font-semibold">
+              {weight.toLocaleString("en-US", { maximumFractionDigits: 0 })} kg
+            </span>
+            {/* <span className="text-[10px] text-muted-foreground">
+              {capacity}% capacity
+            </span> */}
+          </div>
+        );
+      },
+    },
+    {
       accessorKey: "total_amount",
       header: "Amount",
       cell: ({ row }) => {

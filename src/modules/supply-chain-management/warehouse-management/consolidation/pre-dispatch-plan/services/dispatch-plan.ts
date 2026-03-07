@@ -112,8 +112,7 @@ export const dispatchPlanService = {
     search?: string,
   ): Promise<PaginatedDispatchPlans> {
     const params: Record<string, any> = {
-      fields:
-        "dispatch_id,dispatch_no,dispatch_date,driver_id,branch_id,created_at,created_by,status,total_amount,cluster_id,remarks",
+      fields: "*",
       limit,
       offset,
       sort: "-created_at",
@@ -153,67 +152,209 @@ export const dispatchPlanService = {
     if (!plans.length) return [];
 
     // Fetch master data once for resolution
-    const [driversRes, clustersRes, branchesRes] = await Promise.all([
-      fetchItems<DriverOption>("/items/user", {
-        "filter[user_department][_eq]": 8,
-        fields: "user_id,user_fname,user_mname,user_lname",
-        limit: -1,
-      }),
-      fetchItems<ClusterOption>("/items/cluster", {
-        fields: "id,cluster_name",
-        limit: -1,
-      }),
-      fetchItems<BranchOption>("/items/branches", {
-        fields: "id,branch_name",
-        limit: -1,
-      }),
-    ]);
+    const [driversRes, clustersRes, branchesRes, vehiclesRes, vehicleTypesRes] =
+      await Promise.all([
+        fetchItems<DriverOption>("/items/user", {
+          "filter[user_department][_eq]": 8,
+          fields: "user_id,user_fname,user_mname,user_lname",
+          limit: -1,
+        }),
+        fetchItems<ClusterOption>("/items/cluster", {
+          fields: "id,cluster_name",
+          limit: -1,
+        }),
+        fetchItems<BranchOption>("/items/branches", {
+          fields: "id,branch_name",
+          limit: -1,
+        }),
+        fetchItems<VehicleOption>("/items/vehicles", {
+          fields: "vehicle_id,maximum_weight,vehicle_plate,vehicle_type",
+          limit: -1,
+        }),
+        fetchItems<{ id: number; type_name: string }>("/items/vehicle_type", {
+          fields: "id,type_name",
+          limit: -1,
+        }),
+      ]);
 
-    const driverMap = new Map(
-      (driversRes.data || []).map((d) => [
-        d.user_id,
+    const driverMap = new Map<string, string>();
+    (driversRes.data || []).forEach((d) => {
+      driverMap.set(
+        String(d.user_id),
         [d.user_fname, d.user_mname, d.user_lname].filter(Boolean).join(" "),
-      ]),
-    );
-    const clusterMap = new Map(
-      (clustersRes.data || []).map((c) => [c.id, c.cluster_name]),
-    );
-    const branchMap = new Map(
-      (branchesRes.data || []).map((b) => [b.id, b.branch_name]),
+      );
+    });
+
+    const clusterMap = new Map<string, string>();
+    (clustersRes.data || []).forEach((c) => {
+      clusterMap.set(String(c.id), c.cluster_name);
+    });
+
+    const branchMap = new Map<string, string>();
+    (branchesRes.data || []).forEach((b) => {
+      branchMap.set(String(b.id), b.branch_name);
+    });
+
+    const vehicleMap = new Map<string, VehicleOption>();
+    (vehiclesRes.data || []).forEach((v) => {
+      vehicleMap.set(String(v.vehicle_id), v);
+    });
+
+    const vehicleTypeMap = new Map<string, string>();
+    (vehicleTypesRes.data || []).forEach(
+      (vt: { id: number; type_name: string }) => {
+        vehicleTypeMap.set(String(vt.id), vt.type_name);
+      },
     );
 
-    // Fetch details for all plans to compute outlet counts
+    // Fetch details for all plans to compute outlet counts and weights
     const planIds = plans.map((p) => p.dispatch_id);
     const detailsRes = await fetchItems<{
       dispatch_id: number;
       sales_order_id: number;
     }>("/items/dispatch_plan_details", {
       "filter[dispatch_id][_in]": planIds.join(","),
-      fields: "dispatch_id,sales_order_id",
+      fields: "*",
       limit: -1,
     });
     const details = detailsRes.data || [];
 
-    // Count unique sales orders per plan
+    // Map sales order IDs to plan IDs
+    const soToPlanMap = new Map<number, number>();
+    for (const d of details) {
+      soToPlanMap.set(d.sales_order_id, d.dispatch_id);
+    }
+
+    // Resolve Sales Order Details and Product Weights
+    const soIds = details.map((d) => d.sales_order_id);
+    let soWeightMap = new Map<number, number>();
+
+    if (soIds.length) {
+      // Step 1: Fetch all sales order details for these orders
+      const soDetailsRes = await fetchItems<any>("/items/sales_order_details", {
+        "filter[order_id][_in]": soIds.join(","),
+        fields: "order_id,ordered_quantity,allocated_quantity,product_id",
+        limit: -1,
+      });
+      const soDetails = soDetailsRes.data || [];
+
+      // Step 2: Extract unique product IDs
+      const normalizeId = (val: any) => {
+        if (!val) return "";
+        if (typeof val === "object")
+          return String(val.product_id || val.id || "");
+        return String(val);
+      };
+
+      const productIds = [
+        ...new Set(
+          soDetails
+            .map((sod: any) => normalizeId(sod.product_id))
+            .filter(Boolean),
+        ),
+      ];
+
+      // Step 3: Fetch weights for all these products
+      let prodWeightMap = new Map<string, number>();
+      if (productIds.length) {
+        const prodRes = await fetchItems<{
+          product_id: number;
+          weight: number | string | null;
+        }>("/items/products", {
+          "filter[product_id][_in]": productIds.join(","),
+          fields: "product_id,weight",
+          limit: -1,
+        });
+
+        prodWeightMap = new Map(
+          (prodRes.data || []).map((p) => [
+            String(p.product_id),
+            typeof p.weight === "number"
+              ? p.weight
+              : parseFloat(String(p.weight)) || 0,
+          ]),
+        );
+      }
+
+      // Step 4: Calculate total weight per Sales Order
+      for (const sod of soDetails) {
+        const orderId =
+          typeof sod.order_id === "object"
+            ? sod.order_id?.order_id
+            : sod.order_id;
+        const productId = normalizeId(sod.product_id);
+        const qty = Number(sod.allocated_quantity || sod.ordered_quantity || 0);
+        const weight = prodWeightMap.get(productId) || 0;
+
+        const totalWeight = qty * weight;
+        if (orderId) {
+          soWeightMap.set(
+            orderId,
+            (soWeightMap.get(orderId) || 0) + totalWeight,
+          );
+        }
+      }
+    }
+
+    // Map results per plan
+    const planWeightMap = new Map<number, number>();
     const outletCountMap = new Map<number, number>();
+
     for (const d of details) {
       outletCountMap.set(
         d.dispatch_id,
         (outletCountMap.get(d.dispatch_id) || 0) + 1,
       );
+      const soWeight = soWeightMap.get(d.sales_order_id) || 0;
+      planWeightMap.set(
+        d.dispatch_id,
+        (planWeightMap.get(d.dispatch_id) || 0) + soWeight,
+      );
     }
 
-    return plans.map((plan) => ({
-      ...plan,
-      driver_name: plan.driver_id
-        ? driverMap.get(plan.driver_id) || "Unknown"
-        : "—",
-      cluster_name: plan.cluster_id
-        ? clusterMap.get(plan.cluster_id) || "—"
-        : "—",
-      branch_name: plan.branch_id ? branchMap.get(plan.branch_id) || "—" : "—",
-      outlet_count: outletCountMap.get(plan.dispatch_id) || 0,
-    }));
+    return plans.map((plan) => {
+      const planId = plan.dispatch_id;
+      const totalWeight = planWeightMap.get(planId) || 0;
+
+      // Robust vehicle lookup (handle string/number and potential alternate field)
+      const rawVeId = plan.vehicle_id ?? (plan as any).vehicle;
+      const veId =
+        rawVeId && typeof rawVeId === "object"
+          ? String(rawVeId.vehicle_id || rawVeId.id)
+          : rawVeId
+            ? String(rawVeId)
+            : null;
+
+      const vehicle = veId ? vehicleMap.get(veId) : null;
+      const maxWeight = vehicle
+        ? typeof vehicle.maximum_weight === "number"
+          ? vehicle.maximum_weight
+          : parseFloat(String(vehicle.maximum_weight)) || 0
+        : 0;
+      const capacityPercent =
+        maxWeight > 0 ? Math.round((totalWeight / maxWeight) * 100) : 0;
+
+      return {
+        ...plan,
+        driver_name: plan.driver_id
+          ? driverMap.get(String(plan.driver_id)) || "Unknown"
+          : "—",
+        cluster_name: plan.cluster_id
+          ? clusterMap.get(String(plan.cluster_id)) || "—"
+          : "—",
+        branch_name: plan.branch_id
+          ? branchMap.get(String(plan.branch_id)) || "—"
+          : "—",
+        outlet_count: outletCountMap.get(planId) || 0,
+        total_weight: totalWeight,
+        maximum_weight: maxWeight,
+        capacity_percentage: capacityPercent,
+        vehicle_plate: vehicle?.vehicle_plate || "—",
+        vehicle_type_name: vehicle?.vehicle_type
+          ? vehicleTypeMap.get(String(vehicle.vehicle_type)) || "Unknown Type"
+          : "—",
+      };
+    });
   },
 
   // ─── Single Plan Details ──────────────────────────────────
@@ -241,7 +382,7 @@ export const dispatchPlanService = {
       sales_order_id: number;
     }>("/items/dispatch_plan_details", {
       "filter[dispatch_id][_eq]": id,
-      fields: "detail_id,dispatch_id,sales_order_id",
+      fields: "*",
       limit: -1,
     });
 

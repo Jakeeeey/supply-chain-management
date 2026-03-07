@@ -9,26 +9,16 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { cn } from "@/lib/utils";
-import {
   DispatchPlan,
   DispatchPlanDetail,
 } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/types/dispatch-plan.schema";
 import {
-  Building,
   Calendar,
-  FileText,
+  Clock,
   MapPin,
   MessageSquare,
   Package,
-  User,
+  Truck,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -79,134 +69,166 @@ export function PDPViewModal({
 
   const formattedDate = displayPlan.dispatch_date
     ? new Date(displayPlan.dispatch_date).toLocaleDateString("en-US", {
+        weekday: "long",
         year: "numeric",
         month: "long",
         day: "numeric",
       })
     : "—";
 
+  const createdDate = displayPlan.created_at
+    ? new Date(displayPlan.created_at).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "numeric",
+        day: "numeric",
+      })
+    : "—";
+
+  const createdTime = displayPlan.created_at
+    ? new Date(displayPlan.created_at).toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      })
+    : "";
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden border-none shadow-2xl">
-        <DialogHeader className="relative px-6 py-6 border-b shrink-0 overflow-hidden">
-          {/* subtle header gradient */}
-          <div className="absolute inset-0 bg-gradient-to-r from-primary/10 via-background to-background" />
-
-          <div className="relative z-10 flex items-center justify-between mt-1">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                <FileText className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <DialogTitle className="text-xl font-bold tracking-tight">
-                  {displayPlan.dispatch_no}
-                </DialogTitle>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <div className="h-1.5 w-1.5 rounded-full bg-primary" />
-                  <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
-                    Dispatch Plan Overview
-                  </span>
-                </div>
-              </div>
+      <DialogContent className="w-full sm:max-w-4xl max-h-[90vh] flex flex-col p-0 overflow-hidden bg-background">
+        <DialogHeader className="px-6 py-4 border-b">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <DialogTitle className="text-lg font-semibold">
+                {displayPlan.dispatch_no}
+              </DialogTitle>
+              <p className="text-xs text-muted-foreground">
+                Dispatch Plan Details
+              </p>
             </div>
 
             <Badge
               variant={
-                displayPlan.status === "Approved"
-                  ? "default"
-                  : displayPlan.status === "Dispatched"
-                    ? "secondary"
-                    : "outline"
+                displayPlan.status === "Approved" ? "default" : "secondary"
               }
-              className={cn(
-                "px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide",
-                displayPlan.status === "Approved" &&
-                  "bg-emerald-600 hover:bg-emerald-600 text-white shadow-sm shadow-emerald-200",
-              )}
+              className="px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
             >
               {displayPlan.status}
             </Badge>
           </div>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 min-h-0 bg-muted/5">
+        <ScrollArea className="flex-1 bg-muted/5">
           <div className="p-6 space-y-6">
-            {/* Trip Configuration Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-background border rounded-xl p-4 shadow-sm hover:border-primary/20 transition-all">
-                <div className="flex items-center gap-2 text-muted-foreground mb-2">
-                  <Calendar className="h-4 w-4" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider">
-                    Dispatch Date
+            {/* Trip Information Cards - Responsive Grid */}
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+              <div className="bg-background border rounded-lg p-3">
+                <div className="flex items-center gap-2 text-muted-foreground mb-1.5">
+                  <Calendar className="h-3.5 w-3.5" />
+                  <span className="text-[10px] font-semibold uppercase tracking-wider">
+                    Date
                   </span>
                 </div>
-                <p className="font-semibold text-foreground truncate">
+                <p className="text-sm font-medium text-foreground truncate">
                   {formattedDate}
                 </p>
               </div>
 
-              <div className="bg-background border rounded-xl p-4 shadow-sm hover:border-primary/20 transition-all">
-                <div className="flex items-center gap-2 text-muted-foreground mb-2">
-                  <MapPin className="h-4 w-4" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider">
-                    Target Cluster
+              <div className="bg-background border rounded-lg p-3">
+                <div className="flex items-center gap-2 text-muted-foreground mb-1.5">
+                  <MapPin className="h-3.5 w-3.5" />
+                  <span className="text-[10px] font-semibold uppercase tracking-wider">
+                    Cluster
                   </span>
                 </div>
-                <p className="font-semibold text-foreground truncate">
-                  {displayPlan.cluster_name || "—"}
-                </p>
+                <div className="flex flex-col">
+                  <p className="text-sm font-medium text-foreground truncate">
+                    {displayPlan.cluster_name || "—"}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground font-medium">
+                    {displayPlan.branch_name}
+                  </p>
+                </div>
               </div>
 
-              <div className="bg-background border rounded-xl p-4 shadow-sm hover:border-primary/20 transition-all">
-                <div className="flex items-center gap-2 text-muted-foreground mb-2">
-                  <Building className="h-4 w-4" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider">
-                    Source Branch
+              <div className="bg-background border rounded-lg p-3">
+                <div className="flex items-center gap-2 text-muted-foreground mb-1.5">
+                  <Truck className="h-3.5 w-3.5" />
+                  <span className="text-[10px] font-semibold uppercase tracking-wider">
+                    Driver
                   </span>
                 </div>
-                <p className="font-semibold text-foreground truncate">
-                  {displayPlan.branch_name || "—"}
-                </p>
+                <div className="flex flex-col">
+                  <p className="text-sm font-medium text-foreground truncate">
+                    {displayPlan.driver_name || "—"}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground font-medium">
+                    {displayPlan.vehicle_type_name}
+                  </p>
+                </div>
               </div>
 
-              <div className="bg-background border rounded-xl p-4 shadow-sm hover:border-primary/20 transition-all">
-                <div className="flex items-center gap-2 text-muted-foreground mb-2">
-                  <User className="h-4 w-4" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider">
-                    Assigned Driver
+              <div className="bg-background border rounded-lg p-3">
+                <div className="flex items-center gap-2 text-muted-foreground mb-1.5">
+                  <Package className="h-3.5 w-3.5" />
+                  <span className="text-[10px] font-semibold uppercase tracking-wider">
+                    Orders
                   </span>
                 </div>
-                <p className="font-semibold text-foreground truncate">
-                  {displayPlan.driver_name || "—"}
-                </p>
+                <div className="flex flex-col">
+                  <p className="text-sm font-medium text-foreground">
+                    {details.length} order(s)
+                  </p>
+                  <p className="text-[10px] text-muted-foreground font-medium">
+                    {(displayPlan.total_weight || 0).toLocaleString("en-US", {
+                      maximumFractionDigits: 0,
+                    })}{" "}
+                    kg
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-background border rounded-lg p-3">
+                <div className="flex items-center gap-2 text-muted-foreground mb-1.5">
+                  <Clock className="h-3.5 w-3.5" />
+                  <span className="text-[10px] font-semibold uppercase tracking-wider">
+                    Created
+                  </span>
+                </div>
+                <div className="flex flex-col">
+                  <p className="text-sm font-medium text-foreground">
+                    {createdDate}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground font-medium">
+                    {createdTime}
+                  </p>
+                </div>
               </div>
             </div>
 
             {displayPlan.remarks && (
-              <div className="bg-primary/5 border border-primary/10 rounded-xl p-4 flex gap-3">
+              <div className="bg-muted/50 border rounded-lg p-3.5 flex gap-3">
                 <div className="shrink-0 pt-0.5">
-                  <MessageSquare className="h-4 w-4 text-primary" />
+                  <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
                 </div>
                 <div className="space-y-1">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                     Remarks
                   </span>
-                  <p className="text-sm leading-relaxed text-foreground/90">
+                  <p className="text-xs leading-relaxed text-foreground">
                     {displayPlan.remarks}
                   </p>
                 </div>
               </div>
             )}
 
-            {/* Manifest Table */}
-            <div className="bg-background border rounded-2xl overflow-hidden shadow-sm">
-              <div className="px-5 py-4 border-b bg-muted/20 flex items-center justify-between">
-                <h4 className="text-sm font-bold flex items-center gap-2">
-                  <Package className="h-4 w-4 text-primary" />
-                  Trip Manifest
+            {/* Manifest Table Section - Fixed height Scrollbox */}
+            <div className="bg-background border rounded-lg overflow-hidden flex flex-col">
+              <div className="px-4 py-3 border-b bg-muted/30 flex items-center justify-between shrink-0">
+                <h4 className="text-xs font-semibold flex items-center gap-2">
+                  Detailed Trip Manifest
                 </h4>
-                <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                  {details.length} line item(s)
+                <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                  {details.length} orders
                 </div>
               </div>
 
@@ -218,86 +240,88 @@ export function PDPViewModal({
                   </p>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader className="bg-muted/10">
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead className="w-14 text-center font-bold">
-                        #
-                      </TableHead>
-                      <TableHead className="font-bold">SO Number</TableHead>
-                      <TableHead className="font-bold">Customer Name</TableHead>
-                      <TableHead className="font-bold">Destination</TableHead>
-                      <TableHead className="text-right font-bold pr-6">
-                        Amount (₱)
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {details.length === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={5}
-                          className="text-center py-16 text-muted-foreground italic font-medium"
-                        >
-                          This dispatch plan has no sales orders attached.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      details.map((detail, index) => (
-                        <TableRow
-                          key={detail.detail_id || index}
-                          className="group hover:bg-muted/20 transition-colors"
-                        >
-                          <TableCell className="text-center text-xs font-bold text-muted-foreground/60 w-14">
-                            {(index + 1).toString().padStart(2, "0")}
-                          </TableCell>
-                          <TableCell className="font-bold text-primary tracking-tight">
-                            {detail.order_no || "—"}
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            {detail.customer_name || "—"}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground text-xs leading-none">
-                            <div className="flex items-center gap-1.5">
-                              <MapPin className="h-3 w-3 opacity-40" />
+                <div className="relative h-[400px] overflow-auto border-t">
+                  <table className="w-full caption-bottom text-sm border-separate border-spacing-0">
+                    <thead className="sticky top-0 z-20 bg-background">
+                      <tr className="hover:bg-transparent">
+                        <th className="h-10 px-2 text-center align-middle font-bold text-[10px] uppercase tracking-wider w-12 text-foreground border-b">
+                          #
+                        </th>
+                        <th className="h-10 px-2 text-left align-middle font-bold text-[10px] uppercase tracking-wider text-foreground border-b">
+                          SO Number
+                        </th>
+                        <th className="h-10 px-2 text-left align-middle font-bold text-[10px] uppercase tracking-wider text-foreground border-b">
+                          Customer
+                        </th>
+                        <th className="h-10 px-2 text-left align-middle font-bold text-[10px] uppercase tracking-wider text-foreground border-b">
+                          Destination
+                        </th>
+                        <th className="h-10 px-2 text-right align-middle font-bold text-[10px] uppercase tracking-wider text-foreground pr-4 border-b">
+                          Amount (₱)
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="font-medium">
+                      {details.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={5}
+                            className="text-center py-16 text-muted-foreground italic"
+                          >
+                            This dispatch plan has no sales orders attached.
+                          </td>
+                        </tr>
+                      ) : (
+                        details.map((detail, index) => (
+                          <tr
+                            key={detail.detail_id || index}
+                            className="border-b transition-colors hover:bg-muted/50 group"
+                          >
+                            <td className="p-2 align-middle text-center text-xs text-muted-foreground w-12 border-b">
+                              {index + 1}
+                            </td>
+                            <td className="p-2 align-middle text-xs font-semibold text-primary border-b">
+                              {detail.order_no || "—"}
+                            </td>
+                            <td className="p-2 align-middle text-xs border-b">
+                              {detail.customer_name || "—"}
+                            </td>
+                            <td className="p-2 align-middle text-[11px] text-muted-foreground border-b">
                               {[detail.city, detail.province]
                                 .filter(Boolean)
                                 .join(", ") || "—"}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right font-bold tabular-nums pr-6">
-                            {(detail.amount || 0).toLocaleString("en-PH", {
-                              minimumFractionDigits: 2,
-                            })}
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
+                            </td>
+                            <td className="p-2 align-middle text-right text-xs font-semibold tabular-nums pr-4 border-b">
+                              {(detail.amount || 0).toLocaleString("en-PH", {
+                                minimumFractionDigits: 2,
+                              })}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           </div>
         </ScrollArea>
 
         {/* Footer Summary */}
-        <div className="px-6 py-5 bg-background border-t flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-full bg-primary/5 flex items-center justify-center">
-              <Package className="h-4 w-4 text-primary/60" />
-            </div>
-            <span className="text-xs font-semibold text-muted-foreground">
-              Total items in trip:{" "}
-              <span className="text-foreground">{details.length}</span>
+        <div className="px-6 py-4 bg-muted/10 border-t flex items-center justify-between shrink-0">
+          <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+            Plan Total:{" "}
+            <span className="text-foreground ml-1">
+              {details.length} order(s)
             </span>
           </div>
 
-          <div className="flex flex-col items-end">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5">
-              Total Manifest Value
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Total Amount
             </span>
-            <span className="text-xl font-black tracking-tight text-primary">
-              ₱{" "}
+            <span className="text-lg font-bold tracking-tight text-primary">
+              ₱
               {totalAmount.toLocaleString("en-PH", {
                 minimumFractionDigits: 2,
               })}

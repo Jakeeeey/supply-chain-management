@@ -10,9 +10,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { cn } from "@/lib/utils";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { DispatchPlan } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/types/dispatch-plan.schema";
-import { Banknote, FileText, MapPin, Package, User } from "lucide-react";
+import { Calendar, MapPin, Package, Truck } from "lucide-react";
 
 interface PDPApproveModalProps {
   open: boolean;
@@ -41,137 +41,129 @@ export function PDPApproveModal({
       })}`
     : "₱0.00";
 
+  const formattedDate = plan.dispatch_date
+    ? new Date(plan.dispatch_date).toLocaleDateString("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "—";
+
   return (
     <AlertDialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <AlertDialogContent className="sm:max-w-md p-0 overflow-hidden border-none shadow-2xl">
-        <AlertDialogHeader className="relative px-6 py-8 text-white overflow-hidden">
-          {/* Emerald Gradient Background */}
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-600 to-teal-800" />
-          {/* Subtle Pattern overlay */}
-          <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-white/20 via-transparent to-transparent" />
-
-          <div className="relative z-10 flex flex-col items-center text-center gap-2">
-            <div className="h-12 w-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center mb-2">
-              <FileText className="h-6 w-6 text-white" />
-            </div>
-            <AlertDialogTitle className="text-2xl font-bold tracking-tight text-white">
-              Approve Dispatch Plan
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-emerald-50/90 text-sm max-w-[280px]">
-              Please review the trip details below before confirming the
-              approval.
-            </AlertDialogDescription>
-          </div>
+      <AlertDialogContent className="sm:max-w-md bg-background p-0 overflow-hidden border">
+        <AlertDialogHeader className="px-6 pt-6 text-left">
+          <AlertDialogTitle className="text-xl font-bold">
+            {plan.dispatch_no}
+          </AlertDialogTitle>
+          <AlertDialogDescription className="text-muted-foreground text-sm">
+            Please review the trip summary before confirming the approval.
+          </AlertDialogDescription>
         </AlertDialogHeader>
 
-        <div className="px-6 py-6 space-y-4 bg-background">
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 gap-3">
-              {/* PDP Info Card */}
-              <div className="rounded-xl border bg-card/50 p-4 shadow-sm hover:shadow-md transition-shadow duration-200">
-                <div className="space-y-3.5">
-                  <div className="flex items-center justify-between group">
-                    <div className="flex items-center gap-2.5 text-muted-foreground">
-                      <div className="p-1.5 rounded-lg bg-muted group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-                        <FileText className="h-4 w-4" />
-                      </div>
-                      <span className="text-xs font-medium uppercase tracking-wider">
-                        PDP Number
-                      </span>
-                    </div>
-                    <span className="font-bold text-base text-primary">
-                      {plan.dispatch_no}
+        <div className="px-6 py-4 space-y-4">
+          <div className="rounded-lg border bg-muted/5 p-4 space-y-4">
+            {/* Trip Information Cards - Horizontal Scrollable */}
+            <ScrollArea className="w-full whitespace-nowrap pb-2">
+              <div className="flex gap-3 min-w-max">
+                {/* Date Card */}
+                <div className="bg-background border rounded-lg p-3 w-[160px] shrink-0">
+                  <div className="flex items-center gap-2 text-muted-foreground mb-1.5">
+                    <Calendar className="h-3.5 w-3.5" />
+                    <span className="text-[10px] font-semibold uppercase tracking-wider">
+                      Date
                     </span>
                   </div>
+                  <p className="text-xs font-semibold text-foreground truncate">
+                    {formattedDate}
+                  </p>
+                </div>
 
-                  <div className="flex items-center justify-between group">
-                    <div className="flex items-center gap-2.5 text-muted-foreground">
-                      <div className="p-1.5 rounded-lg bg-muted group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-                        <MapPin className="h-4 w-4" />
-                      </div>
-                      <span className="text-xs font-medium uppercase tracking-wider">
-                        Cluster
-                      </span>
-                    </div>
-                    <span className="font-semibold text-foreground">
+                {/* Cluster Card */}
+                <div className="bg-background border rounded-lg p-3 w-[160px] shrink-0">
+                  <div className="flex items-center gap-2 text-muted-foreground mb-1.5">
+                    <MapPin className="h-3.5 w-3.5" />
+                    <span className="text-[10px] font-semibold uppercase tracking-wider">
+                      Cluster
+                    </span>
+                  </div>
+                  <div className="flex flex-col">
+                    <p className="text-xs font-semibold text-foreground truncate">
                       {plan.cluster_name || "—"}
+                    </p>
+                    <p className="text-[9px] text-muted-foreground font-medium truncate">
+                      {plan.branch_name}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Driver Card */}
+                <div className="bg-background border rounded-lg p-3 w-[160px] shrink-0">
+                  <div className="flex items-center gap-2 text-muted-foreground mb-1.5">
+                    <Truck className="h-3.5 w-3.5" />
+                    <span className="text-[10px] font-semibold uppercase tracking-wider">
+                      Driver
                     </span>
                   </div>
-
-                  <div className="flex items-center justify-between group">
-                    <div className="flex items-center gap-2.5 text-muted-foreground">
-                      <div className="p-1.5 rounded-lg bg-muted group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-                        <User className="h-4 w-4" />
-                      </div>
-                      <span className="text-xs font-medium uppercase tracking-wider">
-                        Assigned Driver
-                      </span>
-                    </div>
-                    <span className="font-medium text-foreground">
+                  <div className="flex flex-col">
+                    <p className="text-xs font-semibold text-foreground truncate">
                       {plan.driver_name || "—"}
+                    </p>
+                    <p className="text-[9px] text-muted-foreground font-medium truncate">
+                      {plan.vehicle_type_name}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Orders Card */}
+                <div className="bg-background border rounded-lg p-3 w-[120px] shrink-0">
+                  <div className="flex items-center gap-2 text-muted-foreground mb-1.5">
+                    <Package className="h-3.5 w-3.5" />
+                    <span className="text-[10px] font-semibold uppercase tracking-wider">
+                      Orders
                     </span>
                   </div>
-
-                  <div className="flex items-center justify-between group">
-                    <div className="flex items-center gap-2.5 text-muted-foreground">
-                      <div className="p-1.5 rounded-lg bg-muted group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-                        <Package className="h-4 w-4" />
-                      </div>
-                      <span className="text-xs font-medium uppercase tracking-wider">
-                        Shipment Size
-                      </span>
-                    </div>
-                    <span className="font-medium text-foreground">
+                  <div className="flex flex-col">
+                    <p className="text-xs font-semibold text-foreground">
                       {plan.outlet_count || 0} order(s)
-                    </span>
-                  </div>
-
-                  <div className="pt-2 border-t">
-                    <div className="flex items-center justify-between group">
-                      <div className="flex items-center gap-2.5 text-muted-foreground">
-                        <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-700 group-hover:bg-emerald-200 transition-colors">
-                          <Banknote className="h-4 w-4" />
-                        </div>
-                        <span className="text-xs font-bold uppercase tracking-wider text-emerald-700">
-                          Total Value
-                        </span>
-                      </div>
-                      <span className="font-extrabold text-lg text-emerald-700">
-                        {formattedAmount}
-                      </span>
-                    </div>
+                    </p>
+                    <p className="text-[9px] text-muted-foreground font-medium">
+                      {(plan.total_weight || 0).toLocaleString("en-US", {
+                        maximumFractionDigits: 0,
+                      })}{" "}
+                      kg
+                    </p>
                   </div>
                 </div>
               </div>
-            </div>
+              <ScrollBar orientation="horizontal" />
+            </ScrollArea>
 
-            <div className="flex items-center gap-2 px-1">
-              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <p className="text-xs text-muted-foreground font-medium">
-                Plan status will move to{" "}
-                <span className="text-primary font-bold">Approved</span>.
-              </p>
+            <div className="pt-3 border-t flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Total Value
+              </span>
+              <span className="text-lg font-bold tracking-tight text-primary">
+                {formattedAmount}
+              </span>
             </div>
           </div>
+
+          <p className="text-xs text-muted-foreground px-1">
+            This action will mark the plan as{" "}
+            <span className="font-semibold text-primary">Approved</span>.
+          </p>
         </div>
 
-        <AlertDialogFooter className="px-6 py-4 bg-muted/30 border-t gap-3 sm:gap-0">
-          <AlertDialogCancel
-            disabled={isLoading}
-            className="flex-1 sm:flex-none border-none hover:bg-muted"
-          >
-            Go Back
-          </AlertDialogCancel>
+        <AlertDialogFooter className="px-6 py-4 bg-muted/10 border-t">
+          <AlertDialogCancel disabled={isLoading}>Cancel</AlertDialogCancel>
           <AlertDialogAction
             onClick={onConfirm}
             disabled={isLoading}
-            className={cn(
-              "flex-1 sm:flex-none min-w-[120px]",
-              "bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20",
-              "transition-all duration-200 active:scale-95",
-            )}
+            className="font-semibold"
           >
-            {isLoading ? "Processing..." : "Confirm Approval"}
+            {isLoading ? "Approving..." : "Confirm Approval"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
