@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
 import {
   DispatchPlan,
   DispatchPlanDetail,
@@ -119,7 +120,7 @@ export function PDPViewModal({
         </DialogHeader>
 
         <ScrollArea className="flex-1 bg-muted/5">
-          <div className="p-6 space-y-6">
+          <div className="px-6 space-y-6">
             {/* Trip Information Cards - Responsive Grid */}
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
               <div className="bg-background border rounded-lg p-3">
@@ -224,6 +225,75 @@ export function PDPViewModal({
                 </div>
               </div>
             )}
+
+            {/* Capacity Overview Section */}
+            <div className="bg-background border rounded-xl p-4 space-y-3">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-xs font-medium">
+                  <span className="text-muted-foreground">
+                    Vehicle Capacity
+                  </span>
+                  <span className="text-[xs] font-bold text-foreground">
+                    {displayPlan.total_weight?.toLocaleString() || 0} /{" "}
+                    {(displayPlan.maximum_weight || 0).toLocaleString()} kg
+                  </span>
+                </div>
+              </div>
+
+              <div className="relative w-full h-4 bg-secondary rounded-full overflow-hidden ">
+                <div
+                  className={cn(
+                    "h-full transition-all duration-500 flex items-center justify-center text-xs font-semibold text-white",
+                    displayPlan.capacity_percentage! >= 100
+                      ? "bg-destructive"
+                      : displayPlan.capacity_percentage! >= 90
+                        ? "bg-amber-500"
+                        : "bg-blue-500",
+                  )}
+                  style={{
+                    width: `${Math.min(displayPlan.capacity_percentage || 0, 100)}%`,
+                  }}
+                >
+                  {displayPlan.capacity_percentage}%
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-muted rounded-lg p-4 flex flex-col items-center justify-center text-center space-y-1">
+                  <span className="text-xs text-muted-foreground">
+                    Current Load
+                  </span>
+                  <span className="text-lg font-semibold text-foreground">
+                    {displayPlan.total_weight?.toLocaleString() || 0} kg
+                  </span>
+                </div>
+
+                <div className="bg-muted rounded-lg p-4 flex flex-col items-center justify-center text-center space-y-1">
+                  <span className="text-xs text-muted-foreground">
+                    Capacity Remaining
+                  </span>
+                  <span className="text-lg font-semibold text-foreground">
+                    {(
+                      (displayPlan.maximum_weight || 0) -
+                      (displayPlan.total_weight || 0)
+                    ).toLocaleString()}{" "}
+                    kg
+                  </span>
+                </div>
+
+                <div className="bg-muted rounded-lg p-4 flex flex-col items-center justify-center text-center space-y-1">
+                  <span className="text-xs text-muted-foreground">
+                    Total Value
+                  </span>
+                  <span className="text-lg font-semibold text-foreground">
+                    ₱
+                    {totalAmount.toLocaleString("en-PH", {
+                      maximumFractionDigits: 0,
+                    })}
+                  </span>
+                </div>
+              </div>
+            </div>
 
             {/* Manifest Table Section - Fixed height Scrollbox */}
             <div className="bg-background border rounded-lg overflow-hidden flex flex-col">

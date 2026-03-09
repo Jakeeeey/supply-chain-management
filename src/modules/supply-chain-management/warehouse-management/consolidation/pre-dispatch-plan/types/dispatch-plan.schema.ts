@@ -103,6 +103,7 @@ export const dispatchPlanSchema = z.object({
   branch_name: z.string().optional(),
   outlet_count: z.number().optional(), // Number of unique customers in the plan
   total_weight: z.number().optional(), // Aggregate weight from products
+  maximum_weight: z.number().optional(), // Maximum capacity of the vehicle
   capacity_percentage: z.number().optional(), // (total_weight / maximum_weight) * 100
   vehicle_plate: z.string().optional(),
   vehicle_type_name: z.string().optional(),
