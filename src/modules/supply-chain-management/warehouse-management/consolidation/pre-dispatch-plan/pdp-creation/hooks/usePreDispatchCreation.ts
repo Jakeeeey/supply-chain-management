@@ -2,6 +2,7 @@
 
 import {
   DispatchPlan,
+  DispatchPlanDetail,
   DispatchPlanFormValues,
   DispatchPlanMasterData,
   SalesOrderOption,
@@ -14,7 +15,7 @@ const API_PATH =
 /**
  * Hook for the PDP Creation sub-module.
  * Manages pending plans list, master data, available orders,
- * and plan creation mutations.
+ * and plan creation/update mutations.
  * @returns State and actions for PDP creation
  */
 export function usePreDispatchCreation() {
@@ -94,6 +95,19 @@ export function usePreDispatchCreation() {
     [],
   );
 
+  // ─── Fetch Plan Details ───────────────────────────
+  const fetchPlanDetails = useCallback(
+    async (
+      id: number | string,
+    ): Promise<{ plan: DispatchPlan; details: DispatchPlanDetail[] }> => {
+      const res = await fetch(`${API_PATH}/${id}`);
+      const result = await res.json();
+      if (result.error) throw new Error(result.error);
+      return result.data;
+    },
+    [],
+  );
+
   // ─── Mutations ────────────────────────────────────
 
   /**
@@ -102,6 +116,24 @@ export function usePreDispatchCreation() {
   const createPlan = async (values: DispatchPlanFormValues) => {
     const response = await fetch(API_PATH, {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(values),
+    });
+    const result = await response.json();
+    if (result.error) throw new Error(result.error);
+    await refresh();
+    return result.data;
+  };
+
+  /**
+   * Updates an existing dispatch plan.
+   */
+  const updatePlan = async (
+    id: number | string,
+    values: DispatchPlanFormValues,
+  ) => {
+    const response = await fetch(`${API_PATH}/${id}`, {
+      method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(values),
     });
@@ -137,5 +169,7 @@ export function usePreDispatchCreation() {
 
     // Mutations
     createPlan,
+    updatePlan,
+    fetchPlanDetails,
   };
 }

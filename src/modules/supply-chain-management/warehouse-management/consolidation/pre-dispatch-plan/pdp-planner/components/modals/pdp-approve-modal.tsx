@@ -11,7 +11,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { DispatchPlan } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/types/dispatch-plan.schema";
-import { Calendar, MapPin, Package, Truck } from "lucide-react";
+import { Calendar, MapPin, MessageSquare, Package, Truck } from "lucide-react";
 
 interface PDPApproveModalProps {
   open: boolean;
@@ -137,6 +137,22 @@ export function PDPApproveModal({
               </div>
             </div>
           </div>
+
+          {plan.remarks && (
+            <div className="bg-muted/50 border rounded-lg p-3.5 flex gap-3">
+              <div className="shrink-0 pt-0.5">
+                <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Remarks
+                </span>
+                <p className="text-xs leading-relaxed text-foreground">
+                  {plan.remarks}
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="bg-primary/5 border border-primary/10 rounded-lg p-4 flex items-center justify-between">
             <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">

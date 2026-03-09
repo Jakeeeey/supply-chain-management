@@ -13,7 +13,7 @@ import { NavUser } from "../../../../_components/nav-user";
 
 import { cookies } from "next/headers";
 
-import PDPMasterlistPage from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/pdp-masterlist/PDPMasterlistPage";
+import PDPPlannerPage from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/pdp-planner/PDPPlannerPage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -99,7 +99,7 @@ export default async function Page() {
               </BreadcrumbItem>
               <BreadcrumbSeparator className="hidden md:block" />
               <BreadcrumbItem>
-                <BreadcrumbPage>Masterlist</BreadcrumbPage>
+                <BreadcrumbPage>Planner</BreadcrumbPage>
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
@@ -111,7 +111,7 @@ export default async function Page() {
 
       <ScrollArea className="min-h-0 flex-1">
         <div className="p-4">
-          <PDPMasterlistPage />
+          <PDPPlannerPage />
         </div>
       </ScrollArea>
     </div>

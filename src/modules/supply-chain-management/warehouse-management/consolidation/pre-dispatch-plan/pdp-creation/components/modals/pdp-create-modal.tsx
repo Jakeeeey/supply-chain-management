@@ -29,11 +29,21 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import {
+  DispatchPlan,
+  DispatchPlanDetail,
   DispatchPlanFormValues,
   DispatchPlanMasterData,
   SalesOrderOption,
 } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/types/dispatch-plan.schema";
-import { MapPin, Package, Save, Search, Trash2, X } from "lucide-react";
+import {
+  AlertTriangle,
+  MapPin,
+  Package,
+  Save,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -45,6 +55,9 @@ interface PDPCreateModalProps {
   availableOrders: SalesOrderOption[];
   isLoadingOrders: boolean;
   onClusterChange: (clusterId: number) => void;
+  /** When provided, modal opens in edit mode with pre-filled data */
+  editPlan?: DispatchPlan | null;
+  editDetails?: DispatchPlanDetail[];
 }
 
 /**
@@ -60,7 +73,10 @@ export function PDPCreateModal({
   availableOrders,
   isLoadingOrders,
   onClusterChange,
+  editPlan,
+  editDetails,
 }: PDPCreateModalProps) {
+  const isEditMode = !!editPlan;
   // ─── Form State ───────────────────────────────────
   const [driverId, setDriverId] = useState<number | null>(null);
   const [clusterId, setClusterId] = useState<number | null>(null);
@@ -76,19 +92,79 @@ export function PDPCreateModal({
   // ─── Manifest State (selected orders) ─────────────
   const [manifestOrders, setManifestOrders] = useState<SalesOrderOption[]>([]);
 
-  // Reset state when modal opens
+  // Reset or pre-fill state when modal opens
   useEffect(() => {
     if (open) {
-      setDriverId(null);
-      setClusterId(null);
-      setBranchId(null);
-      setDispatchDate(new Date().toISOString().split("T")[0]);
-      setRemarks("");
-      setVehicleId(null);
-      setOrderSearch("");
-      setManifestOrders([]);
+      if (editPlan) {
+        // Edit mode: pre-fill from existing plan
+        // Directus may return relational IDs as objects (e.g. {vehicle_id: 5})
+        const toId = (val: any): number | null => {
+          if (val == null) return null;
+          if (typeof val === "number") return val;
+          if (typeof val === "object")
+            return (
+              Number(
+                val.id ||
+                  val.vehicle_id ||
+                  val.user_id ||
+                  val.cluster_id ||
+                  val.branch_id,
+              ) || null
+            );
+          return Number(val) || null;
+        };
+
+        setDriverId(toId(editPlan.driver_id));
+        setClusterId(toId(editPlan.cluster_id));
+        setBranchId(toId(editPlan.branch_id));
+        setVehicleId(toId(editPlan.vehicle_id));
+        setDispatchDate(
+          editPlan.dispatch_date
+            ? editPlan.dispatch_date.split("T")[0]
+            : new Date().toISOString().split("T")[0],
+        );
+        setRemarks(editPlan.remarks || "");
+        setOrderSearch("");
+
+        // Pre-fill manifest from details
+        if (editDetails?.length) {
+          const manifestFromDetails: SalesOrderOption[] = editDetails.map(
+            (d) => ({
+              order_id: d.sales_order_id,
+              order_no: d.order_no || "",
+              customer_code: "",
+              customer_name: d.customer_name,
+              city: d.city,
+              province: d.province,
+              total_amount: d.amount ?? null,
+              net_amount: d.amount ?? null,
+              po_no: (d as any).po_no || null,
+              total_weight: d.weight,
+            }),
+          );
+          setManifestOrders(manifestFromDetails);
+        } else {
+          setManifestOrders([]);
+        }
+
+        // Fetch available orders for the cluster
+        if (editPlan.cluster_id) {
+          onClusterChange(editPlan.cluster_id);
+        }
+      } else {
+        // Create mode: reset everything
+        setDriverId(null);
+        setClusterId(null);
+        setBranchId(null);
+        setDispatchDate(new Date().toISOString().split("T")[0]);
+        setRemarks("");
+        setVehicleId(null);
+        setOrderSearch("");
+        setManifestOrders([]);
+      }
     }
-  }, [open]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editPlan]);
 
   // ─── Vehicle / Capacity ───────────────────────────
   // Find the selected vehicle from master data
@@ -192,7 +268,11 @@ export function PDPCreateModal({
         remarks,
         sales_order_ids: manifestOrders.map((o) => o.order_id),
       });
-      toast.success("Pre-dispatch plan created successfully!");
+      toast.success(
+        isEditMode
+          ? "Pre-dispatch plan updated successfully!"
+          : "Pre-dispatch plan created successfully!",
+      );
       onClose();
     } catch (err: any) {
       toast.error(err.message || "Failed to save plan.");
@@ -217,7 +297,7 @@ export function PDPCreateModal({
       <DialogContent className="w-full sm:max-w-8xl h-[95vh] max-h-[95vh] flex flex-col p-0 gap-0 overflow-hidden">
         <DialogHeader className="px-6 py-4 border-b shrink-0">
           <DialogTitle className="text-xl font-semibold">
-            Trip Configuration
+            {isEditMode ? "Edit Trip Configuration" : "Trip Configuration"}
           </DialogTitle>
         </DialogHeader>
 
@@ -268,7 +348,9 @@ export function PDPCreateModal({
                       value={String(vehicle.vehicle_id)}
                     >
                       {vehicle.vehicle_plate}
-                      {vehicle.vehicle_type ? ` (${vehicle.vehicle_type})` : ""}
+                      {vehicle.vehicle_type_name
+                        ? ` (${vehicle.vehicle_type_name})`
+                        : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -576,7 +658,11 @@ export function PDPCreateModal({
               <span
                 className={cn(
                   "font-semibold",
-                  isOverCapacity ? "text-destructive" : "text-muted-foreground",
+                  isOverCapacity
+                    ? "text-destructive"
+                    : capacityPercentage >= 90
+                      ? "text-amber-500"
+                      : "text-muted-foreground",
                 )}
               >
                 {totalWeight.toLocaleString()} /{" "}
@@ -589,20 +675,37 @@ export function PDPCreateModal({
               value={capacityPercentage}
               className={cn(
                 "h-2.5",
-                isOverCapacity &&
-                  "[&>[data-slot=progress-indicator]]:bg-destructive",
+                isOverCapacity
+                  ? "[&>[data-slot=progress-indicator]]:bg-destructive"
+                  : capacityPercentage >= 90
+                    ? "[&>[data-slot=progress-indicator]]:bg-amber-500"
+                    : "",
               )}
             />
             {vehicleCapacity > 0 && (
               <p
                 className={cn(
-                  "text-xs font-medium",
-                  isOverCapacity ? "text-destructive" : "text-muted-foreground",
+                  "text-xs font-medium flex items-center gap-1.5",
+                  isOverCapacity
+                    ? "text-destructive"
+                    : capacityPercentage >= 90
+                      ? "text-amber-500"
+                      : "text-muted-foreground",
                 )}
               >
-                {isOverCapacity
-                  ? "⚠️ Over Capacity!"
-                  : `${capacityPercentage.toFixed(0)}% capacity`}
+                {isOverCapacity ? (
+                  <>
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    Over Capacity!
+                  </>
+                ) : capacityPercentage >= 90 ? (
+                  <>
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    Near Capacity ({capacityPercentage.toFixed(0)}%)
+                  </>
+                ) : (
+                  `${capacityPercentage.toFixed(0)}% capacity`
+                )}
               </p>
             )}
           </div>
@@ -619,7 +722,11 @@ export function PDPCreateModal({
               className={cn(isOverCapacity && "opacity-50 cursor-not-allowed")}
             >
               <Save className="mr-2 h-4 w-4" />
-              {isSaving ? "Saving..." : "Save Plan"}
+              {isSaving
+                ? "Saving..."
+                : isEditMode
+                  ? "Update Plan"
+                  : "Save Plan"}
             </Button>
           </div>
         </div>

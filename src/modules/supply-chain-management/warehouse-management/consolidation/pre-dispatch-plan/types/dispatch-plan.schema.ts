@@ -32,6 +32,7 @@ export const vehicleOptionSchema = z.object({
   status: z.string().nullable(),
   maximum_weight: z.union([z.string(), z.number()]).nullable().optional(),
   minimum_load: z.union([z.string(), z.number()]).nullable().optional(),
+  vehicle_type_name: z.string().optional(),
 });
 export type VehicleOption = z.infer<typeof vehicleOptionSchema>;
 

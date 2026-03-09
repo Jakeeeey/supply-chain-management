@@ -23,6 +23,28 @@ export async function GET(
 }
 
 /**
+ * PUT /api/scm/warehouse-management/consolidation/pre-dispatch-plan/[id]
+ * Updates an existing dispatch plan and its detail records
+ */
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await params;
+    const body = await req.json();
+    await dispatchPlanService.updatePlan(id, body);
+    return NextResponse.json({ data: { success: true } });
+  } catch (error: any) {
+    console.error("[PDP API PUT Error]:", error.message);
+    return NextResponse.json(
+      { error: error.message || "Failed to update dispatch plan" },
+      { status: 500 },
+    );
+  }
+}
+
+/**
  * PATCH /api/scm/warehouse-management/consolidation/pre-dispatch-plan/[id]
  * Updates plan status (approve action)
  */

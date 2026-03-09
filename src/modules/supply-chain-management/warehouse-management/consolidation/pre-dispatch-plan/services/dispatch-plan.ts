@@ -28,7 +28,7 @@ export const dispatchPlanService = {
    * @returns {Promise<DispatchPlanMasterData>} Aggregated lookup data
    */
   async fetchMasterData(): Promise<DispatchPlanMasterData> {
-    const [driversRes, vehiclesRes, clustersRes, branchesRes] =
+    const [driversRes, vehiclesRes, clustersRes, branchesRes, vehicleTypesRes] =
       await Promise.all([
         // Drivers: only users from department 8
         fetchItems<DriverOption>("/items/user", {
@@ -54,11 +54,28 @@ export const dispatchPlanService = {
           fields: "id,branch_name,branch_description,branch_code",
           limit: -1,
         }),
+        // Vehicle Types (needed to display type names in modals)
+        fetchItems<{ id: number; type_name: string }>("/items/vehicle_type", {
+          fields: "id,type_name",
+          limit: -1,
+        }),
       ]);
+
+    const vehicleTypeMap = new Map<string, string>();
+    (vehicleTypesRes.data || []).forEach((vt) => {
+      vehicleTypeMap.set(String(vt.id), vt.type_name);
+    });
+
+    const enrichedVehicles = (vehiclesRes.data || []).map((v) => ({
+      ...v,
+      vehicle_type_name: v.vehicle_type
+        ? vehicleTypeMap.get(String(v.vehicle_type)) || "Unknown Type"
+        : undefined,
+    }));
 
     return {
       drivers: driversRes.data || [],
-      vehicles: vehiclesRes.data || [],
+      vehicles: enrichedVehicles,
       clusters: clustersRes.data || [],
       branches: branchesRes.data || [],
     };
@@ -336,6 +353,10 @@ export const dispatchPlanService = {
 
       return {
         ...plan,
+        vehicle_id: veId ? Number(veId) : null,
+        driver_id: plan.driver_id ? Number(String(plan.driver_id)) : null,
+        cluster_id: plan.cluster_id ? Number(String(plan.cluster_id)) : null,
+        branch_id: plan.branch_id ? Number(String(plan.branch_id)) : null,
         driver_name: plan.driver_id
           ? driverMap.get(String(plan.driver_id)) || "Unknown"
           : "—",
@@ -399,9 +420,11 @@ export const dispatchPlanService = {
           customer_code: string;
           total_amount: number;
           net_amount: number;
+          po_no: string | null;
         }>("/items/sales_order", {
           "filter[order_id][_in]": soIds.join(","),
-          fields: "order_id,order_no,customer_code,total_amount,net_amount",
+          fields:
+            "order_id,order_no,customer_code,total_amount,net_amount,po_no",
           limit: -1,
         }),
       ]);
@@ -444,7 +467,8 @@ export const dispatchPlanService = {
           city: customer?.city ?? undefined,
           province: customer?.province ?? undefined,
           amount: order?.net_amount ?? order?.total_amount ?? 0,
-        });
+          po_no: order?.po_no ?? undefined,
+        } as any);
       }
     }
 
@@ -676,6 +700,7 @@ export const dispatchPlanService = {
           branch_id: values.branch_id,
           cluster_id: values.cluster_id,
           vehicle_id: values.vehicle_id,
+          vehicle: values.vehicle_id, // Include both to handle Directus naming inconsistencies
           status: "Pending",
           total_amount: totalAmount,
           remarks: values.remarks || "",
@@ -701,6 +726,91 @@ export const dispatchPlanService = {
     }
 
     return createdPlan;
+  },
+
+  // ─── Update ────────────────────────────────────────────────
+
+  /**
+   * Updates an existing dispatch plan and replaces its detail records.
+   * 1. Recomputes total_amount from selected sales orders.
+   * 2. PATCHes the dispatch_plan record.
+   * 3. Deletes old dispatch_plan_details and creates new ones.
+   * @param id - Dispatch plan ID
+   * @param values - Updated form values
+   */
+  async updatePlan(
+    id: number | string,
+    values: DispatchPlanFormValues,
+  ): Promise<void> {
+    const baseUrl = API_BASE_URL?.replace(/\/$/, "");
+
+    // Recompute total amount
+    let totalAmount = 0;
+    if (values.sales_order_ids.length) {
+      const ordersRes = await fetchItems<{
+        order_id: number;
+        net_amount: number;
+        total_amount: number;
+      }>("/items/sales_order", {
+        "filter[order_id][_in]": values.sales_order_ids.join(","),
+        fields: "order_id,net_amount,total_amount",
+        limit: -1,
+      });
+      totalAmount = (ordersRes.data || []).reduce(
+        (sum, o) => sum + (o.net_amount ?? o.total_amount ?? 0),
+        0,
+      );
+    }
+
+    // Update the plan record
+    await request(`${baseUrl}/items/dispatch_plan/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        dispatch_date: values.dispatch_date,
+        driver_id: values.driver_id,
+        branch_id: values.branch_id,
+        cluster_id: values.cluster_id,
+        vehicle_id: values.vehicle_id,
+        vehicle: values.vehicle_id, // Include both to handle Directus naming inconsistencies
+        total_amount: totalAmount,
+        remarks: values.remarks || "",
+      }),
+    });
+
+    // Delete existing detail records
+    const existingDetails = await fetchItems<{ detail_id: number }>(
+      "/items/dispatch_plan_details",
+      {
+        "filter[dispatch_id][_eq]": id,
+        fields: "detail_id",
+        limit: -1,
+      },
+    );
+
+    if (existingDetails.data?.length) {
+      await Promise.all(
+        existingDetails.data.map((d) =>
+          request(`${baseUrl}/items/dispatch_plan_details/${d.detail_id}`, {
+            method: "DELETE",
+          }),
+        ),
+      );
+    }
+
+    // Create new detail records
+    if (values.sales_order_ids.length) {
+      await Promise.all(
+        values.sales_order_ids.map((soId) =>
+          request(`${baseUrl}/items/dispatch_plan_details`, {
+            method: "POST",
+            body: JSON.stringify({
+              dispatch_id: Number(id),
+              sales_order_id: soId,
+            }),
+          }),
+        ),
+      );
+    }
   },
 
   // ─── Status Transitions ───────────────────────────────────

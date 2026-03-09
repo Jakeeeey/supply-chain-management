@@ -4,16 +4,39 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DispatchPlan } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/types/dispatch-plan.schema";
 import { ColumnDef } from "@tanstack/react-table";
-import { Pencil } from "lucide-react";
+import { CheckCircle, Eye } from "lucide-react";
 
 /**
- * Column definitions for the PDP Creation (Pending) table.
- * Shows pending dispatch plans with an Edit action.
+ * Returns the appropriate badge variant based on dispatch plan status.
  */
-export function getPDPCreationColumns({
-  onEdit,
+function getStatusVariant(
+  status: string,
+): "default" | "secondary" | "destructive" | "outline" {
+  switch (status) {
+    case "Approved":
+      return "default";
+    case "Dispatched":
+      return "secondary";
+    case "Pending":
+      return "outline";
+    case "Picking":
+    case "Picked":
+      return "secondary";
+    default:
+      return "outline";
+  }
+}
+
+/**
+ * Column definitions for the PDP Planner table.
+ * Shows all dispatch plans with View + conditional Approve actions.
+ */
+export function getPDPPlannerColumns({
+  onView,
+  onApprove,
 }: {
-  onEdit: (plan: DispatchPlan) => void;
+  onView: (plan: DispatchPlan) => void;
+  onApprove: (plan: DispatchPlan) => void;
 }): ColumnDef<DispatchPlan>[] {
   return [
     {
@@ -105,14 +128,8 @@ export function getPDPCreationColumns({
       header: "Status",
       cell: ({ row }) => {
         const status = row.original.status;
-        const variant =
-          status === "Pending"
-            ? "outline"
-            : status === "Approved"
-              ? "default"
-              : "secondary";
         return (
-          <Badge variant={variant} className="capitalize">
+          <Badge variant={getStatusVariant(status)} className="capitalize">
             {status}
           </Badge>
         );
@@ -121,18 +138,31 @@ export function getPDPCreationColumns({
     {
       id: "actions",
       header: () => <div className="text-right">Actions</div>,
-      cell: ({ row }) => (
-        <div className="text-right">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => onEdit(row.original)}
-            title="Edit Plan"
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
-        </div>
-      ),
+      cell: ({ row }) => {
+        const isPending = row.original.status === "Pending";
+        return (
+          <div className="flex items-center justify-end gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onView(row.original)}
+              title="View Details"
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
+            {isPending && (
+              <Button
+                size="sm"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                onClick={() => onApprove(row.original)}
+              >
+                <CheckCircle className="mr-1.5 h-3.5 w-3.5" />
+                Approve
+              </Button>
+            )}
+          </div>
+        );
+      },
     },
   ];
 }

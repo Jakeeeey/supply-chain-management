@@ -156,12 +156,8 @@ const data = {
                   url: "/scm/warehouse-management/consolidation/pre-dispatch-plan/pdp-creation",
                 },
                 {
-                  title: "PDP Approval",
-                  url: "/scm/warehouse-management/consolidation/pre-dispatch-plan/pdp-approval",
-                },
-                {
-                  title: "PDP Masterlist",
-                  url: "/scm/warehouse-management/consolidation/pre-dispatch-plan/pdp-masterlist",
+                  title: "PDP Planner",
+                  url: "/scm/warehouse-management/consolidation/pre-dispatch-plan/pdp-planner",
                 },
               ],
             },

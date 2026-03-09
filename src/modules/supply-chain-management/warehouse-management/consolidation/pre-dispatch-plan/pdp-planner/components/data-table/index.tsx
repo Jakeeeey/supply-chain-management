@@ -3,9 +3,9 @@
 import { DataTable } from "@/components/ui/new-data-table";
 import { DispatchPlan } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/types/dispatch-plan.schema";
 import React from "react";
-import { getPDPCreationColumns } from "./columns";
+import { getPDPPlannerColumns } from "./columns";
 
-interface PDPCreationTableProps {
+interface PDPPlannerTableProps {
   data: DispatchPlan[];
   totalCount: number;
   pageIndex: number;
@@ -15,28 +15,28 @@ interface PDPCreationTableProps {
     pageSize: number;
   }) => void;
   isLoading: boolean;
-  onEdit: (plan: DispatchPlan) => void;
+  onView: (plan: DispatchPlan) => void;
+  onApprove: (plan: DispatchPlan) => void;
   onSearch: (value: string) => void;
-  actionComponent?: React.ReactNode;
 }
 
 /**
- * DataTable wrapper for PDP Creation (Pending plans).
+ * DataTable wrapper for PDP Planner.
  */
-export function PDPCreationTable({
+export function PDPPlannerTable({
   data,
   totalCount,
   pageIndex,
   pageSize,
   onPaginationChange,
   isLoading,
-  onEdit,
+  onView,
+  onApprove,
   onSearch,
-  actionComponent,
-}: PDPCreationTableProps) {
+}: PDPPlannerTableProps) {
   const columns = React.useMemo(
-    () => getPDPCreationColumns({ onEdit }),
-    [onEdit],
+    () => getPDPPlannerColumns({ onView, onApprove }),
+    [onView, onApprove],
   );
 
   return (
@@ -50,9 +50,8 @@ export function PDPCreationTable({
       pagination={{ pageIndex, pageSize }}
       onPaginationChange={onPaginationChange}
       onSearch={onSearch}
-      actionComponent={actionComponent}
-      emptyTitle="No Pending Plans"
-      emptyDescription="Create a new pre-dispatch plan to get started."
+      emptyTitle="No Dispatch Plans"
+      emptyDescription="No dispatch plans have been created yet."
     />
   );
 }
