@@ -1,3 +1,4 @@
+import { handleApiError } from "@/lib/error-handler";
 import { dispatchPlanService } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/services/dispatch-plan";
 import { dispatchPlanFormSchema } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/types/dispatch-plan.schema";
 import { NextRequest, NextResponse } from "next/server";
@@ -53,12 +54,8 @@ export async function GET(req: NextRequest) {
     );
 
     return NextResponse.json(result);
-  } catch (error: any) {
-    console.error("[PDP API GET Error]:", error.message);
-    return NextResponse.json(
-      { error: error.message || "Failed to fetch dispatch plans" },
-      { status: 500 },
-    );
+  } catch (error) {
+    return handleApiError(error);
   }
 }
 
@@ -81,11 +78,7 @@ export async function POST(req: NextRequest) {
 
     const data = await dispatchPlanService.createPlan(parsed.data);
     return NextResponse.json({ data });
-  } catch (error: any) {
-    console.error("[PDP API POST Error]:", error.message);
-    return NextResponse.json(
-      { error: error.message || "Failed to create dispatch plan" },
-      { status: 500 },
-    );
+  } catch (error) {
+    return handleApiError(error);
   }
 }
