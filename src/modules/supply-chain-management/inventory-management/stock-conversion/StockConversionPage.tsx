@@ -34,11 +34,13 @@ export default function StockConversionPage() {
   };
 
   const handleConfirmUnitConversion = (qtyToConvert: number, targetUnitId: number, convertedQuantity: number) => {
+    console.log("[StockConversionPage] Confirming unit conversion:", { qtyToConvert, targetUnitId, convertedQuantity });
     setPendingConversion({ qtyToConvert, targetUnitId, convertedQuantity });
     setIsUnitModalOpen(false);
     
     // Open RFID Modal immediately after
     setTimeout(() => {
+      console.log("[StockConversionPage] Opening RFID Modal...");
       setIsRfidModalOpen(true);
     }, 150);
   };
@@ -47,18 +49,23 @@ export default function StockConversionPage() {
     if (!selectedProduct || !pendingConversion) return;
     
     setIsSubmitting(true);
+    const payload = {
+      productId: selectedProduct.productId,
+      sourceUnitId: selectedProduct.currentUnitId || 11, // fallback to box
+      targetUnitId: pendingConversion.targetUnitId,
+      quantityToConvert: pendingConversion.qtyToConvert,
+      convertedQuantity: pendingConversion.convertedQuantity,
+      pricePerUnit: selectedProduct.pricePerUnit || 0,
+      branchId: 190, // We should get branchId from user session usually, using hardcoded for now or from env
+      userId: 24, // Usually from user session
+      rfidTags: tags
+    };
+
+    console.log("[StockConversion] Confirming with payload:", payload);
+    
+    setIsSubmitting(true);
     try {
-      await convertStock({
-        productId: selectedProduct.productId,
-        sourceUnitId: selectedProduct.currentUnitId || 11, // fallback to box
-        targetUnitId: pendingConversion.targetUnitId,
-        quantityToConvert: pendingConversion.qtyToConvert,
-        convertedQuantity: pendingConversion.convertedQuantity,
-        pricePerUnit: selectedProduct.pricePerUnit,
-        branchId: 190, // We should get branchId from user session usually, using hardcoded for now or from env
-        userId: 24, // Usually from user session
-        rfidTags: tags
-      });
+      await convertStock(payload);
       setIsRfidModalOpen(false);
       setSelectedProduct(null);
       setPendingConversion(null);

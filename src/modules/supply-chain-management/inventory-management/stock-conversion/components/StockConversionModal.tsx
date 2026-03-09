@@ -33,27 +33,47 @@ export function StockConversionModal({ product, isOpen, onClose, onConfirm }: St
   
   let convertedAmount = 0;
   if (qtyToConvert && targetUnit) {
-      // In this logic, we assume unitOfBox is how many base pieces are in the current unit
-      // and targetUnit.conversionFactor is how many base pieces are in the target.
-      // E.g. Box has 24 pieces. Target Pack has 6 pieces.
-      // Converted amount = (qtyToConvert * 24) / 6 = qtyToConvert * 4 packs
+      // Get the source factor (how many base units are in one item of the current unit)
+      let sourceFactor = 1;
+      const currentUnitName = product.currentUnit.toLowerCase();
       
-      // If we don't have accurate conversion factors, we can rely on standard unit naming
-      let multiplier = 1;
-      const tName = targetUnit.name.toLowerCase();
-      
-      if (tName.includes('pack') && product.pack) {
-          multiplier = (product.unitOfBox || 24) / product.pack;
-      } else if (tName.includes('piece')) {
-          multiplier = product.unitOfBox || 24;
+      if (currentUnitName.includes('box')) {
+          sourceFactor = product.unitOfBox || 24;
+      } else if (currentUnitName.includes('pack')) {
+          sourceFactor = product.pack || 6;
+      } else if (currentUnitName.includes('tie')) {
+          sourceFactor = product.tie || 12; // Default to 12 if tie is 0
+      } else if (currentUnitName.includes('piece')) {
+          sourceFactor = 1;
+      } else {
+          sourceFactor = 1; 
       }
       
-      convertedAmount = Number(qtyToConvert) * multiplier;
+      // Ensure sourceFactor is never 0
+      if (sourceFactor <= 0) sourceFactor = 1;
+
+      // Get target factor
+      const targetFactor = targetUnit.conversionFactor || 1;
+      
+      // Conversion formula: (Quantity * Source Factor) / Target Factor
+      // Example: 1 Box (24pcs) to Pack (6pcs) => (1 * 24) / 6 = 4 Packs
+      // Example: 24 Pieces (1pc) to Box (24pcs) => (24 * 1) / 24 = 1 Box
+      
+      if (targetFactor > 0) {
+          convertedAmount = (Number(qtyToConvert) * sourceFactor) / targetFactor;
+          // Round to 2 decimal places if needed, but usually these are whole numbers in this context
+          if (convertedAmount % 1 !== 0) {
+              convertedAmount = Number(convertedAmount.toFixed(2));
+          }
+      }
   }
 
   const handleConfirm = () => {
+    console.log("[StockConversionModal] Confirm clicked. Qty:", qtyToConvert, "TargetUnit:", selectedTargetUnit, "Amount:", convertedAmount);
     if (qtyToConvert && selectedTargetUnit && convertedAmount > 0) {
       onConfirm(Number(qtyToConvert), selectedTargetUnit, convertedAmount);
+    } else {
+      console.warn("[StockConversionModal] Confirm blocked: Missing inputs or amount is 0");
     }
   };
 
