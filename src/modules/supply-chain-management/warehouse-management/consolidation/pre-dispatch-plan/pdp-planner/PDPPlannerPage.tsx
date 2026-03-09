@@ -8,12 +8,12 @@ import { toast } from "sonner";
 import { PDPPlannerTable } from "./components/data-table";
 import { PDPApproveModal } from "./components/modals/pdp-approve-modal";
 import { PDPViewModal } from "./components/modals/pdp-view-modal";
+import { PDPGlobalFilter } from "./components/PDPGlobalFilter";
+import { PDPMetrics } from "./components/PDPMetrics";
 import { usePreDispatchPlanner } from "./hooks/usePreDispatchPlanner";
 
 /**
  * Main page for PDP Planner.
- * Displays all dispatch plans across all statuses
- * with View and conditional Approve actions.
  */
 export default function PDPPlannerPage() {
   const {
@@ -23,6 +23,8 @@ export default function PDPPlannerPage() {
     setPlansPage,
     plansLimit,
     setPlansLimit,
+    masterData,
+    metrics,
     isLoading,
     error,
     setSearch,
@@ -61,7 +63,11 @@ export default function PDPPlannerPage() {
   if (error) return <ErrorPage message={error} reset={refresh} />;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-0">
+      <PDPMetrics metrics={metrics} />
+
+      <PDPGlobalFilter masterData={masterData} />
+
       <PDPPlannerTable
         data={plansData}
         totalCount={plansTotal}

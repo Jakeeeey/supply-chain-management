@@ -1,5 +1,3 @@
-"use client";
-
 import {
   DispatchPlan,
   DispatchPlanDetail,
@@ -8,17 +6,17 @@ import {
   SalesOrderOption,
 } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/types/dispatch-plan.schema";
 import { useCallback, useEffect, useState } from "react";
+import { usePDPFilter } from "../../context/PDPFilterContext";
 
 const API_PATH =
   "/api/scm/warehouse-management/consolidation/pre-dispatch-plan";
 
 /**
  * Hook for the PDP Creation sub-module.
- * Manages pending plans list, master data, available orders,
- * and plan creation/update mutations.
- * @returns State and actions for PDP creation
  */
 export function usePreDispatchCreation() {
+  const { clusterId, setClusterId, search, setSearch } = usePDPFilter();
+
   // ─── Pending Plans State ──────────────────────────
   const [pendingData, setPendingData] = useState<DispatchPlan[]>([]);
   const [pendingTotal, setPendingTotal] = useState(0);
@@ -39,17 +37,23 @@ export function usePreDispatchCreation() {
   // ─── Shared State ─────────────────────────────────
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
 
   // ─── Fetch Pending Plans + Master Data ────────────
   const refresh = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
+      const params = new URLSearchParams({
+        status: "Pending",
+        limit: String(pendingLimit),
+        offset: String(pendingPage * pendingLimit),
+        search: search,
+      });
+
+      if (clusterId) params.append("cluster_id", String(clusterId));
+
       const [plansRes, masterRes] = await Promise.all([
-        fetch(
-          `${API_PATH}?status=Pending&limit=${pendingLimit}&offset=${pendingPage * pendingLimit}&search=${encodeURIComponent(search)}`,
-        ).then((r) => r.json()),
+        fetch(`${API_PATH}?${params.toString()}`).then((r) => r.json()),
         fetch(`${API_PATH}?type=master`).then((r) => r.json()),
       ]);
 
@@ -66,7 +70,7 @@ export function usePreDispatchCreation() {
     } finally {
       setIsLoading(false);
     }
-  }, [pendingLimit, pendingPage, search]);
+  }, [pendingLimit, pendingPage, search, clusterId]);
 
   useEffect(() => {
     refresh();
@@ -74,11 +78,13 @@ export function usePreDispatchCreation() {
 
   // ─── Fetch Available Orders by Cluster ────────────
   const fetchAvailableOrders = useCallback(
-    async (clusterId?: number, orderSearch?: string) => {
+    async (targetClusterId?: number, orderSearch?: string) => {
       setIsLoadingOrders(true);
       try {
         const params = new URLSearchParams({ type: "available_orders" });
-        if (clusterId) params.set("cluster_id", String(clusterId));
+        // Use the passed clusterId (from form) or the global filter clusterId
+        const activeClusterId = targetClusterId || clusterId;
+        if (activeClusterId) params.set("cluster_id", String(activeClusterId));
         if (orderSearch) params.set("search", orderSearch);
 
         const res = await fetch(`${API_PATH}?${params.toString()}`);
@@ -92,7 +98,7 @@ export function usePreDispatchCreation() {
         setIsLoadingOrders(false);
       }
     },
-    [],
+    [clusterId],
   );
 
   // ─── Fetch Plan Details ───────────────────────────
@@ -107,8 +113,6 @@ export function usePreDispatchCreation() {
     },
     [],
   );
-
-  // ─── Mutations ────────────────────────────────────
 
   /**
    * Creates a new dispatch plan from validated form data.

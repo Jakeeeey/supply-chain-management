@@ -28,17 +28,28 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ data });
     }
 
+    // Dashboard metrics
+    if (type === "metrics") {
+      const clusterId = searchParams.get("cluster_id");
+      const data = await dispatchPlanService.fetchMetrics(
+        clusterId ? Number(clusterId) : undefined,
+      );
+      return NextResponse.json({ data });
+    }
+
     // Default: paginated dispatch plans list
     const limit = Number(searchParams.get("limit") || 10);
     const offset = Number(searchParams.get("offset") || 0);
     const status = searchParams.get("status") || undefined;
     const search = searchParams.get("search") || undefined;
+    const clusterId = searchParams.get("cluster_id") || undefined;
 
     const result = await dispatchPlanService.fetchPlans(
       limit,
       offset,
       status,
       search,
+      clusterId ? Number(clusterId) : undefined,
     );
 
     return NextResponse.json(result);

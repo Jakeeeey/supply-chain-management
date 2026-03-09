@@ -4,7 +4,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DispatchPlan } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/types/dispatch-plan.schema";
 import { ColumnDef } from "@tanstack/react-table";
-import { CheckCircle, Eye } from "lucide-react";
 
 /**
  * Returns the appropriate badge variant based on dispatch plan status.
@@ -142,24 +141,23 @@ export function getPDPPlannerColumns({
         const isPending = row.original.status === "Pending";
         return (
           <div className="flex items-center justify-end gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => onView(row.original)}
-              title="View Details"
-            >
-              <Eye className="h-4 w-4" />
-            </Button>
             {isPending && (
               <Button
                 size="sm"
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                className="bg-blue-600 hover:bg-blue-700 text-white"
                 onClick={() => onApprove(row.original)}
               >
-                <CheckCircle className="mr-1.5 h-3.5 w-3.5" />
                 Approve
               </Button>
             )}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => onView(row.original)}
+              title="View Details"
+            >
+              View
+            </Button>
           </div>
         );
       },

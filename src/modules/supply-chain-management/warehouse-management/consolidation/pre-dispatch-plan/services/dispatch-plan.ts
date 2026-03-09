@@ -127,6 +127,7 @@ export const dispatchPlanService = {
     offset: number = 0,
     status?: string,
     search?: string,
+    clusterId?: number,
   ): Promise<PaginatedDispatchPlans> {
     const params: Record<string, any> = {
       fields: "*",
@@ -141,7 +142,11 @@ export const dispatchPlanService = {
     }
 
     if (search) {
-      params["filter[dispatch_no][_contains]"] = search;
+      params["filter[dispatch_no][_icontains]"] = search;
+    }
+
+    if (clusterId) {
+      params["filter[cluster_id][_eq]"] = clusterId;
     }
 
     const result = await fetchItems<DispatchPlan>(
@@ -825,5 +830,58 @@ export const dispatchPlanService = {
       method: "PATCH",
       body: JSON.stringify({ status: "Approved" }),
     });
+  },
+
+  /**
+   * Fetches dashboard metrics (counts and sums) grouped by status.
+   * @param clusterId - Optional cluster filter
+   */
+  async fetchMetrics(clusterId?: number) {
+    const params: Record<string, any> = {
+      fields: "status,total_amount",
+      limit: -1, // Fetch all to aggregate
+    };
+
+    if (clusterId) {
+      params["filter[cluster_id][_eq]"] = clusterId;
+    }
+
+    const { data } = await fetchItems<DispatchPlan>(
+      "/items/dispatch_plan",
+      params,
+    );
+
+    const metrics = {
+      pendingCount: 0,
+      pendingValue: 0,
+      readyCount: 0,
+      activeCount: 0,
+      dispatchedCount: 0,
+      dispatchedValue: 0,
+    };
+
+    (data || []).forEach((plan) => {
+      const amount = Number(plan.total_amount || 0);
+      switch (plan.status) {
+        case "Pending":
+          metrics.pendingCount++;
+          metrics.pendingValue += amount;
+          break;
+        case "Approved":
+          metrics.readyCount++;
+          // Optional: Add readyValue if needed, but not in current DP
+          break;
+        case "Picking":
+        case "Picked":
+          metrics.activeCount++;
+          break;
+        case "Dispatched":
+          metrics.dispatchedCount++;
+          metrics.dispatchedValue += amount;
+          break;
+      }
+    });
+
+    return metrics;
   },
 };

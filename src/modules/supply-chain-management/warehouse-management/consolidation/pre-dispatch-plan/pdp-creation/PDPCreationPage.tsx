@@ -11,14 +11,13 @@ import {
 import { Plus } from "lucide-react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
+import { PDPGlobalFilter } from "../pdp-planner/components/PDPGlobalFilter";
 import { PDPCreationTable } from "./components/data-table";
 import { PDPCreateModal } from "./components/modals/pdp-create-modal";
 import { usePreDispatchCreation } from "./hooks/usePreDispatchCreation";
 
 /**
  * Main page for PDP Creation (Pending Plans).
- * Displays a data table of pending dispatch plans
- * and provides "Create PDP" and "Edit" actions.
  */
 export default function PDPCreationPage() {
   const {
@@ -92,7 +91,9 @@ export default function PDPCreationPage() {
   if (error) return <ErrorPage message={error} reset={refresh} />;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-0">
+      <PDPGlobalFilter masterData={masterData} />
+
       <PDPCreationTable
         data={pendingData}
         totalCount={pendingTotal}
