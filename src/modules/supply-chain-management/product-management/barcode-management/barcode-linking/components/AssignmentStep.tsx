@@ -147,7 +147,7 @@ export function AssignmentStep({
                             <Package className="h-4 w-4 text-muted-foreground" />
                         </div>
                         <div className="min-w-0">
-                            <p className="text-sm font-semibold text-foreground truncate max-w-[280px]">
+                            <p className="text-sm font-semibold text-foreground break-words whitespace-normal">
                                 {product?.description || product?.product_name}
                             </p>
                             <div className="flex items-center gap-1.5 mt-0.5">

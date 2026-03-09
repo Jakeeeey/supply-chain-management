@@ -120,9 +120,9 @@ export function MasterlistTable({
                     {product.barcode}
                   </TableCell>
                   <TableCell>
-                    <span className="font-medium">
+                    <div className="whitespace-normal break-words min-w-[250px] font-medium">
                       {product.description || product.product_name}
-                    </span>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Badge

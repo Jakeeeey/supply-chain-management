@@ -76,6 +76,11 @@ export function validateAndBuildPayload(
             });
             return null;
         }
+    } else {
+        toast.error("Unsupported Barcode Type", {
+            description: `"${typeName}" is not a recognized barcode format. Only EAN-13 and Code 128 are supported.`,
+        });
+        return null;
     }
 
     // 4. Duplicate check — linked products

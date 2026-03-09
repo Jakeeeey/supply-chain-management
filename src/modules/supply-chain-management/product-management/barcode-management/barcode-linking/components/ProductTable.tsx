@@ -145,7 +145,7 @@ export function ProductTable({
                     className="font-medium cursor-pointer"
                     onClick={() => onEdit(product)}
                   >
-                    <div className="truncate max-w-[350px]" title={displayName}>
+                    <div title={displayName} className="whitespace-normal break-words">
                       {displayName}
                     </div>
                   </TableCell>
