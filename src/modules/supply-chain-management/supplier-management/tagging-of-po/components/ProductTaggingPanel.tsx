@@ -117,18 +117,18 @@ export default function ProductTaggingPanel(props: {
                 <div className="grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-4 min-w-0">
                     {/* LEFT */}
                     <div className="min-w-0 space-y-4">
-                        {/* ✅ DARK SCAN PANEL */}
+                        {/* ✅ RESPONSIVE SCAN PANEL */}
                         <div
                             className={cn(
                                 "rounded-2xl border border-border shadow-sm overflow-hidden",
-                                "bg-[linear-gradient(180deg,#0b1220_0%,#070a14_100%)] text-[#F8FAFC]"
+                                "bg-card text-card-foreground"
                             )}
                         >
                             <div className="p-5">
                                 {/* Header */}
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="space-y-1">
-                                        <div className="text-xs font-black uppercase tracking-widest text-[rgba(248,250,252,0.82)]">
+                                        <div className="text-xs font-black uppercase tracking-widest text-muted-foreground">
                                             1. Scan Barcode (SKU)
                                         </div>
                                     </div>
@@ -146,9 +146,8 @@ export default function ProductTaggingPanel(props: {
                                             onChange={(e) => setSku(e.target.value)}
                                             placeholder="Scan SKU..."
                                             className={cn(
-                                                "h-12 rounded-xl",
-                                                "bg-[rgba(255,255,255,0.06)] border-[rgba(255,255,255,0.12)] text-[#F8FAFC]",
-                                                "placeholder:text-[rgba(248,250,252,0.45)] focus-visible:ring-[rgba(248,250,252,0.22)]",
+                                                "h-12 rounded-xl bg-background border-border",
+                                                "placeholder:text-muted-foreground/60 focus-visible:ring-primary/20",
                                                 skuRejected ? "border-destructive/70 ring-2 ring-destructive/30" : ""
                                             )}
                                             onKeyDown={(e) => {
@@ -160,7 +159,7 @@ export default function ProductTaggingPanel(props: {
                                         />
 
                                         {!sku.trim() ? (
-                                            <div className="text-xs italic text-[rgba(248,250,252,0.55)]">
+                                            <div className="text-xs italic text-muted-foreground/80">
                                                 Waiting for scan...
                                             </div>
                                         ) : null}
@@ -183,7 +182,7 @@ export default function ProductTaggingPanel(props: {
                                     {/* RFID */}
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between">
-                                            <div className="text-xs font-black uppercase tracking-widest text-[rgba(248,250,252,0.82)]">
+                                            <div className="text-xs font-black uppercase tracking-widest text-muted-foreground">
                                                 2. Scan RFID Tag
                                             </div>
                                             {/* ✅ Strict toggle removed */}
@@ -200,9 +199,8 @@ export default function ProductTaggingPanel(props: {
                                             placeholder="Scan RFID..."
                                             maxLength={24}
                                             className={cn(
-                                                "h-12 rounded-xl",
-                                                "bg-[rgba(255,255,255,0.06)] border-[rgba(255,255,255,0.12)] text-[#F8FAFC]",
-                                                "placeholder:text-[rgba(248,250,252,0.45)] focus-visible:ring-[rgba(248,250,252,0.22)]"
+                                                "h-12 rounded-xl bg-background border-border",
+                                                "placeholder:text-muted-foreground/60 focus-visible:ring-primary/20"
                                             )}
                                             onKeyDown={(e) => {
                                                 if (e.key === "Enter") {
@@ -229,24 +227,24 @@ export default function ProductTaggingPanel(props: {
 
                                 {/* MATCHED PRODUCT BOX */}
                                 {matched ? (
-                                    <div className="mt-4 rounded-2xl border border-[rgba(255,255,255,0.12)] bg-[rgba(255,255,255,0.06)] p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                    <div className="mt-4 rounded-2xl border border-border bg-muted/40 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                                         <div>
-                                            <div className="text-xs font-black uppercase tracking-widest text-[rgba(248,250,252,0.70)]">
+                                            <div className="text-xs font-black uppercase tracking-widest text-muted-foreground">
                                                 Matched Product
                                             </div>
-                                            <div className="text-lg font-black mt-1">{matched.name}</div>
-                                            <div className="text-xs text-[rgba(248,250,252,0.60)] mt-1">
+                                            <div className="text-lg font-black mt-1 text-foreground">{matched.name}</div>
+                                            <div className="text-xs text-muted-foreground/80 mt-1">
                                                 SKU: {matched.sku}
                                             </div>
                                         </div>
 
-                                        <div className="text-right">
-                                            <div className="text-xs font-black uppercase tracking-widest text-[rgba(248,250,252,0.70)]">
+                                        <div className="text-left sm:text-right">
+                                            <div className="text-xs font-black uppercase tracking-widest text-muted-foreground">
                                                 Progress
                                             </div>
-                                            <div className="text-2xl font-black mt-1">
+                                            <div className="text-2xl font-black mt-1 text-foreground">
                                                 {matched.taggedQty}{" "}
-                                                <span className="text-[rgba(248,250,252,0.55)]">/</span>{" "}
+                                                <span className="text-muted-foreground/60">/</span>{" "}
                                                 {matched.expectedQty}
                                             </div>
                                         </div>
