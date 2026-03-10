@@ -12,7 +12,8 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 import { NavUser } from "../../../_components/nav-user"
 import { cookies } from "next/headers"
 
-import ConsolidatorModule from "@/modules/supply-chain-management/warehouse-management/consolidation/delivery-picking/DeliveryPickingModule";
+// 🚀 THE FIX: Import using your modules alias!
+import AuditorDashboardModule from "@/modules/supply-chain-management/warehouse-management/consolidation/delivery-auditing/AuditorDashboardModule";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -82,8 +83,12 @@ export default async function Page() {
                                 <BreadcrumbLink href="#">Warehouse Management</BreadcrumbLink>
                             </BreadcrumbItem>
                             <BreadcrumbSeparator className="hidden md:block" />
+                            <BreadcrumbItem className="hidden md:block">
+                                <BreadcrumbLink href="#">Consolidation</BreadcrumbLink>
+                            </BreadcrumbItem>
+                            <BreadcrumbSeparator className="hidden md:block" />
                             <BreadcrumbItem>
-                                <BreadcrumbPage>Consolidation</BreadcrumbPage>
+                                <BreadcrumbPage>Delivery Auditing</BreadcrumbPage>
                             </BreadcrumbItem>
                         </BreadcrumbList>
                     </Breadcrumb>
@@ -95,8 +100,8 @@ export default async function Page() {
             </header>
 
             <ScrollArea className="min-h-0 flex-1 bg-muted/10">
-                {/* 🚀 Clean module import with no prop drilling! */}
-                <ConsolidatorModule />
+                {/* 🚀 Mounts the actual Dashboard component from your modules folder */}
+                <AuditorDashboardModule />
             </ScrollArea>
         </div>
     )
