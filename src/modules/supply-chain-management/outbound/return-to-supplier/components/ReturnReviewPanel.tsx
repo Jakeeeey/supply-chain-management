@@ -1,0 +1,388 @@
+"use client";
+
+import React from "react";
+import { Trash2, ScanLine } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import type { CartItem, LineDiscount, RTSReturnType } from "../types/rts.schema";
+
+interface ReturnReviewPanelProps {
+  items: CartItem[];
+  lineDiscounts: LineDiscount[];
+  returnTypes: RTSReturnType[];
+  onUpdateItem: (id: string, field: keyof CartItem, value: number) => void;
+  onRemoveItem: (id: string) => void;
+  remarks: string;
+  setRemarks: (val: string) => void;
+  readOnly?: boolean;
+}
+
+export function ReturnReviewPanel({
+  items,
+  lineDiscounts,
+  returnTypes = [],
+  onUpdateItem,
+  onRemoveItem,
+  remarks,
+  setRemarks,
+  readOnly = false,
+}: ReturnReviewPanelProps) {
+  const totalAmount = items.reduce(
+    (sum, item) =>
+      sum +
+      (item.customPrice || item.price) *
+        item.quantity *
+        (1 - item.discount / 100),
+    0,
+  );
+
+  const totalQuantity = items.reduce((acc, i) => acc + i.quantity, 0);
+  const totalDiscountAmount = items.reduce(
+    (sum, item) =>
+      sum +
+      (item.customPrice || item.price) * item.quantity * (item.discount / 100),
+    0,
+  );
+  const grossAmount = totalAmount + totalDiscountAmount;
+
+  // Helper to find discount name by percentage
+  const getDiscountName = (percentage: number) => {
+    if (percentage === 0) return "0%";
+    const match = lineDiscounts.find(
+      (d) => parseFloat(d.percentage) === percentage,
+    );
+    return match ? match.line_discount : `${percentage}%`; // Fallback to % if custom
+  };
+
+  return (
+    <div className="space-y-8">
+      {/* 1. TABLE SECTION */}
+      <div className="rounded-md border border-slate-200 overflow-hidden bg-white shadow-sm">
+        <Table>
+          <TableHeader className="bg-slate-50 border-b border-slate-200">
+            <TableRow>
+              <TableHead className="w-[100px] text-xs font-bold text-slate-500 uppercase pl-4">
+                Code
+              </TableHead>
+              <TableHead className="w-[120px] text-xs font-bold text-slate-500 uppercase">
+                RFID
+              </TableHead>
+              <TableHead className="text-xs font-bold text-slate-500 uppercase">
+                Product Name
+              </TableHead>
+              <TableHead className="w-20 text-xs font-bold text-slate-500 uppercase text-center">
+                Unit
+              </TableHead>
+              <TableHead className="w-[100px] text-xs font-bold text-slate-500 uppercase text-center">
+                Quantity
+              </TableHead>
+              <TableHead className="w-[120px] text-xs font-bold text-slate-500 uppercase text-right">
+                Unit Price
+              </TableHead>
+              <TableHead className="w-40 text-xs font-bold text-slate-500 uppercase text-center">
+                Discount Type
+              </TableHead>
+              <TableHead className="w-[120px] text-xs font-bold text-slate-500 uppercase text-right">
+                Discount Amt
+              </TableHead>
+              <TableHead className="w-40 text-xs font-bold text-slate-500 uppercase text-center">
+                Return Type
+              </TableHead>
+              <TableHead className="w-[120px] text-xs font-bold text-slate-500 uppercase text-right">
+                Total
+              </TableHead>
+              {!readOnly && (
+                <TableHead className="w-[60px] text-xs font-bold text-slate-500 uppercase text-center pr-4">
+                  Action
+                </TableHead>
+              )}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {items.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={readOnly ? 10 : 11}
+                  className="h-32 text-center text-slate-400"
+                >
+                  No items selected.
+                </TableCell>
+              </TableRow>
+            ) : (
+              items.map((item) => {
+                const unitPrice = item.customPrice || item.price;
+                const discountPerUnit = unitPrice * (item.discount / 100);
+                const rowTotal =
+                  unitPrice * item.quantity * (1 - item.discount / 100);
+
+                return (
+                  <TableRow
+                    key={item.id}
+                    className="hover:bg-slate-50 border-b border-slate-100 last:border-0"
+                  >
+                    <TableCell className="text-xs text-slate-500 font-mono pl-4">
+                      {item.code}
+                    </TableCell>
+                    <TableCell>
+                      {item.rfid_tag ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-emerald-50 text-emerald-700 text-[10px] font-mono">
+                          <ScanLine className="h-3 w-3" />
+                          {item.rfid_tag}
+                        </span>
+                      ) : (
+                        <span className="text-slate-300 text-xs">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="font-medium text-slate-700 text-sm">
+                      {item.name}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <span className="inline-flex items-center justify-center px-2 py-1 rounded bg-blue-50 text-blue-700 text-[10px] font-bold uppercase tracking-wide">
+                        {item.unit}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      {readOnly ? (
+                        <div className="text-center text-sm font-bold">
+                          {item.quantity}
+                        </div>
+                      ) : (
+                        <Input
+                          type="number"
+                          min={1}
+                          value={item.quantity}
+                          onChange={(e) =>
+                            onUpdateItem(
+                              item.id,
+                              "quantity",
+                              Math.max(1, parseFloat(e.target.value) || 0),
+                            )
+                          }
+                          className="h-8 text-center bg-white"
+                        />
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right text-sm font-medium text-slate-600">
+                      <div>
+                        ₱{" "}
+                        {unitPrice.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
+                      </div>
+                    </TableCell>
+
+                    {/* ✅ DISCOUNT TYPE COLUMN */}
+                    <TableCell>
+                      {readOnly ? (
+                        <div className="text-center text-sm font-medium text-slate-700">
+                          {getDiscountName(item.discount)}
+                        </div>
+                      ) : (
+                        <div className="flex justify-center">
+                          <Select
+                            value={
+                              lineDiscounts
+                                .find(
+                                  (d) => Number(d.percentage) === item.discount,
+                                )
+                                ?.id.toString() || "custom"
+                            }
+                            onValueChange={(val) => {
+                              if (val === "custom") {
+                                // Custom logic if implemented
+                              } else {
+                                const selected = lineDiscounts.find(
+                                  (d) => d.id.toString() === val,
+                                );
+                                if (selected)
+                                  onUpdateItem(
+                                    item.id,
+                                    "discount",
+                                    Number(selected.percentage),
+                                  );
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="h-8 w-full text-xs truncate bg-white">
+                              <SelectValue placeholder="-" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="custom">Custom</SelectItem>
+                              {lineDiscounts.map((d) => (
+                                <SelectItem key={d.id} value={d.id.toString()}>
+                                  {d.line_discount}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                    </TableCell>
+
+                    <TableCell className="text-right text-sm text-amber-600 font-medium">
+                      {discountPerUnit > 0 ? (
+                        <span>
+                          ₱{" "}
+                          {discountPerUnit.toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </span>
+                      ) : (
+                        <span className="text-slate-300">-</span>
+                      )}
+                    </TableCell>
+
+                    <TableCell>
+                      {readOnly ? (
+                        <div className="text-center text-sm text-slate-600">
+                          {returnTypes.find((r) => r.id === item.return_type_id)
+                            ?.return_type_name || "-"}
+                        </div>
+                      ) : (
+                        <div className="flex justify-center">
+                          <Select
+                            value={
+                              item.return_type_id
+                                ? String(item.return_type_id)
+                                : ""
+                            }
+                            onValueChange={(val) => {
+                              onUpdateItem(
+                                item.id,
+                                "return_type_id" as any,
+                                Number(val),
+                              );
+                            }}
+                          >
+                            <SelectTrigger className="h-8 w-full text-xs truncate bg-white border-slate-200">
+                              <SelectValue placeholder="Select Type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {returnTypes.map((r) => (
+                                <SelectItem key={r.id} value={String(r.id)}>
+                                  {r.return_type_name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                    </TableCell>
+
+                    <TableCell className="text-right font-bold text-slate-700 text-sm">
+                      ₱{" "}
+                      {rowTotal.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                      })}
+                    </TableCell>
+                    {!readOnly && (
+                      <TableCell className="text-center pr-4">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => onRemoveItem(item.id)}
+                          className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* 2. REMARKS & SUMMARY SECTION */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-3">
+          <Label className="flex items-center gap-2 font-bold text-slate-700 text-sm">
+            Transaction Remarks
+          </Label>
+          <Textarea
+            placeholder="Enter detailed reasons for this return (Optional)..."
+            className="min-h-40 resize-none bg-white border-slate-200 focus:border-blue-500 focus:ring-blue-500/20 shadow-sm"
+            value={remarks}
+            onChange={(e) => !readOnly && setRemarks(e.target.value)}
+            readOnly={readOnly}
+          />
+        </div>
+
+        <div className="lg:col-span-1">
+          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm h-full flex flex-col">
+            <h4 className="font-bold text-xs uppercase text-slate-800 mb-6 flex items-center gap-2 tracking-wider border-b border-slate-100 pb-3">
+              Return Summary
+            </h4>
+            <div className="space-y-4 text-sm flex-1">
+              <div className="flex justify-between text-slate-600">
+                <span>Total Line Items</span>
+                <span className="font-medium text-slate-900">
+                  {items.length}
+                </span>
+              </div>
+              <div className="flex justify-between text-slate-600">
+                <span>Total Quantity</span>
+                <span className="font-medium text-slate-900">
+                  {totalQuantity} units
+                </span>
+              </div>
+              <div className="border-t border-dashed border-slate-200 my-4"></div>
+              <div className="flex justify-between text-slate-600">
+                <span>Gross Amount</span>
+                <span className="font-medium text-slate-900">
+                  ₱{" "}
+                  {grossAmount.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                  })}
+                </span>
+              </div>
+              <div className="flex justify-between text-amber-600 bg-amber-50 px-2 py-1 rounded">
+                <span>Total Discount</span>
+                <span className="font-medium">
+                  - ₱{" "}
+                  {totalDiscountAmount.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                  })}
+                </span>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-200 mt-6 pt-4">
+              <div className="flex justify-between items-end">
+                <span className="font-bold text-slate-500 uppercase text-xs mb-1">
+                  Net Amount
+                </span>
+                <span className="font-extrabold text-3xl text-blue-600 leading-none">
+                  ₱{" "}
+                  {totalAmount.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                  })}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

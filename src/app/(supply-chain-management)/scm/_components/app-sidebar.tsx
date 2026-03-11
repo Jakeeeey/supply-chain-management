@@ -10,8 +10,8 @@ import {
     SquareTerminal,
 } from "lucide-react";
 
-import {NavMain} from "./nav-main";
-import {Separator} from "@/components/ui/separator";
+import { NavMain } from "./nav-main";
+import { Separator } from "@/components/ui/separator";
 import {
     Sidebar,
     SidebarContent,
@@ -101,6 +101,17 @@ const data = {
             ],
         },
         {
+            title: "Outbound",
+            url: "#",
+            icon: BookOpen,
+            items: [
+                {
+                    title: "Return to Supplier",
+                    url: "/scm/outbound/return-to-supplier",
+                },
+            ],
+        },
+        {
             title: "Supplier Management",
             url: "#",
             icon: SquareTerminal,
@@ -181,7 +192,7 @@ const data = {
                         },
                     ],
                 },
-                {title: "Driver Management", url: "#"},
+                { title: "Driver Management", url: "#" },
                 {
                     title: "Trip Management",
                     url: "#",
@@ -214,7 +225,7 @@ const data = {
                         },
                     ],
                 },
-                {title: "Fleet Inventory", url: "#"},
+                { title: "Fleet Inventory", url: "#" },
             ],
         },
         {
@@ -306,7 +317,7 @@ const data = {
     ],
 };
 
-export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
+export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     return (
         <Sidebar variant="inset" {...props}>
             <SidebarHeader>
@@ -316,13 +327,13 @@ export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
                             <Link href="/main-dashboard">
                                 <div
                                     className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                                    <Command className="size-4"/>
+                                    <Command className="size-4" />
                                 </div>
                                 <div className="grid flex-1 text-left text-sm leading-tight">
                                     <span className="truncate font-medium">VOS Web</span>
                                     <span className="truncate text-xs text-muted-foreground">
-                    Supply Chain Management
-                  </span>
+                                        Supply Chain Management
+                                    </span>
                                 </div>
                             </Link>
                         </SidebarMenuButton>
@@ -330,17 +341,17 @@ export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
                 </SidebarMenu>
             </SidebarHeader>
 
-            <Separator/>
+            <Separator />
 
             <SidebarContent>
                 <div className="px-4 pt-3 pb-2 text-xs font-medium text-muted-foreground">
                     Platform
                 </div>
-                <NavMain items={data.navMain}/>
+                <NavMain items={data.navMain} />
             </SidebarContent>
 
             <SidebarFooter className="p-0">
-                <Separator/>
+                <Separator />
                 <div className="py-3 text-center text-xs text-muted-foreground">
                     VOS Web v2.0
                 </div>
