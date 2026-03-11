@@ -363,14 +363,7 @@ export function ScanProductsStep() {
                                                 {a.status === "ok" ? "OK" : "WARN"}
                                             </Badge>
                                             {a.status === "ok" && (
-                                                <button
-                                                    type="button"
-                                                    title="Remove this scan"
-                                                    onClick={() => removeActivity(a.id)}
-                                                    className="text-muted-foreground hover:text-destructive transition-colors p-0.5 rounded"
-                                                >
-                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                </button>
+                                                <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse" title="Verified active" />
                                             )}
                                         </div>
                                     </div>

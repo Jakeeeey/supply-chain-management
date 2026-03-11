@@ -48,6 +48,8 @@ export function PurchaseOrderSummary(props: {
     onSave: () => void | Promise<void> | Promise<SaveResponse>;
     canSave: boolean;
     discountTypes: DiscountType[];
+    isInvoice: boolean;
+    setIsInvoice: (v: boolean) => void;
 }) {
     // ✅ ALL HOOKS MUST BE ABOVE ANY CONDITIONAL RETURN
     const money = React.useMemo(() => buildMoneyFormatter(), []);
@@ -113,7 +115,6 @@ export function PurchaseOrderSummary(props: {
     const [locked, setLocked] = React.useState(false);
     const [notice, setNotice] = React.useState<Notice | null>(null);
     const [previewOpen, setPreviewOpen] = React.useState(false);
-    const [isInvoice, setIsInvoice] = React.useState(false);
 
     // ✅ kapag new PO number => new transaction (unlock)
     React.useEffect(() => {
@@ -121,7 +122,6 @@ export function PurchaseOrderSummary(props: {
         setIsSubmitting(false);
         setConfirmOpen(false);
         setNotice(null);
-        setIsInvoice(false);
     }, [props.poNumber]);
 
     const disabled = !props.canSave || isSubmitting || locked;
@@ -198,7 +198,7 @@ export function PurchaseOrderSummary(props: {
     
     // If not an invoice, totalPayable is just netTotal. 
     // If it IS an invoice, totalPayable is netTotal - ewtGoods.
-    const totalPayable = isInvoice ? Math.max(0, netTotal - ewtGoods) : netTotal;
+    const totalPayable = props.isInvoice ? Math.max(0, netTotal - ewtGoods) : netTotal;
 
     return (
         <div className="bg-background border border-border rounded-xl p-3 sm:p-6 shadow-xl w-full min-w-0">
@@ -495,11 +495,11 @@ export function PurchaseOrderSummary(props: {
                                     <Tags className="w-4 h-4 text-primary" />
                                     <span className="text-sm font-black uppercase tracking-tight text-foreground">Financial Summary</span>
                                 </div>
-                                <div className="flex items-center gap-2 px-2 py-1 bg-muted/50 rounded-lg border border-border/50 hover:bg-muted transition-colors cursor-pointer group" onClick={() => !locked && setIsInvoice(!isInvoice)}>
+                                <div className="flex items-center gap-2 px-2 py-1 bg-muted/50 rounded-lg border border-border/50 hover:bg-muted transition-colors cursor-pointer group" onClick={() => !locked && props.setIsInvoice(!props.isInvoice)}>
                                     <Checkbox 
                                         id="is-invoice" 
-                                        checked={isInvoice} 
-                                        onCheckedChange={(checked) => setIsInvoice(!!checked)}
+                                        checked={props.isInvoice} 
+                                        onCheckedChange={(checked) => props.setIsInvoice(!!checked)}
                                         disabled={locked}
                                         className="transition-transform group-active:scale-90"
                                     />
@@ -530,7 +530,7 @@ export function PurchaseOrderSummary(props: {
                                     <span className="font-black text-foreground text-sm">{money.format(netTotal)}</span>
                                 </div>
 
-                                {isInvoice && (
+                                {props.isInvoice && (
                                     <>
                                         <div className="flex justify-between items-center text-[11px]">
                                             <span className="text-foreground/70 font-black uppercase tracking-widest">VAT </span>
@@ -642,7 +642,7 @@ export function PurchaseOrderSummary(props: {
                 onConfirmSave={runSave}
                 isSubmitting={isSubmitting}
                 locked={locked}
-                isInvoice={isInvoice}
+                isInvoice={props.isInvoice}
                 data={{
                     poNumber: props.poNumber,
                     poDate: props.poDate,

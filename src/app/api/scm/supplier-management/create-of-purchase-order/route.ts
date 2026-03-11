@@ -173,6 +173,7 @@ function buildPoProductLines(input: any, poId: number) {
                 total_amount: toFixedMoney(lineTotal),
                 vat_amount: null,
                 withholding_amount: null,
+                discount_type: it.discountTypeId || null,
                 discounted_price: null,
                 approved_price: null,
                 received: null,
@@ -366,6 +367,7 @@ export async function POST(req: NextRequest) {
             // header branch_id is single only; keep nullable (branches derived from purchase_order_products)
             branch_id: input?.branch_id ?? input?.branchId ?? null,
             price_type_id: input?.price_type_id ?? null,
+            is_invoice: input?.is_invoice ?? input?.isInvoice ?? false,
         };
 
         for (const k of Object.keys(payload)) {
