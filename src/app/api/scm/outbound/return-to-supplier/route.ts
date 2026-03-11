@@ -4,7 +4,6 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { createReturnSchema } from "@/modules/supply-chain-management/outbound/return-to-supplier/types/rts.schema";
 import {
   fetchTransactions,
@@ -53,8 +52,7 @@ export async function GET(req: NextRequest) {
         }
 
         // Extract JWT from cookie for Spring Boot auth
-        const cookieStore = await cookies();
-        const token = cookieStore.get("vos_access_token")?.value;
+        const token = req.cookies.get("vos_access_token")?.value;
 
         if (!token) {
           return json(
@@ -88,8 +86,7 @@ export async function GET(req: NextRequest) {
           );
         }
 
-        const rfidCookieStore = await cookies();
-        const rfidToken = rfidCookieStore.get("vos_access_token")?.value;
+        const rfidToken = req.cookies.get("vos_access_token")?.value;
 
         if (!rfidToken) {
           return json(
