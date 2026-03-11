@@ -12,8 +12,6 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { NavUser } from "../../../_components/nav-user";
 
 import { cookies } from "next/headers";
-
-// ✅ Wire the module
 import SKUApprovalPage from "@/modules/supply-chain-management/product-management/sku/sku-approval/SKUApprovalPage";
 
 export const runtime = "nodejs";
