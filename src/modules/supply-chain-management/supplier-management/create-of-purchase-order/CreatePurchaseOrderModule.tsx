@@ -481,6 +481,7 @@ export default function CreatePurchaseOrderModule() {
     const [searchQuery, setSearchQuery] = React.useState<string>("");
 
     const [tempCart, setTempCart] = React.useState<CartItem[]>([]);
+    const [isInvoice, setIsInvoice] = React.useState(false);
 
     const meta = React.useMemo(() => (makePoMeta() as any), []);
     const poNumber = String(meta?.poNumber ?? "DRAFT-PO");
@@ -606,6 +607,7 @@ export default function CreatePurchaseOrderModule() {
                         return np;
                     })
                 );
+                setIsInvoice(false);
             } catch (e: any) {
                 if (!alive) return;
                 setError(String(e?.message ?? e));
@@ -828,6 +830,7 @@ export default function CreatePurchaseOrderModule() {
             const payload: any = {
                 purchase_order_no: poNumber,
                 supplier_name: Number(selectedSupplier.id),
+                is_invoice: isInvoice,
 
                 date: dateOnly,
                 date_encoded: nowISO,
@@ -1087,6 +1090,8 @@ export default function CreatePurchaseOrderModule() {
                 onSave={onSave}
                 canSave={canSave}
                 discountTypes={discountTypes}
+                isInvoice={isInvoice}
+                setIsInvoice={setIsInvoice}
             />
 
             <ProductPickerDialog
