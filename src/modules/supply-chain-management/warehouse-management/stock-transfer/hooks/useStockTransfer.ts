@@ -17,7 +17,7 @@ interface UseStockTransferReturn {
   rfidInput: string;
   setRfidInput: (v: string) => void;
   scannedItems: ScannedItem[];
-  handleRfidScan: () => void;
+  handleRfidScan: () => Promise<void>;
   updateQty: (rfid: string, qty: number) => void;
   removeItem: (rfid: string) => void;
   reset: () => void;
@@ -39,17 +39,6 @@ function getBranchLabel(b: Branch): string {
   );
 }
 
-/**
- * Simulates a product lookup from stock_transfer data using the RFID value.
- * In the real system the `remarks` field contains the RFID/batch code.
- */
-function lookupProduct(rfid: string, transfers: StockTransfer[]): StockTransfer | undefined {
-  const needle = rfid.trim().toLowerCase();
-  return transfers.find(
-    (t) => t.remarks?.toLowerCase() === needle || t.order_no?.toLowerCase() === needle
-  );
-}
-
 export function useStockTransfer(): UseStockTransferReturn {
   const [stockTransfers, setStockTransfers] = useState<StockTransfer[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -63,6 +52,7 @@ export function useStockTransfer(): UseStockTransferReturn {
   const [isTransferConfirmed, setIsTransferConfirmed] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [transferStatus, setTransferStatus] = useState('');
+  const [orderNo, setOrderNo] = useState('');
 
   useEffect(() => {
     async function fetchData() {
@@ -81,7 +71,7 @@ export function useStockTransfer(): UseStockTransferReturn {
     fetchData();
   }, []);
 
-  const handleRfidScan = useCallback(() => {
+  const handleRfidScan = useCallback(async () => {
     const rfid = rfidInput.trim();
     if (!rfid) return;
 
@@ -91,43 +81,46 @@ export function useStockTransfer(): UseStockTransferReturn {
       return;
     }
 
-    const match = lookupProduct(rfid, stockTransfers);
+    setRfidInput(''); // Clear input immediately for better UX
+    
+    try {
+      const res = await fetch(`/api/scm/warehouse-management/stock-transfer?action=lookup_rfid&rfid=${rfid}`);
+      
+      if (!res.ok) {
+        // Unknown RFID (or server error) — still add as a placeholder row
+        const newItem: ScannedItem = {
+          rfid,
+          productId: 0,
+          productName: 'Unknown Product',
+          description: 'Not found in received records',
+          unit: '—',
+          qtyAvailable: 0,
+          unitQty: 0,
+          unitPrice: 0,
+          totalAmount: 0,
+        };
+        setScannedItems((prev) => [newItem, ...prev]);
+        return;
+      }
 
-    if (match) {
-      const unitPrice =
-        match.ordered_quantity > 0
-          ? parseFloat((match.amount / match.ordered_quantity).toFixed(4))
-          : 0;
+      const match = await res.json();
+
       const newItem: ScannedItem = {
         rfid,
-        productId: match.product_id,
-        productName: `Product #${match.product_id}`,
-        description: match.order_no,
-        unit: 'box',
-        qtyAvailable: match.ordered_quantity,
-        unitQty: 0,
-        unitPrice,
-        totalAmount: 0,
+        productId: match.productId,
+        productName: match.productName,
+        description: match.barcode,
+        unit: 'box', // Default unit
+        qtyAvailable: 1, // RFID represents 1 specific item
+        unitQty: 1, // Default to 1 for convenience
+        unitPrice: match.unitPrice,
+        totalAmount: match.unitPrice,
       };
-      setScannedItems((prev) => [...prev, newItem]);
-    } else {
-      // Unknown RFID — still add as a placeholder row so user can see it was scanned
-      const newItem: ScannedItem = {
-        rfid,
-        productId: 0,
-        productName: 'Unknown Product',
-        description: '—',
-        unit: '—',
-        qtyAvailable: 0,
-        unitQty: 0,
-        unitPrice: 0,
-        totalAmount: 0,
-      };
-      setScannedItems((prev) => [...prev, newItem]);
+      setScannedItems((prev) => [newItem, ...prev]);
+    } catch (err) {
+      console.error('RFID Lookup failed:', err);
     }
-
-    setRfidInput('');
-  }, [rfidInput, scannedItems, stockTransfers]);
+  }, [rfidInput, scannedItems]);
 
   const updateQty = useCallback((rfid: string, qty: number) => {
     setScannedItems((prev) =>
@@ -152,6 +145,7 @@ export function useStockTransfer(): UseStockTransferReturn {
     setScannedItems([]);
     setIsTransferConfirmed(false);
     setTransferStatus('');
+    setOrderNo('');
   }, []);
 
   const confirmTransfer = useCallback(async () => {
@@ -168,17 +162,18 @@ export function useStockTransfer(): UseStockTransferReturn {
         throw new Error(err?.error ?? 'Failed to save transfer');
       }
 
+      const json = await res.json();
       setIsTransferConfirmed(true);
       setTransferStatus('requested');
+      // Capture the generated order number
+      if (json.orderNo) {
+        setOrderNo(json.orderNo);
+        setTransferStatus(`requested (Order: ${json.orderNo})`);
+      }
     } finally {
       setConfirming(false);
     }
   }, [sourceBranch, targetBranch, leadDate, scannedItems]);
-
-  // Derive orderNo from the first successfully matched scanned item
-  const firstMatch = scannedItems.length > 0
-    ? stockTransfers.find((t) => t.remarks?.toLowerCase() === scannedItems[0].rfid.toLowerCase() || t.order_no?.toLowerCase() === scannedItems[0].rfid.toLowerCase())
-    : undefined;
 
   return {
     stockTransfers,
@@ -200,7 +195,7 @@ export function useStockTransfer(): UseStockTransferReturn {
     reset,
     confirmTransfer,
     isTransferConfirmed,
-    orderNo: firstMatch?.order_no ?? '',
+    orderNo: orderNo,
     status: transferStatus,
   };
 }
