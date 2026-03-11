@@ -199,8 +199,34 @@ const data = {
               url: "/scm/fleet-management/trip-management/dispatch-summary",
             },
             {
+              title: "Dispatch Creation",
+              url: "/scm/fleet-management/trip-management/dispatch-creation",
+            },
+            {
               title: "Dispatch Plan",
               url: "/scm/fleet-management/trip-management/dispatch-plan",
+              items: [
+                {
+                  title: "Creation",
+                  url: "/scm/fleet-management/trip-management/dispatch-plan/dispatch-creation",
+                },
+                {
+                  title: "Approval",
+                  url: "/scm/fleet-management/trip-management/dispatch-plan/approval",
+                },
+                {
+                  title: "Clearance",
+                  url: "/scm/fleet-management/trip-management/dispatch-plan/clearance",
+                },
+                {
+                  title: "Inbound",
+                  url: "/scm/fleet-management/trip-management/dispatch-plan/inbound",
+                },
+                {
+                  title: "Outbound",
+                  url: "/scm/fleet-management/trip-management/dispatch-plan/outbound",
+                },
+              ],
             },
           ],
         },
