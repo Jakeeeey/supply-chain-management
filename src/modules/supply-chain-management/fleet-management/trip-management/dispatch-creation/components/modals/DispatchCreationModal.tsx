@@ -1,10 +1,10 @@
 "use client";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -24,17 +24,37 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import { useDispatchCreation } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/hooks/useDispatchCreation";
 import {
   DispatchCreationFormSchema,
   DispatchCreationFormValues,
 } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/types/schema";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Package, Search } from "lucide-react";
+import {
+  Check,
+  Loader2,
+  MapPin,
+  Search,
+  ShoppingCart,
+  Truck,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { DateTimePicker } from "../shared/date-time-picker";
+
+interface PlanDetailItem {
+  detail_id: number;
+  sales_order_id: number;
+  order_no: string;
+  order_status: string;
+  customer_name: string;
+  city: string;
+  amount: number;
+}
 
 interface DispatchCreationModalProps {
   open: boolean;
@@ -52,6 +72,8 @@ export function DispatchCreationModal({
   const [approvedPlans, setApprovedPlans] = useState<any[]>([]);
   const [isLoadingPlans, setIsLoadingPlans] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [planDetails, setPlanDetails] = useState<PlanDetailItem[]>([]);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
 
   const form = useForm<DispatchCreationFormValues>({
     resolver: zodResolver(DispatchCreationFormSchema),
@@ -69,36 +91,40 @@ export function DispatchCreationModal({
     },
   });
 
-  const {
-    fields: helperFields,
-    append: addHelper,
-    remove: removeHelper,
-  } = useFieldArray({
+  const { fields: helperFields } = useFieldArray({
     control: form.control,
     name: "helpers",
   });
 
-  const {
-    fields: budgetFields,
-    append: addBudget,
-    remove: removeBudget,
-  } = useFieldArray({
-    control: form.control,
-    name: "budgets",
-  });
+  const selectedBranch = form.watch("starting_point");
 
   useEffect(() => {
     if (open) {
       form.reset();
-      loadApprovedPlans();
+      setApprovedPlans([]);
+      setSearchQuery("");
     }
   }, [open, form]);
 
-  const loadApprovedPlans = async () => {
+  // Load plans when branch changes
+  useEffect(() => {
+    if (selectedBranch && selectedBranch > 0) {
+      loadApprovedPlans(selectedBranch);
+    } else {
+      setApprovedPlans([]);
+    }
+  }, [selectedBranch]);
+
+  const loadApprovedPlans = async (branchId: number) => {
     setIsLoadingPlans(true);
+    setApprovedPlans([]);
+    // Clear any previously selected plan
+    form.setValue("pre_dispatch_plan_id", 0);
+    form.setValue("amount", 0);
+    setPlanDetails([]);
     try {
       const res = await fetch(
-        "/api/scm/fleet-management/trip-management/dispatch-creation?type=approved_plans",
+        `/api/scm/fleet-management/trip-management/dispatch-creation?type=approved_plans&branch_id=${branchId}`,
       );
       const result = await res.json();
       if (result.error) throw new Error(result.error);
@@ -110,7 +136,7 @@ export function DispatchCreationModal({
     }
   };
 
-  const handlePlanSelect = (planIdStr: string) => {
+  const handlePlanSelect = async (planIdStr: string) => {
     const planId = Number(planIdStr);
     const plan = approvedPlans.find((p) => p.dispatch_id === planId);
     if (!plan) return;
@@ -120,12 +146,28 @@ export function DispatchCreationModal({
     if (plan.driver_id) form.setValue("driver_id", Number(plan.driver_id));
     if (plan.vehicle_id) form.setValue("vehicle_id", Number(plan.vehicle_id));
     if (plan.branch_id) form.setValue("starting_point", Number(plan.branch_id));
+
+    // Fetch plan details (sales orders)
+    setIsLoadingDetails(true);
+    setPlanDetails([]);
+    try {
+      const res = await fetch(
+        `/api/scm/fleet-management/trip-management/dispatch-creation?type=plan_details&plan_id=${planId}`,
+      );
+      const result = await res.json();
+      if (result.error) throw new Error(result.error);
+      setPlanDetails(result.data || []);
+    } catch {
+      toast.error("Failed to load plan details");
+    } finally {
+      setIsLoadingDetails(false);
+    }
   };
 
   const onSubmit = async (values: DispatchCreationFormValues) => {
     try {
       await createTrip(values);
-      toast.success("Dispatch Trip created successfully!");
+      toast.success("Dispatch trip created successfully.");
       onOpenChange(false);
       onSuccess?.();
     } catch (err: any) {
@@ -133,7 +175,10 @@ export function DispatchCreationModal({
     }
   };
 
-  const isDataReady = !isLoadingMasterData && !isLoadingPlans && masterData;
+  const isDataReady = !isLoadingMasterData && masterData;
+  const selectedPlanId = form.watch("pre_dispatch_plan_id");
+  const selectedAmount = form.watch("amount");
+
   const filteredPlans = approvedPlans.filter(
     (p) =>
       p.dispatch_no?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -142,44 +187,178 @@ export function DispatchCreationModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Create New Dispatch Plan</DialogTitle>
-          <DialogDescription>
-            Configure vehicle, staff, and select a pre-dispatch plan for
-            delivery routing.
-          </DialogDescription>
+      <DialogContent className="sm:max-w-[1400px] w-full p-0 gap-0 overflow-hidden rounded-xl border border-border/60 shadow-xl">
+        {/* Header */}
+        <DialogHeader className="px-6 py-5 border-b border-border/50">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-primary/8 border border-border/60 flex items-center justify-center">
+              <Truck className="w-4 h-4 text-primary" />
+            </div>
+            <div>
+              <DialogTitle className="text-base font-semibold text-foreground tracking-tight">
+                Create Dispatch Trip
+              </DialogTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Assign vehicle, crew, and link a pre-dispatch plan.
+              </p>
+            </div>
+          </div>
         </DialogHeader>
 
         {!isDataReady ? (
-          <div className="space-y-4 pt-4">
-            <Skeleton className="h-40 w-full" />
-            <div className="grid grid-cols-2 gap-4">
-              <Skeleton className="h-40 w-full" />
-              <Skeleton className="h-40 w-full" />
+          <div className="p-6 space-y-4">
+            <Skeleton className="h-9 w-full rounded-md" />
+            <div className="grid grid-cols-2 gap-3">
+              <Skeleton className="h-9 w-full rounded-md" />
+              <Skeleton className="h-9 w-full rounded-md" />
             </div>
+            <Skeleton className="h-40 w-full rounded-md" />
           </div>
         ) : (
           <Form {...form}>
-            <form
-              onSubmit={form.handleSubmit(onSubmit)}
-              className="space-y-6 pt-4"
-            >
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {/* LEFT COL: Configuration properties */}
-                <div className="lg:col-span-2 space-y-6">
-                  {/* --- 1. Trip Configuration --- */}
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-semibold text-slate-900 border-b pb-2">
+            <form onSubmit={form.handleSubmit(onSubmit)}>
+              <div className="flex divide-x divide-border/50 max-h-[70vh]">
+                {/* LEFT: Config */}
+
+                {/* RIGHT: Cargo Selection */}
+                <div className="w-lg flex flex-col overflow-hidden bg-muted/20">
+                  {/* Search */}
+                  <div className="p-4 border-b border-border/50 space-y-3 bg-background/60">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Pre-Dispatch Plan
+                    </p>
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
+                      <Input
+                        placeholder="Search plans..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-8 h-8 text-xs bg-background border-border/60"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Plan list */}
+                  <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
+                    {!selectedBranch || selectedBranch === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-10 text-muted-foreground/40">
+                        <p className="text-xs">Select a source branch first.</p>
+                      </div>
+                    ) : isLoadingPlans ? (
+                      <div className="space-y-2 p-2">
+                        <Skeleton className="h-16 w-full rounded-lg" />
+                        <Skeleton className="h-16 w-full rounded-lg" />
+                        <Skeleton className="h-16 w-full rounded-lg" />
+                      </div>
+                    ) : filteredPlans.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-10 text-muted-foreground/40">
+                        <p className="text-xs">
+                          No approved plans for this branch.
+                        </p>
+                      </div>
+                    ) : (
+                      filteredPlans.map((p) => {
+                        const isSelected = selectedPlanId === p.dispatch_id;
+                        return (
+                          <button
+                            type="button"
+                            key={p.dispatch_id}
+                            onClick={() =>
+                              handlePlanSelect(String(p.dispatch_id))
+                            }
+                            className={cn(
+                              "w-full text-left p-3 rounded-lg border text-sm transition-all duration-150",
+                              isSelected
+                                ? "border-primary bg-primary/5 shadow-sm"
+                                : "border-border/50 bg-background hover:border-border hover:bg-muted/30",
+                            )}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <p className="font-semibold text-foreground text-xs truncate">
+                                    {p.dispatch_no}
+                                  </p>
+                                  <Badge
+                                    variant="default"
+                                    className="text-[9px] font-medium tracking-wide px-1.5 py-0 h-4 rounded-full"
+                                  >
+                                    {p.status}
+                                  </Badge>
+                                </div>
+                                <p className="text-[11px] text-muted-foreground mt-0.5">
+                                  {p.cluster_name || "Unassigned"} ·{" "}
+                                  {p.total_items || 0} items
+                                </p>
+                              </div>
+                              <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                {isSelected ? (
+                                  <div className="w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                                    <Check className="w-2.5 h-2.5 text-primary-foreground" />
+                                  </div>
+                                ) : (
+                                  <div className="w-4 h-4 rounded-full border-2 border-border" />
+                                )}
+                              </div>
+                            </div>
+                            <p className="text-xs font-semibold text-foreground mt-2">
+                              ₱
+                              {Number(p.total_amount).toLocaleString(
+                                undefined,
+                                {
+                                  minimumFractionDigits: 2,
+                                },
+                              )}
+                            </p>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Route value summary */}
+                  <div className="p-4 border-t border-border/50 bg-background/60">
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+                      Selected Route Value
+                    </p>
+                    <p
+                      className={cn(
+                        "text-xl font-bold tracking-tight transition-colors",
+                        selectedPlanId
+                          ? "text-foreground"
+                          : "text-muted-foreground/40",
+                      )}
+                    >
+                      ₱
+                      {(selectedAmount || 0).toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </p>
+                    {selectedPlanId > 0 && (
+                      <Badge
+                        variant="secondary"
+                        className="mt-1.5 text-[10px] h-5"
+                      >
+                        Plan selected
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                  {/* Trip Configuration */}
+                  <section className="space-y-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       Trip Configuration
-                    </h3>
-                    <div className="grid grid-cols-2 gap-4">
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
                       <FormField
                         control={form.control}
                         name="starting_point"
                         render={({ field }) => (
-                          <FormItem className="col-span-2 md:col-span-1">
-                            <FormLabel className="text-xs">
+                          <FormItem>
+                            <FormLabel className="text-xs text-muted-foreground">
                               Source Branch
                             </FormLabel>
                             <Select
@@ -191,8 +370,8 @@ export function DispatchCreationModal({
                               }
                             >
                               <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select warehouse" />
+                                <SelectTrigger className="h-9 text-sm">
+                                  <SelectValue placeholder="Select branch" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
@@ -212,9 +391,9 @@ export function DispatchCreationModal({
                         control={form.control}
                         name="vehicle_id"
                         render={({ field }) => (
-                          <FormItem className="col-span-2 md:col-span-1">
-                            <FormLabel className="text-xs">
-                              Select Vehicle
+                          <FormItem>
+                            <FormLabel className="text-xs text-muted-foreground">
+                              Vehicle
                             </FormLabel>
                             <Select
                               onValueChange={(val) =>
@@ -225,8 +404,8 @@ export function DispatchCreationModal({
                               }
                             >
                               <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select truck" />
+                                <SelectTrigger className="h-9 text-sm">
+                                  <SelectValue placeholder="Select vehicle" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
@@ -249,12 +428,16 @@ export function DispatchCreationModal({
                         control={form.control}
                         name="estimated_time_of_dispatch"
                         render={({ field }) => (
-                          <FormItem className="col-span-2 md:col-span-1">
-                            <FormLabel className="text-xs">
-                              ETOD (Departure)
+                          <FormItem>
+                            <FormLabel className="text-xs text-muted-foreground">
+                              Departure (ETOD)
                             </FormLabel>
                             <FormControl>
-                              <Input type="datetime-local" {...field} />
+                              <DateTimePicker
+                                value={field.value}
+                                onChange={field.onChange}
+                                placeholder="Select departure"
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -265,12 +448,16 @@ export function DispatchCreationModal({
                         control={form.control}
                         name="estimated_time_of_arrival"
                         render={({ field }) => (
-                          <FormItem className="col-span-2 md:col-span-1">
-                            <FormLabel className="text-xs">
-                              ETOA (Est. Arrival)
+                          <FormItem>
+                            <FormLabel className="text-xs text-muted-foreground">
+                              Arrival (ETOA)
                             </FormLabel>
                             <FormControl>
-                              <Input type="datetime-local" {...field} />
+                              <DateTimePicker
+                                value={field.value}
+                                onChange={field.onChange}
+                                placeholder="Select arrival"
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -282,12 +469,16 @@ export function DispatchCreationModal({
                         name="remarks"
                         render={({ field }) => (
                           <FormItem className="col-span-2">
-                            <FormLabel className="text-xs">
-                              Remarks (Optional)
+                            <FormLabel className="text-xs text-muted-foreground">
+                              Remarks{" "}
+                              <span className="text-muted-foreground/60">
+                                (optional)
+                              </span>
                             </FormLabel>
                             <FormControl>
                               <Input
-                                placeholder="e.g. priority loading"
+                                placeholder="e.g. priority loading, fragile items"
+                                className="h-9 text-sm"
                                 {...field}
                               />
                             </FormControl>
@@ -296,21 +487,21 @@ export function DispatchCreationModal({
                         )}
                       />
                     </div>
-                  </div>
-
-                  {/* --- 2. Crew Assignment --- */}
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-semibold text-slate-900 border-b pb-2">
+                  </section>
+                  <Separator />
+                  {/* Crew Assignment */}
+                  <section className="space-y-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       Crew Assignment
-                    </h3>
-                    <div className="grid grid-cols-2 gap-4">
+                    </p>
+                    <div className="flex gap-3">
                       <FormField
                         control={form.control}
                         name="driver_id"
                         render={({ field }) => (
-                          <FormItem className="col-span-2 md:col-span-1">
-                            <FormLabel className="text-xs">
-                              Assigned Driver
+                          <FormItem className="col-span-2">
+                            <FormLabel className="text-xs text-muted-foreground">
+                              Driver
                             </FormLabel>
                             <Select
                               onValueChange={(val) =>
@@ -321,8 +512,8 @@ export function DispatchCreationModal({
                               }
                             >
                               <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select driver" />
+                                <SelectTrigger className="h-9 text-sm">
+                                  <SelectValue placeholder="Assign a driver" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
@@ -341,171 +532,158 @@ export function DispatchCreationModal({
                         )}
                       />
 
-                      <div className="col-span-2 md:col-span-1 space-y-3">
-                        <FormLabel className="text-xs font-semibold">
-                          Helpers (Max 2)
-                        </FormLabel>
-                        {[0, 1].map((idx) => (
-                          <FormField
-                            key={idx}
-                            control={form.control}
-                            name={`helpers.${idx}.user_id`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <Select
-                                  onValueChange={(val) =>
-                                    field.onChange(Number(val))
-                                  }
-                                  value={
-                                    field.value
-                                      ? String(field.value)
-                                      : undefined
-                                  }
-                                >
-                                  <FormControl>
-                                    <SelectTrigger>
-                                      <SelectValue
-                                        placeholder={`Select helper ${idx + 1}`}
-                                      />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    {masterData?.helpers.map((h) => (
-                                      <SelectItem
-                                        key={h.user_id}
-                                        value={String(h.user_id)}
-                                      >
-                                        {h.user_fname} {h.user_lname}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </FormItem>
-                            )}
-                          />
-                        ))}
-                      </div>
+                      {[0, 1].map((idx) => (
+                        <FormField
+                          key={idx}
+                          control={form.control}
+                          name={`helpers.${idx}.user_id`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-xs text-muted-foreground">
+                                Helper {idx + 1}{" "}
+                                <span className="text-muted-foreground/60">
+                                  (optional)
+                                </span>
+                              </FormLabel>
+                              <Select
+                                onValueChange={(val) =>
+                                  field.onChange(Number(val))
+                                }
+                                value={
+                                  field.value ? String(field.value) : undefined
+                                }
+                              >
+                                <FormControl>
+                                  <SelectTrigger className="h-9 text-sm">
+                                    <SelectValue
+                                      placeholder={`Select helper`}
+                                    />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {masterData?.helpers.map((h) => (
+                                    <SelectItem
+                                      key={h.user_id}
+                                      value={String(h.user_id)}
+                                    >
+                                      {h.user_fname} {h.user_lname}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </FormItem>
+                          )}
+                        />
+                      ))}
                     </div>
-                  </div>
+                  </section>
                 </div>
 
-                {/* RIGHT COL: PDP Selection */}
-                <div className="flex flex-col border rounded-lg overflow-hidden h-[500px] bg-white">
-                  <div className="p-4 border-b space-y-3 bg-white">
-                    <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
-                      <Package className="w-4 h-4 text-slate-500" />
-                      Cargo Selection
-                    </h3>
-                    <div className="relative">
-                      <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <Input
-                        placeholder="Search Pre-Dispatch Plans..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-9 h-10 text-sm bg-slate-50/50 border-slate-200 focus-visible:ring-blue-500"
-                      />
-                    </div>
+                {/* RIGHT: Sales Order Details */}
+                <div className="w-[340px] flex flex-col overflow-hidden bg-muted/20 shrink-0">
+                  <div className="p-4 border-b border-border/50 bg-background/60">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                      <ShoppingCart className="w-3.5 h-3.5" />
+                      Sales Orders
+                    </p>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      {selectedPlanId > 0
+                        ? `${planDetails.length} order${planDetails.length !== 1 ? "s" : ""} linked`
+                        : "Select a PDP to view orders"}
+                    </p>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-white">
-                    {filteredPlans.map((p) => {
-                      const isSelected =
-                        form.getValues("pre_dispatch_plan_id") ===
-                        p.dispatch_id;
-                      return (
+                  <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
+                    {!selectedPlanId || selectedPlanId === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-16 text-muted-foreground/30">
+                        <ShoppingCart className="w-8 h-8 mb-2" />
+                        <p className="text-xs">Select a plan to see orders</p>
+                      </div>
+                    ) : isLoadingDetails ? (
+                      <div className="space-y-2 p-1">
+                        <Skeleton className="h-14 w-full rounded-lg" />
+                        <Skeleton className="h-14 w-full rounded-lg" />
+                        <Skeleton className="h-14 w-full rounded-lg" />
+                      </div>
+                    ) : planDetails.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-16 text-muted-foreground/30">
+                        <p className="text-xs">
+                          No orders linked to this plan.
+                        </p>
+                      </div>
+                    ) : (
+                      planDetails.map((order) => (
                         <div
-                          key={p.dispatch_id}
-                          onClick={() =>
-                            handlePlanSelect(String(p.dispatch_id))
-                          }
-                          className={`group p-4 rounded-lg border-2 text-sm cursor-pointer transition-all relative ${
-                            isSelected
-                              ? "border-blue-600 bg-blue-50/10 shadow-sm"
-                              : "border-slate-100 bg-white hover:border-slate-200"
-                          }`}
+                          key={order.detail_id}
+                          className="p-3 rounded-lg border border-border/50 bg-background text-xs space-y-1.5"
                         >
-                          <div className="flex justify-between items-start mb-1 pr-6">
-                            <div className="font-bold text-slate-900">
-                              {p.dispatch_no}
-                            </div>
-                            <div className="font-bold text-slate-900">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-foreground">
+                              {order.order_no}
+                            </span>
+                            <Badge
+                              variant="outline"
+                              className="text-[9px] font-medium uppercase tracking-wide px-1.5 py-0 h-4 rounded"
+                            >
+                              {order.order_status}
+                            </Badge>
+                          </div>
+                          <p className="text-muted-foreground truncate">
+                            {order.customer_name}
+                          </p>
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground flex items-center gap-1">
+                              <MapPin className="w-3 h-3" />
+                              {order.city}
+                            </span>
+                            <span className="font-semibold text-foreground tabular-nums">
                               ₱
-                              {Number(p.total_amount).toLocaleString(
+                              {Number(order.amount || 0).toLocaleString(
                                 undefined,
                                 { minimumFractionDigits: 2 },
                               )}
-                            </div>
-                          </div>
-
-                          <div className="flex justify-between items-center text-xs text-slate-500 font-medium">
-                            <span>{p.cluster_name || "NCR"} Cluster</span>
-                            <span>3 Stops</span>
-                          </div>
-
-                          {/* Radio-style indicator like image 1 */}
-                          <div className="absolute top-4 right-4">
-                            <div
-                              className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                                isSelected
-                                  ? "border-blue-600 bg-blue-600"
-                                  : "border-slate-200"
-                              }`}
-                            >
-                              {isSelected && (
-                                <div className="w-2 h-2 rounded-full bg-white" />
-                              )}
-                            </div>
+                            </span>
                           </div>
                         </div>
-                      );
-                    })}
-                    {filteredPlans.length === 0 && (
-                      <div className="flex flex-col items-center justify-center py-12 text-slate-400">
-                        <Package className="w-10 h-10 mb-2 opacity-10" />
-                        <p className="text-xs italic">No plans available.</p>
-                      </div>
+                      ))
                     )}
-                  </div>
-
-                  {/* Summary section like image 2 */}
-                  <div className="p-4 bg-slate-50 border-t flex flex-col items-center justify-center min-h-[100px]">
-                    <span className="text-[11px] text-slate-500 font-semibold mb-1 uppercase tracking-tight">
-                      Selected Route Value
-                    </span>
-                    <div className="text-2xl font-black text-blue-600 tracking-tighter">
-                      ₱
-                      {form.watch("amount")?.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      }) || "0.00"}
-                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-6 border-t">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => onOpenChange(false)}
-                  className="px-6 h-10 font-semibold text-slate-600 border-slate-200 hover:bg-slate-50"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  disabled={isSubmitting || !form.watch("pre_dispatch_plan_id")}
-                  type="submit"
-                  className="px-8 h-10 bg-blue-600 hover:bg-blue-700 font-bold shadow-sm transition-all"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    "Create Dispatch Plan"
-                  )}
-                </Button>
+              {/* Footer */}
+              <div className="flex items-center justify-between px-6 py-4 border-t border-border/50 bg-muted/10">
+                <p className="text-xs text-muted-foreground">
+                  {selectedPlanId > 0
+                    ? "Ready to dispatch — review details before confirming."
+                    : "Select a pre-dispatch plan to continue."}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onOpenChange(false)}
+                    className="h-8 px-4 text-sm font-medium"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={isSubmitting || !selectedPlanId}
+                    className="h-8 px-4 text-sm font-medium"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      "Create Dispatch"
+                    )}
+                  </Button>
+                </div>
               </div>
             </form>
           </Form>

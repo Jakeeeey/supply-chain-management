@@ -2,9 +2,17 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 import { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
-import { Edit2, Truck, Wallet } from "lucide-react";
+import { EllipsisVertical, Pencil, Wallet } from "lucide-react";
 
 export type DispatchPlanSummary = {
   id: string;
@@ -18,6 +26,13 @@ export type DispatchPlanSummary = {
   status: string;
 };
 
+const statusStyles: Record<string, string> = {
+  POSTED: "bg-amber-50 text-amber-600 border-amber-200",
+  COMPLETED: "bg-emerald-50 text-emerald-600 border-emerald-200",
+  CANCELLED: "bg-red-50 text-red-500 border-red-200",
+  DRAFT: "bg-muted text-muted-foreground border-border",
+};
+
 export const getDispatchPlanColumns = (
   onEdit: (plan: DispatchPlanSummary) => void,
   onBudget: (plan: DispatchPlanSummary) => void,
@@ -26,7 +41,7 @@ export const getDispatchPlanColumns = (
     accessorKey: "dpNumber",
     header: "Dispatch No.",
     cell: ({ row }) => (
-      <span className="font-bold text-blue-600 cursor-pointer hover:underline">
+      <span className="text-sm font-medium text-primary">
         {row.original.dpNumber}
       </span>
     ),
@@ -34,44 +49,44 @@ export const getDispatchPlanColumns = (
   {
     header: "Driver & Vehicle",
     cell: ({ row }) => (
-      <div className="space-y-1">
-        <p className="font-bold text-slate-900">{row.original.driverName}</p>
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Truck className="w-3.5 h-3.5" />
-          <span>{row.original.vehiclePlateNo}</span>
-        </div>
+      <div>
+        <p className="text-sm font-medium text-foreground">
+          {row.original.driverName}
+        </p>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          {row.original.vehiclePlateNo}
+        </p>
       </div>
     ),
   },
   {
-    header: "Schedule (ETOD / ETOA)",
+    header: "Departure",
     cell: ({ row }) => {
       const etod = new Date(row.original.estimatedDispatch);
+      return (
+        <div>
+          <p className="text-sm text-foreground">
+            {format(etod, "dd MMM yyyy")}
+          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {format(etod, "HH:mm")}
+          </p>
+        </div>
+      );
+    },
+  },
+  {
+    header: "Arrival",
+    cell: ({ row }) => {
       const etoa = new Date(row.original.estimatedArrival);
       return (
-        <div className="space-y-1.5 text-xs">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold text-muted-foreground uppercase w-7">
-              Dep:
-            </span>
-            <span className="font-medium text-slate-700">
-              {format(etod, "dd/MM/yyyy")}{" "}
-              <span className="text-muted-foreground font-normal">
-                {format(etod, "HH:mm")}
-              </span>
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold text-muted-foreground uppercase w-7">
-              Arr:
-            </span>
-            <span className="font-medium text-slate-700">
-              {format(etoa, "dd/MM/yyyy")}{" "}
-              <span className="text-muted-foreground font-normal">
-                {format(etoa, "HH:mm")}
-              </span>
-            </span>
-          </div>
+        <div>
+          <p className="text-sm text-foreground">
+            {format(etoa, "dd MMM yyyy")}
+          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {format(etoa, "HH:mm")}
+          </p>
         </div>
       );
     },
@@ -80,8 +95,11 @@ export const getDispatchPlanColumns = (
     accessorKey: "amount",
     header: "Trip Value",
     cell: ({ row }) => (
-      <span className="font-bold text-slate-900">
-        ₱{Number(row.original.amount || 0).toLocaleString()}
+      <span className="text-sm font-medium text-foreground tabular-nums">
+        ₱
+        {Number(row.original.amount || 0).toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+        })}
       </span>
     ),
   },
@@ -89,12 +107,12 @@ export const getDispatchPlanColumns = (
     header: "Budget",
     cell: ({ row }) => {
       const total = row.original.budgetTotal || 0;
-      return (
-        <span
-          className={`font-bold ${total > 0 ? "text-emerald-600" : "text-slate-300 italic font-normal"}`}
-        >
-          {total > 0 ? `₱${total.toLocaleString()}` : "Not Set"}
+      return total > 0 ? (
+        <span className="text-sm font-medium text-foreground tabular-nums">
+          ₱{total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
         </span>
+      ) : (
+        <span className="text-xs text-muted-foreground/50 italic">Not set</span>
       );
     },
   },
@@ -106,7 +124,11 @@ export const getDispatchPlanColumns = (
       return (
         <Badge
           variant="outline"
-          className="rounded-lg px-2.5 py-1 border-amber-200 bg-amber-50 text-amber-700 font-bold text-[10px] uppercase tracking-wider"
+          className={cn(
+            "text-[10px] font-medium uppercase tracking-wide px-2 py-0.5 rounded-md",
+            statusStyles[status] ??
+              "bg-muted text-muted-foreground border-border",
+          )}
         >
           {status}
         </Badge>
@@ -115,27 +137,31 @@ export const getDispatchPlanColumns = (
   },
   {
     id: "actions",
-    header: "Actions",
+    header: "",
     cell: ({ row }) => (
-      <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          size="icon"
-          className="h-8 w-8 rounded-lg border-slate-200"
-          onClick={() => onEdit(row.original)}
-        >
-          <Edit2 className="w-3.5 h-3.5 text-slate-400" />
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 rounded-lg border-slate-200 gap-1.5 text-xs font-bold text-slate-700"
-          onClick={() => onBudget(row.original)}
-        >
-          <Wallet className="w-3.5 h-3.5" />
-          Budget
-        </Button>
-      </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            className="flex size-8 text-muted-foreground data-[state=open]:bg-muted"
+            size="icon"
+          >
+            <EllipsisVertical />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuItem onClick={() => onEdit(row.original)}>
+            <Pencil className="w-4 h-4 mr-2" />
+            Edit
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onBudget(row.original)}>
+            <Wallet className="w-4 h-4 mr-2" />
+            Budget
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="destructive">Delete</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     ),
   },
 ];

@@ -26,8 +26,25 @@ export async function GET(req: NextRequest) {
     }
 
     if (type === "approved_plans") {
+      const branchId = searchParams.get("branch_id");
       const result =
-        await dispatchCreationQueryService.fetchApprovedPreDispatchPlans();
+        await dispatchCreationQueryService.fetchApprovedPreDispatchPlans(
+          branchId ? Number(branchId) : undefined,
+        );
+      return NextResponse.json(result);
+    }
+
+    if (type === "plan_details") {
+      const planId = searchParams.get("plan_id");
+      if (!planId) {
+        return NextResponse.json(
+          { error: "plan_id is required" },
+          { status: 400 },
+        );
+      }
+      const result = await dispatchCreationQueryService.fetchPlanDetails(
+        Number(planId),
+      );
       return NextResponse.json(result);
     }
 
