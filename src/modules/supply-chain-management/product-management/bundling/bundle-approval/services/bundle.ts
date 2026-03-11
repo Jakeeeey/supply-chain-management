@@ -13,7 +13,7 @@ import {
   BundleDraftFormValues,
   BundleMasterData,
   PaginatedBundles,
-} from "../types/bundle.schema";
+} from "../../types/bundle.schema";
 import { fetchItems, request, API_BASE_URL } from "./bundle-api";
 
 export const bundleService = {

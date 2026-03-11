@@ -12,10 +12,8 @@ import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { NavUser } from "../../../_components/nav-user";
 
+import SKUCreationPage from "@/modules/supply-chain-management/product-management/sku/sku-creation/SKUCreationPage";
 import { cookies } from "next/headers";
-
-// ✅ Wire the module you asked for
-import { SKUCreationPage } from "@/modules/supply-chain-management/product-management/sku/sku-creation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

@@ -1,14 +1,14 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
-import { useBundles } from "./hooks/useBundles";
+import { useState, useCallback } from "react";
+import { useBundles } from "../hooks/useBundles";
 import { BundleApprovalTable } from "./components/data-table";
-import { BundleViewModal } from "./components/modals/bundle-view-modal";
+import { BundleViewModal } from "../components/modals/bundle-view-modal";
 import { Button } from "@/components/ui/button";
 import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import ErrorPage from "@/components/shared/ErrorPage";
 import { toast } from "sonner";
-import { BundleDraft } from "./types/bundle.schema";
+import { BundleDraft } from "../types/bundle.schema";
 import { CheckCircle2, XCircle } from "lucide-react";
 
 export default function BundleApprovalPage() {
@@ -22,7 +22,6 @@ export default function BundleApprovalPage() {
     masterData,
     isLoading,
     error,
-    search,
     setSearch,
     refresh,
     approveDraft,
@@ -46,7 +45,7 @@ export default function BundleApprovalPage() {
   const handleReject = async (id: number | string) => {
     try {
       await rejectDraft(id);
-      toast.success("Bundle rejected — returned to drafts");
+      toast.success("Bundle rejected successfully");
     } catch (err: any) {
       toast.error(err.message || "Failed to reject bundle");
     }
