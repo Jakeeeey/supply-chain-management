@@ -9,10 +9,11 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
-import { NavUser } from "../../../_components/nav-user"
+import { NavUser } from "../../_components/nav-user" // Verify this path based on your folder structure
 import { cookies } from "next/headers"
 
-import ConsolidatorModule from "@/modules/supply-chain-management/warehouse-management/consolidation/delivery-picking/DeliveryPickingModule";
+// 🚀 Import the new Picker Module
+import PickerDashboardModule from "@/modules/supply-chain-management/warehouse-management/active-picking/PickerDashboardModule";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -60,7 +61,7 @@ function buildHeaderUserFromToken(token: string | null | undefined) {
     };
 }
 
-export default async function Page() {
+export default async function ActivePickingPage() {
     const cookieStore = await cookies();
     const token = cookieStore.get(COOKIE_NAME)?.value ?? null;
 
@@ -83,7 +84,7 @@ export default async function Page() {
                             </BreadcrumbItem>
                             <BreadcrumbSeparator className="hidden md:block" />
                             <BreadcrumbItem>
-                                <BreadcrumbPage>Consolidation</BreadcrumbPage>
+                                <BreadcrumbPage>Active Picking</BreadcrumbPage>
                             </BreadcrumbItem>
                         </BreadcrumbList>
                     </Breadcrumb>
@@ -96,7 +97,7 @@ export default async function Page() {
 
             <ScrollArea className="min-h-0 flex-1 bg-muted/10">
                 {/* 🚀 Clean module import with no prop drilling! */}
-                <ConsolidatorModule />
+                <PickerDashboardModule />
             </ScrollArea>
         </div>
     )
