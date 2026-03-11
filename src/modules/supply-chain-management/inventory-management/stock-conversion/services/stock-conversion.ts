@@ -37,6 +37,7 @@ function getHeaders() {
 function springHeaders(token?: string) {
   return {
     "Content-Type": "application/json",
+    "Accept": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 }
@@ -145,9 +146,11 @@ export async function fetchStockList(token?: string): Promise<StockConversionPro
     }
 
     const invMap = new Map<number, number>();
+    console.log(`[Stock-Conversion] SPRING_API: ${SPRING_API}`);
     if (invRes && invRes.ok) {
        const invJson = await invRes.json();
        const items = Array.isArray(invJson) ? invJson : (invJson.data || []);
+       console.log(`[Stock-Conversion] Fetched ${items.length} inventory items`);
        
        items.forEach((i: any) => {
           const rawId = i.productId || i.product_id;
@@ -159,6 +162,9 @@ export async function fetchStockList(token?: string): Promise<StockConversionPro
               }
           }
        });
+       console.log(`[Stock-Conversion] invMap size: ${invMap.size}`);
+    } else {
+       console.warn(`[Stock-Conversion] invRes failed or null. status: ${invRes?.status}`);
     }
  
     // Dictionary to look up parent products quickly
@@ -284,7 +290,7 @@ export async function fetchStockList(token?: string): Promise<StockConversionPro
            : unitMap.get(Number(unitId)) || "Unknown";
 
       result.push({
-        productId: p.product_id || p.id,
+        productId: pId,
         supplierId: supplierId ? Number(supplierId) : undefined,
         supplierName: supplierId ? supplierIdNameMap.get(Number(supplierId)) : "No Supplier",
         brand: brandMap.get(Number(brandId)) || (typeof rawBrand === 'object' && rawBrand?.brand_name ? rawBrand.brand_name : "Unknown Brand"),
@@ -309,7 +315,7 @@ export async function fetchStockList(token?: string): Promise<StockConversionPro
         currentUnitId: Number(unitId),
         quantity: qty,
         pricePerUnit: price,
-        totalAmount: qty * price,
+        totalAmount: Number((qty * price).toFixed(2)),
         availableUnits,
       });
     });

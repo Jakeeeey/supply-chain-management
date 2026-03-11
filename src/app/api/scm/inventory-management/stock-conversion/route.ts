@@ -7,8 +7,6 @@ export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
   try {
-    const allCookies = req.cookies.getAll();
-    
     const springToken = req.cookies.get('springboot_token')?.value;
     const authToken = req.cookies.get('auth_token')?.value;
     const authjsToken = req.cookies.get('authjs.session-token')?.value;
@@ -20,21 +18,26 @@ export async function GET(req: NextRequest) {
     // Token Priority System
     const isEncrypted = (t?: string) => t?.startsWith("eyJhbGciOiJkaXI") || t === "mock-jwt-token";
     
-    let token = springToken;
-    let source = "springboot_token";
+    let token = vosToken;
+    let source = "vos_access_token";
 
     if (!token || isEncrypted(token)) {
-        // Favor user identity from VOS over the manual anon key if it's a valid JWT
-        if (vosToken && !isEncrypted(vosToken)) {
-            token = vosToken;
+        if (springToken && !isEncrypted(springToken)) {
+            token = springToken;
+            source = "springboot_token";
         } else if (authjsToken && !isEncrypted(authjsToken)) {
             token = authjsToken;
+            source = "authjs.session-token";
         } else if (authToken && !isEncrypted(authToken)) {
             token = authToken;
+            source = "auth_token";
         } else {
             token = PROVIDED_TOKEN;
+            source = "PROVIDED_TOKEN (fallback)";
         }
     }
+    
+    console.log(`[Stock-Conversion API] Using token from source: ${source}`);
     
     const data = await fetchStockList(token);
     return NextResponse.json({ data });
