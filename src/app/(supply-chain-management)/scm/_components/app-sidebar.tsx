@@ -202,6 +202,10 @@ const data = {
               title: "Dispatch Plan",
               url: "/scm/fleet-management/trip-management/dispatch-plan",
             },
+            {
+              title: "Dispatch Clearance",
+              url: "/scm/fleet-management/trip-management/dispatch-clearance",
+            },
           ],
         },
         {
