@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { transmitItemScan, lookupRfidTag } from "../providers/fetchProvider";
 import { ConsolidatorDto, ConsolidatorDetailsDto } from "../types";
+import { soundFX } from "../utils/audioProvider";
 
 export interface UseActivePickingProps {
     batch: ConsolidatorDto;
@@ -26,13 +27,19 @@ export function useActivePicking({ batch, currentUserId }: UseActivePickingProps
     const [isManualModalOpen, setIsManualModalOpen] = useState(false);
     const [manualQuantity, setManualQuantity] = useState<number | "">("");
 
-    // 🏎️ PERFORMANCE REFS: These don't trigger re-renders
+    // 🏎️ PERFORMANCE REFS
+    const detailsRef = useRef(batch.details || []);
+    const scannedTagsRef = useRef(new Set<string>()); // DB Shield for RFIDs
     const bufferRef = useRef<string>("");
     const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const isProcessingRef = useRef<boolean>(false);
 
+    // Initial load sync
     useEffect(() => {
-        if (batch.details) setLocalDetails(batch.details);
+        if (batch.details) {
+            setLocalDetails(batch.details);
+            detailsRef.current = batch.details;
+        }
     }, [batch.id, batch.details]);
 
     const activeDetail = useMemo(() => localDetails.find(d => d.id === activeDetailId), [localDetails, activeDetailId]);
@@ -57,6 +64,9 @@ export function useActivePicking({ batch, currentUserId }: UseActivePickingProps
     }, [localDetails]);
 
     const logScan = useCallback((tag: string, status: "success" | "error", message: string) => {
+        if (status === "success") soundFX.success();
+        else soundFX.error();
+
         const newLog: ScanLog = {
             id: Math.random().toString(36).substring(7),
             tag,
@@ -68,51 +78,68 @@ export function useActivePicking({ batch, currentUserId }: UseActivePickingProps
     }, []);
 
     const processScan = async (inputString: string, isManual: boolean = false, overrideQuantity: number = 1) => {
-        if ((!inputString && !isManual) || isProcessingRef.current) return;
+        const tag = inputString.trim();
+        if ((!tag && !isManual)) return;
 
+        const isLikelyRFID = tag.length > 12;
+        if (!isManual && isLikelyRFID && scannedTagsRef.current.has(tag)) {
+            soundFX.duplicate();
+            return;
+        }
+
+        if (isProcessingRef.current) return;
         isProcessingRef.current = true;
         setIsScanning(true);
 
         try {
-            // 1. Identification
-            let targetDetail = localDetails.find(d =>
-                d.barcode?.toLowerCase() === inputString.toLowerCase() ||
-                d.productId?.toString() === inputString
+            const currentDetails = detailsRef.current; // Always read fresh state
+
+            // 1. Exact Barcode/ID Match
+            let targetDetail = currentDetails.find(d =>
+                d.barcode?.toLowerCase() === tag.toLowerCase() ||
+                d.productId?.toString() === tag
             );
 
+            // 2. RFID Database Lookup
             if (!targetDetail && !isManual) {
-                const productId = await lookupRfidTag(inputString);
-                if (productId) targetDetail = localDetails.find(d => d.productId === productId);
+                const productId = await lookupRfidTag(tag);
+                if (productId) targetDetail = currentDetails.find(d => d.productId === productId);
             }
 
-            if (!targetDetail && activeDetailId) {
-                targetDetail = localDetails.find(d => d.id === activeDetailId);
-            }
-
+            // 🚨 BUG FIX 1: Removed the dangerous "fallback to activeDetailId" logic here.
+            // If the scanner scans an unknown barcode, it will cleanly reject it instead of adding +1 to the selected card!
             if (!targetDetail) {
-                logScan(inputString, "error", "Unknown Product/Tag");
+                logScan(tag, "error", "Unrecognized Barcode/Tag");
                 return;
             }
 
             const currentQty = targetDetail.pickedQuantity || 0;
             const requiredQty = targetDetail.orderedQuantity || 0;
 
+            // Strict limit check
             if (currentQty + overrideQuantity > requiredQty) {
-                logScan(inputString || "MANUAL", "error", "Exceeds Requirement");
+                logScan(tag || "MANUAL", "error", "Exceeds Requirement");
                 return;
             }
 
-            // 🚀 OPTIMISTIC UPDATE: Update UI immediately before API call
+            // 🚨 BUG FIX 2: Synchronous Ref Update!
+            // We update `detailsRef` IMMEDIATELY before React even re-renders.
+            // This prevents a rapid double-scan from over-picking.
             const updatedQty = currentQty + overrideQuantity;
-            setActiveDetailId(targetDetail.id || null);
-            setLocalDetails(prev => prev.map(d =>
+            if (!isManual && isLikelyRFID) scannedTagsRef.current.add(tag);
+
+            const updatedDetails = currentDetails.map(d =>
                 d.id === targetDetail!.id ? { ...d, pickedQuantity: updatedQty } : d
-            ));
+            );
+
+            detailsRef.current = updatedDetails; // Immediate sync
+            setLocalDetails(updatedDetails);     // Triggers UI render
+            setActiveDetailId(targetDetail.id || null);
 
             const isRFIDRequired = (targetDetail.unitOrder || 0) === 3;
-            const transmitTag = isManual ? `MANUAL-${Date.now()}` : inputString;
+            const transmitTag = isManual ? `MANUAL-${Date.now()}` : tag;
 
-            // 2. Transmit in background
+            // API Transmission
             const result = await transmitItemScan({
                 detailId: targetDetail.id!,
                 rfidTag: isRFIDRequired ? transmitTag : "",
@@ -123,14 +150,19 @@ export function useActivePicking({ batch, currentUserId }: UseActivePickingProps
             if (result.success) {
                 logScan(transmitTag, "success", `Picked ${targetDetail.productName}`);
             } else {
-                // ❌ ROLLBACK on failure
-                setLocalDetails(prev => prev.map(d =>
+                // ❌ ROLLBACK ON SERVER REJECT
+                if (!isManual && isLikelyRFID) scannedTagsRef.current.delete(tag);
+
+                const revertedDetails = currentDetails.map(d =>
                     d.id === targetDetail!.id ? { ...d, pickedQuantity: currentQty } : d
-                ));
+                );
+                detailsRef.current = revertedDetails;
+                setLocalDetails(revertedDetails);
+
                 logScan(transmitTag, "error", result.message || "Server Rejected");
             }
         } catch (err) {
-            logScan(inputString || "N/A", "error", "Connection Error");
+            logScan(tag || "N/A", "error", "Connection Error");
         } finally {
             setIsScanning(false);
             isProcessingRef.current = false;
@@ -141,16 +173,12 @@ export function useActivePicking({ batch, currentUserId }: UseActivePickingProps
         }
     };
 
-    // 🚀 ULTRA-FAST SCANNER LISTENER
+    // 🚀 HARDWARE SCANNER LISTENER
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+            if (["Shift", "Control", "Alt", "CapsLock", "Meta"].includes(e.key)) return;
 
-            // Ignore modifiers
-            if (e.key === "Shift" || e.key === "Control" || e.key === "Alt") return;
-
-            // Clear buffer if it's been a while (manual typing vs scanner speed)
-            // Scanners usually send keys < 20ms apart
             if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
 
             if (e.key === "Enter") {
@@ -161,14 +189,14 @@ export function useActivePicking({ batch, currentUserId }: UseActivePickingProps
                 bufferRef.current += e.key;
             }
 
-            // Auto-trigger if the scanner doesn't send "Enter" but stops sending keys
+            // Debounce for suffix-less scanners
             scanTimeoutRef.current = setTimeout(() => {
                 const finalTag = bufferRef.current.trim();
-                if (finalTag.length > 5) { // Assuming RFID tags are long
+                if (finalTag.length > 3) { // Lowered slightly to catch short 4-digit barcodes
                     bufferRef.current = "";
                     processScan(finalTag, false);
                 }
-            }, 50); // 50ms is the sweet spot for long-range scanners
+            }, 60); // 60ms allows standard USB/Bluetooth barcode scanners to complete transmission
         };
 
         window.addEventListener("keydown", handleKeyDown);
@@ -176,7 +204,7 @@ export function useActivePicking({ batch, currentUserId }: UseActivePickingProps
             window.removeEventListener("keydown", handleKeyDown);
             if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
         };
-    }, [localDetails, activeDetailId, currentUserId]);
+    }, [activeDetailId, currentUserId]);
 
     const handleManualSubmit = async () => {
         const qty = Number(manualQuantity);
