@@ -19,39 +19,52 @@ export const BatchCard = ({ batch, onClick }: BatchCardProps) => {
     return (
         <motion.div
             layout
-            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-            whileHover={{ y: -5 }} whileTap={{ scale: 0.98 }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            whileHover={{ y: -5 }}
+            whileTap={{ scale: 0.96 }}
+            className="w-full"
         >
             <Card
                 onClick={() => onClick(batch)}
-                className="cursor-pointer group overflow-hidden border-2 shadow-lg relative border-blue-500/50 bg-blue-500/5 hover:border-blue-500 hover:shadow-blue-500/20 transition-all"
+                className="cursor-pointer group overflow-hidden border-2 shadow-md md:shadow-lg relative border-blue-500/50 bg-blue-500/5 hover:border-blue-500 hover:shadow-blue-500/20 transition-all active:bg-blue-500/10"
             >
-                <CardContent className="p-6">
-                    <div className="flex justify-between items-start mb-6">
-                        <div>
-                            <Badge variant="outline" className="mb-2 font-black uppercase text-[10px] tracking-widest text-blue-500 border-blue-500/20">
+                <CardContent className="p-4 md:p-6">
+                    {/* Header Section */}
+                    <div className="flex justify-between items-start mb-4 md:mb-6 gap-2">
+                        <div className="flex-1 min-w-0"> {/* 🚀 CRITICAL: min-w-0 allows the title to truncate */}
+                            <Badge variant="outline" className="mb-1 md:mb-2 font-black uppercase text-[8px] md:text-[10px] tracking-widest text-blue-500 border-blue-500/20 whitespace-nowrap">
                                 Pending Audit
                             </Badge>
-                            <h3 className="text-xl font-black uppercase tracking-tighter italic group-hover:text-blue-500 transition-colors">
+                            <h3 className="text-lg md:text-xl font-black uppercase tracking-tighter italic group-hover:text-blue-500 transition-colors truncate block">
                                 {batch.consolidatorNo}
                             </h3>
                         </div>
+
                         <motion.div
                             animate={{ scale: [1, 1.1, 1] }}
                             transition={{ repeat: Infinity, duration: 2 }}
-                            className="p-3 rounded-xl bg-blue-500/10"
+                            className="p-2 md:p-3 rounded-lg md:rounded-xl bg-blue-500/10 shrink-0"
                         >
-                            <ShieldAlert className="w-5 h-5 text-blue-500" />
+                            <ShieldAlert className="w-4 h-4 md:w-5 md:h-5 text-blue-500" />
                         </motion.div>
                     </div>
 
-                    <div className="flex items-end justify-between">
-                        <div className="space-y-1">
-                            <div className="text-4xl font-black leading-none italic">{pickedItems}</div>
-                            <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Items Verified</div>
+                    {/* Footer Section (Numbers) */}
+                    <div className="flex items-end justify-between gap-2">
+                        <div className="space-y-0.5 md:space-y-1 min-w-0">
+                            <div className="text-2xl md:text-4xl font-black leading-none italic truncate">
+                                {pickedItems}
+                            </div>
+                            <div className="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis">
+                                Items Verified
+                            </div>
                         </div>
-                        <div className="text-right">
-                            <div className="text-2xl font-black leading-none italic text-muted-foreground/40">/ {totalItems}</div>
+
+                        <div className="text-right shrink-0">
+                            <div className="text-lg md:text-2xl font-black leading-none italic text-muted-foreground/40">
+                                / {totalItems}
+                            </div>
                         </div>
                     </div>
                 </CardContent>
