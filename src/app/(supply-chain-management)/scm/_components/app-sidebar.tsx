@@ -198,6 +198,10 @@ const data = {
               title: "Dispatch Summary",
               url: "/scm/fleet-management/trip-management/dispatch-summary",
             },
+            {
+              title: "Dispatch Plan",
+              url: "/scm/fleet-management/trip-management/dispatch-plan",
+            },
           ],
         },
         {

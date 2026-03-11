@@ -80,9 +80,9 @@ export default function PDPCreationPage() {
     setEditDetails([]);
   };
 
-  const handleClusterChange = useCallback(
-    (clusterId: number) => {
-      fetchAvailableOrders(clusterId);
+  const handleFilterChange = useCallback(
+    (clusterId?: number, branchId?: number) => {
+      fetchAvailableOrders(clusterId, undefined, branchId);
     },
     [fetchAvailableOrders],
   );
@@ -122,7 +122,7 @@ export default function PDPCreationPage() {
         masterData={masterData}
         availableOrders={availableOrders}
         isLoadingOrders={isLoadingOrders}
-        onClusterChange={handleClusterChange}
+        onFilterChange={handleFilterChange}
         editPlan={editPlan}
         editDetails={editDetails}
       />

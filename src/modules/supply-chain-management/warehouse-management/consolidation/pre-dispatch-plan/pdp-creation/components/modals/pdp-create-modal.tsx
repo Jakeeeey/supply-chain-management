@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -54,7 +55,7 @@ interface PDPCreateModalProps {
   masterData: DispatchPlanMasterData | null;
   availableOrders: SalesOrderOption[];
   isLoadingOrders: boolean;
-  onClusterChange: (clusterId: number) => void;
+  onFilterChange: (clusterId?: number, branchId?: number) => void;
   /** When provided, modal opens in edit mode with pre-filled data */
   editPlan?: DispatchPlan | null;
   editDetails?: DispatchPlanDetail[];
@@ -72,7 +73,7 @@ export function PDPCreateModal({
   masterData,
   availableOrders,
   isLoadingOrders,
-  onClusterChange,
+  onFilterChange,
   editPlan,
   editDetails,
 }: PDPCreateModalProps) {
@@ -114,9 +115,12 @@ export function PDPCreateModal({
           return Number(val) || null;
         };
 
+        const cId = toId(editPlan.cluster_id);
+        const bId = toId(editPlan.branch_id);
+
         setDriverId(toId(editPlan.driver_id));
-        setClusterId(toId(editPlan.cluster_id));
-        setBranchId(toId(editPlan.branch_id));
+        setClusterId(cId);
+        setBranchId(bId);
         setVehicleId(toId(editPlan.vehicle_id));
         setDispatchDate(
           editPlan.dispatch_date
@@ -147,9 +151,9 @@ export function PDPCreateModal({
           setManifestOrders([]);
         }
 
-        // Fetch available orders for the cluster
-        if (editPlan.cluster_id) {
-          onClusterChange(editPlan.cluster_id);
+        // Fetch available orders for the cluster and branch
+        if (cId) {
+          onFilterChange(cId, bId || undefined);
         }
       } else {
         // Create mode: reset everything
@@ -227,12 +231,19 @@ export function PDPCreateModal({
     return orders;
   }, [availableOrders, manifestOrderIds, orderSearch]);
 
-  // ─── Cluster Selection Handler ────────────────────
+  // ─── Selection Handlers ─────────────────────────
   const handleClusterChange = (value: string) => {
     const id = Number(value);
     setClusterId(id);
     setManifestOrders([]); // Reset manifest when cluster changes
-    onClusterChange(id);
+    onFilterChange(id, branchId || undefined);
+  };
+
+  const handleBranchChange = (value: string) => {
+    const id = Number(value);
+    setBranchId(id);
+    setManifestOrders([]); // Reset manifest when branch changes
+    onFilterChange(clusterId || undefined, id);
   };
 
   // ─── Add Order to Manifest ────────────────────────
@@ -391,7 +402,7 @@ export function PDPCreateModal({
               </Label>
               <Select
                 value={branchId ? String(branchId) : ""}
-                onValueChange={(v) => setBranchId(Number(v))}
+                onValueChange={handleBranchChange}
               >
                 <SelectTrigger id="pdp-branch">
                   <SelectValue placeholder="Select branch" />
@@ -466,8 +477,27 @@ export function PDPCreateModal({
                     Select a target cluster to view available orders
                   </div>
                 ) : isLoadingOrders ? (
-                  <div className="text-center py-8 text-muted-foreground text-sm">
-                    Loading orders...
+                  <div className="space-y-2">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div key={i} className="border rounded-lg p-3">
+                        <div className="flex items-start justify-between">
+                          <div className="space-y-2.5 w-2/3">
+                            <div className="flex items-center gap-2">
+                              <Skeleton className="h-4 w-24" />
+                              <Skeleton className="h-4 w-16" />
+                            </div>
+                            <Skeleton className="h-4 w-[85%]" />
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <Skeleton className="h-3 w-32" />
+                            </div>
+                          </div>
+                          <div className="text-right flex flex-col items-end gap-1.5 mt-0.5">
+                            <Skeleton className="h-4 w-20" />
+                            <Skeleton className="h-3 w-12" />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : filteredAvailable.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground text-sm">

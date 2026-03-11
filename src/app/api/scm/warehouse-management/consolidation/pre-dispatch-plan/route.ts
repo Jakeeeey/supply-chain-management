@@ -21,10 +21,12 @@ export async function GET(req: NextRequest) {
     // Available orders for dispatch planning
     if (type === "available_orders") {
       const clusterId = searchParams.get("cluster_id");
+      const branchId = searchParams.get("branch_id");
       const search = searchParams.get("search") || "";
       const data = await dispatchPlanService.fetchAvailableOrders(
         clusterId ? Number(clusterId) : undefined,
         search || undefined,
+        branchId ? Number(branchId) : undefined,
       );
       return NextResponse.json({ data });
     }

@@ -380,6 +380,7 @@ export const dispatchPlanQueryService = {
   async fetchAvailableOrders(
     clusterId?: number,
     search?: string,
+    branchId?: number,
   ): Promise<SalesOrderOption[]> {
     // Step 1: Get allowed areas for the cluster
     let allowedAreas: { province: string; city: string }[] = [];
@@ -405,6 +406,10 @@ export const dispatchPlanQueryService = {
 
     if (search) {
       detailsParams["filter[order_id][order_no][_contains]"] = search;
+    }
+
+    if (branchId) {
+      detailsParams["filter[order_id][branch_id][_eq]"] = branchId;
     }
 
     const detailsRes = await fetchItems<any>(

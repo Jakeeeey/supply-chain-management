@@ -78,13 +78,18 @@ export function usePreDispatchCreation() {
 
   // ─── Fetch Available Orders by Cluster ────────────
   const fetchAvailableOrders = useCallback(
-    async (targetClusterId?: number, orderSearch?: string) => {
+    async (
+      targetClusterId?: number,
+      orderSearch?: string,
+      targetBranchId?: number,
+    ) => {
       setIsLoadingOrders(true);
       try {
         const params = new URLSearchParams({ type: "available_orders" });
-        // Use the passed clusterId (from form) or the global filter clusterId
+        // Use the passed ids or the global filter ids
         const activeClusterId = targetClusterId || clusterId;
         if (activeClusterId) params.set("cluster_id", String(activeClusterId));
+        if (targetBranchId) params.set("branch_id", String(targetBranchId));
         if (orderSearch) params.set("search", orderSearch);
 
         const res = await fetch(`${API_PATH}?${params.toString()}`);

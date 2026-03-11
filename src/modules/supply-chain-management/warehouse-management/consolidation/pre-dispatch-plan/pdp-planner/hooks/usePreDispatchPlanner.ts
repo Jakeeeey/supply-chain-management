@@ -68,7 +68,7 @@ export function usePreDispatchPlanner() {
     } catch (err: any) {
       setError(err.message);
     } finally {
-      setIsLoading(false);
+      setIsLoading(false);   
     }
   }, [plansLimit, plansPage, search, clusterId, status]);
 

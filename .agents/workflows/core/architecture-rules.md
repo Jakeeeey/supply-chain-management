@@ -51,9 +51,15 @@ For complex modules with distinct lifecycle states (e.g., Draft → Approval →
 
 ## 3. Implementation Rules
 
-- **Explicit Returns**: Always define return types for Service and API functions.
-- **Path Aliases**: Never use relative paths like `../../`. Use project aliases (e.g., `@/modules/`, `@/components/`).
-- **Standardized Elements**: Use project-wide components for common tasks (e.g., `<GenericDataTable>`, `<GenericModal>`, `<EntitySkeletonLoader>`).
+- **3.1 Technical Standards**:
+  - **Explicit Returns**: Always define return types for Service and API functions.
+  - **Path Aliases**: Never use relative paths like `../../`. Use project aliases (e.g., `@/modules/`, `@/components/`).
+  - **Standardized Elements**: Use project-wide components for common tasks (e.g., `<GenericDataTable>`, `<GenericModal>`, `<EntitySkeletonLoader>`).
+
+- **3.2 Agentic Orchestration Protocol**:
+  - When running in **Orchestrated Mode**, the AI must explicitly switch "personas" by referencing the corresponding agent file in `.agent/workflows/orchestration/`.
+  - No code should be written until the **Architect Agent** has produced and the user has approved an `implementation_plan.md`.
+  - Every complex module must pass a **QA Agent** audit before the task is marked as complete.
 
 ## 4. Quality Guardrails
 
