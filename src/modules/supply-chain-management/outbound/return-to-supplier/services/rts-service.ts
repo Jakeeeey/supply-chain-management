@@ -1,7 +1,6 @@
 // =============================================================================
 // Return-to-Supplier — Core Service Logic
 // =============================================================================
-import { getDirectusBase, directusFetch } from "@/lib/directus";
 import type { 
   ReturnToSupplier, 
   RTSItem, 
@@ -11,7 +10,6 @@ import type {
   LineDiscount, 
   ProductSupplier, 
   RTSReturnType,
-  InventoryViewRow,
   InventoryRecord,
   RfidLookupResult,
   Supplier,
@@ -19,41 +17,22 @@ import type {
   CreateReturnDTO
 } from "../types/rts.schema";
 
-/** Helper for Directus GET requests */
-async function directusGetHelper<T>(path: string): Promise<T> {
-  const base = getDirectusBase();
-  const url = `${base}${path.startsWith("/") ? "" : "/"}${path}`;
-  return directusFetch(url, { method: "GET" });
-}
-
-/** Helper for Directus POST/PATCH/DELETE requests */
-async function directusMutateHelper<T>(path: string, method: "POST" | "PATCH" | "DELETE", body?: any): Promise<T> {
-  const base = getDirectusBase();
-  const url = `${base}${path.startsWith("/") ? "" : "/"}${path}`;
-  
-  const options: RequestInit = { method };
-  if (body) {
-    options.body = JSON.stringify(body);
-  }
-  
-  return directusFetch(url, options);
-}
+import * as repo from "../repositories/rts-repository";
 
 /**
  * Fetches all Return-to-Supplier transactions for the dashboard list.
+ * Decoupled from Directus via Repository.
  */
 export async function fetchTransactions(): Promise<ReturnToSupplier[]> {
-  const json = await directusGetHelper<{ data: any[] }>(
-    "/items/return_to_supplier?limit=-1&fields=id,doc_no,transaction_date,is_posted,remarks,supplier_id.supplier_name,branch_id.branch_name&sort=-date_created"
-  );
+  const [headerRes, itemsRes] = await Promise.all([
+    repo.getRawRtsHeaders(),
+    repo.getRawRtsAllItems()
+  ]);
 
-  const records = json.data || [];
+  const records = headerRes.data || [];
   if (records.length === 0) return [];
 
-  const itemsJson = await directusGetHelper<{ data: any[] }>(
-    "/items/rts_items?limit=-1&fields=rts_id,net_amount,gross_amount,discount_amount"
-  );
-  const allItems = itemsJson.data || [];
+  const allItems = itemsRes.data || [];
 
   return records.map((r: any) => {
     const parentItems = allItems.filter((i) => (typeof i.rts_id === 'object' ? i.rts_id.id : i.rts_id) === r.id);
@@ -82,27 +61,13 @@ export async function fetchTransactions(): Promise<ReturnToSupplier[]> {
 export async function fetchTransactionDetails(
   id: string,
 ): Promise<RTSItem[]> {
-  const params = new URLSearchParams({
-    "filter[rts_id][_eq]": id,
-    fields:
-      "id,quantity,gross_unit_price,discount_rate,discount_amount,net_amount,return_type_id,product_id.product_name,product_id.product_code,product_id.product_id,product_id.unit_of_measurement_count,uom_id.unit_shortcut,uom_id.unit_id",
-  });
-
-  const json = await directusGetHelper<{ data: any[] }>(
-    `/items/rts_items?${params}`,
-  );
-
-  const items = json.data || [];
+  const itemsJson = await repo.getRawItemsByRtsId(id);
+  const items = itemsJson.data || [];
   if (items.length === 0) return [];
 
   const itemIds = items.map((i: any) => i.id);
-  const rfidParams = new URLSearchParams({
-    "filter[rts_item_id][_in]": itemIds.join(","),
-    fields: "rts_item_id,rfid_tag",
-  });
-  const rfidJson = await directusGetHelper<{ data: any[] }>(
-    `/items/rts_item_rfid?${rfidParams}`,
-  );
+  const rfidJson = await repo.getRawRfidsByItemIds(itemIds);
+  
   const rfidMap = new Map<number, string>();
   (rfidJson.data || []).forEach((r: any) => {
     rfidMap.set(Number(r.rts_item_id), r.rfid_tag);
@@ -144,19 +109,7 @@ export async function fetchReferences(): Promise<ReferenceData> {
     discountsJson,
     connectionsJson,
     returnTypesJson,
-  ] = await Promise.all([
-    directusGetHelper<{ data: any[] }>("/items/suppliers?limit=-1&filter[supplier_type][_eq]=Trade"),
-    directusGetHelper<{ data: any[] }>("/items/branches?limit=-1"),
-    directusGetHelper<{ data: any[] }>(
-      "/items/products?limit=-1&fields=product_id,product_name,description,product_code,parent_id,unit_of_measurement,unit_of_measurement_count,cost_per_unit",
-    ),
-    directusGetHelper<{ data: any[] }>("/items/units?limit=-1&fields=unit_id,unit_name,unit_shortcut,order"),
-    directusGetHelper<{ data: any[] }>("/items/line_discount?limit=-1"),
-    directusGetHelper<{ data: any[] }>(
-      "/items/product_per_supplier?limit=-1&fields=id,product_id,supplier_id,discount_type",
-    ),
-    directusGetHelper<{ data: any[] }>("/items/rts_return_type?limit=-1"),
-  ]);
+  ] = await repo.getRawReferences();
 
   const unitMap = new Map<string, string>();
   (unitsJson.data || []).forEach((u: any) => {
@@ -185,38 +138,19 @@ export async function fetchReferences(): Promise<ReferenceData> {
   };
 }
 
+/**
+ * Fetches running inventory from the Spring Boot VOS API.
+ * Uses the Repository to handle network integration.
+ */
 export async function fetchInventory(
   branchId: number,
   supplierId: number,
   token: string,
 ): Promise<InventoryRecord[]> {
-  const SPRING_URL = process.env.SPRING_API_BASE_URL;
-  if (!SPRING_URL) {
-    throw new Error("SPRING_API_BASE_URL is not defined");
-  }
-
-  const startDate = "2000-01-01";
-  const endDate = "2099-12-31";
-  const targetUrl = `${SPRING_URL.replace(/\/$/, "")}/api/view-running-inventory-by-unit/all?startDate=${startDate}&endDate=${endDate}`;
-
   try {
-    const springRes = await fetch(targetUrl, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      cache: "no-store",
-    });
-
-    if (!springRes.ok) {
-       const text = await springRes.text().catch(() => `HTTP ${springRes.status}`);
-       throw new Error(`Spring Boot inventory fetch failed (${springRes.status}): ${text}`);
-    }
-
-    const allRows: InventoryViewRow[] = await springRes.json();
+    const allRows = await repo.getSpringInventory(branchId, supplierId, token);
     
-    // Filter by branch and supplier using camelCase names
+    // Filter by branch and supplier using camelCase names (Standardized in Repo/Schema)
     const viewRows = allRows.filter((r) => 
       Number(r.branchId) === Number(branchId) && 
       Number(r.supplierId) === Number(supplierId)
@@ -224,12 +158,9 @@ export async function fetchInventory(
 
     if (viewRows.length === 0) return [];
 
-    // Process real data
+    // Get prices and parents to calculate families
     const productIds = [...new Set(viewRows.map((r) => Number(r.productId)))];
-    const productFilter = JSON.stringify({ product_id: { _in: productIds } });
-    const productsJson = await directusGetHelper<{ data: any[] }>(
-      `/items/products?limit=-1&fields=product_id,parent_id,cost_per_unit&filter=${encodeURIComponent(productFilter)}`,
-    );
+    const productsJson = await repo.getRawProductsByIds(productIds);
     const productsData = productsJson.data || [];
 
     const parentMap = new Map<number, number>();
@@ -241,7 +172,7 @@ export async function fetchInventory(
       priceMap.set(pId, Number(p.cost_per_unit ?? 0));
     });
 
-    const families = new Map<number, (InventoryViewRow & { familyId: number })[]>();
+    const families = new Map<number, any[]>();
     viewRows.forEach((row) => {
       const pId = Number(row.productId);
       const familyId = parentMap.get(pId) || pId;
@@ -251,7 +182,7 @@ export async function fetchInventory(
 
     const result: InventoryRecord[] = [];
     families.forEach((variants) => {
-      // Sort by unitCount descending
+      // Sort by unitCount descending for remainder cascading
       variants.sort((a, b) => b.unitCount - a.unitCount);
       
       let remainderPieces = 0;
@@ -281,7 +212,7 @@ export async function fetchInventory(
 
     return result;
   } catch (err: any) {
-    console.error("[RTS] Inventory fetch error:", err);
+    console.error("[RTS] Service Inventory fetch error:", err);
     throw err;
   }
 }
@@ -294,28 +225,7 @@ export async function lookupRfid(
   branchId: number,
   token: string,
 ): Promise<RfidLookupResult | null> {
-  const SPRING_URL = process.env.SPRING_API_BASE_URL;
-  if (!SPRING_URL) {
-    throw new Error("SPRING_API_BASE_URL is not defined");
-  }
-
-  const targetUrl = `${SPRING_URL.replace(/\/$/, "")}/api/view-rfid-onhand?rfid=${encodeURIComponent(rfidTag)}&branchId=${branchId}`;
-
-  const springRes = await fetch(targetUrl, {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    cache: "no-store",
-  });
-
-  if (!springRes.ok) {
-    const text = await springRes.text().catch(() => `HTTP ${springRes.status}`);
-    throw new Error(`RFID lookup failed (${springRes.status}): ${text}`);
-  }
-
-  const results: RfidLookupResult[] = await springRes.json();
+  const results: RfidLookupResult[] = await repo.getSpringRfidLookup(rfidTag, branchId, token);
   return results.length > 0 ? results[0] : null;
 }
 
@@ -326,31 +236,19 @@ export async function createTransaction(dto: CreateReturnDTO) {
   const { rts_items, ...header } = dto;
   const docNo = `RTS-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.floor(Math.random() * 10000).toString().padStart(4, "0")}`;
 
-  const parentJson = await directusMutateHelper<{ data: { id: number } }>(
-    "/items/return_to_supplier",
-    "POST",
-    { ...header, doc_no: docNo },
-  );
+  const parentJson = await repo.createRtsHeader({ ...header, doc_no: docNo });
   const parentId = parentJson.data.id;
 
   for (const item of rts_items) {
     const { rfid_tag, ...itemData } = item;
-    const res = await directusMutateHelper<{ data: { id: number } }>(
-      "/items/rts_items",
-      "POST",
-      { ...itemData, rts_id: parentId }
-    );
+    const res = await repo.createRtsItem({ ...itemData, rts_id: parentId });
     
     if (rfid_tag) {
-      await directusMutateHelper(
-        "/items/rts_item_rfid",
-        "POST",
-        {
-          rts_item_id: res.data.id,
-          rfid_tag: rfid_tag,
-          status: "RETURNED"
-        }
-      );
+      await repo.createRtsRfidBinding({
+        rts_item_id: res.data.id,
+        rfid_tag: rfid_tag,
+        status: "RETURNED"
+      });
     }
   }
 
@@ -359,37 +257,31 @@ export async function createTransaction(dto: CreateReturnDTO) {
 
 /**
  * Updates an existing Return-to-Supplier transaction.
+ * Cleans up old items and rfids before creating new ones.
  */
 export async function updateTransaction(id: string, dto: CreateReturnDTO) {
   const { rts_items, ...header } = dto;
-  await directusMutateHelper(`/items/return_to_supplier/${id}`, "PATCH", header);
+  
+  // 1. Update header
+  await repo.updateRtsHeader(id, header);
 
-  const existingItemsJson = await directusGetHelper<{ data: any[] }>(
-    `/items/rts_items?filter[rts_id][_eq] ${id}\u0026fields=id`
-  );
-  const existingIds = (existingItemsJson.data || []).map((i) => i.id);
-
-  if (existingIds.length > 0) {
-    const rfidJson = await directusGetHelper<{ data: any[] }>(
-      `/items/rts_item_rfid?filter[rts_item_id][_in]=${existingIds.join(",")}\u0026fields=id`
-    );
-    const rfidIds = (rfidJson.data || []).map((r) => r.id);
-    if (rfidIds.length > 0) {
-      await directusMutateHelper("/items/rts_item_rfid", "DELETE", rfidIds);
-    }
-    await directusMutateHelper("/items/rts_items", "DELETE", existingIds);
+  // 2. Cleanup old associations
+  const { itemIds, rfidIds } = await repo.getExistingRelatedIds(id);
+  
+  if (rfidIds.length > 0) {
+    await repo.deleteRecords("rts_item_rfid", rfidIds);
+  }
+  if (itemIds.length > 0) {
+    await repo.deleteRecords("rts_items", itemIds);
   }
 
+  // 3. Create new items
   for (const item of rts_items) {
     const { rfid_tag, ...itemData } = item;
-    const res = await directusMutateHelper<{ data: { id: number } }>(
-      "/items/rts_items",
-      "POST",
-      { ...itemData, rts_id: Number(id) }
-    );
+    const res = await repo.createRtsItem({ ...itemData, rts_id: Number(id) });
 
     if (rfid_tag) {
-      await directusMutateHelper("/items/rts_item_rfid", "POST", {
+      await repo.createRtsRfidBinding({
         rts_item_id: res.data.id,
         rfid_tag: rfid_tag,
         status: "RETURNED"
