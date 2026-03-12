@@ -5,33 +5,16 @@ const DIRECTUS_API = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "");
 const DIRECTUS_TOKEN = process.env.DIRECTUS_STATIC_TOKEN;
 const SPRING_API = process.env.SPRING_API_BASE_URL?.replace(/\/$/, "");
 
-/**
- * Utility to decode JWT without a library
- */
-function decodeJwt(token: string): Record<string, any> | null {
-  try {
-    const base64Url = token.split(".")[1];
-    if (!base64Url) return null;
-    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-    const jsonPayload = decodeURIComponent(
-      Buffer.from(base64, "base64")
-        .toString()
-        .split("")
-        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-        .join("")
-    );
-    return JSON.parse(jsonPayload);
-  } catch (err) {
-    console.error("[Stock-Conversion] JWT Decode failed:", err);
-    return null;
-  }
-}
-
-function getHeaders() {
+// Helper to use static token for Directus and session token for Spring
+function getDirectusHeaders() {
   return {
     "Content-Type": "application/json",
     ...(DIRECTUS_TOKEN ? { Authorization: `Bearer ${DIRECTUS_TOKEN}` } : {}),
   };
+}
+
+function getHeaders() {
+  return getDirectusHeaders();
 }
 
 function springHeaders(token?: string) {
@@ -58,7 +41,7 @@ async function fetchWithTimeout(url: string, options: any = {}, timeout = 15000)
   }
 }
 
-export async function fetchStockList(token?: string): Promise<StockConversionProduct[]> {
+export async function fetchStockList(): Promise<StockConversionProduct[]> {
   try {
     const fields = [
       "product_id",
@@ -75,96 +58,39 @@ export async function fetchStockList(token?: string): Promise<StockConversionPro
       "price_per_unit"
     ].join(",");
 
-    console.log("[Stock-Conversion] Starting parallel data fetch...");
+    console.log("[Stock-Conversion] Starting fast product fetch...");
     const startTime = Date.now();
 
-    // Fetch all required data in parallel
-    const [prodRes, unitRes, brandRes, catRes, supplierRes, invRes, supplierListRes] = await Promise.all([
-      fetchWithTimeout(`${DIRECTUS_API}/items/products?limit=-1&fields=*.*`, { headers: getHeaders(), cache: "no-store" }),
-      fetchWithTimeout(`${DIRECTUS_API}/items/units?limit=-1`, { headers: getHeaders(), cache: "no-store" }),
-      fetchWithTimeout(`${DIRECTUS_API}/items/brand?limit=-1`, { headers: getHeaders(), cache: "no-store" }),
-      fetchWithTimeout(`${DIRECTUS_API}/items/categories?limit=-1`, { headers: getHeaders(), cache: "no-store" }),
-      fetchWithTimeout(`${DIRECTUS_API}/items/product_per_supplier?limit=-1`, { headers: getHeaders(), cache: "no-store" }),
-      SPRING_API 
-        ? fetchWithTimeout(`${SPRING_API}/api/view-running-inventory/all`, { headers: springHeaders(token), cache: "no-store" }, 30000).catch(e => {
-            console.warn("[Stock-Conversion] Spring Inventory fetch failed:", e.message);
-            return null;
-          })
-        : Promise.resolve(null),
-      fetchWithTimeout(`${DIRECTUS_API}/items/suppliers?limit=-1`, { headers: getHeaders(), cache: "no-store" })
+    const headers = getDirectusHeaders();
+
+    // Fetch essential data in parallel
+    const [prodRes, supplierRes, supplierListRes] = await Promise.all([
+      fetchWithTimeout(`${DIRECTUS_API}/items/products?limit=-1&fields=${fields}`, { headers, cache: "no-store" }),
+      fetchWithTimeout(`${DIRECTUS_API}/items/product_per_supplier?limit=-1&fields=product_id,supplier_id`, { headers, cache: "no-store" }),
+      fetchWithTimeout(`${DIRECTUS_API}/items/suppliers?limit=-1&fields=id,supplier_id,supplier_name`, { headers, cache: "no-store" }),
     ]);
 
-    console.log(`[Stock-Conversion] All requests returned in ${Date.now() - startTime}ms`);
+    console.log(`[Stock-Conversion] Fast API requests took ${Date.now() - startTime}ms`);
 
-    // Check critical responses
-    if (!prodRes.ok) {
-       console.error(`[Stock-Conversion] Products fetch failed: ${prodRes.status} ${prodRes.statusText}`);
-       throw new AppError("FETCH_ERROR", `Failed to fetch products: ${prodRes.statusText}`, 500);
-    }
+    if (!prodRes.ok) throw new AppError("FETCH_ERROR", `Failed to fetch products: ${prodRes.statusText}`, 500);
     const products = (await prodRes.json()).data || [];
-    console.log(`[Stock-Conversion] Fetched ${products.length} products`);
-
-    if (!unitRes.ok) console.warn("[Stock-Conversion] Units fetch failed:", unitRes.statusText);
-    const unitMap = new Map<number, string>();
-    if (unitRes.ok) {
-       const uJson = await unitRes.json();
-       (uJson.data || []).forEach((u: any) => unitMap.set(Number(u.unit_id), u.unit_name));
-    }
-
-    const brandMap = new Map<number, string>();
-    if (brandRes && brandRes.ok) {
-       const bJson = await brandRes.json();
-       (bJson.data || []).forEach((b: any) => brandMap.set(Number(b.brand_id), b.brand_name));
-    }
-
-    const catMap = new Map<number, string>();
-    if (catRes && catRes.ok) {
-       const cJson = await catRes.json();
-       (cJson.data || []).forEach((c: any) => catMap.set(Number(c.category_id), c.category_name));
-    }
 
     const supplierMap = new Map<number, number>();
-    if (supplierRes && supplierRes.ok) {
+    if (supplierRes?.ok) {
        const sJson = await supplierRes.json();
        (sJson.data || []).forEach((s: any) => {
-          // Robustly handle if IDs are objects or numbers
-          const pId = (typeof s.product_id === 'object' && s.product_id !== null) ? s.product_id.id || s.product_id.product_id : s.product_id;
-          const sId = (typeof s.supplier_id === 'object' && s.supplier_id !== null) ? s.supplier_id.id || s.supplier_id.supplier_id : s.supplier_id;
-          
-          if (pId != null && sId != null) {
-              supplierMap.set(Number(pId), Number(sId));
-          }
+          const pId = typeof s.product_id === 'object' ? s.product_id?.id : s.product_id;
+          const sId = typeof s.supplier_id === 'object' ? s.supplier_id?.id : s.supplier_id;
+          if (pId != null && sId != null) supplierMap.set(Number(pId), Number(sId));
        });
     }
 
     const supplierIdNameMap = new Map<number, string>();
-    if (supplierListRes && supplierListRes.ok) {
+    if (supplierListRes?.ok) {
         const slJson = await supplierListRes.json();
         (slJson.data || []).forEach((s: any) => {
-            supplierIdNameMap.set(Number(s.id || s.supplier_id), s.supplier_name || s.name || "Unknown");
+            supplierIdNameMap.set(Number(s.id || s.supplier_id), s.supplier_name || "Unknown");
         });
-    }
-
-    const invMap = new Map<number, number>();
-    console.log(`[Stock-Conversion] SPRING_API: ${SPRING_API}`);
-    if (invRes && invRes.ok) {
-       const invJson = await invRes.json();
-       const items = Array.isArray(invJson) ? invJson : (invJson.data || []);
-       console.log(`[Stock-Conversion] Fetched ${items.length} inventory items`);
-       
-       items.forEach((i: any) => {
-          const rawId = i.productId || i.product_id;
-          if (rawId != null) {
-              const pId = Number(rawId);
-              const qty = i.runningInventory ?? i.running_inventory ?? 0;
-              if (!isNaN(pId)) {
-                 invMap.set(pId, (invMap.get(pId) || 0) + Number(qty));
-              }
-          }
-       });
-       console.log(`[Stock-Conversion] invMap size: ${invMap.size}`);
-    } else {
-       console.warn(`[Stock-Conversion] invRes failed or null. status: ${invRes?.status}`);
     }
  
     // Dictionary to look up parent products quickly
@@ -234,52 +160,15 @@ export async function fetchStockList(token?: string): Promise<StockConversionPro
       const pId = Number(p.product_id || p.id);
       const parentId = p.parent_id ? Number(p.parent_id) : null;
       
-      let qty = invMap.get(pId) ?? 0;
-      if (qty === 0 && parentId !== null) {
-          qty = invMap.get(parentId) ?? 0;
-      }
-      
       const price = Number(p.cost_per_unit || inheritP.cost_per_unit || p.price_per_unit || inheritP.price_per_unit || 0);
       
-      const rawBrand = p.product_brand || inheritP.product_brand;
-      const rawCategory = p.product_category || inheritP.product_category;
-
-      const brandId = typeof rawBrand === 'object' && rawBrand !== null 
-         ? rawBrand.brand_id || rawBrand.id || rawBrand
-         : rawBrand;
-         
-      const categoryId = typeof rawCategory === 'object' && rawCategory !== null 
-         ? rawCategory.category_id || rawCategory.id || rawCategory
-         : rawCategory;
+      const brandName = typeof p.product_brand === 'object' && p.product_brand !== null 
+          ? p.product_brand.brand_name 
+          : "Unknown Brand";
       
-      const key = getBaseFamilyKey(p);
-      const familyGroup = productGroups.get(key) || [];
-      const availableUnits = familyGroup
-        .filter((v: any) => {
-             const vUnitId = typeof v.unit_of_measurement === 'object' && v.unit_of_measurement !== null 
-                  ? v.unit_of_measurement.unit_id || v.unit_of_measurement.id 
-                  : v.unit_of_measurement;
-             const pUnitId = typeof p.unit_of_measurement === 'object' && p.unit_of_measurement !== null 
-                  ? p.unit_of_measurement.unit_id || p.unit_of_measurement.id 
-                  : p.unit_of_measurement;
-             return Number(vUnitId) !== Number(pUnitId);
-        })
-        .map((v: any) => {
-             const vUnitId = typeof v.unit_of_measurement === 'object' && v.unit_of_measurement !== null 
-                  ? v.unit_of_measurement.unit_id || v.unit_of_measurement.id 
-                  : v.unit_of_measurement;
-                   
-             return {
-                 unitId: Number(vUnitId),
-                 name: unitMap.get(Number(vUnitId)) || "Unknown Unit",
-                 conversionFactor: v.unit_of_measurement_count || 1,
-                 targetProductId: v.product_id || v.id
-             };
-        });
-
-      const supplierId = supplierMap.get(p.product_id || p.id) 
-                      || supplierMap.get(inheritP.product_id || inheritP.id)
-                      || groupSupplierMap.get(key);
+      const categoryName = typeof p.product_category === 'object' && p.product_category !== null 
+          ? p.product_category.category_name 
+          : "Unknown Category";
 
       const unitId = typeof p.unit_of_measurement === 'object' && p.unit_of_measurement !== null 
          ? p.unit_of_measurement.unit_id || p.unit_of_measurement.id 
@@ -287,38 +176,97 @@ export async function fetchStockList(token?: string): Promise<StockConversionPro
          
       const unitName = (typeof p.unit_of_measurement === 'object' && p.unit_of_measurement?.unit_name) 
            ? p.unit_of_measurement.unit_name 
-           : unitMap.get(Number(unitId)) || "Unknown";
+           : "Unknown";
 
-      // Precise conversion factors sourced directly from unit_of_measurement_count
+      const key = getBaseFamilyKey(p);
+      const familyGroup = productGroups.get(key) || [];
+      const availableUnits = familyGroup
+        .filter((v: any) => {
+             const vUnitId = typeof v.unit_of_measurement === 'object' && v.unit_of_measurement !== null 
+                  ? v.unit_of_measurement.unit_id || v.unit_of_measurement.id 
+                  : v.unit_of_measurement;
+             return Number(vUnitId) !== Number(unitId);
+        })
+        .map((v: any) => {
+             const vUnitId = typeof v.unit_of_measurement === 'object' && v.unit_of_measurement !== null 
+                  ? v.unit_of_measurement.unit_id || v.unit_of_measurement.id 
+                  : v.unit_of_measurement;
+                    
+             return {
+                 unitId: Number(vUnitId),
+                 name: (typeof v.unit_of_measurement === 'object' && v.unit_of_measurement?.unit_name) ? v.unit_of_measurement.unit_name : "Unknown Unit",
+                 conversionFactor: v.unit_of_measurement_count || 1,
+                 targetProductId: v.product_id || v.id
+             };
+        });
+
+      const supplierId = supplierMap.get(pId) 
+                      || (parentId && supplierMap.get(parentId))
+                      || groupSupplierMap.get(key);
+
       const convFactor = Number(p.unit_of_measurement_count) || 1;
 
       result.push({
         productId: pId,
         supplierId: supplierId ? Number(supplierId) : undefined,
         supplierName: supplierId ? supplierIdNameMap.get(Number(supplierId)) : "No Supplier",
-        brand: brandMap.get(Number(brandId)) || (typeof rawBrand === 'object' && rawBrand?.brand_name ? rawBrand.brand_name : "Unknown Brand"),
-        category: catMap.get(Number(categoryId)) || (typeof rawCategory === 'object' && rawCategory?.category_name ? rawCategory.category_name : "Unknown Category"),
+        brand: brandName,
+        category: categoryName,
         productCode: p.product_code || inheritP.product_code,
         productDescription: p.description || p.product_name || inheritP.description || inheritP.product_name || "",
         family: key,
         conversionFactor: convFactor,
         currentUnit: unitName,
         currentUnitId: Number(unitId),
-        quantity: qty,
+        quantity: 0, // Placeholder
         pricePerUnit: price,
-        totalAmount: Number((qty * price).toFixed(2)),
+        totalAmount: 0, // Placeholder
+        inventoryLoaded: false, // UI knows it needs to fetch inventory
         availableUnits,
       });
     });
-
-    const withChoicesCount = result.filter(r => r.availableUnits && r.availableUnits.length > 0).length;
-    
-    console.log(`[Stock-Conversion] Total Products: ${result.length}, with choices: ${withChoicesCount}`);
 
     return result;
   } catch (error: any) {
     if (error instanceof AppError) throw error;
     throw new AppError("FETCH_ERROR", `Stock fetch failed: ${error.message}`, 500);
+  }
+}
+
+export async function fetchInventoryMap(token?: string): Promise<Record<number, number>> {
+  if (!SPRING_API) return {};
+  
+  try {
+    const start = Date.now();
+    const res = await fetchWithTimeout(`${SPRING_API}/api/view-running-inventory/all`, { 
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      }, 
+      cache: "no-store" 
+    }, 25000);
+    
+    console.log(`[Stock-Conversion] Spring Inventory API took ${Date.now() - start}ms`);
+    
+    if (!res.ok) throw new Error("Inventory API failed");
+    
+    const json = await res.json();
+    const items = Array.isArray(json) ? json : (json.data || []);
+    const invMap: Record<number, number> = {};
+    
+    items.forEach((i: any) => {
+      const pId = Number(i.productId || i.product_id);
+      const qty = Number(i.runningInventory ?? i.running_inventory ?? 0);
+      if (!isNaN(pId)) {
+        invMap[pId] = (invMap[pId] || 0) + qty;
+      }
+    });
+    
+    return invMap;
+  } catch (err: any) {
+    console.error("[Stock-Conversion] fetchInventoryMap error:", err.message);
+    throw new AppError("FETCH_ERROR", "Could not load inventory data", 500);
   }
 }
 

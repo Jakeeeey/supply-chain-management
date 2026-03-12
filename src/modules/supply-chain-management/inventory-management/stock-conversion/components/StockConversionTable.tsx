@@ -21,16 +21,18 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Filter, Cuboid, Layers, Users } from "lucide-react";
+import { Filter, Cuboid, Layers, Users, RefreshCw } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 
 interface StockConversionTableProps {
   data: StockConversionProduct[];
   onConvertClick: (product: StockConversionProduct) => void;
+  onRefresh: () => void;
+  isLoading?: boolean;
 }
 
-export function StockConversionTable({ data, onConvertClick }: StockConversionTableProps) {
+export function StockConversionTable({ data, onConvertClick, onRefresh, isLoading }: StockConversionTableProps) {
   const [brandFilter, setBrandFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [unitFilter, setUnitFilter] = useState("all");
@@ -77,9 +79,20 @@ export function StockConversionTable({ data, onConvertClick }: StockConversionTa
   return (
     <Card className="border-none shadow-sm h-full flex flex-col pt-3 bg-background">
       <CardHeader className="flex flex-row items-center justify-between py-4 pb-2">
-         <div className="flex items-center gap-2">
-            <Cuboid className="w-5 h-5 text-blue-600" />
-            <CardTitle className="text-xl font-semibold tracking-tight">Stock Conversion</CardTitle>
+         <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+               <Cuboid className="w-5 h-5 text-blue-600" />
+               <CardTitle className="text-xl font-semibold tracking-tight">Stock Conversion</CardTitle>
+            </div>
+            <Button 
+               variant="ghost" 
+               size="sm" 
+               onClick={onRefresh} 
+               disabled={isLoading}
+               className="h-8 w-8 p-0 hover:bg-muted rounded-full"
+            >
+               <RefreshCw className={`w-4 h-4 text-muted-foreground ${isLoading ? 'animate-spin' : ''}`} />
+            </Button>
          </div>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col gap-4 overflow-hidden pt-4">

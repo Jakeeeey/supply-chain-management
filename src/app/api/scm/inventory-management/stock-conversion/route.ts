@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { handleApiError, AppError } from "@/lib/error-handler";
-import { fetchStockList, convertStock } from "@/modules/supply-chain-management/inventory-management/stock-conversion/services/stock-conversion";
+import { fetchStockList, convertStock, fetchInventoryMap } from "@/modules/supply-chain-management/inventory-management/stock-conversion/services/stock-conversion";
 import { stockConversionPayloadSchema } from "@/modules/supply-chain-management/inventory-management/stock-conversion/types/stock-conversion.schema";
 
 export const runtime = "nodejs";
@@ -39,7 +39,15 @@ export async function GET(req: NextRequest) {
     
     console.log(`[Stock-Conversion API] Using token from source: ${source}`);
     
-    const data = await fetchStockList(token);
+    const { searchParams } = new URL(req.url);
+    const type = searchParams.get("type");
+
+    if (type === "inventory") {
+        const data = await fetchInventoryMap(token);
+        return NextResponse.json({ data });
+    }
+
+    const data = await fetchStockList();
     return NextResponse.json({ data });
   } catch (error: any) {
     return handleApiError(error);

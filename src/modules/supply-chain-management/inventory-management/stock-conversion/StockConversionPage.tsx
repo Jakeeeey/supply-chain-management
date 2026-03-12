@@ -113,6 +113,8 @@ export default function StockConversionPage({ user }: StockConversionPageProps) 
       <StockConversionTable 
          data={data} 
          onConvertClick={handleOpenConversion} 
+         onRefresh={refresh}
+         isLoading={isLoading}
       />
 
       <StockConversionModal
