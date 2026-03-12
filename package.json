@@ -42,6 +42,7 @@
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
     "embla-carousel-react": "^8.6.0",
+    "framer-motion": "^12.35.2",
     "input-otp": "^1.4.2",
     "jspdf": "^4.2.0",
     "jspdf-autotable": "^5.0.7",
@@ -60,6 +61,7 @@
     "sonner": "^2.0.7",
     "sweetalert2": "^11.26.18",
     "tailwind-merge": "^3.4.0",
+    "uuid": "^13.0.0",
     "vaul": "^1.1.2",
     "zod": "^4.3.6"
   },
@@ -68,6 +70,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/uuid": "^10.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.4",
     "tailwindcss": "^4",

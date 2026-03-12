@@ -1,9 +1,12 @@
 "use client";
 
 import React from "react";
-import { Bundle, BundleMasterData } from "../../types/bundle.schema";
 import { DataTable } from "@/components/ui/new-data-table";
 import { getMasterlistColumns } from "./columns";
+import {
+  Bundle,
+  BundleMasterData,
+} from "@/modules/supply-chain-management/product-management/bundling/types/bundle.schema";
 
 interface BundleMasterlistTableProps {
   data: Bundle[];

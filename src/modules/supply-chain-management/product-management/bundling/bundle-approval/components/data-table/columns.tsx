@@ -1,11 +1,11 @@
 "use client";
 
-import { ColumnDef } from "@tanstack/react-table";
-import { BundleDraft, BundleMasterData } from "../../types/bundle.schema";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ColumnDef } from "@tanstack/react-table";
 import { Eye } from "lucide-react";
+import { BundleDraft, BundleMasterData } from "../../../types/bundle.schema";
 import { DataTableColumnHeader } from "./table-column-header";
 
 interface ColumnOptions {
@@ -78,9 +78,9 @@ export function getApprovalColumns({
     {
       accessorKey: "draft_status",
       header: "Status",
-      cell: ({ row }) => (
+      cell: () => (
         <Badge variant="secondary" className="bg-amber-500/10 text-amber-600">
-          {row.original.draft_status}
+          For approval
         </Badge>
       ),
     },

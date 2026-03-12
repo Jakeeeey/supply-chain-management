@@ -1,15 +1,25 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { Plus, RefreshCcw } from "lucide-react";
-import { useSKUs } from "@/modules/supply-chain-management/product-management/sku/sku-creation/hooks/useSKUs";
+import ErrorPage from "@/components/shared/ErrorPage";
+import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import { SKUTable } from "@/modules/supply-chain-management/product-management/sku/sku-creation/components/data-table";
 import { SKUModal } from "@/modules/supply-chain-management/product-management/sku/sku-creation/components/modals/sku-create-modal";
-import { Button } from "@/components/ui/button";
+import { useSKUs } from "@/modules/supply-chain-management/product-management/sku/sku-creation/hooks/useSKUs";
 import { SKU } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
+import { AlertTriangle, Plus, RefreshCcw, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
-import ErrorPage from "@/components/shared/ErrorPage";
 import { BulkDraftActionsModal } from "./components/modals/bulk-draft-actions-modal";
 
 export default function SKUCreationModule() {
@@ -47,9 +57,24 @@ export default function SKUCreationModule() {
   const [saving, setSaving] = useState(false);
   const [mounted, setMounted] = useState(false);
 
+  const [skuToDelete, setSkuToDelete] = useState<SKU | null>(null);
+  const [duplicateWarning, setDuplicateWarning] = useState<{
+    open: boolean;
+    sku: SKU | null;
+  }>({ open: false, sku: null });
+
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  const resolveId = useCallback(
+    (sku: SKU | undefined | null): number | null => {
+      if (!sku) return null;
+      const id = (sku as any).id || sku.product_id;
+      return id ? Number(id) : null;
+    },
+    [],
+  );
 
   const handleDraftPagination = useCallback(
     ({ pageIndex, pageSize }: { pageIndex: number; pageSize: number }) => {
@@ -78,45 +103,30 @@ export default function SKUCreationModule() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (id: number) => {
-    if (
-      confirm(
-        "Are you sure you want to delete this record? This cannot be undone.",
-      )
-    ) {
-      try {
-        await deleteDraft(id);
-        toast.success("SKU Draft Deleted", {
-          description:
-            "The product record has been permanently removed from the system.",
-        });
-      } catch (err: any) {
-        toast.error("Deletion Failed", {
-          description:
-            err.message ||
-            "An unexpected error occurred while trying to delete the record.",
-        });
-      }
+  const confirmDelete = async () => {
+    const id = resolveId(skuToDelete);
+    if (!id) return;
+
+    try {
+      await deleteDraft(id);
+      toast.success("SKU Draft Deleted", {
+        description:
+          "The product record has been permanently removed from the system.",
+      });
+      setSkuToDelete(null);
+    } catch (err: any) {
+      toast.error("Deletion Failed", {
+        description:
+          err.message ||
+          "An unexpected error occurred while trying to delete the record.",
+      });
     }
   };
 
-  const handleSubmitForm = async (sku: SKU) => {
+  const processSubmit = async (sku: SKU) => {
     setSaving(true);
     try {
-      const id = (selectedSKU as any)?.id || (selectedSKU as any)?.product_id;
-
-      if (!id) {
-        const isDuplicate = await checkDuplicate(sku.product_name);
-        if (isDuplicate) {
-          const proceed = confirm(
-            "A similar product name already exists in the system. Are you sure you want to create this SKU?",
-          );
-          if (!proceed) {
-            setSaving(false);
-            return;
-          }
-        }
-      }
+      const id = resolveId(selectedSKU);
 
       if (id) {
         await updateDraft(id, sku);
@@ -130,6 +140,7 @@ export default function SKUCreationModule() {
         });
       }
       setIsModalOpen(false);
+      setDuplicateWarning({ open: false, sku: null });
     } catch (err: any) {
       toast.error("Operation failed: " + err.message);
       throw err;
@@ -138,18 +149,31 @@ export default function SKUCreationModule() {
     }
   };
 
-  const handleSubmitToManager = async (id: number | string) => {
+  const handleSubmitForm = async (sku: SKU) => {
+    const id = resolveId(selectedSKU);
+
+    if (!id) {
+      const isDuplicate = await checkDuplicate(sku.product_name);
+      if (isDuplicate) {
+        setDuplicateWarning({ open: true, sku });
+        return;
+      }
+    }
+
+    await processSubmit(sku);
+  };
+
+  const handleSubmitToManager = async (item: SKU) => {
+    const id = resolveId(item);
+    if (!id) return;
+
     try {
       await submitForApproval(id);
       toast.success("SKU Submitted for Review", {
         description:
           "The record has been moved to the manager's approval queue.",
       });
-      setSelectedRows((prev) =>
-        prev.filter(
-          (item) => String((item as any).id || item.product_id) !== String(id),
-        ),
-      );
+      setSelectedRows((prev) => prev.filter((p) => resolveId(p) !== id));
     } catch (err: any) {
       toast.error("Submission Failed", {
         description:
@@ -161,7 +185,9 @@ export default function SKUCreationModule() {
   const handleBulkSubmit = async () => {
     setSaving(true);
     try {
-      const ids = selectedRows.map((sku) => (sku as any).id || sku.product_id);
+      const ids = selectedRows
+        .map((sku) => resolveId(sku))
+        .filter(Boolean) as number[];
       await bulkSubmitForApproval(ids);
       toast.success("Bulk Submission Successful", {
         description: `${selectedRows.length} items have been submitted for manager approval.`,
@@ -181,7 +207,9 @@ export default function SKUCreationModule() {
   const handleBulkDelete = async () => {
     setSaving(true);
     try {
-      const ids = selectedRows.map((sku) => (sku as any).id || sku.product_id);
+      const ids = selectedRows
+        .map((sku) => resolveId(sku))
+        .filter(Boolean) as number[];
       await bulkDeleteDrafts(ids);
       toast.success("Bulk Deletion Successful", {
         description: `${selectedRows.length} draft records have been permanently removed.`,
@@ -239,8 +267,8 @@ export default function SKUCreationModule() {
         masterData={masterData}
         isLoading={isLoading}
         onEdit={handleEdit}
-        onDelete={handleDelete as any}
-        onSubmitForApproval={handleSubmitToManager as any}
+        onDelete={(sku: SKU) => setSkuToDelete(sku)}
+        onSubmitForApproval={handleSubmitToManager}
         onSelectionChange={setSelectedRows}
         actionComponent={
           selectedRows.length > 0 && (
@@ -276,6 +304,65 @@ export default function SKUCreationModule() {
         onSubmit={handleSubmitForm}
         loading={saving}
       />
+
+      {/* Confirmation Dialogs */}
+      <AlertDialog
+        open={skuToDelete !== null}
+        onOpenChange={(open) => !open && setSkuToDelete(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-destructive" />
+              Delete Product Draft?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {skuToDelete?.product_name}? This
+              will permanently remove the draft record from the system.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Record
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={duplicateWarning.open}
+        onOpenChange={(open) =>
+          setDuplicateWarning((prev) => ({ ...prev, open }))
+        }
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Duplicate Name Warning
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              A product with the name {duplicateWarning.sku?.product_name}
+              already exists in the system. Are you sure you want to create a
+              duplicate SKU?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() =>
+                duplicateWarning.sku && processSubmit(duplicateWarning.sku)
+              }
+            >
+              Yes, Create SKU
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <BulkDraftActionsModal
         isOpen={bulkActionType !== null}
