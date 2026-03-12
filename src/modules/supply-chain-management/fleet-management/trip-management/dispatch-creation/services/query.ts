@@ -73,38 +73,57 @@ export const dispatchCreationQueryService = {
 
     if (!plans.length) return plansRes;
 
-    // Enrich with Cluster Names & Item Counts
-    const planIds = plans.map((p: any) => p.dispatch_id);
+    // Enrich with Cluster Names & Item Counts (Filtered by SO status)
+    const planIds = plans.map((p: any) => p.dispatch_id || p.id);
 
     const [clustersRes, detailsRes] = await Promise.all([
       fetchItems<{ id: number; cluster_name: string }>("/items/cluster", {
         fields: "id,cluster_name",
         limit: -1,
       }),
-      fetchItems<{ dispatch_id: number }>("/items/dispatch_plan_details", {
-        "filter[dispatch_id][_in]": planIds.join(","),
-        fields: "dispatch_id",
-        limit: -1,
-      }),
+      fetchItems<{ dispatch_id: number; sales_order_id: number }>(
+        "/items/dispatch_plan_details",
+        {
+          "filter[dispatch_id][_in]": planIds.join(","),
+          fields: "dispatch_id,sales_order_id",
+          limit: -1,
+        },
+      ),
     ]);
 
-    const clusterMap = new Map(
-      (clustersRes.data || []).map((c) => [c.id, c.cluster_name]),
+    const details = detailsRes.data || [];
+    const soIds = [...new Set(details.map((d) => d.sales_order_id))];
+
+    // Fetch SO statuses in chunks if necessary, but here we just ensure the filter is robust
+    const validOrdersRes = await fetchItems<{ order_id: number }>(
+      "/items/sales_order",
+      {
+        "filter[order_id][_in]": soIds.join(","),
+        "filter[order_status][_in]": "For Loading,On Hold",
+        fields: "order_id",
+        limit: -1,
+      },
     );
 
+    const validSoIds = new Set((validOrdersRes.data || []).map((o) => o.order_id));
+    const clusterMap = new Map((clustersRes.data || []).map((c) => [c.id, c.cluster_name]));
+
     const detailCountMap = new Map<number, number>();
-    (detailsRes.data || []).forEach((d) => {
-      detailCountMap.set(
-        d.dispatch_id,
-        (detailCountMap.get(d.dispatch_id) || 0) + 1,
-      );
+    details.forEach((d) => {
+      const planId = d.dispatch_id;
+      if (planId && validSoIds.has(d.sales_order_id)) {
+        detailCountMap.set(planId, (detailCountMap.get(planId) || 0) + 1);
+      }
     });
 
-    const enrichedData = plans.map((p: any) => ({
-      ...p,
-      cluster_name: clusterMap.get(p.cluster_id) || "Unassigned",
-      total_items: detailCountMap.get(p.dispatch_id) || 0,
-    }));
+    const enrichedData = plans.map((p: any) => {
+      const planId = p.dispatch_id || p.id;
+      return {
+        ...p,
+        cluster_name: clusterMap.get(p.cluster_id) || "Unassigned",
+        total_items: detailCountMap.get(planId) || 0,
+      };
+    });
 
     return { data: enrichedData };
   },
@@ -139,8 +158,7 @@ export const dispatchCreationQueryService = {
       net_amount: number;
     }>("/items/sales_order", {
       "filter[order_id][_in]": soIds.join(","),
-      "filter[order_status][_in]":
-        "For Invoicing,For Picking,For Loading,On Hold",
+      "filter[order_status][_in]": "For Loading,On Hold",
       fields:
         "order_id,order_no,customer_code,order_status,total_amount,net_amount",
       limit: -1,
@@ -180,19 +198,23 @@ export const dispatchCreationQueryService = {
     }
 
     // 4. Build enriched result
-    const enrichedDetails = details.map((d) => {
-      const order = orderMap.get(d.sales_order_id);
-      const customer = order ? customerMap.get(order.customer_code) : undefined;
-      return {
-        detail_id: d.detail_id,
-        sales_order_id: d.sales_order_id,
-        order_no: order?.order_no || "—",
-        order_status: order?.order_status || "—",
-        customer_name: customer?.customer_name || customer?.store_name || "—",
-        city: customer?.city || "—",
-        amount: order?.net_amount ?? order?.total_amount ?? 0,
-      };
-    });
+    const enrichedDetails = details
+      .map((d) => {
+        const order = orderMap.get(d.sales_order_id);
+        if (!order) return null;
+
+        const customer = customerMap.get(order.customer_code);
+        return {
+          detail_id: d.detail_id,
+          sales_order_id: d.sales_order_id,
+          order_no: order.order_no || "—",
+          order_status: order.order_status || "—",
+          customer_name: customer?.customer_name || customer?.store_name || "—",
+          city: customer?.city || "—",
+          amount: order.net_amount ?? order.total_amount ?? 0,
+        };
+      })
+      .filter((d): d is any => d !== null);
 
     return { data: enrichedDetails };
   },

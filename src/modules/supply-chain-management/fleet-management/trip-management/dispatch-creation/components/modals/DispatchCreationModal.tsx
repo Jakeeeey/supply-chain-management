@@ -140,6 +140,7 @@ export function DispatchCreationModal({
     try {
       const res = await fetch(
         `/api/scm/fleet-management/trip-management/dispatch-creation?type=approved_plans&branch_id=${branchId}`,
+        { cache: "no-store" },
       );
       const result = await res.json();
       if (result.error) throw new Error(result.error);
@@ -153,7 +154,7 @@ export function DispatchCreationModal({
 
   const handlePlanSelect = async (planIdStr: string) => {
     const planId = Number(planIdStr);
-    const plan = approvedPlans.find((p) => p.dispatch_id === planId);
+    const plan = approvedPlans.find((p) => (p.dispatch_id || p.id) === planId);
     if (!plan) return;
 
     form.setValue("pre_dispatch_plan_id", planId);
@@ -168,6 +169,7 @@ export function DispatchCreationModal({
     try {
       const res = await fetch(
         `/api/scm/fleet-management/trip-management/dispatch-creation?type=plan_details&plan_id=${planId}`,
+        { cache: "no-store" },
       );
       const result = await res.json();
       if (result.error) throw new Error(result.error);
