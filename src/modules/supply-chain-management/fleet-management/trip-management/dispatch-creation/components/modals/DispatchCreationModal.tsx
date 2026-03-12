@@ -63,11 +63,13 @@ const getStatusColor = (status: string) => {
     case "For Invoicing":
       return "bg-emerald-500/10 text-emerald-600 border-emerald-200 hover:bg-emerald-500/15";
     case "For Loading":
+    case "Printed":
       return "bg-orange-500/10 text-orange-600 border-orange-200 hover:bg-orange-500/15";
     case "On Hold":
+    case "Posted":
       return "bg-rose-500/10 text-rose-600 border-rose-200 hover:bg-rose-500/15";
     default:
-      return "bg-muted/50 text-muted-foreground border-border hover:bg-muted/60";
+      return "bg-emerald-500/10 text-emerald-600 border-emerald-200 hover:bg-emerald-500/15";
   }
 };
 
@@ -598,12 +600,12 @@ export function DispatchCreationModal({
                   <div className="p-4 border-b border-border/50 bg-background/60">
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                       <ShoppingCart className="w-3.5 h-3.5" />
-                      Sales Orders
+                      Sales Invoices
                     </p>
                     <p className="text-[11px] text-muted-foreground mt-1">
                       {selectedPlanId > 0
-                        ? `${planDetails.length} order${planDetails.length !== 1 ? "s" : ""} linked`
-                        : "Select a PDP to view orders"}
+                        ? `${planDetails.length} invoice${planDetails.length !== 1 ? "s" : ""} linked`
+                        : "Select a PDP to view invoices"}
                     </p>
                   </div>
 
@@ -611,7 +613,7 @@ export function DispatchCreationModal({
                     {!selectedPlanId || selectedPlanId === 0 ? (
                       <div className="flex flex-col items-center justify-center py-16 text-muted-foreground/30">
                         <ShoppingCart className="w-8 h-8 mb-2" />
-                        <p className="text-xs">Select a plan to see orders</p>
+                        <p className="text-xs">Select a plan to see invoices</p>
                       </div>
                     ) : isLoadingDetails ? (
                       <div className="space-y-2 p-1">
@@ -622,7 +624,7 @@ export function DispatchCreationModal({
                     ) : planDetails.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-16 text-muted-foreground/30">
                         <p className="text-xs">
-                          No orders linked to this plan.
+                          No invoices linked to this plan.
                         </p>
                       </div>
                     ) : (
@@ -676,9 +678,11 @@ export function DispatchCreationModal({
                   planDetails.some(
                     (o) =>
                       o.order_status !== "On Hold" &&
-                      o.order_status !== "For Loading",
+                      o.order_status !== "For Loading" &&
+                      o.order_status !== "Printed" &&
+                      o.order_status !== "Posted",
                   )
-                    ? "⚠ Some orders are not ready for dispatch (must be For Loading or On Hold)."
+                    ? "⚠ Some items are not ready for dispatch (must be Printed or Posted)."
                     : selectedPlanId > 0
                       ? "Ready to dispatch — review details before confirming."
                       : "Select a pre-dispatch plan to continue."}
@@ -703,7 +707,9 @@ export function DispatchCreationModal({
                       planDetails.some(
                         (o) =>
                           o.order_status !== "On Hold" &&
-                          o.order_status !== "For Loading",
+                          o.order_status !== "For Loading" &&
+                          o.order_status !== "Printed" &&
+                          o.order_status !== "Posted",
                       )
                     }
                     className="h-8 px-4 text-sm font-medium"

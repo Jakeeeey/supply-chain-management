@@ -94,24 +94,50 @@ export const dispatchCreationQueryService = {
     const details = detailsRes.data || [];
     const soIds = [...new Set(details.map((d) => d.sales_order_id))];
 
-    // Fetch SO statuses in chunks if necessary, but here we just ensure the filter is robust
-    const validOrdersRes = await fetchItems<{ order_id: number }>(
+    // Fetch SO statuses and order numbers for these IDs
+    const ordersRes = await fetchItems<{ order_id: number; order_no: string; order_status: string }>(
       "/items/sales_order",
       {
         "filter[order_id][_in]": soIds.join(","),
-        "filter[order_status][_in]": "For Loading,On Hold",
-        fields: "order_id",
+        fields: "order_id,order_no,order_status",
         limit: -1,
       },
     );
 
-    const validSoIds = new Set((validOrdersRes.data || []).map((o) => o.order_id));
+    const orders = ordersRes.data || [];
+    const orderNos = orders.map((o) => o.order_no).filter(Boolean);
+
+    const READY_STATUSES = ["For Loading", "On Hold"];
+
+    // Fetch Invoice statuses
+    let invoicesRes: { data: { order_id: string; transaction_status: string }[] } | undefined;
+    if (orderNos.length) {
+      invoicesRes = await fetchItems<{
+        order_id: string;
+        transaction_status: string;
+      }>("/items/sales_invoice", {
+        "filter[order_id][_in]": orderNos.join(","),
+        fields: "order_id,transaction_status",
+        limit: -1,
+      });
+    }
+
+    const orderIdToMapData = new Map(orders.map((o) => [o.order_id, { no: o.order_no, status: o.order_status }]));
+    const invoiceMap = new Map((invoicesRes?.data || []).map((i) => [i.order_id, i.transaction_status]));
     const clusterMap = new Map((clustersRes.data || []).map((c) => [c.id, c.cluster_name]));
 
     const detailCountMap = new Map<number, number>();
     details.forEach((d) => {
       const planId = d.dispatch_id;
-      if (planId && validSoIds.has(d.sales_order_id)) {
+      const orderData = orderIdToMapData.get(d.sales_order_id);
+      if (!planId || !orderData) return;
+
+      const invoiceStatus = invoiceMap.get(orderData.no);
+      const isReady =
+        READY_STATUSES.includes(orderData.status) ||
+        (invoiceStatus && READY_STATUSES.includes(invoiceStatus));
+
+      if (isReady) {
         detailCountMap.set(planId, (detailCountMap.get(planId) || 0) + 1);
       }
     });
@@ -147,7 +173,7 @@ export const dispatchCreationQueryService = {
     const details = detailsRes.data || [];
     if (!details.length) return { data: [] };
 
-    // 2. Fetch linked sales orders (only relevant statuses)
+    // 2. Fetch linked sales orders
     const soIds = details.map((d) => d.sales_order_id);
     const ordersRes = await fetchItems<{
       order_id: number;
@@ -158,7 +184,6 @@ export const dispatchCreationQueryService = {
       net_amount: number;
     }>("/items/sales_order", {
       "filter[order_id][_in]": soIds.join(","),
-      "filter[order_status][_in]": "For Loading,On Hold",
       fields:
         "order_id,order_no,customer_code,order_status,total_amount,net_amount",
       limit: -1,
@@ -167,7 +192,25 @@ export const dispatchCreationQueryService = {
     const orders = ordersRes.data || [];
     const orderMap = new Map(orders.map((o) => [o.order_id, o]));
 
-    // 3. Resolve customer info
+    // 3. Fetch linked invoices (SO.order_no -> SI.order_id)
+    const orderNos = orders.map((o) => o.order_no).filter(Boolean);
+    let invoiceMap = new Map<string, { transaction_status: string }>();
+
+    if (orderNos.length) {
+      const invoicesRes = await fetchItems<{
+        order_id: string;
+        transaction_status: string;
+      }>("/items/sales_invoice", {
+        "filter[order_id][_in]": orderNos.join(","),
+        fields: "order_id,transaction_status",
+        limit: -1,
+      });
+      invoiceMap = new Map(
+        (invoicesRes.data || []).map((i) => [i.order_id, i]),
+      );
+    }
+
+    // 4. Resolve customer info
     const customerCodes = [
       ...new Set(orders.map((o) => o.customer_code).filter(Boolean)),
     ];
@@ -197,18 +240,27 @@ export const dispatchCreationQueryService = {
       );
     }
 
-    // 4. Build enriched result
+    // 5. Build enriched result
+    const READY_STATUSES = ["For Loading", "On Hold"];
+
     const enrichedDetails = details
       .map((d) => {
         const order = orderMap.get(d.sales_order_id);
         if (!order) return null;
 
+        const invoice = invoiceMap.get(order.order_no);
         const customer = customerMap.get(order.customer_code);
+
+        const currentStatus = invoice?.transaction_status || order.order_status || "—";
+        const isReady = READY_STATUSES.includes(currentStatus) || READY_STATUSES.includes(order.order_status);
+
+        if (!isReady) return null;
+
         return {
           detail_id: d.detail_id,
           sales_order_id: d.sales_order_id,
           order_no: order.order_no || "—",
-          order_status: order.order_status || "—",
+          order_status: currentStatus,
           customer_name: customer?.customer_name || customer?.store_name || "—",
           city: customer?.city || "—",
           amount: order.net_amount ?? order.total_amount ?? 0,
