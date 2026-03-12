@@ -39,8 +39,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { DispatchRow, ReconciliationRow } from '../types';
-import { submitClearance } from '../providers/fetchProviders';
+import { DispatchRow, ReconciliationRow, RFIDMapping } from '../types';
+import { submitClearance, fetchRFIDTagsForDispatch } from '../providers/fetchProviders';
 import ReconciliationDetailModal from './ReconciliationDetailModal';
 
 interface ClearanceModalProps {
@@ -64,6 +64,16 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
     const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
     const [isDetailOpen, setIsDetailOpen] = useState(false);
     const [activeReconciliation, setActiveReconciliation] = useState<ReconciliationRow | null>(null);
+    const [selectedInvoice, setSelectedInvoice] = useState<ReconciliationRow | null>(null);
+    const [rfidTags, setRfidTags] = useState<RFIDMapping[]>([]);
+
+    useEffect(() => {
+        if (isOpen && dispatch.id) {
+            fetchRFIDTagsForDispatch(dispatch.id)
+                .then(setRfidTags)
+                .catch(err => console.error("Failed to fetch RFID tags:", err));
+        }
+    }, [isOpen, dispatch.id]);
 
     useEffect(() => {
         if (isOpen && dispatch.invoices) {
@@ -97,11 +107,12 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
     };
 
     const handleConfirmClearance = async () => {
-        if (invoices.length === 0) return;
+        const selectedInvoices = invoices.filter(inv => selectedIds.has(inv.id));
+        if (selectedInvoices.length === 0) return;
 
         setIsSubmitting(true);
         try {
-            await submitClearance(dispatch.id, invoices);
+            await submitClearance(dispatch.id, selectedInvoices);
             toast.success(`Clearance confirmed for Dispatch ${dispatch.dispatchNo}`);
             onSuccess?.();
             onClose();
@@ -118,9 +129,9 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
         setIsDetailOpen(true);
     };
 
-    const handleSaveDetail = (id: number, detailData: any) => {
+    const handleConfirmProductReconciliation = (id: number, status: string, remarks: string, missingQtys: Record<string | number, number>) => {
         setInvoices(prev => prev.map(inv =>
-            inv.id === id ? { ...inv, ...detailData } : inv
+            inv.id === id ? { ...inv, status: status as any, remarks, missingQtys } : inv
         ));
         // Auto-select row after reconciliation if not already selected
         setSelectedIds(prev => {
@@ -305,7 +316,8 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                         isOpen={isDetailOpen}
                         onClose={() => setIsDetailOpen(false)}
                         reconciliation={activeReconciliation}
-                        onSave={handleSaveDetail}
+                        onSave={handleConfirmProductReconciliation}
+                        rfidTags={rfidTags}
                     />
                 )}
             </DialogContent>

@@ -9,7 +9,10 @@ import {
     Plus,
     Minus,
     ArrowRight,
+    Search,
 } from 'lucide-react';
+import { toast } from 'sonner';
+import { Input } from '@/components/ui/input';
 import {
     Dialog,
     DialogContent,
@@ -25,13 +28,14 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { InvoiceLine } from '../types';
+import { InvoiceLine, RFIDMapping } from '../types';
 
 interface ScanningModalProps {
     isOpen: boolean;
     onClose: () => void;
     onConfirm: (scannedQtys: Record<string | number, number>) => void;
     items: InvoiceLine[];
+    rfidTags?: RFIDMapping[];
     initialScanned?: Record<string | number, number>;
 }
 
@@ -40,43 +44,141 @@ const ScanningModal: React.FC<ScanningModalProps> = ({
     onClose,
     onConfirm,
     items,
-    initialScanned = {}
+    initialScanned = {},
+    rfidTags = []
 }) => {
     const [scannedQtys, setScannedQtys] = useState<Record<string | number, number>>(initialScanned);
+    const [scannedTags, setScannedTags] = useState<Set<string>>(new Set());
+    const [scanInput, setScanInput] = useState('');
     const [lastScanned, setLastScanned] = useState<InvoiceLine | null>(null);
     const [isScanning, setIsScanning] = useState(true);
 
     useEffect(() => {
         if (isOpen) {
             setScannedQtys(initialScanned);
+            setScannedTags(new Set());
+            setScanInput('');
             setLastScanned(null);
             setIsScanning(true);
         }
     }, [isOpen, initialScanned]);
 
-    // Internal simulation for RFID scan
-    const simulateScan = () => {
-        // Pick a random item that isn't fully scanned yet
-        const remainingItems = items.filter(item => (scannedQtys[item.id] || 0) < item.qty);
+    const handleRFIDScan = (input: string) => {
+        const rawInput = input.trim().toUpperCase();
+        if (!rawInput) return;
 
-        if (remainingItems.length === 0) {
-            setIsScanning(false);
+        // Clear input immediately to prevent accumulation
+        setScanInput('');
+
+        // 1. Determine if we have multiple tags concatenated or delimited
+        let tags: string[] = [];
+        if (rawInput.length > 24 && !/[\s\n\r,]+/.test(rawInput)) {
+            // Concatenated block of 24-char hex strings
+            for (let i = 0; i < rawInput.length; i += 24) {
+                const chunk = rawInput.substring(i, i + 24);
+                if (chunk.length === 24) tags.push(chunk);
+            }
+        } else {
+            // Standard delimited tags (whitespace, newline, etc.)
+            tags = rawInput.split(/[\s\n\r,]+/).filter(Boolean);
+        }
+
+        if (tags.length === 0) return;
+
+        // 2. Process each detected tag individually
+        tags.forEach(tag => {
+            if (scannedTags.has(tag)) {
+                // Duplicate detection - don't show too many toasts if bulk scanning
+                if (tags.length < 5) toast.warning(`RFID Tag ${tag} already scanned!`);
+                return;
+            }
+
+            // 3. Find the tag in the provided RFID mappings
+            const mapping = rfidTags.find(t => t.rfid?.toUpperCase() === tag);
+            
+            if (!mapping) {
+                toast.error(`Invalid RFID Tag: ${tag.substring(0, 8)}...`);
+                return;
+            }
+
+            // 4. Find the item in the current manifest
+            const item = items.find(i => Number(i.product_id) === Number(mapping.product_id));
+
+            if (!item) {
+                toast.error(`Product for Tag ${tag.substring(0, 8)}... not in manifest.`);
+                return;
+            }
+
+            // 5. Check if we already reached the required quantity
+            // We use the functional update to ensure we use the latest state if processing many tags
+            setScannedQtys(prev => {
+                if ((prev[item.id] || 0) >= item.qty) {
+                    if (tags.length < 5) toast.warning(`Product ${item.product_name} is already fully scanned.`);
+                    return prev;
+                }
+
+                const newQty = (prev[item.id] || 0) + 1;
+                
+                // Track tag as scanned
+                setScannedTags(tagsPrev => new Set(tagsPrev).add(tag));
+                setLastScanned(item);
+                
+                if (tags.length < 5) toast.success(`Scanned: ${item.product_name}`);
+                
+                return { ...prev, [item.id]: newQty };
+            });
+        });
+
+        // 6. Check if everything is complete (de-bounced check after state updates would be better, but we do it here)
+        // Note: The progress check below might use stale data since setScannedQtys is async.
+        // For reliability in bulk scanning, we rely on the final manifest check during confirmation.
+    };
+
+    // Internal simulation for RFID scan - Updated to use real RFID tags
+    const simulateScan = () => {
+        // 1. If we have real RFID tags from the database, use them
+        if (rfidTags && rfidTags.length > 0) {
+            // Available tags are those whose product_id is in this invoice and item not fully scanned
+            const availableTags = rfidTags.filter(tag => {
+                const item = items.find(i => Number(i.product_id) === Number(tag.product_id));
+                return item && (scannedQtys[item.id] || 0) < item.qty;
+            });
+
+            if (availableTags.length === 0) {
+                setIsScanning(false);
+                toast.info("No more valid unscanned tags found in data.");
+                return;
+            }
+
+            const randomIndex = Math.floor(Math.random() * availableTags.length);
+            const tagToScan = availableTags[randomIndex];
+            
+            if (tagToScan && tagToScan.rfid) {
+                handleRFIDScan(tagToScan.rfid);
+            }
             return;
         }
 
+        // Fallback to original simulation if no rfidTags provided or if rfidTags is empty
+        const remainingItems = items.filter(item => (scannedQtys[item.id] || 0) < item.qty);
+        if (remainingItems.length === 0) {
+            setIsScanning(false);
+            toast.info("All items already scanned.");
+            return;
+        }
         const randomIndex = Math.floor(Math.random() * remainingItems.length);
         const item = remainingItems[randomIndex];
         const newQty = (scannedQtys[item.id] || 0) + 1;
-
-        setScannedQtys(prev => ({
-            ...prev,
-            [item.id]: newQty
-        }));
+        setScannedQtys(prev => ({ ...prev, [item.id]: newQty }));
         setLastScanned(item);
-
-        // Auto-stop when everything is scanned
-        if (remainingItems.length === 1 && newQty === item.qty) {
+        toast.success(`Simulated scan for: ${item.product_name}`);
+        
+        // Check if all items are scanned after this simulation
+        const totalRequired = items.reduce((acc, i) => acc + i.qty, 0);
+        const totalScannedNow = Object.values({ ...scannedQtys, [item.id]: newQty }).reduce((acc, q) => acc + q, 0);
+        if (totalScannedNow >= totalRequired) {
             setIsScanning(false);
+            toast.success("Manifest completed!");
         }
     };
 
@@ -105,16 +207,35 @@ const ScanningModal: React.FC<ScanningModalProps> = ({
                                 </p>
                             </div>
                         </div>
-                        {isScanning && (
-                            <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={simulateScan}
-                                className="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg text-[9px] md:text-[10px] font-bold uppercase tracking-wider h-7 md:h-8 px-2 md:px-3 whitespace-nowrap"
-                            >
-                                Simulate Scan
-                            </Button>
-                        )}
+                        <div className="flex items-center gap-2">
+                            {isScanning && (
+                                <>
+                                    <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-100 shadow-sm focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500 transition-all">
+                                        <Search className="w-3.5 h-3.5 text-slate-400" />
+                                        <Input
+                                            autoFocus
+                                            value={scanInput}
+                                            onChange={(e) => setScanInput(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    handleRFIDScan(scanInput);
+                                                }
+                                            }}
+                                            placeholder="Scan RFID..."
+                                            className="h-6 w-32 border-none bg-transparent p-0 text-xs font-bold placeholder:text-slate-300 focus-visible:ring-0 focus-visible:ring-offset-0"
+                                        />
+                                    </div>
+                                    <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={simulateScan}
+                                        className="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg text-[9px] md:text-[10px] font-bold uppercase tracking-wider h-7 md:h-8 px-2 md:px-3 whitespace-nowrap"
+                                    >
+                                        Simulate Scan
+                                    </Button>
+                                </>
+                            )}
+                        </div>
                     </div>
                 </DialogHeader>
 

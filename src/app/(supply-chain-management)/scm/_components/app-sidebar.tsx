@@ -171,6 +171,10 @@ const data = {
             },
           ],
         },
+        {
+          title: "Active Picking",
+          url: "/scm/warehouse-management/active-picking",
+        },
       ],
     },
     {

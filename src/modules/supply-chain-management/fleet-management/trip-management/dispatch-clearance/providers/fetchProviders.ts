@@ -8,7 +8,8 @@ import {
   SalesInvoice,
   DispatchRow,
   ReconciliationRow,
-  InvoiceDetail
+  InvoiceDetail,
+  RFIDMapping
 } from '../types';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL + '/items';
@@ -101,6 +102,14 @@ export const submitClearance = async (dispatchId: number, invoices: Reconciliati
 
 export const fetchInvoiceDetails = async (invoiceId: number): Promise<InvoiceDetail> => {
   const response = await fetch(`/api/scm/fleet-management/trip-management/dispatch-clearance/invoice-details?invoice_id=${invoiceId}`);
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+};
+
+export const fetchRFIDTagsForDispatch = async (dispatchId: number): Promise<RFIDMapping[]> => {
+  const response = await fetch(`/api/scm/fleet-management/trip-management/dispatch-clearance/rfid-tags?dispatch_id=${dispatchId}`);
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);
   }

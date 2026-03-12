@@ -118,3 +118,10 @@ export interface InvoiceDetail {
   };
   lines: InvoiceLine[];
 }
+
+export interface RFIDMapping {
+  id: number;
+  product_id: number;
+  dispatch_id: number;
+  rfid: string;
+}

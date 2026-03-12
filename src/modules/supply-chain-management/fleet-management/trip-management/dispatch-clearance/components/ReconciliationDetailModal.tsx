@@ -38,59 +38,55 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { InvoiceDetail, InvoiceLine, ReconciliationRow } from '../types';
+import { InvoiceDetail, InvoiceLine, ReconciliationRow, RFIDMapping } from '../types';
 import { fetchInvoiceDetails } from '../providers/fetchProviders';
 import ScanningModal from './ScanningModal';
 
 interface ReconciliationDetailModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (id: number, data: any) => void;
-    reconciliation: ReconciliationRow;
+    reconciliation: ReconciliationRow | null;
+    onSave: (invoiceId: number, status: string, remarks: string, missingQtys: Record<string | number, number>) => void;
+    rfidTags?: RFIDMapping[];
 }
 
 const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
     isOpen,
     onClose,
     onSave,
-    reconciliation
+    reconciliation,
+    rfidTags = []
 }) => {
     const [detail, setDetail] = useState<InvoiceDetail | null>(null);
-    const [loading, setLoading] = useState(false);
-    const [remarks, setRemarks] = useState('');
+    const [isLoading, setIsLoading] = useState(true);
     const [missingQtys, setMissingQtys] = useState<Record<string | number, number>>({});
+    const [remarks, setRemarks] = useState('');
     const [scannedQtys, setScannedQtys] = useState<Record<string | number, number>>({});
     const [isScanningOpen, setIsScanningOpen] = useState(false);
 
     useEffect(() => {
-        if (isOpen && reconciliation.invoiceId) {
-            loadDetails();
+        if (isOpen && reconciliation?.invoiceId) {
+            setIsLoading(true);
+            fetchInvoiceDetails(reconciliation.invoiceId)
+                .then(data => {
+                    setDetail(data);
+                    setMissingQtys(reconciliation.missingQtys || {});
+                    setRemarks(reconciliation.remarks || '');
+                })
+                .catch(err => console.error("Failed to fetch invoice details:", err))
+                .finally(() => setIsLoading(false));
         } else {
             setDetail(null);
             setRemarks('');
             setMissingQtys({});
             setScannedQtys({});
         }
-    }, [isOpen, reconciliation.invoiceId]);
+    }, [isOpen, reconciliation]);
 
-    const loadDetails = async () => {
-        setLoading(true);
-        try {
-            const data = await fetchInvoiceDetails(reconciliation.invoiceId);
-            setDetail(data);
-        } catch (error) {
-            console.error('Failed to load invoice details:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
+    if (!reconciliation) return null;
 
     const handleSave = () => {
-        onSave(reconciliation.id, {
-            remarks,
-            missingQtys,
-            status: reconciliation.status
-        });
+        onSave(reconciliation.id, reconciliation.status, remarks, missingQtys);
         onClose();
     };
 
@@ -146,9 +142,9 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
     };
 
     const renderContent = () => {
-        if (loading) {
+        if (isLoading) {
             return (
-                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <div className="flex flex-col items-center justify-center py-20 space-y-4">
                     <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
                     <p className="text-sm text-slate-500 font-medium">Fetching invoice details...</p>
                 </div>
@@ -307,6 +303,7 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                     onConfirm={handleScanningConfirm}
                     items={detail.lines}
                     initialScanned={scannedQtys}
+                    rfidTags={rfidTags}
                 />
             </div>
         );
