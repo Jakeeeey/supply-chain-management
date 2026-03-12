@@ -142,7 +142,7 @@ export async function fetchStockList(): Promise<StockConversionProduct[]> {
       });
     });
 
-    const choicesCount = result.filter(r => r.availableUnits.length > 0).length;
+    const choicesCount = result.filter(r => (r.availableUnits?.length || 0) > 0).length;
     console.log(`[Stock-Conversion] Processed ${result.length} products. Products with choices: ${choicesCount}`);
     
     return result;
@@ -152,14 +152,17 @@ export async function fetchStockList(): Promise<StockConversionProduct[]> {
   }
 }
 
-export async function fetchInventoryMap(token?: string): Promise<Record<number, number>> {
+export async function fetchInventoryMap(token?: string, branchId?: number): Promise<Record<number, number>> {
   if (!SPRING_API) return {};
   try {
     const start = Date.now();
-    const res = await fetchWithTimeout(`${SPRING_API}/api/view-running-inventory/all`, { 
+    const url = `${SPRING_API}/api/view-running-inventory/all${branchId ? `?branch_id=${branchId}` : ""}`;
+    console.log(`[Stock-Conversion] Fetching inventory from: ${url}`);
+    
+    const res = await fetchWithTimeout(url, { 
       headers: springHeaders(token), 
       cache: "no-store" 
-    }, 28000);
+    }, 45000);
     
     if (!res.ok) throw new Error("Inventory API failed");
     const json = await res.json();

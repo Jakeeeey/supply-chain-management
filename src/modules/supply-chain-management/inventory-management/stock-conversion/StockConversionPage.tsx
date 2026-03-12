@@ -19,7 +19,7 @@ interface StockConversionPageProps {
 }
 
 export default function StockConversionPage({ user }: StockConversionPageProps) {
-  const { data, isLoading, error, refresh, convertStock } = useStockConversion();
+  const { data, isLoading, error, refresh, convertStock } = useStockConversion(user?.branchId);
   
   const [selectedProduct, setSelectedProduct] = useState<StockConversionProduct | null>(null);
   

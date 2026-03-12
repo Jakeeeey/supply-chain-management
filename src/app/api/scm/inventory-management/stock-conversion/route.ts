@@ -10,14 +10,23 @@ export async function GET(req: NextRequest) {
     const springToken = req.cookies.get('springboot_token')?.value || 
                        req.cookies.get('vos_access_token')?.value;
     
+    console.log(`[Stock-Conversion API] GET Request URL: ${req.url}`);
+    
     const { searchParams } = new URL(req.url);
     const type = searchParams.get("type");
+    const branchId = searchParams.get("branchId") ? Number(searchParams.get("branchId")) : undefined;
 
     // Staged loading support
     if (type === "inventory") {
-        console.log("[Stock-Conversion API] Background inventory fetch requested");
-        const data = await fetchInventoryMap(springToken);
-        return NextResponse.json({ data });
+        console.log(`[Stock-Conversion API] Background inventory fetch for branch ${branchId || 'ALL'}. Token present: ${!!springToken}`);
+        try {
+            const data = await fetchInventoryMap(springToken, branchId);
+            console.log("[Stock-Conversion API] Background inventory fetch SUCCESS");
+            return NextResponse.json({ data });
+        } catch (err: any) {
+            console.error("[Stock-Conversion API] Background inventory fetch FAILED:", err.message);
+            throw err;
+        }
     }
 
     console.log("[Stock-Conversion API] Initial product fetch requested");
