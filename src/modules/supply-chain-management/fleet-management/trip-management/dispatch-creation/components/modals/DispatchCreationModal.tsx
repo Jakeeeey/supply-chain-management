@@ -24,7 +24,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useDispatchCreation } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/hooks/useDispatchCreation";
@@ -32,9 +31,28 @@ import {
   DispatchCreationFormSchema,
   DispatchCreationFormValues,
 } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/types/schema";
+import {
+  closestCenter,
+  DndContext,
+  DragEndEvent,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Check,
+  GripVertical,
   Loader2,
   MapPin,
   Search,
@@ -45,31 +63,13 @@ import { useEffect, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { DateTimePicker } from "../shared/date-time-picker";
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  useSortable,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
-import { GripVertical } from "lucide-react";
 
 interface PlanDetailItem {
   detail_id: number;
   sales_order_id: number;
   order_no: string;
   order_status: string;
+  true_order_status?: string;
   customer_name: string;
   city: string;
   amount: number;
@@ -82,10 +82,8 @@ const getStatusColor = (status: string) => {
     case "For Invoicing":
       return "bg-emerald-500/10 text-emerald-600 border-emerald-200 hover:bg-emerald-500/15";
     case "For Loading":
-    case "Printed":
       return "bg-orange-500/10 text-orange-600 border-orange-200 hover:bg-orange-500/15";
     case "On Hold":
-    case "Posted":
       return "bg-rose-500/10 text-rose-600 border-rose-200 hover:bg-rose-500/15";
     default:
       return "bg-emerald-500/10 text-emerald-600 border-emerald-200 hover:bg-emerald-500/15";
@@ -113,7 +111,8 @@ function DraggableInvoiceItem({ order }: { order: PlanDetailItem }) {
       style={style}
       className={cn(
         "p-3 rounded-lg border border-border/50 bg-background text-xs space-y-1.5 transition-shadow",
-        isDragging && "shadow-lg ring-1 ring-primary/20 z-10 opacity-50 cursor-grabbing"
+        isDragging &&
+          "shadow-lg ring-1 ring-primary/20 z-10 opacity-50 cursor-grabbing",
       )}
     >
       <div className="flex items-center justify-between">
@@ -134,7 +133,7 @@ function DraggableInvoiceItem({ order }: { order: PlanDetailItem }) {
           variant="outline"
           className={cn(
             "text-[9px] font-medium uppercase tracking-wide px-1.5 py-0 h-4 rounded border transition-colors",
-            getStatusColor(order.order_status)
+            getStatusColor(order.order_status),
           )}
         >
           {order.order_status}
@@ -182,7 +181,7 @@ export function DispatchCreationModal({
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    })
+    }),
   );
 
   function handleDragEnd(event: DragEndEvent) {
@@ -209,12 +208,16 @@ export function DispatchCreationModal({
       estimated_time_of_arrival: "",
       remarks: "",
       amount: 0,
-      helpers: [],
+      helpers: [{ user_id: 0 }],
       budgets: [],
     },
   });
 
-  const { fields: helperFields } = useFieldArray({
+  const {
+    fields: helperFields,
+    append,
+    remove,
+  } = useFieldArray({
     control: form.control,
     name: "helpers",
   });
@@ -470,17 +473,19 @@ export function DispatchCreationModal({
 
                 <div className="flex-1 overflow-y-auto p-6 space-y-6">
                   {/* Trip Configuration */}
-                  <section className="space-y-3">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  <section className="space-y-4">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                      <Truck className="w-3.5 h-3.5" />
                       Trip Configuration
                     </p>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 gap-4 auto-rows-min">
+                      {/* Source Branch */}
                       <FormField
                         control={form.control}
                         name="starting_point"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-xs text-muted-foreground">
+                            <FormLabel className="text-[11px] font-medium text-muted-foreground uppercase tracking-tight">
                               Source Branch
                             </FormLabel>
                             <Select
@@ -492,7 +497,7 @@ export function DispatchCreationModal({
                               }
                             >
                               <FormControl>
-                                <SelectTrigger className="h-9 text-sm">
+                                <SelectTrigger className="h-9 text-sm bg-background/50">
                                   <SelectValue placeholder="Select branch" />
                                 </SelectTrigger>
                               </FormControl>
@@ -504,17 +509,18 @@ export function DispatchCreationModal({
                                 ))}
                               </SelectContent>
                             </Select>
-                            <FormMessage />
+                            <FormMessage className="text-[10px]" />
                           </FormItem>
                         )}
                       />
 
+                      {/* Vehicle */}
                       <FormField
                         control={form.control}
                         name="vehicle_id"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-xs text-muted-foreground">
+                            <FormLabel className="text-[11px] font-medium text-muted-foreground uppercase tracking-tight">
                               Vehicle
                             </FormLabel>
                             <Select
@@ -526,7 +532,7 @@ export function DispatchCreationModal({
                               }
                             >
                               <FormControl>
-                                <SelectTrigger className="h-9 text-sm">
+                                <SelectTrigger className="h-9 text-sm bg-background/50">
                                   <SelectValue placeholder="Select vehicle" />
                                 </SelectTrigger>
                               </FormControl>
@@ -541,17 +547,18 @@ export function DispatchCreationModal({
                                 ))}
                               </SelectContent>
                             </Select>
-                            <FormMessage />
+                            <FormMessage className="text-[10px]" />
                           </FormItem>
                         )}
                       />
 
+                      {/* ETOD */}
                       <FormField
                         control={form.control}
                         name="estimated_time_of_dispatch"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-xs text-muted-foreground">
+                            <FormLabel className="text-[11px] font-medium text-muted-foreground uppercase tracking-tight">
                               Departure (ETOD)
                             </FormLabel>
                             <FormControl>
@@ -561,17 +568,18 @@ export function DispatchCreationModal({
                                 placeholder="Select departure"
                               />
                             </FormControl>
-                            <FormMessage />
+                            <FormMessage className="text-[10px]" />
                           </FormItem>
                         )}
                       />
 
+                      {/* ETOA */}
                       <FormField
                         control={form.control}
                         name="estimated_time_of_arrival"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-xs text-muted-foreground">
+                            <FormLabel className="text-[11px] font-medium text-muted-foreground uppercase tracking-tight">
                               Arrival (ETOA)
                             </FormLabel>
                             <FormControl>
@@ -581,48 +589,18 @@ export function DispatchCreationModal({
                                 placeholder="Select arrival"
                               />
                             </FormControl>
-                            <FormMessage />
+                            <FormMessage className="text-[10px]" />
                           </FormItem>
                         )}
                       />
 
-                      <FormField
-                        control={form.control}
-                        name="remarks"
-                        render={({ field }) => (
-                          <FormItem className="col-span-2">
-                            <FormLabel className="text-xs text-muted-foreground">
-                              Remarks{" "}
-                              <span className="text-muted-foreground/60">
-                                (optional)
-                              </span>
-                            </FormLabel>
-                            <FormControl>
-                              <Input
-                                placeholder="e.g. priority loading, fragile items"
-                                className="h-9 text-sm"
-                                {...field}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                  </section>
-                  <Separator />
-                  {/* Crew Assignment */}
-                  <section className="space-y-3">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Crew Assignment
-                    </p>
-                    <div className="flex gap-3">
+                      {/* Driver */}
                       <FormField
                         control={form.control}
                         name="driver_id"
                         render={({ field }) => (
-                          <FormItem className="col-span-2">
-                            <FormLabel className="text-xs text-muted-foreground">
+                          <FormItem>
+                            <FormLabel className="text-[11px] font-medium text-muted-foreground uppercase tracking-tight">
                               Driver
                             </FormLabel>
                             <Select
@@ -634,7 +612,7 @@ export function DispatchCreationModal({
                               }
                             >
                               <FormControl>
-                                <SelectTrigger className="h-9 text-sm">
+                                <SelectTrigger className="h-9 text-sm bg-background/50">
                                   <SelectValue placeholder="Assign a driver" />
                                 </SelectTrigger>
                               </FormControl>
@@ -649,56 +627,144 @@ export function DispatchCreationModal({
                                 ))}
                               </SelectContent>
                             </Select>
-                            <FormMessage />
+                            <FormMessage className="text-[10px]" />
                           </FormItem>
                         )}
                       />
 
-                      {[0, 1].map((idx) => (
-                        <FormField
-                          key={idx}
-                          control={form.control}
-                          name={`helpers.${idx}.user_id`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-xs text-muted-foreground">
-                                Helper {idx + 1}{" "}
-                                <span className="text-muted-foreground/60">
-                                  (optional)
-                                </span>
-                              </FormLabel>
-                              <Select
-                                onValueChange={(val) =>
-                                  field.onChange(Number(val))
-                                }
-                                value={
-                                  field.value ? String(field.value) : undefined
-                                }
-                              >
-                                <FormControl>
-                                  <SelectTrigger className="h-9 text-sm">
-                                    <SelectValue
-                                      placeholder={`Select helper`}
-                                    />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {masterData?.helpers.map((h) => (
-                                    <SelectItem
-                                      key={h.user_id}
-                                      value={String(h.user_id)}
-                                    >
-                                      {h.user_fname} {h.user_lname}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </FormItem>
-                          )}
-                        />
-                      ))}
+                      {/* Helper 1 (Required) */}
+                      <FormField
+                        control={form.control}
+                        name="helpers.0.user_id"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-[11px] font-medium text-muted-foreground uppercase tracking-tight">
+                              Helper
+                            </FormLabel>
+                            <Select
+                              onValueChange={(val) =>
+                                field.onChange(Number(val))
+                              }
+                              value={
+                                field.value ? String(field.value) : undefined
+                              }
+                            >
+                              <FormControl>
+                                <SelectTrigger className="h-9 text-sm bg-background/50">
+                                  <SelectValue placeholder="Assign a helper" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {masterData?.helpers.map((h) => (
+                                  <SelectItem
+                                    key={h.user_id}
+                                    value={String(h.user_id)}
+                                  >
+                                    {h.user_fname} {h.user_lname}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage className="text-[10px]" />
+                          </FormItem>
+                        )}
+                      />
+
+                      {/* Remarks */}
+                      <FormField
+                        control={form.control}
+                        name="remarks"
+                        render={({ field }) => (
+                          <FormItem className="col-span-2">
+                            <FormLabel className="text-[11px] font-medium text-muted-foreground uppercase tracking-tight">
+                              Remarks
+                            </FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="Additional notes for the trip..."
+                                className="h-9 text-sm bg-background/50"
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage className="text-[10px]" />
+                          </FormItem>
+                        )}
+                      />
                     </div>
                   </section>
+
+                  {/* Additional Helpers */}
+                  {helperFields.length > 1 && (
+                    <section className="space-y-3 pt-2">
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                        Additional Crew
+                      </p>
+                      <div className="grid grid-cols-2 gap-4">
+                        {helperFields.map((field, index) => {
+                          if (index === 0) return null; // Primary helper is in the main grid
+                          return (
+                            <FormField
+                              key={field.id}
+                              control={form.control}
+                              name={`helpers.${index}.user_id`}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel className="text-[11px] font-medium text-muted-foreground uppercase tracking-tight flex items-center justify-between">
+                                    Helper {index + 1}
+                                    <button
+                                      type="button"
+                                      onClick={() => remove(index)}
+                                      className="text-destructive hover:text-destructive/80 transition-colors"
+                                    >
+                                      Remove
+                                    </button>
+                                  </FormLabel>
+                                  <Select
+                                    onValueChange={(val) =>
+                                      field.onChange(Number(val))
+                                    }
+                                    value={
+                                      field.value
+                                        ? String(field.value)
+                                        : undefined
+                                    }
+                                  >
+                                    <FormControl>
+                                      <SelectTrigger className="h-9 text-sm bg-background/50">
+                                        <SelectValue placeholder="Select additional helper" />
+                                      </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                      {masterData?.helpers.map((h) => (
+                                        <SelectItem
+                                          key={h.user_id}
+                                          value={String(h.user_id)}
+                                        >
+                                          {h.user_fname} {h.user_lname}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </FormItem>
+                              )}
+                            />
+                          );
+                        })}
+                      </div>
+                    </section>
+                  )}
+
+                  {helperFields.length < 3 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => append({ user_id: 0 })}
+                      className="text-[11px] h-7 w-fit text-primary hover:text-primary hover:bg-primary/5 -mt-2"
+                    >
+                      + Add Additional Helper
+                    </Button>
+                  )}
                 </div>
 
                 {/* RIGHT: Sales Order Details */}
@@ -729,7 +795,9 @@ export function DispatchCreationModal({
                       </div>
                     ) : planDetails.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-16 text-muted-foreground/30">
-                        <p className="text-xs">No invoices linked to this plan.</p>
+                        <p className="text-xs">
+                          No invoices linked to this plan.
+                        </p>
                       </div>
                     ) : (
                       <DndContext
@@ -764,12 +832,10 @@ export function DispatchCreationModal({
                   planDetails.length > 0 &&
                   planDetails.some(
                     (o) =>
-                      o.order_status !== "On Hold" &&
-                      o.order_status !== "For Loading" &&
-                      o.order_status !== "Printed" &&
-                      o.order_status !== "Posted",
+                      o.true_order_status !== "For Loading" &&
+                      o.true_order_status !== "On Hold",
                   )
-                    ? "⚠ Some items are not ready for dispatch (must be Printed or Posted)."
+                    ? "⚠ Some items are not ready for dispatch (must be For Loading or On Hold)."
                     : selectedPlanId > 0
                       ? "Ready to dispatch — review details before confirming."
                       : "Select a pre-dispatch plan to continue."}
@@ -793,10 +859,8 @@ export function DispatchCreationModal({
                       planDetails.length === 0 ||
                       planDetails.some(
                         (o) =>
-                          o.order_status !== "On Hold" &&
-                          o.order_status !== "For Loading" &&
-                          o.order_status !== "Printed" &&
-                          o.order_status !== "Posted",
+                          o.true_order_status !== "For Loading" &&
+                          o.true_order_status !== "On Hold",
                       )
                     }
                     className="h-8 px-4 text-sm font-medium"

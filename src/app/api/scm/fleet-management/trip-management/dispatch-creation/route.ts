@@ -62,6 +62,15 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ data });
     }
 
+    if (type === "post_plan_details") {
+      const planId = searchParams.get("plan_id");
+      if (!planId) {
+        return NextResponse.json({ error: "plan_id is required" }, { status: 400 });
+      }
+      const data = await dispatchCreationQueryService.fetchPostDispatchPlanDetails(Number(planId));
+      return NextResponse.json({ data });
+    }
+
     return NextResponse.json({ error: "Invalid type" }, { status: 400 });
   } catch (error) {
     console.error("[Dispatch GET Error]:", error);
@@ -216,10 +225,86 @@ export async function PATCH(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const planId = searchParams.get("plan_id");
+    const action = searchParams.get("action");
+
     if (!planId) {
       return NextResponse.json({ error: "plan_id is required" }, { status: 400 });
     }
 
+    if (action === "update_trip") {
+      const body = await req.json();
+      
+      const planPayload = {
+        driver_id: body.driver_id,
+        vehicle_id: body.vehicle_id,
+        starting_point: body.starting_point,
+        estimated_time_of_dispatch: new Date(body.estimated_time_of_dispatch).toISOString(),
+        estimated_time_of_arrival: new Date(body.estimated_time_of_arrival).toISOString(),
+        remarks: body.remarks,
+      };
+
+      // 1. Update Header
+      const planRes = await fetch(`${DIRECTUS_BASE}/items/post_dispatch_plan/${planId}`, {
+        method: "PATCH",
+        headers: directusHeaders(),
+        body: JSON.stringify(planPayload),
+      });
+
+      if (!planRes.ok) {
+        throw new Error("Failed to update dispatch plan header");
+      }
+
+      // 2. Clear old staff
+      const existingStaffRes = await fetch(
+        `${DIRECTUS_BASE}/items/post_dispatch_plan_staff?filter[post_dispatch_plan_id][_eq]=${planId}&fields=id`,
+        { headers: directusHeaders() },
+      );
+      const existingStaffData = await existingStaffRes.json();
+      const existingStaffIds = (existingStaffData.data || []).map((b: any) => b.id);
+
+      if (existingStaffIds.length > 0) {
+        const deleteRes = await fetch(`${DIRECTUS_BASE}/items/post_dispatch_plan_staff`, {
+          method: "DELETE",
+          headers: directusHeaders(),
+          body: JSON.stringify(existingStaffIds),
+        });
+        if (!deleteRes.ok) throw new Error("Failed to clear existing staff");
+      }
+
+      // 3. Insert new staff
+      const staffPayloads = [
+        {
+          post_dispatch_plan_id: Number(planId),
+          user_id: body.driver_id,
+          role: "Driver",
+          is_present: false,
+        },
+        ...(body.helpers ?? []).map((h: { user_id: number }) => ({
+          post_dispatch_plan_id: Number(planId),
+          user_id: h.user_id,
+          role: "Helper",
+          is_present: false,
+        })),
+      ];
+
+      const staffResults = await Promise.all(
+        staffPayloads.map((sp) =>
+          fetch(`${DIRECTUS_BASE}/items/post_dispatch_plan_staff`, {
+            method: "POST",
+            headers: directusHeaders(),
+            body: JSON.stringify(sp),
+          }),
+        ),
+      );
+
+      for (const res of staffResults) {
+        if (!res.ok) throw new Error("Failed to reassign staff");
+      }
+
+      return NextResponse.json({ success: true });
+    }
+
+    // Default: Budget Update (if no action, or action='budget')
     const { budgets } = await req.json();
 
     // 1. Delete existing budgets for this plan

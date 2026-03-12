@@ -7,6 +7,7 @@ import {
 } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/components/data-table";
 import { BudgetAllocationModal } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/components/modals/BudgetAllocationModal";
 import { DispatchCreationModal } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/components/modals/DispatchCreationModal";
+import { DispatchEditModal } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/components/modals/DispatchEditModal";
 import { useDispatchCreation } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/hooks/useDispatchCreation";
 import { SortingState } from "@tanstack/react-table";
 import { Plus } from "lucide-react";
@@ -15,9 +16,9 @@ import { useState } from "react";
 export default function DispatchCreationPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<DispatchPlanSummary | null>(
-    null,
-  );
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<DispatchPlanSummary | null>(null);
+  const [selectedEditPlanId, setSelectedEditPlanId] = useState<number | null>(null);
   const [sorting, setSorting] = useState<SortingState>([]);
 
   const { dispatchSummary, isLoadingSummary, refreshSummary, masterData } =
@@ -50,7 +51,8 @@ export default function DispatchCreationPage() {
           sorting={sorting}
           onSortingChange={setSorting}
           onEdit={(plan) => {
-            console.log("Edit plan:", plan);
+            setSelectedEditPlanId(Number(plan.id));
+            setIsEditModalOpen(true);
           }}
           onBudget={(plan) => {
             setSelectedPlan(plan);
@@ -67,6 +69,15 @@ export default function DispatchCreationPage() {
         onSuccess={() => {
           refreshSummary();
           console.log("Trip creation successful and modal closed");
+        }}
+      />
+
+      <DispatchEditModal
+        open={isEditModalOpen}
+        onOpenChange={setIsEditModalOpen}
+        planId={selectedEditPlanId}
+        onSuccess={() => {
+          refreshSummary();
         }}
       />
 

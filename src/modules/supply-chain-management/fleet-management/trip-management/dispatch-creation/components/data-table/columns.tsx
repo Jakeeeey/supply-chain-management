@@ -42,8 +42,9 @@ export const getDispatchPlanColumns = (
   {
     accessorKey: "dpNumber",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Dispatch No." />
+      <DataTableColumnHeader column={column} label="Dispatch No." />
     ),
+    meta: { label: "Dispatch No." },
     cell: ({ row }) => (
       <span className="text-sm font-medium text-primary">
         {row.original.dpNumber}
@@ -51,7 +52,11 @@ export const getDispatchPlanColumns = (
     ),
   },
   {
-    header: "Driver & Vehicle",
+    accessorKey: "driverName",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Driver & Vehicle" />
+    ),
+    meta: { label: "Driver & Vehicle" },
     cell: ({ row }) => (
       <div>
         <p className="text-sm font-medium text-foreground">
@@ -64,7 +69,11 @@ export const getDispatchPlanColumns = (
     ),
   },
   {
-    header: "Departure",
+    accessorKey: "estimatedDispatch",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Departure" />
+    ),
+    meta: { label: "Departure" },
     cell: ({ row }) => {
       const etod = new Date(row.original.estimatedDispatch);
       return (
@@ -80,7 +89,11 @@ export const getDispatchPlanColumns = (
     },
   },
   {
-    header: "Arrival",
+    accessorKey: "estimatedArrival",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Arrival" />
+    ),
+    meta: { label: "Arrival" },
     cell: ({ row }) => {
       const etoa = new Date(row.original.estimatedArrival);
       return (
@@ -98,8 +111,9 @@ export const getDispatchPlanColumns = (
   {
     accessorKey: "amount",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Trip Value" />
+      <DataTableColumnHeader column={column} label="Trip Value" />
     ),
+    meta: { label: "Trip Value" },
     cell: ({ row }) => (
       <span className="text-sm font-medium text-foreground tabular-nums">
         ₱
@@ -110,7 +124,11 @@ export const getDispatchPlanColumns = (
     ),
   },
   {
-    header: "Budget",
+    accessorKey: "budgetTotal",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Budget" />
+    ),
+    meta: { label: "Budget" },
     cell: ({ row }) => {
       const total = row.original.budgetTotal || 0;
       return total > 0 ? (
@@ -125,8 +143,9 @@ export const getDispatchPlanColumns = (
   {
     accessorKey: "status",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Status" />
+      <DataTableColumnHeader column={column} label="Status" />
     ),
+    meta: { label: "Status" },
     cell: ({ row }) => {
       const status = row.original.status;
       return (

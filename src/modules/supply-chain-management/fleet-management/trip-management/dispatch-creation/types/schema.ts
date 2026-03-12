@@ -38,7 +38,7 @@ export const DispatchCreationFormSchema = z.object({
 
   // Crew (post_dispatch_plan_staff)
   driver_id: z.number().min(1, "Driver is required"),
-  helpers: z.array(CrewHelperSchema).optional(),
+  helpers: z.array(CrewHelperSchema).min(1, "At least one helper is required"),
 
   // Budgeting (post_dispatch_budgeting)
   budgets: z.array(BudgetLineSchema).optional(),

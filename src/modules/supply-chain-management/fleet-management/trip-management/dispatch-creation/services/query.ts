@@ -55,6 +55,39 @@ export const dispatchCreationQueryService = {
   },
 
   /**
+   * Fetches full details for a specific post-dispatch plan, including assigned staff.
+   */
+  async fetchPostDispatchPlanDetails(planId: number) {
+    const [planRes, staffRes] = await Promise.all([
+      fetchItems<any>("/items/post_dispatch_plan", {
+        "filter[id][_eq]": planId,
+        fields: "*",
+        limit: 1,
+      }),
+      fetchItems<any>("/items/post_dispatch_plan_staff", {
+        "filter[post_dispatch_plan_id][_eq]": planId,
+        fields: "user_id,role",
+        limit: -1,
+      }),
+    ]);
+
+    const planData = planRes.data?.[0];
+    if (!planData) {
+      throw new Error(`Post-dispatch plan with ID ${planId} not found`);
+    }
+
+    const staff = staffRes.data || [];
+    const driver = staff.find((s: any) => s.role === "Driver");
+    const helpers = staff.filter((s: any) => s.role === "Helper");
+
+    return {
+      ...planData,
+      driver_id: driver?.user_id,
+      helpers: helpers.map((h: any) => ({ user_id: h.user_id })),
+    };
+  },
+
+  /**
    * Fetches Approved Pre-Dispatch Plans available for conversion.
    */
   async fetchApprovedPreDispatchPlans(branchId?: number) {
@@ -250,11 +283,11 @@ export const dispatchCreationQueryService = {
         const order = orderMap.get(d.sales_order_id);
         if (!order) return null;
 
-        const invoice = invoiceMap.get(order.order_no);
         const customer = customerMap.get(order.customer_code);
+        const invoice = invoiceMap.get(order.order_no);
 
-        const currentStatus = invoice?.transaction_status || order.order_status || "—";
-        const isReady = READY_STATUSES.includes(currentStatus) || READY_STATUSES.includes(order.order_status);
+        const orderStatus = order.order_status || "—";
+        const isReady = READY_STATUSES.includes(orderStatus);
 
         if (!isReady) return null;
 
@@ -262,7 +295,10 @@ export const dispatchCreationQueryService = {
           detail_id: d.detail_id,
           sales_order_id: d.sales_order_id,
           order_no: order.order_no || "—",
-          order_status: currentStatus,
+          // The UI expects order_status for its displays right now, so we will assign the invoice status here.
+          // BUT, we will additionally pass the true_order_status so the validation logic can use it instead.
+          order_status: invoice?.transaction_status || orderStatus,
+          true_order_status: orderStatus,
           customer_name: customer?.customer_name || customer?.store_name || "—",
           city: customer?.city || "—",
           amount: order.net_amount ?? order.total_amount ?? 0,
