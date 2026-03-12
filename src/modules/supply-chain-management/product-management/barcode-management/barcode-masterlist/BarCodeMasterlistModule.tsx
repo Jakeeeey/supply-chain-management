@@ -8,8 +8,6 @@ import {
   Search,
   Printer,
   RotateCcw,
-  ChevronsUpDown,
-  Check,
   ChevronsLeft,
   ChevronLeft,
   ChevronRight,
@@ -24,19 +22,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
 
 import { useBarcodeMasterlist } from "./hooks/useBarcodeMasterlist";
 import { MasterlistTable } from "./components/MasterlistTable";
@@ -52,7 +37,6 @@ export default function BarcodeMasterlistModule() {
   const {
     products,
     allProducts,
-    suppliers,
     isLoading,
     currentPage,
     setCurrentPage,
@@ -60,8 +44,6 @@ export default function BarcodeMasterlistModule() {
     totalItems,
     searchQuery,
     setSearchQuery,
-    supplierFilter,
-    setSupplierFilter,
     recordTypeFilter,
     setRecordTypeFilter,
     error,
@@ -73,7 +55,6 @@ export default function BarcodeMasterlistModule() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   // UI States
-  const [openSupplier, setOpenSupplier] = useState(false);
   const [pageInput, setPageInput] = useState(String(currentPage));
 
   // Debounced search
@@ -192,77 +173,6 @@ export default function BarcodeMasterlistModule() {
             </div>
           </div>
 
-          {/* Supplier */}
-          <div className="flex flex-col gap-2 w-full md:w-[320px]">
-            <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-              Supplier
-            </Label>
-            <Popover open={openSupplier} onOpenChange={setOpenSupplier}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={openSupplier}
-                  className="h-10 w-full justify-between font-normal"
-                >
-                  <span className="truncate">
-                    {supplierFilter && supplierFilter !== "all"
-                      ? suppliers.find((s) => String(s.id) === supplierFilter)
-                        ?.supplier_name
-                      : "All Suppliers"}
-                  </span>
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[320px] p-0">
-                <Command>
-                  <CommandInput placeholder="Search supplier..." />
-                  <CommandList>
-                    <CommandEmpty>No supplier found.</CommandEmpty>
-                    <CommandGroup>
-                      <CommandItem
-                        value="all"
-                        onSelect={() => {
-                          setSupplierFilter("all");
-                          setOpenSupplier(false);
-                        }}
-                      >
-                        <Check
-                          className={cn(
-                            "mr-2 h-4 w-4",
-                            supplierFilter === "all"
-                              ? "opacity-100"
-                              : "opacity-0",
-                          )}
-                        />
-                        All Suppliers
-                      </CommandItem>
-                      {suppliers.map((s) => (
-                        <CommandItem
-                          key={s.id}
-                          value={s.supplier_name}
-                          onSelect={() => {
-                            setSupplierFilter(String(s.id));
-                            setOpenSupplier(false);
-                          }}
-                        >
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4",
-                              supplierFilter === String(s.id)
-                                ? "opacity-100"
-                                : "opacity-0",
-                            )}
-                          />
-                          {s.supplier_name}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-          </div>
 
           {/* Inventory Type */}
           <div className="flex flex-col gap-2 w-full md:w-[150px]">

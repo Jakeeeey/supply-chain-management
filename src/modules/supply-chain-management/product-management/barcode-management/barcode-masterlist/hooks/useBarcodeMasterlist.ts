@@ -3,19 +3,16 @@ import { toast } from "sonner";
 import { Product, Supplier } from "../types";
 import {
   getMasterlistProducts,
-  getSuppliers,
   getMasterlistBundles,
 } from "../providers/fetchProviders";
 
 export function useBarcodeMasterlist() {
   const [allProducts, setAllProducts] = useState<Product[]>([]);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
-  const [supplierFilter, setSupplierFilter] = useState("all");
   const [recordTypeFilter, setRecordTypeFilter] = useState("all");
 
   // Pagination
@@ -27,9 +24,8 @@ export function useBarcodeMasterlist() {
     setIsLoading(true);
     setError(null);
     try {
-      const [productsData, suppliersData, bundlesData] = await Promise.all([
+      const [productsData, bundlesData] = await Promise.all([
         getMasterlistProducts(),
-        getSuppliers(),
         getMasterlistBundles(),
       ]);
 
@@ -67,7 +63,6 @@ export function useBarcodeMasterlist() {
       }));
 
       setAllProducts([...validProducts, ...validBundles]);
-      setSuppliers(suppliersData);
     } catch (err: any) {
       console.error("Failed to fetch data", err);
       setError(err.message || "Failed to load masterlist data.");
@@ -93,22 +88,13 @@ export function useBarcodeMasterlist() {
         (product.product_code || "").toLowerCase().includes(searchLower) ||
         (product.barcode || "").includes(searchLower);
 
-      // 2. Supplier Filter
-      const matchesSupplier =
-        supplierFilter === "all" ||
-        (product.product_per_supplier &&
-          product.product_per_supplier.some(
-            (junction) =>
-              typeof junction.supplier_id === "object" &&
-              String(junction.supplier_id.id) === supplierFilter,
-          ));
 
       const matchesRecordType =
         recordTypeFilter === "all" || product.record_type === recordTypeFilter;
 
-      return matchesSearch && matchesSupplier && matchesRecordType;
+      return matchesSearch && matchesRecordType;
     });
-  }, [allProducts, searchQuery, supplierFilter, recordTypeFilter]);
+  }, [allProducts, searchQuery, recordTypeFilter]);
 
   // --- PAGINATION ---
   const totalItems = filteredProducts.length;
@@ -120,12 +106,11 @@ export function useBarcodeMasterlist() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, supplierFilter, recordTypeFilter]);
+  }, [searchQuery, recordTypeFilter]);
 
   return {
     products,
     allProducts,
-    suppliers,
     isLoading,
     currentPage,
     setCurrentPage,
@@ -133,8 +118,6 @@ export function useBarcodeMasterlist() {
     totalItems,
     searchQuery,
     setSearchQuery,
-    supplierFilter,
-    setSupplierFilter,
     recordTypeFilter,
     setRecordTypeFilter,
     error,

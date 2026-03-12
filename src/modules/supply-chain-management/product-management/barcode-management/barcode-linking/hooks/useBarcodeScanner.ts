@@ -4,11 +4,9 @@ import { Product, Supplier, RefData, UpdateBarcodeDTO } from "../types";
 
 export function useBarcodeScanner() {
   const [allProducts, setAllProducts] = useState<Product[]>([]);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [supplierFilter, setSupplierFilter] = useState("all");
   const [productFilter, setProductFilter] = useState("all");
   const [recordTypeFilter, setRecordTypeFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
@@ -29,13 +27,10 @@ export function useBarcodeScanner() {
     setIsLoading(true);
     setError(null);
     try {
-      const [productsRes, suppliersRes, btRes, wuRes, cuRes, bundlesRes] =
+      const [productsRes, btRes, wuRes, cuRes, bundlesRes] =
         await Promise.all([
           fetch(
             "/api/scm/product-management/barcode-management/barcode-linking",
-          ),
-          fetch(
-            "/api/scm/product-management/barcode-management/barcode-linking?scope=suppliers",
           ),
           fetch(
             "/api/scm/product-management/barcode-management/barcode-linking?scope=barcode_type",
@@ -51,11 +46,10 @@ export function useBarcodeScanner() {
           ),
         ]);
 
-      if (!productsRes.ok || !suppliersRes.ok)
+      if (!productsRes.ok)
         throw new Error("Failed to fetch data");
 
       const productsData = await productsRes.json();
-      const suppliersData = await suppliersRes.json();
 
       const allProductsRaw: Product[] = productsData.data || [];
 
@@ -101,7 +95,6 @@ export function useBarcodeScanner() {
       }
 
       setAllProducts([...eligibleProducts, ...eligibleBundles]);
-      setSuppliers(suppliersData.data || []);
 
       // Parse reference data
       if (btRes.ok) {
@@ -138,13 +131,6 @@ export function useBarcodeScanner() {
         (product.product_name || "").toLowerCase().includes(searchLower) ||
         (product.product_code || "").toLowerCase().includes(searchLower);
 
-      const matchesSupplier =
-        supplierFilter === "all" ||
-        product.product_per_supplier?.some(
-          (j) =>
-            typeof j.supplier_id === "object" &&
-            String(j.supplier_id.id) === supplierFilter,
-        );
 
       const matchesProduct =
         productFilter === "all" || String(product.product_id) === productFilter;
@@ -152,9 +138,9 @@ export function useBarcodeScanner() {
       const matchesRecordType =
         recordTypeFilter === "all" || product.record_type === recordTypeFilter;
 
-      return matchesSearch && matchesSupplier && matchesProduct && matchesRecordType;
+      return matchesSearch && matchesProduct && matchesRecordType;
     });
-  }, [allProducts, searchQuery, supplierFilter, productFilter, recordTypeFilter]);
+  }, [allProducts, searchQuery, productFilter, recordTypeFilter]);
 
   const totalItems = filteredProducts.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
@@ -165,7 +151,7 @@ export function useBarcodeScanner() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, supplierFilter, productFilter, recordTypeFilter]);
+  }, [searchQuery, productFilter, recordTypeFilter]);
 
   // ✅ FIXED: Correct URL and DTO Payload — now bundle-aware
   const handleUpdateBarcode = async (payload: UpdateBarcodeDTO) => {
@@ -246,7 +232,6 @@ export function useBarcodeScanner() {
   return {
     products,
     allProducts,
-    suppliers,
     isLoading,
     selectedProduct,
     setSelectedProduct,
@@ -257,8 +242,6 @@ export function useBarcodeScanner() {
     totalItems,
     searchQuery,
     setSearchQuery,
-    supplierFilter,
-    setSupplierFilter,
     productFilter,
     setProductFilter,
     recordTypeFilter,

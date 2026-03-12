@@ -43,12 +43,12 @@ const ScannerModal = React.lazy(() =>
 );
 import { BarcodeScannerSkeleton } from "./components/BarcodeScannerSkeleton";
 import ErrorPage from "@/components/shared/ErrorPage";
+import { Product } from "./types";
 
 export default function BarCodeScannerModule() {
   const {
     products,
     allProducts,
-    suppliers,
     selectedProduct,
     setSelectedProduct,
     handleUpdateBarcode,
@@ -59,8 +59,6 @@ export default function BarCodeScannerModule() {
     totalItems,
     searchQuery,
     setSearchQuery,
-    supplierFilter,
-    setSupplierFilter,
     productFilter,
     setProductFilter,
     recordTypeFilter,
@@ -74,7 +72,6 @@ export default function BarCodeScannerModule() {
   } = useBarcodeScanner();
 
   // UI States for Comboboxes
-  const [openSupplier, setOpenSupplier] = useState(false);
   const [openProduct, setOpenProduct] = useState(false);
 
   // Local state for page input
@@ -148,77 +145,6 @@ export default function BarCodeScannerModule() {
             </div>
           </div>
 
-          {/* SUPPLIER COMBOBOX */}
-          <div className="flex flex-col gap-2 w-full md:w-[240px]">
-            <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-              Supplier
-            </Label>
-            <Popover open={openSupplier} onOpenChange={setOpenSupplier}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={openSupplier}
-                  className="h-10 w-full justify-between font-normal"
-                >
-                  <span className="truncate">
-                    {supplierFilter && supplierFilter !== "all"
-                      ? suppliers.find((s) => String(s.id) === supplierFilter)
-                        ?.supplier_name
-                      : "All Suppliers"}
-                  </span>
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[240px] p-0">
-                <Command>
-                  <CommandInput placeholder="Search supplier..." />
-                  <CommandList>
-                    <CommandEmpty>No supplier found.</CommandEmpty>
-                    <CommandGroup>
-                      <CommandItem
-                        value="all"
-                        onSelect={() => {
-                          setSupplierFilter("all");
-                          setOpenSupplier(false);
-                        }}
-                      >
-                        <Check
-                          className={cn(
-                            "mr-2 h-4 w-4",
-                            supplierFilter === "all"
-                              ? "opacity-100"
-                              : "opacity-0",
-                          )}
-                        />
-                        All Suppliers
-                      </CommandItem>
-                      {suppliers.map((s) => (
-                        <CommandItem
-                          key={s.id}
-                          value={s.supplier_name}
-                          onSelect={() => {
-                            setSupplierFilter(String(s.id));
-                            setOpenSupplier(false);
-                          }}
-                        >
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4",
-                              supplierFilter === String(s.id)
-                                ? "opacity-100"
-                                : "opacity-0",
-                            )}
-                          />
-                          {s.supplier_name}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-          </div>
 
           {/* PRODUCT COMBOBOX */}
           <div className="flex flex-col gap-2 w-full md:w-[350px]">
@@ -237,7 +163,7 @@ export default function BarCodeScannerModule() {
                   <span className="truncate">
                     {productFilter && productFilter !== "all"
                       ? allProducts.find(
-                        (p) => String(p.product_id) === productFilter,
+                        (p: Product) => String(p.product_id) === productFilter,
                       )?.product_name || "Unknown"
                       : "All Products"}
                   </span>
@@ -267,7 +193,7 @@ export default function BarCodeScannerModule() {
                         />
                         All Products
                       </CommandItem>
-                      {allProducts.map((product) => (
+                      {allProducts.map((product: Product) => (
                         <CommandItem
                           key={product.product_id}
                           value={product.product_name || ""}
