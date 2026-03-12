@@ -189,7 +189,18 @@ export async function fetchInventoryMap(token?: string, branchId?: number): Prom
       cache: "no-store" 
     }, 45000);
     
-    if (!res.ok) throw new Error("Inventory API failed");
+    if (!res.ok) {
+        const status = res.status;
+        const body = await res.text().catch(() => "No body");
+        
+        if (status === 401 || status === 403) {
+            console.warn(`[Stock-Conversion] Spring API Unauthorized (401/403). Returning empty inventory.`);
+            return {}; // Graceful fallback
+        }
+
+        console.error(`[Stock-Conversion] Inventory API failed. Status: ${status}, Body: ${body}`);
+        throw new Error(`Inventory API failed with status ${status}: ${body.substring(0, 100)}`);
+    }
     const json = await res.json();
     const items = Array.isArray(json) ? json : (json.data || []);
     const invMap: Record<number, number> = {};
