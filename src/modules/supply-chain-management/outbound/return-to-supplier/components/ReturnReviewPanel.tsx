@@ -74,42 +74,42 @@ export function ReturnReviewPanel({
   return (
     <div className="space-y-8">
       {/* 1. TABLE SECTION */}
-      <div className="rounded-md border border-slate-200 overflow-hidden bg-white shadow-sm">
+      <div className="rounded-md border overflow-hidden bg-card shadow-sm">
         <Table>
-          <TableHeader className="bg-slate-50 border-b border-slate-200">
+          <TableHeader className="bg-muted/50 border-b">
             <TableRow>
-              <TableHead className="w-[100px] text-xs font-bold text-slate-500 uppercase pl-4">
+              <TableHead className="w-[100px] text-xs font-bold text-muted-foreground uppercase pl-4">
                 Code
               </TableHead>
-              <TableHead className="w-[120px] text-xs font-bold text-slate-500 uppercase">
+              <TableHead className="w-[120px] text-xs font-bold text-muted-foreground uppercase">
                 RFID
               </TableHead>
-              <TableHead className="text-xs font-bold text-slate-500 uppercase">
+              <TableHead className="text-xs font-bold text-muted-foreground uppercase">
                 Product Name
               </TableHead>
-              <TableHead className="w-20 text-xs font-bold text-slate-500 uppercase text-center">
+              <TableHead className="w-20 text-xs font-bold text-muted-foreground uppercase text-center">
                 Unit
               </TableHead>
-              <TableHead className="w-[100px] text-xs font-bold text-slate-500 uppercase text-center">
+              <TableHead className="w-[100px] text-xs font-bold text-muted-foreground uppercase text-center">
                 Quantity
               </TableHead>
-              <TableHead className="w-[120px] text-xs font-bold text-slate-500 uppercase text-right">
+              <TableHead className="w-[120px] text-xs font-bold text-muted-foreground uppercase text-right">
                 Unit Price
               </TableHead>
-              <TableHead className="w-40 text-xs font-bold text-slate-500 uppercase text-center">
+              <TableHead className="w-40 text-xs font-bold text-muted-foreground uppercase text-center">
                 Discount Type
               </TableHead>
-              <TableHead className="w-[120px] text-xs font-bold text-slate-500 uppercase text-right">
+              <TableHead className="w-[120px] text-xs font-bold text-muted-foreground uppercase text-right">
                 Discount Amt
               </TableHead>
-              <TableHead className="w-40 text-xs font-bold text-slate-500 uppercase text-center">
+              <TableHead className="w-40 text-xs font-bold text-muted-foreground uppercase text-center">
                 Return Type
               </TableHead>
-              <TableHead className="w-[120px] text-xs font-bold text-slate-500 uppercase text-right">
+              <TableHead className="w-[120px] text-xs font-bold text-muted-foreground uppercase text-right">
                 Total
               </TableHead>
               {!readOnly && (
-                <TableHead className="w-[60px] text-xs font-bold text-slate-500 uppercase text-center pr-4">
+                <TableHead className="w-[60px] text-xs font-bold text-muted-foreground uppercase text-center pr-4">
                   Action
                 </TableHead>
               )}
@@ -120,7 +120,7 @@ export function ReturnReviewPanel({
               <TableRow>
                 <TableCell
                   colSpan={readOnly ? 10 : 11}
-                  className="h-32 text-center text-slate-400"
+                  className="h-32 text-center text-muted-foreground/50"
                 >
                   No items selected.
                 </TableCell>
@@ -135,26 +135,26 @@ export function ReturnReviewPanel({
                 return (
                   <TableRow
                     key={item.id}
-                    className="hover:bg-slate-50 border-b border-slate-100 last:border-0"
+                    className="hover:bg-muted/30 border-b last:border-0"
                   >
-                    <TableCell className="text-xs text-slate-500 font-mono pl-4">
+                    <TableCell className="text-xs text-muted-foreground font-mono pl-4">
                       {item.code}
                     </TableCell>
                     <TableCell>
                       {item.rfid_tag ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-emerald-50 text-emerald-700 text-[10px] font-mono">
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-primary/10 text-primary text-[10px] font-mono">
                           <ScanLine className="h-3 w-3" />
                           {item.rfid_tag}
                         </span>
                       ) : (
-                        <span className="text-slate-300 text-xs">—</span>
+                        <span className="text-muted-foreground/30 text-xs">—</span>
                       )}
                     </TableCell>
-                    <TableCell className="font-medium text-slate-700 text-sm">
+                    <TableCell className="font-medium text-sm">
                       {item.name}
                     </TableCell>
                     <TableCell className="text-center">
-                      <span className="inline-flex items-center justify-center px-2 py-1 rounded bg-blue-50 text-blue-700 text-[10px] font-bold uppercase tracking-wide">
+                      <span className="inline-flex items-center justify-center px-2 py-1 rounded bg-primary/5 text-primary text-[10px] font-bold uppercase tracking-wide">
                         {item.unit}
                       </span>
                     </TableCell>
@@ -175,11 +175,11 @@ export function ReturnReviewPanel({
                               Math.max(1, parseFloat(e.target.value) || 0),
                             )
                           }
-                          className="h-8 text-center bg-white"
+                          className="h-8 text-center"
                         />
                       )}
                     </TableCell>
-                    <TableCell className="text-right text-sm font-medium text-slate-600">
+                    <TableCell className="text-right text-sm font-medium">
                       <div>
                         ₱{" "}
                         {unitPrice.toLocaleString(undefined, {
@@ -191,7 +191,7 @@ export function ReturnReviewPanel({
                     {/* ✅ DISCOUNT TYPE COLUMN */}
                     <TableCell>
                       {readOnly ? (
-                        <div className="text-center text-sm font-medium text-slate-700">
+                        <div className="text-center text-sm font-medium">
                           {getDiscountName(item.discount)}
                         </div>
                       ) : (
@@ -220,7 +220,7 @@ export function ReturnReviewPanel({
                               }
                             }}
                           >
-                            <SelectTrigger className="h-8 w-full text-xs truncate bg-white">
+                            <SelectTrigger className="h-8 w-full text-xs truncate">
                               <SelectValue placeholder="-" />
                             </SelectTrigger>
                             <SelectContent>
@@ -236,7 +236,7 @@ export function ReturnReviewPanel({
                       )}
                     </TableCell>
 
-                    <TableCell className="text-right text-sm text-amber-600 font-medium">
+                    <TableCell className="text-right text-sm font-medium">
                       {discountPerUnit > 0 ? (
                         <span>
                           ₱{" "}
@@ -246,13 +246,13 @@ export function ReturnReviewPanel({
                           })}
                         </span>
                       ) : (
-                        <span className="text-slate-300">-</span>
+                        <span className="text-muted-foreground/30">-</span>
                       )}
                     </TableCell>
 
                     <TableCell>
                       {readOnly ? (
-                        <div className="text-center text-sm text-slate-600">
+                        <div className="text-center text-sm">
                           {returnTypes.find((r) => r.id === item.return_type_id)
                             ?.return_type_name || "-"}
                         </div>
@@ -272,7 +272,7 @@ export function ReturnReviewPanel({
                               );
                             }}
                           >
-                            <SelectTrigger className="h-8 w-full text-xs truncate bg-white border-slate-200">
+                            <SelectTrigger className="h-8 w-full text-xs truncate">
                               <SelectValue placeholder="Select Type" />
                             </SelectTrigger>
                             <SelectContent>
@@ -287,7 +287,7 @@ export function ReturnReviewPanel({
                       )}
                     </TableCell>
 
-                    <TableCell className="text-right font-bold text-slate-700 text-sm">
+                    <TableCell className="text-right font-bold text-sm">
                       ₱{" "}
                       {rowTotal.toLocaleString(undefined, {
                         minimumFractionDigits: 2,
@@ -299,7 +299,7 @@ export function ReturnReviewPanel({
                           variant="ghost"
                           size="icon"
                           onClick={() => onRemoveItem(item.id)}
-                          className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -316,12 +316,12 @@ export function ReturnReviewPanel({
       {/* 2. REMARKS & SUMMARY SECTION */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-3">
-          <Label className="flex items-center gap-2 font-bold text-slate-700 text-sm">
+          <Label className="flex items-center gap-2 font-bold text-sm">
             Transaction Remarks
           </Label>
           <Textarea
             placeholder="Enter detailed reasons for this return (Optional)..."
-            className="min-h-40 resize-none bg-white border-slate-200 focus:border-blue-500 focus:ring-blue-500/20 shadow-sm"
+            className="min-h-40 resize-none shadow-sm"
             value={remarks}
             onChange={(e) => !readOnly && setRemarks(e.target.value)}
             readOnly={readOnly}
@@ -329,34 +329,34 @@ export function ReturnReviewPanel({
         </div>
 
         <div className="lg:col-span-1">
-          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm h-full flex flex-col">
-            <h4 className="font-bold text-xs uppercase text-slate-800 mb-6 flex items-center gap-2 tracking-wider border-b border-slate-100 pb-3">
+          <div className="bg-card rounded-xl border p-6 shadow-sm h-full flex flex-col">
+            <h4 className="font-bold text-xs uppercase mb-6 flex items-center gap-2 tracking-wider border-b pb-3">
               Return Summary
             </h4>
             <div className="space-y-4 text-sm flex-1">
-              <div className="flex justify-between text-slate-600">
+              <div className="flex justify-between text-muted-foreground">
                 <span>Total Line Items</span>
-                <span className="font-medium text-slate-900">
+                <span className="font-medium text-foreground">
                   {items.length}
                 </span>
               </div>
-              <div className="flex justify-between text-slate-600">
+              <div className="flex justify-between text-muted-foreground">
                 <span>Total Quantity</span>
-                <span className="font-medium text-slate-900">
+                <span className="font-medium text-foreground">
                   {totalQuantity} units
                 </span>
               </div>
-              <div className="border-t border-dashed border-slate-200 my-4"></div>
-              <div className="flex justify-between text-slate-600">
+              <div className="border-t border-dashed my-4"></div>
+              <div className="flex justify-between text-muted-foreground">
                 <span>Gross Amount</span>
-                <span className="font-medium text-slate-900">
+                <span className="font-medium text-foreground">
                   ₱{" "}
                   {grossAmount.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
                   })}
                 </span>
               </div>
-              <div className="flex justify-between text-amber-600 bg-amber-50 px-2 py-1 rounded">
+              <div className="flex justify-between px-2 py-1 rounded bg-amber-500/10 text-amber-600">
                 <span>Total Discount</span>
                 <span className="font-medium">
                   - ₱{" "}
@@ -367,12 +367,12 @@ export function ReturnReviewPanel({
               </div>
             </div>
 
-            <div className="border-t border-slate-200 mt-6 pt-4">
+            <div className="border-t mt-6 pt-4">
               <div className="flex justify-between items-end">
-                <span className="font-bold text-slate-500 uppercase text-xs mb-1">
+                <span className="font-bold text-muted-foreground uppercase text-xs mb-1">
                   Net Amount
                 </span>
-                <span className="font-extrabold text-3xl text-blue-600 leading-none">
+                <span className="font-extrabold text-3xl text-primary leading-none">
                   ₱{" "}
                   {totalAmount.toLocaleString(undefined, {
                     minimumFractionDigits: 2,

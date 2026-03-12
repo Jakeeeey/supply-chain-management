@@ -43,10 +43,10 @@ export const PrintableReportSummary = React.forwardRef<HTMLDivElement, Props>(
         </style>
 
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-slate-900 uppercase">
+          <h1 className="text-2xl font-bold uppercase">
             Return to Supplier Summary Report
           </h1>
-          <div className="text-xs text-slate-500 mt-2 space-y-1">
+          <div className="text-xs text-muted-foreground mt-2 space-y-1">
             <p>Generated: {new Date().toLocaleString()}</p>
             <p>
               Filters: <span className="font-medium">{filters.dateRange}</span>{" "}
@@ -60,75 +60,79 @@ export const PrintableReportSummary = React.forwardRef<HTMLDivElement, Props>(
 
         <table className="w-full text-xs text-left border-collapse">
           <thead>
-            <tr className="bg-slate-100 border-y border-slate-300">
-              <th className="py-2 px-2 font-bold text-slate-700 uppercase">
+            <tr className="bg-muted/50 border-y">
+              <th className="py-2 px-2 font-bold uppercase">
                 Return No
               </th>
-              <th className="py-2 px-2 font-bold text-slate-700 uppercase">
+              <th className="py-2 px-2 font-bold uppercase">
                 Date
               </th>
-              <th className="py-2 px-2 font-bold text-slate-700 uppercase">
+              <th className="py-2 px-2 font-bold uppercase">
                 Supplier
               </th>
-              <th className="py-2 px-2 font-bold text-slate-700 uppercase">
+              <th className="py-2 px-2 font-bold uppercase">
                 Branch
               </th>
-              <th className="py-2 px-2 font-bold text-slate-700 uppercase text-center">
+              <th className="py-2 px-2 font-bold uppercase text-center">
                 Status
               </th>
-              <th className="py-2 px-2 font-bold text-slate-700 uppercase text-right">
+              <th className="py-2 px-2 font-bold uppercase text-right">
                 Gross
               </th>
-              <th className="py-2 px-2 font-bold text-slate-700 uppercase text-right">
+              <th className="py-2 px-2 font-bold uppercase text-right">
                 Disc
               </th>
-              <th className="py-2 px-2 font-bold text-slate-700 uppercase text-right">
+              <th className="py-2 px-2 font-bold uppercase text-right">
                 Net
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-200">
+          <tbody className="divide-y">
             {data.length === 0 ? (
               <tr>
                 <td
                   colSpan={8}
-                  className="py-8 text-center text-slate-400 italic"
+                  className="py-8 text-center text-muted-foreground italic"
                 >
                   No records found.
                 </td>
               </tr>
             ) : (
               data.map((item, idx) => (
-                <tr key={idx} className="border-b border-slate-100">
-                  <td className="py-1.5 px-2 font-mono text-blue-700">
+                <tr key={idx} className="border-b">
+                  <td className="py-1.5 px-2 font-mono text-primary">
                     {item.returnNo}
                   </td>
-                  <td className="py-1.5 px-2 text-slate-600">
+                  <td className="py-1.5 px-2 text-muted-foreground">
                     {new Date(item.returnDate).toLocaleDateString()}
                   </td>
-                  <td className="py-1.5 px-2 text-slate-800 font-medium truncate max-w-[150px]">
+                  <td className="py-1.5 px-2 font-medium truncate max-w-[150px]">
                     {item.supplier}
                   </td>
-                  <td className="py-1.5 px-2 text-slate-800 truncate max-w-[150px]">
+                  <td className="py-1.5 px-2 truncate max-w-[150px]">
                     {item.branch}
                   </td>
                   <td className="py-1.5 px-2 text-center">
                     <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${item.status === "Posted" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        item.status === "Posted"
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-amber-100 text-amber-700"
+                      }`}
                     >
                       {item.status}
                     </span>
                   </td>
                   {/* ✅ FIX: Apply strict formatting */}
-                  <td className="py-1.5 px-2 text-right text-slate-600">
+                  <td className="py-1.5 px-2 text-right text-muted-foreground">
                     {formatCurrency(item.grossAmount)}
                   </td>
-                  <td className="py-1.5 px-2 text-right text-red-500">
+                  <td className="py-1.5 px-2 text-right text-destructive">
                     {item.discountAmount > 0
                       ? `(${formatCurrency(item.discountAmount)})`
                       : "-"}
                   </td>
-                  <td className="py-1.5 px-2 text-right font-bold text-slate-900">
+                  <td className="py-1.5 px-2 text-right font-bold text-foreground">
                     {formatCurrency(item.totalAmount)}
                   </td>
                 </tr>
@@ -136,20 +140,20 @@ export const PrintableReportSummary = React.forwardRef<HTMLDivElement, Props>(
             )}
           </tbody>
           <tfoot>
-            <tr className="border-t-2 border-slate-800 bg-slate-50">
+            <tr className="border-t-2 border-foreground bg-muted/30">
               <td
                 colSpan={5}
-                className="py-2 px-2 text-right font-bold text-slate-700 uppercase"
+                className="py-2 px-2 text-right font-bold uppercase"
               >
                 Grand Total
               </td>
-              <td className="py-2 px-2 text-right font-bold text-slate-700">
+              <td className="py-2 px-2 text-right font-bold">
                 {formatCurrency(totalGross)}
               </td>
-              <td className="py-2 px-2 text-right font-bold text-red-600">
+              <td className="py-2 px-2 text-right font-bold text-destructive">
                 ({formatCurrency(totalDisc)})
               </td>
-              <td className="py-2 px-2 text-right font-extrabold text-slate-900 text-sm">
+              <td className="py-2 px-2 text-right font-extrabold text-sm">
                 {formatCurrency(totalNet)}
               </td>
             </tr>

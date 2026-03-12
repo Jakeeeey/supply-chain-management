@@ -51,7 +51,7 @@ const columns: ColumnDef<ReturnToSupplier>[] = [
     header: "Return No.",
     meta: { label: "Return No." },
     cell: ({ row }) => (
-      <span className="font-mono text-sm font-bold text-blue-600 hover:underline cursor-pointer">
+      <span className="font-mono text-sm font-bold text-primary hover:underline cursor-pointer">
         {row.original.returnNo}
       </span>
     ),
@@ -61,7 +61,7 @@ const columns: ColumnDef<ReturnToSupplier>[] = [
     header: "Supplier",
     meta: { label: "Supplier" },
     cell: ({ row }) => (
-      <span className="text-sm text-slate-700 font-medium truncate max-w-[200px] block">
+      <span className="text-sm font-medium truncate max-w-[200px] block">
         {row.original.supplier}
       </span>
     ),
@@ -71,7 +71,7 @@ const columns: ColumnDef<ReturnToSupplier>[] = [
     header: "Branch",
     meta: { label: "Branch" },
     cell: ({ row }) => (
-      <span className="text-sm text-slate-600 truncate max-w-[150px] block">
+      <span className="text-sm text-muted-foreground truncate max-w-[150px] block">
         {row.original.branch}
       </span>
     ),
@@ -81,7 +81,7 @@ const columns: ColumnDef<ReturnToSupplier>[] = [
     header: "Date",
     meta: { label: "Date" },
     cell: ({ row }) => (
-      <span className="text-sm text-slate-600">
+      <span className="text-sm text-muted-foreground">
         {new Date(row.original.returnDate).toLocaleDateString()}
       </span>
     ),
@@ -109,7 +109,7 @@ const columns: ColumnDef<ReturnToSupplier>[] = [
     header: () => <div className="text-right">Gross</div>,
     meta: { label: "Gross" },
     cell: ({ row }) => (
-      <div className="text-right text-sm text-slate-600">
+      <div className="text-right text-sm text-muted-foreground">
         ₱{" "}
         {row.original.grossAmount.toLocaleString(undefined, {
           minimumFractionDigits: 2,
@@ -122,7 +122,7 @@ const columns: ColumnDef<ReturnToSupplier>[] = [
     header: () => <div className="text-right">Discount</div>,
     meta: { label: "Discount" },
     cell: ({ row }) => (
-      <div className="text-right text-sm text-amber-600">
+      <div className="text-right text-sm">
         {row.original.discountAmount > 0
           ? `₱ ${row.original.discountAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
           : "-"}
@@ -134,7 +134,7 @@ const columns: ColumnDef<ReturnToSupplier>[] = [
     header: () => <div className="text-right">Net Amount</div>,
     meta: { label: "Net Amount" },
     cell: ({ row }) => (
-      <div className="text-right font-bold text-sm text-slate-800">
+      <div className="text-right font-bold text-sm">
         ₱{" "}
         {row.original.totalAmount.toLocaleString(undefined, {
           minimumFractionDigits: 2,
@@ -261,7 +261,7 @@ export function ReturnToSupplierList({
             <Button
               variant="outline"
               role="combobox"
-              className="w-[220px] justify-between bg-white border-slate-200 h-10"
+              className="w-[220px] justify-between h-10"
             >
               <span className="truncate">
                 {filterSupplier === "all" ? "All Suppliers" : filterSupplier}
@@ -322,7 +322,7 @@ export function ReturnToSupplierList({
             <Button
               variant="outline"
               role="combobox"
-              className="w-[220px] justify-between bg-white border-slate-200 h-10"
+              className="w-[220px] justify-between h-10"
             >
               <span className="truncate">
                 {filterBranch === "all" ? "All Branches" : filterBranch}
@@ -379,7 +379,7 @@ export function ReturnToSupplierList({
 
         {/* Filter: Status */}
         <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-[150px] h-10 bg-white border-slate-200">
+          <SelectTrigger className="w-[150px] h-10">
             <SelectValue placeholder="All Statuses" />
           </SelectTrigger>
           <SelectContent>
@@ -393,7 +393,7 @@ export function ReturnToSupplierList({
           <Button
             variant="outline"
             onClick={clearFilters}
-            className="h-10 text-slate-500"
+            className="h-10 text-muted-foreground"
           >
             <Filter className="mr-2 h-4 w-4" /> Clear
           </Button>
@@ -434,7 +434,7 @@ export function ReturnToSupplierList({
             </Button>
             <Button
               onClick={() => setShowCreate(true)}
-              className="h-10 bg-blue-600 hover:bg-blue-700 text-white"
+              className="h-10"
             >
               <Plus className="mr-2 h-4 w-4" /> Create Return
             </Button>

@@ -180,14 +180,14 @@ export function ExportReportModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-[600px] bg-white p-0 gap-0 border-slate-200 shadow-xl sm:rounded-xl overflow-visible [&>button]:hidden">
+      <DialogContent className="max-w-[600px] bg-background p-0 gap-0 border shadow-xl sm:rounded-xl overflow-visible [&>button]:hidden">
         {/* Header */}
-        <DialogHeader className="px-6 py-5 border-b border-slate-100 flex flex-row items-center justify-between space-y-0">
+        <DialogHeader className="px-6 py-5 border-b flex flex-row items-center justify-between space-y-0">
           <div>
-            <DialogTitle className="text-xl font-bold text-slate-900">
+            <DialogTitle className="text-xl font-bold">
               What needs to be printed?
             </DialogTitle>
-            <p className="text-sm text-slate-500 mt-1">
+            <p className="text-sm text-muted-foreground mt-1">
               Filter select the criteria for the printed report.
             </p>
           </div>
@@ -195,7 +195,7 @@ export function ExportReportModal({
             variant="ghost"
             size="icon"
             onClick={onClose}
-            className="h-8 w-8 text-slate-400 hover:text-slate-600 rounded-full"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground rounded-full"
           >
             <X className="w-5 h-5" />
           </Button>
@@ -206,7 +206,7 @@ export function ExportReportModal({
           <div className="grid grid-cols-2 gap-6">
             {/* Supplier Combobox */}
             <div className="space-y-2 flex flex-col">
-              <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
                 Supplier
               </Label>
               <Popover open={openSupplier} onOpenChange={setOpenSupplier}>
@@ -214,7 +214,7 @@ export function ExportReportModal({
                   <Button
                     variant="outline"
                     role="combobox"
-                    className="w-full justify-between bg-white border-slate-200 text-slate-700 h-10 px-3"
+                    className="w-full justify-between bg-background text-foreground h-10 px-3"
                   >
                     <span className="truncate flex-1 text-left">
                       {supplierId === "all"
@@ -285,7 +285,7 @@ export function ExportReportModal({
 
             {/* Branch Combobox */}
             <div className="space-y-2 flex flex-col">
-              <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
                 Branch
               </Label>
               <Popover open={openBranch} onOpenChange={setOpenBranch}>
@@ -293,7 +293,7 @@ export function ExportReportModal({
                   <Button
                     variant="outline"
                     role="combobox"
-                    className="w-full justify-between bg-white border-slate-200 text-slate-700 h-10 px-3"
+                    className="w-full justify-between bg-background text-foreground h-10 px-3"
                   >
                     <span className="truncate flex-1 text-left">
                       {branchId === "all"
@@ -360,7 +360,7 @@ export function ExportReportModal({
           </div>
 
           <div className="space-y-3">
-            <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+            <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
               Date Range
             </Label>
             <div className="flex flex-wrap gap-2">
@@ -379,8 +379,8 @@ export function ExportReportModal({
                   className={cn(
                     "px-4 py-2 text-sm font-medium rounded-lg border transition-all duration-200",
                     dateRange === opt.value
-                      ? "bg-slate-900 text-white border-slate-900 shadow-md"
-                      : "bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50",
+                      ? "bg-primary text-primary-foreground border-primary shadow-md"
+                      : "bg-background text-muted-foreground hover:border-primary/50 hover:bg-muted/50",
                   )}
                 >
                   {opt.label}
@@ -388,25 +388,25 @@ export function ExportReportModal({
               ))}
             </div>
             {dateRange === "custom" && (
-              <div className="flex items-center gap-4 mt-3 bg-slate-50 p-4 rounded-lg border border-slate-100">
+              <div className="flex items-center gap-4 mt-3 bg-muted/30 p-4 rounded-lg border">
                 <div className="flex-1 space-y-1">
-                  <Label className="text-[10px] uppercase font-bold text-slate-400">
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground">
                     From
                   </Label>
                   <Input
                     type="date"
-                    className="h-9 bg-white"
+                    className="h-9 bg-background"
                     value={customStart}
                     onChange={(e) => setCustomStart(e.target.value)}
                   />
                 </div>
                 <div className="flex-1 space-y-1">
-                  <Label className="text-[10px] uppercase font-bold text-slate-400">
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground">
                     To
                   </Label>
                   <Input
                     type="date"
-                    className="h-9 bg-white"
+                    className="h-9 bg-background"
                     value={customEnd}
                     onChange={(e) => setCustomEnd(e.target.value)}
                   />
@@ -416,12 +416,12 @@ export function ExportReportModal({
           </div>
 
           <div className="space-y-2">
-            <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+            <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
               Status
             </Label>
             <div className="w-1/2">
               <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger className="h-10 bg-white border-slate-200 text-slate-700">
+                <SelectTrigger className="h-10 bg-background text-foreground">
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent>
@@ -435,17 +435,17 @@ export function ExportReportModal({
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-slate-100 flex justify-end gap-3 bg-slate-50 rounded-b-xl">
+        <div className="p-6 border-t flex justify-end gap-3 bg-muted/30 rounded-b-xl">
           <Button
             variant="outline"
             onClick={onClose}
-            className="h-11 px-6 border-slate-300 text-slate-700 hover:bg-white"
+            className="h-11 px-6 text-foreground"
           >
             Cancel
           </Button>
           {/* ✅ UPDATE: Calls handlePreview instead of handlePrint */}
           <Button
-            className="bg-slate-900 hover:bg-slate-800 text-white h-11 px-8 shadow-lg shadow-slate-900/10"
+            className="h-11 px-8 shadow-lg shadow-primary/10"
             onClick={() => handlePreview()}
           >
             <Printer className="w-4 h-4 mr-2" /> Export / Preview

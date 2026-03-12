@@ -159,9 +159,13 @@ export function ReturnDetailsModal({
     );
 
     const discountMap = new Map<string, any>();
-    refs.lineDiscounts.forEach((d) =>
-      discountMap.set(String(d.id), d),
-    );
+    refs.lineDiscounts.forEach((d) => discountMap.set(String(d.id), d));
+
+    const unitOrderMap = new Map<string, number>();
+    refs.units.forEach((u) => {
+      unitOrderMap.set(u.unit_name, u.order);
+      unitOrderMap.set(u.unit_shortcut, u.order);
+    });
 
     const enrichedItems = inventory
       .map((item: InventoryRecord) => {
@@ -196,7 +200,12 @@ export function ReturnDetailsModal({
           supplierDiscount: computedDiscount,
         };
       })
-      .filter((p) => p.stock > 0 || items.some((i) => i.id === p.id));
+      .filter((p) => {
+        const order = unitOrderMap.get(p.unit) ?? 0;
+        const isAlreadyInCart = items.some((i) => i.id === p.id);
+        // Manual add in detail modal: only allow order 1 or 2 (small units)
+        return (p.stock > 0 && (order === 1 || order === 2)) || isAlreadyInCart;
+      });
 
     // Group by familyId
     const groups: Record<string, any> = {};
@@ -347,15 +356,15 @@ export function ReturnDetailsModal({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={(o) => !o && onClose()}>
-        <DialogContent className="max-w-[1200px]! w-[90vw]! h-[90vh] bg-white p-0 gap-0 flex flex-col overflow-hidden shadow-2xl sm:rounded-xl border border-slate-200 [&>button]:hidden">
+        <DialogContent className="max-w-[1200px]! w-[90vw]! h-[90vh] bg-background p-0 gap-0 flex flex-col overflow-hidden shadow-2xl sm:rounded-xl border border-border [&>button]:hidden">
           {/* Header */}
-          <div className="flex flex-row items-center justify-between px-8 py-6 bg-white shrink-0 border-b border-slate-100">
+          <div className="flex flex-row items-center justify-between px-8 py-6 bg-background shrink-0 border-b">
             <div>
-              <DialogTitle className="text-xl font-bold text-slate-900 flex items-center gap-2">
+              <DialogTitle className="text-xl font-bold flex items-center gap-2">
                 {isEditable ? "Edit Return to Supplier" : "Return Details"}
               </DialogTitle>
               <div className="flex items-center gap-3 text-sm mt-1">
-                <span className="text-slate-500">{data.returnNo}</span>
+                <span className="text-muted-foreground">{data.returnNo}</span>
               </div>
             </div>
             <div className="flex gap-2">
@@ -370,55 +379,55 @@ export function ReturnDetailsModal({
                 variant="ghost"
                 size="icon"
                 onClick={onClose}
-                className="h-9 w-9 bg-red-50 hover:bg-red-100 text-red-500 rounded-md transition-colors"
+                className="h-9 w-9 bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-md transition-colors"
               >
                 <X className="h-4 w-4" />
               </Button>
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar bg-white p-6">
-            <div className="bg-slate-50 rounded-xl p-6 h-full">
+          <div className="flex-1 overflow-y-auto custom-scrollbar bg-background p-6">
+            <div className="bg-muted/30 rounded-xl p-6 h-full">
               {/* Header Info */}
-              <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm mb-8">
+              <div className="bg-card rounded-xl border p-6 shadow-sm mb-8">
                 <div className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <Label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                      <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
                         Supplier
                       </Label>
-                      <div className="flex items-center px-3 h-10 rounded-md border border-slate-200 bg-slate-50 text-sm font-medium text-slate-900 shadow-sm">
+                      <div className="flex items-center px-3 h-10 rounded-md border bg-muted/50 text-sm font-medium shadow-sm">
                         {data.supplier}
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                      <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
                         Branch
                       </Label>
-                      <div className="flex items-center px-3 h-10 rounded-md border border-slate-200 bg-slate-50 text-sm font-medium text-slate-900 shadow-sm">
+                      <div className="flex items-center px-3 h-10 rounded-md border bg-muted/50 text-sm font-medium shadow-sm">
                         {data.branch}
                       </div>
                     </div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="space-y-2">
-                      <Label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                      <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
                         Return Date
                       </Label>
-                      <div className="flex items-center px-3 h-10 rounded-md border border-slate-200 bg-slate-50 text-sm font-medium text-slate-900 shadow-sm">
+                      <div className="flex items-center px-3 h-10 rounded-md border bg-muted/50 text-sm font-medium shadow-sm">
                         {new Date(data.returnDate).toLocaleDateString()}
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                      <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
                         Document Ref No.
                       </Label>
-                      <div className="flex items-center px-3 h-10 rounded-md border border-slate-200 bg-slate-50 text-sm font-medium text-slate-900 shadow-sm">
+                      <div className="flex items-center px-3 h-10 rounded-md border bg-muted/50 text-sm font-medium shadow-sm">
                         {data.returnNo}
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                      <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
                         Status
                       </Label>
                       <div
@@ -437,14 +446,13 @@ export function ReturnDetailsModal({
 
               {/* Products to Return */}
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-base font-bold text-slate-800">
+                <h3 className="text-base font-bold">
                   Products to Return
                 </h3>
                 {isEditable && (
                   <Button
                     size="sm"
                     onClick={() => setShowPicker(true)}
-                    className="bg-blue-600 hover:bg-blue-700 text-white"
                   >
                     <Plus className="w-4 h-4 mr-1" /> Add Products
                   </Button>
@@ -476,14 +484,14 @@ export function ReturnDetailsModal({
           </div>
 
           {/* Footer Actions */}
-          <div className="px-8 py-4 border-t bg-white flex justify-end gap-2 shrink-0">
+          <div className="px-8 py-4 border-t bg-background flex justify-end gap-2 shrink-0">
             <Button variant="outline" onClick={onClose}>
               {isEditable ? "Cancel" : "Close"}
             </Button>
             {isEditable && (
               <>
                 <Button
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground"
                   onClick={() => handleSave(false)}
                   disabled={saving}
                 >
@@ -495,7 +503,7 @@ export function ReturnDetailsModal({
                   Save Changes
                 </Button>
                 <Button
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  variant="secondary"
                   onClick={() => handleSave(true)}
                   disabled={saving}
                 >
@@ -529,7 +537,7 @@ export function ReturnDetailsModal({
       </Dialog>
 
       <Dialog open={showPicker} onOpenChange={setShowPicker}>
-        <DialogContent className="max-w-[95vw]! w-[95vw]! h-[95vh] p-0 overflow-hidden bg-white shadow-2xl border-none flex flex-col z-9999 [&>button]:hidden">
+        <DialogContent className="max-w-[95vw]! w-[95vw]! h-[95vh] p-0 overflow-hidden bg-background shadow-2xl border-none flex flex-col z-9999 [&>button]:hidden">
           <div className="flex items-center justify-between px-6 py-4 border-b">
             <DialogTitle>Select Products</DialogTitle>
             <Button

@@ -203,7 +203,7 @@ export interface ReturnItem {
 
 /** A single row from the v_running_inventory_by_unit Spring Boot view. */
 export interface InventoryViewRow {
-  id: string; // concat(branchId, '-', productId, '-', supplierId)
+  id: string;
   productId: number;
   productCode: string;
   productName: string;

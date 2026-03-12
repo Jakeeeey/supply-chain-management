@@ -113,9 +113,12 @@ export function CreateReturnModal({
       discountMap.set(String(d.id), d),
     );
 
-    // Build unit order map (unit_name -> order) for filtering
+    // Build unit order map (unit_name/shortcut -> order) for filtering
     const unitOrderMap = new Map<string, number>();
-    refs.units.forEach((u) => unitOrderMap.set(u.unit_name, u.order));
+    refs.units.forEach((u) => {
+      unitOrderMap.set(u.unit_name, u.order);
+      unitOrderMap.set(u.unit_shortcut, u.order);
+    });
 
     // Enrich inventory records
     const enrichedItems = inventory
@@ -205,6 +208,13 @@ export function CreateReturnModal({
     }
   }, [selection.supplierId, selection.branchId, loadInventory]);
 
+  // Auto-focus RFID input when ready
+  useEffect(() => {
+    if (selection.supplierId && selection.branchId && step === "input") {
+      rfidInputRef.current?.focus();
+    }
+  }, [selection.supplierId, selection.branchId, step]);
+
   const addToCart = (p: any, qty = 1) => {
     setCart((prev) => {
       // For RFID items, never merge — always add as a new line
@@ -253,6 +263,14 @@ export function CreateReturnModal({
       if (!rfidTag.trim()) return;
       if (!selection.branchId) {
         toast.error("Select a Branch first before scanning RFID.");
+        return;
+      }
+
+      // Validate: 24-character limit
+      if (rfidTag.length > 24) {
+        toast.error("Invalid RFID", {
+          description: `RFID tag must be 24 characters or fewer (received ${rfidTag.length}).`,
+        });
         return;
       }
 
@@ -352,16 +370,32 @@ export function CreateReturnModal({
         toast.success("RFID Scanned", {
           description: `Added "${product.name}" (RFID: ${rfidTag})`,
         });
+
+        // Auto-clear the displayed scan value after 2 seconds
+        setTimeout(() => {
+          setLastScannedRfid("");
+        }, 2000);
       } catch (err: any) {
         toast.error("RFID Scan Error", {
           description: err.message || "Failed to look up RFID tag.",
         });
       } finally {
         setRfidScanning(false);
+        // Automatically refocus for the next scan after the element is re-enabled
+        setTimeout(() => {
+          rfidInputRef.current?.focus();
+        }, 100);
       }
     },
     [selection.branchId, selection.supplierId, cart, inventory, refs],
   );
+
+  // Clear RFID display when modal closes or resets
+  useEffect(() => {
+    if (!isOpen) {
+      setLastScannedRfid("");
+    }
+  }, [isOpen]);
 
   const updateCart = (id: string, field: keyof CartItem, val: number) => {
     setCart((prev) =>
@@ -374,6 +408,7 @@ export function CreateReturnModal({
     setCart([]);
     setStep("input");
     setShowPicker(false);
+    setLastScannedRfid(""); // Reset scan display
     onClose();
   };
 
@@ -442,14 +477,14 @@ export function CreateReturnModal({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleCloseFull()}>
       <DialogContent
-        className={`p-0 overflow-hidden gap-0 ${getModalWidth()} bg-white border-none shadow-2xl [&>button]:hidden transition-all duration-300`}
+        className={`p-0 overflow-hidden gap-0 ${getModalWidth()} border-none shadow-2xl [&>button]:hidden transition-all duration-300`}
       >
-        <DialogHeader className="px-6 py-5 border-b flex flex-row items-center justify-between bg-white z-20 shrink-0">
-          <DialogTitle className="text-xl font-bold text-slate-900 flex items-center gap-2">
+        <DialogHeader className="px-6 py-5 border-b flex flex-row items-center justify-between bg-background z-20 shrink-0">
+          <DialogTitle className="text-xl font-bold flex items-center gap-2">
             {showPicker ? (
               <>
-                <div className="bg-blue-100 p-2 rounded-lg">
-                  <Plus className="h-5 w-5 text-blue-600" />
+                <div className="bg-primary/10 p-2 rounded-lg">
+                   <Plus className="h-5 w-5 text-primary" />
                 </div>
                 Add Products
               </>
@@ -461,14 +496,14 @@ export function CreateReturnModal({
           </DialogTitle>
           <button
             onClick={showPicker ? () => setShowPicker(false) : handleCloseFull}
-            className="bg-red-500 hover:bg-red-600 text-white p-2 rounded-md shadow-sm transition-colors"
+            className="bg-destructive hover:bg-destructive/90 text-destructive-foreground p-2 rounded-md shadow-sm transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
         </DialogHeader>
 
         <div
-          className={`${showPicker ? "overflow-hidden h-[calc(95vh-70px)]" : "overflow-y-auto p-8 max-h-[85vh] bg-slate-50/50"}`}
+          className={`${showPicker ? "overflow-hidden h-[calc(95vh-70px)]" : "overflow-y-auto p-8 max-h-[85vh] bg-muted/30"}`}
         >
           {showPicker ? (
             <ProductPicker
@@ -485,10 +520,10 @@ export function CreateReturnModal({
           ) : (
             <div className="space-y-8">
               {step === "input" ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 bg-card p-6 rounded-xl border shadow-sm">
                   {/* Supplier Select */}
                   <div className="space-y-2 flex flex-col">
-                    <Label className="text-xs font-bold text-slate-700 uppercase">
+                    <Label className="text-xs font-bold uppercase">
                       Supplier *
                     </Label>
                     <Popover
@@ -500,7 +535,7 @@ export function CreateReturnModal({
                         <Button
                           variant="outline"
                           role="combobox"
-                          className="w-full h-11 justify-between bg-slate-50 border-slate-200"
+                          className="w-full h-11 justify-between bg-muted/50"
                         >
                           {selection.supplierId
                             ? refs.suppliers.find(
@@ -552,7 +587,7 @@ export function CreateReturnModal({
 
                   {/* Branch Select */}
                   <div className="space-y-2 flex flex-col">
-                    <Label className="text-xs font-bold text-slate-700 uppercase">
+                    <Label className="text-xs font-bold uppercase">
                       Branch *
                     </Label>
                     <Popover
@@ -564,7 +599,7 @@ export function CreateReturnModal({
                         <Button
                           variant="outline"
                           role="combobox"
-                          className="w-full h-11 justify-between bg-slate-50 border-slate-200"
+                          className="w-full h-11 justify-between bg-muted/50"
                         >
                           {selection.branchId
                             ? refs.branches.find(
@@ -614,9 +649,9 @@ export function CreateReturnModal({
                   </div>
                 </div>
               ) : (
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex gap-8">
+                <div className="bg-card p-6 rounded-xl border shadow-sm flex gap-8">
                   <div>
-                    <div className="text-xs text-slate-500 font-bold uppercase">
+                    <div className="text-xs text-muted-foreground font-bold uppercase">
                       Supplier
                     </div>
                     <div className="text-lg font-bold">
@@ -628,7 +663,7 @@ export function CreateReturnModal({
                     </div>
                   </div>
                   <div>
-                    <div className="text-xs text-slate-500 font-bold uppercase">
+                    <div className="text-xs text-muted-foreground font-bold uppercase">
                       Branch
                     </div>
                     <div className="text-lg font-bold">
@@ -647,7 +682,7 @@ export function CreateReturnModal({
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <Label className="font-bold flex items-center gap-2">
-                      <Package className="h-4 w-4 text-blue-600" />{" "}
+                       <Package className="h-4 w-4 text-primary" />{" "}
                       {step === "input" ? "Items" : "Summary"}
                     </Label>
                     <div className="flex items-center gap-2">
@@ -679,8 +714,8 @@ export function CreateReturnModal({
                             className={cn(
                               "pl-9 pr-3 h-9 w-[220px] text-xs border rounded-md font-mono flex items-center cursor-pointer select-none transition-all",
                               !selection.branchId || !selection.supplierId
-                                ? "border-slate-200 bg-slate-50 text-slate-400"
-                                : "border-emerald-200 bg-emerald-50/50 text-emerald-700 hover:border-emerald-300",
+                                ? "bg-muted text-muted-foreground"
+                                : "bg-primary/5 text-primary hover:border-primary/30",
                             )}
                             onClick={() => rfidInputRef.current?.focus()}
                           >
@@ -698,7 +733,7 @@ export function CreateReturnModal({
                       {step === "input" && (
                         <Button
                           onClick={() => setShowPicker(true)}
-                          className="bg-blue-600 hover:bg-blue-700 text-white h-9 text-xs"
+                          className="h-9 text-xs"
                         >
                           <Plus className="mr-2 h-3 w-3" /> Add
                         </Button>
@@ -721,13 +756,13 @@ export function CreateReturnModal({
                       readOnly={step === "review"}
                     />
                   ) : (
-                    <div className="border-2 border-dashed h-32 flex items-center justify-center text-slate-400 text-sm">
+                    <div className="border-2 border-dashed h-32 flex items-center justify-center text-muted-foreground text-sm">
                       No items selected
                     </div>
                   )}
                 </div>
               ) : (
-                <div className="border-2 border-dashed h-32 flex items-center justify-center text-slate-400 text-sm">
+                <div className="border-2 border-dashed h-32 flex items-center justify-center text-muted-foreground text-sm">
                   Please select Supplier and Branch first.
                 </div>
               )}
@@ -737,7 +772,7 @@ export function CreateReturnModal({
 
         {/* Footer */}
         {!showPicker && (
-          <DialogFooter className="px-8 py-5 border-t bg-white shrink-0">
+          <DialogFooter className="px-8 py-5 border-t bg-background shrink-0">
             {step === "review" && (
               <Button
                 variant="ghost"
@@ -762,7 +797,6 @@ export function CreateReturnModal({
                   cart.length === 0
                 }
                 onClick={() => setStep("review")}
-                className="bg-blue-600 text-white"
               >
                 Review <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
@@ -770,7 +804,7 @@ export function CreateReturnModal({
               <Button
                 onClick={handleSubmit}
                 disabled={submitting}
-                className="bg-green-600 text-white hover:bg-green-700"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground"
               >
                 {submitting ? (
                   <Loader2 className="animate-spin mr-2 h-4 w-4" />
