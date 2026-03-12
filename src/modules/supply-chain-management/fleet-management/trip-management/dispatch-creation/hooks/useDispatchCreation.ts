@@ -39,6 +39,7 @@ export function useDispatchCreation() {
     try {
       const res = await fetch(
         "/api/scm/fleet-management/trip-management/dispatch-summary",
+        { cache: "no-store" },
       );
       const result = await res.json();
       if (result.error) throw new Error(result.error);

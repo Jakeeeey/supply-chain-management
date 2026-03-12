@@ -56,6 +56,21 @@ interface PlanDetailItem {
   amount: number;
 }
 
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case "For Picking":
+      return "bg-blue-500/10 text-blue-600 border-blue-200 hover:bg-blue-500/15";
+    case "For Invoicing":
+      return "bg-emerald-500/10 text-emerald-600 border-emerald-200 hover:bg-emerald-500/15";
+    case "For Loading":
+      return "bg-orange-500/10 text-orange-600 border-orange-200 hover:bg-orange-500/15";
+    case "On Hold":
+      return "bg-rose-500/10 text-rose-600 border-rose-200 hover:bg-rose-500/15";
+    default:
+      return "bg-muted/50 text-muted-foreground border-border hover:bg-muted/60";
+  }
+};
+
 interface DispatchCreationModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -218,10 +233,7 @@ export function DispatchCreationModal({
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)}>
               <div className="flex divide-x divide-border/50 max-h-[70vh]">
-                {/* LEFT: Config */}
-
-                {/* RIGHT: Cargo Selection */}
-                <div className="w-lg flex flex-col overflow-hidden bg-muted/20">
+                <div className="w-sm flex flex-col overflow-hidden bg-muted/20">
                   {/* Search */}
                   <div className="p-4 border-b border-border/50 space-y-3 bg-background/60">
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -276,15 +288,15 @@ export function DispatchCreationModal({
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-2">
-                                  <p className="font-semibold text-foreground text-xs truncate">
-                                    {p.dispatch_no}
-                                  </p>
                                   <Badge
                                     variant="default"
                                     className="text-[9px] font-medium tracking-wide px-1.5 py-0 h-4 rounded-full"
                                   >
                                     {p.status}
                                   </Badge>
+                                  <p className="font-semibold text-foreground text-xs truncate">
+                                    {p.dispatch_no}
+                                  </p>
                                 </div>
                                 <p className="text-[11px] text-muted-foreground mt-0.5">
                                   {p.cluster_name || "Unassigned"} ·{" "}
@@ -623,7 +635,10 @@ export function DispatchCreationModal({
                             </span>
                             <Badge
                               variant="outline"
-                              className="text-[9px] font-medium uppercase tracking-wide px-1.5 py-0 h-4 rounded"
+                              className={cn(
+                                "text-[9px] font-medium uppercase tracking-wide px-1.5 py-0 h-4 rounded border transition-colors",
+                                getStatusColor(order.order_status),
+                              )}
                             >
                               {order.order_status}
                             </Badge>
@@ -654,9 +669,17 @@ export function DispatchCreationModal({
               {/* Footer */}
               <div className="flex items-center justify-between px-6 py-4 border-t border-border/50 bg-muted/10">
                 <p className="text-xs text-muted-foreground">
-                  {selectedPlanId > 0
-                    ? "Ready to dispatch — review details before confirming."
-                    : "Select a pre-dispatch plan to continue."}
+                  {selectedPlanId > 0 &&
+                  planDetails.length > 0 &&
+                  planDetails.some(
+                    (o) =>
+                      o.order_status !== "On Hold" &&
+                      o.order_status !== "For Loading",
+                  )
+                    ? "⚠ Some orders are not ready for dispatch (must be For Loading or On Hold)."
+                    : selectedPlanId > 0
+                      ? "Ready to dispatch — review details before confirming."
+                      : "Select a pre-dispatch plan to continue."}
                 </p>
                 <div className="flex gap-2">
                   <Button
@@ -671,7 +694,16 @@ export function DispatchCreationModal({
                   <Button
                     type="submit"
                     size="sm"
-                    disabled={isSubmitting || !selectedPlanId}
+                    disabled={
+                      isSubmitting ||
+                      !selectedPlanId ||
+                      planDetails.length === 0 ||
+                      planDetails.some(
+                        (o) =>
+                          o.order_status !== "On Hold" &&
+                          o.order_status !== "For Loading",
+                      )
+                    }
                     className="h-8 px-4 text-sm font-medium"
                   >
                     {isSubmitting ? (

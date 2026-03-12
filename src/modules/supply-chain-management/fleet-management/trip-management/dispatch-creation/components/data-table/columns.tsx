@@ -14,6 +14,8 @@ import { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 import { EllipsisVertical, Pencil, Wallet } from "lucide-react";
 
+import { DataTableColumnHeader } from "./table-column-header";
+
 export type DispatchPlanSummary = {
   id: string;
   dpNumber: string;
@@ -39,7 +41,9 @@ export const getDispatchPlanColumns = (
 ): ColumnDef<DispatchPlanSummary>[] => [
   {
     accessorKey: "dpNumber",
-    header: "Dispatch No.",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Dispatch No." />
+    ),
     cell: ({ row }) => (
       <span className="text-sm font-medium text-primary">
         {row.original.dpNumber}
@@ -93,7 +97,9 @@ export const getDispatchPlanColumns = (
   },
   {
     accessorKey: "amount",
-    header: "Trip Value",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Trip Value" />
+    ),
     cell: ({ row }) => (
       <span className="text-sm font-medium text-foreground tabular-nums">
         ₱
@@ -118,7 +124,9 @@ export const getDispatchPlanColumns = (
   },
   {
     accessorKey: "status",
-    header: "Status",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Status" />
+    ),
     cell: ({ row }) => {
       const status = row.original.status;
       return (
