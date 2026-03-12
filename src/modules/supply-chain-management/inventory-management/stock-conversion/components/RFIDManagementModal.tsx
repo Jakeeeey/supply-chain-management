@@ -96,7 +96,7 @@ export function RFIDManagementModal({
           </div>
           <div>
             <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Current Stock</div>
-            <div className="text-sm font-bold text-blue-600 dark:text-blue-400">{product.quantity} Box(s)</div>
+            <div className="text-sm font-bold text-blue-600 dark:text-blue-400">{product.quantity} {product.currentUnit}(s)</div>
           </div>
         </div>
 

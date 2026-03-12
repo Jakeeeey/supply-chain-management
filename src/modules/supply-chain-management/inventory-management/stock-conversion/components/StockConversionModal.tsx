@@ -12,7 +12,7 @@ interface StockConversionModalProps {
   product: StockConversionProduct | null;
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (qtyToConvert: number, targetUnitId: number, convertedQuantity: number) => void;
+  onConfirm: (qtyToConvert: number, targetUnit: { unitId: number, targetProductId?: number }, convertedQuantity: number) => void;
 }
 
 export function StockConversionModal({ product, isOpen, onClose, onConfirm }: StockConversionModalProps) {
@@ -33,35 +33,13 @@ export function StockConversionModal({ product, isOpen, onClose, onConfirm }: St
   
   let convertedAmount = 0;
   if (qtyToConvert && targetUnit) {
-      // Get the source factor (how many base units are in one item of the current unit)
-      let sourceFactor = 1;
-      const currentUnitName = product.currentUnit.toLowerCase();
-      
-      if (currentUnitName.includes('box')) {
-          sourceFactor = product.unitOfBox || 24;
-      } else if (currentUnitName.includes('pack')) {
-          sourceFactor = product.pack || 6;
-      } else if (currentUnitName.includes('tie')) {
-          sourceFactor = product.tie || 12; // Default to 12 if tie is 0
-      } else if (currentUnitName.includes('piece')) {
-          sourceFactor = 1;
-      } else {
-          sourceFactor = 1; 
-      }
-      
-      // Ensure sourceFactor is never 0
-      if (sourceFactor <= 0) sourceFactor = 1;
-
-      // Get target factor
-      const targetFactor = targetUnit.conversionFactor || 1;
+      const sourceFactor = Number(product.conversionFactor) || 1;
+      const targetFactor = Number(targetUnit.conversionFactor) || 1;
       
       // Conversion formula: (Quantity * Source Factor) / Target Factor
       // Example: 1 Box (24pcs) to Pack (6pcs) => (1 * 24) / 6 = 4 Packs
-      // Example: 24 Pieces (1pc) to Box (24pcs) => (24 * 1) / 24 = 1 Box
-      
       if (targetFactor > 0) {
           convertedAmount = (Number(qtyToConvert) * sourceFactor) / targetFactor;
-          // Round to 2 decimal places if needed, but usually these are whole numbers in this context
           if (convertedAmount % 1 !== 0) {
               convertedAmount = Number(convertedAmount.toFixed(2));
           }
@@ -69,11 +47,8 @@ export function StockConversionModal({ product, isOpen, onClose, onConfirm }: St
   }
 
   const handleConfirm = () => {
-    console.log("[StockConversionModal] Confirm clicked. Qty:", qtyToConvert, "TargetUnit:", selectedTargetUnit, "Amount:", convertedAmount);
-    if (qtyToConvert && selectedTargetUnit && convertedAmount > 0) {
-      onConfirm(Number(qtyToConvert), selectedTargetUnit, convertedAmount);
-    } else {
-      console.warn("[StockConversionModal] Confirm blocked: Missing inputs or amount is 0");
+    if (qtyToConvert && targetUnit && convertedAmount > 0) {
+      onConfirm(Number(qtyToConvert), targetUnit, convertedAmount);
     }
   };
 
@@ -141,9 +116,8 @@ export function StockConversionModal({ product, isOpen, onClose, onConfirm }: St
                         {u.name}
                      </div>
                      <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-tighter">
-                         {u.name.toLowerCase().includes('pack') && product.pack ? `Pack (${product.pack} pcs)` : ''}
-                         {u.name.toLowerCase().includes('piece') ? `Individual Pieces` : ''}
-                         {u.name.toLowerCase().includes('box') ? `Full Box` : ''}
+                         {/* Display generic info or leave empty if specific packaging info is no longer in schema */}
+                         Conversion Factor: {u.conversionFactor}
                      </div>
                   </div>
                ))}
@@ -167,24 +141,6 @@ export function StockConversionModal({ product, isOpen, onClose, onConfirm }: St
                 </div>
              </div>
           )}
-
-          <div className="bg-muted/50 p-3 rounded-md text-[11px] text-muted-foreground mt-4 border border-border">
-             <div className="font-bold text-foreground mb-1.5 uppercase tracking-wide text-[10px]">Reference Factors:</div>
-             <ul className="grid grid-cols-2 gap-y-1 gap-x-4 list-none">
-                <li className="flex justify-between border-b border-border/50 pb-0.5">
-                  <span className="opacity-80">Unit of Box:</span> 
-                  <span className="font-bold text-foreground">{product.unitOfBox || 24} pc</span>
-                </li>
-                <li className="flex justify-between border-b border-border/50 pb-0.5">
-                  <span className="opacity-80">Pack:</span>
-                  <span className="font-bold text-foreground">{product.pack || 6} pc</span>
-                </li>
-                <li className="flex justify-between border-b border-border/50 pb-0.5">
-                  <span className="opacity-80">Tie:</span>
-                  <span className="font-bold text-foreground">{product.tie || 0} pc</span>
-                </li>
-             </ul>
-          </div>
         </div>
 
         <DialogFooter className="mt-4 gap-2 sm:gap-0">

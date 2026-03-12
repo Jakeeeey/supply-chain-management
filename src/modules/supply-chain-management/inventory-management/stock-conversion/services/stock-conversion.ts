@@ -289,6 +289,9 @@ export async function fetchStockList(token?: string): Promise<StockConversionPro
            ? p.unit_of_measurement.unit_name 
            : unitMap.get(Number(unitId)) || "Unknown";
 
+      // Precise conversion factors sourced directly from unit_of_measurement_count
+      const convFactor = Number(p.unit_of_measurement_count) || 1;
+
       result.push({
         productId: pId,
         supplierId: supplierId ? Number(supplierId) : undefined,
@@ -298,19 +301,7 @@ export async function fetchStockList(token?: string): Promise<StockConversionPro
         productCode: p.product_code || inheritP.product_code,
         productDescription: p.description || p.product_name || inheritP.description || inheritP.product_name || "",
         family: key,
-        unitOfBox: familyGroup.find(v => {
-           const vu = typeof v.unit_of_measurement === 'object' ? v.unit_of_measurement.unit_id : v.unit_of_measurement; 
-           return unitMap.get(Number(vu))?.toLowerCase() === 'box'
-        })?.unit_of_measurement_count || p.unit_of_measurement_count || 24,
-        pieces: familyGroup.find(v => {
-           const vu = typeof v.unit_of_measurement === 'object' ? v.unit_of_measurement.unit_id : v.unit_of_measurement;
-           return unitMap.get(Number(vu))?.toLowerCase() === 'pieces'
-        })?.unit_of_measurement_count || 0,
-        tie: 0,
-        pack: familyGroup.find(v => {
-           const vu = typeof v.unit_of_measurement === 'object' ? v.unit_of_measurement.unit_id : v.unit_of_measurement;
-           return unitMap.get(Number(vu))?.toLowerCase() === 'pack'
-        })?.unit_of_measurement_count || 0,
+        conversionFactor: convFactor,
         currentUnit: unitName,
         currentUnitId: Number(unitId),
         quantity: qty,
@@ -335,27 +326,8 @@ export async function convertStock(payload: StockConversionPayload) {
   try {
      const docNo = `CONV-${Date.now()}`;
      
-     // 1. Fetch matching product variants to find the target product ID
-     const prodRes = await fetch(`${DIRECTUS_API}/items/products/${payload.productId}`, {
-        headers: getHeaders(),
-        cache: "no-store",
-     });
-     if (!prodRes.ok) throw new AppError("NOT_FOUND", "Source product not found.", 404);
-     const sourceProductData = (await prodRes.json()).data;
-     
-     const key = sourceProductData.parent_id ? String(sourceProductData.parent_id) : sourceProductData.product_name;
-     const allVariantsRes = await fetch(`${DIRECTUS_API}/items/products?filter[_or][0][parent_id][_eq]=${key}&filter[_or][1][product_name][_eq]=${key}`, {
-        headers: getHeaders(),
-        cache: "no-store"
-     });
-     
-     let targetProductId = payload.productId; // Fallback
-     if (allVariantsRes.ok) {
-         const variants = (await allVariantsRes.json()).data || [];
-         const targetP = variants.find((v:any) => v.unit_of_measurement === payload.targetUnitId);
-         if (targetP) targetProductId = targetP.product_id || targetP.id;
-     }
-
+      let targetProductId = payload.targetProductId || payload.productId; // Prefer explicit target ID from UI
+      
      const remarkStr = `Conversion from ${payload.sourceUnitId} to ${payload.targetUnitId}`;
      const unitPrice = Number(payload.pricePerUnit) || 0;
      const totalAmount = Number((payload.quantityToConvert * unitPrice).toFixed(2)) || 0;

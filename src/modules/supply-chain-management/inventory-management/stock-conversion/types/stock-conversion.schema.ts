@@ -18,10 +18,7 @@ export const stockConversionProductSchema = z.object({
   productCode: z.string().optional(),
   productDescription: z.string(),
   family: z.string().optional(),
-  unitOfBox: z.number().optional(), // e.g. 24 pieces
-  pieces: z.number().optional(),
-  tie: z.number().optional(),
-  pack: z.number().optional(),
+  conversionFactor: z.number().optional(), // multiplier vs base unit
   currentUnit: z.string(), // e.g. "Box"
   currentUnitId: z.number().optional(),
   quantity: z.number(), // Current box quantity in inventory
@@ -43,6 +40,7 @@ export const stockConversionPayloadSchema = z.object({
   productId: z.number(),
   sourceUnitId: z.number(),
   targetUnitId: z.number(),
+  targetProductId: z.number(),
   quantityToConvert: z.number().gt(0, "Quantity must be greater than 0"),
   convertedQuantity: z.number().gt(0, "Converted quantity must be greater than 0"),
   branchId: z.number().min(1, "Branch ID is required"),
