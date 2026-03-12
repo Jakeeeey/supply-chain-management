@@ -71,18 +71,31 @@ export async function fetchStockList(): Promise<StockConversionProduct[]> {
     const catMap = new Map();
     if (catRes.ok) (await catRes.json()).data?.forEach((c: any) => catMap.set(Number(c.category_id), c.category_name));
 
-    const supplierMap = new Map();
-    if (supplierRes.ok) (await supplierRes.json()).data?.forEach((s: any) => {
-        const pId = Number(s.product_id);
-        const sId = Number(s.supplier_id);
-        if (!isNaN(pId) && !isNaN(sId)) supplierMap.set(pId, sId);
-    });
+    const supplierMap = new Map<number, number[]>();
+    if (supplierRes.ok) {
+        const juncJson = await supplierRes.json();
+        const juncData = juncJson.data || [];
+        console.log(`[Stock-Conversion] Fetched ${juncData.length} junction rows`);
+        juncData.forEach((s: any) => {
+            const pId = Number(s.product_id);
+            const sId = Number(s.supplier_id);
+            if (!isNaN(pId) && !isNaN(sId)) {
+                if (!supplierMap.has(pId)) supplierMap.set(pId, []);
+                supplierMap.get(pId)!.push(sId);
+            }
+        });
+    }
 
     const supplierNameMap = new Map();
-    if (supplierListRes.ok) (await supplierListRes.json()).data?.forEach((s: any) => {
-        const sId = Number(s.id);
-        if (!isNaN(sId)) supplierNameMap.set(sId, s.supplier_name);
-    });
+    if (supplierListRes.ok) {
+        const supJson = await supplierListRes.json();
+        const supData = supJson.data || [];
+        console.log(`[Stock-Conversion] Fetched ${supData.length} suppliers`);
+        supData.forEach((s: any) => {
+            const sId = Number(s.id);
+            if (!isNaN(sId)) supplierNameMap.set(sId, s.supplier_name);
+        });
+    }
 
     // 2. Strict Grouping logic to prevent JSON explosion (No more name-based fuzzy grouping)
     // We only group products that are explicitly parts of a parent-child relationship.
@@ -121,12 +134,24 @@ export async function fetchStockList(): Promise<StockConversionProduct[]> {
             };
         });
 
-      const supplierId = supplierMap.get(pId) || supplierMap.get(parentId);
+      // Robust supplier lookup: check product then parent, try to find a named one
+      const sIds = [...(supplierMap.get(pId) || []), ...(supplierMap.get(parentId) || [])];
+      let finalSupplierId = sIds[0];
+      let finalSupplierName = "No Supplier";
+
+      for (const sId of sIds) {
+          const name = supplierNameMap.get(sId);
+          if (name) {
+              finalSupplierId = sId;
+              finalSupplierName = name;
+              break;
+          }
+      }
 
       result.push({
         productId: pId,
-        supplierId: supplierId ? Number(supplierId) : undefined,
-        supplierName: supplierId ? supplierNameMap.get(supplierId) : "No Supplier",
+        supplierId: finalSupplierId ? Number(finalSupplierId) : undefined,
+        supplierName: finalSupplierName,
         brand: brandMap.get(brandId) || "Unknown",
         category: catMap.get(categoryId) || "Unknown",
         productCode: p.product_code || "",
@@ -156,7 +181,7 @@ export async function fetchInventoryMap(token?: string, branchId?: number): Prom
   if (!SPRING_API) return {};
   try {
     const start = Date.now();
-    const url = `${SPRING_API}/api/view-running-inventory/all${branchId ? `?branch_id=${branchId}` : ""}`;
+    const url = `${SPRING_API}/api/view-running-inventory/all${branchId !== undefined ? `?branch_id=${branchId}` : ""}`;
     console.log(`[Stock-Conversion] Fetching inventory from: ${url}`);
     
     const res = await fetchWithTimeout(url, { 

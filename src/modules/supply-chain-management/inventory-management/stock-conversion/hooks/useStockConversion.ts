@@ -24,8 +24,8 @@ export function useStockConversion(branchId?: number) {
       setIsLoading(false); // First load done
 
       // 2. Fetch Inventory (Slow, 10s)
-      console.log("[useStockConversion] Triggering background inventory fetch...");
-      const invUrl = `/api/scm/inventory-management/stock-conversion?type=inventory${branchId ? `&branchId=${branchId}` : ""}`;
+      console.log("[useStockConversion] Triggering background inventory fetch for branch:", branchId);
+      const invUrl = `/api/scm/inventory-management/stock-conversion?type=inventory${branchId !== undefined ? `&branchId=${branchId}` : ""}`;
       fetch(invUrl)
         .then(res => res.json())
         .then(invJson => {
