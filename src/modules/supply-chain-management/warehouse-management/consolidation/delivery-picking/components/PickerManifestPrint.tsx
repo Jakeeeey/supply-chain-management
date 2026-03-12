@@ -58,7 +58,7 @@ export const generatePickerPDF = (groupedManifest: Record<string, PickerItem[]>,
 
             Object.entries(categories).forEach(([catName, catItems]: [string, any]) => {
                 tableRows.push([
-                    { content: `ZONE: ${catName}`, colSpan: 5, styles: { fillColor: [244, 244, 245], textColor: [82, 82, 91], fontStyle: 'bold', fontSize: 7, cellPadding: 1.5 } }
+                    { content: `Category: ${catName}`, colSpan: 5, styles: { fillColor: [244, 244, 245], textColor: [82, 82, 91], fontStyle: 'bold', fontSize: 7, cellPadding: 1.5 } }
                 ]);
 
                 catItems.forEach((item: PickerItem) => {

@@ -169,6 +169,9 @@ const data = {
                         {
                             title: "Pending Deliveries",
                             url: "/scm/fleet-management/logistics-deliveries/pending-deliveries"
+                        }, {
+                            title: "Pre Dispatch Summary",
+                            url: "/scm/fleet-management/logistics-deliveries/pre-dispatch-summary"
                         },
                         {title: "Pending Invoices", url: "/scm/fleet-management/logistics-deliveries/pending-invoices"},
                     ],
