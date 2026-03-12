@@ -45,6 +45,25 @@ import { useEffect, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { DateTimePicker } from "../shared/date-time-picker";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import { GripVertical } from "lucide-react";
 
 interface PlanDetailItem {
   detail_id: number;
@@ -73,6 +92,73 @@ const getStatusColor = (status: string) => {
   }
 };
 
+function DraggableInvoiceItem({ order }: { order: PlanDetailItem }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: order.detail_id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "p-3 rounded-lg border border-border/50 bg-background text-xs space-y-1.5 transition-shadow",
+        isDragging && "shadow-lg ring-1 ring-primary/20 z-10 opacity-50 cursor-grabbing"
+      )}
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground transition-colors p-0.5"
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical className="w-3.5 h-3.5" />
+          </button>
+          <span className="font-semibold text-foreground">
+            {order.order_no}
+          </span>
+        </div>
+        <Badge
+          variant="outline"
+          className={cn(
+            "text-[9px] font-medium uppercase tracking-wide px-1.5 py-0 h-4 rounded border transition-colors",
+            getStatusColor(order.order_status)
+          )}
+        >
+          {order.order_status}
+        </Badge>
+      </div>
+      <p className="text-muted-foreground truncate pl-6">
+        {order.customer_name}
+      </p>
+      <div className="flex items-center justify-between pl-6">
+        <span className="text-muted-foreground flex items-center gap-1">
+          <MapPin className="w-3 h-3" />
+          {order.city}
+        </span>
+        <span className="font-semibold text-foreground tabular-nums">
+          ₱
+          {Number(order.amount || 0).toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+          })}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 interface DispatchCreationModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -91,6 +177,26 @@ export function DispatchCreationModal({
   const [searchQuery, setSearchQuery] = useState("");
   const [planDetails, setPlanDetails] = useState<PlanDetailItem[]>([]);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+
+    if (active.id !== over?.id) {
+      setPlanDetails((items) => {
+        const oldIndex = items.findIndex((i) => i.detail_id === active.id);
+        const newIndex = items.findIndex((i) => i.detail_id === over?.id);
+
+        return arrayMove(items, oldIndex, newIndex);
+      });
+    }
+  }
 
   const form = useForm<DispatchCreationFormValues>({
     resolver: zodResolver(DispatchCreationFormSchema),
@@ -623,48 +729,29 @@ export function DispatchCreationModal({
                       </div>
                     ) : planDetails.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-16 text-muted-foreground/30">
-                        <p className="text-xs">
-                          No invoices linked to this plan.
-                        </p>
+                        <p className="text-xs">No invoices linked to this plan.</p>
                       </div>
                     ) : (
-                      planDetails.map((order) => (
-                        <div
-                          key={order.detail_id}
-                          className="p-3 rounded-lg border border-border/50 bg-background text-xs space-y-1.5"
+                      <DndContext
+                        sensors={sensors}
+                        collisionDetection={closestCenter}
+                        onDragEnd={handleDragEnd}
+                        modifiers={[restrictToVerticalAxis]}
+                      >
+                        <SortableContext
+                          items={planDetails.map((d) => d.detail_id)}
+                          strategy={verticalListSortingStrategy}
                         >
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold text-foreground">
-                              {order.order_no}
-                            </span>
-                            <Badge
-                              variant="outline"
-                              className={cn(
-                                "text-[9px] font-medium uppercase tracking-wide px-1.5 py-0 h-4 rounded border transition-colors",
-                                getStatusColor(order.order_status),
-                              )}
-                            >
-                              {order.order_status}
-                            </Badge>
+                          <div className="space-y-1.5">
+                            {planDetails.map((order) => (
+                              <DraggableInvoiceItem
+                                key={order.detail_id}
+                                order={order}
+                              />
+                            ))}
                           </div>
-                          <p className="text-muted-foreground truncate">
-                            {order.customer_name}
-                          </p>
-                          <div className="flex items-center justify-between">
-                            <span className="text-muted-foreground flex items-center gap-1">
-                              <MapPin className="w-3 h-3" />
-                              {order.city}
-                            </span>
-                            <span className="font-semibold text-foreground tabular-nums">
-                              ₱
-                              {Number(order.amount || 0).toLocaleString(
-                                undefined,
-                                { minimumFractionDigits: 2 },
-                              )}
-                            </span>
-                          </div>
-                        </div>
-                      ))
+                        </SortableContext>
+                      </DndContext>
                     )}
                   </div>
                 </div>

@@ -142,14 +142,16 @@ export const dispatchCreationQueryService = {
       }
     });
 
-    const enrichedData = plans.map((p: any) => {
-      const planId = p.dispatch_id || p.id;
-      return {
-        ...p,
-        cluster_name: clusterMap.get(p.cluster_id) || "Unassigned",
-        total_items: detailCountMap.get(planId) || 0,
-      };
-    });
+    const enrichedData = plans
+      .map((p: any) => {
+        const planId = p.dispatch_id || p.id;
+        return {
+          ...p,
+          cluster_name: clusterMap.get(p.cluster_id) || "Unassigned",
+          total_items: detailCountMap.get(planId) || 0,
+        };
+      })
+      .filter((p) => p.total_items > 0);
 
     return { data: enrichedData };
   },
@@ -269,5 +271,28 @@ export const dispatchCreationQueryService = {
       .filter((d): d is any => d !== null);
 
     return { data: enrichedDetails };
+  },
+
+  /**
+   * Fetches all post-dispatch budgets for enrichment.
+   */
+  async fetchAllBudgets() {
+    const res = await fetchItems<any>("/items/post_dispatch_budgeting", {
+      limit: -1,
+      fields: "post_dispatch_plan_id,amount",
+    });
+    return res.data || [];
+  },
+
+  /**
+   * Fetches budgets for a specific dispatch plan.
+   */
+  async fetchPlanBudgets(planId: number) {
+    const res = await fetchItems<any>("/items/post_dispatch_budgeting", {
+      "filter[post_dispatch_plan_id][_eq]": planId,
+      fields: "coa_id,amount,remarks",
+      limit: -1,
+    });
+    return res.data || [];
   },
 };

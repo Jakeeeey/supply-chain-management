@@ -13,11 +13,12 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { DispatchPlanSummary } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/components/data-table/DispatchPlanColumns";
+import { dispatchCreationLifecycleService } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/services";
+import { DispatchPlanSummary } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/components/data-table/columns";
 import { COAOption } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/types/schema";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Clock, Loader2, Plus, Trash2, Users, Wallet } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -67,11 +68,34 @@ export function BudgetAllocationModal({
     0,
   );
 
+  // Fetch existing budgets when modal opens
+  useEffect(() => {
+    if (open && plan?.id) {
+      const fetchBudgets = async () => {
+        try {
+          const res = await fetch(
+            `/api/scm/fleet-management/trip-management/dispatch-creation?type=plan_budgets&plan_id=${plan.id}`,
+          );
+          const result = await res.json();
+          if (result.data) {
+            form.reset({ lines: result.data });
+          }
+        } catch {
+          toast.error("Failed to load existing budgets");
+        }
+      };
+      fetchBudgets();
+    }
+  }, [open, plan, form]);
+
   const onSubmit = async (values: BudgetFormValues) => {
-    if (!plan) return;
+    if (!plan?.id) return;
     setIsSubmitting(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await dispatchCreationLifecycleService.updateBudget(
+        Number(plan.id),
+        values.lines,
+      );
       toast.success("Budget allocated successfully");
       onSuccess?.();
       onOpenChange(false);

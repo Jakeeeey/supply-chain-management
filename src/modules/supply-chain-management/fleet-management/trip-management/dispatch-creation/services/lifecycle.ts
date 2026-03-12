@@ -27,4 +27,29 @@ export const dispatchCreationLifecycleService = {
 
     return response.json();
   },
+
+  /**
+   * Updates budgets for an existing dispatch plan.
+   */
+  async updateBudget(planId: number, budgets: any[]) {
+    const response = await fetch(
+      `/api/scm/fleet-management/trip-management/dispatch-creation?plan_id=${planId}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ budgets }),
+      },
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        errorData.error || `Failed to update budget (${response.status})`,
+      );
+    }
+
+    return response.json();
+  },
 };

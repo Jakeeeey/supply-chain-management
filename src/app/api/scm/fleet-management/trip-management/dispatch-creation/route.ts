@@ -48,6 +48,20 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(result);
     }
 
+    if (type === "budget_summary") {
+      const data = await dispatchCreationQueryService.fetchAllBudgets();
+      return NextResponse.json({ data });
+    }
+
+    if (type === "plan_budgets") {
+      const planId = searchParams.get("plan_id");
+      if (!planId) {
+        return NextResponse.json({ error: "plan_id is required" }, { status: 400 });
+      }
+      const data = await dispatchCreationQueryService.fetchPlanBudgets(Number(planId));
+      return NextResponse.json({ data });
+    }
+
     return NextResponse.json({ error: "Invalid type" }, { status: 400 });
   } catch (error) {
     console.error("[Dispatch GET Error]:", error);
@@ -194,6 +208,62 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, id: newPlanId });
   } catch (error) {
     console.error("[Dispatch POST Error]:", error);
+    return handleApiError(error);
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const planId = searchParams.get("plan_id");
+    if (!planId) {
+      return NextResponse.json({ error: "plan_id is required" }, { status: 400 });
+    }
+
+    const { budgets } = await req.json();
+
+    // 1. Delete existing budgets for this plan
+    // We fetch them first to get their IDs if direct delete-by-filter is not supported or to be safer
+    const existingRes = await fetch(
+      `${DIRECTUS_BASE}/items/post_dispatch_budgeting?filter[post_dispatch_plan_id][_eq]=${planId}&fields=id`,
+      { headers: directusHeaders() },
+    );
+    const existingData = await existingRes.json();
+    const existingIds = (existingData.data || []).map((b: any) => b.id);
+
+    if (existingIds.length > 0) {
+      const deleteRes = await fetch(`${DIRECTUS_BASE}/items/post_dispatch_budgeting`, {
+        method: "DELETE",
+        headers: directusHeaders(),
+        body: JSON.stringify(existingIds),
+      });
+      if (!deleteRes.ok) throw new Error("Failed to clear existing budgets");
+    }
+
+    // 2. Insert new budgets
+    if (budgets && budgets.length > 0) {
+      const budgetPayloads = budgets.map((b: any) => ({
+        post_dispatch_plan_id: Number(planId),
+        coa_id: b.coa_id,
+        amount: b.amount,
+        remarks: b.remarks,
+      }));
+
+      const insertRes = await fetch(`${DIRECTUS_BASE}/items/post_dispatch_budgeting`, {
+        method: "POST",
+        headers: directusHeaders(),
+        body: JSON.stringify(budgetPayloads),
+      });
+
+      if (!insertRes.ok) {
+        const errorText = await insertRes.text();
+        throw new Error(`Failed to insert new budgets: ${errorText}`);
+      }
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("[Dispatch PATCH Error]:", error);
     return handleApiError(error);
   }
 }
