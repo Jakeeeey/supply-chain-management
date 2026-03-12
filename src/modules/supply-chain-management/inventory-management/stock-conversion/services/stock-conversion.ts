@@ -50,7 +50,7 @@ export async function fetchStockList(): Promise<StockConversionProduct[]> {
       fetchWithTimeout(`${DIRECTUS_API}/items/brand?limit=-1&fields=brand_id,brand_name`, { headers, cache: "no-store" }),
       fetchWithTimeout(`${DIRECTUS_API}/items/categories?limit=-1&fields=category_id,category_name`, { headers, cache: "no-store" }),
       fetchWithTimeout(`${DIRECTUS_API}/items/product_per_supplier?limit=-1&fields=product_id,supplier_id`, { headers, cache: "no-store" }),
-      fetchWithTimeout(`${DIRECTUS_API}/items/suppliers?limit=-1&fields=supplier_id,supplier_name`, { headers, cache: "no-store" })
+      fetchWithTimeout(`${DIRECTUS_API}/items/suppliers?limit=-1&fields=id,supplier_name`, { headers, cache: "no-store" })
     ]);
 
     console.log(`[Stock-Conversion] API fetches took ${Date.now() - startTime}ms`);
@@ -73,15 +73,15 @@ export async function fetchStockList(): Promise<StockConversionProduct[]> {
 
     const supplierMap = new Map();
     if (supplierRes.ok) (await supplierRes.json()).data?.forEach((s: any) => {
-        const pId = typeof s.product_id === 'object' ? s.product_id?.product_id : s.product_id;
-        const sId = typeof s.supplier_id === 'object' ? s.supplier_id?.supplier_id : s.supplier_id;
-        if (pId != null && sId != null) supplierMap.set(Number(pId), Number(sId));
+        const pId = Number(s.product_id);
+        const sId = Number(s.supplier_id);
+        if (!isNaN(pId) && !isNaN(sId)) supplierMap.set(pId, sId);
     });
 
     const supplierNameMap = new Map();
     if (supplierListRes.ok) (await supplierListRes.json()).data?.forEach((s: any) => {
-        const sId = s.supplier_id || s.id;
-        if (sId != null) supplierNameMap.set(Number(sId), s.supplier_name);
+        const sId = Number(s.id);
+        if (!isNaN(sId)) supplierNameMap.set(sId, s.supplier_name);
     });
 
     // 2. Strict Grouping logic to prevent JSON explosion (No more name-based fuzzy grouping)
