@@ -27,9 +27,11 @@ export async function GET(req: NextRequest) {
 
     if (type === "approved_plans") {
       const branchId = searchParams.get("branch_id");
+      const currentPlanId = searchParams.get("current_plan_id");
       const result =
         await dispatchCreationQueryService.fetchApprovedPreDispatchPlans(
           branchId ? Number(branchId) : undefined,
+          currentPlanId ? Number(currentPlanId) : undefined,
         );
       return NextResponse.json(result);
     }
@@ -96,11 +98,13 @@ export async function POST(req: NextRequest) {
     // 2. Insert into post_dispatch_plan
     const planPayload = {
       doc_no: `DP-${Date.now()}`,
+      dispatch_id: data.pre_dispatch_plan_id,
       driver_id: data.driver_id,
       vehicle_id: data.vehicle_id,
       starting_point: data.starting_point,
       status: "For Approval",
       amount: data.amount,
+      encoder_id: data.driver_id, // Fallback to driver as encoder
       estimated_time_of_dispatch: new Date(
         data.estimated_time_of_dispatch,
       ).toISOString(),
@@ -168,7 +172,27 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 4. Insert Budgets into post_dispatch_budgeting
+    // 4. Insert into post_dispatch_dispatch_plans (Junction)
+    const junctionPayload = {
+      post_dispatch_plan_id: newPlanId,
+      dispatch_plan_id: data.pre_dispatch_plan_id,
+      linked_at: new Date().toISOString(),
+      linked_by: data.driver_id, // Mandatory field in DDL
+    };
+
+    const junctionRes = await fetch(`${DIRECTUS_BASE}/items/post_dispatch_dispatch_plans`, {
+      method: "POST",
+      headers: directusHeaders(),
+      body: JSON.stringify(junctionPayload),
+    });
+
+    if (!junctionRes.ok) {
+      const errorText = await junctionRes.text();
+      console.error("[Dispatch POST] Junction insert failed:", errorText);
+      throw new Error(`Failed to link PDP: ${errorText}`);
+    }
+
+    // 5. Insert Budgets into post_dispatch_budgeting
     if (data.budgets && data.budgets.length > 0) {
       const budgetPayloads = data.budgets.map(
         (b: { coa_id: number; amount: number; remarks?: string }) => ({
@@ -179,7 +203,7 @@ export async function POST(req: NextRequest) {
         }),
       );
 
-      const budgetResults = await Promise.all(
+      await Promise.all(
         budgetPayloads.map((bp: any) =>
           fetch(`${DIRECTUS_BASE}/items/post_dispatch_budgeting`, {
             method: "POST",
@@ -188,14 +212,29 @@ export async function POST(req: NextRequest) {
           }),
         ),
       );
+    }
 
-      for (const res of budgetResults) {
-        if (!res.ok) {
-          const errorText = await res.text();
-          console.error("[Dispatch POST] Budget insert failed:", errorText);
-          throw new Error(`Budget allocation failed: ${errorText}`);
-        }
-      }
+    // 6. Insert Invoices from PDP into post_dispatch_invoices
+    const invoiceIds = await dispatchCreationQueryService.fetchPdpInvoiceIds(
+      data.pre_dispatch_plan_id,
+    );
+    if (invoiceIds.length > 0) {
+      const invoicePayloads = invoiceIds.map((id, index) => ({
+        post_dispatch_plan_id: newPlanId,
+        invoice_id: id,
+        sequence: index + 1,
+        status: "Not Fulfilled",
+      }));
+
+      await Promise.all(
+        invoicePayloads.map((ip) =>
+          fetch(`${DIRECTUS_BASE}/items/post_dispatch_invoices`, {
+            method: "POST",
+            headers: directusHeaders(),
+            body: JSON.stringify(ip),
+          }),
+        ),
+      );
     }
 
     // 5. Update source pre_dispatch_plan status
@@ -234,6 +273,104 @@ export async function PATCH(req: NextRequest) {
     if (action === "update_trip") {
       const body = await req.json();
       
+      // 1. Fetch existing PDP link from junction table
+      const junctionFetchRes = await fetch(
+        `${DIRECTUS_BASE}/items/post_dispatch_dispatch_plans?filter[post_dispatch_plan_id][_eq]=${planId}`,
+        { headers: directusHeaders() }
+      );
+      const junctionData = await junctionFetchRes.json();
+      const junctionRecord = junctionData.data?.[0];
+      const oldPdpId = junctionRecord?.dispatch_plan_id;
+      const newPdpId = body.pre_dispatch_plan_id;
+
+      // 2. Handle PDP swapping status and junction update
+      if (newPdpId && oldPdpId && newPdpId !== oldPdpId) {
+        // Revert old PDP to "Picked"
+        await fetch(`${DIRECTUS_BASE}/items/dispatch_plan/${oldPdpId}`, {
+          method: "PATCH",
+          headers: directusHeaders(),
+          body: JSON.stringify({ status: "Picked" }),
+        });
+        
+        // Mark new PDP as Dispatched
+        await fetch(`${DIRECTUS_BASE}/items/dispatch_plan/${newPdpId}`, {
+          method: "PATCH",
+          headers: directusHeaders(),
+          body: JSON.stringify({ status: "Dispatched" }),
+        });
+
+        // Update Junction Record
+        if (junctionRecord) {
+          await fetch(`${DIRECTUS_BASE}/items/post_dispatch_dispatch_plans/${junctionRecord.id}`, {
+            method: "PATCH",
+            headers: directusHeaders(),
+            body: JSON.stringify({ 
+              dispatch_plan_id: newPdpId,
+              linked_by: body.driver_id,
+            }),
+          });
+        }
+
+        // Sync Invoices: Delete old ones and insert new ones
+        await fetch(`${DIRECTUS_BASE}/items/post_dispatch_invoices?filter[post_dispatch_plan_id][_eq]=${planId}`, {
+          method: "DELETE",
+          headers: directusHeaders(),
+        });
+
+        const invoiceIds = await dispatchCreationQueryService.fetchPdpInvoiceIds(newPdpId);
+        if (invoiceIds.length > 0) {
+          const invoicePayloads = invoiceIds.map((id, index) => ({
+            post_dispatch_plan_id: Number(planId),
+            invoice_id: id,
+            sequence: index + 1,
+            status: "Not Fulfilled",
+          }));
+          await Promise.all(invoicePayloads.map(ip => 
+            fetch(`${DIRECTUS_BASE}/items/post_dispatch_invoices`, {
+              method: "POST",
+              headers: directusHeaders(),
+              body: JSON.stringify(ip)
+            })
+          ));
+        }
+      } else if (newPdpId && !oldPdpId) {
+        // Just mark new as Dispatched and create junction if it wasn't linked before
+        await fetch(`${DIRECTUS_BASE}/items/dispatch_plan/${newPdpId}`, {
+          method: "PATCH",
+          headers: directusHeaders(),
+          body: JSON.stringify({ status: "Dispatched" }),
+        });
+
+        await fetch(`${DIRECTUS_BASE}/items/post_dispatch_dispatch_plans`, {
+          method: "POST",
+          headers: directusHeaders(),
+          body: JSON.stringify({
+            post_dispatch_plan_id: Number(planId),
+            dispatch_plan_id: newPdpId,
+            linked_at: new Date().toISOString(),
+            linked_by: body.driver_id,
+          }),
+        });
+
+        // Insert new invoices
+        const invoiceIds = await dispatchCreationQueryService.fetchPdpInvoiceIds(newPdpId);
+        if (invoiceIds.length > 0) {
+          const invoicePayloads = invoiceIds.map((id, index) => ({
+            post_dispatch_plan_id: Number(planId),
+            invoice_id: id,
+            sequence: index + 1,
+            status: "Not Fulfilled",
+          }));
+          await Promise.all(invoicePayloads.map(ip => 
+            fetch(`${DIRECTUS_BASE}/items/post_dispatch_invoices`, {
+              method: "POST",
+              headers: directusHeaders(),
+              body: JSON.stringify(ip)
+            })
+          ));
+        }
+      }
+
       const planPayload = {
         driver_id: body.driver_id,
         vehicle_id: body.vehicle_id,
@@ -241,6 +378,7 @@ export async function PATCH(req: NextRequest) {
         estimated_time_of_dispatch: new Date(body.estimated_time_of_dispatch).toISOString(),
         estimated_time_of_arrival: new Date(body.estimated_time_of_arrival).toISOString(),
         remarks: body.remarks,
+        amount: body.amount,
       };
 
       // 1. Update Header

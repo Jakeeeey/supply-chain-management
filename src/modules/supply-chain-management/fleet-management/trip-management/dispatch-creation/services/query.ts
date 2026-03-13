@@ -58,7 +58,7 @@ export const dispatchCreationQueryService = {
    * Fetches full details for a specific post-dispatch plan, including assigned staff.
    */
   async fetchPostDispatchPlanDetails(planId: number) {
-    const [planRes, staffRes] = await Promise.all([
+    const [planRes, staffRes, junctionRes] = await Promise.all([
       fetchItems<any>("/items/post_dispatch_plan", {
         "filter[id][_eq]": planId,
         fields: "*",
@@ -68,6 +68,11 @@ export const dispatchCreationQueryService = {
         "filter[post_dispatch_plan_id][_eq]": planId,
         fields: "user_id,role",
         limit: -1,
+      }),
+      fetchItems<any>("/items/post_dispatch_dispatch_plans", {
+        "filter[post_dispatch_plan_id][_eq]": planId,
+        fields: "dispatch_plan_id",
+        limit: 1,
       }),
     ]);
 
@@ -79,9 +84,11 @@ export const dispatchCreationQueryService = {
     const staff = staffRes.data || [];
     const driver = staff.find((s: any) => s.role === "Driver");
     const helpers = staff.filter((s: any) => s.role === "Helper");
+    const linkedPdp = junctionRes.data?.[0];
 
     return {
       ...planData,
+      dispatch_id: linkedPdp?.dispatch_plan_id || planData.dispatch_id,
       driver_id: driver?.user_id,
       helpers: helpers.map((h: any) => ({ user_id: h.user_id })),
     };
@@ -90,13 +97,17 @@ export const dispatchCreationQueryService = {
   /**
    * Fetches Approved Pre-Dispatch Plans available for conversion.
    */
-  async fetchApprovedPreDispatchPlans(branchId?: number) {
+  async fetchApprovedPreDispatchPlans(branchId?: number, currentPlanId?: number) {
     const params: Record<string, any> = {
-      "filter[status][_eq]": "Picked",
+      "filter[_or][0][status][_eq]": "Picked",
       fields:
         "dispatch_id,dispatch_no,driver_id,vehicle_id,cluster_id,branch_id,total_amount,status",
       limit: -1,
     };
+
+    if (currentPlanId) {
+      params["filter[_or][1][dispatch_id][_eq]"] = currentPlanId;
+    }
     if (branchId) {
       params["filter[branch_id][_eq]"] = branchId;
     }
@@ -330,5 +341,46 @@ export const dispatchCreationQueryService = {
       limit: -1,
     });
     return res.data || [];
+  },
+
+  /**
+   * Fetches only the invoice IDs (PK) associated with a PDP.
+   * Useful for persisting links in post_dispatch_invoices.
+   */
+  async fetchPdpInvoiceIds(pdpId: number): Promise<number[]> {
+    const detailsRes = await fetchItems<{ sales_order_id: number }>(
+      "/items/dispatch_plan_details",
+      {
+        "filter[dispatch_id][_eq]": pdpId,
+        fields: "sales_order_id",
+        limit: -1,
+      },
+    );
+    const details = detailsRes.data || [];
+    if (!details.length) return [];
+
+    const soIds = details.map((d) => d.sales_order_id);
+    const ordersRes = await fetchItems<{ order_no: string }>(
+      "/items/sales_order",
+      {
+        "filter[order_id][_in]": soIds.join(","),
+        fields: "order_no",
+        limit: -1,
+      },
+    );
+    const orderNos = (ordersRes.data || [])
+      .map((o) => o.order_no)
+      .filter(Boolean);
+    if (!orderNos.length) return [];
+
+    const invoicesRes = await fetchItems<{ invoice_id: number }>(
+      "/items/sales_invoice",
+      {
+        "filter[order_id][_in]": orderNos.join(","),
+        fields: "invoice_id",
+        limit: -1,
+      },
+    );
+    return (invoicesRes.data || []).map((i) => i.invoice_id);
   },
 };
