@@ -1,25 +1,21 @@
 "use client";
 
-import * as React from "react";
-import Link from "next/link";
 import {
-    BookOpen,
-    Bot,
+    ArrowRightLeft,
+    Building2,
+    ClipboardList,
     Command,
-    SquareTerminal,
-    LayoutDashboard, // Dashboard
-    Package,         // Product Management
-    Users2,          // Supplier Management
-    Warehouse,       // Warehouse Management
-    Truck,           // Fleet Management
-    Boxes,           // Inventory Management
-    MapPinned,       // Logistics
-    BarChart3,       // Business Intelligence
-    ArrowLeftRight,  // Transfers
+    LayoutDashboard,
+    LineChart,
+    Package,
+    Route,
+    Truck,
+    Warehouse
 } from "lucide-react";
+import Link from "next/link";
+import * as React from "react";
 
-import {NavMain} from "./nav-main";
-import {Separator} from "@/components/ui/separator";
+import { Separator } from "@/components/ui/separator";
 import {
     Sidebar,
     SidebarContent,
@@ -29,19 +25,20 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { NavMain } from "./nav-main";
 
 const data = {
     navMain: [
         {
             title: "Dashboard",
             url: "/scm/",
-            icon: LayoutDashboard, // 🚀 Dashboard Logo
+            icon: LayoutDashboard, // 📊 Dashboard Logo
             isActive: true,
         },
         {
             title: "Product Management",
             url: "#",
-            icon: Package, // 🚀 Product Logo
+            icon: Package, // 📦 Product Logo
             isActive: false,
             items: [
                 {
@@ -94,64 +91,158 @@ const data = {
                         },
                     ],
                 },
-                {title: "Brand", url: "/scm/product-management/brand"},
-                {title: "Category", url: "/scm/product-management/category"},
-                {title: "Unit of Measurement", url: "/scm/product-management/unit-of-measurement"},
+                {
+                    title: "Brand",
+                    url: "/scm/product-management/brand",
+                },
+                {
+                    title: "Category",
+                    url: "/scm/product-management/category",
+                },
+                {
+                    title: "Unit of Measurement",
+                    url: "/scm/product-management/unit-of-measurement",
+                },
             ],
         },
         {
             title: "Supplier Management",
             url: "#",
-            icon: Users2, // 🚀 Supplier Logo
+            icon: Building2, // 🏢 Supplier/Company Logo
             isActive: false,
             items: [
-                {title: "Create Purchase Order", url: "/scm/supplier-management/create-of-purchase-order"},
-                {title: "Approval of PO", url: "/scm/supplier-management/approval-of-purchase-order"},
-                {title: "Tagging of PO", url: "/scm/supplier-management/tagging-of-po"},
-                {title: "Receiving Products", url: "/scm/supplier-management/receiving-products"},
-                {title: "Posting Of PO", url: "/scm/supplier-management/posting-of-purchase-order"},
-                {title: "PurchaseOrderSummary", url: "/scm/supplier-management/purchase-order-summary"},
+                {
+                    title: "Create Purchase Order",
+                    url: "/scm/supplier-management/create-of-purchase-order",
+                },
+                {
+                    title: "Approval of PO",
+                    url: "/scm/supplier-management/approval-of-purchase-order",
+                },
+                {
+                    title: "Tagging of PO",
+                    url: "/scm/supplier-management/tagging-of-po",
+                },
+                {
+                    title: "Receiving Products",
+                    url: "/scm/supplier-management/receiving-products",
+                },
+                {
+                    title: "Posting Of PO",
+                    url: "/scm/supplier-management/posting-of-purchase-order",
+                },
+                {
+                    title: "PurchaseOrderSummary",
+                    url: "/scm/supplier-management/purchase-order-summary",
+                },
+                {
+                    title: "Inbound/Outbound Kiosk",
+                    url: "/scm/inbound-outbound-kiosk",
+                },
             ],
         },
         {
             title: "Warehouse Management",
             url: "#",
-            icon: Warehouse, // 🚀 Warehouse Logo
+            icon: Warehouse, // 🏭 Warehouse Logo
             items: [
-                {title: "Warehouse Unit Conversion", url: "/scm/warehouse-management/warehouse-unit-conversion"},
-                {title: "Stock Transfer", url: "/scm/warehouse-management/stock-transfer"},
+                {
+                    title: "Warehouse Unit Conversion",
+                    url: "/scm/warehouse-management/warehouse-unit-conversion",
+                },
+                {
+                    title: "Stock Transfer",
+                    url: "/scm/warehouse-management/stock-transfer",
+                },
                 {
                     title: "Consolidation",
                     url: "/scm/warehouse-management/consolidation",
                     items: [
-                        {title: "Pre Dispatch Plan", url: "/scm/warehouse-management/consolidation/pre-dispatch-plan"},
-                        {title: "Delivery Picking", url: "/scm/warehouse-management/consolidation/delivery-picking"},
-                        {title: "Delivery Auditing", url: "/scm/warehouse-management/consolidation/delivery-auditing"},
-                        {title: "Withdrawals Picking", url: "/scm/warehouse-management/withdrawals-picking"},
+                        {
+                            title: "Pre Dispatch Plan",
+                            url: "#",
+                            items: [
+                                {
+                                    title: "PDP Creation",
+                                    url: "/scm/warehouse-management/consolidation/pre-dispatch-plan/pdp-creation",
+                                },
+                                {
+                                    title: "PDP Planner",
+                                    url: "/scm/warehouse-management/consolidation/pre-dispatch-plan/pdp-planner",
+                                },
+                            ],
+                        },
+                        {
+                            title: "Delivery Picking",
+                            url: "/scm/warehouse-management/consolidation/delivery-picking",
+                        },
+                        {
+                            title: "Withdrawals Picking",
+                            url: "/scm/warehouse-management/withdrawals-picking",
+                        },
                     ],
                 },
-                {title: "Active Picking", url: "/scm/warehouse-management/active-picking"}
             ],
         },
         {
             title: "Fleet Management",
             url: "#",
-            icon: Truck, // 🚀 Fleet Logo
+            icon: Truck, // 🚚 Fleet Logo
             isActive: false,
             items: [
                 {
                     title: "Vehicle Management",
                     url: "#",
                     items: [
-                        {title: "Vehicle List", url: "/scm/fleet-management/vehicle-management/vehicle-list"},
+                        {
+                            title: "Vehicle List",
+                            url: "/scm/fleet-management/vehicle-management/vehicle-list",
+                        },
                     ],
                 },
-                {title: "Driver Management", url: "#"},
+                { title: "Driver Management", url: "#" },
                 {
                     title: "Trip Management",
                     url: "#",
                     items: [
-                        {title: "Dispatch Summary", url: "/scm/fleet-management/trip-management/dispatch-summary"},
+                        {
+                            title: "Dispatch Summary",
+                            url: "/scm/fleet-management/trip-management/dispatch-summary",
+                        },
+                        {
+                            title: "Dispatch Creation",
+                            url: "/scm/fleet-management/trip-management/dispatch-creation",
+                        },
+                        {
+                            title: "Dispatch Plan",
+                            url: "/scm/fleet-management/trip-management/dispatch-plan",
+                            items: [
+                                {
+                                    title: "Creation",
+                                    url: "/scm/fleet-management/trip-management/dispatch-plan/dispatch-creation",
+                                },
+                                {
+                                    title: "Approval",
+                                    url: "/scm/fleet-management/trip-management/dispatch-plan/approval",
+                                },
+                                {
+                                    title: "Clearance",
+                                    url: "/scm/fleet-management/trip-management/dispatch-plan/clearance",
+                                },
+                                {
+                                    title: "Inbound",
+                                    url: "/scm/fleet-management/trip-management/dispatch-plan/inbound",
+                                },
+                                {
+                                    title: "Outbound",
+                                    url: "/scm/fleet-management/trip-management/dispatch-plan/outbound",
+                                },
+                            ],
+                        },
+                        {
+                            title: "Dispatch Clearance",
+                            url: "/scm/fleet-management/trip-management/dispatch-clearance",
+                        },
                     ],
                 },
                 {
@@ -160,48 +251,73 @@ const data = {
                     items: [
                         {
                             title: "Delivery Statistics",
-                            url: "/scm/fleet-management/logistics-deliveries/delivery-statistics"
+                            url: "/scm/fleet-management/logistics-deliveries/delivery-statistics",
                         },
                         {
                             title: "Logistics Summary",
-                            url: "/scm/fleet-management/logistics-deliveries/logistics-summary"
+                            url: "/scm/fleet-management/logistics-deliveries/logistics-summary",
                         },
                         {
                             title: "Pending Deliveries",
-                            url: "/scm/fleet-management/logistics-deliveries/pending-deliveries"
-                        }, {
-                            title: "Pre Dispatch Summary",
-                            url: "/scm/fleet-management/logistics-deliveries/pre-dispatch-summary"
+                            url: "/scm/fleet-management/logistics-deliveries/pending-deliveries",
                         },
-                        {title: "Pending Invoices", url: "/scm/fleet-management/logistics-deliveries/pending-invoices"},
+                        {
+                            title: "PDP Summary",
+                            url: "/scm/fleet-management/logistics-deliveries/pre-dispatch-summary",
+                        },
+                        {
+                            title: "Pending Invoices",
+                            url: "/scm/fleet-management/logistics-deliveries/pending-invoices",
+                        },
                     ],
                 },
-                {title: "Fleet Inventory", url: "#"},
+                { title: "Fleet Inventory", url: "#" },
             ],
         },
         {
             title: "Inventory Management",
             url: "#",
-            icon: Boxes, // 🚀 Inventory Logo
+            icon: ClipboardList, // 📋 Inventory/List Logo
             items: [
-                {title: "Inventory Controls", url: "/scm/inventory-management/inventory-controls"},
-                {title: "Physical Inventory", url: "/scm/inventory-management/physical-inventory"},
-                {title: "Branch Management", url: "/scm/inventory-management/branch-management"},
+                {
+                    title: "Inventory Controls",
+                    url: "/scm/inventory-management/inventory-controls",
+                },
+                {
+                    title: "Physical Inventory",
+                    url: "/scm/inventory-management/physical-inventory",
+                },
+                {
+                    title: "Branch Management",
+                    url: "/scm/inventory-management/branch-management",
+                },
             ],
         },
         {
             title: "Logistics",
             url: "#",
-            icon: MapPinned, // 🚀 Logistics Logo
+            icon: Route, // 🗺️ Routing/Logistics Logo
             items: [
                 {
                     title: "Vehicle Management",
                     url: "#",
                     items: [
-                        {title: "Vehicle Type", url: "/scm/logistics/vehicle-management/vehicle-type"},
-                        {title: "Fuel Type", url: "/scm/logistics/vehicle-management/fuel-type"},
-                        {title: "Category", url: "/scm/logistics/vehicle-management/category"},
-                        {title: "Engine Type", url: "/scm/logistics/vehicle-management/engine-type"},
+                        {
+                            title: "Vehicle Type",
+                            url: "/scm/logistics/vehicle-management/vehicle-type",
+                        },
+                        {
+                            title: "Fuel Type",
+                            url: "/scm/logistics/vehicle-management/fuel-type",
+                        },
+                        {
+                            title: "Category",
+                            url: "/scm/logistics/vehicle-management/category",
+                        },
+                        {
+                            title: "Engine Type",
+                            url: "/scm/logistics/vehicle-management/engine-type",
+                        },
                     ],
                 },
             ],
@@ -209,33 +325,45 @@ const data = {
         {
             title: "Business Intelligence Analytics",
             url: "#",
-            icon: BarChart3, // 🚀 BI Logo
+            icon: LineChart, // 📈 Analytics Logo
             items: [
                 {
                     title: "Inventory Performance Dashboard",
-                    url: "/scm/business-analytics/inventory-performance-dashboard"
+                    url: "/scm/business-analytics/inventory-performance-dashboard",
                 },
-                {title: "Stock Health Monitor", url: "/scm/business-analytics/stock-health-monitor"},
+                {
+                    title: "Stock Health Monitor",
+                    url: "/scm/business-analytics/stock-health-monitor",
+                },
                 {
                     title: "Supplier Reliability Scorecard",
-                    url: "/scm/business-analytics/supplier-reliability-scorecard"
+                    url: "/scm/business-analytics/supplier-reliability-scorecard",
                 },
             ],
         },
         {
             title: "Transfers",
             url: "#",
-            icon: ArrowLeftRight, // 🚀 Transfers Logo
+            icon: ArrowRightLeft, // 🔁 Transfer Logo
             items: [
-                {title: "Stock Withdrawal", url: "/scm/transfers/stock-withdrawal"},
-                {title: "Bad Stock Transfer", url: "/scm/transfers/bad-stock-transfer"},
-                {title: "Stock Conversion", url: "/scm/transfers/stock-conversion"},
+                {
+                    title: "Stock Withdrawal",
+                    url: "/scm/transfers/stock-withdrawal",
+                },
+                {
+                    title: "Bad Stock Transfer",
+                    url: "/scm/transfers/bad-stock-transfer",
+                },
+                {
+                    title: "Stock Conversion",
+                    url: "/scm/transfers/stock-conversion",
+                },
             ],
         },
     ],
 };
 
-export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
+export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     return (
         <Sidebar variant="inset" {...props}>
             <SidebarHeader>
@@ -243,9 +371,8 @@ export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" asChild>
                             <Link href="/main-dashboard">
-                                <div
-                                    className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                                    <Command className="size-4"/>
+                                <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
+                                    <Command className="size-4" />
                                 </div>
                                 <div className="grid flex-1 text-left text-sm leading-tight">
                                     <span className="truncate font-medium">VOS Web</span>
@@ -259,18 +386,18 @@ export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
                 </SidebarMenu>
             </SidebarHeader>
 
-            <Separator/>
+            <Separator />
 
             <SidebarContent>
-                <div className="px-4 pt-3 pb-2 text-xs font-medium text-muted-foreground uppercase tracking-widest">
+                <div className="px-4 pt-3 pb-2 text-xs font-medium text-muted-foreground">
                     Platform
                 </div>
-                <NavMain items={data.navMain}/>
+                <NavMain items={data.navMain} />
             </SidebarContent>
 
             <SidebarFooter className="p-0">
-                <Separator/>
-                <div className="py-3 text-center text-xs text-muted-foreground font-medium">
+                <Separator />
+                <div className="py-3 text-center text-xs text-muted-foreground">
                     VOS Web v2.0
                 </div>
             </SidebarFooter>
