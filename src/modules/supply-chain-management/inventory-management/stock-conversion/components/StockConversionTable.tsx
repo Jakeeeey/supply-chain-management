@@ -21,16 +21,18 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Filter, Cuboid, Layers, Users } from "lucide-react";
+import { Filter, Cuboid, Layers, Users, RefreshCw } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 
 interface StockConversionTableProps {
   data: StockConversionProduct[];
   onConvertClick: (product: StockConversionProduct) => void;
+  onRefresh: () => void;
+  isLoading?: boolean;
 }
 
-export function StockConversionTable({ data, onConvertClick }: StockConversionTableProps) {
+export function StockConversionTable({ data, onConvertClick, onRefresh, isLoading }: StockConversionTableProps) {
   const [brandFilter, setBrandFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [unitFilter, setUnitFilter] = useState("all");
@@ -77,9 +79,20 @@ export function StockConversionTable({ data, onConvertClick }: StockConversionTa
   return (
     <Card className="border-none shadow-sm h-full flex flex-col pt-3 bg-background">
       <CardHeader className="flex flex-row items-center justify-between py-4 pb-2">
-         <div className="flex items-center gap-2">
-            <Cuboid className="w-5 h-5 text-blue-600" />
-            <CardTitle className="text-xl font-semibold tracking-tight">Stock Conversion</CardTitle>
+         <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+               <Cuboid className="w-5 h-5 text-blue-600" />
+               <CardTitle className="text-xl font-semibold tracking-tight">Stock Conversion</CardTitle>
+            </div>
+            <Button 
+               variant="ghost" 
+               size="sm" 
+               onClick={onRefresh} 
+               disabled={isLoading}
+               className="h-8 w-8 p-0 hover:bg-muted rounded-full"
+            >
+               <RefreshCw className={`w-4 h-4 text-muted-foreground ${isLoading ? 'animate-spin' : ''}`} />
+            </Button>
          </div>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col gap-4 overflow-hidden pt-4">
@@ -219,23 +232,54 @@ export function StockConversionTable({ data, onConvertClick }: StockConversionTa
         </div>
         
         {/* Pagination Controls */}
-        <div className="flex items-center justify-end space-x-2 py-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            Previous
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            Next
-          </Button>
+        <div className="flex items-center justify-between py-2 border-t mt-auto">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium text-muted-foreground">Rows per page</p>
+            <Select
+              value={`${table.getState().pagination.pageSize}`}
+              onValueChange={(value) => {
+                table.setPageSize(Number(value));
+              }}
+            >
+              <SelectTrigger className="h-8 w-[70px]">
+                <SelectValue placeholder={table.getState().pagination.pageSize} />
+              </SelectTrigger>
+              <SelectContent side="top">
+                {[10, 20, 30, 50].map((pageSize) => (
+                  <SelectItem key={pageSize} value={`${pageSize}`}>
+                    {pageSize}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <div className="flex w-[100px] items-center justify-center text-sm font-medium text-muted-foreground">
+              Page {table.getState().pagination.pageIndex + 1} of{" "}
+              {table.getPageCount()}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+              className="h-8 w-8 p-0"
+            >
+              <span className="sr-only">Go to previous page</span>
+              {"<"}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+              className="h-8 w-8 p-0"
+            >
+              <span className="sr-only">Go to next page</span>
+              {">"}
+            </Button>
+          </div>
         </div>
         
       </CardContent>

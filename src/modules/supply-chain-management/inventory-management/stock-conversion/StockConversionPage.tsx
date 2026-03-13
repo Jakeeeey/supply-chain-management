@@ -9,8 +9,17 @@ import { StockConversionProduct, RFIDTag } from "./types";
 import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import ErrorPage from "@/components/shared/ErrorPage";
 
-export default function StockConversionPage() {
-  const { data, isLoading, error, refresh, convertStock } = useStockConversion();
+interface StockConversionPageProps {
+  user?: {
+    id?: number;
+    branchId?: number;
+    name?: string;
+    email?: string;
+  };
+}
+
+export default function StockConversionPage({ user }: StockConversionPageProps) {
+  const { data, isLoading, error, refresh, convertStock } = useStockConversion(user?.branchId);
   
   const [selectedProduct, setSelectedProduct] = useState<StockConversionProduct | null>(null);
   
@@ -22,6 +31,7 @@ export default function StockConversionPage() {
   const [pendingConversion, setPendingConversion] = useState<{
     qtyToConvert: number;
     targetUnitId: number;
+    targetProductId: number;
     convertedQuantity: number;
   } | null>(null);
 
@@ -33,9 +43,14 @@ export default function StockConversionPage() {
     setIsUnitModalOpen(true);
   };
 
-  const handleConfirmUnitConversion = (qtyToConvert: number, targetUnitId: number, convertedQuantity: number) => {
-    console.log("[StockConversionPage] Confirming unit conversion:", { qtyToConvert, targetUnitId, convertedQuantity });
-    setPendingConversion({ qtyToConvert, targetUnitId, convertedQuantity });
+  const handleConfirmUnitConversion = (qtyToConvert: number, targetUnit: { unitId: number, targetProductId?: number }, convertedQuantity: number) => {
+    console.log("[StockConversionPage] Confirming unit conversion:", { qtyToConvert, targetUnit, convertedQuantity });
+    setPendingConversion({ 
+      qtyToConvert, 
+      targetUnitId: targetUnit.unitId, 
+      targetProductId: targetUnit.targetProductId || 0,
+      convertedQuantity 
+    });
     setIsUnitModalOpen(false);
     
     // Open RFID Modal immediately after
@@ -53,11 +68,12 @@ export default function StockConversionPage() {
       productId: selectedProduct.productId,
       sourceUnitId: selectedProduct.currentUnitId || 11, // fallback to box
       targetUnitId: pendingConversion.targetUnitId,
+      targetProductId: pendingConversion.targetProductId || selectedProduct.productId,
       quantityToConvert: pendingConversion.qtyToConvert,
       convertedQuantity: pendingConversion.convertedQuantity,
       pricePerUnit: selectedProduct.pricePerUnit || 0,
-      branchId: 190, // We should get branchId from user session usually, using hardcoded for now or from env
-      userId: 24, // Usually from user session
+      branchId: user?.branchId || 190, // Use branchId from session or fallback
+      userId: user?.id || 24, // Use userId from session or fallback
       rfidTags: tags
     };
 
@@ -97,6 +113,8 @@ export default function StockConversionPage() {
       <StockConversionTable 
          data={data} 
          onConvertClick={handleOpenConversion} 
+         onRefresh={refresh}
+         isLoading={isLoading}
       />
 
       <StockConversionModal
