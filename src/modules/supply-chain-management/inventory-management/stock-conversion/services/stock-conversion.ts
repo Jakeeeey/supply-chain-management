@@ -50,7 +50,7 @@ export async function fetchStockList(): Promise<StockConversionProduct[]> {
       fetchWithTimeout(`${DIRECTUS_API}/items/brand?limit=-1&fields=brand_id,brand_name`, { headers, cache: "no-store" }),
       fetchWithTimeout(`${DIRECTUS_API}/items/categories?limit=-1&fields=category_id,category_name`, { headers, cache: "no-store" }),
       fetchWithTimeout(`${DIRECTUS_API}/items/product_per_supplier?limit=-1&fields=product_id,supplier_id`, { headers, cache: "no-store" }),
-      fetchWithTimeout(`${DIRECTUS_API}/items/suppliers?limit=-1&fields=id,supplier_name`, { headers, cache: "no-store" })
+      fetchWithTimeout(`${DIRECTUS_API}/items/suppliers?limit=-1&fields=id,supplier_name,supplier_shortcut`, { headers, cache: "no-store" })
     ]);
 
     console.log(`[Stock-Conversion] API fetches took ${Date.now() - startTime}ms`);
@@ -93,7 +93,12 @@ export async function fetchStockList(): Promise<StockConversionProduct[]> {
         console.log(`[Stock-Conversion] Fetched ${supData.length} suppliers`);
         supData.forEach((s: any) => {
             const sId = Number(s.id);
-            if (!isNaN(sId)) supplierNameMap.set(sId, s.supplier_name);
+            if (!isNaN(sId)) {
+                supplierNameMap.set(sId, {
+                    name: s.supplier_name,
+                    shortcut: s.supplier_shortcut
+                });
+            }
         });
     }
 
@@ -138,12 +143,14 @@ export async function fetchStockList(): Promise<StockConversionProduct[]> {
       const sIds = [...(supplierMap.get(pId) || []), ...(supplierMap.get(parentId) || [])];
       let finalSupplierId = sIds[0];
       let finalSupplierName = "No Supplier";
+      let finalSupplierShortcut = "";
 
       for (const sId of sIds) {
-          const name = supplierNameMap.get(sId);
-          if (name) {
+          const supInfo = supplierNameMap.get(sId);
+          if (supInfo) {
               finalSupplierId = sId;
-              finalSupplierName = name;
+              finalSupplierName = supInfo.name;
+              finalSupplierShortcut = supInfo.shortcut;
               break;
           }
       }
@@ -152,6 +159,7 @@ export async function fetchStockList(): Promise<StockConversionProduct[]> {
         productId: pId,
         supplierId: finalSupplierId ? Number(finalSupplierId) : undefined,
         supplierName: finalSupplierName,
+        supplierShortcut: finalSupplierShortcut,
         brand: brandMap.get(brandId) || "Unknown",
         category: catMap.get(categoryId) || "Unknown",
         productCode: p.product_code || "",
@@ -177,17 +185,46 @@ export async function fetchStockList(): Promise<StockConversionProduct[]> {
   }
 }
 
-export async function fetchInventoryMap(token?: string, branchId?: number): Promise<Record<number, number>> {
+export interface InventoryFilters {
+  supplierShortcut?: string;
+  productCategory?: string;
+  unitName?: string;
+  productBrand?: string;
+  productIds?: number[];
+}
+
+export async function fetchInventoryMap(token?: string, branchId?: number, filters?: InventoryFilters): Promise<Record<number, number>> {
   if (!SPRING_API) return {};
   try {
     const start = Date.now();
-    const url = `${SPRING_API}/api/view-running-inventory/all${branchId !== undefined ? `?branch_id=${branchId}` : ""}`;
+    let url = "";
+
+    const clean = (val: string | undefined) => (val === "all" ? undefined : val);
+    const sShortcut = clean(filters?.supplierShortcut);
+    const pCategory = clean(filters?.productCategory);
+    const uName = clean(filters?.unitName);
+    const pBrand = clean(filters?.productBrand);
+    const pIds = filters?.productIds;
+
+    if (sShortcut || pCategory || uName || pBrand || (pIds && pIds.length > 0)) {
+      const sp = new URLSearchParams();
+      if (sShortcut) sp.set("supplierShortcut", sShortcut);
+      if (pCategory) sp.set("productCategory", pCategory);
+      if (uName) sp.set("unitName", uName);
+      if (pBrand) sp.set("productBrand", pBrand);
+      if (pIds && pIds.length > 0) sp.set("productIds", pIds.join(","));
+      if (branchId !== undefined) sp.set("branch_id", String(branchId));
+      
+      url = `${SPRING_API}/api/view-running-inventory/filter?${sp.toString()}`;
+    } else {
+      url = `${SPRING_API}/api/view-running-inventory/all${branchId !== undefined ? `?branch_id=${branchId}` : ""}`;
+    }
     console.log(`[Stock-Conversion] Fetching inventory from: ${url}`);
     
     const res = await fetchWithTimeout(url, { 
       headers: springHeaders(token), 
       cache: "no-store" 
-    }, 45000);
+    }, 90000);
     
     if (!res.ok) {
         const status = res.status;
@@ -196,6 +233,28 @@ export async function fetchInventoryMap(token?: string, branchId?: number): Prom
         if (status === 401 || status === 403) {
             console.warn(`[Stock-Conversion] Spring API Unauthorized (401/403). Returning empty inventory.`);
             return {}; // Graceful fallback
+        }
+
+        // If /filter failed (e.g. 404 or 400), try falling back to /all as a last resort
+        if (url.includes("/filter")) {
+          console.warn(`[Stock-Conversion] /filter failed (${status}). Falling back to /all...`);
+          const fallbackUrl = `${SPRING_API}/api/view-running-inventory/all${branchId !== undefined ? `?branch_id=${branchId}` : ""}`;
+          const fallbackRes = await fetchWithTimeout(fallbackUrl, { 
+            headers: springHeaders(token), 
+            cache: "no-store" 
+          }, 90000);
+          
+          if (fallbackRes.ok) {
+            const json = await fallbackRes.json();
+            const items = Array.isArray(json) ? json : (json.data || []);
+            const invMap: Record<number, number> = {};
+            items.forEach((i: any) => {
+              const pId = Number(i.productId || i.product_id);
+              const qty = Number(i.runningInventory ?? i.running_inventory ?? 0);
+              if (!isNaN(pId)) invMap[pId] = (invMap[pId] || 0) + qty;
+            });
+            return invMap;
+          }
         }
 
         console.error(`[Stock-Conversion] Inventory API failed. Status: ${status}, Body: ${body}`);
@@ -215,7 +274,7 @@ export async function fetchInventoryMap(token?: string, branchId?: number): Prom
     return invMap;
   } catch (err: any) {
     console.error("[Stock-Conversion] fetchInventoryMap error:", err.message);
-    throw new AppError("FETCH_ERROR", "Inventory load failed", 500);
+    throw new AppError("FETCH_ERROR", `Inventory load failed: ${err.message}`, 500);
   }
 }
 

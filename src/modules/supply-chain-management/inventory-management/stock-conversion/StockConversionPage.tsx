@@ -19,7 +19,7 @@ interface StockConversionPageProps {
 }
 
 export default function StockConversionPage({ user }: StockConversionPageProps) {
-  const { data, isLoading, error, refresh, convertStock } = useStockConversion(user?.branchId);
+  const { data, isLoading, error, refresh, loadInventory, loadProductsInventory, convertStock } = useStockConversion(user?.branchId);
   
   const [selectedProduct, setSelectedProduct] = useState<StockConversionProduct | null>(null);
   
@@ -113,7 +113,8 @@ export default function StockConversionPage({ user }: StockConversionPageProps) 
       <StockConversionTable 
          data={data} 
          onConvertClick={handleOpenConversion} 
-         onRefresh={refresh}
+         onRefresh={loadInventory}
+         loadProductsInventory={loadProductsInventory}
          isLoading={isLoading}
       />
 

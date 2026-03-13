@@ -7,22 +7,31 @@ export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
   try {
+    const allCookiesObj = req.cookies.getAll();
     const springToken = req.cookies.get('springboot_token')?.value || 
                        req.cookies.get('vos_access_token')?.value;
     
-    const allCookies = req.cookies.getAll().map(c => c.name).join(", ");
-    console.log(`[Stock-Conversion API] All Cookies: [${allCookies}]`);
+    console.log(`[Stock-Conversion API] All Cookies:`, allCookiesObj.map(c => `${c.name}=${c.value.substring(0, 5)}...`));
     console.log(`[Stock-Conversion API] GET Request URL: ${req.url}`);
     
     const { searchParams } = new URL(req.url);
     const type = searchParams.get("type");
     const branchId = searchParams.get("branchId") ? Number(searchParams.get("branchId")) : undefined;
+    
+    // Filters for inventory
+    const filters = {
+      supplierShortcut: searchParams.get("supplierShortcut") || undefined,
+      productCategory: searchParams.get("productCategory") || undefined,
+      unitName: searchParams.get("unitName") || undefined,
+      productBrand: searchParams.get("productBrand") || undefined,
+      productIds: searchParams.get("productIds")?.split(",").map(Number).filter(n => !isNaN(n)),
+    };
 
     // Staged loading support
     if (type === "inventory") {
-        console.log(`[Stock-Conversion API] Background inventory fetch for branch ${branchId || 'ALL'}. Token present: ${!!springToken}`);
+        console.log(`[Stock-Conversion API] Background inventory fetch for branch ${branchId || 'ALL'}. Filters: ${JSON.stringify(filters)}. Token present: ${!!springToken}`);
         try {
-            const data = await fetchInventoryMap(springToken, branchId);
+            const data = await fetchInventoryMap(springToken, branchId, filters);
             console.log("[Stock-Conversion API] Background inventory fetch SUCCESS");
             return NextResponse.json({ data });
         } catch (err: any) {

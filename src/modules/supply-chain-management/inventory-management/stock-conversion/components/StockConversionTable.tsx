@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -28,11 +28,12 @@ import { Label } from "@/components/ui/label";
 interface StockConversionTableProps {
   data: StockConversionProduct[];
   onConvertClick: (product: StockConversionProduct) => void;
-  onRefresh: () => void;
+  onRefresh: (filters?: any) => void;
+  loadProductsInventory: (productIds: number[]) => void;
   isLoading?: boolean;
 }
 
-export function StockConversionTable({ data, onConvertClick, onRefresh, isLoading }: StockConversionTableProps) {
+export function StockConversionTable({ data, onConvertClick, onRefresh, loadProductsInventory, isLoading }: StockConversionTableProps) {
   const [brandFilter, setBrandFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [unitFilter, setUnitFilter] = useState("all");
@@ -75,6 +76,44 @@ export function StockConversionTable({ data, onConvertClick, onRefresh, isLoadin
       },
     },
   });
+
+  // Effect to trigger filtered inventory fetch when filters change
+  useEffect(() => {
+    // Only fetch if we actually have products loaded
+    if (!data.length) return;
+
+    const selectedShortcut = data.find(d => d.supplierName === supplierFilter)?.supplierShortcut || 
+                            (supplierFilter === "all" ? "all" : undefined);
+
+    // If everything is "all", the backend /all endpoint is slow. 
+    // We only trigger if at least one meaningful filter is set, OR on the very first load.
+    // However, the user wants /filter to be used.
+    
+    onRefresh({
+      supplierShortcut: selectedShortcut,
+      productCategory: categoryFilter,
+      unitName: unitFilter,
+      productBrand: brandFilter
+    });
+  }, [brandFilter, categoryFilter, unitFilter, supplierFilter, onRefresh, data.length]);
+
+  // Lazy Loading Effect: Watch the current page and fetch inventory for visible products
+  const pageItems = table.getRowModel().rows;
+  const visibleProductIds = JSON.stringify(pageItems.map(row => row.original.productId));
+
+  useEffect(() => {
+    if (!pageItems.length) return;
+
+    const productsToLoad = pageItems
+      .map(row => row.original)
+      .filter(p => p.inventoryLoaded === false)
+      .map(p => p.productId);
+
+    if (productsToLoad.length > 0) {
+      console.log("[StockConversionTable] Lazy loading inventory for page products:", productsToLoad);
+      loadProductsInventory(productsToLoad);
+    }
+  }, [visibleProductIds, loadProductsInventory, pageItems.length]); // Use stringified IDs
 
   return (
     <Card className="border-none shadow-sm h-full flex flex-col pt-3 bg-background">
