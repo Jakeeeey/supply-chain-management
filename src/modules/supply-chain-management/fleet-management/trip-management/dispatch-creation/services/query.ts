@@ -204,19 +204,74 @@ export const dispatchCreationQueryService = {
    * Fetches details (linked sales orders) for a specific dispatch plan.
    * Returns customer name, order status, city, and amount for each linked order.
    */
-  async fetchPlanDetails(planId: number) {
-    // 1. Get dispatch_plan_details rows for this plan
-    const detailsRes = await fetchItems<{
-      detail_id: number;
-      dispatch_id: number;
-      sales_order_id: number;
-    }>("/items/dispatch_plan_details", {
-      "filter[dispatch_id][_eq]": planId,
-      fields: "detail_id,dispatch_id,sales_order_id",
-      limit: -1,
-    });
+  async fetchPlanDetails(planId: number, tripId?: number) {
+    let details: { id?: number; sales_order_id: number; invoice_id?: number; sequence?: number }[] = [];
 
-    const details = detailsRes.data || [];
+    if (tripId) {
+      // 1a. Fetch from post_dispatch_invoices for an existing trip
+      const tripInvoicesRes = await fetchItems<{
+        id: number;
+        invoice_id: number;
+        sequence: number;
+      }>("/items/post_dispatch_invoices", {
+        "filter[post_dispatch_plan_id][_eq]": tripId,
+        fields: "id,invoice_id,sequence",
+        sort: "sequence",
+        limit: -1,
+      });
+
+      // We need to map invoice_id back to sales_order_id for consistent enrichment
+      const tripInvoices = tripInvoicesRes.data || [];
+      if (tripInvoices.length > 0) {
+        const invIds = tripInvoices.map((ti) => ti.invoice_id);
+        const invoicesRes = await fetchItems<{ invoice_id: number; order_id: string }>(
+          "/items/sales_invoice",
+          {
+            "filter[invoice_id][_in]": invIds.join(","),
+            fields: "invoice_id,order_id",
+            limit: -1,
+          }
+        );
+        const invToOrderMap = new Map((invoicesRes.data || []).map(i => [i.invoice_id, i.order_id]));
+        
+        const orderRes = await fetchItems<{ order_id: number; order_no: string }>(
+          "/items/sales_order",
+          {
+            "filter[order_no][_in]": Array.from(invToOrderMap.values()).join(","),
+            fields: "order_id,order_no",
+            limit: -1,
+          }
+        );
+        const orderNoToIdMap = new Map((orderRes.data || []).map(o => [o.order_no, o.order_id]));
+
+        details = tripInvoices.map(ti => {
+          const orderNo = invToOrderMap.get(ti.invoice_id);
+          const soId = orderNo ? orderNoToIdMap.get(orderNo) : undefined;
+          return {
+            id: ti.id,
+            invoice_id: ti.invoice_id,
+            sales_order_id: soId || 0,
+            sequence: ti.sequence,
+          };
+        }).filter(d => d.sales_order_id > 0);
+      }
+    } else {
+      // 1b. Get dispatch_plan_details rows for this plan (standard PDP enrichment)
+      const detailsRes = await fetchItems<{
+        detail_id: number;
+        dispatch_id: number;
+        sales_order_id: number;
+      }>("/items/dispatch_plan_details", {
+        "filter[dispatch_id][_eq]": planId,
+        fields: "detail_id,dispatch_id,sales_order_id",
+        limit: -1,
+      });
+      details = (detailsRes.data || []).map(d => ({
+        id: d.detail_id,
+        sales_order_id: d.sales_order_id,
+      }));
+    }
+
     if (!details.length) return { data: [] };
 
     // 2. Fetch linked sales orders
@@ -240,15 +295,16 @@ export const dispatchCreationQueryService = {
 
     // 3. Fetch linked invoices (SO.order_no -> SI.order_id)
     const orderNos = orders.map((o) => o.order_no).filter(Boolean);
-    let invoiceMap = new Map<string, { transaction_status: string }>();
+    let invoiceMap = new Map<string, { invoice_id: number; order_id: string; transaction_status: string }>();
 
     if (orderNos.length) {
       const invoicesRes = await fetchItems<{
+        invoice_id: number;
         order_id: string;
         transaction_status: string;
       }>("/items/sales_invoice", {
         "filter[order_id][_in]": orderNos.join(","),
-        fields: "order_id,transaction_status",
+        fields: "invoice_id,order_id,transaction_status",
         limit: -1,
       });
       invoiceMap = new Map(
@@ -303,8 +359,9 @@ export const dispatchCreationQueryService = {
         if (!isReady) return null;
 
         return {
-          detail_id: d.detail_id,
+          detail_id: d.id,
           sales_order_id: d.sales_order_id,
+          invoice_id: invoice?.invoice_id || d.invoice_id,
           order_no: order.order_no || "—",
           // The UI expects order_status for its displays right now, so we will assign the invoice status here.
           // BUT, we will additionally pass the true_order_status so the validation logic can use it instead.

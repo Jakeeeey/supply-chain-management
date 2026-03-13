@@ -42,6 +42,16 @@ export const DispatchCreationFormSchema = z.object({
 
   // Budgeting (post_dispatch_budgeting)
   budgets: z.array(BudgetLineSchema).optional(),
+
+  // Invoices (post_dispatch_invoices) - needed for reordering/persistence
+  invoices: z
+    .array(
+      z.object({
+        invoice_id: z.number(),
+        sequence: z.number(),
+      }),
+    )
+    .optional(),
 });
 
 export type DispatchCreationFormValues = z.infer<

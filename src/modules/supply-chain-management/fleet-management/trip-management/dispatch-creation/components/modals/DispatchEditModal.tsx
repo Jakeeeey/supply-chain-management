@@ -62,11 +62,13 @@ import {
 import { useEffect, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { dispatchCreationLifecycleService } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/services/lifecycle";
 import { DateTimePicker } from "../shared/date-time-picker";
 
 interface PlanDetailItem {
   detail_id: number;
   sales_order_id: number;
+  invoice_id: number;
   order_no: string;
   order_status: string;
   true_order_status?: string;
@@ -321,11 +323,11 @@ export function DispatchEditModal({
             budgets: [],
           });
 
-          // Also load the current PDP's invoices
+          // Also load the current PDP's invoices (pass trip_id to get SAVED order)
           if (p.dispatch_id) {
             setIsLoadingDetails(true);
             const detailsRes = await fetch(
-              `/api/scm/fleet-management/trip-management/dispatch-creation?type=plan_details&plan_id=${p.dispatch_id}`
+              `/api/scm/fleet-management/trip-management/dispatch-creation?type=plan_details&plan_id=${p.dispatch_id}&trip_id=${planId}`
             );
             const detailsResult = await detailsRes.json();
             setPlanDetails(detailsResult.data || []);
@@ -354,10 +356,14 @@ export function DispatchEditModal({
     if (!planId) return;
     setIsSaving(true);
     try {
-      const { dispatchCreationLifecycleService } = await import(
-        "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/services/lifecycle"
-      );
-      await dispatchCreationLifecycleService.updateTrip(planId, values);
+      const payloadWithInvoices = {
+        ...values,
+        invoices: planDetails.map((d, idx) => ({
+          invoice_id: d.invoice_id,
+          sequence: idx + 1,
+        })),
+      };
+      await dispatchCreationLifecycleService.updateTrip(planId, payloadWithInvoices);
       toast.success("Dispatch plan updated successfully!");
       onSuccess();
       onOpenChange(false);

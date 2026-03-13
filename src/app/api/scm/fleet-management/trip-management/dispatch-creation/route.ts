@@ -38,6 +38,7 @@ export async function GET(req: NextRequest) {
 
     if (type === "plan_details") {
       const planId = searchParams.get("plan_id");
+      const tripId = searchParams.get("trip_id");
       if (!planId) {
         return NextResponse.json(
           { error: "plan_id is required" },
@@ -46,6 +47,7 @@ export async function GET(req: NextRequest) {
       }
       const result = await dispatchCreationQueryService.fetchPlanDetails(
         Number(planId),
+        tripId ? Number(tripId) : undefined
       );
       return NextResponse.json(result);
     }
@@ -265,13 +267,13 @@ export async function PATCH(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const planId = searchParams.get("plan_id");
     const action = searchParams.get("action");
+    const body = await req.json();
 
     if (!planId) {
       return NextResponse.json({ error: "plan_id is required" }, { status: 400 });
     }
 
     if (action === "update_trip") {
-      const body = await req.json();
       
       // 1. Fetch existing PDP link from junction table
       const junctionFetchRes = await fetch(
@@ -311,28 +313,6 @@ export async function PATCH(req: NextRequest) {
           });
         }
 
-        // Sync Invoices: Delete old ones and insert new ones
-        await fetch(`${DIRECTUS_BASE}/items/post_dispatch_invoices?filter[post_dispatch_plan_id][_eq]=${planId}`, {
-          method: "DELETE",
-          headers: directusHeaders(),
-        });
-
-        const invoiceIds = await dispatchCreationQueryService.fetchPdpInvoiceIds(newPdpId);
-        if (invoiceIds.length > 0) {
-          const invoicePayloads = invoiceIds.map((id, index) => ({
-            post_dispatch_plan_id: Number(planId),
-            invoice_id: id,
-            sequence: index + 1,
-            status: "Not Fulfilled",
-          }));
-          await Promise.all(invoicePayloads.map(ip => 
-            fetch(`${DIRECTUS_BASE}/items/post_dispatch_invoices`, {
-              method: "POST",
-              headers: directusHeaders(),
-              body: JSON.stringify(ip)
-            })
-          ));
-        }
       } else if (newPdpId && !oldPdpId) {
         // Just mark new as Dispatched and create junction if it wasn't linked before
         await fetch(`${DIRECTUS_BASE}/items/dispatch_plan/${newPdpId}`, {
@@ -351,9 +331,62 @@ export async function PATCH(req: NextRequest) {
             linked_by: body.driver_id,
           }),
         });
+      }
+      
+      // 3. Sync Invoices
+      if (body.invoices && body.invoices.length > 0) {
+        // Explicit reordering from client
+        const oldInvoicesRes = await fetch(
+          `${DIRECTUS_BASE}/items/post_dispatch_invoices?filter[post_dispatch_plan_id][_eq]=${planId}&fields=id`,
+          { headers: directusHeaders() }
+        );
+        const oldInvoicesData = await oldInvoicesRes.json();
+        const oldInvoiceIds = (oldInvoicesData.data || []).map((i: any) => i.id);
 
-        // Insert new invoices
-        const invoiceIds = await dispatchCreationQueryService.fetchPdpInvoiceIds(newPdpId);
+        if (oldInvoiceIds.length > 0) {
+          await fetch(`${DIRECTUS_BASE}/items/post_dispatch_invoices`, {
+            method: "DELETE",
+            headers: directusHeaders(),
+            body: JSON.stringify(oldInvoiceIds),
+          });
+        }
+
+        const invoicePayloads = body.invoices.map((inv: any, index: number) => ({
+          post_dispatch_plan_id: Number(planId),
+          invoice_id: inv.invoice_id,
+          sequence: inv.sequence || index + 1,
+          status: "Not Fulfilled",
+        }));
+
+        await Promise.all(
+          invoicePayloads.map((ip: any) =>
+            fetch(`${DIRECTUS_BASE}/items/post_dispatch_invoices`, {
+              method: "POST",
+              headers: directusHeaders(),
+              body: JSON.stringify(ip),
+            }),
+          ),
+        );
+      } else if (newPdpId && oldPdpId && newPdpId !== oldPdpId) {
+        // PDP Changed, fetch default invoices from new PDP
+        const oldInvoicesRes = await fetch(
+          `${DIRECTUS_BASE}/items/post_dispatch_invoices?filter[post_dispatch_plan_id][_eq]=${planId}&fields=id`,
+          { headers: directusHeaders() }
+        );
+        const oldInvoicesData = await oldInvoicesRes.json();
+        const oldInvoiceIds = (oldInvoicesData.data || []).map((i: any) => i.id);
+
+        if (oldInvoiceIds.length > 0) {
+          await fetch(`${DIRECTUS_BASE}/items/post_dispatch_invoices`, {
+            method: "DELETE",
+            headers: directusHeaders(),
+            body: JSON.stringify(oldInvoiceIds),
+          });
+        }
+
+        const invoiceIds = await dispatchCreationQueryService.fetchPdpInvoiceIds(
+          newPdpId,
+        );
         if (invoiceIds.length > 0) {
           const invoicePayloads = invoiceIds.map((id, index) => ({
             post_dispatch_plan_id: Number(planId),
@@ -361,17 +394,42 @@ export async function PATCH(req: NextRequest) {
             sequence: index + 1,
             status: "Not Fulfilled",
           }));
-          await Promise.all(invoicePayloads.map(ip => 
-            fetch(`${DIRECTUS_BASE}/items/post_dispatch_invoices`, {
-              method: "POST",
-              headers: directusHeaders(),
-              body: JSON.stringify(ip)
-            })
-          ));
+          await Promise.all(
+            invoicePayloads.map((ip) =>
+              fetch(`${DIRECTUS_BASE}/items/post_dispatch_invoices`, {
+                method: "POST",
+                headers: directusHeaders(),
+                body: JSON.stringify(ip),
+              }),
+            ),
+          );
+        }
+      } else if (newPdpId && !oldPdpId) {
+        // New PDP link, fetch default invoices
+        const invoiceIds = await dispatchCreationQueryService.fetchPdpInvoiceIds(
+          newPdpId,
+        );
+        if (invoiceIds.length > 0) {
+          const invoicePayloads = invoiceIds.map((id, index) => ({
+            post_dispatch_plan_id: Number(planId),
+            invoice_id: id,
+            sequence: index + 1,
+            status: "Not Fulfilled",
+          }));
+          await Promise.all(
+            invoicePayloads.map((ip) =>
+              fetch(`${DIRECTUS_BASE}/items/post_dispatch_invoices`, {
+                method: "POST",
+                headers: directusHeaders(),
+                body: JSON.stringify(ip),
+              }),
+            ),
+          );
         }
       }
 
       const planPayload = {
+        dispatch_id: body.pre_dispatch_plan_id,
         driver_id: body.driver_id,
         vehicle_id: body.vehicle_id,
         starting_point: body.starting_point,
@@ -379,6 +437,7 @@ export async function PATCH(req: NextRequest) {
         estimated_time_of_arrival: new Date(body.estimated_time_of_arrival).toISOString(),
         remarks: body.remarks,
         amount: body.amount,
+        encoder_id: body.driver_id, // Ensure encoder is set/updated
       };
 
       // 1. Update Header
@@ -443,7 +502,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     // Default: Budget Update (if no action, or action='budget')
-    const { budgets } = await req.json();
+    const { budgets } = body;
 
     // 1. Delete existing budgets for this plan
     // We fetch them first to get their IDs if direct delete-by-filter is not supported or to be safer
