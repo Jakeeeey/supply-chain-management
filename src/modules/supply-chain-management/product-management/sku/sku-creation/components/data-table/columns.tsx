@@ -32,10 +32,10 @@ import { CellHelpers, statusVariants } from "../../utils/sku-helpers";
 export const getColumns = (
   masterData: MasterData | null,
   onEdit?: (sku: SKU) => void,
-  onDelete?: (id: number) => void,
-  onSubmitForApproval?: (id: number) => void,
-  onApprove?: (id: number) => void,
-  onReject?: (id: number) => void,
+  onDelete?: (sku: SKU) => void,
+  onSubmitForApproval?: (sku: SKU) => void,
+  onApprove?: (id: number | string) => void,
+  onReject?: (id: number | string) => void,
 ): ColumnDef<SKU>[] => [
   {
     id: "select",
@@ -220,9 +220,7 @@ export const getColumns = (
               {(status === "draft" || status === "rejected") && (
                 <>
                   {onSubmitForApproval && (
-                    <DropdownMenuItem
-                      onClick={() => onSubmitForApproval(id as number)}
-                    >
+                    <DropdownMenuItem onClick={() => onSubmitForApproval(sku)}>
                       <Send className="h-4 w-4 mr-2" /> Submit
                     </DropdownMenuItem>
                   )}
@@ -254,7 +252,7 @@ export const getColumns = (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
-                    onClick={() => onDelete(id as number)}
+                    onClick={() => onDelete(sku)}
                     className="text-destructive"
                   >
                     <Trash2 className="h-4 w-4 mr-2" /> Delete

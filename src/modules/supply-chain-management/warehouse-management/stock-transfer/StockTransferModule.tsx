@@ -109,7 +109,7 @@ export default function StockTransferModule() {
       {/* ═══════════════════════════════════════════════
           SCREEN LAYOUT  (hidden on print)
       ═══════════════════════════════════════════════ */}
-      <div className="print:hidden p-6 space-y-6 max-w-screen-xl mx-auto">
+      <div className="print:hidden w-full min-w-0 p-6 space-y-6">
         <h1 className="text-2xl font-bold tracking-tight text-foreground">
           Stock Transfer
         </h1>

@@ -15,9 +15,6 @@ import { NavUser } from "../../../_components/nav-user";
 
 import { cookies } from "next/headers";
 
-// ✅ Wire the module you asked for
-import { SKUCreationPage } from "@/modules/supply-chain-management/product-management/sku/sku-creation";
-
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -76,7 +73,6 @@ function buildHeaderUserFromToken(token: string | null | undefined) {
 }
 
 export default async function Page() {
-  // ✅ Next.js 16: cookies() is async
   const cookieStore = await cookies();
   const token = cookieStore.get(COOKIE_NAME)?.value ?? null;
 

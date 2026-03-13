@@ -8,7 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { KioskDispatchPlan } from "../types";
 import { format } from "date-fns";
-import { Calendar, Truck, User, Fingerprint, CheckCircle2 } from "lucide-react";
+import { Calendar, Truck, User, Fingerprint, CheckCircle2, ArrowRight } from "lucide-react";
+import { DispatchSummaryModal } from "./DispatchSummaryModal";
+import { ArrivalDetailsModal } from "./ArrivalDetailsModal";
+
+
 
 import { toast } from "sonner";
 
@@ -29,6 +33,10 @@ export function DispatchModal({ plan, open, onOpenChange, onSuccess }: DispatchM
     const [isLookingUp, setIsLookingUp] = React.useState(false);
     const [subUser, setSubUser] = React.useState<{ user_id: number; name: string; rfid: string } | null>(null);
     const [isRoleModalOpen, setIsRoleModalOpen] = React.useState(false);
+    const [showSummaryModal, setShowSummaryModal] = React.useState(false);
+    const [showArrivalSummaryModal, setShowArrivalSummaryModal] = React.useState(false);
+
+
 
     // Overrides for substitution
     const [driverOverride, setDriverOverride] = React.useState<{ name: string; rfid: string; id: number } | null>(null);
@@ -46,7 +54,11 @@ export function DispatchModal({ plan, open, onOpenChange, onSuccess }: DispatchM
             setDriverOverride(null);
             setHelperOverrides([]);
             setIsConfirming(false);
+            setShowSummaryModal(false);
+            setShowArrivalSummaryModal(false);
         }
+
+
     }, [open]);
 
     // Focus management effect
@@ -134,6 +146,7 @@ export function DispatchModal({ plan, open, onOpenChange, onSuccess }: DispatchM
             // 1. Check if matches assigned Driver
             if (plan.driver_rfid && cleanRfidLower === plan.driver_rfid.toLowerCase()) {
                 setDriverChecked(true);
+                setDriverOverride(null);
                 setRfid("");
                 toast.success("Driver Verified", {
                     description: plan.driver_name
@@ -209,10 +222,16 @@ export function DispatchModal({ plan, open, onOpenChange, onSuccess }: DispatchM
         if (role === "Driver") {
             setDriverOverride({ name: subUser.name, rfid: subUser.rfid, id: subUser.user_id });
             setDriverChecked(true);
+            toast.success("Driver Substituted", {
+                description: `${subUser.name} is now the assigned driver.`
+            });
         } else {
             // Append another helper instead of substituting
             setHelperOverrides(prev => [...prev, { name: subUser.name, rfid: subUser.rfid, id: subUser.user_id }]);
             setVerifiedHelperRfids(prev => Array.from(new Set([...prev, subUser.rfid])));
+            toast.success("Helper Added", {
+                description: `${subUser.name} has been added as a helper.`
+            });
         }
 
         setIsRoleModalOpen(false);
@@ -267,8 +286,17 @@ export function DispatchModal({ plan, open, onOpenChange, onSuccess }: DispatchM
             : driverChecked
     );
 
-    const handleConfirm = async () => {
+    const handleConfirm = async (deliveryStatuses?: Record<string, string | null>, remarks?: string) => {
+        if (isDispatch && !showSummaryModal) {
+            setShowSummaryModal(true);
+            return;
+        }
+        if (isInbound && !showArrivalSummaryModal) {
+            setShowArrivalSummaryModal(true);
+            return;
+        }
         setIsConfirming(true);
+
         try {
             const nextStatus = isDispatch ? "For Inbound" : isInbound ? "For Clearance" : plan.status;
 
@@ -282,7 +310,9 @@ export function DispatchModal({ plan, open, onOpenChange, onSuccess }: DispatchM
                     helper_ids: helperOverrides.map(h => h.id), // Send all new helpers
                     driver_verified: driverChecked,
                     helper_verified_rfids: verifiedHelperRfids, // Send all verified RFIDs (original + overrides)
-                    [isDispatch ? "time_of_dispatch" : "time_of_arrival"]: new Date().toISOString() // Correct timestamp field based on mode
+                    [isDispatch ? "time_of_dispatch" : "time_of_arrival"]: new Date().toISOString(), // Correct timestamp field based on mode
+                    deliveryStatuses,
+                    remarks
                 })
             });
 
@@ -477,17 +507,41 @@ export function DispatchModal({ plan, open, onOpenChange, onSuccess }: DispatchM
                                     ? `!text-white ${isDispatch ? "!bg-emerald-600 shadow-emerald-500/40" : "!bg-red-600 shadow-red-500/40"} cursor-pointer`
                                     : "bg-muted text-muted-foreground opacity-40 pointer-events-none"
                                     }`}
-                                onClick={handleConfirm}
+                                onClick={() => handleConfirm()}
                                 disabled={isConfirming || !canConfirm}
                             >
-                                {isConfirming ? "Processing..." : isDispatch ? "Confirm Dispatch" : isInbound ? "Confirm Arrival" : "Process"}
+                                {isConfirming ? "Processing..." : (isDispatch || isInbound) ? (
+                                    <>
+                                        Next
+                                        <ArrowRight className="ml-2 h-4 w-4" />
+                                    </>
+                                ) : "Process"}
+
                             </Button>
                         </div>
                     </div>
                 </DialogContent>
             </Dialog>
 
+            <DispatchSummaryModal
+                open={showSummaryModal}
+                onOpenChange={setShowSummaryModal}
+                plan={plan}
+                onConfirm={(_, remarks) => handleConfirm(undefined, remarks)}
+                isConfirming={isConfirming}
+            />
+
+            <ArrivalDetailsModal
+                open={showArrivalSummaryModal}
+                onOpenChange={setShowArrivalSummaryModal}
+                plan={plan}
+                onConfirm={handleConfirm}
+                isConfirming={isConfirming}
+            />
+
+
             {/* Role Selection Secondary Dialog */}
+
             <Dialog open={isRoleModalOpen} onOpenChange={setIsRoleModalOpen}>
                 <DialogContent className="max-w-[440px] rounded-[32px] p-0 overflow-hidden shadow-[0_32px_128px_-12px_rgba(0,0,0,0.6)] border border-border/10 bg-background">
                     <div className="bg-amber-500 h-2 w-full animate-pulse" />

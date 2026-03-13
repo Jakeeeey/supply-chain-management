@@ -189,7 +189,7 @@ export default function PurchaseOrderReviewPanel(props: {
     const poAny: any = React.useMemo(() => unwrap(props.po), [props.po]);
 
     React.useEffect(() => {
-        setMarkAsInvoice(false);
+        setMarkAsInvoice(!!(poAny?.is_invoice ?? false));
         setPaymentTerm("cash_on_delivery");
         setTermsDays(30);
 
@@ -628,9 +628,14 @@ export default function PurchaseOrderReviewPanel(props: {
 
                             <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
                                 <div className="flex items-center gap-3">
-                                    <Switch checked={markAsInvoice} onCheckedChange={setMarkAsInvoice} id="markAsInvoice" />
-                                    <Label htmlFor="markAsInvoice" className="text-sm font-bold">
-                                        Mark as Invoice
+                                    <Switch 
+                                        checked={markAsInvoice} 
+                                        onCheckedChange={setMarkAsInvoice} 
+                                        id="markAsInvoice" 
+                                        disabled={!!poAny?.is_invoice}
+                                    />
+                                    <Label htmlFor="markAsInvoice" className={cn("text-sm font-bold", !!poAny?.is_invoice && "opacity-70")}>
+                                        Mark as Invoice {!!poAny?.is_invoice && "(Locked)"}
                                     </Label>
                                 </div>
 
