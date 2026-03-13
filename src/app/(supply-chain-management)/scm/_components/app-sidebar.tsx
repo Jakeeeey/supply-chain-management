@@ -175,6 +175,9 @@ const data = {
                         {
                             title: "Delivery Picking",
                             url: "/scm/warehouse-management/consolidation/delivery-picking",
+                        }, {
+                            title: "Delivery Auditing",
+                            url: "/scm/warehouse-management/consolidation/delivery-auditing",
                         },
                         {
                             title: "Withdrawals Picking",
