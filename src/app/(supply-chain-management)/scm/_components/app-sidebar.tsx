@@ -95,6 +95,17 @@ const data = {
       ],
     },
     {
+      title: "Outbound",
+      url: "#",
+      icon: BookOpen,
+      items: [
+        {
+          title: "Return to Supplier",
+          url: "/scm/outbound/return-to-supplier",
+        },
+      ],
+    },
+    {
       title: "Supplier Management",
       url: "#",
       icon: SquareTerminal,
@@ -219,26 +230,26 @@ const data = {
                   url: "/scm/fleet-management/trip-management/dispatch-plan/clearance",
                 },
                 {
-                    title: "Logistics and Deliveries",
-                    url: "#",
-                    items: [
-                        {
-                            title: "Delivery Statistics",
-                            url: "/scm/fleet-management/logistics-deliveries/delivery-statistics"
-                        },
-                        {
-                            title: "Logistics Summary",
-                            url: "/scm/fleet-management/logistics-deliveries/logistics-summary"
-                        },
-                        {
-                            title: "Pending Deliveries",
-                            url: "/scm/fleet-management/logistics-deliveries/pending-deliveries"
-                        }, {
-                            title: "Pre Dispatch Summary",
-                            url: "/scm/fleet-management/logistics-deliveries/pre-dispatch-summary"
-                        },
-                        {title: "Pending Invoices", url: "/scm/fleet-management/logistics-deliveries/pending-invoices"},
-                    ],
+                  title: "Logistics and Deliveries",
+                  url: "#",
+                  items: [
+                    {
+                      title: "Delivery Statistics",
+                      url: "/scm/fleet-management/logistics-deliveries/delivery-statistics"
+                    },
+                    {
+                      title: "Logistics Summary",
+                      url: "/scm/fleet-management/logistics-deliveries/logistics-summary"
+                    },
+                    {
+                      title: "Pending Deliveries",
+                      url: "/scm/fleet-management/logistics-deliveries/pending-deliveries"
+                    }, {
+                      title: "Pre Dispatch Summary",
+                      url: "/scm/fleet-management/logistics-deliveries/pre-dispatch-summary"
+                    },
+                    { title: "Pending Invoices", url: "/scm/fleet-management/logistics-deliveries/pending-invoices" },
+                  ],
                 },
                 {
                   title: "Outbound",
