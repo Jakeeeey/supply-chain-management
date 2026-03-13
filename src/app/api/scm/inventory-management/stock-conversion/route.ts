@@ -10,6 +10,8 @@ export async function GET(req: NextRequest) {
     const springToken = req.cookies.get('springboot_token')?.value || 
                        req.cookies.get('vos_access_token')?.value;
     
+    const allCookies = req.cookies.getAll().map(c => c.name).join(", ");
+    console.log(`[Stock-Conversion API] All Cookies: [${allCookies}]`);
     console.log(`[Stock-Conversion API] GET Request URL: ${req.url}`);
     
     const { searchParams } = new URL(req.url);
