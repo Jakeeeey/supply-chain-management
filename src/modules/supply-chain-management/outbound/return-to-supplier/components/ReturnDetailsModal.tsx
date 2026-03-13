@@ -35,7 +35,12 @@ export function ReturnDetailsModal({
   onUpdateSuccess,
 }: ReturnDetailsModalProps) {
   const componentRef = useRef<HTMLDivElement>(null);
-  const { refs, inventory, loadInventory } = useReturnCreationData(isOpen);
+  const {
+    refs,
+    inventory,
+    loadInventory,
+    isLoading: isLoadingInventory,
+  } = useReturnCreationData(isOpen);
 
   const [items, setItems] = useState<CartItem[]>([]);
   const [remarks, setRemarks] = useState("");
@@ -584,7 +589,7 @@ export function ReturnDetailsModal({
                 )
               }
               onClearAll={() => setItems([])}
-              isLoading={loading}
+              isLoading={loading || isLoadingInventory}
             />
           </div>
         </DialogContent>
