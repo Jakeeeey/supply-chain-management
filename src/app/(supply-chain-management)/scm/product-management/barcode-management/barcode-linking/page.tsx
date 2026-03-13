@@ -11,9 +11,9 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { NavUser } from "../../../_components/nav-user";
 
 import { cookies } from "next/headers";
-import ComingSoon from "@/app/(supply-chain-management)/scm/_components/ComingSoon";
+
 // ✅ Wire the module you asked for
-// import BarCodeLinking from "@/modules/supply-chain-management/product-management/barcode-management/barcode-linking/BarCodeLinkingModule";
+import BarCodeLinking from "@/modules/supply-chain-management/product-management/barcode-management/barcode-linking/BarCodeLinkingModule";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -116,7 +116,7 @@ export default async function Page() {
 
       {/* ✅ Only content scrolls inside RIGHT column */}
       <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-2 sm:p-4">
-        <ComingSoon />
+        <BarCodeLinking />
       </main>
     </div>
   );

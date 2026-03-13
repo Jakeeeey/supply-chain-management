@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +12,14 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent } from "@/components/ui/card";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   Package,
   Barcode as BarcodeIcon,
   Ruler,
@@ -20,8 +28,11 @@ import {
   Truck,
   Tag,
   Layers,
+  PackageOpen,
+  Loader2,
 } from "lucide-react";
-import { Product, Unit, Category, getSupplierName } from "../types";
+import { Product, Unit, Category, BundleItem, getSupplierName } from "../types";
+import { getBundleItems } from "../providers/fetchProviders";
 
 interface ProductDetailModalProps {
   open: boolean;
@@ -34,6 +45,24 @@ export function ProductDetailModal({
   product,
   onClose,
 }: ProductDetailModalProps) {
+  const [bundleItems, setBundleItems] = useState<BundleItem[]>([]);
+  const [loadingItems, setLoadingItems] = useState(false);
+
+  const isBundle = product?.record_type === "bundle";
+
+  // Fetch bundle items when a bundle is opened
+  useEffect(() => {
+    if (open && isBundle && product) {
+      setLoadingItems(true);
+      getBundleItems(product.product_id)
+        .then((items) => setBundleItems(items))
+        .catch((err) => console.error("Failed to load bundle items", err))
+        .finally(() => setLoadingItems(false));
+    } else {
+      setBundleItems([]);
+    }
+  }, [open, isBundle, product]);
+
   if (!product) return null;
 
   const unitName =
@@ -66,15 +95,19 @@ export function ProductDetailModal({
         <div className="px-6 pt-6 pb-4">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold flex items-center gap-2">
-              <Package className="h-5 w-5 text-primary" />
-              Product Details
+              {isBundle ? (
+                <PackageOpen className="h-5 w-5 text-amber-500" />
+              ) : (
+                <Package className="h-5 w-5 text-primary" />
+              )}
+              {isBundle ? "Bundle Details" : "Product Details"}
             </DialogTitle>
           </DialogHeader>
         </div>
 
         <ScrollArea className="max-h-[75vh]">
           <div className="px-6 pb-6 space-y-5">
-            {/* Product Identity */}
+            {/* Product/Bundle Identity */}
             <div className="space-y-2">
               <h3 className="text-base font-bold text-foreground leading-snug">
                 {product.description || product.product_name}
@@ -84,22 +117,91 @@ export function ProductDetailModal({
                   variant="outline"
                   className="font-mono text-xs text-muted-foreground"
                 >
-                  SKU: {product.product_code}
-                </Badge>
-                <Badge className="bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 text-xs">
-                  Regular Inventory
+                  {isBundle ? "BDL" : "SKU"}: {product.product_code}
                 </Badge>
                 <Badge
-                  variant="secondary"
-                  className="text-xs"
+                  className={
+                    isBundle
+                      ? "bg-amber-500/10 text-amber-600 border-amber-500/20 hover:bg-amber-500/20 text-xs"
+                      : "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 text-xs"
+                  }
                 >
-                  <Layers className="h-3 w-3 mr-1" />
-                  {categoryName}
+                  {isBundle ? "Bundle" : "Regular Inventory"}
                 </Badge>
+                {!isBundle && (
+                  <Badge
+                    variant="secondary"
+                    className="text-xs"
+                  >
+                    <Layers className="h-3 w-3 mr-1" />
+                    {categoryName}
+                  </Badge>
+                )}
+                {isBundle && categoryName !== "Uncategorized" && (
+                  <Badge
+                    variant="secondary"
+                    className="text-xs"
+                  >
+                    <Layers className="h-3 w-3 mr-1" />
+                    {categoryName}
+                  </Badge>
+                )}
               </div>
             </div>
 
             <Separator />
+
+            {/* Bundle Items Section — Only for bundles */}
+            {isBundle && (
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <PackageOpen className="h-4 w-4" /> Bundle Items
+                </h4>
+                <Card>
+                  <CardContent className="p-0">
+                    {loadingItems ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                        <span className="ml-2 text-sm text-muted-foreground">
+                          Loading items...
+                        </span>
+                      </div>
+                    ) : bundleItems.length === 0 ? (
+                      <div className="text-center py-6 text-sm text-muted-foreground">
+                        No items in this bundle.
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/30">
+                            <TableHead className="text-xs">SKU</TableHead>
+                            <TableHead className="text-xs">Product Name</TableHead>
+                            <TableHead className="text-xs text-right">Qty</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {bundleItems.map((item) => (
+                            <TableRow key={item.id} className="border-0">
+                              <TableCell className="font-mono text-sm text-primary py-2">
+                                {item.product_code}
+                              </TableCell>
+                              <TableCell className="text-sm py-2">
+                                {item.product_name}
+                              </TableCell>
+                              <TableCell className="text-sm font-medium text-right py-2">
+                                {item.quantity}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {isBundle && <Separator />}
 
             {/* Barcode Information */}
             <div className="space-y-3">
@@ -180,45 +282,47 @@ export function ProductDetailModal({
               </div>
             </div>
 
-            {/* Metadata */}
-            <div className="space-y-3">
-              <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                <Tag className="h-4 w-4" /> Metadata
-              </h4>
-              <Card>
-                <CardContent className="p-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                        <Truck className="h-3 w-3" /> Supplier
-                      </span>
-                      <p
-                        className="text-sm font-medium text-foreground truncate"
-                        title={supplierName}
-                      >
-                        {supplierName}
-                      </p>
+            {/* Metadata — Only for products, bundles don't have supplier/date linked */}
+            {!isBundle && (
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <Tag className="h-4 w-4" /> Metadata
+                </h4>
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                          <Truck className="h-3 w-3" /> Supplier
+                        </span>
+                        <p
+                          className="text-sm font-medium text-foreground truncate"
+                          title={supplierName}
+                        >
+                          {supplierName}
+                        </p>
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                          <Package className="h-3 w-3" /> UOM
+                        </span>
+                        <p className="text-sm font-medium text-foreground">
+                          {unitName}
+                        </p>
+                      </div>
+                      <div className="space-y-1 col-span-2">
+                        <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                          <Calendar className="h-3 w-3" /> Date Linked
+                        </span>
+                        <p className="text-sm font-medium text-foreground">
+                          {dateLinked}
+                        </p>
+                      </div>
                     </div>
-                    <div className="space-y-1">
-                      <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                        <Package className="h-3 w-3" /> UOM
-                      </span>
-                      <p className="text-sm font-medium text-foreground">
-                        {unitName}
-                      </p>
-                    </div>
-                    <div className="space-y-1 col-span-2">
-                      <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                        <Calendar className="h-3 w-3" /> Date Linked
-                      </span>
-                      <p className="text-sm font-medium text-foreground">
-                        {dateLinked}
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
           </div>
         </ScrollArea>
       </DialogContent>

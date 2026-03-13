@@ -120,16 +120,20 @@ export function MasterlistTable({
                     {product.barcode}
                   </TableCell>
                   <TableCell>
-                    <span className="font-medium">
+                    <div className="whitespace-normal break-words min-w-[250px] font-medium">
                       {product.description || product.product_name}
-                    </span>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Badge
                       variant="secondary"
-                      className="bg-primary/10 text-primary border-primary/20"
+                      className={
+                        product.record_type === "bundle"
+                          ? "bg-amber-500/10 text-amber-600 border-amber-500/20"
+                          : "bg-primary/10 text-primary border-primary/20"
+                      }
                     >
-                      Regular
+                      {product.record_type === "bundle" ? "Bundle" : "Regular"}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-muted-foreground">

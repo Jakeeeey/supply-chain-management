@@ -8,10 +8,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox"; // Shadcn Checkbox
-import { ChevronRight } from "lucide-react";
 import { Product, Unit } from "../types";
 
 interface ProductTableProps {
@@ -88,15 +86,13 @@ export function ProductTable({
             <TableHead className="min-w-[300px]">Product Name</TableHead>
             <TableHead>Inventory Type</TableHead>
             <TableHead>UOM</TableHead>
-            <TableHead>Attributes</TableHead>
-            <TableHead className="text-right">Action</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {products.length === 0 ? (
             <TableRow>
               <TableCell
-                colSpan={isSelectionMode ? 7 : 6}
+                colSpan={isSelectionMode ? 5 : 4}
                 className="text-center h-24 text-muted-foreground"
               >
                 No products found matching your filters.
@@ -112,8 +108,9 @@ export function ProductTable({
                   : "PCS";
 
               const displayName = product.description || product.product_name;
-              const inventoryType = "Regular";
-              const attributes = "-";
+              const isBundle = product.record_type === "bundle";
+              const inventoryType = isBundle ? "Bundle" : "Regular";
+
 
               const isSelected = selectedIds.includes(
                 String(product.product_id),
@@ -148,7 +145,7 @@ export function ProductTable({
                     className="font-medium cursor-pointer"
                     onClick={() => onEdit(product)}
                   >
-                    <div className="truncate max-w-[350px]" title={displayName}>
+                    <div title={displayName} className="whitespace-normal break-words">
                       {displayName}
                     </div>
                   </TableCell>
@@ -157,7 +154,11 @@ export function ProductTable({
                   <TableCell>
                     <Badge
                       variant="secondary"
-                      className="bg-primary/10 text-primary hover:bg-primary/20 border-primary/20"
+                      className={
+                        isBundle
+                          ? "bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 border-amber-500/20"
+                          : "bg-primary/10 text-primary hover:bg-primary/20 border-primary/20"
+                      }
                     >
                       {inventoryType}
                     </Badge>
@@ -168,22 +169,6 @@ export function ProductTable({
                     {unitName}
                   </TableCell>
 
-                  {/* Attributes */}
-                  <TableCell className="text-muted-foreground text-sm font-mono">
-                    {attributes}
-                  </TableCell>
-
-                  {/* Action */}
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground"
-                      onClick={() => onEdit(product)}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
                 </TableRow>
               );
             })
