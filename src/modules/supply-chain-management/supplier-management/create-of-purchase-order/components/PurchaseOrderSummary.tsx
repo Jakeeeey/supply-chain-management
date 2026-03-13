@@ -196,9 +196,8 @@ export function PurchaseOrderSummary(props: {
     const vatTotal = Math.max(0, netTotal - vatExclusive);
     const ewtGoods = Math.max(0, vatExclusive * 0.01);
     
-    // If not an invoice, totalPayable is just netTotal. 
-    // If it IS an invoice, totalPayable is netTotal - ewtGoods.
-    const totalPayable = props.isInvoice ? Math.max(0, netTotal - ewtGoods) : netTotal;
+    // ✅ Updated: Total Payable is always netTotal. VAT/EWT are hidden and don't subtract anymore.
+    const totalPayable = netTotal;
 
     return (
         <div className="bg-background border border-border rounded-xl p-3 sm:p-6 shadow-xl w-full min-w-0">

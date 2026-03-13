@@ -12,7 +12,7 @@ interface StockConversionModalProps {
   product: StockConversionProduct | null;
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (qtyToConvert: number, targetUnitId: number, convertedQuantity: number) => void;
+  onConfirm: (qtyToConvert: number, targetUnit: { unitId: number, targetProductId?: number }, convertedQuantity: number) => void;
 }
 
 export function StockConversionModal({ product, isOpen, onClose, onConfirm }: StockConversionModalProps) {
@@ -33,35 +33,13 @@ export function StockConversionModal({ product, isOpen, onClose, onConfirm }: St
   
   let convertedAmount = 0;
   if (qtyToConvert && targetUnit) {
-      // Get the source factor (how many base units are in one item of the current unit)
-      let sourceFactor = 1;
-      const currentUnitName = product.currentUnit.toLowerCase();
-      
-      if (currentUnitName.includes('box')) {
-          sourceFactor = product.unitOfBox || 24;
-      } else if (currentUnitName.includes('pack')) {
-          sourceFactor = product.pack || 6;
-      } else if (currentUnitName.includes('tie')) {
-          sourceFactor = product.tie || 12; // Default to 12 if tie is 0
-      } else if (currentUnitName.includes('piece')) {
-          sourceFactor = 1;
-      } else {
-          sourceFactor = 1; 
-      }
-      
-      // Ensure sourceFactor is never 0
-      if (sourceFactor <= 0) sourceFactor = 1;
-
-      // Get target factor
-      const targetFactor = targetUnit.conversionFactor || 1;
+      const sourceFactor = Number(product.conversionFactor) || 1;
+      const targetFactor = Number(targetUnit.conversionFactor) || 1;
       
       // Conversion formula: (Quantity * Source Factor) / Target Factor
       // Example: 1 Box (24pcs) to Pack (6pcs) => (1 * 24) / 6 = 4 Packs
-      // Example: 24 Pieces (1pc) to Box (24pcs) => (24 * 1) / 24 = 1 Box
-      
       if (targetFactor > 0) {
           convertedAmount = (Number(qtyToConvert) * sourceFactor) / targetFactor;
-          // Round to 2 decimal places if needed, but usually these are whole numbers in this context
           if (convertedAmount % 1 !== 0) {
               convertedAmount = Number(convertedAmount.toFixed(2));
           }
@@ -69,49 +47,46 @@ export function StockConversionModal({ product, isOpen, onClose, onConfirm }: St
   }
 
   const handleConfirm = () => {
-    console.log("[StockConversionModal] Confirm clicked. Qty:", qtyToConvert, "TargetUnit:", selectedTargetUnit, "Amount:", convertedAmount);
-    if (qtyToConvert && selectedTargetUnit && convertedAmount > 0) {
-      onConfirm(Number(qtyToConvert), selectedTargetUnit, convertedAmount);
-    } else {
-      console.warn("[StockConversionModal] Confirm blocked: Missing inputs or amount is 0");
+    if (qtyToConvert && targetUnit && convertedAmount > 0) {
+      onConfirm(Number(qtyToConvert), targetUnit, convertedAmount);
     }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-xl text-blue-900">
-            <Cuboid className="w-5 h-5 text-blue-600" />
+          <DialogTitle className="flex items-center gap-2 text-xl text-primary">
+            <Cuboid className="w-5 h-5 text-blue-500" />
             Convert Stock Units
           </DialogTitle>
-          <DialogDescription className="text-slate-500 text-sm">
+          <DialogDescription className="text-muted-foreground text-sm">
             {product.productDescription}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-lg border border-slate-100 mb-2 mt-2">
+        <div className="grid grid-cols-2 gap-4 bg-muted/30 p-3 rounded-lg border border-border mb-2 mt-2">
           <div>
-            <div className="text-xs font-semibold text-slate-500 uppercase">Brand</div>
-            <div className="text-sm font-medium">{product.brand}</div>
+            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Brand</div>
+            <div className="text-sm font-semibold">{product.brand}</div>
           </div>
           <div>
-            <div className="text-xs font-semibold text-slate-500 uppercase">Category</div>
-            <div className="text-sm font-medium">{product.category}</div>
+            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Category</div>
+            <div className="text-sm font-semibold">{product.category}</div>
           </div>
         </div>
 
         <div className="space-y-4 py-2">
-          <div className="space-y-1">
-            <Label className="text-sm font-medium text-slate-600">Current Stock</Label>
-            <div className="bg-blue-50 border border-blue-100 rounded-md p-3">
-              <div className="text-2xl font-bold text-blue-900">{product.quantity}</div>
-              <div className="text-xs text-blue-700">{product.currentUnit}(S)</div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold text-muted-foreground uppercase tracking-tight">Current Stock</Label>
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-md p-3">
+              <div className="text-2xl font-black text-blue-600 dark:text-blue-400">{product.quantity}</div>
+              <div className="text-xs font-bold text-blue-500/80 uppercase tracking-tighter">{product.currentUnit}(S)</div>
             </div>
           </div>
 
           <div className="space-y-2">
-             <Label htmlFor="qtyToConvert" className="text-sm font-medium text-slate-600">Quantity to Convert</Label>
+             <Label htmlFor="qtyToConvert" className="text-xs font-bold text-muted-foreground uppercase tracking-tight">Quantity to Convert</Label>
              <Input 
                  id="qtyToConvert" 
                  type="number" 
@@ -120,66 +95,62 @@ export function StockConversionModal({ product, isOpen, onClose, onConfirm }: St
                  value={qtyToConvert}
                  onChange={(e) => setQtyToConvert(e.target.value ? Number(e.target.value) : "")}
                  placeholder="Enter quantity"
+                 className="bg-background border-input focus-visible:ring-blue-500"
              />
           </div>
 
           <div className="space-y-2">
-            <Label className="text-sm font-medium text-slate-600">Convert To</Label>
-            <div className="grid grid-cols-2 gap-3">
+            <Label className="text-xs font-bold text-muted-foreground uppercase tracking-tight">Convert To</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                {product.availableUnits?.map(u => (
                   <div 
                     key={u.unitId}
-                    className={`border rounded-lg p-3 cursor-pointer transition-all ${
+                    className={`border rounded-lg p-3 cursor-pointer transition-all duration-200 ${
                        selectedTargetUnit === u.unitId 
-                         ? "border-blue-500 bg-blue-50/50 ring-1 ring-blue-500" 
-                         : "border-slate-200 hover:border-slate-300"
+                         ? "border-blue-500 bg-blue-500/5 ring-1 ring-blue-500 shadow-sm" 
+                         : "border-border bg-card hover:border-blue-400/50 hover:bg-accent/50"
                     }`}
                     onClick={() => setSelectedTargetUnit(u.unitId)}
                   >
-                     <div className="font-semibold text-slate-800">{u.name}</div>
-                     <div className="text-xs text-slate-500 opacity-80">
-                         {u.name.toLowerCase().includes('pack') && product.pack ? `Pack (${product.pack} pcs)` : ''}
-                         {u.name.toLowerCase().includes('piece') ? `Pieces` : ''}
+                     <div className={`font-bold ${selectedTargetUnit === u.unitId ? "text-blue-600 dark:text-blue-400" : "text-foreground"}`}>
+                        {u.name}
+                     </div>
+                     <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-tighter">
+                         {/* Display generic info or leave empty if specific packaging info is no longer in schema */}
+                         Conversion Factor: {u.conversionFactor}
                      </div>
                   </div>
                ))}
                {(!product.availableUnits || product.availableUnits.length === 0) && (
-                 <div className="col-span-2 text-sm text-slate-500 italic p-2 border border-dashed rounded-md bg-slate-50 text-center">
-                   No target units available for conversion.
-                 </div>
+                  <div className="col-span-full text-xs text-muted-foreground italic p-4 border border-dashed rounded-md bg-muted/20 text-center">
+                    No target units available for conversion.
+                  </div>
                )}
             </div>
           </div>
 
           {convertedAmount > 0 && (
-             <div className="bg-emerald-50 border border-emerald-200 rounded-md p-3 flex items-center justify-between">
+             <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-md p-3 flex items-center justify-between animate-in fade-in slide-in-from-top-1">
                 <div>
-                   <div className="text-xs text-emerald-600 font-medium">Converted Amount</div>
-                   <div className="text-2xl font-bold text-emerald-700">{convertedAmount}</div>
-                   <div className="text-xs text-emerald-600 font-medium">{targetUnit?.name}(S)</div>
+                   <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-tight">Converted Result</div>
+                   <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{convertedAmount}</div>
+                   <div className="text-xs font-bold text-emerald-600/80 uppercase tracking-tighter">{targetUnit?.name}(S)</div>
                 </div>
-                <ArrowRight className="w-6 h-6 text-emerald-500" />
+                <div className="bg-emerald-500/20 p-2 rounded-full">
+                  <ArrowRight className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                </div>
              </div>
           )}
-
-          <div className="bg-slate-50 p-3 rounded-md text-xs text-slate-600 mt-4 border border-slate-100">
-             <div className="font-semibold text-slate-700 mb-1">Conversion Details:</div>
-             <ul className="list-disc pl-4 space-y-1">
-                <li>Unit of Box: {product.unitOfBox || 24} pieces</li>
-                <li>Pack: {product.pack || 6} pieces</li>
-                <li>Tie: {product.tie || 0} pieces</li>
-             </ul>
-          </div>
         </div>
 
-        <DialogFooter className="mt-2">
-          <Button variant="outline" onClick={onClose} className="rounded-md font-medium">
+        <DialogFooter className="mt-4 gap-2 sm:gap-0">
+          <Button variant="outline" onClick={onClose} className="rounded-md font-bold text-xs uppercase tracking-widest border-border hover:bg-accent transition-colors">
             Cancel
           </Button>
           <Button 
              onClick={handleConfirm} 
              disabled={!qtyToConvert || !selectedTargetUnit || convertedAmount <= 0}
-             className="bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium"
+             className="bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-600 dark:hover:bg-blue-500 rounded-md font-bold text-xs uppercase tracking-widest transition-all shadow-md shadow-blue-500/20"
           >
             Confirm Conversion
           </Button>

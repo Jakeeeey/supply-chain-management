@@ -37,11 +37,35 @@ export const getColumns = (
   {
     accessorKey: "quantity",
     header: "QUANTITY",
+    cell: ({ row }) => {
+      const p = row.original;
+      if (p.inventoryLoaded === false) {
+        return (
+          <span className="flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+            <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" />
+            Fetching stock...
+          </span>
+        );
+      }
+      return (
+        <span className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
+           {p.quantity}
+        </span>
+      );
+    }
   },
   {
     accessorKey: "totalAmount",
     header: "TOTAL AMOUNT",
-    cell: ({ row }) => formatCurrency(row.getValue("totalAmount") || 0),
+    cell: ({ row }) => {
+      const p = row.original;
+      if (p.inventoryLoaded === false) return <span className="text-muted-foreground italic text-xs">...</span>;
+      return (
+        <span className="font-black text-foreground tracking-tight">
+          {formatCurrency(p.totalAmount || 0)}
+        </span>
+      );
+    }
   },
   {
     id: "actions",

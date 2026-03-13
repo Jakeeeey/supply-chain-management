@@ -180,7 +180,8 @@ export async function generatePurchaseOrderPDF(data: {
     // Title
     doc.setFontSize(22);
     doc.setTextColor(37, 99, 235); // Blue
-    const title = data.isInvoice ? "INVOICE" : "PURCHASE ORDER";
+    // ✅ Updated: Always show "PURCHASE ORDER"
+    const title = "PURCHASE ORDER";
     doc.text(title, pageWidth / 2, 20, { align: "center" });
 
     doc.setFontSize(9);
@@ -194,21 +195,30 @@ export async function generatePurchaseOrderPDF(data: {
     doc.setFontSize(11);
     doc.setTextColor(0, 0, 0);
     doc.setFont("helvetica", "bold");
-    doc.text(`${data.isInvoice ? "Invoice" : "PO"} Number:`, 15, 40);
+    // ✅ Updated label
+    doc.text("Purchase Order Number:", 15, 40);
     doc.setFont("helvetica", "normal");
-    doc.text(data.poNumber || "N/A", 45, 40);
+    doc.text(data.poNumber || "N/A", 65, 40); // Shifted a bit for longer label
 
     doc.setFont("helvetica", "bold");
     doc.text("Supplier:", 15, 47);
     doc.setFont("helvetica", "normal");
-    doc.text(data.supplierName || "N/A", 45, 47);
+    doc.text(data.supplierName || "N/A", 65, 47);
+
+    // ✅ Added Branch Info
+    const uniqueBranches = Array.from(new Set(data.items.map(it => it.branchName).filter(Boolean)));
+    const branchText = uniqueBranches.length > 0 ? uniqueBranches.join(", ") : "N/A";
+    doc.setFont("helvetica", "bold");
+    doc.text("Branch:", 15, 54);
+    doc.setFont("helvetica", "normal");
+    doc.text(branchText, 65, 54);
 
     doc.setFont("helvetica", "bold");
     doc.text("Date:", 130, 40);
     doc.setFont("helvetica", "normal");
     doc.text(data.poDate || "N/A", 150, 40);
 
-    doc.line(15, 55, pageWidth - 15, 55);
+    doc.line(15, 60, pageWidth - 15, 60); // Adjusted line position
 
     // Items Table
     const tableRows = data.items.map(it => [
@@ -224,7 +234,7 @@ export async function generatePurchaseOrderPDF(data: {
     ]);
 
     autoTable(doc, {
-        startY: 60,
+        startY: 68,
         head: [["Brand", "Category", "Product Name", "Price", "UOM", "Qty", "Gross", "Discount", "Net"]],
         body: tableRows,
         theme: "grid",
@@ -286,7 +296,7 @@ export async function generatePurchaseOrderPDF(data: {
     doc.line(summaryX, finalY + 3, pageWidth - 15, finalY + 3);
     doc.text("TOTAL PAYABLE:", summaryX, finalY + 10);
     doc.setTextColor(37, 99, 235); // Blue
-    doc.text(formatMoney(data.isInvoice ? data.total : netAmount), pageWidth - 15, finalY + 10, { align: "right" });
+    doc.text(formatMoney(netAmount), pageWidth - 15, finalY + 10, { align: "right" });
 
     doc.save(`${data.isInvoice ? "Invoice" : "PO"}_${data.poNumber}.pdf`);
 }
