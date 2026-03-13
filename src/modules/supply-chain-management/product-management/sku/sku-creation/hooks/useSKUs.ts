@@ -1,84 +1,62 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
 import {
-  SKU,
   MasterData,
+  SKU,
 } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
-import { SortingState } from "@tanstack/react-table";
+import { useCallback, useEffect, useState } from "react";
 import { CellHelpers } from "../utils/sku-helpers";
+import { useApprovedSKUs } from "./useApprovedSKUs";
+import { useDraftSKUs } from "./useDraftSKUs";
+import { usePendingApprovalSKUs } from "./usePendingApprovalSKUs";
 
+/**
+ * Composer hook — assembles the three state slices and orchestrates all
+ * data fetching and mutations. Returns the exact same API as before the
+ * refactor so all consumers (SKUCreationPage, SKUApprovalPage, etc.) are
+ * completely unaffected.
+ *
+ * State ownership:
+ *   useDraftSKUs           — draft list pagination/sorting/data
+ *   usePendingApprovalSKUs — pending list + approvedIds localStorage cache
+ *   useApprovedSKUs        — approved list pagination/sorting/data
+ *
+ * This hook owns: refresh (single Promise.all), masterData, search, isLoading,
+ * error, and all CRUD/approval mutations.
+ */
 export function useSKUs() {
-  const [approvedData, setApprovedData] = useState<SKU[]>([]);
-  const [approvedTotal, setApprovedTotal] = useState(0);
-  const [approvedPage, setApprovedPage] = useState(0);
-  const [approvedLimit, setApprovedLimit] = useState(10);
+  const drafts = useDraftSKUs();
+  const pending = usePendingApprovalSKUs();
+  const approved = useApprovedSKUs();
 
-  const [draftData, setDraftData] = useState<SKU[]>([]);
-  const [draftsTotal, setDraftsTotal] = useState(0);
-  const [draftsPage, setDraftsPage] = useState(0);
-  const [draftsLimit, setDraftsLimit] = useState(10);
-  const [draftsSorting, setDraftsSorting] = useState<SortingState>([]);
-  const [approvedSorting, setApprovedSorting] = useState<SortingState>([]);
-
-  const [pendingApprovalData, setPendingApprovalData] = useState<SKU[]>([]);
-  const [pendingTotal, setPendingTotal] = useState(0);
-  const [pendingPage, setPendingPage] = useState(0);
-  const [pendingLimit, setPendingLimit] = useState(10);
-  const [pendingSorting, setPendingSorting] = useState<SortingState>([]);
   const [search, setSearch] = useState("");
-
   const [masterData, setMasterData] = useState<MasterData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Track locally approved IDs to filter them out even if backend status update fails
-  // Initialize from localStorage to persist across page refreshes
-  const [approvedIds, setApprovedIds] = useState<Set<number | string>>(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("sku_approved_ids");
-      if (stored) {
-        try {
-          return new Set(JSON.parse(stored));
-        } catch {
-          return new Set();
-        }
-      }
-    }
-    return new Set();
-  });
-
-  // Persist approvedIds to localStorage whenever it changes
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem(
-        "sku_approved_ids",
-        JSON.stringify(Array.from(approvedIds)),
-      );
-    }
-  }, [approvedIds]);
+  // ─── Data Fetching ─────────────────────────────────────────────────────────
 
   const refresh = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const aSort = CellHelpers.getDirectusSort(approvedSorting) || "";
-      const dSort = CellHelpers.getDirectusSort(draftsSorting) || "";
-      const pSort = CellHelpers.getDirectusSort(pendingSorting) || "";
+      const aSort = CellHelpers.getDirectusSort(approved.approvedSorting) || "";
+      const dSort = CellHelpers.getDirectusSort(drafts.draftsSorting) || "";
+      const pSort = CellHelpers.getDirectusSort(pending.pendingSorting) || "";
 
       const [approvedRes, draftsRes, pendingRes, masterRes] = await Promise.all(
         [
           fetch(
-            `/api/scm/product-management/sku?type=approved&limit=${approvedLimit}&offset=${approvedPage * approvedLimit}&search=${encodeURIComponent(search)}&sort=${aSort}`,
+            `/api/scm/product-management/sku?type=approved&limit=${approved.approvedLimit}&offset=${approved.approvedPage * approved.approvedLimit}&search=${encodeURIComponent(search)}&sort=${aSort}`,
           ).then((res) => res.json()),
           fetch(
-            `/api/scm/product-management/sku?type=drafts&status=DRAFT&limit=${draftsLimit}&offset=${draftsPage * draftsLimit}&search=${encodeURIComponent(search)}&sort=${dSort}`,
+            `/api/scm/product-management/sku?type=drafts&status=DRAFT&limit=${drafts.draftsLimit}&offset=${drafts.draftsPage * drafts.draftsLimit}&search=${encodeURIComponent(search)}&sort=${dSort}`,
           ).then((res) => res.json()),
           fetch(
-            `/api/scm/product-management/sku?type=drafts&status=FOR_APPROVAL&limit=${pendingLimit}&offset=${pendingPage * pendingLimit}&search=${encodeURIComponent(search)}&sort=${pSort}`,
+            `/api/scm/product-management/sku?type=drafts&status=FOR_APPROVAL&limit=${pending.pendingLimit}&offset=${pending.pendingPage * pending.pendingLimit}&search=${encodeURIComponent(search)}&sort=${pSort}`,
           ).then((res) => res.json()),
-          fetch("/api/scm/product-management/sku?type=master").then(
-            (res) => res.json(),
+          fetch("/api/scm/product-management/sku?type=master").then((res) =>
+            res.json(),
           ),
         ],
       );
@@ -88,37 +66,40 @@ export function useSKUs() {
       if (pendingRes.error) throw new Error(pendingRes.error);
       if (masterRes.error) throw new Error(masterRes.error);
 
-      setApprovedData(approvedRes.data || []);
-      setApprovedTotal(approvedRes.meta?.total_count || 0);
+      approved.setApprovedData(approvedRes.data || []);
+      approved.setApprovedTotal(approvedRes.meta?.total_count || 0);
 
-      setDraftData(draftsRes.data || []);
-      setDraftsTotal(draftsRes.meta?.total_count || 0);
+      drafts.setDraftData(draftsRes.data || []);
+      drafts.setDraftsTotal(draftsRes.meta?.total_count || 0);
 
-      setPendingApprovalData(pendingRes.data || []);
-      setPendingTotal(pendingRes.meta?.total_count || 0);
+      pending.setPendingApprovalData(pendingRes.data || []);
+      pending.setPendingTotal(pendingRes.meta?.total_count || 0);
 
-      if (approvedIds.size > 0) {
+      // Apply local approvedIds cache: filter out items already approved this session
+      // whose backend status hasn't updated via Directus yet
+      if (pending.approvedIds.size > 0) {
         const filteredPending = (pendingRes.data || []).filter((item: SKU) => {
           const itemId = item.id || item.product_id;
-          return !approvedIds.has(String(itemId));
+          return !pending.approvedIds.has(String(itemId));
         });
-        setPendingApprovalData(filteredPending);
-        setPendingTotal(filteredPending.length);
+        pending.setPendingApprovalData(filteredPending);
+        pending.setPendingTotal(filteredPending.length);
 
+        // Prune IDs from the cache that are no longer in the pending list at all
         const pendingIds = new Set(
           (pendingRes.data || []).map((item: SKU) =>
             String(item.id || item.product_id),
           ),
         );
         const idsToRemove: (number | string)[] = [];
-        approvedIds.forEach((id) => {
+        pending.approvedIds.forEach((id) => {
           if (!pendingIds.has(String(id))) {
             idsToRemove.push(id);
           }
         });
 
         if (idsToRemove.length > 0) {
-          setApprovedIds((prev) => {
+          pending.setApprovedIds((prev) => {
             const newSet = new Set(prev);
             idsToRemove.forEach((id) => newSet.delete(id));
             return newSet;
@@ -133,22 +114,24 @@ export function useSKUs() {
       setIsLoading(false);
     }
   }, [
-    approvedLimit,
-    approvedPage,
-    approvedSorting,
-    draftsLimit,
-    draftsPage,
-    draftsSorting,
-    pendingLimit,
-    pendingPage,
-    pendingSorting,
+    approved.approvedLimit,
+    approved.approvedPage,
+    approved.approvedSorting,
+    drafts.draftsLimit,
+    drafts.draftsPage,
+    drafts.draftsSorting,
+    pending.pendingLimit,
+    pending.pendingPage,
+    pending.pendingSorting,
     search,
-    approvedIds,
+    pending.approvedIds,
   ]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // ─── Draft Mutations ───────────────────────────────────────────────────────
 
   const createDraft = async (sku: SKU) => {
     const response = await fetch("/api/scm/product-management/sku", {
@@ -166,14 +149,11 @@ export function useSKUs() {
   };
 
   const updateDraft = async (id: number | string, sku: Partial<SKU>) => {
-    const response = await fetch(
-      `/api/scm/product-management/sku/${id}`,
-      {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(sku),
-      },
-    );
+    const response = await fetch(`/api/scm/product-management/sku/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(sku),
+    });
     const result = await response.json();
     if (result.error) throw new Error(result.error);
     await refresh();
@@ -184,14 +164,11 @@ export function useSKUs() {
     id: number | string,
     skipRefresh = false,
   ) => {
-    const response = await fetch(
-      `/api/scm/product-management/sku/${id}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "submit" }),
-      },
-    );
+    const response = await fetch(`/api/scm/product-management/sku/${id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "submit" }),
+    });
     const result = await response.json();
     if (result.error) throw new Error(result.error);
     if (!skipRefresh) await refresh();
@@ -202,83 +179,18 @@ export function useSKUs() {
     await refresh();
   };
 
-  const approveSKU = async (id: number | string, skipRefresh = false) => {
-    const response = await fetch(
-      `/api/scm/product-management/sku/${id}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "approve" }),
-      },
-    );
-    const result = await response.json();
-
-    if (result.error) throw new Error(result.error);
-
-    // Add to locally approved IDs cache
-    setApprovedIds((prev) => new Set(prev).add(String(id)));
-
-    // Optimistic update: immediately remove from pending queue
-    setPendingApprovalData((prev) => {
-      const filtered = prev.filter((item) => {
-        const itemId = item.id || item.product_id;
-        const match = String(itemId) === String(id);
-        return !match;
-      });
-      return filtered;
+  const deleteDraft = async (id: number | string, skipRefresh = false) => {
+    const response = await fetch(`/api/scm/product-management/sku/${id}`, {
+      method: "DELETE",
     });
-    setPendingTotal((prev) => Math.max(0, prev - 1));
-
-    if (!skipRefresh) await refresh();
-  };
-
-  const bulkApproveSKUs = async (ids: (number | string)[]) => {
-    // 1. Sort IDs: Parents first, then children to ensure linking works
-    const sortedIds = [...ids].sort((a, b) => {
-      const skuA = pendingApprovalData.find(
-        (s) => String(s.id || s.product_id) === String(a),
-      );
-      const skuB = pendingApprovalData.find(
-        (s) => String(s.id || s.product_id) === String(b),
-      );
-
-      const aIsChild = !!skuA?.parent_id;
-      const bIsChild = !!skuB?.parent_id;
-
-      if (!aIsChild && bIsChild) return -1;
-      if (aIsChild && !bIsChild) return 1;
-      return 0;
-    });
-
-    // 2. Process sequentially to avoid race conditions in parent-linking
-    for (const id of sortedIds) {
-      await approveSKU(id, true);
-    }
-    await refresh();
-  };
-
-  const rejectSKU = async (
-    id: number | string,
-    remarks?: string,
-    skipRefresh = false,
-  ) => {
-    const response = await fetch(
-      `/api/scm/product-management/sku/${id}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "reject", remarks }),
-      },
-    );
     const result = await response.json();
     if (result.error) throw new Error(result.error);
     if (!skipRefresh) await refresh();
+    return true;
   };
 
-  const bulkRejectSKUs = async (
-    rejections: { id: number | string; remarks: string }[],
-  ) => {
-    await Promise.all(rejections.map((r) => rejectSKU(r.id, r.remarks, true)));
+  const bulkDeleteDrafts = async (ids: (number | string)[]) => {
+    await Promise.all(ids.map((id) => deleteDraft(id, true)));
     await refresh();
   };
 
@@ -291,69 +203,129 @@ export function useSKUs() {
     return result.isDuplicate as boolean;
   };
 
-  const deleteDraft = async (id: number | string, skipRefresh = false) => {
-    const response = await fetch(
-      `/api/scm/product-management/sku/${id}`,
-      {
-        method: "DELETE",
-      },
-    );
+  // ─── Approval / Rejection Mutations ───────────────────────────────────────
+
+  const approveSKU = async (id: number | string, skipRefresh = false) => {
+    const response = await fetch(`/api/scm/product-management/sku/${id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "approve" }),
+    });
     const result = await response.json();
     if (result.error) throw new Error(result.error);
+
+    // Add to locally approved IDs cache
+    pending.setApprovedIds((prev) => new Set(prev).add(String(id)));
+
+    // Optimistic update: immediately remove from the pending queue UI
+    pending.setPendingApprovalData((prev) =>
+      prev.filter((item) => {
+        const itemId = item.id || item.product_id;
+        return String(itemId) !== String(id);
+      }),
+    );
+    pending.setPendingTotal((prev) => Math.max(0, prev - 1));
+
     if (!skipRefresh) await refresh();
-    return true;
   };
 
-  const bulkDeleteDrafts = async (ids: (number | string)[]) => {
-    await Promise.all(ids.map((id) => deleteDraft(id, true)));
+  const bulkApproveSKUs = async (ids: (number | string)[]) => {
+    // Sort parents before children to avoid race conditions during parent-linking
+    const sortedIds = [...ids].sort((a, b) => {
+      const skuA = pending.pendingApprovalData.find(
+        (s) => String(s.id || s.product_id) === String(a),
+      );
+      const skuB = pending.pendingApprovalData.find(
+        (s) => String(s.id || s.product_id) === String(b),
+      );
+      const aIsChild = !!skuA?.parent_id;
+      const bIsChild = !!skuB?.parent_id;
+      if (!aIsChild && bIsChild) return -1;
+      if (aIsChild && !bIsChild) return 1;
+      return 0;
+    });
+
+    // Sequential to avoid race conditions in parent-child linking
+    for (const id of sortedIds) {
+      await approveSKU(id, true);
+    }
     await refresh();
   };
 
+  const rejectSKU = async (
+    id: number | string,
+    remarks?: string,
+    skipRefresh = false,
+  ) => {
+    const response = await fetch(`/api/scm/product-management/sku/${id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "reject", remarks }),
+    });
+    const result = await response.json();
+    if (result.error) throw new Error(result.error);
+    if (!skipRefresh) await refresh();
+  };
+
+  const bulkRejectSKUs = async (
+    rejections: { id: number | string; remarks: string }[],
+  ) => {
+    await Promise.all(rejections.map((r) => rejectSKU(r.id, r.remarks, true)));
+    await refresh();
+  };
+
+  // ─── Return (identical shape to original useSKUs) ─────────────────────────
+
   return {
-    approvedData,
-    approvedTotal,
-    approvedPage,
-    setApprovedPage,
-    approvedLimit,
-    setApprovedLimit,
+    // Approved
+    approvedData: approved.approvedData,
+    approvedTotal: approved.approvedTotal,
+    approvedPage: approved.approvedPage,
+    setApprovedPage: approved.setApprovedPage,
+    approvedLimit: approved.approvedLimit,
+    setApprovedLimit: approved.setApprovedLimit,
+    approvedSorting: approved.approvedSorting,
+    setApprovedSorting: approved.setApprovedSorting,
 
-    draftData,
-    draftsTotal,
-    draftsPage,
-    setDraftsPage,
-    draftsLimit,
-    setDraftsLimit,
-    draftsSorting,
-    setDraftsSorting,
-    approvedSorting,
-    setApprovedSorting,
+    // Drafts
+    draftData: drafts.draftData,
+    draftsTotal: drafts.draftsTotal,
+    draftsPage: drafts.draftsPage,
+    setDraftsPage: drafts.setDraftsPage,
+    draftsLimit: drafts.draftsLimit,
+    setDraftsLimit: drafts.setDraftsLimit,
+    draftsSorting: drafts.draftsSorting,
+    setDraftsSorting: drafts.setDraftsSorting,
 
-    pendingApprovalData,
-    pendingTotal,
-    pendingPage,
-    setPendingPage,
-    pendingLimit,
-    setPendingLimit,
-    pendingSorting,
-    setPendingSorting,
+    // Pending Approval
+    pendingApprovalData: pending.pendingApprovalData,
+    pendingTotal: pending.pendingTotal,
+    pendingPage: pending.pendingPage,
+    setPendingPage: pending.setPendingPage,
+    pendingLimit: pending.pendingLimit,
+    setPendingLimit: pending.setPendingLimit,
+    pendingSorting: pending.pendingSorting,
+    setPendingSorting: pending.setPendingSorting,
 
+    // Shared
     search,
     setSearch,
-
     masterData,
     isLoading,
     error,
     refresh,
+
+    // Mutations
     createDraft,
     updateDraft,
     submitForApproval,
     bulkSubmitForApproval,
     approveSKU,
     bulkApproveSKUs,
+    rejectSKU,
     bulkRejectSKUs,
     deleteDraft,
     bulkDeleteDrafts,
     checkDuplicate,
-    rejectSKU,
   };
 }

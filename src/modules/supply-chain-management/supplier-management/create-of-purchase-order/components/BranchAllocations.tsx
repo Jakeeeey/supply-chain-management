@@ -43,7 +43,7 @@ export function BranchAllocations(props: {
     }
 
     return (
-        <div className="space-y-4 pt-4 w-full min-w-0 h-[650px] overflow-y-auto pr-2 custom-scrollbar">
+        <div className="space-y-4 pt-4 w-full min-w-0 h-auto max-h-[650px] overflow-y-auto pr-2 custom-scrollbar">
             {props.branches.map((branch) => {
                 const currentPage = pages[branch.branchId] || 1;
                 const totalItems = branch.items.length;

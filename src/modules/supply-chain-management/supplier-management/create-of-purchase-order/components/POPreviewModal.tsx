@@ -106,7 +106,8 @@ export function POPreviewModal({
                             <div className="space-y-1">
                                 <DialogTitle className="text-xl font-black uppercase tracking-tight flex items-center gap-2">
                                     <Printer className="h-5 w-5 text-primary" />
-                                    {isInvoice ? "Invoice Preview" : "Purchase Order Preview"}
+                                    {/* ✅ Updated: Always show Purchase Order */}
+                                    Purchase Order Preview
                                 </DialogTitle>
                                 <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">
                                     Review document content before printing
@@ -123,7 +124,7 @@ export function POPreviewModal({
                             </label>
                             <div className="bg-background border border-border rounded-xl p-3 shadow-sm space-y-2">
                                 <div className="flex justify-between items-center">
-                                    <span className="text-[10px] uppercase text-muted-foreground">Order Number:</span>
+                                    <span className="text-[10px] uppercase text-muted-foreground">Purchase Order Number:</span>
                                     <span className="text-xs font-mono font-black text-primary bg-primary/5 px-2 py-0.5 rounded border border-primary/10">
                                         {data.poNumber}
                                     </span>
@@ -261,10 +262,11 @@ export function POPreviewModal({
                                 <Separator className="my-1.5 bg-border/60" />
                                 <div className="flex justify-between items-center text-sm font-bold text-primary italic uppercase tracking-tighter gap-10">
                                     <span className="shrink-0">Total Payable Amount:</span>
-                                    <span className="text-2xl tabular-nums tracking-tighter">{money.format(data.total)}</span>
+                                    <span className="text-2xl tabular-nums tracking-tighter">{money.format(data.subtotal - data.discount)}</span>
                                 </div>
                             </div>
                         )}
+                        {/* ✅ Updated: Always show simple total even if isInvoice is true (but handled above if isInvoice) */}
                         {!isInvoice && (
                             <div className="space-y-1.5 text-right min-w-[170px]">
                                 <div className="flex justify-between items-center text-sm font-bold text-primary italic uppercase tracking-tighter gap-10">

@@ -203,8 +203,8 @@
 
   --radius: var(--radius);
 
-  /* Fonts from layout.tsx (Geist vars) */
-  --font-sans: var(--font-geist-sans);
+  /* Fonts from layout.tsx */
+  --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
 
   /* Sidebar */
@@ -232,7 +232,7 @@
     @apply bg-background text-foreground font-sans;
     /* Geist is used via font-sans; keep fallbacks safe */
     font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans",
-    "Apple Color Emoji", "Segoe UI Emoji";
+      "Apple Color Emoji", "Segoe UI Emoji";
   }
 }
 
@@ -243,6 +243,7 @@
    - Density helpers (comfortable/compact)
 ============================================================ */
 @layer components {
+
   /* ----- Data table / grid styling helpers ----- */
   .data-grid {
     @apply w-full overflow-hidden rounded-lg border bg-card text-card-foreground;
@@ -320,8 +321,19 @@ html.theme-switching * {
 
 /* Respect reduced motion */
 @media (prefers-reduced-motion: reduce) {
+
   html.theme-switching,
   html.theme-switching * {
     transition: none !important;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
   }
 }

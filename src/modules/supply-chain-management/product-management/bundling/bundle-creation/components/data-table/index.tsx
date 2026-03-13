@@ -1,10 +1,12 @@
 "use client";
 
 import React from "react";
-import { BundleDraft } from "@/modules/supply-chain-management/product-management/bundling/bundle-creation/types/bundle.schema";
+import {
+  BundleDraft,
+  BundleMasterData,
+} from "@/modules/supply-chain-management/product-management/bundling/types/bundle.schema";
 import { DataTable } from "@/components/ui/new-data-table";
 import { getDraftColumns } from "./columns";
-import { BundleMasterData } from "../../types/bundle.schema";
 
 interface BundleCreationTableProps {
   data: BundleDraft[];
@@ -19,6 +21,7 @@ interface BundleCreationTableProps {
   isLoading: boolean;
   onSubmit: (id: number | string) => void;
   onDelete: (id: number | string) => void;
+  onView: (draft: BundleDraft) => void;
   onSearch: (value: string) => void;
   onSelectionChange: (selectedRows: BundleDraft[]) => void;
   actionComponent?: React.ReactNode;
@@ -34,6 +37,7 @@ export function BundleCreationTable({
   isLoading,
   onSubmit,
   onDelete,
+  onView,
   onSearch,
   onSelectionChange,
   actionComponent,
@@ -44,8 +48,9 @@ export function BundleCreationTable({
         masterData,
         onSubmit,
         onDelete,
+        onView,
       }),
-    [masterData, onSubmit, onDelete],
+    [masterData, onSubmit, onDelete, onView],
   );
 
   return (
