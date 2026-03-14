@@ -23,10 +23,6 @@ export default function PDPCreationPage() {
   const {
     pendingData,
     pendingTotal,
-    pendingPage,
-    setPendingPage,
-    pendingLimit,
-    setPendingLimit,
     masterData,
     availableOrders,
     isLoadingOrders,
@@ -92,17 +88,11 @@ export default function PDPCreationPage() {
 
   return (
     <div className="space-y-0">
-      <PDPGlobalFilter masterData={masterData} />
+      <PDPGlobalFilter masterData={masterData} showStatus={false} />
 
       <PDPCreationTable
         data={pendingData}
         totalCount={pendingTotal}
-        pageIndex={pendingPage}
-        pageSize={pendingLimit}
-        onPaginationChange={(p: { pageIndex: number; pageSize: number }) => {
-          setPendingPage(p.pageIndex);
-          setPendingLimit(p.pageSize);
-        }}
         isLoading={isLoading || isEditLoading}
         onEdit={handleEdit}
         onSearch={(v: string) => setSearch(v)}

@@ -20,8 +20,6 @@ export function usePreDispatchCreation() {
   // ─── Pending Plans State ──────────────────────────
   const [pendingData, setPendingData] = useState<DispatchPlan[]>([]);
   const [pendingTotal, setPendingTotal] = useState(0);
-  const [pendingPage, setPendingPage] = useState(0);
-  const [pendingLimit, setPendingLimit] = useState(10);
 
   // ─── Master Data ──────────────────────────────────
   const [masterData, setMasterData] = useState<DispatchPlanMasterData | null>(
@@ -38,42 +36,59 @@ export function usePreDispatchCreation() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // ─── Fetch Pending Plans + Master Data ────────────
+  // ─── Fetch Master Data ────────────────────────────
+  useEffect(() => {
+    let isMounted = true;
+    const fetchMaster = async () => {
+      try {
+        const res = await fetch(`${API_PATH}?type=master`);
+        const result = await res.json();
+        if (isMounted) setMasterData(result.data || null);
+      } catch (err: any) {
+        console.error("Failed to fetch master data:", err.message);
+      }
+    };
+    fetchMaster();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // ─── Fetch Pending Plans ──────────────────────────
   const refresh = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams({
         status: "Pending",
-        limit: String(pendingLimit),
-        offset: String(pendingPage * pendingLimit),
-        search: search,
+        limit: "-1",
       });
 
+      if (search) params.append("search", search);
       if (clusterId) params.append("cluster_id", String(clusterId));
 
-      const [plansRes, masterRes] = await Promise.all([
-        fetch(`${API_PATH}?${params.toString()}`).then((r) => r.json()),
-        fetch(`${API_PATH}?type=master`).then((r) => r.json()),
-      ]);
+      const res = await fetch(`${API_PATH}?${params.toString()}`);
+      const plansRes = await res.json();
 
       if (plansRes.error) throw new Error(plansRes.error);
-      if (masterRes.error) throw new Error(masterRes.error);
 
       setPendingData(plansRes.data || []);
       setPendingTotal(
-        plansRes.meta?.filter_count || plansRes.meta?.total_count || 0,
+        plansRes.meta?.filter_count || plansRes.meta?.total_count || plansRes.data?.length || 0,
       );
-      setMasterData(masterRes.data || null);
     } catch (err: any) {
       setError(err.message);
     } finally {
       setIsLoading(false);
     }
-  }, [pendingLimit, pendingPage, search, clusterId]);
+  }, [search, clusterId]);
 
   useEffect(() => {
-    refresh();
+    // Debounce the refresh call to avoid rapid refetching
+    const handler = setTimeout(() => {
+      refresh();
+    }, 300);
+    return () => clearTimeout(handler);
   }, [refresh]);
 
   // ─── Fetch Available Orders by Cluster ────────────
@@ -156,10 +171,6 @@ export function usePreDispatchCreation() {
     // Pending plans
     pendingData,
     pendingTotal,
-    pendingPage,
-    setPendingPage,
-    pendingLimit,
-    setPendingLimit,
 
     // Master data
     masterData,

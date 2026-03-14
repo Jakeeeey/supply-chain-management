@@ -41,7 +41,8 @@ export async function GET(req: NextRequest) {
     }
 
     // Default: paginated dispatch plans list
-    const limit = Number(searchParams.get("limit") || 10);
+    const limitParam = searchParams.get("limit");
+    const limit = limitParam === "-1" ? -1 : Number(limitParam || 10);
     const offset = Number(searchParams.get("offset") || 0);
     const status = searchParams.get("status") || undefined;
     const search = searchParams.get("search") || undefined;
