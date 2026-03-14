@@ -265,13 +265,7 @@ export async function POST(req: NextRequest) {
     try {
         const base = getDirectusBase();
 
-        const rawBody = await req.text().catch(() => "");
-        console.log("[PO-CREATE-DEBUG] RAW BODY:", rawBody);
-        
-        const body = (() => {
-            try { return rawBody ? JSON.parse(rawBody) : {}; }
-            catch { return { raw: rawBody }; }
-        })();
+        const body = await req.json().catch(() => null);
         const input = (body?.data ?? body?.payload ?? body) as any;
 
         const supplierId = pickSupplierId(input);
@@ -350,8 +344,6 @@ export async function POST(req: NextRequest) {
             input?.receivingType === 2;
 
         const receiving_type = isInvoiceFlag ? 2 : 3;
-        console.log("[PO-CREATE-DEBUG] is_invoice:", input?.is_invoice, "isInvoice:", input?.isInvoice, "RESOLVED receiving_type:", receiving_type);
-        
         const receipt_required = intOrDefault(input?.receipt_required ?? input?.receiptRequired, 1);
         const price_type = strOrDefault(input?.price_type ?? input?.priceType, "General Receive Price");
         const inventory_status = intOrDefault(input?.inventory_status ?? input?.inventoryStatus, 1);
