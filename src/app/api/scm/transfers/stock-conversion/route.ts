@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { handleApiError } from "@/lib/error-handler";
-import { fetchStockList, convertStock, fetchInventoryMap } from "@/modules/supply-chain-management/inventory-management/stock-conversion/services/stock-conversion";
-import { stockConversionPayloadSchema } from "@/modules/supply-chain-management/inventory-management/stock-conversion/types/stock-conversion.schema";
+import { fetchStockList, convertStock, fetchInventoryMap } from "@/modules/supply-chain-management/transfers/stock-conversion/services/stock-conversion";
+import { stockConversionPayloadSchema } from "@/modules/supply-chain-management/transfers/stock-conversion/types/stock-conversion.schema";
 
 export const runtime = "nodejs";
 
@@ -41,8 +41,12 @@ export async function GET(req: NextRequest) {
     }
 
     console.log("[Stock-Conversion API] Initial product fetch requested");
-    const data = await fetchStockList();
-    return NextResponse.json({ data });
+    const page = searchParams.get("page") ? Number(searchParams.get("page")) : 1;
+    const limit = searchParams.get("limit") ? Number(searchParams.get("limit")) : 20;
+    const offset = (page - 1) * limit;
+
+    const data = await fetchStockList(limit, offset, filters);
+    return NextResponse.json(data);
   } catch (error: any) {
     return handleApiError(error);
   }

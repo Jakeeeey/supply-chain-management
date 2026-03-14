@@ -9,7 +9,7 @@ import { StockConversionProduct, RFIDTag } from "./types";
 import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import ErrorPage from "@/components/shared/ErrorPage";
 
-interface StockConversionPageProps {
+interface StockConversionModuleProps {
   user?: {
     id?: number;
     branchId?: number;
@@ -18,8 +18,11 @@ interface StockConversionPageProps {
   };
 }
 
-export default function StockConversionPage({ user }: StockConversionPageProps) {
-  const { data, isLoading, error, refresh, loadInventory, loadProductsInventory, convertStock } = useStockConversion(user?.branchId);
+export default function StockConversionModule({ user }: StockConversionModuleProps) {
+  const { 
+    data, totalCount, page, pageSize, setPage, setPageSize,
+    isLoading, error, refresh, loadInventory, loadProductsInventory, convertStock 
+  } = useStockConversion(user?.branchId);
   
   const [selectedProduct, setSelectedProduct] = useState<StockConversionProduct | null>(null);
   
@@ -44,7 +47,7 @@ export default function StockConversionPage({ user }: StockConversionPageProps) 
   };
 
   const handleConfirmUnitConversion = (qtyToConvert: number, targetUnit: { unitId: number, targetProductId?: number }, convertedQuantity: number) => {
-    console.log("[StockConversionPage] Confirming unit conversion:", { qtyToConvert, targetUnit, convertedQuantity });
+    console.log("[StockConversionModule] Confirming unit conversion:", { qtyToConvert, targetUnit, convertedQuantity });
     setPendingConversion({ 
       qtyToConvert, 
       targetUnitId: targetUnit.unitId, 
@@ -55,7 +58,7 @@ export default function StockConversionPage({ user }: StockConversionPageProps) 
     
     // Open RFID Modal immediately after
     setTimeout(() => {
-      console.log("[StockConversionPage] Opening RFID Modal...");
+      console.log("[StockConversionModule] Opening RFID Modal...");
       setIsRfidModalOpen(true);
     }, 150);
   };
@@ -111,7 +114,12 @@ export default function StockConversionPage({ user }: StockConversionPageProps) 
   return (
     <div className="h-full flex flex-col space-y-4">
       <StockConversionTable 
-         data={data} 
+         data={data}
+         totalCount={totalCount}
+         page={page}
+         pageSize={pageSize}
+         setPage={setPage}
+         setPageSize={setPageSize}
          onConvertClick={handleOpenConversion} 
          onRefresh={loadInventory}
          loadProductsInventory={loadProductsInventory}

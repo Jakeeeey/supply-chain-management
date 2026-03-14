@@ -1,32 +1,47 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
-import { type StockConversionProduct, type StockConversionPayload } from "../types/stock-conversion.schema";
+import { type StockConversionProduct, type StockConversionPayload } from "../types";
 
 export function useStockConversion(branchId?: number) {
   const [data, setData] = useState<StockConversionProduct[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 1. Initial Load: Only fetch products
+  // Pagination states
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  // Safeguard to prevent multiple concurrent requests for the same product
+  const loadingProductsRef = useRef<Set<number>>(new Set());
+
+  // 1. Initial Load: Fetch paginated products
   const refresh = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/scm/inventory-management/stock-conversion");
+      const sp = new URLSearchParams();
+      sp.set("page", String(page));
+      sp.set("limit", String(pageSize));
+
+      const res = await fetch(`/api/scm/transfers/stock-conversion?${sp.toString()}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to fetch stock conversion data");
       
       const products: StockConversionProduct[] = json.data || [];
+      const total = json.totalCount || 0;
+      
       setData(products);
+      setTotalCount(total);
       setIsLoading(false);
     } catch (err: any) {
       setError(err.message);
       setIsLoading(false);
     }
-  }, []);
+  }, [page, pageSize]);
 
   // 2. Targeted Inventory Fetch: Triggered by UI/Filters
   const loadInventory = useCallback(async (filters?: any) => {
@@ -50,7 +65,7 @@ export function useStockConversion(branchId?: number) {
         if (filters.productIds && filters.productIds.length > 0) sp.set("productIds", filters.productIds.join(","));
       }
 
-      const invUrl = `/api/scm/inventory-management/stock-conversion?${sp.toString()}`;
+      const invUrl = `/api/scm/transfers/stock-conversion?${sp.toString()}`;
       const res = await fetch(invUrl);
       const invJson = await res.json();
       
@@ -81,11 +96,18 @@ export function useStockConversion(branchId?: number) {
   const loadProductsInventory = useCallback(async (productIds: number[]) => {
     if (!productIds.length) return;
     
+    // Filter out products that are already being fetched
+    const fetchableIds = productIds.filter(id => !loadingProductsRef.current.has(id));
+    if (!fetchableIds.length) return;
+    
+    // Mark as currently fetching
+    fetchableIds.forEach(id => loadingProductsRef.current.add(id));
+
     // Mark these specific products as loading (only if not already loading)
     setData(prev => {
       let changed = false;
       const next = prev.map(p => {
-        if (productIds.includes(p.productId) && p.inventoryLoaded !== false) {
+        if (fetchableIds.includes(p.productId) && p.inventoryLoaded !== false) {
            changed = true;
            return { ...p, inventoryLoaded: false };
         }
@@ -98,16 +120,16 @@ export function useStockConversion(branchId?: number) {
       const sp = new URLSearchParams();
       sp.set("type", "inventory");
       if (branchId !== undefined) sp.set("branchId", String(branchId));
-      sp.set("productIds", productIds.join(","));
+      sp.set("productIds", fetchableIds.join(","));
 
-      const res = await fetch(`/api/scm/inventory-management/stock-conversion?${sp.toString()}`);
+      const res = await fetch(`/api/scm/transfers/stock-conversion?${sp.toString()}`);
       const invJson = await res.json();
       if (!res.ok) throw new Error(invJson.error || "Batch inventory load failed");
 
       const invMap = invJson.data || {};
       setData(prev => {
         return prev.map(p => {
-          if (productIds.includes(p.productId)) {
+          if (fetchableIds.includes(p.productId)) {
             const qty = invMap[p.productId];
             const finalQty = qty !== undefined ? qty : 0;
             return {
@@ -125,15 +147,18 @@ export function useStockConversion(branchId?: number) {
       toast.error(`Batch Inventory failed: ${err.message}`);
       // Revert loading state if failed
       setData(prev => prev.map(p => 
-        productIds.includes(p.productId) ? { ...p, inventoryLoaded: true } : p
+        fetchableIds.includes(p.productId) ? { ...p, inventoryLoaded: true } : p
       ));
+    } finally {
+      // Remove from tracking ref
+      fetchableIds.forEach(id => loadingProductsRef.current.delete(id));
     }
   }, [branchId]);
 
   const convertStockAction = async (payload: StockConversionPayload) => {
     setIsUpdating(true);
     try {
-      const res = await fetch("/api/scm/inventory-management/stock-conversion", {
+      const res = await fetch("/api/scm/transfers/stock-conversion", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -181,6 +206,11 @@ export function useStockConversion(branchId?: number) {
 
   return {
     data,
+    totalCount,
+    page,
+    pageSize,
+    setPage,
+    setPageSize,
     isLoading,
     isUpdating,
     error,

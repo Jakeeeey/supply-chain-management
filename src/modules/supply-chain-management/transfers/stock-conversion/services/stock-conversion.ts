@@ -36,71 +36,95 @@ async function fetchWithTimeout(url: string, options: any = {}, timeout = 15000)
   }
 }
 
-export async function fetchStockList(): Promise<StockConversionProduct[]> {
+// Global cache for master data dictionaries to prevent fetching on every page navigation
+const masterCache: any = {
+    units: null,
+    brands: null,
+    cats: null,
+    suppliers: null,
+    supplierNames: null,
+    lastFetched: 0
+};
+
+const CACHE_TTL = 1000 * 60 * 60; // 1 hour TTL
+
+async function getMasterData(headers: any) {
+    const now = Date.now();
+    if (masterCache.lastFetched > now - CACHE_TTL && masterCache.units) {
+        return masterCache;
+    }
+
+    console.log("[Stock-Conversion] Fetching Master Dictionaries (Units, Brands, Categories, Suppliers) - CACHE MISS");
+    const [unitRes, brandRes, catRes, supplierRes, supplierListRes] = await Promise.all([
+      fetchWithTimeout(`${DIRECTUS_API}/items/units?limit=-1&fields=unit_id,unit_name`, { headers }),
+      fetchWithTimeout(`${DIRECTUS_API}/items/brand?limit=-1&fields=brand_id,brand_name`, { headers }),
+      fetchWithTimeout(`${DIRECTUS_API}/items/categories?limit=-1&fields=category_id,category_name`, { headers }),
+      fetchWithTimeout(`${DIRECTUS_API}/items/product_per_supplier?limit=-1&fields=product_id,supplier_id`, { headers }),
+      fetchWithTimeout(`${DIRECTUS_API}/items/suppliers?limit=-1&fields=id,supplier_name,supplier_shortcut`, { headers })
+    ]);
+
+    masterCache.units = unitRes.ok ? (await unitRes.json()).data : [];
+    masterCache.brands = brandRes.ok ? (await brandRes.json()).data : [];
+    masterCache.cats = catRes.ok ? (await catRes.json()).data : [];
+    masterCache.suppliers = supplierRes.ok ? (await supplierRes.json()).data : [];
+    masterCache.supplierNames = supplierListRes.ok ? (await supplierListRes.json()).data : [];
+    masterCache.lastFetched = now;
+
+    return masterCache;
+}
+
+export async function fetchStockList(
+  limit: number = 20,
+  offset: number = 0,
+  filters?: InventoryFilters
+): Promise<{ data: StockConversionProduct[]; totalCount: number }> {
   try {
-    console.log("[Stock-Conversion] Starting separate API fetches (Authorized Mode)...");
+    console.log(`[Stock-Conversion] Starting API fetches (limit=${limit}, offset=${offset})...`);
     const startTime = Date.now();
     const headers = getHeaders();
 
-    // 1. Fetch collections separately. AVOIDING "id" field as it triggers 403 on this static token.
-    // Using explicit PK fields like product_id, unit_id, etc.
-    const [prodRes, unitRes, brandRes, catRes, supplierRes, supplierListRes] = await Promise.all([
-      fetchWithTimeout(`${DIRECTUS_API}/items/products?limit=-1&fields=product_id,product_name,description,product_code,parent_id,unit_of_measurement,product_brand,product_category,cost_per_unit,price_per_unit`, { headers, cache: "no-store" }),
-      fetchWithTimeout(`${DIRECTUS_API}/items/units?limit=-1&fields=unit_id,unit_name`, { headers, cache: "no-store" }),
-      fetchWithTimeout(`${DIRECTUS_API}/items/brand?limit=-1&fields=brand_id,brand_name`, { headers, cache: "no-store" }),
-      fetchWithTimeout(`${DIRECTUS_API}/items/categories?limit=-1&fields=category_id,category_name`, { headers, cache: "no-store" }),
-      fetchWithTimeout(`${DIRECTUS_API}/items/product_per_supplier?limit=-1&fields=product_id,supplier_id`, { headers, cache: "no-store" }),
-      fetchWithTimeout(`${DIRECTUS_API}/items/suppliers?limit=-1&fields=id,supplier_name,supplier_shortcut`, { headers, cache: "no-store" })
-    ]);
+    // 1. Fetch products with limit and offset
+    const prodRes = await fetchWithTimeout(`${DIRECTUS_API}/items/products?limit=${limit}&offset=${offset}&meta=filter_count&fields=product_id,product_name,description,product_code,parent_id,unit_of_measurement,product_brand,product_category,cost_per_unit,price_per_unit`, { headers, cache: "no-store" });
 
+    // 2. Fetch or retrieve cached master dictionaries
+    const cache = await getMasterData(headers);
     console.log(`[Stock-Conversion] API fetches took ${Date.now() - startTime}ms`);
 
     if (!prodRes.ok) {
         const err = await prodRes.json().catch(() => ({}));
         throw new AppError("FETCH_ERROR", `Failed to fetch products: ${prodRes.statusText} ${JSON.stringify(err)}`, 500);
     }
-    const products = (await prodRes.json()).data || [];
+    const prodJson = await prodRes.json();
+    const products = prodJson.data || [];
+    const totalCount = prodJson.meta?.filter_count || 0;
 
-    // Helper Maps for O(1) correlation
+    // Helper Maps for O(1) correlation rebuilt quickly from cache
     const unitMap = new Map();
-    if (unitRes.ok) (await unitRes.json()).data?.forEach((u: any) => unitMap.set(Number(u.unit_id), u.unit_name));
+    cache.units?.forEach((u: any) => unitMap.set(Number(u.unit_id), u.unit_name));
 
     const brandMap = new Map();
-    if (brandRes.ok) (await brandRes.json()).data?.forEach((b: any) => brandMap.set(Number(b.brand_id), b.brand_name));
+    cache.brands?.forEach((b: any) => brandMap.set(Number(b.brand_id), b.brand_name));
 
     const catMap = new Map();
-    if (catRes.ok) (await catRes.json()).data?.forEach((c: any) => catMap.set(Number(c.category_id), c.category_name));
+    cache.cats?.forEach((c: any) => catMap.set(Number(c.category_id), c.category_name));
 
     const supplierMap = new Map<number, number[]>();
-    if (supplierRes.ok) {
-        const juncJson = await supplierRes.json();
-        const juncData = juncJson.data || [];
-        console.log(`[Stock-Conversion] Fetched ${juncData.length} junction rows`);
-        juncData.forEach((s: any) => {
-            const pId = Number(s.product_id);
-            const sId = Number(s.supplier_id);
-            if (!isNaN(pId) && !isNaN(sId)) {
-                if (!supplierMap.has(pId)) supplierMap.set(pId, []);
-                supplierMap.get(pId)!.push(sId);
-            }
-        });
-    }
+    cache.suppliers?.forEach((s: any) => {
+        const pId = Number(s.product_id);
+        const sId = Number(s.supplier_id);
+        if (!isNaN(pId) && !isNaN(sId)) {
+            if (!supplierMap.has(pId)) supplierMap.set(pId, []);
+            supplierMap.get(pId)!.push(sId);
+        }
+    });
 
     const supplierNameMap = new Map();
-    if (supplierListRes.ok) {
-        const supJson = await supplierListRes.json();
-        const supData = supJson.data || [];
-        console.log(`[Stock-Conversion] Fetched ${supData.length} suppliers`);
-        supData.forEach((s: any) => {
-            const sId = Number(s.id);
-            if (!isNaN(sId)) {
-                supplierNameMap.set(sId, {
-                    name: s.supplier_name,
-                    shortcut: s.supplier_shortcut
-                });
-            }
-        });
-    }
+    cache.supplierNames?.forEach((s: any) => {
+        const sId = Number(s.id);
+        if (!isNaN(sId)) {
+            supplierNameMap.set(sId, { name: s.supplier_name, shortcut: s.supplier_shortcut });
+        }
+    });
 
     // 2. Strict Grouping logic to prevent JSON explosion (No more name-based fuzzy grouping)
     // We only group products that are explicitly parts of a parent-child relationship.
@@ -178,7 +202,7 @@ export async function fetchStockList(): Promise<StockConversionProduct[]> {
     const choicesCount = result.filter(r => (r.availableUnits?.length || 0) > 0).length;
     console.log(`[Stock-Conversion] Processed ${result.length} products. Products with choices: ${choicesCount}`);
     
-    return result;
+    return { data: result, totalCount };
   } catch (error: any) {
     console.error("[Stock-Conversion] fetchStockList Critical Error:", error.message);
     throw new AppError("FETCH_ERROR", `Stock fetch failed: ${error.message}`, 500);
