@@ -874,7 +874,7 @@ export default function CreatePurchaseOrderModule() {
         } finally {
             setIsSaving(false);
         }
-    }, [selectedSupplier, allItemsFlat, poNumber, poDate, poDateISO, allocations, financials]);
+    }, [selectedSupplier, allItemsFlat, poNumber, poDate, poDateISO, allocations, financials, isInvoice]);
 
     const pickerBranchLabel = React.useMemo(() => {
         const b = allocations.find((x) => x.branchId === pickerBranchId);

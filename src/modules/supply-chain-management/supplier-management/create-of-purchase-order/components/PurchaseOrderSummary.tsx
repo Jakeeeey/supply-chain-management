@@ -494,7 +494,7 @@ export function PurchaseOrderSummary(props: {
                                     <Tags className="w-4 h-4 text-primary" />
                                     <span className="text-sm font-black uppercase tracking-tight text-foreground">Financial Summary</span>
                                 </div>
-                                <div className="flex items-center gap-2 px-2 py-1 bg-muted/50 rounded-lg border border-border/50 hover:bg-muted transition-colors cursor-pointer group" onClick={() => !locked && props.setIsInvoice(!props.isInvoice)}>
+                                <div className="flex items-center gap-2 px-2 py-1 bg-muted/50 rounded-lg border border-border/50 hover:bg-muted transition-colors group">
                                     <Checkbox 
                                         id="is-invoice" 
                                         checked={props.isInvoice} 
@@ -540,6 +540,9 @@ export function PurchaseOrderSummary(props: {
                                             <span className="text-foreground/70 font-black uppercase tracking-widest">EWT (1%)</span>
                                             <span className="font-black text-foreground text-sm">{money.format(ewtGoods)}</span>
                                         </div>
+                                        <p className="text-[9px] text-amber-600 dark:text-amber-400 font-bold italic text-right mt-0.5">
+                                            Note: EWT is not yet deducted
+                                        </p>
                                     </>
                                 )}
                             </div>
