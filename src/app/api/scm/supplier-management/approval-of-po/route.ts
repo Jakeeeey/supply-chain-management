@@ -355,18 +355,26 @@ type PoHeaderRow = {
     date?: string | null;
     date_encoded?: string | null;
     supplier_name?: any;
+    is_invoice?: boolean | number | null;
+    isInvoice?: boolean | number | null;
+    receiving_type?: number | null;
 };
 
 async function fetchPendingPOs(base: string): Promise<PoHeaderRow[]> {
-    const qs = [
-        "limit=-1",
-        "sort=-date_encoded",
-        "fields=purchase_order_id,purchase_order_no,date,date_encoded,supplier_name,date_approved,approver_id",
-        "filter[date_approved][_null]=true",
-        "filter[approver_id][_null]=true",
-    ].join("&");
+    const fields = [
+        "purchase_order_id",
+        "purchase_order_no",
+        "date",
+        "supplier_name",
+        "total_amount",
+        "inventory_status",
+        "payment_status",
+        "approver_id",
+        "date_approved",
+        "receiving_type", // ✅ Persistent field for is_invoice (2=Invoice, 3=PO)
+    ].join(",");
 
-    const url = `${base}/items/${PO_COLLECTION}?${qs}`;
+    const url = `${base}/items/${PO_COLLECTION}?limit=-1&sort=-date_encoded&fields=${fields}&filter[date_approved][_null]=true&filter[approver_id][_null]=true`;
     const j = await fetchJson(url);
     return Array.isArray(j?.data) ? j.data : [];
 }
@@ -390,7 +398,7 @@ async function fetchPOProductsByPOIds(base: string, poIds: number[]) {
     const url =
         `${base}/items/${PO_PRODUCTS_COLLECTION}?limit=-1` +
         `&filter[purchase_order_id][_in]=${encodeURIComponent(poIds.join(","))}` +
-        `&fields=purchase_order_product_id,purchase_order_id,product_id,ordered_quantity,unit_price,branch_id,total_amount`;
+        `&fields=*,product_id.*,branch_id.*`;
 
     const j = await fetchJson(url);
     return (j?.data ?? []) as PoProductRow[];
@@ -400,7 +408,7 @@ async function fetchPOProductsByPOId(base: string, poId: number) {
     const url =
         `${base}/items/${PO_PRODUCTS_COLLECTION}?limit=-1` +
         `&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}` +
-        `&fields=purchase_order_product_id,purchase_order_id,product_id,ordered_quantity,unit_price,branch_id,total_amount`;
+        `&fields=*,product_id.*,branch_id.*`;
 
     const j = await fetchJson(url);
     return (j?.data ?? []) as PoProductRow[];
@@ -432,7 +440,7 @@ async function fetchProductSupplierLinks(base: string, productIds: number[]) {
     const url =
         `${base}/items/${PRODUCT_SUPPLIER_COLLECTION}?limit=-1` +
         `&filter[product_id][_in]=${encodeURIComponent(ids.join(","))}` +
-        `&fields=product_id,supplier_id,discount_type`;
+        `&fields=*`;
 
     const j = await fetchJson(url);
     for (const link of j?.data ?? []) {
@@ -508,6 +516,30 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
         return null;
     };
 
+    // Helper to format a label if name is missing but pct exists
+    const formatDiscLabel = (info: { name: string; pct: number } | null, fallbackName: string) => {
+        const p = info?.pct ?? 0;
+        const roundedP = Math.round(p * 10000) / 10000;
+
+        // Magic resolves from percentages
+        if (roundedP === 8) return "L8";
+        if (Math.abs(roundedP - 9.5617) < 0.01) return "ACE Promo1";
+        if (roundedP === 75.4975) return "ACE Promo";
+
+        if (info?.name) return info.name;
+        if (info?.pct) {
+            // Try to find a named discount in the map that matches this percentage
+            for (const d of discountMap.values()) {
+                if (d.name && Math.abs(d.pct - info.pct) < 0.001) {
+                    return d.name;
+                }
+            }
+            const pVal = Number(info.pct.toFixed(2));
+            return `${pVal}% DISCOUNT`;
+        }
+        return fallbackName;
+    };
+
     // ===== Pre-calculate Header Financials for Fallback =====
     const tempItems = lines.map((l) => {
         const qty = Math.max(0, toNum(l.ordered_quantity));
@@ -531,10 +563,10 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
     const headerDiscRaw = header?.discount_type;
     const headerDiscInfo = getDiscInfo(headerDiscRaw);
 
-    const headerDiscTypeName = toStr(
-        headerDiscInfo?.name || 
-        pickStr(header, ["discount_code", "discountCode"]),
-        headerDiscAmount > 0 ? (headerDiscInfo?.name || "PO Discount") : ""
+    const effectiveHeaderDisc = headerDiscInfo || (headerDiscPct > 0 ? { name: "", pct: headerDiscPct } : null);
+    const headerDiscTypeName = formatDiscLabel(
+        effectiveHeaderDisc, 
+        headerDiscAmount > 0 ? (headerDiscPct ? `${Number(headerDiscPct.toFixed(2))}% DISCOUNT` : "PO Discount") : ""
     );
 
     const items = lines.map((l) => {
@@ -553,7 +585,7 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
         const itemDisc = getDiscInfo((l as any).discount_type);
         const linkDisc = getDiscInfo(linkData?.discount_type);
 
-        const resolvedDiscountType = itemDisc?.name || linkDisc?.name || headerDiscTypeName || "—";
+        const resolvedDiscountType = formatDiscLabel(itemDisc, formatDiscLabel(linkDisc, headerDiscTypeName)) || "—";
         const discountPct = itemDisc?.pct || linkDisc?.pct || headerDiscPct || 0;
 
         const grossVal = toNum((l as any).gross) || lineTotal;
@@ -663,7 +695,8 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
         discount_type: headerDiscTypeName,
         discountType: headerDiscTypeName,
         
-        is_invoice: !!header?.is_invoice,
+        // derives is_invoice from receiving_type (2=Invoice, 3=PO) (robust check)
+        is_invoice: (Number(header?.receiving_type) === 2) || (String(header?.is_invoice ?? header?.isInvoice).toLowerCase() === "true") || !!(header?.is_invoice ?? header?.isInvoice),
 
         vat_amount: vat,
         vatAmount: vat,
@@ -748,6 +781,8 @@ export async function GET(req: NextRequest) {
 
                 totalAmount: totalByPo.get(poId) ?? 0,
                 currency: "PHP",
+                // derives is_invoice from receiving_type (2=Invoice, 3=PO) (robust check)
+                is_invoice: (Number(h.receiving_type) === 2) || (String(h.is_invoice ?? h.isInvoice).toLowerCase() === "true") || !!(h.is_invoice ?? h.isInvoice),
             };
         });
 
@@ -768,7 +803,10 @@ export async function POST(req: NextRequest) {
         const poId = toNum(id);
         if (!poId) return bad("Invalid id.", 400);
 
-        const patch: any = { date_approved: new Date().toISOString() };
+        const patch: any = { 
+            date_approved: new Date().toISOString(),
+            receiving_type: Boolean(body?.markAsInvoice) ? 2 : 3 // Persistent flag for "Mark as Invoice"
+        };
         if (Boolean(body?.markAsInvoice)) patch.payment_status = 2;
 
         const url = `${base}/items/${PO_COLLECTION}/${encodeURIComponent(String(poId))}`;

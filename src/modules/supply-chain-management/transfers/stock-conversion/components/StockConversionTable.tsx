@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -27,12 +27,21 @@ import { Label } from "@/components/ui/label";
 
 interface StockConversionTableProps {
   data: StockConversionProduct[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  setPage: (p: number) => void;
+  setPageSize: (s: number) => void;
   onConvertClick: (product: StockConversionProduct) => void;
-  onRefresh: () => void;
+  onRefresh: (filters?: any) => void;
+  loadProductsInventory: (productIds: number[]) => void;
   isLoading?: boolean;
 }
 
-export function StockConversionTable({ data, onConvertClick, onRefresh, isLoading }: StockConversionTableProps) {
+export function StockConversionTable({ 
+  data, totalCount, page, pageSize, setPage, setPageSize,
+  onConvertClick, onRefresh, loadProductsInventory, isLoading 
+}: StockConversionTableProps) {
   const [brandFilter, setBrandFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [unitFilter, setUnitFilter] = useState("all");
@@ -66,15 +75,62 @@ export function StockConversionTable({ data, onConvertClick, onRefresh, isLoadin
   const table = useReactTable({
     data: filteredData,
     columns,
+    pageCount: Math.ceil(totalCount / pageSize),
     getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    initialState: {
+    manualPagination: true,
+    state: {
       pagination: {
-        pageSize: 10,
+        pageIndex: page - 1,
+        pageSize,
       },
     },
   });
+
+  // Effect to trigger filtered inventory fetch when filters change
+  useEffect(() => {
+    // Only fetch if we actually have products loaded
+    if (!data.length) return;
+
+    // Skip initial bulk fetch if no specific filter is active. 
+    // The table relies on lazy-loading visible rows efficiently instead.
+    if (supplierFilter === "all" && categoryFilter === "all" && unitFilter === "all" && brandFilter === "all") {
+        return;
+    }
+
+    const selectedShortcut = data.find(d => d.supplierName === supplierFilter)?.supplierShortcut || 
+                            (supplierFilter === "all" ? "all" : undefined);
+
+    // If everything is "all", the backend /all endpoint is slow. 
+    // We only trigger if at least one meaningful filter is set, OR on the very first load.
+    // However, the user wants /filter to be used.
+    
+    onRefresh({
+      supplierShortcut: selectedShortcut,
+      productCategory: categoryFilter,
+      unitName: unitFilter,
+      productBrand: brandFilter
+    });
+  }, [brandFilter, categoryFilter, unitFilter, supplierFilter, onRefresh, data.length]);
+
+  // Lazy Loading Effect: Watch the current page and fetch inventory for visible products
+  const pageItems = table.getRowModel().rows;
+  const visibleProductIds = JSON.stringify(pageItems.map(row => row.original.productId));
+
+  useEffect(() => {
+    if (!pageItems.length) return;
+
+    // Grab products from current page that need loading
+    const productsToLoad = pageItems
+      .map(row => row.original)
+      .filter(p => p.inventoryLoaded === false)
+      .map(p => p.productId);
+
+    if (productsToLoad.length > 0) {
+      console.log("[StockConversionTable] Lazy loading inventory for current page products:", productsToLoad);
+      loadProductsInventory(productsToLoad);
+    }
+  }, [visibleProductIds, loadProductsInventory, pageItems.length]); // Use stringified IDs
 
   return (
     <Card className="border-none shadow-sm h-full flex flex-col pt-3 bg-background">
@@ -236,18 +292,19 @@ export function StockConversionTable({ data, onConvertClick, onRefresh, isLoadin
           <div className="flex items-center gap-2">
             <p className="text-sm font-medium text-muted-foreground">Rows per page</p>
             <Select
-              value={`${table.getState().pagination.pageSize}`}
+              value={`${pageSize}`}
               onValueChange={(value) => {
-                table.setPageSize(Number(value));
+                setPageSize(Number(value));
+                setPage(1);
               }}
             >
               <SelectTrigger className="h-8 w-[70px]">
-                <SelectValue placeholder={table.getState().pagination.pageSize} />
+                <SelectValue placeholder={pageSize} />
               </SelectTrigger>
               <SelectContent side="top">
-                {[10, 20, 30, 50].map((pageSize) => (
-                  <SelectItem key={pageSize} value={`${pageSize}`}>
-                    {pageSize}
+                {[10, 20, 30, 50].map((size) => (
+                  <SelectItem key={size} value={`${size}`}>
+                    {size}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -256,13 +313,13 @@ export function StockConversionTable({ data, onConvertClick, onRefresh, isLoadin
 
           <div className="flex items-center space-x-2">
             <div className="flex w-[100px] items-center justify-center text-sm font-medium text-muted-foreground">
-              Page {table.getState().pagination.pageIndex + 1} of{" "}
-              {table.getPageCount()}
+              Page {page} of{" "}
+              {table.getPageCount() || 1}
             </div>
             <Button
               variant="outline"
               size="sm"
-              onClick={() => table.previousPage()}
+              onClick={() => setPage(page - 1)}
               disabled={!table.getCanPreviousPage()}
               className="h-8 w-8 p-0"
             >
@@ -272,7 +329,7 @@ export function StockConversionTable({ data, onConvertClick, onRefresh, isLoadin
             <Button
               variant="outline"
               size="sm"
-              onClick={() => table.nextPage()}
+              onClick={() => setPage(page + 1)}
               disabled={!table.getCanNextPage()}
               className="h-8 w-8 p-0"
             >

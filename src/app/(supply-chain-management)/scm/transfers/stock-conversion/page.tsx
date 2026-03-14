@@ -1,4 +1,4 @@
-import StockConversionPage from "@/modules/supply-chain-management/inventory-management/stock-conversion/StockConversionPage";
+import StockConversionModule from "@/modules/supply-chain-management/transfers/stock-conversion/StockConversionModule";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -115,7 +115,7 @@ export default async function Page() {
 
       <ScrollArea className="min-h-0 flex-1">
         <div className="p-4">
-          <StockConversionPage user={headerUser} />
+          <StockConversionModule user={headerUser} />
         </div>
       </ScrollArea>
     </div>

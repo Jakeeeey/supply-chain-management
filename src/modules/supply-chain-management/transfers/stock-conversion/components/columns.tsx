@@ -43,7 +43,7 @@ export const getColumns = (
         return (
           <span className="flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
             <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" />
-            Fetching stock...
+            Loading...
           </span>
         );
       }

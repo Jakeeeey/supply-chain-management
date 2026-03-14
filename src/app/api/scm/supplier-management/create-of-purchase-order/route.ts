@@ -333,7 +333,17 @@ export async function POST(req: NextRequest) {
         const payment_type = intOrDefault(input?.payment_type ?? input?.paymentType, 0);
         const payment_status = intOrDefault(input?.payment_status ?? input?.paymentStatus, 2);
         const transaction_type = intOrDefault(input?.transaction_type ?? input?.transactionType, 1);
-        const receiving_type = intOrDefault(input?.receiving_type ?? input?.receivingType, 3);
+        
+        // Robust check for invoice flag (handles true, "true", 1, etc.)
+        const isInvoiceFlag = 
+            String(input?.is_invoice || "").toLowerCase() === "true" ||
+            String(input?.isInvoice || "").toLowerCase() === "true" ||
+            input?.is_invoice === true ||
+            input?.isInvoice === true ||
+            input?.receiving_type === 2 ||
+            input?.receivingType === 2;
+
+        const receiving_type = isInvoiceFlag ? 2 : 3;
         const receipt_required = intOrDefault(input?.receipt_required ?? input?.receiptRequired, 1);
         const price_type = strOrDefault(input?.price_type ?? input?.priceType, "General Receive Price");
         const inventory_status = intOrDefault(input?.inventory_status ?? input?.inventoryStatus, 1);
@@ -367,7 +377,6 @@ export async function POST(req: NextRequest) {
             // header branch_id is single only; keep nullable (branches derived from purchase_order_products)
             branch_id: input?.branch_id ?? input?.branchId ?? null,
             price_type_id: input?.price_type_id ?? null,
-            is_invoice: input?.is_invoice ?? input?.isInvoice ?? false,
         };
 
         for (const k of Object.keys(payload)) {

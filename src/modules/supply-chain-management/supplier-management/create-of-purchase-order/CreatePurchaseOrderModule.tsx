@@ -236,8 +236,8 @@ function SupplierSelect(props: {
                                     {props.suppliers.map((s, idx) => {
                                         const selected = props.value?.id === s.id;
                                         return (
-                                            <React.Fragment key={s.id}>
                                                 <CommandItem
+                                                    key={s.id}
                                                     value={`${s.name} ${s.id}`}
                                                     onSelect={() => {
                                                         props.onChange(selected ? null : s);
@@ -270,11 +270,6 @@ function SupplierSelect(props: {
                                                         </Badge>
                                                     </div>
                                                 </CommandItem>
-
-                                                {idx < props.suppliers.length - 1 ? (
-                                                    <Separator className="my-2" />
-                                                ) : null}
-                                            </React.Fragment>
                                         );
                                     })}
                                 </CommandGroup>
@@ -389,8 +384,8 @@ function BranchMultiSelect(props: {
                                     {props.branches.map((b, idx) => {
                                         const isOn = selected.has(b.id);
                                         return (
-                                            <React.Fragment key={b.id}>
                                                 <CommandItem
+                                                    key={b.id}
                                                     value={`${b.code} ${b.name}`}
                                                     onSelect={() => {
                                                         const next = new Set(selected);
@@ -421,11 +416,6 @@ function BranchMultiSelect(props: {
                                                         </div>
                                                     </div>
                                                 </CommandItem>
-
-                                                {idx < props.branches.length - 1 ? (
-                                                    <Separator className="my-2" />
-                                                ) : null}
-                                            </React.Fragment>
                                         );
                                     })}
                                 </CommandGroup>
@@ -884,7 +874,7 @@ export default function CreatePurchaseOrderModule() {
         } finally {
             setIsSaving(false);
         }
-    }, [selectedSupplier, allItemsFlat, poNumber, poDate, poDateISO, allocations, financials]);
+    }, [selectedSupplier, allItemsFlat, poNumber, poDate, poDateISO, allocations, financials, isInvoice]);
 
     const pickerBranchLabel = React.useMemo(() => {
         const b = allocations.find((x) => x.branchId === pickerBranchId);

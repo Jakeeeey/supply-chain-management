@@ -189,7 +189,7 @@ export default function PurchaseOrderReviewPanel(props: {
     const poAny: any = React.useMemo(() => unwrap(props.po), [props.po]);
 
     React.useEffect(() => {
-        setMarkAsInvoice(!!(poAny?.is_invoice ?? false));
+        setMarkAsInvoice(!!(poAny?.is_invoice ?? poAny?.isInvoice ?? false));
         setPaymentTerm("cash_on_delivery");
         setTermsDays(30);
 
@@ -199,7 +199,7 @@ export default function PurchaseOrderReviewPanel(props: {
 
         // Reset pagination
         setCurrentPage(1);
-    }, [poAny?.purchase_order_id ?? poAny?.id ?? null]);
+    }, [poAny?.purchase_order_id ?? poAny?.id ?? null, poAny?.is_invoice, poAny?.isInvoice]);
 
     /**
      * ✅ FIX: Branch label resolver
@@ -598,8 +598,8 @@ export default function PurchaseOrderReviewPanel(props: {
                                             <span className="font-bold text-destructive">-{fmt.format(ewtGoods)}</span>
                                         </div>
 
-                                        <div className="rounded-md bg-background/60 border border-border/60 px-3 py-2 text-[11px] text-muted-foreground italic">
-                                            Note: VAT and EWT are shown for receipt/invoice display purposes only
+                                        <div className="rounded-md bg-background/60 border border-border/60 px-3 py-2 text-[11px] text-amber-600 dark:text-amber-400 font-bold italic">
+                                            Note: VAT and EWT are shown for receipt/invoice display purposes only. EWT is not yet deducted.
                                         </div>
                                     </>
                                 ) : null}
@@ -632,10 +632,9 @@ export default function PurchaseOrderReviewPanel(props: {
                                         checked={markAsInvoice} 
                                         onCheckedChange={setMarkAsInvoice} 
                                         id="markAsInvoice" 
-                                        disabled={!!poAny?.is_invoice}
                                     />
-                                    <Label htmlFor="markAsInvoice" className={cn("text-sm font-bold", !!poAny?.is_invoice && "opacity-70")}>
-                                        Mark as Invoice {!!poAny?.is_invoice && "(Locked)"}
+                                    <Label htmlFor="markAsInvoice" className="text-sm font-bold">
+                                        Mark as Invoice
                                     </Label>
                                 </div>
 
