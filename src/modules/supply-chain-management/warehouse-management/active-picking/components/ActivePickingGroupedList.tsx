@@ -2,16 +2,25 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import {
-    CheckCircle2, ChevronRight, Factory, Keyboard, ListTodo, ScanLine, Tags, Barcode, Send, Search, PackageX
+    CheckCircle2, ChevronRight, Factory, Keyboard, ListTodo, ScanLine, Tags, Barcode, Send, Search, PackageX, AlertOctagon
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import { motion } from "framer-motion";
 import { ConsolidatorDetailsDto } from "../types";
 
 interface Props {
+    cldtoNo: string; // 🚀 ADDED: Pass the current CLDTO number from the parent to validate against
     groupedDetails: Record<string, Record<string, Record<string, ConsolidatorDetailsDto[]>>>;
     activeDetailId: number | null;
     setActiveDetailId: (id: number | null) => void;
@@ -20,6 +29,7 @@ interface Props {
 }
 
 export function ActivePickingGroupedList({
+                                             cldtoNo,
                                              groupedDetails,
                                              activeDetailId,
                                              setActiveDetailId,
@@ -28,7 +38,12 @@ export function ActivePickingGroupedList({
                                          }: Props) {
     const [searchQuery, setSearchQuery] = useState("");
 
-    // 🚀 THE FIX: Auto-scroll to the active card when a blind scan occurs
+    // Force End Confirmation State
+    const [showForceEndDialog, setShowForceEndDialog] = useState(false);
+    const [cldtoInput, setCldtoInput] = useState("");
+    const [hasError, setHasError] = useState(false);
+
+    // Auto-scroll to the active card when a blind scan occurs
     useEffect(() => {
         if (activeDetailId) {
             const element = document.getElementById(`pick-card-${activeDetailId}`);
@@ -82,6 +97,27 @@ export function ActivePickingGroupedList({
 
     const isFilteredEmpty = Object.keys(filteredGroupedDetails).length === 0;
 
+    // Handle end session logic
+    const handleEndSessionClick = () => {
+        if (isFullyDone) {
+            onFinalizeBatch();
+        } else {
+            setCldtoInput("");
+            setHasError(false);
+            setShowForceEndDialog(true);
+        }
+    };
+
+    const handleConfirmForceEnd = () => {
+        // Case insensitive match to prevent frustrating user errors
+        if (cldtoInput.trim().toLowerCase() === cldtoNo.trim().toLowerCase()) {
+            setShowForceEndDialog(false);
+            onFinalizeBatch();
+        } else {
+            setHasError(true);
+        }
+    };
+
     return (
         <div className="w-full md:w-2/3 lg:w-3/4 flex flex-col border-r border-border/40 bg-muted/10 min-h-0 relative">
             <div className="shrink-0 p-4 bg-card border-b border-border/40 flex flex-col gap-4 shadow-sm z-20">
@@ -90,7 +126,7 @@ export function ActivePickingGroupedList({
                         <ListTodo className="h-5 w-5 text-primary"/> Grouped Pick Cards
                     </h2>
                     <Button
-                        variant="ghost" size="sm" onClick={onFinalizeBatch}
+                        variant="ghost" size="sm" onClick={handleEndSessionClick}
                         className="text-xs font-black uppercase tracking-tighter hover:bg-primary/10 hover:text-primary transition-all md:hidden"
                     >
                         End Session
@@ -152,7 +188,7 @@ export function ActivePickingGroupedList({
                                                                 return (
                                                                     <div
                                                                         key={detail.id}
-                                                                        id={`pick-card-${detail.id}`} // 🚀 THE FIX: Tagged for auto-scroll
+                                                                        id={`pick-card-${detail.id}`}
                                                                         onClick={() => !isComplete && setActiveDetailId(detail.id || null)}
                                                                         className={`
                                                                             relative flex flex-col p-5 rounded-2xl border-2 transition-all cursor-pointer overflow-hidden group min-h-[220px]
@@ -278,9 +314,9 @@ export function ActivePickingGroupedList({
                     </div>
 
                     <Button
-                        onClick={onFinalizeBatch}
+                        onClick={handleEndSessionClick}
                         className={`h-14 px-6 md:px-8 rounded-2xl font-black uppercase italic tracking-tighter text-base md:text-lg shadow-lg group shrink-0 ${
-                            isFullyDone ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-primary hover:bg-primary/90'
+                            isFullyDone ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-destructive hover:bg-destructive/90'
                         }`}
                     >
                         {isFullyDone ? 'Finish' : 'Force End'}
@@ -288,6 +324,61 @@ export function ActivePickingGroupedList({
                     </Button>
                 </motion.div>
             </div>
+
+            {/* Force End Confirmation Dialog */}
+            <Dialog open={showForceEndDialog} onOpenChange={setShowForceEndDialog}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-destructive font-black uppercase tracking-widest">
+                            <AlertOctagon className="h-5 w-5" />
+                            Incomplete Batch
+                        </DialogTitle>
+                        <DialogDescription className="text-sm font-medium mt-2">
+                            You have not finished scanning all items. To forcefully end this batch, please type the CLDTO Number <strong className="text-foreground border-b border-dashed border-foreground pb-0.5">{cldtoNo}</strong> below to confirm.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="flex flex-col gap-2 py-4">
+                        <Input
+                            placeholder="Enter CLDTO No."
+                            value={cldtoInput}
+                            onChange={(e) => {
+                                setCldtoInput(e.target.value);
+                                if (hasError) setHasError(false);
+                            }}
+                            onKeyDown={(e) => e.key === 'Enter' && handleConfirmForceEnd()}
+                            className={`h-12 text-center font-mono font-bold text-lg tracking-widest uppercase ${
+                                hasError ? "border-destructive focus-visible:ring-destructive/20 bg-destructive/5" : ""
+                            }`}
+                        />
+                        {hasError && (
+                            <p className="text-[11px] font-bold text-destructive text-center uppercase tracking-widest">
+                                Incorrect CLDTO Number. Please try again.
+                            </p>
+                        )}
+                    </div>
+
+                    <DialogFooter className="sm:justify-between flex-row gap-2">
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() => setShowForceEndDialog(false)}
+                            className="font-bold uppercase tracking-widest text-xs"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="destructive"
+                            onClick={handleConfirmForceEnd}
+                            disabled={!cldtoInput.trim()}
+                            className="font-black uppercase tracking-widest text-xs"
+                        >
+                            Confirm Force End
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

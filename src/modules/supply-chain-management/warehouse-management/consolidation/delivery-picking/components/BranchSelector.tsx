@@ -59,8 +59,7 @@ export function BranchSelector({
                                 <Building2 className="w-4 h-4 text-primary"/>
                             </div>
                             <div className="flex flex-col items-start truncate">
-                                <span
-                                    className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 leading-none mb-1">
+                                <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 leading-none mb-1">
                                     Active Terminal
                                 </span>
                                 <span className="font-bold text-sm truncate">
@@ -71,8 +70,7 @@ export function BranchSelector({
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50"/>
                     </Button>
                 </PopoverTrigger>
-                <PopoverContent
-                    className="w-[260px] p-0 bg-card/95 backdrop-blur-2xl border-border/40 rounded-2xl shadow-2xl">
+                <PopoverContent className="w-[260px] p-0 bg-card/95 backdrop-blur-2xl border-border/40 rounded-2xl shadow-2xl">
                     <Command className="bg-transparent">
                         <div className="flex items-center border-b border-border/40 px-3">
                             <Search className="mr-2 h-4 w-4 shrink-0 opacity-50"/>
@@ -82,15 +80,15 @@ export function BranchSelector({
                             />
                         </div>
                         <CommandList>
-                            <CommandEmpty
-                                className="p-4 text-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                            <CommandEmpty className="p-4 text-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                                 No facility found.
                             </CommandEmpty>
                             <CommandGroup>
                                 {branches.map((branch) => (
                                     <CommandItem
                                         key={branch.id}
-                                        value={branch.branchName} // cmdk filters based on value
+                                        // Combining Name and Code ensures cmdk's internal value is strictly unique
+                                        value={`${branch.branchName} ${branch.branchCode}`}
                                         onSelect={() => {
                                             onBranchChange(branch.id);
                                             setOpen(false);
@@ -102,14 +100,12 @@ export function BranchSelector({
                                                 <span className="text-[11px] font-black uppercase tracking-tighter">
                                                     {branch.branchName}
                                                 </span>
-                                                <Badge variant="outline"
-                                                       className="text-[8px] h-4 px-1 border-primary/20 text-primary font-mono uppercase">
+                                                <Badge variant="outline" className="text-[8px] h-4 px-1 border-primary/20 text-primary font-mono uppercase">
                                                     {branch.branchCode}
                                                 </Badge>
                                             </div>
                                             {branch.city && (
-                                                <div
-                                                    className="flex items-center gap-1 text-[9px] text-muted-foreground font-bold uppercase opacity-60">
+                                                <div className="flex items-center gap-1 text-[9px] text-muted-foreground font-bold uppercase opacity-60">
                                                     <MapPin className="w-2 h-2"/>
                                                     {branch.city}
                                                 </div>
@@ -131,8 +127,7 @@ export function BranchSelector({
 
             {/* Status Indicator */}
             {selectedBranchId && (
-                <div
-                    className="hidden md:flex items-center gap-1.5 px-3 h-11 rounded-xl border border-emerald-500/20 bg-emerald-500/5 text-emerald-500 transition-all animate-in zoom-in-95">
+                <div className="hidden md:flex items-center gap-1.5 px-3 h-11 rounded-xl border border-emerald-500/20 bg-emerald-500/5 text-emerald-500 transition-all animate-in zoom-in-95">
                     <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"/>
                     <span className="text-[9px] font-black uppercase tracking-widest italic">
                         Live Stream

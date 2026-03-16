@@ -10,12 +10,13 @@ import {
     Package,
     Route,
     Truck,
-    Warehouse
+    Warehouse,
+    Activity // <-- Added an icon for monitoring if you want to use it
 } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
 
-import { Separator } from "@/components/ui/separator";
+import {Separator} from "@/components/ui/separator";
 import {
     Sidebar,
     SidebarContent,
@@ -25,20 +26,20 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { NavMain } from "./nav-main";
+import {NavMain} from "./nav-main";
 
 const data = {
     navMain: [
         {
             title: "Dashboard",
             url: "/scm/",
-            icon: LayoutDashboard, // 📊 Dashboard Logo
+            icon: LayoutDashboard,
             isActive: true,
         },
         {
             title: "Product Management",
             url: "#",
-            icon: Package, // 📦 Product Logo
+            icon: Package,
             isActive: false,
             items: [
                 {
@@ -108,7 +109,7 @@ const data = {
         {
             title: "Supplier Management",
             url: "#",
-            icon: Building2, // 🏢 Supplier/Company Logo
+            icon: Building2,
             isActive: false,
             items: [
                 {
@@ -144,7 +145,7 @@ const data = {
         {
             title: "Warehouse Management",
             url: "#",
-            icon: Warehouse, // 🏭 Warehouse Logo
+            icon: Warehouse,
             items: [
                 {
                     title: "Warehouse Unit Conversion",
@@ -182,6 +183,9 @@ const data = {
                         {
                             title: "Withdrawals Picking",
                             url: "/scm/warehouse-management/withdrawals-picking",
+                        }, {
+                            title: "Active Picking",
+                            url: "/scm/warehouse-management/active-picking",
                         },
                     ],
                 },
@@ -190,7 +194,7 @@ const data = {
         {
             title: "Fleet Management",
             url: "#",
-            icon: Truck, // 🚚 Fleet Logo
+            icon: Truck,
             isActive: false,
             items: [
                 {
@@ -203,7 +207,7 @@ const data = {
                         },
                     ],
                 },
-                { title: "Driver Management", url: "#" },
+                {title: "Driver Management", url: "#"},
                 {
                     title: "Trip Management",
                     url: "#",
@@ -274,13 +278,13 @@ const data = {
                         },
                     ],
                 },
-                { title: "Fleet Inventory", url: "#" },
+                {title: "Fleet Inventory", url: "#"},
             ],
         },
         {
             title: "Inventory Management",
             url: "#",
-            icon: ClipboardList, // 📋 Inventory/List Logo
+            icon: ClipboardList,
             items: [
                 {
                     title: "Inventory Controls",
@@ -299,8 +303,20 @@ const data = {
         {
             title: "Logistics",
             url: "#",
-            icon: Route, // 🗺️ Routing/Logistics Logo
+            icon: Route,
             items: [
+                // 👇 ADDED THE MONITORING ROUTE HERE 👇
+                {
+                    title: "Monitoring",
+                    url: "#",
+                    items: [
+                        {
+                            title: "For Consolidation Queue",
+                            url: "/scm/monitoring/for-consolidation",
+                        }
+                    ]
+                },
+                // 👆 END OF NEW ROUTE 👆
                 {
                     title: "Vehicle Management",
                     url: "#",
@@ -328,7 +344,7 @@ const data = {
         {
             title: "Business Intelligence Analytics",
             url: "#",
-            icon: LineChart, // 📈 Analytics Logo
+            icon: LineChart,
             items: [
                 {
                     title: "Inventory Performance Dashboard",
@@ -347,7 +363,7 @@ const data = {
         {
             title: "Transfers",
             url: "#",
-            icon: ArrowRightLeft, // 🔁 Transfer Logo
+            icon: ArrowRightLeft,
             items: [
                 {
                     title: "Stock Withdrawal",
@@ -366,7 +382,7 @@ const data = {
     ],
 };
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
     return (
         <Sidebar variant="inset" {...props}>
             <SidebarHeader>
@@ -374,8 +390,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" asChild>
                             <Link href="/main-dashboard">
-                                <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                                    <Command className="size-4" />
+                                <div
+                                    className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
+                                    <Command className="size-4"/>
                                 </div>
                                 <div className="grid flex-1 text-left text-sm leading-tight">
                                     <span className="truncate font-medium">VOS Web</span>
@@ -389,17 +406,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 </SidebarMenu>
             </SidebarHeader>
 
-            <Separator />
+            <Separator/>
 
             <SidebarContent>
                 <div className="px-4 pt-3 pb-2 text-xs font-medium text-muted-foreground">
                     Platform
                 </div>
-                <NavMain items={data.navMain} />
+                <NavMain items={data.navMain}/>
             </SidebarContent>
 
             <SidebarFooter className="p-0">
-                <Separator />
+                <Separator/>
                 <div className="py-3 text-center text-xs text-muted-foreground">
                     VOS Web v2.0
                 </div>
