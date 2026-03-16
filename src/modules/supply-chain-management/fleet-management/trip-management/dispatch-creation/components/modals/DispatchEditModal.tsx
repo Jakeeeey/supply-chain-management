@@ -62,11 +62,13 @@ import {
 import { useEffect, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { dispatchCreationLifecycleService } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/services/lifecycle";
 import { DateTimePicker } from "../shared/date-time-picker";
 
 interface PlanDetailItem {
   detail_id: number;
   sales_order_id: number;
+  invoice_id: number;
   order_no: string;
   order_status: string;
   true_order_status?: string;
@@ -158,19 +160,23 @@ function DraggableInvoiceItem({ order }: { order: PlanDetailItem }) {
   );
 }
 
-interface DispatchCreationModalProps {
+interface DispatchEditModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess?: () => void;
+  planId: number | null;
+  onSuccess: () => void;
 }
 
-export function DispatchCreationModal({
+export function DispatchEditModal({
   open,
   onOpenChange,
+  planId,
   onSuccess,
-}: DispatchCreationModalProps) {
-  const { masterData, isLoadingMasterData, createTrip, isSubmitting } =
-    useDispatchCreation();
+}: DispatchEditModalProps) {
+  const { masterData, refreshMasterData, isLoadingMasterData } = useDispatchCreation();
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  
   const [approvedPlans, setApprovedPlans] = useState<any[]>([]);
   const [isLoadingPlans, setIsLoadingPlans] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -197,6 +203,12 @@ export function DispatchCreationModal({
     }
   }
 
+  useEffect(() => {
+    if (open && !masterData) {
+      refreshMasterData();
+    }
+  }, [open, masterData, refreshMasterData]);
+
   const form = useForm<DispatchCreationFormValues>({
     resolver: zodResolver(DispatchCreationFormSchema),
     defaultValues: {
@@ -213,46 +225,38 @@ export function DispatchCreationModal({
     },
   });
 
-  const {
-    fields: helperFields,
-    append,
-    remove,
-  } = useFieldArray({
+  const { fields: helperFields, append, remove } = useFieldArray({
     control: form.control,
     name: "helpers",
   });
 
   const selectedBranch = form.watch("starting_point");
-
-  useEffect(() => {
-    if (open) {
-      form.reset();
-      setApprovedPlans([]);
-      setSearchQuery("");
-    }
-  }, [open, form]);
+  const selectedPlanId = form.watch("pre_dispatch_plan_id");
 
   // Load plans when branch changes
   useEffect(() => {
     if (selectedBranch && selectedBranch > 0) {
-      loadApprovedPlans(selectedBranch);
+      loadApprovedPlans(selectedBranch, selectedPlanId);
     } else {
       setApprovedPlans([]);
     }
-  }, [selectedBranch]);
+  }, [selectedBranch, selectedPlanId]);
 
-  const loadApprovedPlans = async (branchId: number) => {
+  const loadApprovedPlans = async (branchId: number, currentPdpId?: number) => {
     setIsLoadingPlans(true);
-    setApprovedPlans([]);
-    // Clear any previously selected plan
-    form.setValue("pre_dispatch_plan_id", 0);
-    form.setValue("amount", 0);
-    setPlanDetails([]);
+    // Note: Don't clear approvedPlans here to avoid flashing if currentPdpId changed but branch stayed same
     try {
-      const res = await fetch(
-        `/api/scm/fleet-management/trip-management/dispatch-creation?type=approved_plans&branch_id=${branchId}`,
-        { cache: "no-store" },
+      const url = new URL(
+        "/api/scm/fleet-management/trip-management/dispatch-creation",
+        window.location.origin
       );
+      url.searchParams.append("type", "approved_plans");
+      url.searchParams.append("branch_id", String(branchId));
+      if (currentPdpId) {
+        url.searchParams.append("current_plan_id", String(currentPdpId));
+      }
+
+      const res = await fetch(url.toString(), { cache: "no-store" });
       const result = await res.json();
       if (result.error) throw new Error(result.error);
       setApprovedPlans(result.data || []);
@@ -272,6 +276,7 @@ export function DispatchCreationModal({
     form.setValue("amount", plan.total_amount || 0);
     if (plan.driver_id) form.setValue("driver_id", Number(plan.driver_id));
     if (plan.vehicle_id) form.setValue("vehicle_id", Number(plan.vehicle_id));
+    // Usually branch is already set if searching, but sync it anyway
     if (plan.branch_id) form.setValue("starting_point", Number(plan.branch_id));
 
     // Fetch plan details (sales orders)
@@ -292,26 +297,82 @@ export function DispatchCreationModal({
     }
   };
 
-  const onSubmit = async (values: DispatchCreationFormValues) => {
-    try {
-      await createTrip(values);
-      toast.success("Dispatch trip created successfully.");
-      onOpenChange(false);
-      onSuccess?.();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to create dispatch trip");
-    }
-  };
+  useEffect(() => {
+    if (open && planId) {
+      const fetchDetails = async () => {
+        setIsLoading(true);
+        try {
+          const res = await fetch(
+            `/api/scm/fleet-management/trip-management/dispatch-creation?type=post_plan_details&plan_id=${planId}`
+          );
+          if (!res.ok) throw new Error("Failed to load details");
+          const result = await res.json();
+          const p = result.data;
+          console.log("[DispatchEditModal] Loaded trip details:", p);
 
-  const isDataReady = !isLoadingMasterData && masterData;
-  const selectedPlanId = form.watch("pre_dispatch_plan_id");
-  const selectedAmount = form.watch("amount");
+          form.reset({
+            pre_dispatch_plan_id: Number(p.dispatch_id || 0),
+            starting_point: p.starting_point || 0,
+            vehicle_id: p.vehicle_id || 0,
+            driver_id: p.driver_id || 0,
+            estimated_time_of_dispatch: p.estimated_time_of_dispatch || "",
+            estimated_time_of_arrival: p.estimated_time_of_arrival || "",
+            remarks: p.remarks || "",
+            amount: p.amount || 0,
+            helpers: p.helpers?.length ? p.helpers : [{ user_id: 0 }],
+            budgets: [],
+          });
+
+          // Also load the current PDP's invoices (pass trip_id to get SAVED order)
+          if (p.dispatch_id) {
+            setIsLoadingDetails(true);
+            const detailsRes = await fetch(
+              `/api/scm/fleet-management/trip-management/dispatch-creation?type=plan_details&plan_id=${p.dispatch_id}&trip_id=${planId}`
+            );
+            const detailsResult = await detailsRes.json();
+            setPlanDetails(detailsResult.data || []);
+            setIsLoadingDetails(false);
+          }
+        } catch (error: any) {
+          toast.error(error.message || "Could not load plan details");
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      fetchDetails();
+    } else {
+      form.reset();
+      setPlanDetails([]);
+    }
+  }, [open, planId, form]);
 
   const filteredPlans = approvedPlans.filter(
     (p) =>
       p.dispatch_no?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.cluster_name?.toLowerCase().includes(searchQuery.toLowerCase()),
   );
+
+  const onSubmit = async (values: DispatchCreationFormValues) => {
+    if (!planId) return;
+    setIsSaving(true);
+    try {
+      const payloadWithInvoices = {
+        ...values,
+        invoices: planDetails.map((d, idx) => ({
+          invoice_id: d.invoice_id,
+          sequence: idx + 1,
+        })),
+      };
+      await dispatchCreationLifecycleService.updateTrip(planId, payloadWithInvoices);
+      toast.success("Dispatch plan updated successfully!");
+      onSuccess();
+      onOpenChange(false);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to update dispatch plan.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -324,16 +385,16 @@ export function DispatchCreationModal({
             </div>
             <div>
               <DialogTitle className="text-base font-semibold text-foreground tracking-tight">
-                Create Dispatch Trip
+                Edit Trip Configuration
               </DialogTitle>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Assign vehicle, crew, and link a pre-dispatch plan.
+                Update vehicle, driver, times, and routing for this dispatch plan.
               </p>
             </div>
           </div>
         </DialogHeader>
 
-        {!isDataReady ? (
+        {isLoading || !masterData ? (
           <div className="p-6 space-y-4">
             <Skeleton className="h-9 w-full rounded-md" />
             <div className="grid grid-cols-2 gap-3">
@@ -346,8 +407,8 @@ export function DispatchCreationModal({
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)}>
               <div className="flex divide-x divide-border/50 max-h-[70vh]">
+                {/* LEFT: PDP Selection */}
                 <div className="w-sm flex flex-col overflow-hidden bg-muted/20">
-                  {/* Search */}
                   <div className="p-4 border-b border-border/50 space-y-3 bg-background/60">
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       Pre-Dispatch Plan
@@ -363,7 +424,6 @@ export function DispatchCreationModal({
                     </div>
                   </div>
 
-                  {/* Plan list */}
                   <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
                     {!selectedBranch || selectedBranch === 0 ? (
                       <div className="flex flex-col items-center justify-center py-10 text-muted-foreground/40">
@@ -383,13 +443,14 @@ export function DispatchCreationModal({
                       </div>
                     ) : (
                       filteredPlans.map((p) => {
-                        const isSelected = selectedPlanId === p.dispatch_id;
+                        const pId = Number(p.dispatch_id || p.id);
+                        const isSelected = Number(selectedPlanId) === pId;
                         return (
                           <button
                             type="button"
-                            key={p.dispatch_id}
+                            key={pId}
                             onClick={() =>
-                              handlePlanSelect(String(p.dispatch_id))
+                              handlePlanSelect(String(pId))
                             }
                             className={cn(
                               "w-full text-left p-3 rounded-lg border text-sm transition-all duration-150",
@@ -426,53 +487,15 @@ export function DispatchCreationModal({
                                 )}
                               </div>
                             </div>
-                            <p className="text-xs font-semibold text-foreground mt-2">
-                              ₱
-                              {Number(p.total_amount).toLocaleString(
-                                undefined,
-                                {
-                                  minimumFractionDigits: 2,
-                                },
-                              )}
-                            </p>
                           </button>
                         );
                       })
                     )}
                   </div>
-
-                  {/* Route value summary */}
-                  <div className="p-4 border-t border-border/50 bg-background/60">
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
-                      Selected Route Value
-                    </p>
-                    <p
-                      className={cn(
-                        "text-xl font-bold tracking-tight transition-colors",
-                        selectedPlanId
-                          ? "text-foreground"
-                          : "text-muted-foreground/40",
-                      )}
-                    >
-                      ₱
-                      {(selectedAmount || 0).toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </p>
-                    {selectedPlanId > 0 && (
-                      <Badge
-                        variant="secondary"
-                        className="mt-1.5 text-[10px] h-5"
-                      >
-                        Plan selected
-                      </Badge>
-                    )}
-                  </div>
                 </div>
 
+                {/* CENTER: Trip Configuration */}
                 <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                  {/* Trip Configuration */}
                   <section className="space-y-4">
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                       <Truck className="w-3.5 h-3.5" />
@@ -489,12 +512,8 @@ export function DispatchCreationModal({
                               Source Branch
                             </FormLabel>
                             <Select
-                              onValueChange={(val) =>
-                                field.onChange(Number(val))
-                              }
-                              value={
-                                field.value ? String(field.value) : undefined
-                              }
+                              onValueChange={(val) => field.onChange(Number(val))}
+                              value={field.value ? String(field.value) : undefined}
                             >
                               <FormControl>
                                 <SelectTrigger className="h-9 text-sm bg-background/50">
@@ -524,12 +543,8 @@ export function DispatchCreationModal({
                               Vehicle
                             </FormLabel>
                             <Select
-                              onValueChange={(val) =>
-                                field.onChange(Number(val))
-                              }
-                              value={
-                                field.value ? String(field.value) : undefined
-                              }
+                              onValueChange={(val) => field.onChange(Number(val))}
+                              value={field.value ? String(field.value) : undefined}
                             >
                               <FormControl>
                                 <SelectTrigger className="h-9 text-sm bg-background/50">
@@ -604,12 +619,8 @@ export function DispatchCreationModal({
                               Driver
                             </FormLabel>
                             <Select
-                              onValueChange={(val) =>
-                                field.onChange(Number(val))
-                              }
-                              value={
-                                field.value ? String(field.value) : undefined
-                              }
+                              onValueChange={(val) => field.onChange(Number(val))}
+                              value={field.value ? String(field.value) : undefined}
                             >
                               <FormControl>
                                 <SelectTrigger className="h-9 text-sm bg-background/50">
@@ -642,12 +653,8 @@ export function DispatchCreationModal({
                               Helper
                             </FormLabel>
                             <Select
-                              onValueChange={(val) =>
-                                field.onChange(Number(val))
-                              }
-                              value={
-                                field.value ? String(field.value) : undefined
-                              }
+                              onValueChange={(val) => field.onChange(Number(val))}
+                              value={field.value ? String(field.value) : undefined}
                             >
                               <FormControl>
                                 <SelectTrigger className="h-9 text-sm bg-background/50">
@@ -701,7 +708,7 @@ export function DispatchCreationModal({
                       </p>
                       <div className="grid grid-cols-2 gap-4">
                         {helperFields.map((field, index) => {
-                          if (index === 0) return null; // Primary helper is in the main grid
+                          if (index === 0) return null;
                           return (
                             <FormField
                               key={field.id}
@@ -724,9 +731,7 @@ export function DispatchCreationModal({
                                       field.onChange(Number(val))
                                     }
                                     value={
-                                      field.value
-                                        ? String(field.value)
-                                        : undefined
+                                      field.value ? String(field.value) : undefined
                                     }
                                   >
                                     <FormControl>
@@ -767,7 +772,7 @@ export function DispatchCreationModal({
                   )}
                 </div>
 
-                {/* RIGHT: Sales Order Details */}
+                {/* RIGHT: Sales Invoices */}
                 <div className="w-[340px] flex flex-col overflow-hidden bg-muted/20 shrink-0">
                   <div className="p-4 border-b border-border/50 bg-background/60">
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
@@ -795,9 +800,7 @@ export function DispatchCreationModal({
                       </div>
                     ) : planDetails.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-16 text-muted-foreground/30">
-                        <p className="text-xs">
-                          No invoices linked to this plan.
-                        </p>
+                        <p className="text-xs">No invoices linked to this plan.</p>
                       </div>
                     ) : (
                       <DndContext
@@ -807,10 +810,10 @@ export function DispatchCreationModal({
                         modifiers={[restrictToVerticalAxis]}
                       >
                         <SortableContext
-                          items={planDetails.map((d) => d.detail_id)}
+                          items={planDetails.map((o) => o.detail_id)}
                           strategy={verticalListSortingStrategy}
                         >
-                          <div className="space-y-1.5">
+                          <div className="space-y-2">
                             {planDetails.map((order) => (
                               <DraggableInvoiceItem
                                 key={order.detail_id}
@@ -825,7 +828,7 @@ export function DispatchCreationModal({
                 </div>
               </div>
 
-              {/* Footer */}
+              {/* Action Buttons */}
               <div className="flex items-center justify-between px-6 py-4 border-t border-border/50 bg-muted/10">
                 <p className="text-xs text-muted-foreground">
                   {selectedPlanId > 0 &&
@@ -846,6 +849,7 @@ export function DispatchCreationModal({
                     variant="ghost"
                     size="sm"
                     onClick={() => onOpenChange(false)}
+                    disabled={isSaving}
                     className="h-8 px-4 text-sm font-medium"
                   >
                     Cancel
@@ -854,7 +858,7 @@ export function DispatchCreationModal({
                     type="submit"
                     size="sm"
                     disabled={
-                      isSubmitting ||
+                      isSaving ||
                       !selectedPlanId ||
                       planDetails.length === 0 ||
                       planDetails.some(
@@ -865,13 +869,13 @@ export function DispatchCreationModal({
                     }
                     className="h-8 px-4 text-sm font-medium"
                   >
-                    {isSubmitting ? (
+                    {isSaving ? (
                       <>
                         <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
-                        Creating...
+                        Saving...
                       </>
                     ) : (
-                      "Create Dispatch"
+                      "Save Changes"
                     )}
                   </Button>
                 </div>

@@ -11,6 +11,9 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    if (isNaN(Number(id))) {
+      return NextResponse.json({ data: null }, { status: 404 });
+    }
     const result = await dispatchPlanService.fetchPlanById(id);
     return NextResponse.json({ data: result });
   } catch (error: any) {
@@ -32,6 +35,9 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
+    if (isNaN(Number(id))) {
+      return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
+    }
     const body = await req.json();
     await dispatchPlanService.updatePlan(id, body);
     return NextResponse.json({ data: { success: true } });
@@ -54,6 +60,9 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
+    if (isNaN(Number(id))) {
+      return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
+    }
     const body = await req.json();
     const { action } = body;
 
