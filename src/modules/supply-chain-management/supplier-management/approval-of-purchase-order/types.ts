@@ -31,6 +31,9 @@ export type PendingApprovalPO = {
     branch_id?: any; // number OR expanded object
     branch_id_value?: any;
     branch_summary?: string;
+
+    is_invoice?: boolean | number;
+    isInvoice?: boolean | number;
 };
 
 export type PurchaseOrderItem = {
@@ -102,6 +105,9 @@ export type PurchaseOrderDetail = {
     vatAmount?: any;
     ewtGoods?: any;
     total?: any;
+
+    is_invoice?: boolean | number;
+    isInvoice?: boolean | number;
 };
 export type Supplier = {
     id: string;

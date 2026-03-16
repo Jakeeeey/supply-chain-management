@@ -8,7 +8,9 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { useReceivingProducts } from "../../providers/ReceivingProductsProvider";
+import { useKeyboardScanner } from "../../hooks/useKeyboardScanner";
 
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -45,11 +47,36 @@ export function ScanProductsStep() {
     const [activityPage, setActivityPage] = React.useState(1);
     const [cheatsheetPage, setCheatsheetPage] = React.useState(1);
     const [historyIdx, setHistoryIdx] = React.useState(0);
+    const [receivingPage, setReceivingPage] = React.useState(1);
     const ITEMS_PER_PAGE = 5;
 
     // ✅ Lot & Expiry mandatory inputs
     const [lotNumbers, setLotNumbers] = React.useState<Record<string, string>>({});
     const [expiryDates, setExpiryDates] = React.useState<Record<string, string>>({});
+
+    // ✅ Auto-scan RFID listener (keyboard wedge scanner)
+    const handleAutoScan = React.useCallback((scannedValue: string) => {
+        // Pass scanned value directly to scanRFID to bypass stale state
+        scanRFID(scannedValue);
+    }, [scanRFID]);
+
+    useKeyboardScanner({
+        enabled: !!selectedPO,
+        onScan: handleAutoScan,
+        minLength: 6,
+        endKey: "Enter",
+        maxDelayMs: 50,
+        cooldownMs: 300,
+    });
+
+    // ✅ Auto-clear scan errors instantly so scanner is always ready
+    React.useEffect(() => {
+        if (!scanError) return;
+        const timer = setTimeout(() => {
+            setRfid("");
+        }, 200); // instant clear — long-range scanner fires continuously
+        return () => clearTimeout(timer);
+    }, [scanError, setRfid]);
 
     // Sync from selectedPO if data exists (per item)
     React.useEffect(() => {
@@ -82,12 +109,19 @@ export function ScanProductsStep() {
         const allocs = Array.isArray(selectedPO?.allocations) ? selectedPO!.allocations : [];
         return allocs.flatMap((a) => {
             const items = Array.isArray(a?.items) ? a.items : [];
-            return items.map((it) => ({
-                ...it,
-                porId: String((it as any)?.porId ?? it.id),
-                branchName: a?.branch?.name ?? "Unassigned",
-                rfids: Array.isArray((it as any)?.rfids) ? (it as any).rfids : [],
-            }));
+            return items
+                .map((it) => ({
+                    ...it,
+                    porId: String((it as any)?.porId ?? it.id),
+                    branchName: a?.branch?.name ?? "Unassigned",
+                    rfids: Array.isArray((it as any)?.rfids) ? (it as any).rfids : [],
+                }))
+                // ✅ Filter out fully-received items for partial receiving
+                .filter((it: any) => {
+                    const received = Number(it.receivedQty ?? 0);
+                    const expected = Number(it.expectedQty ?? it.taggedQty ?? 0);
+                    return expected <= 0 || received < expected;
+                });
         });
     }, [selectedPO]);
 
@@ -191,31 +225,49 @@ export function ScanProductsStep() {
 
     return (
         <div className="space-y-4">
-            <Card className="p-4">
-                <div className="flex items-start justify-between gap-4">
-                    <div>
-                        <div className="text-sm font-semibold">Scan RFID</div>
-                        <div className="text-xs text-muted-foreground">
-                            Scan RFID again to verify it belongs to this PO. Barcode is not required here.
+            <Card className="p-4 border-2 border-green-500/30 bg-green-50/30 dark:bg-green-950/10">
+                {/* ✅ Big, prominent "Ready to Scan" indicator */}
+                <div className="flex flex-col items-center justify-center py-6 gap-3">
+                    <div className="relative">
+                        <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center">
+                            <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                                <div className="w-5 h-5 rounded-full bg-green-500 shadow-[0_0_20px_rgba(34,197,94,0.5)] animate-pulse" />
+                            </div>
+                        </div>
+                        {/* Pulsing ring */}
+                        <div className="absolute inset-0 rounded-full border-2 border-green-500/30 animate-ping" style={{ animationDuration: "2s" }} />
+                    </div>
+                    <div className="text-center space-y-1">
+                        <div className="text-lg font-black uppercase tracking-wide text-green-600 dark:text-green-400">
+                            Ready to Scan
+                        </div>
+                        <div className="text-xs text-muted-foreground max-w-[250px]">
+                            Scan any RFID tag — the system will automatically verify and record it.
                         </div>
                     </div>
                 </div>
 
-                <div className="mt-4 space-y-3">
-                    <Input
-                        value={rfid}
-                        onChange={(e) => setRfid(e.target.value)}
-                        placeholder="Scan RFID..."
-                        onKeyDown={(e) => {
-                            if (e.key === "Enter") scanRFID();
-                        }}
-                    />
+                <div className="space-y-3">
+                    <div className="flex gap-2">
+                        <Input
+                            value={rfid}
+                            onChange={(e) => setRfid(e.target.value)}
+                            placeholder="Or enter RFID manually..."
+                            className="text-xs"
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") scanRFID();
+                            }}
+                        />
+                        <Button size="sm" onClick={() => scanRFID()} type="button" className="shrink-0">
+                            Verify
+                        </Button>
+                    </div>
 
-                    {scanError ? <div className="text-xs text-destructive">{scanError}</div> : null}
-
-                    <Button className="w-full" onClick={scanRFID} type="button">
-                        Verify RFID
-                    </Button>
+                    {scanError ? (
+                        <div className="text-xs text-destructive animate-in fade-in duration-200 p-2 bg-destructive/5 rounded-lg border border-destructive/20 text-center">
+                            {scanError}
+                        </div>
+                    ) : null}
 
                     {/* ✅ Matched Piece History with Pagination */}
                     {okMatches.length > 0 && currentMatch && (
@@ -291,25 +343,27 @@ export function ScanProductsStep() {
 
                         <div className="space-y-4">
                             <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Contents of this receipt:</div>
-                            <ScrollArea className="max-h-[200px] rounded-md border p-4 bg-muted/30">
+                            <div className="max-h-[250px] overflow-y-auto rounded-md border p-4 bg-muted/30">
                                 <div className="space-y-4">
-                                    {receiptSaved.items.map((it, idx) => (
-                                        <div key={idx} className="flex flex-col gap-1 pb-3 border-b last:border-0">
+                                    {receiptSaved.items.filter(it => it.receivedQtyNow > 0).map((it, idx) => (
+                                        <div key={idx} className="flex flex-col gap-1 pb-3 border-b border-primary/10 last:border-0 last:pb-0">
                                             <div className="flex items-center justify-between">
-                                                <div className="font-medium text-sm">{it.name}</div>
-                                                <Badge variant="outline" className="text-[10px] font-mono">
+                                                <div className="font-medium text-sm text-foreground">{it.name}</div>
+                                                <Badge variant="outline" className="text-[10px] font-mono bg-background">
                                                     SKU: {it.barcode}
                                                 </Badge>
                                             </div>
-                                            <div className="text-xs text-muted-foreground flex justify-between">
-                                                <span>RFIDs: {it.rfids.join(", ")}</span>
-                                                <span className="font-semibold text-primary">Qty: {it.receivedQtyNow}</span>
+                                            <div className="text-xs text-muted-foreground flex justify-between items-end">
+                                                <span className="leading-snug">RFIDs: {it.rfids.join(", ") || <span className="italic">N/A</span>}</span>
+                                                <span className="font-semibold text-primary whitespace-nowrap ml-4">Qty: {it.receivedQtyNow}</span>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
-                            </ScrollArea>
+                            </div>
+
                         </div>
+
                     </div>
                 </Card>
             )}
@@ -382,107 +436,157 @@ export function ScanProductsStep() {
                     </Badge>
                 </div>
 
-                <ScrollArea className="h-[400px] rounded-md border">
-                    <Table>
-                        <TableHeader className="bg-muted/50 sticky top-0 z-20 shadow-sm">
-                            <TableRow>
-                                <TableHead className="text-[10px] h-8 font-black uppercase tracking-wider bg-muted/50">Date</TableHead>
-                                <TableHead className="text-[10px] h-8 font-black uppercase tracking-wider text-left bg-muted/50">Product Name</TableHead>
-                                <TableHead className="text-[10px] h-8 font-black uppercase tracking-wider text-left bg-muted/50">Lot Number</TableHead>
-                                <TableHead className="text-[10px] h-8 font-black uppercase tracking-wider text-left bg-muted/50">Expiry</TableHead>
-                                <TableHead className="text-[10px] h-8 font-black uppercase tracking-wider text-center bg-muted/50">PO Qty</TableHead>
-                                <TableHead className="text-[10px] h-8 font-black uppercase tracking-wider text-center bg-muted/50">Received</TableHead>
-                                <TableHead className="text-[10px] h-8 font-black uppercase tracking-wider text-right bg-muted/50">Unit Price</TableHead>
-                                <TableHead className="text-[10px] h-8 font-black uppercase tracking-wider text-center bg-muted/50">Discount Type</TableHead>
-                                <TableHead className="text-[10px] h-8 font-black uppercase tracking-wider text-right bg-muted/50">Discount</TableHead>
-                                <TableHead className="text-[10px] h-8 font-black uppercase tracking-wider text-right bg-muted/50">Net Amount</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {allItems.map((it: any) => {
-                                const porId = String(it.porId ?? it.id);
-                                const scanned = safeCounts[porId] ?? 0;
-                                const expected = Number(it.expectedQty || it.taggedQty || 0);
-                                const date = selectedPO?.createdAt ? new Date(selectedPO.createdAt).toLocaleDateString() : "—";
-                                const up = Number(it.unitPrice || 0);
-                                const discountPerUnit = Number(it.discountAmount || 0);
-                                const lineDiscount = expected * discountPerUnit;
-                                const na = expected * (up - discountPerUnit);
+                {(() => {
+                    const RCV_PER_PAGE = 10;
+                    const rcvTotalPages = Math.max(1, Math.ceil(allItems.length / RCV_PER_PAGE));
+                    const rcvStart = (receivingPage - 1) * RCV_PER_PAGE;
+                    const rcvPageItems = allItems.slice(rcvStart, rcvStart + RCV_PER_PAGE);
 
-                                return (
-                                    <TableRow key={porId}>
-                                        <TableCell className="text-[10px] font-mono whitespace-nowrap">{date}</TableCell>
-                                        <TableCell className="max-w-[150px]">
-                                            <div className="truncate text-[11px] font-bold">{it.name}</div>
-                                            <div className="text-[9px] text-muted-foreground font-mono">SKU: {it.barcode}</div>
-                                        </TableCell>
-                                        <TableCell className="min-w-[120px]">
-                                            <Input
-                                                className="h-8 text-[11px] font-bold uppercase"
-                                                placeholder="Lot #"
-                                                value={lotNumbers[porId] || ""}
-                                                onChange={(e) => setLotNumbers(prev => ({ ...prev, [porId]: e.target.value }))}
-                                            />
-                                        </TableCell>
-                                        <TableCell className="min-w-[140px]">
-                                            <Input
-                                                type="date"
-                                                className="h-8 text-[11px] font-bold"
-                                                value={expiryDates[porId] || ""}
-                                                onChange={(e) => setExpiryDates(prev => ({ ...prev, [porId]: e.target.value }))}
-                                            />
-                                        </TableCell>
-                                        <TableCell className="text-center font-bold text-xs">{expected}</TableCell>
-                                        <TableCell className="text-center">
-                                            <Badge variant={scanned >= expected ? "default" : "secondary"} className="h-5 text-[10px] font-mono px-1">
-                                                {scanned} / {expected}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell className="text-right text-[10px] font-mono">
-                                            {up.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                        </TableCell>
-                                        <TableCell className="text-center">
-                                            <Badge variant="outline" className="text-[9px] h-4 font-normal">
-                                                {it.discountType || "No Discount"}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell className="text-right text-[10px] font-mono">
-                                            {lineDiscount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                        </TableCell>
-                                        <TableCell className="text-right font-bold text-[11px] font-mono text-primary">
-                                            {na.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                        </TableCell>
-                                    </TableRow>
-                                );
-                            })}
-                        </TableBody>
-                        <TableFooter className="bg-muted/30 sticky bottom-0 z-20 shadow-sm border-t">
-                            <TableRow>
-                                <TableCell colSpan={9} className="text-right text-[10px] font-black uppercase tracking-widest bg-muted/30">Grand Total</TableCell>
-                                <TableCell className="text-right font-black text-xs text-primary font-mono bg-muted/30">
-                                    {allItems.reduce((sum: number, it: any) => {
-                                        const expected = Number(it.expectedQty || it.taggedQty || 0);
-                                        const up = Number(it.unitPrice || 0);
-                                        const dp = Number(it.discountAmount || 0);
-                                        return sum + (expected * (up - dp));
-                                    }, 0).toLocaleString(undefined, {
-                                        minimumFractionDigits: 2,
-                                        maximumFractionDigits: 2
-                                    })}
-                                </TableCell>
-                            </TableRow>
-                        </TableFooter>
-                    </Table>
-                </ScrollArea>
+                    return (
+                        <>
+                            <div className="rounded-md border">
+                                <Table>
+                                    <TableHeader className="bg-muted/50 sticky top-0 z-20 shadow-sm">
+                                        <TableRow>
+                                            <TableHead className="text-[10px] h-8 font-black uppercase tracking-wider bg-muted/50">Date</TableHead>
+                                            <TableHead className="text-[10px] h-8 font-black uppercase tracking-wider text-left bg-muted/50">Product Name</TableHead>
+                                            <TableHead className="text-[10px] h-8 font-black uppercase tracking-wider text-left bg-muted/50">Lot Number</TableHead>
+                                            <TableHead className="text-[10px] h-8 font-black uppercase tracking-wider text-left bg-muted/50">Expiry</TableHead>
+                                            <TableHead className="text-[10px] h-8 font-black uppercase tracking-wider text-center bg-muted/50">PO Qty</TableHead>
+                                            <TableHead className="text-[10px] h-8 font-black uppercase tracking-wider text-center bg-muted/50">Received</TableHead>
+                                            <TableHead className="text-[10px] h-8 font-black uppercase tracking-wider text-right bg-muted/50">Unit Price</TableHead>
+                                            <TableHead className="text-[10px] h-8 font-black uppercase tracking-wider text-center bg-muted/50">Discount Type</TableHead>
+                                            <TableHead className="text-[10px] h-8 font-black uppercase tracking-wider text-right bg-muted/50">Discount</TableHead>
+                                            <TableHead className="text-[10px] h-8 font-black uppercase tracking-wider text-right bg-muted/50">Net Amount</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {rcvPageItems.map((it: any) => {
+                                            const porId = String(it.porId ?? it.id);
+                                            const scanned = safeCounts[porId] ?? 0;
+                                            const expected = Number(it.expectedQty || it.taggedQty || 0);
+                                            const date = selectedPO?.createdAt ? new Date(selectedPO.createdAt).toLocaleDateString() : "—";
+                                            const up = Number(it.unitPrice || 0);
+                                            const discountPerUnit = Number(it.discountAmount || 0);
+                                            const lineDiscount = expected * discountPerUnit;
+                                            const na = expected * (up - discountPerUnit);
 
-                {/* ✅ validation priority: local click-validation first, then provider saveError */}
+                                            return (
+                                                <TableRow key={porId}>
+                                                    <TableCell className="text-[10px] font-mono whitespace-nowrap">{date}</TableCell>
+                                                    <TableCell className="max-w-[220px] overflow-hidden">
+                                                        <div className="truncate text-[11px] font-bold" title={it.name}>{it.name}</div>
+                                                        <div className="truncate text-[9px] text-muted-foreground font-mono" title={`SKU: ${it.barcode}`}>SKU: {it.barcode}</div>
+                                                    </TableCell>
+                                                    <TableCell className="min-w-[120px]">
+                                                        <Input
+                                                            className="h-8 text-[11px] font-bold uppercase"
+                                                            placeholder="Lot #"
+                                                            value={lotNumbers[porId] || ""}
+                                                            onChange={(e) => setLotNumbers(prev => ({ ...prev, [porId]: e.target.value }))}
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell className="min-w-[140px]">
+                                                        <Input
+                                                            type="date"
+                                                            className="h-8 text-[11px] font-bold"
+                                                            value={expiryDates[porId] || ""}
+                                                            onChange={(e) => setExpiryDates(prev => ({ ...prev, [porId]: e.target.value }))}
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell className="text-center font-bold text-xs">{expected}</TableCell>
+                                                    <TableCell className="text-center">
+                                                        <Badge variant={scanned >= expected ? "default" : "secondary"} className="h-5 text-[10px] font-mono px-1">
+                                                            {scanned} / {expected}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-right text-[10px] font-mono">
+                                                        {up.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </TableCell>
+                                                    <TableCell className="text-center">
+                                                        <Badge variant="outline" className="text-[9px] h-4 font-normal">
+                                                            {it.discountType || "No Discount"}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-right text-[10px] font-mono">
+                                                        {lineDiscount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </TableCell>
+                                                    <TableCell className="text-right font-bold text-[11px] font-mono text-primary">
+                                                        {na.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
+                                    </TableBody>
+                                    <TableFooter className="bg-muted/30 sticky bottom-0 z-20 shadow-sm border-t">
+                                        <TableRow>
+                                            <TableCell colSpan={9} className="text-right text-[10px] font-black uppercase tracking-widest bg-muted/30">Grand Total</TableCell>
+                                            <TableCell className="text-right font-black text-xs text-primary font-mono bg-muted/30">
+                                                {allItems.reduce((sum: number, it: any) => {
+                                                    const expected = Number(it.expectedQty || it.taggedQty || 0);
+                                                    const up = Number(it.unitPrice || 0);
+                                                    const dp = Number(it.discountAmount || 0);
+                                                    return sum + (expected * (up - dp));
+                                                }, 0).toLocaleString(undefined, {
+                                                    minimumFractionDigits: 2,
+                                                    maximumFractionDigits: 2
+                                                })}
+                                            </TableCell>
+                                        </TableRow>
+                                    </TableFooter>
+                                </Table>
+                            </div>
+
+                            {/* ✅ Pagination — only show when more than 10 items */}
+                            {allItems.length > RCV_PER_PAGE && (
+                                <div className="flex items-center justify-between mt-3">
+                                    <div className="text-xs text-muted-foreground">
+                                        Page {receivingPage} of {rcvTotalPages}
+                                    </div>
+                                    <Pagination className="w-auto mx-0">
+                                        <PaginationContent>
+                                            <PaginationItem>
+                                                <PaginationPrevious
+                                                    href="#"
+                                                    onClick={(e) => { e.preventDefault(); if (receivingPage > 1) setReceivingPage(p => p - 1); }}
+                                                    className={receivingPage <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                                                />
+                                            </PaginationItem>
+                                            {Array.from({ length: rcvTotalPages }, (_, i) => i + 1).map(p => (
+                                                <PaginationItem key={p}>
+                                                    <PaginationLink
+                                                        href="#"
+                                                        isActive={p === receivingPage}
+                                                        onClick={(e) => { e.preventDefault(); setReceivingPage(p); }}
+                                                        className="cursor-pointer"
+                                                    >
+                                                        {p}
+                                                    </PaginationLink>
+                                                </PaginationItem>
+                                            ))}
+                                            <PaginationItem>
+                                                <PaginationNext
+                                                    href="#"
+                                                    onClick={(e) => { e.preventDefault(); if (receivingPage < rcvTotalPages) setReceivingPage(p => p + 1); }}
+                                                    className={receivingPage >= rcvTotalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                                                />
+                                            </PaginationItem>
+                                        </PaginationContent>
+                                    </Pagination>
+                                </div>
+                            )}
+                        </>
+                    );
+                })()}
+
+                {/* ✅ validation + Save Receipt — right below Grand Total */}
                 {clientSaveError ? (
-                    <div className="mt-3 text-xs text-destructive">{clientSaveError}</div>
+                    <div className="mt-2 text-xs text-destructive">{clientSaveError}</div>
                 ) : saveError ? (
-                    <div className="mt-3 text-xs text-destructive">{saveError}</div>
+                    <div className="mt-2 text-xs text-destructive">{saveError}</div>
                 ) : null}
 
-                <div className="mt-4">
+                <div className="mt-2">
                     <Button
                         className="w-full h-11 text-xs font-black uppercase tracking-widest"
                         onClick={handleSaveReceipt}

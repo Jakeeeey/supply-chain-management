@@ -13,6 +13,7 @@ export const stockConversionProductSchema = z.object({
   productId: z.number(),
   supplierId: z.number().optional(),
   supplierName: z.string().optional(),
+  supplierShortcut: z.string().optional(),
   brand: z.string(),
   category: z.string(),
   productCode: z.string().optional(),
