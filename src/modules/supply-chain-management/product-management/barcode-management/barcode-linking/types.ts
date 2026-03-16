@@ -31,6 +31,9 @@ export interface Product {
   product_category: Category | string | null;
   unit_of_measurement: Unit | string | null;
   product_per_supplier?: ProductSupplierJunction[];
+
+  /** Runtime-only discriminator: "product" or "bundle" */
+  record_type?: "product" | "bundle";
 }
 
 export interface RefData {
@@ -53,4 +56,8 @@ export interface UpdateBarcodeDTO {
   // Weight
   weight?: number;
   weight_unit_id?: number;
+
+  // Audit
+  updated_by?: number;
+  updated_at?: string;
 }

@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 
-// ─── GET: Fetch stock transfers + branches ─────────────────────────────────────
-export async function GET() {
+// ─── GET: Fetch stock transfers + branches OR Lookup RFID ───────────────────────
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const action = searchParams.get('action');
+  const rfid = searchParams.get('rfid');
+
   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
   const staticToken = process.env.DIRECTUS_STATIC_TOKEN;
 
@@ -9,22 +13,67 @@ export async function GET() {
     return NextResponse.json({ error: 'API Base URL is not defined' }, { status: 500 });
   }
 
+  // Handle RFID lookup
+  if (action === 'lookup_rfid' && rfid) {
+    try {
+      // 1. Search for the RFID in purchase_order_receiving_items
+      const rfidRes = await fetch(
+        `${baseUrl}/items/purchase_order_receiving_items?filter[rfid_code][_eq]=${encodeURIComponent(rfid)}&fields=product_id,purchase_order_product_id`,
+        {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${staticToken}`, 'Content-Type': 'application/json' },
+          cache: 'no-store',
+        }
+      );
+
+      if (!rfidRes.ok) throw new Error('Failed to lookup RFID');
+      const rfidData = await rfidRes.json();
+      const match = rfidData.data?.[0];
+
+      if (!match) {
+        return NextResponse.json({ error: 'RFID not found in received records' }, { status: 404 });
+      }
+
+      const productId = match.product_id;
+
+      // 2. Fetch product details
+      const prodRes = await fetch(
+        `${baseUrl}/items/products/${productId}?fields=product_id,product_name,barcode,product_code,cost_per_unit,price_per_unit`,
+        {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${staticToken}`, 'Content-Type': 'application/json' },
+          cache: 'no-store',
+        }
+      );
+
+      if (!prodRes.ok) throw new Error('Failed to fetch product details');
+      const prodData = await prodRes.json();
+      const product = prodData.data;
+
+      return NextResponse.json({
+        rfid,
+        productId: product.product_id,
+        productName: product.product_name,
+        barcode: product.barcode || product.product_code || String(product.product_id),
+        unitPrice: product.price_per_unit || product.cost_per_unit || 0,
+      });
+    } catch (error) {
+      console.error('RFID Lookup Error:', error);
+      return NextResponse.json({ error: 'Failed to lookup RFID' }, { status: 500 });
+    }
+  }
+
+  // Default: Fetch everything for the module
   try {
     const [stockRes, branchRes] = await Promise.all([
       fetch(`${baseUrl}/items/stock_transfer?limit=-1`, {
         method: 'GET',
-        headers: {
-          Authorization: `Bearer ${staticToken}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { Authorization: `Bearer ${staticToken}`, 'Content-Type': 'application/json' },
         cache: 'no-store',
       }),
       fetch(`${baseUrl}/items/branches?limit=-1`, {
         method: 'GET',
-        headers: {
-          Authorization: `Bearer ${staticToken}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { Authorization: `Bearer ${staticToken}`, 'Content-Type': 'application/json' },
         cache: 'no-store',
       }),
     ]);

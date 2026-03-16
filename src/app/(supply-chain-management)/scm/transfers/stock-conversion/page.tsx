@@ -1,4 +1,4 @@
-import StockConversionPage from "@/modules/supply-chain-management/inventory-management/stock-conversion/StockConversionPage";
+import StockConversionModule from "@/modules/supply-chain-management/transfers/stock-conversion/StockConversionModule";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -65,6 +65,8 @@ function buildHeaderUserFromToken(token: string | null | undefined) {
   const name = [first, last].filter(Boolean).join(" ") || email || "User";
 
   return {
+    id: Number(payload?.id || payload?.userId || payload?.sub || 0),
+    branchId: Number(payload?.branch_id || payload?.branchId || 0),
     name,
     email: email || "",
     avatar: "/avatars/shadcn.jpg",
@@ -113,7 +115,7 @@ export default async function Page() {
 
       <ScrollArea className="min-h-0 flex-1">
         <div className="p-4">
-          <StockConversionPage />
+          <StockConversionModule user={headerUser} />
         </div>
       </ScrollArea>
     </div>

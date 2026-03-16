@@ -104,3 +104,21 @@ export function validateCode128(code: string): {
 
   return { isValid: true };
 }
+
+// --- DETECTION ---
+
+export function detectBarcodeType(code: string): "EAN-13" | "Code 128" | "UNKNOWN" {
+  if (!code || code.length < 3) return "UNKNOWN";
+
+  // Check for EAN-13 first (more strict)
+  if (/^\d{13}$/.test(code)) {
+    const eanCheck = validateEAN13(code);
+    if (eanCheck.isValid) return "EAN-13";
+  }
+
+  // Check for Code 128
+  const c128Check = validateCode128(code);
+  if (c128Check.isValid) return "Code 128";
+
+  return "UNKNOWN";
+}

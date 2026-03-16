@@ -169,9 +169,25 @@ export function BranchAllocations(props: {
                                                                 >
                                                                     <Minus className="w-2.5 h-2.5" />
                                                                 </button>
-                                                                <span className="w-5 text-center font-black text-[11px] tracking-tighter">
-                                                                    {item.orderQty}
-                                                                </span>
+                                                                <input
+                                                                    type="number"
+                                                                    value={item.orderQty}
+                                                                    onChange={(e) => {
+                                                                        const val = parseInt(e.target.value);
+                                                                        props.onUpdateQty(
+                                                                            branch.branchId,
+                                                                            item.id,
+                                                                            isNaN(val) ? 0 : val
+                                                                        );
+                                                                    }}
+                                                                    onBlur={(e) => {
+                                                                        const val = parseInt(e.target.value);
+                                                                        if (isNaN(val) || val < 1) {
+                                                                            props.onUpdateQty(branch.branchId, item.id, 1);
+                                                                        }
+                                                                    }}
+                                                                    className="w-10 text-center font-black text-[11px] tracking-tighter bg-transparent border-none outline-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                />
                                                                  <button
                                                                     onClick={() =>
                                                                         props.onUpdateQty(

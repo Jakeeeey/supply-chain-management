@@ -9,7 +9,8 @@ import {
 } from "@/components/ui/dialog";
 import { Card } from "@/components/ui/card";
 import { QrCode, FileText } from "lucide-react";
-import { Product, Category } from "../types";
+import { Product, Category, Unit, BundleItem } from "../types";
+import { getBundleItems } from "../providers/fetchProviders";
 
 // =============================================================================
 // MODAL: SELECT FORMAT
@@ -61,7 +62,7 @@ export function PrintFormatModal({
             <div>
               <h4 className="font-semibold">Barcode with Details</h4>
               <p className="text-sm text-muted-foreground">
-                Table format: includes CBM (L×W×H), Weight, Category
+                Product Name, SKU Code, Category, Barcode &amp; Type
               </p>
             </div>
           </Card>
@@ -94,14 +95,27 @@ function getCategoryName(product: Product): string {
   return "–";
 }
 
+function getUnitName(product: Product): string {
+  if (
+    typeof product.unit_of_measurement === "object" &&
+    product.unit_of_measurement
+  ) {
+    return (product.unit_of_measurement as Unit).unit_name || "";
+  }
+  return "";
+}
+
+function getTypeBadge(product: Product): string {
+  return product.record_type === "bundle" ? "Bundle" : "Regular";
+}
+
 function getBarcodeJsFormat(product: Product): string {
   if (product.barcode_type_id?.name?.includes("EAN")) return "EAN13";
   return "CODE128";
 }
 
-function formatDecimal(value: number | null | undefined): string {
-  if (value == null) return "–";
-  return Number(value).toFixed(2);
+function getBarcodeTypeName(product: Product): string {
+  return product.barcode_type_id?.name || "–";
 }
 
 function escapeHtml(str: string): string {
@@ -112,9 +126,121 @@ function escapeHtml(str: string): string {
     .replace(/"/g, "&quot;");
 }
 
-// --- Main function ---
+// --- Build barcode cell with type label ---
 
-export function openPrintTab(
+function buildBarcodeCell(product: Product): string {
+  const barcodeValue = product.barcode || "";
+  const barcodeFormat = getBarcodeJsFormat(product);
+  const typeName = escapeHtml(getBarcodeTypeName(product));
+
+  if (!barcodeValue) {
+    return `<span style="color:#999;font-style:italic;">–</span>`;
+  }
+
+  return `
+    <div>
+      <svg class="barcode-svg" data-value="${escapeHtml(barcodeValue)}" data-format="${barcodeFormat}"></svg>
+      <div style="text-align:center;font-size:10px;color:#64748b;margin-top:2px;">${typeName}</div>
+    </div>
+  `;
+}
+
+// --- Build Product Name cell content ---
+
+function buildProductNameContent(
+  product: Product,
+  items: BundleItem[],
+): string {
+  const name = escapeHtml(product.description || product.product_name || "");
+  const type = escapeHtml(getTypeBadge(product));
+  const uom = escapeHtml(getUnitName(product));
+
+  // Name line: Product Name (Type) (UOM)
+  let nameHtml = `<span style="font-weight:600;">${name}</span>`;
+  if (type) {
+    nameHtml += ` <span style="font-size:10px;color:#64748b;">(${type})</span>`;
+  }
+  if (uom) {
+    nameHtml += ` <span style="font-size:10px;color:#64748b;">(${uom})</span>`;
+  }
+
+  // For bundles, append components list
+  if (product.record_type === "bundle" && items.length > 0) {
+    const componentsList = items
+      .map(
+        (item) =>
+          `${item.quantity}x ${escapeHtml(item.product_name)} <span style="font-family:monospace;font-size:11px;color:#64748b;">${escapeHtml(item.product_code)}</span>`,
+      )
+      .join("<br/>");
+
+    nameHtml += `
+      <div style="margin-top:6px;font-size:11px;color:#475569;">
+        <div style="font-weight:600;margin-bottom:2px;">Components:</div>
+        ${componentsList}
+      </div>
+    `;
+  } else if (product.record_type === "bundle" && items.length === 0) {
+    nameHtml += `
+      <div style="margin-top:4px;font-size:11px;color:#999;font-style:italic;">No components</div>
+    `;
+  }
+
+  return nameHtml;
+}
+
+// --- Build rows ---
+
+/**
+ * SIMPLE format row (same for all):
+ * SKU Code | Description | Barcode
+ */
+function buildSimpleRow(p: Product): string {
+  const sku = escapeHtml(p.product_code || "");
+  const desc = escapeHtml(p.description || p.product_name || "");
+  const barcodeValue = p.barcode || "";
+  const barcodeFormat = getBarcodeJsFormat(p);
+
+  const typeName = escapeHtml(getBarcodeTypeName(p));
+
+  const barcodeCell = barcodeValue
+    ? `<div><svg class="barcode-svg" data-value="${escapeHtml(barcodeValue)}" data-format="${barcodeFormat}"></svg><div style="text-align:center;font-size:10px;color:#64748b;margin-top:2px;">${typeName}</div></div>`
+    : `<span style="color:#999;font-style:italic;">–</span>`;
+
+  return `
+    <tr>
+      <td style="font-weight:500;white-space:nowrap;">${sku}</td>
+      <td>${desc}</td>
+      <td class="barcode-cell">${barcodeCell}</td>
+    </tr>
+  `;
+}
+
+/**
+ * DETAILED format row (unified for regular + bundle):
+ * Product Name | SKU Code | Category | Barcode + Type
+ */
+function buildDetailedRow(
+  p: Product,
+  items: BundleItem[],
+): string {
+  const productName = buildProductNameContent(p, items);
+  const sku = escapeHtml(p.product_code || "");
+  const category = escapeHtml(getCategoryName(p));
+  const barcodeCell = buildBarcodeCell(p);
+
+  return `
+    <tr>
+      <td style="vertical-align:top;">${productName}</td>
+      <td style="font-weight:500;white-space:nowrap;vertical-align:top;">${sku}</td>
+      <td style="text-align:center;vertical-align:top;">${category}</td>
+      <td class="barcode-cell" style="vertical-align:top;">${barcodeCell}</td>
+    </tr>
+  `;
+}
+
+// --- Main function (async to fetch bundle items) ---
+
+export async function openPrintTab(
   products: Product[],
   format: "simple" | "detailed",
 ) {
@@ -124,62 +250,47 @@ export function openPrintTab(
   const dateStr = new Date().toLocaleDateString();
   const itemCount = products.length;
 
-  // Build table header
-  const baseHeaders = `
+  // Pre-fetch bundle items for all bundles in detailed mode
+  const bundleItemsMap = new Map<string, BundleItem[]>();
+  if (isDetailed) {
+    const bundleProducts = products.filter(
+      (p) => p.record_type === "bundle",
+    );
+    const results = await Promise.all(
+      bundleProducts.map(async (p) => {
+        try {
+          const items = await getBundleItems(p.product_id);
+          return { id: p.product_id, items };
+        } catch {
+          return { id: p.product_id, items: [] };
+        }
+      }),
+    );
+    results.forEach((r) => bundleItemsMap.set(r.id, r.items));
+  }
+
+  // Build headers based on format
+  const headers = isDetailed
+    ? `
+    <th>Product Name</th>
+    <th>SKU Code</th>
+    <th style="text-align:center;">Category</th>
+    <th style="text-align:center;">Barcode</th>
+  `
+    : `
     <th>SKU Code</th>
     <th>Description</th>
     <th style="text-align:center;">Barcode</th>
   `;
 
-  const detailedHeaders = isDetailed
-    ? `
-    <th style="text-align:center;">CBM (L)</th>
-    <th style="text-align:center;">CBM (W)</th>
-    <th style="text-align:center;">CBM (H)</th>
-    <th style="text-align:center;">Weight</th>
-    <th style="text-align:center;">Category</th>
-  `
-    : "";
-
   // Build table rows
   const rows = products
     .map((p) => {
-      const sku = escapeHtml(p.product_code || "");
-      const desc = escapeHtml(p.description || p.product_name || "");
-      const barcodeValue = p.barcode || "";
-      const barcodeFormat = getBarcodeJsFormat(p);
-
-      const barcodeCell = barcodeValue
-        ? `<svg class="barcode-svg" data-value="${escapeHtml(barcodeValue)}" data-format="${barcodeFormat}"></svg>`
-        : `<span style="color:#999;font-style:italic;">–</span>`;
-
-      let detailedCells = "";
-      if (isDetailed) {
-        const cbmUnit = p.cbm_unit_id?.code || p.cbm_unit_id?.name || "";
-        const weightUnit = p.weight_unit_id?.code || p.weight_unit_id?.name || "";
-
-        const cbmL = p.cbm_length != null ? `${formatDecimal(p.cbm_length)} ${cbmUnit}` : "–";
-        const cbmW = p.cbm_width != null ? `${formatDecimal(p.cbm_width)} ${cbmUnit}` : "–";
-        const cbmH = p.cbm_height != null ? `${formatDecimal(p.cbm_height)} ${cbmUnit}` : "–";
-        const weightDisplay = p.weight != null ? `${Number(p.weight).toFixed(2)} ${weightUnit}` : "–";
-
-        detailedCells = `
-          <td style="text-align:center;">${escapeHtml(cbmL)}</td>
-          <td style="text-align:center;">${escapeHtml(cbmW)}</td>
-          <td style="text-align:center;">${escapeHtml(cbmH)}</td>
-          <td style="text-align:center;">${escapeHtml(weightDisplay)}</td>
-          <td style="text-align:center;">${escapeHtml(getCategoryName(p))}</td>
-        `;
+      if (!isDetailed) {
+        return buildSimpleRow(p);
       }
-
-      return `
-        <tr>
-          <td style="font-weight:500;white-space:nowrap;">${sku}</td>
-          <td>${desc}</td>
-          <td class="barcode-cell">${barcodeCell}</td>
-          ${detailedCells}
-        </tr>
-      `;
+      const items = bundleItemsMap.get(p.product_id) || [];
+      return buildDetailedRow(p, items);
     })
     .join("");
 
@@ -257,7 +368,6 @@ export function openPrintTab(
       width: 100%;
       border-collapse: collapse;
       font-size: 13px;
-      ${isDetailed ? "table-layout: fixed;" : ""}
     }
 
     thead th {
@@ -282,7 +392,6 @@ export function openPrintTab(
     .barcode-cell {
       text-align: center;
       overflow: hidden;
-      max-width: 0;
     }
 
     .barcode-svg {
@@ -309,7 +418,6 @@ export function openPrintTab(
 
       table {
         width: 100% !important;
-        ${isDetailed ? "table-layout: fixed;" : ""}
       }
     }
   </style>
@@ -330,8 +438,7 @@ export function openPrintTab(
   <table>
     <thead>
       <tr>
-        ${baseHeaders}
-        ${detailedHeaders}
+        ${headers}
       </tr>
     </thead>
     <tbody>
@@ -340,26 +447,43 @@ export function openPrintTab(
   </table>
 
   <script>
-    // Initialize all barcodes after page loads
-    document.querySelectorAll('.barcode-svg').forEach(function(el) {
-      try {
-        JsBarcode(el, el.dataset.value, {
-          format: el.dataset.format,
-          width: ${isDetailed ? 1 : 1.2},
-          height: ${isDetailed ? 35 : 45},
-          fontSize: ${isDetailed ? 10 : 12},
-          margin: 0,
-          displayValue: true,
+    function renderBarcodes() {
+      document.querySelectorAll('.barcode-svg').forEach(function(el) {
+        try {
+          JsBarcode(el, el.dataset.value, {
+            format: el.dataset.format,
+            width: ${isDetailed ? 1 : 1.2},
+            height: ${isDetailed ? 35 : 45},
+            fontSize: ${isDetailed ? 10 : 12},
+            margin: 0,
+            displayValue: true,
+          });
+        } catch (e) {
+          el.outerHTML = '<span style="color:#999;font-style:italic;">Invalid barcode</span>';
+        }
+      });
+    }
+
+    // Wait for JsBarcode CDN to fully load before rendering
+    function waitForJsBarcode(retries) {
+      if (typeof JsBarcode !== 'undefined') {
+        renderBarcodes();
+      } else if (retries > 0) {
+        setTimeout(function() { waitForJsBarcode(retries - 1); }, 200);
+      } else {
+        // CDN failed to load after all retries
+        document.querySelectorAll('.barcode-svg').forEach(function(el) {
+          el.outerHTML = '<span style="color:#999;font-style:italic;">Barcode library failed to load</span>';
         });
-      } catch (e) {
-        el.outerHTML = '<span style="color:#999;font-style:italic;">Invalid barcode</span>';
       }
-    });
+    }
+
+    // Use window.onload to ensure all resources (including CDN script) are loaded
+    window.onload = function() { waitForJsBarcode(25); };
   <\/script>
 </body>
 </html>`;
 
-  // Open new tab and write the content
   const printWindow = window.open("", "_blank");
   if (printWindow) {
     printWindow.document.write(html);

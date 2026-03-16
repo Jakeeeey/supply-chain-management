@@ -196,9 +196,8 @@ export function PurchaseOrderSummary(props: {
     const vatTotal = Math.max(0, netTotal - vatExclusive);
     const ewtGoods = Math.max(0, vatExclusive * 0.01);
     
-    // If not an invoice, totalPayable is just netTotal. 
-    // If it IS an invoice, totalPayable is netTotal - ewtGoods.
-    const totalPayable = props.isInvoice ? Math.max(0, netTotal - ewtGoods) : netTotal;
+    // ✅ Updated: Total Payable is always netTotal. VAT/EWT are hidden and don't subtract anymore.
+    const totalPayable = netTotal;
 
     return (
         <div className="bg-background border border-border rounded-xl p-3 sm:p-6 shadow-xl w-full min-w-0">
@@ -495,7 +494,7 @@ export function PurchaseOrderSummary(props: {
                                     <Tags className="w-4 h-4 text-primary" />
                                     <span className="text-sm font-black uppercase tracking-tight text-foreground">Financial Summary</span>
                                 </div>
-                                <div className="flex items-center gap-2 px-2 py-1 bg-muted/50 rounded-lg border border-border/50 hover:bg-muted transition-colors cursor-pointer group" onClick={() => !locked && props.setIsInvoice(!props.isInvoice)}>
+                                <div className="flex items-center gap-2 px-2 py-1 bg-muted/50 rounded-lg border border-border/50 hover:bg-muted transition-colors group">
                                     <Checkbox 
                                         id="is-invoice" 
                                         checked={props.isInvoice} 
@@ -541,6 +540,9 @@ export function PurchaseOrderSummary(props: {
                                             <span className="text-foreground/70 font-black uppercase tracking-widest">EWT (1%)</span>
                                             <span className="font-black text-foreground text-sm">{money.format(ewtGoods)}</span>
                                         </div>
+                                        <p className="text-[9px] text-amber-600 dark:text-amber-400 font-bold italic text-right mt-0.5">
+                                            Note: EWT is not yet deducted
+                                        </p>
                                     </>
                                 )}
                             </div>

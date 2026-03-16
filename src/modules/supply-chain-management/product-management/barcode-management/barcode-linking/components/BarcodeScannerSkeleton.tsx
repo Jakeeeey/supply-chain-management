@@ -17,19 +17,22 @@ export function BarcodeScannerSkeleton() {
       </div>
 
       <div className="flex flex-col xl:flex-row gap-4 items-end xl:items-center justify-between bg-card border rounded-lg p-4 shadow-sm">
-        <div className="flex flex-col sm:flex-row gap-4 w-full xl:w-auto flex-1">
-          <div className="flex flex-col gap-2 w-full sm:w-62.5">
+        <div className="flex flex-col md:flex-row gap-4 w-full xl:w-auto flex-1">
+          {/* Search Skeleton */}
+          <div className="flex flex-col gap-2 w-full md:w-[280px]">
             <Skeleton className="h-3 w-16" />
             <Skeleton className="h-10 w-full" />
           </div>
 
-          <div className="flex flex-col gap-2 w-full sm:w-50">
-            <Skeleton className="h-3 w-16" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-
-          <div className="flex flex-col gap-2 w-full sm:w-87.5">
+          {/* Product Select Skeleton */}
+          <div className="flex flex-col gap-2 w-full md:w-[350px]">
             <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+
+          {/* Inventory Type Skeleton */}
+          <div className="flex flex-col gap-2 w-full md:w-[150px]">
+            <Skeleton className="h-3 w-20" />
             <Skeleton className="h-10 w-full" />
           </div>
         </div>

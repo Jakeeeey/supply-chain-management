@@ -63,6 +63,19 @@ export interface Product {
   cbm_width?: number | null;
   cbm_height?: number | null;
   cbm_unit_id?: CbmUnit | null;
+
+  /** Runtime-only discriminator: "product" or "bundle" */
+  record_type?: "product" | "bundle";
+
+  /** Bundle items — only populated for bundles in the detail modal */
+  bundle_items?: BundleItem[];
+}
+
+export interface BundleItem {
+  id: number;
+  product_code: string;
+  product_name: string;
+  quantity: number;
 }
 
 export const getSupplierName = (p: Product): string => {
@@ -86,3 +99,15 @@ export const getSupplierName = (p: Product): string => {
 
   return names.length > 0 ? names.join(", ") : "-";
 };
+
+export interface BarcodeHistoryEntry {
+  id: string;
+  sku_code: string;
+  name: string;
+  barcode_value: string;
+  barcode_type_id: { id: number; name: string } | null;
+  barcode_date: string | null;
+  updated_by: { id: number; first_name: string; last_name: string } | null;
+  updated_at: string | null;
+  record_type: "Regular" | "Bundle";
+}

@@ -134,7 +134,7 @@ type Ctx = {
     receiptSaved: ReceiptSavedInfo | null;
     clearReceiptSaved: () => void;
 
-    scanRFID: () => Promise<void>;
+    scanRFID: (rfidOverride?: string) => Promise<void>;
     removeActivity: (id: string) => void;
     saveReceipt: (porMetaData?: Record<string, { lotNo: string; expiryDate: string }>) => Promise<void>;
     savingReceipt: boolean;
@@ -359,14 +359,14 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
         });
     }, []);
 
-    const scanRFID = React.useCallback(async () => {
+    const scanRFID = React.useCallback(async (rfidOverride?: string) => {
         setScanError("");
         setLastMatched(null);
 
         const poId = selectedPO?.id;
         if (!poId) return setScanError("Select a PO first.");
 
-        const value = rfid.trim();
+        const value = (rfidOverride ?? rfid).trim();
         if (!value) return setScanError("Scan RFID first.");
 
         try {
@@ -491,7 +491,7 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
             const savedItems: SavedItem[] = allItems.map((it: any) => {
                 const scannedNow = Number(countsMap[it.id] || 0);
                 const itemRfids = activity
-                    .filter((a: any) => a.status === "ok" && a.productName === it.name)
+                    .filter((a: any) => a.status === "ok" && String(a.porId) === String(it.id))
                     .map((a: any) => a.rfid);
 
                 return {
@@ -501,9 +501,10 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
                     expectedQty: Number(it.expectedQty),
                     receivedQtyAtStart: Number(it.receivedQty) - scannedNow, // already matched in detail
                     receivedQtyNow: scannedNow,
-                    rfids: itemRfids
+                    rfids: Array.from(new Set(itemRfids))
                 };
             });
+
 
             // ✅ mark success for UI
             setReceiptSaved({

@@ -46,7 +46,11 @@ function normalizeLine(line: any) {
 }
 
 export async function fetchPendingApprovalPOs(): Promise<PendingApprovalPO[]> {
-    const res = await fetch(API, { method: "GET", credentials: "include" });
+    const res = await fetch(API, { 
+        method: "GET", 
+        credentials: "include",
+        cache: "no-store"
+    });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(json?.error || "Failed to fetch pending POs");
 
@@ -65,6 +69,7 @@ export async function fetchPendingApprovalPOs(): Promise<PendingApprovalPO[]> {
 export async function fetchPurchaseOrderDetail(id: string): Promise<PurchaseOrderDetail> {
     const res = await fetch(`${API}?id=${encodeURIComponent(id)}`, {
         method: "GET",
+        cache: "no-store",
         credentials: "include",
     });
 
