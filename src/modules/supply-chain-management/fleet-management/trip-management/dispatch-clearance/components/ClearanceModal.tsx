@@ -129,9 +129,9 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
         setIsDetailOpen(true);
     };
 
-    const handleConfirmProductReconciliation = (id: number, status: string, remarks: string, missingQtys: Record<string | number, number>) => {
+    const handleConfirmProductReconciliation = (id: number, status: string, remarks: string, missingQtys: Record<string | number, number>, scannedQtys: Record<string | number, number>) => {
         setInvoices(prev => prev.map(inv =>
-            inv.id === id ? { ...inv, status: status as any, remarks, missingQtys } : inv
+            inv.id === id ? { ...inv, status: status as any, remarks, missingQtys, scannedQtys } : inv
         ));
         // Auto-select row after reconciliation if not already selected
         setSelectedIds(prev => {
