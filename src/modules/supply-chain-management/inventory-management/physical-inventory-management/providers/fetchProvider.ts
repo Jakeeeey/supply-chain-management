@@ -621,7 +621,7 @@ export async function createPhysicalInventoryHeader(
     const json = await apiPost<
         PhysicalInventoryHeaderUpsertPayload,
         DirectusItemResponse<PhysicalInventoryHeaderRow>
-    >(`/api/scm/physical-inventory/header`, payload);
+    >(`/api/scm/inventory-management/physical-inventory/header`, payload);
 
     return json.data;
 }
@@ -633,7 +633,7 @@ export async function updatePhysicalInventoryHeader(
     const json = await apiPatch<
         Partial<PhysicalInventoryHeaderUpsertPayload>,
         DirectusItemResponse<PhysicalInventoryHeaderRow>
-    >(`/api/scm/physical-inventory/header/${id}`, payload);
+    >(`/api/scm/inventory-management/physical-inventory/header/${id}`, payload);
 
     return json.data;
 }
@@ -642,7 +642,7 @@ export async function commitPhysicalInventory(
     id: number,
 ): Promise<PhysicalInventoryHeaderRow> {
     const json = await apiPost<Record<string, never>, DirectusItemResponse<PhysicalInventoryHeaderRow>>(
-        `/api/scm/physical-inventory/header/${id}/commit`,
+        `/api/scm/inventory-management/physical-inventory/header/${id}/commit`,
         {},
     );
 
@@ -653,7 +653,7 @@ export async function cancelPhysicalInventory(
     id: number,
 ): Promise<PhysicalInventoryHeaderRow> {
     const json = await apiPost<Record<string, never>, DirectusItemResponse<PhysicalInventoryHeaderRow>>(
-        `/api/scm/physical-inventory/header/${id}/cancel`,
+        `/api/scm/inventory-management/physical-inventory/header/${id}/cancel`,
         {},
     );
 
