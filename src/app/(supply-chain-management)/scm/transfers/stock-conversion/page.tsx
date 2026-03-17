@@ -64,9 +64,11 @@ function buildHeaderUserFromToken(token: string | null | undefined) {
 
   const name = [first, last].filter(Boolean).join(" ") || email || "User";
 
+  const branchId = Number(payload?.branch_id || payload?.branchId || payload?.branch || 0);
+
   return {
-    id: Number(payload?.id || payload?.userId || payload?.sub || 0),
-    branchId: Number(payload?.branch_id || payload?.branchId || 0),
+    id: Number(payload?.id || payload?.userId || payload?.sub || 0) || undefined,
+    branchId: branchId > 0 ? branchId : undefined,
     name,
     email: email || "",
     avatar: "/avatars/shadcn.jpg",
@@ -75,7 +77,7 @@ function buildHeaderUserFromToken(token: string | null | undefined) {
 
 export default async function Page() {
   const cookieStore = await cookies();
-  const token = cookieStore.get(COOKIE_NAME)?.value ?? null;
+  const token = cookieStore.get("springboot_token")?.value || cookieStore.get(COOKIE_NAME)?.value || null;
 
   const headerUser = buildHeaderUserFromToken(token);
 
