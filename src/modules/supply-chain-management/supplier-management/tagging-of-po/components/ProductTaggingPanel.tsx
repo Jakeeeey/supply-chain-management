@@ -21,7 +21,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 
-
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { TaggingPODetail, TaggingPOItem } from "../types";
 import { ArrowLeft, BadgeCheck, BadgeX, ScanLine, Radio, Printer } from "lucide-react";
@@ -416,6 +416,26 @@ export default function ProductTaggingPanel(props: {
                                         </Badge>
                                     )}
                                 </div>
+
+                                {totalTagged > 0 && totalTagged < totalExpected && (
+                                    <div className="pt-2">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            className="w-full text-xs font-bold border-primary/30 hover:bg-primary/10 text-primary"
+                                            onClick={() => {
+                                                props.onBack();
+                                                setTimeout(() => {
+                                                    toast.success("Ready for Receiving", {
+                                                        description: "This partially tagged PO is now visible in Receiving Products."
+                                                    });
+                                                }, 100);
+                                            }}
+                                        >
+                                            Send Partially Tagged to Receiving
+                                        </Button>
+                                    </div>
+                                )}
                             </div>
                         </div>
 

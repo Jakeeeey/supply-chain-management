@@ -88,8 +88,13 @@ export function useStockConversion(branchId?: number) {
       }));
     } catch (err: any) {
         console.error("Inventory fetch failed:", err);
-        setData(prev => prev.map(p => ({ ...p, inventoryLoaded: false })));
-        toast.error(`Inventory failed: ${err.message}`);
+        setData(prev => prev.map(p => ({ ...p, inventoryLoaded: true })));
+        // Surface auth errors as a critical error on the page
+        if (err?.message?.includes("session") || err?.message?.includes("expired") || err?.message?.includes("401") || err?.message?.includes("403")) {
+            setError(err.message);
+        } else {
+            toast.error(`Inventory failed: ${err.message}`);
+        }
     }
   }, [branchId]);
 
@@ -144,8 +149,12 @@ export function useStockConversion(branchId?: number) {
       });
     } catch (err: any) {
       console.error("Batch inventory fetch failed:", err);
-      toast.error(`Batch Inventory failed: ${err.message}`);
-      // Revert loading state if failed
+      // Surface auth errors as critical
+      if (err?.message?.includes("session") || err?.message?.includes("expired") || err?.message?.includes("401") || err?.message?.includes("403")) {
+          setError(err.message);
+      } else {
+          toast.error(`Batch Inventory failed: ${err.message}`);
+      }
       setData(prev => prev.map(p => 
         fetchableIds.includes(p.productId) ? { ...p, inventoryLoaded: true } : p
       ));
