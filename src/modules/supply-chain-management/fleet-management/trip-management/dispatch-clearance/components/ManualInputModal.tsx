@@ -86,16 +86,16 @@ const ManualInputModal: React.FC<ManualInputModalProps> = ({
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-2xl w-[95vw] p-0 bg-white rounded-2xl md:rounded-3xl border-none shadow-2xl overflow-hidden max-h-[95vh] flex flex-col">
-                <DialogHeader className="p-4 md:p-6 pb-2 shrink-0">
+            <DialogContent className="sm:max-w-2xl w-[95vw] p-0 bg-background rounded-2xl md:rounded-3xl border-none shadow-2xl overflow-hidden max-h-[95vh] flex flex-col">
+                <DialogHeader className="p-4 md:p-6 pb-2 shrink-0 bg-card border-b border-border">
                     <div className="flex items-center justify-between gap-4">
                         <div className="flex items-center gap-3 overflow-hidden">
-                            <div className="p-2 rounded-xl bg-orange-50 text-orange-600 shrink-0">
+                            <div className="p-2 rounded-xl bg-orange-500/10 text-orange-600 shrink-0">
                                 <Edit3 className="w-4 h-4 md:w-5 md:h-5" />
                             </div>
                             <div className="space-y-0.5 truncate">
-                                <DialogTitle className="text-lg md:text-xl font-bold truncate">Manual Input</DialogTitle>
-                                <p className="text-[10px] md:text-xs text-slate-500 font-medium truncate">
+                                <DialogTitle className="text-lg md:text-xl font-bold truncate text-foreground">Manual Input</DialogTitle>
+                                <p className="text-[10px] md:text-xs text-muted-foreground font-medium truncate">
                                     Please enter the quantities manually.
                                 </p>
                             </div>
@@ -103,9 +103,9 @@ const ManualInputModal: React.FC<ManualInputModalProps> = ({
                     </div>
                 </DialogHeader>
 
-                <div className="flex-1 overflow-y-auto p-4 md:p-6 pt-2 space-y-6 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto p-4 md:p-6 pt-2 space-y-6 custom-scrollbar bg-background">
                     {/* Total Progress Card */}
-                    <div className="p-4 md:p-6 rounded-2xl bg-orange-500 text-white shadow-xl shadow-orange-100 relative overflow-hidden shrink-0">
+                    <div className="p-4 md:p-6 rounded-2xl bg-orange-500 text-white shadow-xl shadow-orange-500/10 relative overflow-hidden shrink-0">
                         <div className="relative z-10 flex items-center justify-between mb-4">
                             <div className="space-y-1">
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-orange-100">Global Progress</p>
@@ -126,23 +126,23 @@ const ManualInputModal: React.FC<ManualInputModalProps> = ({
 
                         {/* Abstract Background Decoration */}
                         <div className="absolute top-[-20%] right-[-10%] w-32 md:w-48 h-32 md:h-48 bg-white/5 rounded-full blur-2xl" />
-                        <div className="absolute bottom-[-10%] left-[-5%] w-24 md:w-32 h-24 md:h-32 bg-orange-300/20 rounded-full blur-xl" />
+                        <div className="absolute bottom-[-10%] left-[-5%] w-24 md:w-32 h-24 md:h-32 bg-orange-200/10 rounded-full blur-xl" />
                     </div>
 
                     {/* Items List */}
-                    <div className="rounded-xl border border-slate-100 overflow-hidden bg-white">
-                        <div className="bg-slate-50/50 px-4 py-2 border-b border-slate-100 flex items-center justify-between">
-                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Detail Manifest</p>
-                            <p className="text-[10px] font-bold text-slate-500 uppercase">{items.length} Unique SKUs</p>
+                    <div className="rounded-xl border border-border overflow-hidden bg-card shadow-sm">
+                        <div className="bg-muted px-4 py-2 border-b border-border flex items-center justify-between">
+                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Detail Manifest</p>
+                            <p className="text-[10px] font-bold text-muted-foreground uppercase">{items.length} Unique SKUs</p>
                         </div>
                         <div className="overflow-x-auto custom-scrollbar">
                             <Table className="min-w-[500px] md:min-w-full">
-                                <TableHeader className="bg-white sticky top-0 z-10 shadow-sm border-b border-slate-100">
-                                    <TableRow className="hover:bg-transparent">
-                                        <TableHead className="text-[10px] font-bold text-slate-400 uppercase py-3">Product Description</TableHead>
-                                        <TableHead className="text-[10px] font-bold text-slate-400 uppercase text-center py-3">Total Required</TableHead>
-                                        <TableHead className="text-[10px] font-bold text-slate-400 uppercase text-center py-3">Input Qty</TableHead>
-                                        <TableHead className="text-[10px] font-bold text-slate-400 uppercase text-right py-3 pr-6">Status</TableHead>
+                                <TableHeader className="bg-card sticky top-0 z-10 shadow-sm border-b border-border">
+                                    <TableRow className="hover:bg-transparent border-border">
+                                        <TableHead className="text-[10px] font-bold text-muted-foreground uppercase py-3 pl-4">Product Description</TableHead>
+                                        <TableHead className="text-[10px] font-bold text-muted-foreground uppercase text-center py-3">Total Required</TableHead>
+                                        <TableHead className="text-[10px] font-bold text-muted-foreground uppercase text-center py-3">Input Qty</TableHead>
+                                        <TableHead className="text-[10px] font-bold text-muted-foreground uppercase text-right py-3 pr-6">Status</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -151,16 +151,16 @@ const ManualInputModal: React.FC<ManualInputModalProps> = ({
                                         const isComplete = inputQty >= item.qty;
 
                                         return (
-                                            <TableRow key={item.id} className={`group hover:bg-slate-50/50 transition-colors border-slate-50 ${isComplete ? 'opacity-60' : ''}`}>
-                                                <TableCell className="py-3 md:py-4">
+                                            <TableRow key={item.id} className={`group hover:bg-muted/30 transition-colors border-border ${isComplete ? 'opacity-60' : ''}`}>
+                                                <TableCell className="py-3 md:py-4 pl-4">
                                                     <div className="space-y-1">
-                                                        <p className="text-xs md:text-sm font-bold text-slate-800 leading-tight group-hover:text-orange-600 transition-colors">{item.product_name}</p>
-                                                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 font-bold uppercase tracking-tighter">
+                                                        <p className="text-xs md:text-sm font-bold text-foreground leading-tight group-hover:text-orange-600 transition-colors">{item.product_name}</p>
+                                                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-bold uppercase tracking-tighter border border-border">
                                                             {item.unit}
                                                         </span>
                                                     </div>
                                                 </TableCell>
-                                                <TableCell className="text-center font-bold text-slate-500 text-xs md:text-sm py-3 md:py-4">{item.qty}</TableCell>
+                                                <TableCell className="text-center font-bold text-muted-foreground text-xs md:text-sm py-3 md:py-4 tabular-nums">{item.qty}</TableCell>
                                                 <TableCell className="text-center py-3 md:py-4">
                                                     <div className="flex justify-center">
                                                         <Input
@@ -169,19 +169,19 @@ const ManualInputModal: React.FC<ManualInputModalProps> = ({
                                                             pattern="[0-9]*"
                                                             value={inputQtys[item.id] !== undefined ? inputQtys[item.id] : ''}
                                                             onChange={(e) => handleQtyChange(item.id, e.target.value, item.qty)}
-                                                            className="w-20 text-center font-black h-10 border-slate-200 focus-visible:ring-orange-500 rounded-lg text-lg bg-orange-50/30"
+                                                            className="w-20 text-center font-black h-10 border-border focus-visible:ring-orange-500 rounded-lg text-lg bg-orange-500/5 tabular-nums text-foreground"
                                                             placeholder="0"
                                                         />
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="text-right py-3 md:py-4 pr-6">
                                                     {isComplete ? (
-                                                        <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-50 text-emerald-600">
+                                                        <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
                                                             <CheckCircle2 className="w-3 h-3" />
                                                             <span className="text-[10px] font-black uppercase tracking-widest">OK</span>
                                                         </div>
                                                     ) : (
-                                                        <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-50 text-slate-400">
+                                                        <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-muted text-muted-foreground border border-border">
                                                             <Loader2 className="w-3 h-3 animate-spin" />
                                                             <span className="text-[10px] font-black uppercase tracking-widest">Wait</span>
                                                         </div>
@@ -196,13 +196,13 @@ const ManualInputModal: React.FC<ManualInputModalProps> = ({
                     </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row justify-end gap-3 p-4 md:p-6 pt-2 md:pt-4 border-t border-slate-100 bg-white/80 backdrop-blur-sm sticky bottom-0 z-20 shrink-0">
-                    <Button variant="outline" onClick={onClose} className="rounded-xl md:rounded-2xl px-6 md:px-8 h-10 md:h-12 font-bold text-slate-500 hover:text-slate-900 hover:border-slate-300 transition-all text-sm md:text-base order-2 sm:order-1">
+                <div className="flex flex-col sm:flex-row justify-end gap-3 p-4 md:p-6 pt-2 md:pt-4 border-t border-border bg-card/80 backdrop-blur-sm sticky bottom-0 z-20 shrink-0">
+                    <Button variant="outline" onClick={onClose} className="rounded-xl md:rounded-2xl px-6 md:px-8 h-10 md:h-12 font-bold text-muted-foreground hover:text-foreground hover:border-muted-foreground/30 transition-all text-sm md:text-base order-2 sm:order-1 border-border">
                         Cancel
                     </Button>
                     <Button
                         onClick={handleConfirm}
-                        className="bg-orange-500 hover:bg-slate-900 text-white rounded-xl md:rounded-2xl px-6 md:px-12 h-10 md:h-12 font-black shadow-2xl shadow-orange-100 flex items-center justify-center gap-2 md:gap-3 group transition-all text-sm md:text-base order-1 sm:order-2"
+                        className="bg-orange-500 hover:bg-orange-600 text-white rounded-xl md:rounded-2xl px-6 md:px-12 h-10 md:h-12 font-black shadow-xl shadow-orange-500/20 flex items-center justify-center gap-2 md:gap-3 group transition-all text-sm md:text-base order-1 sm:order-2"
                     >
                         Confirm Manual Entries
                         <ArrowRight className="w-4 h-4 md:w-5 md:h-5 group-hover:translate-x-1 transition-transform" />

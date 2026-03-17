@@ -51,10 +51,10 @@ interface ClearanceModalProps {
 }
 
 const STATUS_VARIANTS = {
-    'Fulfilled': 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100',
-    'Unfulfilled': 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100',
-    'Fulfilled with Concerns': 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100',
-    'Fulfilled with Returns': 'bg-sky-50 text-sky-700 border-sky-200 hover:bg-sky-100',
+    'Fulfilled': 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20',
+    'Unfulfilled': 'bg-rose-500/10 text-rose-500 border-rose-500/20 hover:bg-rose-500/20',
+    'Fulfilled with Concerns': 'bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500/20',
+    'Fulfilled with Returns': 'bg-sky-500/10 text-sky-500 border-sky-500/20 hover:bg-sky-500/20',
 };
 
 const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSuccess, dispatch }) => {
@@ -186,25 +186,25 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[1400px] w-[95vw] max-h-[90vh] p-0 flex flex-col overflow-hidden bg-slate-50 border-none rounded-2xl">
-                <DialogHeader className="p-4 md:p-6 bg-white border-b border-slate-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <DialogContent className="sm:max-w-[1400px] w-[95vw] max-h-[90vh] p-0 flex flex-col overflow-hidden bg-background border-none rounded-2xl shadow-2xl">
+                <DialogHeader className="p-4 md:p-6 bg-card border-b border-border flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                     <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                            <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600 shrink-0">
+                            <div className="p-2 bg-primary/10 rounded-lg text-primary shrink-0">
                                 <ClipboardList className="w-5 h-5" />
                             </div>
-                            <DialogTitle className="text-lg md:text-xl font-bold text-slate-900 leading-tight">
+                            <DialogTitle className="text-lg md:text-xl font-bold text-foreground leading-tight">
                                 Dispatch Clearance & Reconciliation
                             </DialogTitle>
                         </div>
-                        <p className="text-xs md:text-sm text-slate-500 pl-11">
-                            Reconcile items for Dispatch <span className="font-bold text-indigo-700">{dispatch.dispatchNo}</span>
+                        <p className="text-xs md:text-sm text-muted-foreground pl-11">
+                            Reconcile items for Dispatch <span className="font-bold text-primary">{dispatch.dispatchNo}</span>
                         </p>
                     </div>
                     <div className="flex w-full md:w-auto gap-2 justify-end">
-                        <Button variant="outline" onClick={onClose} className="rounded-lg h-9 md:h-10 text-sm" disabled={isSubmitting}>Cancel</Button>
+                        <Button variant="outline" onClick={onClose} className="rounded-lg h-9 md:h-10 text-sm border-border" disabled={isSubmitting}>Cancel</Button>
                         <Button
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-100 font-semibold px-4 md:px-6 rounded-lg transition-all active:scale-95 flex items-center gap-2 h-9 md:h-10 text-sm"
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg font-semibold px-4 md:px-6 rounded-lg transition-all active:scale-95 flex items-center gap-2 h-9 md:h-10 text-sm"
                             onClick={handleConfirmClearance}
                             disabled={isSubmitting || selectedIds.size === 0}
                         >
@@ -214,51 +214,51 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                     </div>
                 </DialogHeader>
 
-                <div className="p-4 md:p-6 space-y-6 overflow-y-auto flex-1 custom-scrollbar">
+                <div className="p-4 md:p-6 space-y-6 overflow-y-auto flex-1 custom-scrollbar bg-background">
                     {/* Summary Cards */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-                        <Card className="border-none shadow-sm ring-1 ring-slate-200">
+                        <Card className="border-border bg-card shadow-sm">
                             <CardContent className="p-4 space-y-1">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Driver</p>
-                                <p className="font-bold text-slate-900">{dispatch.driverName}</p>
+                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Driver</p>
+                                <p className="font-bold text-foreground">{dispatch.driverName}</p>
                             </CardContent>
                         </Card>
-                        <Card className="border-none shadow-sm ring-1 ring-slate-200">
+                        <Card className="border-border bg-card shadow-sm">
                             <CardContent className="p-4 space-y-1">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Vehicle</p>
-                                <p className="font-bold text-slate-900">{dispatch.vehiclePlate}</p>
+                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Vehicle</p>
+                                <p className="font-bold text-foreground">{dispatch.vehiclePlate}</p>
                             </CardContent>
                         </Card>
-                        <Card className="border-none shadow-sm ring-1 ring-slate-200">
+                        <Card className="border-border bg-card shadow-sm">
                             <CardContent className="p-4 space-y-1">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Items</p>
-                                <p className="font-bold text-slate-900">
+                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Total Items</p>
+                                <p className="font-bold text-foreground">
                                     {selectedIds.size > 0 ? `${selectedIds.size} / ` : ''}{invoices.length} Invoices
                                 </p>
                             </CardContent>
                         </Card>
-                        <Card className="border-none shadow-sm ring-1 ring-slate-200">
+                        <Card className="border-border bg-card shadow-sm">
                             <CardContent className="p-4 space-y-1">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status</p>
-                                <p className="font-bold text-indigo-600">Ready for Clearance</p>
+                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Status</p>
+                                <p className="font-bold text-primary">Ready for Clearance</p>
                             </CardContent>
                         </Card>
                     </div>
 
                     {/* Reconciliation Table */}
-                    <Card className="border-none shadow-sm ring-1 ring-slate-200 overflow-hidden rounded-xl bg-white">
-                        <CardHeader className="py-4 px-6 bg-slate-50/50 border-b border-slate-100">
+                    <Card className="border-border shadow-sm overflow-hidden rounded-xl bg-card">
+                        <CardHeader className="py-4 px-6 bg-muted/30 border-b border-border">
                             <div>
-                                <h3 className="text-sm font-bold text-slate-900">Invoice Reconciliation Table</h3>
-                                <p className="text-l text-red-600 mt-1">
+                                <h3 className="text-sm font-bold text-foreground">Invoice Reconciliation Table</h3>
+                                <p className="text-sm text-red-500 font-medium mt-1">
                                     Select status and mark items as cleared. Click a row to add remarks/details.
                                 </p>
                             </div>
                         </CardHeader>
                         <CardContent className="p-0 overflow-x-auto custom-scrollbar">
                             <Table className="min-w-[800px] md:min-w-full">
-                                <TableHeader className="bg-slate-50/30">
-                                    <TableRow className="border-slate-100">
+                                <TableHeader className="bg-muted/50">
+                                    <TableRow className="border-border hover:bg-transparent">
                                         <TableHead className="w-[50px]">
                                             <Checkbox
                                                 checked={invoices.length > 0 && invoices.every(isRowCheckable) && selectedIds.size === invoices.filter(isRowCheckable).length && invoices.filter(isRowCheckable).length > 0}
@@ -266,12 +266,12 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                                                 disabled={invoices.filter(isRowCheckable).length === 0}
                                             />
                                         </TableHead>
-                                        <TableHead className="text-slate-500 font-semibold text-xs py-3">Status</TableHead>
-                                        <TableHead className="text-slate-500 font-semibold text-xs py-3">Order No.</TableHead>
-                                        <TableHead className="text-slate-500 font-semibold text-xs py-3">Invoice No.</TableHead>
-                                        <TableHead className="text-slate-500 font-semibold text-xs py-3">Invoice Date</TableHead>
-                                        <TableHead className="text-slate-500 font-semibold text-xs py-3">Customer</TableHead>
-                                        <TableHead className="text-right text-slate-500 font-semibold text-xs py-3 pr-6">Amount</TableHead>
+                                        <TableHead className="text-muted-foreground font-semibold text-xs py-3">Status</TableHead>
+                                        <TableHead className="text-muted-foreground font-semibold text-xs py-3">Order No.</TableHead>
+                                        <TableHead className="text-muted-foreground font-semibold text-xs py-3">Invoice No.</TableHead>
+                                        <TableHead className="text-muted-foreground font-semibold text-xs py-3">Invoice Date</TableHead>
+                                        <TableHead className="text-muted-foreground font-semibold text-xs py-3">Customer</TableHead>
+                                        <TableHead className="text-right text-muted-foreground font-semibold text-xs py-3 pr-6">Amount</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -279,14 +279,14 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                                         <TableRow>
                                             <TableCell colSpan={7} className="h-64 text-center">
                                                 <div className="flex flex-col items-center gap-2">
-                                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-                                                    <span className="text-sm text-slate-500">Loading invoices...</span>
+                                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                                                    <span className="text-sm text-muted-foreground">Loading invoices...</span>
                                                 </div>
                                             </TableCell>
                                         </TableRow>
                                     ) : invoices.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={7} className="h-48 text-center text-slate-400 italic text-sm">
+                                            <TableCell colSpan={7} className="h-48 text-center text-muted-foreground italic text-sm">
                                                 No invoices attached to this dispatch.
                                             </TableCell>
                                         </TableRow>
@@ -294,7 +294,7 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                                         invoices.map((inv) => (
                                             <TableRow
                                                 key={inv.id}
-                                                className="hover:bg-slate-50 transition-colors border-slate-100 cursor-pointer select-none"
+                                                className="hover:bg-muted/40 transition-colors border-border cursor-pointer select-none"
                                                 onClick={() => handleRowDoubleClick(inv)}
                                             >
                                                 <TableCell onClick={(e) => e.stopPropagation()}>
@@ -309,26 +309,26 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                                                         value={inv.status}
                                                         onValueChange={(val: any) => handleStatusChange(inv.id, val)}
                                                     >
-                                                        <SelectTrigger className={`w-[190px] h-9 border-none text-xs font-bold ring-1 ring-inset ${STATUS_VARIANTS[inv.status] || 'bg-slate-100 text-slate-400 border-slate-200'}`}>
+                                                        <SelectTrigger className={`w-[190px] h-9 border-none text-xs font-bold ring-1 ring-inset ${STATUS_VARIANTS[inv.status] || 'bg-muted text-muted-foreground ring-border'}`}>
                                                             <SelectValue placeholder="Select Status" />
                                                         </SelectTrigger>
-                                                        <SelectContent className="rounded-xl border-slate-200 shadow-xl overflow-hidden p-1">
-                                                            <SelectItem value="Fulfilled" className="rounded-lg mb-1 focus:bg-emerald-50 focus:text-emerald-700 font-bold hover:bg-emerald-50 data-[state=checked]:bg-emerald-600 data-[state=checked]:text-white">
+                                                        <SelectContent className="rounded-xl border-border bg-popover text-popover-foreground shadow-xl overflow-hidden p-1">
+                                                            <SelectItem value="Fulfilled" className="rounded-lg mb-1 focus:bg-emerald-500/10 focus:text-emerald-500 font-bold hover:bg-emerald-500/10 data-[state=checked]:bg-emerald-600 data-[state=checked]:text-white transition-colors">
                                                                 <div className="flex items-center gap-2">
                                                                     <PackageCheck className="w-4 h-4" /> Fulfilled
                                                                 </div>
                                                             </SelectItem>
-                                                            <SelectItem value="Unfulfilled" className="rounded-lg mb-1 focus:bg-rose-50 focus:text-rose-700 font-bold hover:bg-rose-50 data-[state=checked]:bg-rose-600 data-[state=checked]:text-white">
+                                                            <SelectItem value="Unfulfilled" className="rounded-lg mb-1 focus:bg-rose-500/10 focus:text-rose-500 font-bold hover:bg-rose-500/10 data-[state=checked]:bg-rose-600 data-[state=checked]:text-white transition-colors">
                                                                 <div className="flex items-center gap-2">
                                                                     <PackageX className="w-4 h-4" /> Unfulfilled
                                                                 </div>
                                                             </SelectItem>
-                                                            <SelectItem value="Fulfilled with Concerns" className="rounded-lg mb-1 focus:bg-amber-50 focus:text-amber-700 font-bold hover:bg-amber-50 data-[state=checked]:bg-amber-500 data-[state=checked]:text-white">
+                                                            <SelectItem value="Fulfilled with Concerns" className="rounded-lg mb-1 focus:bg-amber-500/10 focus:text-amber-500 font-bold hover:bg-amber-500/10 data-[state=checked]:bg-amber-500 data-[state=checked]:text-white transition-colors">
                                                                 <div className="flex items-center gap-2">
                                                                     <AlertTriangle className="w-4 h-4" /> Fulfilled with Concerns
                                                                 </div>
                                                             </SelectItem>
-                                                            <SelectItem value="Fulfilled with Returns" className="rounded-lg focus:bg-sky-50 focus:text-sky-700 font-bold hover:bg-sky-50 data-[state=checked]:bg-sky-600 data-[state=checked]:text-white">
+                                                            <SelectItem value="Fulfilled with Returns" className="rounded-lg focus:bg-sky-500/10 focus:text-sky-500 font-bold hover:bg-sky-500/10 data-[state=checked]:bg-sky-600 data-[state=checked]:text-white transition-colors">
                                                                 <div className="flex items-center gap-2">
                                                                     <RotateCcw className="w-4 h-4" /> Fulfilled with Returns
                                                                 </div>
@@ -336,15 +336,15 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                                                         </SelectContent>
                                                     </Select>
                                                 </TableCell>
-                                                <TableCell className="text-slate-600 font-medium text-sm">{inv.orderNo}</TableCell>
-                                                <TableCell className="text-slate-600 font-medium text-sm">{inv.invoiceNo}</TableCell>
-                                                <TableCell className="text-slate-400 text-xs">
+                                                <TableCell className="text-foreground font-medium text-sm tabular-nums">{inv.orderNo}</TableCell>
+                                                <TableCell className="text-foreground font-medium text-sm tabular-nums">{inv.invoiceNo}</TableCell>
+                                                <TableCell className="text-muted-foreground text-xs font-mono">
                                                     {inv.invoiceDate ? new Date(inv.invoiceDate).toLocaleDateString() : 'N/A'}
                                                 </TableCell>
-                                                <TableCell className="text-slate-900 font-bold text-sm">
+                                                <TableCell className="text-foreground font-bold text-sm">
                                                     {inv.customerName || 'No Name'}
                                                 </TableCell>
-                                                <TableCell className="text-right font-bold text-slate-900 pr-6">
+                                                <TableCell className="text-right font-bold text-foreground pr-6 tabular-nums">
                                                     ₱{inv.amount.toLocaleString()}
                                                 </TableCell>
                                             </TableRow>
