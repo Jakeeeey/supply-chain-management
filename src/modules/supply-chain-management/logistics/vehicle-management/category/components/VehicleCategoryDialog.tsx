@@ -86,11 +86,11 @@ export function VehicleCategoryDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {isEdit ? "Edit Vehicle Category" : "Create Vehicle Category"}
+            {isEdit ? "Edit Category" : "Create Vehicle Category"}
           </DialogTitle>
           <DialogDescription>
             {isEdit
-              ? "Update vehicle category details below."
+              ? "Update category details below."
               : "Register a new vehicle category to the system."}
           </DialogDescription>
         </DialogHeader>
