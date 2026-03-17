@@ -1,41 +1,28 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { DataTable } from "@/components/ui/new-data-table";
 import {
   DispatchPlanSummary,
-  getDispatchPlanColumns,
-} from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/components/data-table/DispatchPlanColumns";
+  DispatchPlanTable,
+} from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/components/data-table";
 import { BudgetAllocationModal } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/components/modals/BudgetAllocationModal";
 import { DispatchCreationModal } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/components/modals/DispatchCreationModal";
+import { DispatchEditModal } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/components/modals/DispatchEditModal";
 import { useDispatchCreation } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/hooks/useDispatchCreation";
+import { SortingState } from "@tanstack/react-table";
 import { Plus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 export default function DispatchCreationPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<DispatchPlanSummary | null>(
-    null,
-  );
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<DispatchPlanSummary | null>(null);
+  const [selectedEditPlanId, setSelectedEditPlanId] = useState<number | null>(null);
+  const [sorting, setSorting] = useState<SortingState>([]);
 
   const { dispatchSummary, isLoadingSummary, refreshSummary, masterData } =
     useDispatchCreation();
-
-  const columns = useMemo(
-    () =>
-      getDispatchPlanColumns(
-        (plan) => {
-          console.log("Edit plan:", plan);
-          // TODO: Implement edit logic if needed
-        },
-        (plan) => {
-          setSelectedPlan(plan);
-          setIsBudgetModalOpen(true);
-        },
-      ),
-    [],
-  );
 
   return (
     <div className="space-y-6">
@@ -58,11 +45,19 @@ export default function DispatchCreationPage() {
       </div>
 
       <div className="flex flex-col space-y-4">
-        <DataTable
-          columns={columns}
+        <DispatchPlanTable
           data={dispatchSummary || []}
           isLoading={isLoadingSummary}
-          searchKey="dpNumber"
+          sorting={sorting}
+          onSortingChange={setSorting}
+          onEdit={(plan) => {
+            setSelectedEditPlanId(Number(plan.id));
+            setIsEditModalOpen(true);
+          }}
+          onBudget={(plan) => {
+            setSelectedPlan(plan);
+            setIsBudgetModalOpen(true);
+          }}
           emptyTitle="No Dispatch Plans Found"
           emptyDescription="Click 'Create Dispatch' to convert an approved Pre-Dispatch Plan into an active trip."
         />
@@ -74,6 +69,15 @@ export default function DispatchCreationPage() {
         onSuccess={() => {
           refreshSummary();
           console.log("Trip creation successful and modal closed");
+        }}
+      />
+
+      <DispatchEditModal
+        open={isEditModalOpen}
+        onOpenChange={setIsEditModalOpen}
+        planId={selectedEditPlanId}
+        onSuccess={() => {
+          refreshSummary();
         }}
       />
 

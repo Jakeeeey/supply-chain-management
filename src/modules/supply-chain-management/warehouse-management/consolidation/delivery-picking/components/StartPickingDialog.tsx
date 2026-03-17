@@ -98,7 +98,7 @@ export function StartPickingDialog({ isOpen, onClose, onConfirm, batchNo }: Star
                 <div className="p-8 pt-6 space-y-6">
                     <div className="space-y-3">
                         <label className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground ml-1 opacity-70">
-                            Assign Warehouse Auditor
+                            Assign Warehouse Checker
                         </label>
 
                         {fetchError ? (
