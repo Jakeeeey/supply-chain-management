@@ -54,6 +54,59 @@ const DispatchClearanceModule = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // Date Filter State
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'tomorrow' | 'week' | 'month' | 'year' | 'custom'>('all');
+  const [customRange, setCustomRange] = useState<{ start: string; end: string }>({ start: '', end: '' });
+
+  const getDateRange = (filter: string) => {
+    const now = new Date();
+    const start = new Date(now);
+    const end = new Date(now);
+
+    switch (filter) {
+      case 'today':
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        break;
+      case 'tomorrow':
+        start.setDate(now.getDate() + 1);
+        start.setHours(0, 0, 0, 0);
+        end.setDate(now.getDate() + 1);
+        end.setHours(23, 59, 59, 999);
+        break;
+      case 'week':
+        const day = now.getDay(); // 0 is Sunday
+        const diff = now.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+        start.setDate(diff);
+        start.setHours(0, 0, 0, 0);
+        end.setDate(diff + 6);
+        end.setHours(23, 59, 59, 999);
+        break;
+      case 'month':
+        start.setDate(1);
+        start.setHours(0, 0, 0, 0);
+        end.setMonth(now.getMonth() + 1);
+        end.setDate(0);
+        end.setHours(23, 59, 59, 999);
+        break;
+      case 'year':
+        start.setMonth(0, 1);
+        start.setHours(0, 0, 0, 0);
+        end.setMonth(11, 31);
+        end.setHours(23, 59, 59, 999);
+        break;
+      case 'custom':
+        return customRange.start && customRange.end ? { start: customRange.start, end: customRange.end } : null;
+      default:
+        return null;
+    }
+
+    return {
+      start: start.toISOString(),
+      end: end.toISOString()
+    };
+  };
+
   // Debounce search query
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -67,10 +120,13 @@ const DispatchClearanceModule = () => {
     const loadData = async () => {
       setLoading(true);
       try {
+        const range = getDateRange(dateFilter);
         const { data: joinedData, total } = await getJoinedDispatchData(
           currentPage,
           itemsPerPage,
-          debouncedSearch
+          debouncedSearch,
+          range?.start,
+          range?.end
         );
         setData(joinedData);
         setTotalItems(total);
@@ -81,12 +137,22 @@ const DispatchClearanceModule = () => {
       }
     };
     loadData();
-  }, [currentPage, debouncedSearch, refreshKey]);
+  }, [currentPage, debouncedSearch, refreshKey, dateFilter, customRange]);
 
   const handleOpenClearance = (dispatch: DispatchRow) => {
     setSelectedDispatch(dispatch);
     setIsModalOpen(true);
   };
+
+  const filterButtons = [
+    { label: 'All Time', value: 'all' },
+    { label: 'Today', value: 'today' },
+    { label: 'Tomorrow', value: 'tomorrow' },
+    { label: 'This Week', value: 'week' },
+    { label: 'This Month', value: 'month' },
+    { label: 'This Year', value: 'year' },
+    { label: 'Custom', value: 'custom' },
+  ];
 
   return (
     <div className="p-6 space-y-6 bg-muted/30 min-h-screen">
@@ -101,29 +167,57 @@ const DispatchClearanceModule = () => {
       </div>
 
       {/* Header & Filters */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-card p-4 rounded-xl shadow-sm border border-border">
-        <div className="flex items-center gap-4 w-full md:w-auto">
-          <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-medium text-foreground">Date:</span>
-            <Select defaultValue="all">
-              <SelectTrigger className="w-[180px] bg-muted/50 border-border">
-                <SelectValue placeholder="All Dates" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Dates</SelectItem>
-                <SelectItem value="today">Today</SelectItem>
-                <SelectItem value="yesterday">Yesterday</SelectItem>
-              </SelectContent>
-            </Select>
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 bg-card p-5 rounded-2xl shadow-sm border border-border">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full xl:w-auto">
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+              <Calendar className="w-4 h-4" />
+            </div>
+            <span className="text-sm font-bold text-foreground uppercase tracking-wider">Date Schedule:</span>
           </div>
+          
+          <div className="flex flex-wrap items-center gap-1.5 p-1.5 bg-muted/30 rounded-xl border border-border/50">
+            {filterButtons.map((btn) => (
+              <Button
+                key={btn.value}
+                variant={dateFilter === btn.value ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setDateFilter(btn.value as any)}
+                className={`h-8 rounded-lg text-xs font-bold transition-all px-4 ${
+                  dateFilter === btn.value 
+                    ? 'shadow-md shadow-primary/20 bg-primary text-primary-foreground' 
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted font-medium'
+                }`}
+              >
+                {btn.label}
+              </Button>
+            ))}
+          </div>
+
+          {dateFilter === 'custom' && (
+            <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 duration-300">
+              <Input
+                type="date"
+                className="h-9 w-36 bg-muted/50 border-border text-xs font-medium rounded-lg"
+                value={customRange.start}
+                onChange={(e) => setCustomRange(prev => ({ ...prev, start: e.target.value }))}
+              />
+              <span className="text-xs text-muted-foreground font-bold">-</span>
+              <Input
+                type="date"
+                className="h-9 w-36 bg-muted/50 border-border text-xs font-medium rounded-lg"
+                value={customRange.end}
+                onChange={(e) => setCustomRange(prev => ({ ...prev, end: e.target.value }))}
+              />
+            </div>
+          )}
         </div>
 
-        <div className="relative w-full md:w-72">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <div className="relative w-full sm:w-80 group">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
           <Input
-            placeholder="Search dispatch, driver..."
-            className="pl-10 bg-muted/50 border-border focus:ring-primary/50"
+            placeholder="Search dispatch, driver, vehicle..."
+            className="pl-11 h-10 bg-muted/50 border-border focus:ring-2 focus:ring-primary/20 rounded-xl transition-all"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />

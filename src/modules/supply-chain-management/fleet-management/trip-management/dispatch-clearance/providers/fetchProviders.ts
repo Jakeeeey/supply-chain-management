@@ -70,13 +70,20 @@ export const fetchSalesInvoices = async (): Promise<SalesInvoice[]> => {
 export const getJoinedDispatchData = async (
   page: number = 1,
   limit: number = 10,
-  search: string = ''
+  search: string = '',
+  startDate?: string,
+  endDate?: string
 ): Promise<{ data: DispatchRow[]; total: number }> => {
-  const query = new URLSearchParams({
+  const params: any = {
     page: page.toString(),
     limit: limit.toString(),
     search: search
-  }).toString();
+  };
+
+  if (startDate) params.startDate = startDate;
+  if (endDate) params.endDate = endDate;
+
+  const query = new URLSearchParams(params).toString();
 
   const response = await fetch(`/api/scm/fleet-management/trip-management/dispatch-clearance?${query}`);
   if (!response.ok) {

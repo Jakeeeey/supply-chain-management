@@ -24,21 +24,77 @@ export async function GET(request: Request) {
     const page = searchParams.get('page') || '1';
     const limit = searchParams.get('limit') || '10';
     const search = searchParams.get('search') || '';
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
 
     try {
         // Only fetch dispatches with status "For Clearance"
         const statusFilter = "For Clearance";
-
-        // Query dispatches with pagination and search
-        // Use encodeURIComponent for parameters with spaces
         let plansQuery = `/post_dispatch_plan?filter[status][_eq]=${encodeURIComponent(statusFilter)}&page=${page}&limit=${limit}&meta=*`;
+
+        // If search is provided, we need to find matching vehicle IDs and member IDs
         if (search) {
-            plansQuery += `&search=${encodeURIComponent(search)}`;
+            const searchTerm = encodeURIComponent(search);
+            
+            // 1. Find matching vehicles
+            let matchedVehicleIds: number[] = [];
+            try {
+                const vehiclesRes = await fetcher(`/vehicles?filter[vehicle_plate][_icontains]=${searchTerm}&fields=vehicle_id`);
+                matchedVehicleIds = (vehiclesRes?.data || []).map((v: any) => v.vehicle_id);
+            } catch (vErr) {
+                console.warn('Search: Vehicle sub-fetch failed', vErr);
+            }
+
+            // 2. Find matching users (Driver Name)
+            // Searching in user_fname, user_lname (Removing user_name as it doesn't exist in schema)
+            let matchedUserIds: number[] = [];
+            try {
+                const usersRes = await fetcher(`/user?filter[_or][0][user_fname][_icontains]=${searchTerm}&filter[_or][1][user_lname][_icontains]=${searchTerm}&fields=user_id`);
+                matchedUserIds = (usersRes?.data || []).map((u: any) => u.user_id);
+            } catch (uErr) {
+                console.warn('Search: User sub-fetch failed', uErr);
+            }
+
+            let matchedPlanIds: number[] = [];
+            if (matchedUserIds.length > 0) {
+                try {
+                    const staffRes = await fetcher(`/post_dispatch_plan_staff?filter[user_id][_in]=${matchedUserIds.join(',')}&filter[role][_eq]=Driver&fields=post_dispatch_plan_id`);
+                    matchedPlanIds = (staffRes?.data || []).map((s: any) => s.post_dispatch_plan_id);
+                } catch (sErr) {
+                    console.warn('Search: Staff sub-fetch failed', sErr);
+                }
+            }
+
+            // 3. Construct the combined filter for post_dispatch_plan
+            // (doc_no ~ search) OR (vehicle_id IN matchedVehicleIds) OR (id IN matchedPlanIds)
+            let searchFilter = `&filter[_or][0][doc_no][_icontains]=${searchTerm}`;
+            let orIndex = 1;
+
+            if (matchedVehicleIds.length > 0) {
+                searchFilter += `&filter[_or][${orIndex}][vehicle_id][_in]=${matchedVehicleIds.join(',')}`;
+                orIndex++;
+            }
+
+            if (matchedPlanIds.length > 0) {
+                searchFilter += `&filter[_or][${orIndex}][id][_in]=${matchedPlanIds.join(',')}`;
+                orIndex++;
+            }
+
+            plansQuery += searchFilter;
+        }
+
+        // Apply date filters if provided
+        if (startDate && endDate) {
+            plansQuery += `&filter[estimated_time_of_dispatch][_between]=${startDate},${endDate}`;
+        } else if (startDate) {
+            plansQuery += `&filter[estimated_time_of_dispatch][_gte]=${startDate}`;
+        } else if (endDate) {
+            plansQuery += `&filter[estimated_time_of_dispatch][_lte]=${endDate}`;
         }
 
         const plansRes = await fetcher(plansQuery);
         const plans = plansRes?.data || [];
-        const total = plansRes?.meta?.filter_count ?? plansRes?.meta?.total_count ?? 0;
+        const total = plansRes?.meta?.filter_count ?? plansRes?.meta?.total_count ?? plansRes?.meta?.total ?? 0;
 
         if (plans.length === 0) {
             return NextResponse.json({ data: [], total: 0 });
