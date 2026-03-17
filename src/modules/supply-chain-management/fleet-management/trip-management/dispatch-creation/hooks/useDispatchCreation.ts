@@ -39,10 +39,44 @@ export function useDispatchCreation() {
     try {
       const res = await fetch(
         "/api/scm/fleet-management/trip-management/dispatch-summary",
+        { cache: "no-store" },
       );
       const result = await res.json();
       if (result.error) throw new Error(result.error);
-      setDispatchSummary(result.data || []);
+
+      const rawData = result.data || [];
+
+      // Fetch budgeting data for enrichment (Use internal API proxy)
+      try {
+        const budgetRes = await fetch(
+          "/api/scm/fleet-management/trip-management/dispatch-creation?type=budget_summary",
+        );
+        const budgetResult = await budgetRes.json();
+        const budgets = budgetResult.data || [];
+
+        const budgetMap = new Map<string, number>();
+        budgets.forEach((b: any) => {
+          const pid = String(b.post_dispatch_plan_id);
+          budgetMap.set(pid, (budgetMap.get(pid) || 0) + Number(b.amount || 0));
+        });
+
+        const enriched = rawData.map((p: any) => {
+          const totalValue = (p.customerTransactions || []).reduce(
+            (acc: number, t: any) => acc + Number(t.amount || 0),
+            0,
+          );
+          return {
+            ...p,
+            amount: totalValue,
+            budgetTotal: budgetMap.get(String(p.id)) || 0,
+          };
+        });
+
+        setDispatchSummary(enriched);
+      } catch (budgetErr) {
+        console.error("Failed to enrich budget data:", budgetErr);
+        setDispatchSummary(rawData); // Fallback to raw data
+      }
     } catch (err: any) {
       console.error("Failed to load dispatch summary:", err.message);
     } finally {

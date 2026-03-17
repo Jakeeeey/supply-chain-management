@@ -8,12 +8,6 @@ import { getPDPCreationColumns } from "./columns";
 interface PDPCreationTableProps {
   data: DispatchPlan[];
   totalCount: number;
-  pageIndex: number;
-  pageSize: number;
-  onPaginationChange: (pagination: {
-    pageIndex: number;
-    pageSize: number;
-  }) => void;
   isLoading: boolean;
   onEdit: (plan: DispatchPlan) => void;
   onSearch: (value: string) => void;
@@ -26,9 +20,6 @@ interface PDPCreationTableProps {
 export function PDPCreationTable({
   data,
   totalCount,
-  pageIndex,
-  pageSize,
-  onPaginationChange,
   isLoading,
   onEdit,
   onSearch,
@@ -45,10 +36,6 @@ export function PDPCreationTable({
       data={data}
       searchKey="dispatch_no"
       isLoading={isLoading}
-      manualPagination
-      pageCount={Math.ceil(totalCount / pageSize)}
-      pagination={{ pageIndex, pageSize }}
-      onPaginationChange={onPaginationChange}
       onSearch={onSearch}
       actionComponent={actionComponent}
       emptyTitle="No Pending Plans"

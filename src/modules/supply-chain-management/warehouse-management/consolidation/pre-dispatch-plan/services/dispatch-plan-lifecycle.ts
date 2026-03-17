@@ -22,13 +22,14 @@ export const dispatchPlanLifecycleService = {
         order_id: number;
         net_amount: number;
         total_amount: number;
+        allocated_amount: number | null;
       }>("/items/sales_order", {
         "filter[order_id][_in]": values.sales_order_ids.join(","),
-        fields: "order_id,net_amount,total_amount",
+        fields: "order_id,net_amount,total_amount,allocated_amount",
         limit: -1,
       });
       totalAmount = (ordersRes.data || []).reduce(
-        (sum, o) => sum + (o.net_amount ?? o.total_amount ?? 0),
+        (sum, o) => sum + (o.allocated_amount ?? o.net_amount ?? o.total_amount ?? 0),
         0,
       );
     }
@@ -89,13 +90,14 @@ export const dispatchPlanLifecycleService = {
         order_id: number;
         net_amount: number;
         total_amount: number;
+        allocated_amount: number | null;
       }>("/items/sales_order", {
         "filter[order_id][_in]": values.sales_order_ids.join(","),
-        fields: "order_id,net_amount,total_amount",
+        fields: "order_id,net_amount,total_amount,allocated_amount",
         limit: -1,
       });
       totalAmount = (ordersRes.data || []).reduce(
-        (sum, o) => sum + (o.net_amount ?? o.total_amount ?? 0),
+        (sum, o) => sum + (o.allocated_amount ?? o.net_amount ?? o.total_amount ?? 0),
         0,
       );
     }

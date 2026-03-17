@@ -26,7 +26,7 @@ async function proxyRequest(req: NextRequest, method: string) {
   if (id) {
     upstreamUrl += `/${id}`;
   } else if (method === "GET") {
-    upstreamUrl += `?sort=type_name&page=${page}&limit=${limit}&meta=filter_count`;
+    upstreamUrl += `?sort=-id&page=${page}&limit=${limit}&meta=filter_count`;
 
     if (search) {
       const filter = {

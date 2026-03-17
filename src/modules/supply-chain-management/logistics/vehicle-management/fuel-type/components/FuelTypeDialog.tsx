@@ -86,11 +86,11 @@ export function FuelTypeDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {isEdit ? "Edit Fuel Type" : "Create Fuel Type"}
+            {isEdit ? "Edit Fuel" : "Create Fuel Type"}
           </DialogTitle>
           <DialogDescription>
             {isEdit
-              ? "Update fuel type details below."
+              ? "Update fuel details below."
               : "Register a new fuel type to the system."}
           </DialogDescription>
         </DialogHeader>
