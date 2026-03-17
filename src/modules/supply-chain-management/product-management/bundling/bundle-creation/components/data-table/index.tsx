@@ -22,6 +22,7 @@ interface BundleCreationTableProps {
   onSubmit: (id: number | string) => void;
   onDelete: (id: number | string) => void;
   onView: (draft: BundleDraft) => void;
+  onEdit: (id: number | string) => void;
   onSearch: (value: string) => void;
   onSelectionChange: (selectedRows: BundleDraft[]) => void;
   actionComponent?: React.ReactNode;
@@ -38,6 +39,7 @@ export function BundleCreationTable({
   onSubmit,
   onDelete,
   onView,
+  onEdit,
   onSearch,
   onSelectionChange,
   actionComponent,
@@ -49,8 +51,9 @@ export function BundleCreationTable({
         onSubmit,
         onDelete,
         onView,
+        onEdit,
       }),
-    [masterData, onSubmit, onDelete, onView],
+    [masterData, onSubmit, onDelete, onView, onEdit],
   );
 
   return (

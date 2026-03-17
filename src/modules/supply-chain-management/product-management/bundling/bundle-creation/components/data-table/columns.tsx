@@ -5,7 +5,7 @@ import { BundleDraft, BundleMasterData } from "../../../types/bundle.schema";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { MoreHorizontal, Send, Trash2, Package } from "lucide-react";
+import { MoreHorizontal, Send, Trash2, Package, Edit } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,6 +19,7 @@ interface ColumnOptions {
   onSubmit: (id: number | string) => void;
   onDelete: (id: number | string) => void;
   onView: (draft: BundleDraft) => void;
+  onEdit: (id: number | string) => void;
 }
 
 /**
@@ -29,6 +30,7 @@ export function getDraftColumns({
   onSubmit,
   onDelete,
   onView,
+  onEdit,
 }: ColumnOptions): ColumnDef<BundleDraft>[] {
   return [
     {
@@ -111,6 +113,11 @@ export function getDraftColumns({
                 <DropdownMenuItem onClick={() => onView(row.original)}>
                   <Package className="mr-2 h-4 w-4" /> View Details
                 </DropdownMenuItem>
+                {(row.original.draft_status === "DRAFT" || row.original.draft_status === "REJECTED") && (
+                  <DropdownMenuItem onClick={() => onEdit(id)}>
+                    <Edit className="mr-2 h-4 w-4" /> Edit Draft
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={() => onSubmit(id)}>
                   <Send className="mr-2 h-4 w-4" /> Submit for Approval
                 </DropdownMenuItem>
