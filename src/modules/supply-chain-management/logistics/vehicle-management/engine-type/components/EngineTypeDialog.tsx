@@ -86,11 +86,11 @@ export function EngineTypeDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {isEdit ? "Edit Engine Type" : "Create Engine Type"}
+            {isEdit ? "Edit Engine" : "Create Engine Type"}
           </DialogTitle>
           <DialogDescription>
             {isEdit
-              ? "Update engine type details below."
+              ? "Update engine details below."
               : "Register a new engine type to the system."}
           </DialogDescription>
         </DialogHeader>
