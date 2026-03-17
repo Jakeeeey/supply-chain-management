@@ -11,8 +11,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useState } from "react";
+import { BundleViewModal } from "../components/modals/bundle-view-modal";
 
 export default function BundleMasterlistPage() {
+  const [selectedBundle, setSelectedBundle] = useState<any>(null);
+  const [isViewOpen, setIsViewOpen] = useState(false);
+
   const {
     approvedData,
     approvedTotal,
@@ -30,6 +35,24 @@ export default function BundleMasterlistPage() {
     setTypeFilter,
     refresh,
   } = useBundles();
+
+  const handleView = (id: number) => {
+    const bundle = (approvedData as any[]).find((b) => b.id === id);
+    setSelectedBundle(bundle || null);
+    setIsViewOpen(true);
+  };
+
+  const fetchDetails = async (id: number | string) => {
+    const bundle = (approvedData as any[]).find((b) => b.id === id);
+    const isApproved = bundle?.status === "APPROVED";
+    const type = isApproved ? "approved" : "draft";
+    const response = await fetch(
+      `/api/scm/product-management/bundling/${id}?type=${type}`,
+    );
+    const result = await response.json();
+    if (result.error) throw new Error(result.error);
+    return result.data;
+  };
 
   if (isLoading && !approvedData.length) return <ModuleSkeleton />;
   if (error) return <ErrorPage message={error} reset={refresh} />;
@@ -81,7 +104,7 @@ export default function BundleMasterlistPage() {
 
       {/* Data Table */}
       <BundleMasterlistTable
-        data={approvedData}
+        data={approvedData as any}
         totalCount={approvedTotal}
         pageIndex={approvedPage}
         pageSize={approvedLimit}
@@ -92,6 +115,20 @@ export default function BundleMasterlistPage() {
         masterData={masterData}
         isLoading={isLoading}
         onSearch={(v: string) => setSearch(v)}
+        onView={handleView}
+      />
+
+      {/* View Modal */}
+      <BundleViewModal
+        open={isViewOpen}
+        onClose={() => {
+          setIsViewOpen(false);
+          setSelectedBundle(null);
+        }}
+        draft={selectedBundle}
+        masterData={masterData}
+        fetchDetails={fetchDetails}
+        previewMode={true}
       />
     </div>
   );

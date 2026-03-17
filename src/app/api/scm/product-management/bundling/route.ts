@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { bundleService } from "@/modules/supply-chain-management/product-management/bundling/bundle-creation/services/bundle";
+import { bundleService } from "@/modules/supply-chain-management/product-management/bundling/services/bundle";
 import { bundleDraftSchema } from "@/modules/supply-chain-management/product-management/bundling/types/bundle.schema";
 
 export const runtime = "nodejs";
@@ -41,12 +41,14 @@ export async function GET(req: NextRequest) {
         draftOffset,
         "DRAFT",
         search,
+        typeFilter ? parseInt(typeFilter) : undefined,
       );
       const pending = await bundleService.fetchDrafts(
         pendingLimit,
         pendingOffset,
         "FOR_APPROVAL",
         search,
+        typeFilter ? parseInt(typeFilter) : undefined,
       );
       const approved = await bundleService.fetchApproved(
         approvedLimit,

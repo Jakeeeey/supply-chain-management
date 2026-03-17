@@ -1,17 +1,24 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { useBundles } from "../hooks/useBundles";
-import { BundleCreationTable } from "./components/data-table";
-import { BundleCreateModal } from "./components/modals/bundle-create-modal";
-import { BundleViewModal } from "../components/modals/bundle-view-modal";
-import { BulkActionsModal } from "./components/modals/bulk-actions-modal";
-import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import ErrorPage from "@/components/shared/ErrorPage";
+import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Plus, Send, Trash2 } from "lucide-react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
+import { BundleViewModal } from "../components/modals/bundle-view-modal";
+import { useBundles } from "../hooks/useBundles";
 import { BundleDraft, BundleDraftFormValues } from "../types/bundle.schema";
+import { BundleCreationTable } from "./components/data-table";
+import { BulkActionsModal } from "./components/modals/bulk-actions-modal";
+import { BundleCreateModal } from "./components/modals/bundle-create-modal";
 
 export default function BundleCreationPage() {
   const {
@@ -25,32 +32,45 @@ export default function BundleCreationPage() {
     isLoading,
     error,
     setSearch,
+    typeFilter,
+    setTypeFilter,
     refresh,
     createDraft,
+    updateDraft,
     deleteDraft,
     submitForApproval,
     bulkSubmitForApproval,
     bulkDeleteDrafts,
     fetchDraftDetails,
   } = useBundles();
-
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editDraftId, setEditDraftId] = useState<number | string | null>(null);
   const [selectedDraft, setSelectedDraft] = useState<BundleDraft | null>(null);
   const [selectedRows, setSelectedRows] = useState<BundleDraft[]>([]);
   const [bulkAction, setBulkAction] = useState<"submit" | "delete" | null>(
     null,
   );
   const [isProcessing, setIsProcessing] = useState(false);
-
-  const handleCreate = async (values: BundleDraftFormValues) => {
+  const handleCreateOrUpdate = async (values: BundleDraftFormValues) => {
     try {
-      await createDraft(values);
-      toast.success("Bundle draft created successfully");
+      if (editDraftId) {
+        await updateDraft(editDraftId, values);
+        toast.success("Bundle draft updated successfully");
+      } else {
+        await createDraft(values);
+        toast.success("Bundle draft created successfully");
+      }
       setIsCreateOpen(false);
+      setEditDraftId(null);
     } catch (err: any) {
-      toast.error(err.message || "Failed to create bundle");
+      toast.error(err.message || "Failed to save bundle");
     }
   };
+
+  const handleEdit = useCallback((id: number | string) => {
+    setEditDraftId(id);
+    setIsCreateOpen(true);
+  }, []);
 
   const handleView = useCallback((draft: BundleDraft) => {
     setSelectedDraft(draft);
@@ -110,6 +130,23 @@ export default function BundleCreationPage() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col items-end">
+        <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <SelectTrigger className=" h-9">
+            <SelectValue placeholder="Bundle Type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            {masterData?.bundleTypes.map((t: any) => (
+              <SelectItem key={t.id} value={t.id.toString()}>
+                {t.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       {/* Data Table */}
       <BundleCreationTable
         data={draftData}
@@ -125,6 +162,7 @@ export default function BundleCreationPage() {
         onSubmit={handleSubmit}
         onDelete={handleDelete}
         onView={handleView}
+        onEdit={handleEdit}
         onSearch={(v: string) => setSearch(v)}
         onSelectionChange={handleSelectionChange}
         actionComponent={
@@ -157,12 +195,17 @@ export default function BundleCreationPage() {
         }
       />
 
-      {/* Create Modal */}
+      {/* Create / Edit Modal */}
       <BundleCreateModal
         open={isCreateOpen}
-        onClose={() => setIsCreateOpen(false)}
-        onSubmit={handleCreate}
+        onClose={() => {
+          setIsCreateOpen(false);
+          setEditDraftId(null);
+        }}
+        onSubmit={handleCreateOrUpdate}
         masterData={masterData}
+        editDraftId={editDraftId}
+        fetchDetails={handleFetchDetails}
       />
 
       {/* Bulk Actions Modal */}

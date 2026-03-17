@@ -23,7 +23,8 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertTriangle, Loader2, Package, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useState, useEffect } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import {
   BundleDraftFormValues,
@@ -39,10 +40,12 @@ interface BundleCreateModalProps {
   onSubmit: (values: BundleDraftFormValues) => Promise<void>;
   masterData: BundleMasterData | null;
   loading?: boolean;
+  editDraftId?: number | string | null;
+  fetchDetails?: (id: number | string) => Promise<any>;
 }
 
 /**
- * Modal for creating a new bundle draft.
+ * Modal for creating or editing a bundle draft.
  * Contains a form with bundle name, type, and a dynamic list of products.
  */
 export function BundleCreateModal({
@@ -51,8 +54,11 @@ export function BundleCreateModal({
   onSubmit,
   masterData,
   loading,
+  editDraftId,
+  fetchDetails,
 }: BundleCreateModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isFetchingDetails, setIsFetchingDetails] = useState(false);
 
   const form = useForm<any>({
     resolver: zodResolver(bundleDraftSchema) as any,
@@ -68,10 +74,39 @@ export function BundleCreateModal({
     name: "items",
   });
 
+  // Fetch and populate form when in edit mode
+  useEffect(() => {
+    if (open && editDraftId && fetchDetails) {
+      setIsFetchingDetails(true);
+      fetchDetails(editDraftId)
+        .then((data) => {
+          form.reset({
+            id: data.id,
+            bundle_name: data.bundle_name || "",
+            bundle_type_id: typeof data.bundle_type_id === "object" ? data.bundle_type_id?.id : data.bundle_type_id,
+            items: data.items?.map((item: any) => ({
+              product_id: item.product_id?.product_id || item.product_id?.id || item.product_id,
+              quantity: Math.floor(Number(item.quantity)) || 1,
+            })) || [{ product_id: 0, quantity: 1 }],
+          });
+        })
+        .catch((err) => {
+          console.error("Failed to load draft details", err);
+        })
+        .finally(() => setIsFetchingDetails(false));
+    } else if (open && !editDraftId) {
+      form.reset({
+        bundle_name: "",
+        bundle_type_id: 0,
+        items: [{ product_id: 0, quantity: 1 }],
+      });
+    }
+  }, [open, editDraftId, fetchDetails, form]);
+
   const handleSubmit = async (values: BundleDraftFormValues) => {
     setIsSubmitting(true);
     try {
-      await onSubmit(values);
+      await onSubmit({ ...values, id: editDraftId ? Number(editDraftId) : undefined });
       form.reset();
     } finally {
       setIsSubmitting(false);
@@ -95,7 +130,7 @@ export function BundleCreateModal({
       <DialogContent className="w-full sm:max-w-4xl max-h-[90vh] overflow-y-auto bg-background">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Package className="h-5 w-5" /> Create New Bundle
+            <Package className="h-5 w-5" /> {editDraftId ? "Edit Bundle Draft" : "Create New Bundle"}
           </DialogTitle>
         </DialogHeader>
 
@@ -104,7 +139,40 @@ export function BundleCreateModal({
             onSubmit={form.handleSubmit(handleSubmit)}
             className="flex flex-col flex-1 min-h-0 gap-4"
           >
-            <ScrollArea className="flex-1 min-h-0">
+            {isFetchingDetails ? (
+              <div className="space-y-6 py-4 animate-in fade-in duration-500">
+                <div className="space-y-4 px-6">
+                  {/* Bundle Info Section Skeleton */}
+                  <div className="space-y-2">
+                    <Skeleton className="h-3 w-24" />
+                    <Skeleton className="h-10 w-full rounded-md" />
+                  </div>
+                  <div className="space-y-2">
+                    <Skeleton className="h-3 w-24" />
+                    <Skeleton className="h-10 w-full rounded-md" />
+                  </div>
+                </div>
+
+                <div className="space-y-4 px-6 pt-4 border-t">
+                  {/* Products Section Skeleton */}
+                  {[1, 2].map((i) => (
+                    <div key={i} className="flex gap-2 items-end">
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-3 w-16" />
+                        <Skeleton className="h-10 w-full rounded-md" />
+                      </div>
+                      <div className="w-16 space-y-2">
+                        <Skeleton className="h-3 w-8" />
+                        <Skeleton className="h-10 w-full rounded-md" />
+                      </div>
+                      <Skeleton className="h-9 w-9 rounded-md" />
+                    </div>
+                  ))}
+                  <Skeleton className="h-10 w-full rounded-md mt-2" />
+                </div>
+              </div>
+            ) : (
+              <ScrollArea className="flex-1 min-h-0">
               <div>
                 <Card className="border-none shadow-none bg-background">
                   <CardContent className="space-y-4">
@@ -220,7 +288,31 @@ export function BundleCreateModal({
                             />
                           </div>
 
-                          <div className="w-16 shrink-0">
+                          <div className="w-24">
+                            <FormItem>
+                              <FormLabel className="text-muted-foreground uppercase text-[10px] font-bold tracking-wider">
+                                Unit
+                              </FormLabel>
+                              <FormControl>
+                                <Input
+                                  value={
+                                    masterData?.products?.find(
+                                      (p) =>
+                                        Number(p.product_id) ===
+                                        Number(
+                                          form.watch(`items.${index}.product_id`),
+                                        ),
+                                    )?.unit_name || "-"
+                                  }
+                                  readOnly
+                                  disabled
+                                  className="bg-muted font-medium text-xs text-center px-1"
+                                />
+                              </FormControl>
+                            </FormItem>
+                          </div>
+
+                          <div className="w-20 shrink-0">
                             <FormField
                               control={form.control}
                               name={`items.${index}.quantity`}
@@ -233,6 +325,7 @@ export function BundleCreateModal({
                                     <Input
                                       type="number"
                                       min={1}
+                                      step="1"
                                       {...field}
                                       onChange={(e) =>
                                         field.onChange(
@@ -288,6 +381,7 @@ export function BundleCreateModal({
                 </Alert>
               )}
             </ScrollArea>
+            )}
 
             <DialogFooter className="shrink-0 pt-2 border-t">
               <Button
@@ -297,13 +391,15 @@ export function BundleCreateModal({
                   form.reset();
                   onClose();
                 }}
-                disabled={isSubmitting || loading}
+                disabled={isSubmitting || loading || isFetchingDetails}
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting || loading}>
+              <Button type="submit" disabled={isSubmitting || loading || isFetchingDetails}>
                 {isSubmitting ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
+                ) : editDraftId ? (
+                  "Save Changes"
                 ) : (
                   "Create"
                 )}
