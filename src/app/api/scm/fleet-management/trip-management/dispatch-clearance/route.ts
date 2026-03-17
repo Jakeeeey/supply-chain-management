@@ -293,14 +293,14 @@ export async function POST(request: Request) {
                 
                 if (inv.missingQtys && Object.keys(inv.missingQtys).length > 0) {
                     Object.entries(inv.missingQtys).forEach(([detailId, missingQty]: [any, any]) => {
-                        const original = originalDetails.find((d: any) => d.id === Number(detailId));
+                        const original = originalDetails.find((d: any) => (d.detail_id || d.id) === Number(detailId));
                         
                         let unitPrice = 0;
                         if (original) {
-                            if (original.net_total && original.qty) {
-                                unitPrice = Number(original.net_total) / Number(original.qty);
-                            } else if (original.price) {
-                                unitPrice = Number(original.price);
+                            if (original.total_amount && original.quantity) {
+                                unitPrice = Number(original.total_amount) / Number(original.quantity);
+                            } else if (original.unit_price) {
+                                unitPrice = Number(original.unit_price);
                             }
                         }
 
@@ -311,7 +311,7 @@ export async function POST(request: Request) {
                             sales_invoice_detail_id: Number(detailId),
                             // unfulfilled_sales_transaction_id will be appended below
                             missing_quantity: missingQty,
-                            invoice_quantity: original?.qty || 0,
+                            invoice_quantity: original?.quantity || 0,
                             total_amount: missingAmount
                         });
                     });

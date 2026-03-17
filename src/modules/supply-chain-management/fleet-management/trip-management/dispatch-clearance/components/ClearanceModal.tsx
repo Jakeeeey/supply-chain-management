@@ -82,28 +82,65 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
         }
     }, [isOpen, dispatch.invoices]);
 
+    const isRowCheckable = (inv: ReconciliationRow) => {
+        if (!inv.status) return false;
+        
+        if (inv.status === 'Unfulfilled' || inv.status === 'Fulfilled with Concerns') {
+            const hasMissingQtys = inv.missingQtys && Object.keys(inv.missingQtys).length > 0;
+            const hasScannedQtys = inv.scannedQtys && Object.keys(inv.scannedQtys).length > 0;
+            return !!(hasMissingQtys || hasScannedQtys);
+        }
+        
+        return true;
+    };
+
     const handleSelectAll = (checked: boolean) => {
         if (checked) {
-            setSelectedIds(new Set(invoices.map(inv => inv.id)));
+            const checkableIds = invoices.filter(isRowCheckable).map(inv => inv.id);
+            setSelectedIds(new Set(checkableIds));
         } else {
             setSelectedIds(new Set());
         }
     };
 
-    const handleToggleRow = (id: number) => {
+    const handleToggleRow = (inv: ReconciliationRow) => {
+        if (!isRowCheckable(inv)) {
+            toast.error("Please define a status and complete inner modal inputs before checking.");
+            return;
+        }
         setSelectedIds(prev => {
             const next = new Set(prev);
-            if (next.has(id)) {
-                next.delete(id);
+            if (next.has(inv.id)) {
+                next.delete(inv.id);
             } else {
-                next.add(id);
+                next.add(inv.id);
             }
             return next;
         });
     };
 
     const handleStatusChange = (id: number, newStatus: ReconciliationRow['status']) => {
-        setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, status: newStatus } : inv));
+        setInvoices(prev => prev.map(inv => {
+            if (inv.id === id) {
+                // If status changed, we clear reconciliation data to force fresh input
+                const statusChanged = inv.status !== newStatus;
+                return { 
+                    ...inv, 
+                    status: newStatus,
+                    missingQtys: statusChanged ? {} : inv.missingQtys,
+                    scannedQtys: statusChanged ? {} : inv.scannedQtys,
+                    remarks: statusChanged ? '' : inv.remarks
+                };
+            }
+            return inv;
+        }));
+        
+        // Always uncheck when status is manually changed via dropdown
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+        });
     };
 
     const handleConfirmClearance = async () => {
@@ -127,6 +164,12 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
     const handleRowDoubleClick = (inv: ReconciliationRow) => {
         setActiveReconciliation(inv);
         setIsDetailOpen(true);
+        // Uncheck while editing/reviewing to ensure they explicitly save/re-validate
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            next.delete(inv.id);
+            return next;
+        });
     };
 
     const handleConfirmProductReconciliation = (id: number, status: string, remarks: string, missingQtys: Record<string | number, number>, scannedQtys: Record<string | number, number>) => {
@@ -207,8 +250,8 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                         <CardHeader className="py-4 px-6 bg-slate-50/50 border-b border-slate-100">
                             <div>
                                 <h3 className="text-sm font-bold text-slate-900">Invoice Reconciliation Table</h3>
-                                <p className="text-xs text-indigo-600 mt-1">
-                                    Select status and mark items as cleared. Double-click a row to add remarks/details.
+                                <p className="text-l text-red-600 mt-1">
+                                    Select status and mark items as cleared. Click a row to add remarks/details.
                                 </p>
                             </div>
                         </CardHeader>
@@ -218,8 +261,9 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                                     <TableRow className="border-slate-100">
                                         <TableHead className="w-[50px]">
                                             <Checkbox
-                                                checked={invoices.length > 0 && selectedIds.size === invoices.length}
+                                                checked={invoices.length > 0 && invoices.every(isRowCheckable) && selectedIds.size === invoices.filter(isRowCheckable).length && invoices.filter(isRowCheckable).length > 0}
                                                 onCheckedChange={(checked) => handleSelectAll(!!checked)}
+                                                disabled={invoices.filter(isRowCheckable).length === 0}
                                             />
                                         </TableHead>
                                         <TableHead className="text-slate-500 font-semibold text-xs py-3">Status</TableHead>
@@ -255,8 +299,9 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                                             >
                                                 <TableCell onClick={(e) => e.stopPropagation()}>
                                                     <Checkbox
+                                                        disabled={!isRowCheckable(inv)}
                                                         checked={selectedIds.has(inv.id)}
-                                                        onCheckedChange={() => handleToggleRow(inv.id)}
+                                                        onCheckedChange={() => handleToggleRow(inv)}
                                                     />
                                                 </TableCell>
                                                 <TableCell onClick={(e) => e.stopPropagation()}>
@@ -264,8 +309,8 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                                                         value={inv.status}
                                                         onValueChange={(val: any) => handleStatusChange(inv.id, val)}
                                                     >
-                                                        <SelectTrigger className={`w-[190px] h-9 border-none text-xs font-bold ring-1 ring-inset ${STATUS_VARIANTS[inv.status]}`}>
-                                                            <SelectValue />
+                                                        <SelectTrigger className={`w-[190px] h-9 border-none text-xs font-bold ring-1 ring-inset ${STATUS_VARIANTS[inv.status] || 'bg-slate-100 text-slate-400 border-slate-200'}`}>
+                                                            <SelectValue placeholder="Select Status" />
                                                         </SelectTrigger>
                                                         <SelectContent className="rounded-xl border-slate-200 shadow-xl overflow-hidden p-1">
                                                             <SelectItem value="Fulfilled" className="rounded-lg mb-1 focus:bg-emerald-50 focus:text-emerald-700 font-bold hover:bg-emerald-50 data-[state=checked]:bg-emerald-600 data-[state=checked]:text-white">
