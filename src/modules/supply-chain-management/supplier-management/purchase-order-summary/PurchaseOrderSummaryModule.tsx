@@ -55,6 +55,7 @@ export default function PurchaseOrderSummaryModule({
   const [dateTo, setDateTo] = useState("");
   
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
 
   const getInventoryStatusColor = (status: string) => {
@@ -97,6 +98,22 @@ export default function PurchaseOrderSummaryModule({
     });
   }, [searchTerm, filterSupplier, filterInvStatus, filterPayStatus, filterTransType, poData, dateFrom, dateTo, suppliers]);
 
+  const previewTotals = useMemo(() => {
+    return filteredData.reduce(
+      (acc, po) => {
+        const gross = Number(po.gross_amount ?? po.grossAmount ?? po.subtotal ?? 0);
+        const disc = Number(po.discounted_amount ?? po.discountAmount ?? po.discount_amount ?? po.discount_value ?? 0);
+        const net = Number(po.total_amount ?? po.total ?? po.net_amount ?? 0);
+        return {
+          gross: acc.gross + gross,
+          discount: acc.discount + disc,
+          net: acc.net + net,
+        };
+      },
+      { gross: 0, discount: 0, net: 0 }
+    );
+  }, [filteredData]);
+
   const totalPages = Math.ceil(filteredData.length / pageSize) || 1;
   const currentData = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
@@ -127,7 +144,7 @@ export default function PurchaseOrderSummaryModule({
             <Button 
                 variant="outline" 
                 size="sm" 
-                onClick={() => generatePOSummaryPDF(filteredData, suppliers)}
+                onClick={() => setIsPreviewOpen(true)}
                 className="h-8 text-[10px] font-bold uppercase gap-1.5 border-primary/20 text-primary hover:bg-primary/5"
             >
                 <Printer className="w-3.5 h-3.5" /> Print Summary
@@ -404,6 +421,109 @@ export default function PurchaseOrderSummaryModule({
                  </div>
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* PRINT PREVIEW MODAL */}
+      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+        <DialogContent className="sm:max-w-6xl max-w-[95vw] max-h-[85vh] flex flex-col">
+          <DialogHeader className="shrink-0">
+            <DialogTitle className="text-lg font-bold flex items-center gap-2">
+              <Printer className="w-5 h-5 text-primary" />
+              Print Preview
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-auto py-4">
+             <div className="border border-border rounded-lg bg-card overflow-hidden shadow-sm">
+               <Table>
+                 <TableHeader className="bg-muted/40 sticky top-0 z-10">
+                   <TableRow className="hover:bg-transparent border-b border-border">
+                     <TableHead className="font-bold text-foreground h-10 text-[10px] uppercase tracking-wider">Date</TableHead>
+                     <TableHead className="font-bold text-foreground text-[10px] uppercase tracking-wider">Supplier</TableHead>
+                     <TableHead className="font-bold text-foreground text-[10px] uppercase tracking-wider">PO #</TableHead>
+                     <TableHead className="font-bold text-foreground text-[10px] uppercase tracking-wider">Remarks</TableHead>
+                     <TableHead className="font-bold text-foreground text-[10px] uppercase tracking-wider text-right">Gross Amount</TableHead>
+                     <TableHead className="font-bold text-foreground text-[10px] uppercase tracking-wider text-right">Discount</TableHead>
+                     <TableHead className="font-bold text-foreground text-[10px] uppercase tracking-wider text-right">Net Amount</TableHead>
+                   </TableRow>
+                 </TableHeader>
+                 <TableBody>
+                   {filteredData.length > 0 ? (
+                     filteredData.map((po) => {
+                       const supplierName = suppliers.find(s => s.id === po.supplier_name)?.supplier_name || po.supplier_name;
+                       const gross = Number(po.gross_amount ?? po.grossAmount ?? po.subtotal ?? 0);
+                       const disc = Number(po.discounted_amount ?? po.discountAmount ?? po.discount_amount ?? po.discount_value ?? 0);
+                       const net = Number(po.total_amount ?? po.total ?? po.net_amount ?? 0);
+
+                       return (
+                         <TableRow key={po.purchase_order_id} className="border-border">
+                           <TableCell className="text-[10px] text-muted-foreground">{po.date || "--"}</TableCell>
+                           <TableCell className="text-[10px] font-semibold text-foreground uppercase">{supplierName}</TableCell>
+                           <TableCell className="text-[10px] text-muted-foreground">{po.purchase_order_no || "--"}</TableCell>
+                           <TableCell className="text-[10px] text-muted-foreground italic">{po.remark || "--"}</TableCell>
+                           <TableCell className="text-right text-[10px] font-mono text-muted-foreground">
+                             {gross.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                           </TableCell>
+                           <TableCell className="text-right text-[10px] font-mono text-muted-foreground">
+                             {disc.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                           </TableCell>
+                           <TableCell className="text-right text-[10px] font-bold font-mono text-foreground">
+                             {net.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                           </TableCell>
+                         </TableRow>
+                       );
+                     })
+                   ) : (
+                     <TableRow>
+                       <TableCell colSpan={7} className="h-24 text-center text-muted-foreground text-xs italic">
+                         No data to print.
+                       </TableCell>
+                     </TableRow>
+                   )}
+                   {filteredData.length > 0 && (
+                     <TableRow className="bg-muted/20 hover:bg-muted/20">
+                       <TableCell colSpan={4} className="text-right text-[10px] font-bold uppercase tracking-wider text-foreground">
+                         Total
+                       </TableCell>
+                       <TableCell className="text-right text-[10px] font-bold font-mono text-foreground">
+                         {previewTotals.gross.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                       </TableCell>
+                       <TableCell className="text-right text-[10px] font-bold font-mono text-foreground">
+                         {previewTotals.discount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                       </TableCell>
+                       <TableCell className="text-right text-[10px] font-bold font-mono text-foreground">
+                         {previewTotals.net.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                       </TableCell>
+                     </TableRow>
+                   )}
+                 </TableBody>
+               </Table>
+             </div>
+          </div>
+
+          <div className="flex justify-end gap-3 shrink-0 pt-2 pb-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsPreviewOpen(false)}
+              className="text-xs font-semibold"
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={filteredData.length === 0}
+              onClick={() => {
+                generatePOSummaryPDF(filteredData, suppliers);
+                setIsPreviewOpen(false);
+              }}
+              className="text-xs font-semibold gap-1.5"
+            >
+              <Printer className="w-3.5 h-3.5 mb-0.5" />
+              Confirm & Print
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
