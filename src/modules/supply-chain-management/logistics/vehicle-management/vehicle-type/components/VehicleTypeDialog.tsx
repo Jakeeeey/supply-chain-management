@@ -70,7 +70,11 @@ export function VehicleTypeDialog({
       onSuccess();
       onOpenChange(false);
     } catch (error: any) {
-      toast.error(error.message || "Something went wrong");
+      if (error.message?.includes("unique") || error.message?.includes("UNIQUE")) {
+        toast.error("This vehicle type name already exists.");
+      } else {
+        toast.error(error.message || "Something went wrong");
+      }
     }
   };
 
