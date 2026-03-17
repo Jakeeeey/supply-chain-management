@@ -95,9 +95,10 @@ export default function UnitOfMeasurementModule() {
       setError(null);
       const res = await listUnits(1, -1); // Fetch all
       setData(res.data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to load units", err);
-      setError(err.message || "Failed to load units.");
+      const message = err instanceof Error ? err.message : "Failed to load units.";
+      setError(message);
       toast.error("Failed to load units");
     } finally {
       setLoading(false);

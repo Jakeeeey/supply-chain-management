@@ -45,7 +45,7 @@ export function UnitDialog({
 
   const form = useForm<UnitFormValues>({
     // 🔴 THE NUCLEAR FIX: Casting resolver to 'any' stops the type conflict
-    resolver: zodResolver(unitSchema) as any,
+    resolver: zodResolver(unitSchema),
     defaultValues: {
       unit_name: "",
       unit_shortcut: "",
@@ -77,11 +77,12 @@ export function UnitDialog({
       }
       onSuccess();
       onOpenChange(false);
-    } catch (error: any) {
-      if (error.message.includes("unique")) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Operation failed";
+      if (message.includes("unique")) {
         toast.error("This Unit Name or Shortcut already exists.");
       } else {
-        toast.error(error.message || "Operation failed");
+        toast.error(message);
       }
     }
   };
@@ -100,8 +101,7 @@ export function UnitDialog({
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <FormField
-                // 🔴 FIX: Casting control to 'any' to satisfy shadcn FormField
-                control={form.control as any}
+                control={form.control}
                 name="unit_name"
                 render={({ field }) => (
                   <FormItem>
@@ -117,7 +117,7 @@ export function UnitDialog({
               />
 
               <FormField
-                control={form.control as any}
+                control={form.control}
                 name="unit_shortcut"
                 render={({ field }) => (
                   <FormItem>
@@ -134,7 +134,7 @@ export function UnitDialog({
             </div>
 
             <FormField
-              control={form.control as any}
+              control={form.control}
               name="sku_code"
               render={({ field }) => (
                 <FormItem>
@@ -148,7 +148,7 @@ export function UnitDialog({
             />
 
             <FormField
-              control={form.control as any}
+              control={form.control}
               name="order"
               render={({ field }) => (
                 <FormItem>
@@ -159,7 +159,7 @@ export function UnitDialog({
                       placeholder="0"
                       {...field}
                       // Handle number conversion manually
-                      onChange={(e) => field.onChange(e.target.value)}
+                      onChange={(e) => field.onChange(Number(e.target.value))}
                     />
                   </FormControl>
                   <FormMessage />
