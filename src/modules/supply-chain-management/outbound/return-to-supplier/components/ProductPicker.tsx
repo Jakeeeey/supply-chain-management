@@ -219,7 +219,11 @@ export function ProductPicker({
                             <div className="flex-1 min-w-0 mr-4">
                               <div className="flex items-baseline gap-2 mb-1">
                                 <span className="font-extrabold text-foreground">
-                                  ₱ {variant.price.toLocaleString()}
+                                  ₱{" "}
+                                  {variant.price.toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })}
                                 </span>
                                 <span className="text-xs text-muted-foreground font-medium">
                                   / {variant.unit}
@@ -330,7 +334,14 @@ export function ProductPicker({
 
                       <div className="flex items-center justify-between pt-2 border-t mt-2">
                         <div className="font-bold text-sm">
-                          ₱ {(item.customPrice || item.price).toLocaleString()}
+                          ₱{" "}
+                          {(item.customPrice || item.price).toLocaleString(
+                            undefined,
+                            {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            },
+                          )}
                         </div>
 
                         <div className="flex items-center bg-muted/30 rounded-md border">
@@ -393,6 +404,7 @@ export function ProductPicker({
               ₱{" "}
               {totalAmount.toLocaleString(undefined, {
                 minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
               })}
             </span>
           </div>

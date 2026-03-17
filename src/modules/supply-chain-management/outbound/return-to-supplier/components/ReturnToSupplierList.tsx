@@ -113,6 +113,7 @@ const columns: ColumnDef<ReturnToSupplier>[] = [
         ₱{" "}
         {row.original.grossAmount.toLocaleString(undefined, {
           minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
         })}
       </div>
     ),
@@ -124,7 +125,7 @@ const columns: ColumnDef<ReturnToSupplier>[] = [
     cell: ({ row }) => (
       <div className="text-right text-sm">
         {row.original.discountAmount > 0
-          ? `₱ ${row.original.discountAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+          ? `₱ ${row.original.discountAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
           : "-"}
       </div>
     ),
@@ -138,6 +139,7 @@ const columns: ColumnDef<ReturnToSupplier>[] = [
         ₱{" "}
         {row.original.totalAmount.toLocaleString(undefined, {
           minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
         })}
       </div>
     ),

@@ -184,6 +184,7 @@ export function ReturnReviewPanel({
                         ₱{" "}
                         {unitPrice.toLocaleString(undefined, {
                           minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
                         })}
                       </div>
                     </TableCell>
@@ -291,6 +292,7 @@ export function ReturnReviewPanel({
                       ₱{" "}
                       {rowTotal.toLocaleString(undefined, {
                         minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
                       })}
                     </TableCell>
                     {!readOnly && (
@@ -353,6 +355,7 @@ export function ReturnReviewPanel({
                   ₱{" "}
                   {grossAmount.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
                   })}
                 </span>
               </div>
@@ -362,6 +365,7 @@ export function ReturnReviewPanel({
                   - ₱{" "}
                   {totalDiscountAmount.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
                   })}
                 </span>
               </div>
@@ -376,6 +380,7 @@ export function ReturnReviewPanel({
                   ₱{" "}
                   {totalAmount.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
                   })}
                 </span>
               </div>

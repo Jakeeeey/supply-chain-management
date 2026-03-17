@@ -135,6 +135,7 @@ export const PrintableReturnSlip = React.forwardRef<HTMLDivElement, Props>(
                   <td className="py-1 px-2 text-right text-gray-600 border-r border-gray-200">
                     {item.price.toLocaleString(undefined, {
                       minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
                     })}
                   </td>
                   <td className="py-1 px-2 text-center text-gray-600 border-r border-gray-200">
@@ -147,6 +148,7 @@ export const PrintableReturnSlip = React.forwardRef<HTMLDivElement, Props>(
                   <td className="py-1 px-2 text-right font-bold text-gray-900">
                     {item.total.toLocaleString(undefined, {
                       minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
                     })}
                   </td>
                 </tr>
@@ -184,6 +186,7 @@ export const PrintableReturnSlip = React.forwardRef<HTMLDivElement, Props>(
                 <span className="font-bold text-gray-900">
                   {grossAmount.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
                   })}
                 </span>
               </p>
@@ -193,6 +196,7 @@ export const PrintableReturnSlip = React.forwardRef<HTMLDivElement, Props>(
                   -{" "}
                   {totalDiscount.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
                   })}
                 </span>
               </p>
@@ -204,6 +208,7 @@ export const PrintableReturnSlip = React.forwardRef<HTMLDivElement, Props>(
                 <span className="font-bold text-black">
                   {netAmount.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
                   })}
                 </span>
               </p>

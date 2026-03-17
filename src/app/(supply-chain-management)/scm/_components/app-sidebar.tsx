@@ -106,13 +106,48 @@ const data = {
             ],
         },
         {
+            title: "Inbound",
+            url: "#",
+            icon: Package,
+            items: [
+                {
+                    title: "Receiving",
+                    url: "#",
+                },
+                {
+                    title: "Rejected Upon Delivery",
+                    url: "#",
+                },
+                {
+                    title: "Reserve Logistics",
+                    url: "#",
+                },
+                {
+                    title: "RTV Sales Return",
+                    url: "#",
+                },
+            ],
+        },
+        {
             title: "Outbound",
             url: "#",
             icon: Package,
             items: [
                 {
+                    title: "Good Stock",
+                    url: "#",
+                },
+                {
+                    title: "Bad Stock",
+                    url: "#",
+                },
+                {
                     title: "Return to Supplier",
                     url: "/scm/outbound/return-to-supplier",
+                },
+                {
+                    title: "Consolidation",
+                    url: "#",
                 },
             ],
         },
