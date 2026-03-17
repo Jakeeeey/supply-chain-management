@@ -15,6 +15,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useGlobalScanner } from "../hooks/useGlobalScanner";
+import { detectScanType } from "../utils/barcodeUtils";
 import type { CartItem } from "../types/rts.schema";
 
 interface ProductPickerProps {
@@ -26,6 +28,7 @@ interface ProductPickerProps {
   onRemove: (id: string) => void;
   onUpdateQty: (id: string, qty: number) => void;
   onClearAll: () => void;
+  onBarcodeScan?: (barcode: string) => void;
   isLoading?: boolean; // ✅ NEW PROP
 }
 
@@ -59,9 +62,27 @@ export function ProductPicker({
   onRemove,
   onUpdateQty,
   onClearAll,
+  onBarcodeScan,
   isLoading = false, // ✅ Defaults to false
 }: ProductPickerProps) {
   const [search, setSearch] = useState("");
+  const [lastScanned, setLastScanned] = useState("");
+
+  // Global scanner capture: routes scans to the parent handlers
+  // and displays the value visually in the read-only box.
+  useGlobalScanner({
+    enabled: isVisible,
+    onScan: (val) => {
+      // Logic for picker: only show and process BARCODES here
+      // RFIDs are handled by the main modal's RFID input field
+      if (detectScanType(val) === "barcode") {
+        setLastScanned(val);
+        if (onBarcodeScan) onBarcodeScan(val);
+        // Auto-clear display after 2s
+        setTimeout(() => setLastScanned(""), 2000);
+      }
+    },
+  });
 
   const filteredGroups = useMemo(() => {
     if (!search) return products;
@@ -137,9 +158,10 @@ export function ProductPicker({
                 <ScanBarcode className="w-4 h-4" />
               </div>
               <Input
-                placeholder="Scan barcode..."
-                className="pl-9 bg-background"
-                disabled
+                placeholder="Scan Barcode..."
+                className="pl-9 bg-muted/30 cursor-default font-mono text-xs"
+                value={lastScanned}
+                readOnly
               />
             </div>
           </div>

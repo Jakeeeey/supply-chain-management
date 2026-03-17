@@ -235,6 +235,7 @@ export interface InventoryRecord {
   running_inventory: number; // Floored display stock
   familyId: number; // parent_id or self
   price: number; // cost_per_unit from products
+  product_barcode?: string;
 }
 
 // =============================================================================

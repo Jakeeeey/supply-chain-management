@@ -206,6 +206,7 @@ export async function fetchInventory(
           running_inventory: displayStock,
           familyId: Number(variant.familyId),
           price: priceMap.get(Number(variant.productId)) ?? 0,
+          product_barcode: variant.productBarcode ?? undefined,
         });
       });
     });
