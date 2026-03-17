@@ -221,7 +221,6 @@ const data = {
                         },
                     ],
                 },
-                { title: "Driver Management", url: "#" },
                 {
                     title: "Trip Management",
                     url: "#",
@@ -292,7 +291,14 @@ const data = {
                         },
                     ],
                 },
-                { title: "Fleet Inventory", url: "#" },
+                {
+                    title: "Driver Management",
+                    url: "/scm/fleet-management/driver-management",
+                },
+                {
+                    title: "Fleet Inventory",
+                    url: "#",
+                },
             ],
         },
         {
