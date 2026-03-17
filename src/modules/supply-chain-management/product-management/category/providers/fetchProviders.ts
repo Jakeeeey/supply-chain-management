@@ -50,7 +50,7 @@ export async function createCategory(
 ): Promise<CategoryApiRow> {
   const cleanPayload = { ...payload };
   if ("category_id" in cleanPayload) {
-    delete (cleanPayload as any).category_id;
+    delete (cleanPayload as Record<string, unknown>).category_id;
   }
 
   const res = await fetch(API_BASE, {

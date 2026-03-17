@@ -44,7 +44,7 @@ export function BrandDialog({
   const isEdit = !!selectedBrand;
 
   const form = useForm<BrandFormValues>({
-    resolver: zodResolver(brandSchema) as any, // ✅ Type safety fix
+    resolver: zodResolver(brandSchema),
     defaultValues: {
       brand_name: "",
       sku_code: "", // ✅ Default value
@@ -71,11 +71,12 @@ export function BrandDialog({
       }
       onSuccess();
       onOpenChange(false);
-    } catch (error: any) {
-      if (error.message.includes("unique")) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Something went wrong";
+      if (message.includes("unique")) {
         toast.error("This Brand Name or Code already exists.");
       } else {
-        toast.error(error.message || "Something went wrong");
+        toast.error(message);
       }
     }
   };
@@ -95,7 +96,7 @@ export function BrandDialog({
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
-              control={form.control as any}
+              control={form.control}
               name="brand_name"
               render={({ field }) => (
                 <FormItem>
@@ -112,7 +113,7 @@ export function BrandDialog({
 
             {/* ✅ Added SKU Code Field */}
             <FormField
-              control={form.control as any}
+              control={form.control}
               name="sku_code"
               render={({ field }) => (
                 <FormItem>
