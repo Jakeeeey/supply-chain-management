@@ -8,10 +8,10 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { NavUser } from "../../_components/nav-user";
+import { NavUser } from "../../../_components/nav-user";
 
 import { cookies } from "next/headers";
-import PhysicalInventoryWorkspaceClient from "./PhysicalInventoryWorkspaceClient";
+import PhysicalInventoryOffsettingWorkspaceClient from "./PhysicalInventoryOffsettingWorkspaceClient";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,12 +25,18 @@ function decodeJwtPayload(token: string): JwtPayload | null {
         const parts = token.split(".");
         if (parts.length < 2) return null;
 
-        const p = parts[1];
-        const b64 = p.replace(/-/g, "+").replace(/_/g, "/");
+        const payloadPart = parts[1];
+        const b64 = payloadPart.replace(/-/g, "+").replace(/_/g, "/");
         const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
 
         const json = Buffer.from(padded, "base64").toString("utf8");
-        return JSON.parse(json) as JwtPayload;
+        const parsed: unknown = JSON.parse(json);
+
+        if (parsed && typeof parsed === "object") {
+            return parsed as JwtPayload;
+        }
+
+        return null;
     } catch {
         return null;
     }
@@ -39,8 +45,8 @@ function decodeJwtPayload(token: string): JwtPayload | null {
 function pickString(obj: JwtPayload | null, keys: string[]): string {
     if (!obj) return "";
 
-    for (const k of keys) {
-        const value = obj[k];
+    for (const key of keys) {
+        const value = obj[key];
         if (typeof value === "string" && value.trim()) {
             return value.trim();
         }
@@ -59,6 +65,7 @@ function buildHeaderUserFromToken(token: string | null | undefined) {
         "firstname",
         "first_name",
     ]);
+
     const last = pickString(payload, [
         "LastName",
         "Lastname",
@@ -66,6 +73,7 @@ function buildHeaderUserFromToken(token: string | null | undefined) {
         "lastname",
         "last_name",
     ]);
+
     const email = pickString(payload, ["email", "Email"]);
 
     const name = [first, last].filter(Boolean).join(" ") || email || "User";
@@ -99,18 +107,14 @@ export default async function Page() {
                             <BreadcrumbList>
                                 <BreadcrumbItem className="hidden md:block">
                                     <BreadcrumbLink href="#">
-                                        Supply Chain Management
-                                    </BreadcrumbLink>
-                                </BreadcrumbItem>
-                                <BreadcrumbSeparator className="hidden md:block" />
-                                <BreadcrumbItem className="hidden md:block">
-                                    <BreadcrumbLink href="#">
                                         Physical Inventory Management
                                     </BreadcrumbLink>
                                 </BreadcrumbItem>
                                 <BreadcrumbSeparator className="hidden md:block" />
                                 <BreadcrumbItem>
-                                    <BreadcrumbPage>Physical Inventory List</BreadcrumbPage>
+                                    <BreadcrumbPage>
+                                        Physical Inventory Offsetting
+                                    </BreadcrumbPage>
                                 </BreadcrumbItem>
                             </BreadcrumbList>
                         </Breadcrumb>
@@ -123,7 +127,7 @@ export default async function Page() {
             </header>
 
             <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-2 sm:p-4">
-                <PhysicalInventoryWorkspaceClient />
+                <PhysicalInventoryOffsettingWorkspaceClient />
             </main>
         </div>
     );
