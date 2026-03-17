@@ -14,9 +14,13 @@ import { DispatchPlanMasterData } from "../../types/dispatch-plan.schema";
 
 interface PDPGlobalFilterProps {
   masterData: DispatchPlanMasterData | null;
+  showStatus?: boolean;
 }
 
-export function PDPGlobalFilter({ masterData }: PDPGlobalFilterProps) {
+export function PDPGlobalFilter({
+  masterData,
+  showStatus = true,
+}: PDPGlobalFilterProps) {
   const { clusterId, setClusterId, status, setStatus, resetFilters } =
     usePDPFilter();
 
@@ -42,22 +46,24 @@ export function PDPGlobalFilter({ masterData }: PDPGlobalFilterProps) {
         </Select>
 
         {/* Status Filter */}
-        <Select
-          value={status || "all"}
-          onValueChange={(v) => setStatus(v === "all" ? null : v)}
-        >
-          <SelectTrigger className="h-8 w-[150px] text-xs font-medium">
-            <SelectValue placeholder="All Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="Pending">Pending</SelectItem>
-            <SelectItem value="Approved">Approved</SelectItem>
-            <SelectItem value="Picking">Picking</SelectItem>
-            <SelectItem value="Picked">Picked</SelectItem>
-            <SelectItem value="Dispatched">Dispatched</SelectItem>
-          </SelectContent>
-        </Select>
+        {showStatus && (
+          <Select
+            value={status || "all"}
+            onValueChange={(v) => setStatus(v === "all" ? null : v)}
+          >
+            <SelectTrigger className="h-8 w-[150px] text-xs font-medium">
+              <SelectValue placeholder="All Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="Pending">Pending</SelectItem>
+              <SelectItem value="Approved">Approved</SelectItem>
+              <SelectItem value="Picking">Picking</SelectItem>
+              <SelectItem value="Picked">Picked</SelectItem>
+              <SelectItem value="Dispatched">Dispatched</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
 
         <Button
           variant="ghost"

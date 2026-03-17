@@ -10,12 +10,15 @@ import {
     Package,
     Route,
     Truck,
-    Warehouse
+    Warehouse,
+    Search
 } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
+import { useState, useMemo } from "react";
 
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input"; // Make sure you have the shadcn Input component installed!
 import {
     Sidebar,
     SidebarContent,
@@ -27,18 +30,19 @@ import {
 } from "@/components/ui/sidebar";
 import { NavMain } from "./nav-main";
 
+// 👇 Here is the data object the compiler was looking for 👇
 const data = {
     navMain: [
         {
             title: "Dashboard",
             url: "/scm/",
-            icon: LayoutDashboard, // 📊 Dashboard Logo
+            icon: LayoutDashboard,
             isActive: true,
         },
         {
             title: "Product Management",
             url: "#",
-            icon: Package, // 📦 Product Logo
+            icon: Package,
             isActive: false,
             items: [
                 {
@@ -154,7 +158,7 @@ const data = {
         {
             title: "Supplier Management",
             url: "#",
-            icon: Building2, // 🏢 Supplier/Company Logo
+            icon: Building2,
             isActive: false,
             items: [
                 {
@@ -190,7 +194,7 @@ const data = {
         {
             title: "Warehouse Management",
             url: "#",
-            icon: Warehouse, // 🏭 Warehouse Logo
+            icon: Warehouse,
             items: [
                 {
                     title: "Warehouse Unit Conversion",
@@ -228,6 +232,9 @@ const data = {
                         {
                             title: "Withdrawals Picking",
                             url: "/scm/warehouse-management/withdrawals-picking",
+                        }, {
+                            title: "Active Picking",
+                            url: "/scm/warehouse-management/active-picking",
                         },
                     ],
                 },
@@ -236,7 +243,7 @@ const data = {
         {
             title: "Fleet Management",
             url: "#",
-            icon: Truck, // 🚚 Fleet Logo
+            icon: Truck,
             isActive: false,
             items: [
                 {
@@ -249,7 +256,6 @@ const data = {
                         },
                     ],
                 },
-                { title: "Driver Management", url: "#" },
                 {
                     title: "Trip Management",
                     url: "#",
@@ -320,13 +326,20 @@ const data = {
                         },
                     ],
                 },
-                { title: "Fleet Inventory", url: "#" },
+                {
+                    title: "Driver Management",
+                    url: "/scm/fleet-management/driver-management",
+                },
+                {
+                    title: "Fleet Inventory",
+                    url: "#",
+                },
             ],
         },
         {
             title: "Inventory Management",
             url: "#",
-            icon: ClipboardList, // 📋 Inventory/List Logo
+            icon: ClipboardList,
             items: [
                 {
                     title: "Inventory Controls",
@@ -345,8 +358,18 @@ const data = {
         {
             title: "Logistics",
             url: "#",
-            icon: Route, // 🗺️ Routing/Logistics Logo
+            icon: Route,
             items: [
+                {
+                    title: "Monitoring",
+                    url: "#",
+                    items: [
+                        {
+                            title: "For Consolidation Queue",
+                            url: "/scm/monitoring/for-consolidation",
+                        }
+                    ]
+                },
                 {
                     title: "Vehicle Management",
                     url: "#",
@@ -374,7 +397,7 @@ const data = {
         {
             title: "Business Intelligence Analytics",
             url: "#",
-            icon: LineChart, // 📈 Analytics Logo
+            icon: LineChart,
             items: [
                 {
                     title: "Inventory Performance Dashboard",
@@ -393,7 +416,7 @@ const data = {
         {
             title: "Transfers",
             url: "#",
-            icon: ArrowRightLeft, // 🔁 Transfer Logo
+            icon: ArrowRightLeft,
             items: [
                 {
                     title: "Stock Withdrawal",
@@ -413,6 +436,36 @@ const data = {
 };
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+    const [searchQuery, setSearchQuery] = useState("");
+
+    // Recursive function to filter the nested navigation items
+    const filteredNavMain = useMemo(() => {
+        if (!searchQuery.trim()) return data.navMain;
+        const lowerQuery = searchQuery.toLowerCase();
+
+        const filterItems = (items: any[]) => {
+            return items.reduce((acc, item) => {
+                // Check if current item matches
+                const isMatch = item.title.toLowerCase().includes(lowerQuery);
+                // Recursively check children
+                const childMatches = item.items ? filterItems(item.items) : [];
+
+                // If parent matches, show it and all its original children
+                if (isMatch) {
+                    acc.push(item);
+                }
+                // If a child matches, show the parent but ONLY the matching children
+                else if (childMatches.length > 0) {
+                    acc.push({ ...item, items: childMatches });
+                }
+
+                return acc;
+            }, []);
+        };
+
+        return filterItems(data.navMain);
+    }, [searchQuery]);
+
     return (
         <Sidebar variant="inset" {...props}>
             <SidebarHeader>
@@ -433,6 +486,20 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         </SidebarMenuButton>
                     </SidebarMenuItem>
                 </SidebarMenu>
+
+                {/* 👇 The Search Bar UI 👇 */}
+                <div className="px-4 py-2">
+                    <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            type="search"
+                            placeholder="Search modules..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="pl-9 h-8 text-xs bg-sidebar-accent/50 focus-visible:ring-1"
+                        />
+                    </div>
+                </div>
             </SidebarHeader>
 
             <Separator />
@@ -441,7 +508,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <div className="px-4 pt-3 pb-2 text-xs font-medium text-muted-foreground">
                     Platform
                 </div>
-                <NavMain items={data.navMain} />
+                {/* 👇 Pass the filtered data instead of the raw data 👇 */}
+                <NavMain items={filteredNavMain} />
             </SidebarContent>
 
             <SidebarFooter className="p-0">
