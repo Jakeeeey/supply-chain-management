@@ -1,6 +1,6 @@
 "use client";
 
-import { MoreHorizontal, Pencil } from "lucide-react";
+import { Pencil } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -11,12 +11,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { EngineTypeApiRow } from "../types";
@@ -34,7 +28,6 @@ export function EngineTypeTable({ data, loading, search, onEdit }: EngineTypeTab
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-16">#</TableHead>
             <TableHead>Name</TableHead>
             <TableHead>Description</TableHead>
             <TableHead className="w-20 text-right">Actions</TableHead>
@@ -69,24 +62,18 @@ export function EngineTypeTable({ data, loading, search, onEdit }: EngineTypeTab
           ) : (
             data.map((row) => (
               <TableRow key={row.id}>
-                <TableCell className="text-muted-foreground">{row.id}</TableCell>
                 <TableCell className="font-medium">{row.name}</TableCell>
                 <TableCell className="text-muted-foreground">
                   {row.description || "-"}
                 </TableCell>
                 <TableCell className="text-right">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" className="h-8 w-8 p-0">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => onEdit(row)}>
-                        <Pencil className="mr-2 h-4 w-4" /> Edit
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onEdit(row)}
+                  >
+                    <Pencil className="mr-2 h-4 w-4" />
+                  </Button>
                 </TableCell>
               </TableRow>
             ))
