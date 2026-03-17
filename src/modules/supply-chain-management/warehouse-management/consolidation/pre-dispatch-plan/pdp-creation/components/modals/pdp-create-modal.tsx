@@ -196,7 +196,7 @@ export function PDPCreateModal({
   const totalAmount = useMemo(
     () =>
       manifestOrders.reduce(
-        (sum, o) => sum + (o.net_amount ?? o.total_amount ?? 0),
+        (sum, o) => sum + (o.allocated_amount ?? o.net_amount ?? o.total_amount ?? 0),
         0,
       ),
     [manifestOrders],
