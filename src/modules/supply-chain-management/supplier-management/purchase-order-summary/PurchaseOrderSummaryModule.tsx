@@ -20,6 +20,12 @@ import {
 import { Search, ChevronRight, ChevronLeft, FilterX, ListFilter, Printer, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { PurchaseOrder, Supplier, StatusRef } from "./types";
 import { generatePOSummaryPDF } from "./utils/generatePOSummaryPDF";
 
@@ -47,6 +53,8 @@ export default function PurchaseOrderSummaryModule({
   
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  
+  const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
 
 
   const getInventoryStatusColor = (status: string) => {
@@ -70,10 +78,13 @@ export default function PurchaseOrderSummaryModule({
     return poData.filter((item) => {
       const searchLower = searchTerm.toLowerCase();
       const supplierName = suppliers.find(s => s.id === item.supplier_name)?.supplier_name || "";
+      const transTypeText = item.transaction_type === 1 ? "trade" : "non-trade";
+
       const matchesSearch = 
         (item.purchase_order_no || "").toLowerCase().includes(searchLower) ||
         (item.remark || "").toLowerCase().includes(searchLower) ||
-        supplierName.toLowerCase().includes(searchLower);
+        supplierName.toLowerCase().includes(searchLower) ||
+        transTypeText.includes(searchLower);
 
       const matchesSupplier = filterSupplier === "all" || item.supplier_name?.toString() === filterSupplier;
       const matchesInv = filterInvStatus === "all" || item.inventory_status?.toString() === filterInvStatus;
@@ -259,8 +270,12 @@ export default function PurchaseOrderSummaryModule({
                 const supplierName = suppliers.find(s => s.id === po.supplier_name)?.supplier_name || po.supplier_name;
 
                 return (
-                  <TableRow key={po.purchase_order_id} className="border-border hover:bg-muted/10 transition-colors">
-                    <TableCell className="font-bold text-primary hover:underline cursor-pointer py-4">{po.purchase_order_no}</TableCell>
+                  <TableRow 
+                    key={po.purchase_order_id} 
+                    className="border-border hover:bg-muted/10 transition-colors cursor-pointer"
+                    onClick={() => setSelectedPO(po)}
+                  >
+                    <TableCell className="font-bold text-primary hover:underline py-4">{po.purchase_order_no}</TableCell>
                     <TableCell className="text-xs font-medium text-muted-foreground">
                       {po.transaction_type === 1 ? "Trade" : "Non-Trade"}
                     </TableCell>
@@ -343,6 +358,55 @@ export default function PurchaseOrderSummaryModule({
           </Button>
         </div>
       </div>
+
+      {/* MODAL POP-UP FOR ROW DETAILS */}
+      <Dialog open={!!selectedPO} onOpenChange={(open) => !open && setSelectedPO(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold">Details of the transaction</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Search Details</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input 
+                  placeholder="Search inside transaction..." 
+                  className="pl-9 h-10 bg-muted/20 border-border"
+                  readOnly
+                />
+              </div>
+              <p className="text-[10px] text-muted-foreground italic ml-1">* Search is currently non-functional</p>
+            </div>
+
+            <div className="pt-2">
+              <div className="flex flex-col gap-1 p-3 bg-muted/30 rounded-lg border border-border">
+                  <span className="text-[10px] font-bold uppercase text-muted-foreground">Transaction type</span>
+                  <span className="text-sm font-semibold text-foreground">
+                    {selectedPO?.transaction_type === 1 ? "Trade" : "Non-Trade"}
+                  </span>
+              </div>
+            </div>
+            
+            {/* Displaying some additional basic Info since it's a detail modal */}
+            {selectedPO && (
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                 <div className="flex flex-col gap-1 p-3 bg-muted/30 rounded-lg border border-border">
+                    <span className="text-[10px] font-bold uppercase text-muted-foreground">PO Number</span>
+                    <span className="text-sm font-semibold text-foreground">{selectedPO.purchase_order_no}</span>
+                 </div>
+                 <div className="flex flex-col gap-1 p-3 bg-muted/30 rounded-lg border border-border">
+                    <span className="text-[10px] font-bold uppercase text-muted-foreground">Total Amount</span>
+                    <span className="text-sm font-bold font-mono text-foreground">
+                      ₱{(Number(selectedPO.total_amount ?? selectedPO.total ?? selectedPO.net_amount ?? 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                 </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
