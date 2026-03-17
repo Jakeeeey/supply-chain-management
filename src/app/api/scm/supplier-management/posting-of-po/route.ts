@@ -262,7 +262,7 @@ function buildPorIdsByKey(porRows: any[]) {
     return map;
 }
 
-function isTaggingComplete(
+function isPartiallyTagged(
     poId: number,
     lines: PoProductRow[],
     porRows: any[],
@@ -278,12 +278,12 @@ function isTaggingComplete(
         if (!pid || !bid || expected <= 0) continue;
 
         const porIds = porIdsByKey.get(keyLine(poId, pid, bid)) ?? [];
-        if (!porIds.length) return false;
+        if (!porIds.length) continue;
 
         const taggedQty = porIds.reduce((sum, id) => sum + (rfidsByPorId.get(id) ?? []).length, 0);
-        if (taggedQty < expected) return false;
+        if (taggedQty > 0) return true; // ✅ Allow PO to appear in Posting if at least 1 item is tagged
     }
-    return true;
+    return false; // ❌ Only hide PO if absolutely nothing is tagged yet
 }
 
 function isFullyReceived(
@@ -580,12 +580,11 @@ export async function GET() {
             const porRows = porByPo.get(poId) ?? [];
             const lines = linesByPo.get(poId) ?? [];
 
-            // must be tagging-complete AND fully received
-            const taggingOk = isTaggingComplete(poId, lines, porRows, rfidsByPorId);
+            // must be at least partially tagged
+            const taggingOk = isPartiallyTagged(poId, lines, porRows, rfidsByPorId);
             if (!taggingOk) continue;
 
             const fully = isFullyReceived(poId, lines, porRows, rfidsByPorId);
-            if (!fully) continue;
 
             const sid = toNum(po?.supplier_name);
             const supplierName = sid ? toStr(supplierMap.get(sid), "—") : "—";
@@ -606,8 +605,8 @@ export async function GET() {
 
             // ✅ allPosted used only to mark CLOSED
             const allPosted = rs.receiptsCount > 0 && rs.unpostedReceiptsCount === 0;
-            // ✅ fullyReceived: PO passed isFullyReceived gate → mark as RECEIVED when not all posted
-            const fullyReceived = !allPosted;
+            // ✅ fullyReceived: mark as RECEIVED when full and not all posted
+            const fullyReceived = fully && !allPosted;
 
             list.push({
                 id: String(poId),
@@ -664,11 +663,10 @@ export async function POST(req: NextRequest) {
             const receivingItems = porIds.length ? await fetchReceivingItems(base, porIds) : [];
             const rfidsByPorId = groupRfidsByPorId(receivingItems);
 
-            const taggingOk = isTaggingComplete(poId, lines, porRows, rfidsByPorId);
-            if (!taggingOk) return bad("PO is not ready for posting. Complete RFID tagging first.", 409);
+            const taggingOk = isPartiallyTagged(poId, lines, porRows, rfidsByPorId);
+            if (!taggingOk) return bad("PO is not ready for posting. Please tag at least one item first.", 409);
 
             const fully = isFullyReceived(poId, lines, porRows, rfidsByPorId);
-            if (!fully) return bad("PO is not ready for posting. Complete receiving first.", 409);
 
             const sid = toNum(po?.supplier_name);
             const supplierMap = await fetchSupplierNames(base, sid ? [sid] : []);
@@ -740,7 +738,7 @@ export async function POST(req: NextRequest) {
             const lr = latestReceiptInfo(porRows);
             const rs = buildReceiptSummary(porRows);
             const allPosted = rs.receiptsCount > 0 && rs.unpostedReceiptsCount === 0;
-            const fullyReceived = !allPosted;
+            const fullyReceived = fully && !allPosted;
 
             const branchName = branchesLabelFromLines(lines, branchesMap);
 
@@ -809,7 +807,7 @@ export async function POST(req: NextRequest) {
             const receivingItems = porIds.length ? await fetchReceivingItems(base, porIds) : [];
             const rfidsByPorId = groupRfidsByPorId(receivingItems);
 
-            const taggingOk = isTaggingComplete(poId, lines, porRows, rfidsByPorId);
+            const taggingOk = isPartiallyTagged(poId, lines, porRows, rfidsByPorId);
             if (!taggingOk) return bad("Cannot post. Complete RFID tagging first.", 409);
 
             const fully = isFullyReceived(poId, lines, porRows, rfidsByPorId);
@@ -856,7 +854,7 @@ export async function POST(req: NextRequest) {
             const receivingItems = porIds.length ? await fetchReceivingItems(base, porIds) : [];
             const rfidsByPorId = groupRfidsByPorId(receivingItems);
 
-            const taggingOk = isTaggingComplete(poId, lines, porRows, rfidsByPorId);
+            const taggingOk = isPartiallyTagged(poId, lines, porRows, rfidsByPorId);
             if (!taggingOk) return bad("Cannot post. Complete RFID tagging first.", 409);
 
             const fully = isFullyReceived(poId, lines, porRows, rfidsByPorId);
