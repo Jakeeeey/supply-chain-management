@@ -32,7 +32,8 @@ export const bundleService = {
     const productsRes = await fetchItems<any>("/items/products", {
       limit: -1,
       "filter[isActive][_eq]": 1,
-      fields: "product_id,product_name,product_code,isActive,unit_of_measurement.*",
+      fields:
+        "product_id,product_name,product_code,isActive,unit_of_measurement.*",
       sort: "product_name",
     });
     const unitsRes = await fetchItems<any>("/items/units", {
@@ -58,7 +59,9 @@ export const bundleService = {
       let unit_name = "";
 
       if (uom && typeof uom === "object") {
-        unit_name = String(uom.unit_name || uom.name || uom.unit_shortcut || "");
+        unit_name = String(
+          uom.unit_name || uom.name || uom.unit_shortcut || "",
+        );
       } else if (uom !== null && uom !== undefined && !Array.isArray(uom)) {
         unit_name = unitMap.get(Number(uom)) || "";
       }
@@ -250,11 +253,11 @@ export const bundleService = {
 
     const masterRes = fetchMaster
       ? await fetchItems<Bundle>("/items/product_bundles", {
-          limit: limit,
-          offset: offset,
+          limit: 200, // Fetch a larger pool from both tables
+          offset: 0, // Always fetch from the beginning to ensure correct merging
           fields: "*.*",
           meta: "filter_count",
-          sort: "updated_at",
+          sort: "-id",
           filter:
             masterFilter._and.length > 0
               ? JSON.stringify(masterFilter)
@@ -264,11 +267,11 @@ export const bundleService = {
 
     const draftRes = fetchRejected
       ? await fetchItems<BundleDraft>("/items/product_bundles_draft", {
-          limit: limit,
-          offset: offset,
+          limit: 200, // Fetch a larger pool from both tables
+          offset: 0, // Always fetch from the beginning to ensure correct merging
           fields: "*.*",
           meta: "filter_count",
-          sort: "created_at",
+          sort: "-id",
           filter: JSON.stringify(draftFilter),
         })
       : { data: [], meta: { filter_count: 0 } };
@@ -278,21 +281,26 @@ export const bundleService = {
     totalCount =
       (masterRes.meta?.filter_count || 0) + (draftRes.meta?.filter_count || 0);
 
-    // Sort by updated_at descending so the most recently modified items appear first
+    // Sort: most recently updated/created first (strictly chronological)
     results.sort((a, b) => {
-      const dateA = new Date(a.updated_at || a.created_at || 0).getTime();
-      const dateB = new Date(b.updated_at || b.created_at || 0).getTime();
-      return dateB - dateA;
+      const getSortTime = (item: any) => {
+        const dateStr =
+          item.updated_at ||
+          item.last_updated ||
+          item.date_updated ||
+          item.created_at ||
+          item.date_created ||
+          0;
+        return new Date(dateStr).getTime();
+      };
+      return getSortTime(b) - getSortTime(a);
     });
 
-    // If both were fetched, we might have too many items per 'limit'.
-    // We'll slice them for the UI consistency.
-    if (results.length > limit) {
-      results = results.slice(0, limit);
-    }
+    // Unified pagination: slice the merged and sorted results
+    const paginatedResults = results.slice(offset, offset + limit);
 
     return {
-      data: results,
+      data: paginatedResults,
       meta: {
         total_count: totalCount,
         filter_count: totalCount,
@@ -386,8 +394,13 @@ export const bundleService = {
       throw new Error("Draft bundle not found.");
     }
 
-    if (currentDraft.draft_status !== "DRAFT" && currentDraft.draft_status !== "REJECTED") {
-      throw new Error("Only bundles in DRAFT or REJECTED status can be edited.");
+    if (
+      currentDraft.draft_status !== "DRAFT" &&
+      currentDraft.draft_status !== "REJECTED"
+    ) {
+      throw new Error(
+        "Only bundles in DRAFT or REJECTED status can be edited.",
+      );
     }
 
     // 2. Enforce unique bundle name (excluding self)
@@ -396,8 +409,8 @@ export const bundleService = {
         filter: JSON.stringify({
           _and: [
             { bundle_name: { _eq: values.bundle_name.trim() } },
-            { id: { _neq: id } }
-          ]
+            { id: { _neq: id } },
+          ],
         }),
         limit: 1,
       }),
@@ -409,7 +422,10 @@ export const bundleService = {
       }),
     ]);
 
-    if ((nameInDraft.data && nameInDraft.data.length > 0) || (nameInMaster.data && nameInMaster.data.length > 0)) {
+    if (
+      (nameInDraft.data && nameInDraft.data.length > 0) ||
+      (nameInMaster.data && nameInMaster.data.length > 0)
+    ) {
       throw new Error(
         "A bundle with this name already exists. Please choose a unique name.",
       );
@@ -630,7 +646,10 @@ export const bundleService = {
   async rejectDraft(id: number | string) {
     await request(`${API_BASE_URL}/items/product_bundles_draft/${id}`, {
       method: "PATCH",
-      body: JSON.stringify({ draft_status: "REJECTED" }),
+      body: JSON.stringify({
+        draft_status: "REJECTED",
+        updated_at: new Date().toISOString(),
+      }),
     });
     return true;
   },
