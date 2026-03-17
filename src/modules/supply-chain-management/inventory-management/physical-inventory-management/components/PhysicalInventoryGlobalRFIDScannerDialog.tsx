@@ -20,33 +20,16 @@ import {
     computeVariance,
 } from "../utils/compute";
 
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogPortal, DialogOverlay } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
     AlertCircle,
     CheckCircle2,
     Loader2,
     ScanLine,
     Wifi,
+    X,
 } from "lucide-react";
-
-type ScanHistoryItem = {
-    id: string;
-    rfidTag: string;
-    status: "success" | "error";
-    message: string;
-    productId: number | null;
-    productName: string | null;
-    unitName: string | null;
-    createdAt: string;
-};
 
 type RfidSavedPayload = {
     updatedDetail: PhysicalInventoryDetailRow;
@@ -66,16 +49,32 @@ type Props = {
 type ScannerSignalState = "idle" | "ready" | "processing" | "success" | "error";
 type ScanAnimationState = "none" | "success" | "error";
 
-function normalizeTag(value: string): string {
-    return value.trim();
+const RFID_HEX_LENGTH = 24;
+
+function extractHexCharacters(value: string): string {
+    return value.toUpperCase().replace(/[^0-9A-F]/g, "");
+}
+
+function finalizeHexTag(rawValue: string): string {
+    const hex = extractHexCharacters(rawValue);
+
+    if (hex.length < RFID_HEX_LENGTH) {
+        return "";
+    }
+
+    if (hex.length === RFID_HEX_LENGTH) {
+        return hex;
+    }
+
+    return hex.slice(-RFID_HEX_LENGTH);
 }
 
 function sameTag(a: string, b: string): boolean {
-    return normalizeTag(a).toLowerCase() === normalizeTag(b).toLowerCase();
+    return finalizeHexTag(a) === finalizeHexTag(b);
 }
 
-function createHistoryId(): string {
-    return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+function isHexKey(key: string): boolean {
+    return /^[0-9A-Fa-f]$/.test(key);
 }
 
 function playTone(
@@ -109,7 +108,6 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
     const [existingPiTags, setExistingPiTags] = React.useState<PhysicalInventoryDetailRFIDRow[]>(
         [],
     );
-    const [history, setHistory] = React.useState<ScanHistoryItem[]>([]);
     const [scannerSignal, setScannerSignal] = React.useState<ScannerSignalState>("idle");
     const [lastScannedTag, setLastScannedTag] = React.useState<string>("");
     const [lastSignalMessage, setLastSignalMessage] = React.useState<string>(
@@ -117,14 +115,16 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
     );
     const [scanAnimation, setScanAnimation] = React.useState<ScanAnimationState>("none");
     const [savedCountPulse, setSavedCountPulse] = React.useState(false);
-    const [latestHistoryId, setLatestHistoryId] = React.useState<string | null>(null);
 
     const hiddenInputRef = React.useRef<HTMLInputElement | null>(null);
     const signalResetTimerRef = React.useRef<number | null>(null);
     const animationResetTimerRef = React.useRef<number | null>(null);
     const savedCountPulseTimerRef = React.useRef<number | null>(null);
-    const historyHighlightTimerRef = React.useRef<number | null>(null);
+    const finalizeScanTimerRef = React.useRef<number | null>(null);
     const audioContextRef = React.useRef<AudioContext | null>(null);
+
+    const scanBufferRef = React.useRef("");
+    const lastKeyAtRef = React.useRef(0);
 
     const flattenedRows = React.useMemo(() => rows, [rows]);
 
@@ -214,19 +214,6 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
         }, 0);
     }, []);
 
-    const markLatestHistoryItem = React.useCallback((id: string) => {
-        if (historyHighlightTimerRef.current !== null) {
-            window.clearTimeout(historyHighlightTimerRef.current);
-            historyHighlightTimerRef.current = null;
-        }
-
-        setLatestHistoryId(id);
-
-        historyHighlightTimerRef.current = window.setTimeout(() => {
-            setLatestHistoryId(null);
-        }, 650);
-    }, []);
-
     const focusHiddenReceiver = React.useCallback(() => {
         if (!open || !canEdit) return;
 
@@ -256,12 +243,22 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
         }
     }, []);
 
-    const clearHistoryHighlightTimer = React.useCallback(() => {
-        if (historyHighlightTimerRef.current !== null) {
-            window.clearTimeout(historyHighlightTimerRef.current);
-            historyHighlightTimerRef.current = null;
+    const clearFinalizeScanTimer = React.useCallback(() => {
+        if (finalizeScanTimerRef.current !== null) {
+            window.clearTimeout(finalizeScanTimerRef.current);
+            finalizeScanTimerRef.current = null;
         }
     }, []);
+
+    const resetScannerBuffer = React.useCallback(() => {
+        scanBufferRef.current = "";
+        lastKeyAtRef.current = 0;
+        clearFinalizeScanTimer();
+
+        if (hiddenInputRef.current) {
+            hiddenInputRef.current.value = "";
+        }
+    }, [clearFinalizeScanTimer]);
 
     const setTemporarySignal = React.useCallback(
         (
@@ -290,6 +287,7 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
                 );
                 setLastScannedTag("");
                 setScanAnimation("none");
+                resetScannerBuffer();
                 focusHiddenReceiver();
             }, 1400);
         },
@@ -299,6 +297,7 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
             focusHiddenReceiver,
             playErrorBeep,
             playSuccessBeep,
+            resetScannerBuffer,
             triggerSavedCountPulse,
             triggerScanAnimation,
         ],
@@ -328,15 +327,14 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
             clearSignalResetTimer();
             clearAnimationResetTimer();
             clearSavedCountPulseTimer();
-            clearHistoryHighlightTimer();
+            clearFinalizeScanTimer();
             setExistingPiTags([]);
-            setHistory([]);
             setScannerSignal("idle");
             setLastScannedTag("");
             setLastSignalMessage("Scanner is waiting.");
             setScanAnimation("none");
             setSavedCountPulse(false);
-            setLatestHistoryId(null);
+            resetScannerBuffer();
             return;
         }
 
@@ -347,16 +345,17 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
         setLastScannedTag("");
         setScanAnimation("none");
         setSavedCountPulse(false);
-        setLatestHistoryId(null);
+        resetScannerBuffer();
         void loadExistingPiTags();
     }, [
         canEdit,
         clearAnimationResetTimer,
-        clearHistoryHighlightTimer,
+        clearFinalizeScanTimer,
         clearSavedCountPulseTimer,
         clearSignalResetTimer,
         loadExistingPiTags,
         open,
+        resetScannerBuffer,
     ]);
 
     React.useEffect(() => {
@@ -391,7 +390,7 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
             clearSignalResetTimer();
             clearAnimationResetTimer();
             clearSavedCountPulseTimer();
-            clearHistoryHighlightTimer();
+            clearFinalizeScanTimer();
 
             if (audioContextRef.current) {
                 void audioContextRef.current.close();
@@ -400,24 +399,10 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
         };
     }, [
         clearAnimationResetTimer,
-        clearHistoryHighlightTimer,
+        clearFinalizeScanTimer,
         clearSavedCountPulseTimer,
         clearSignalResetTimer,
     ]);
-
-    const pushHistory = React.useCallback(
-        (item: Omit<ScanHistoryItem, "id" | "createdAt">) => {
-            const nextItem: ScanHistoryItem = {
-                ...item,
-                id: createHistoryId(),
-                createdAt: new Date().toLocaleString("en-PH"),
-            };
-
-            setHistory((prev) => [nextItem, ...prev].slice(0, 50));
-            markLatestHistoryItem(nextItem.id);
-        },
-        [markLatestHistoryItem],
-    );
 
     const hasDuplicateInCurrentPi = React.useCallback(
         (rfidTag: string): boolean => {
@@ -428,11 +413,13 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
 
     const processScan = React.useCallback(
         async (rawTag: string) => {
-            const normalized = normalizeTag(rawTag);
+            const normalized = finalizeHexTag(rawTag);
 
             if (!canEdit) {
                 const message = "This PI can no longer be edited.";
-                toast.error(message);
+                toast.error(message, {
+                    description: normalized ? `RFID: ${normalized}` : undefined,
+                });
                 setTemporarySignal("error", message, normalized);
                 return;
             }
@@ -443,35 +430,35 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
 
             if (!branchId) {
                 const message = "Branch is required before scanning RFID.";
-                toast.error(message);
+                toast.error(message, {
+                    description: `RFID: ${normalized}`,
+                });
                 setTemporarySignal("error", message, normalized);
                 return;
             }
 
             if (!phId) {
                 const message = "Please save the PI header first.";
-                toast.error(message);
+                toast.error(message, {
+                    description: `RFID: ${normalized}`,
+                });
                 setTemporarySignal("error", message, normalized);
                 return;
             }
 
             if (!flattenedRows.length) {
                 const message = "Load products first before scanning RFID.";
-                toast.error(message);
+                toast.error(message, {
+                    description: `RFID: ${normalized}`,
+                });
                 setTemporarySignal("error", message, normalized);
                 return;
             }
 
             if (hasDuplicateInCurrentPi(normalized)) {
                 const message = "This RFID tag already exists in the current PI.";
-                toast.error(message);
-                pushHistory({
-                    rfidTag: normalized,
-                    status: "error",
-                    message,
-                    productId: null,
-                    productName: null,
-                    unitName: null,
+                toast.error(message, {
+                    description: `RFID: ${normalized}`,
                 });
                 setTemporarySignal("error", message, normalized);
                 return;
@@ -492,14 +479,8 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
 
                 if (!resolved.item) {
                     const message = resolved.message || "RFID not found in on-hand records.";
-                    toast.error(message);
-                    pushHistory({
-                        rfidTag: normalized,
-                        status: "error",
-                        message,
-                        productId: null,
-                        productName: null,
-                        unitName: null,
+                    toast.error(message, {
+                        description: `RFID: ${normalized}`,
                     });
                     setTemporarySignal("error", message, normalized);
                     return;
@@ -509,14 +490,8 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
 
                 if (!matchedRow) {
                     const message = `Scanned RFID belongs to product ID ${resolved.item.productId}, but that product is not loaded in the current PI.`;
-                    toast.error(message);
-                    pushHistory({
-                        rfidTag: normalized,
-                        status: "error",
-                        message,
-                        productId: resolved.item.productId,
-                        productName: null,
-                        unitName: null,
+                    toast.error(message, {
+                        description: `RFID: ${normalized}`,
                     });
                     setTemporarySignal("error", message, normalized);
                     return;
@@ -524,14 +499,8 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
 
                 if (!matchedRow.detail_id) {
                     const message = `Matched product "${matchedRow.product_name}" does not have a valid PI detail row.`;
-                    toast.error(message);
-                    pushHistory({
-                        rfidTag: normalized,
-                        status: "error",
-                        message,
-                        productId: matchedRow.product_id,
-                        productName: matchedRow.product_name,
-                        unitName: matchedRow.unit_name ?? matchedRow.unit_shortcut ?? null,
+                    toast.error(message, {
+                        description: `RFID: ${normalized}`,
                     });
                     setTemporarySignal("error", message, normalized);
                     return;
@@ -568,17 +537,9 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
                     });
 
                     const successMessage = `RFID counted to ${matchedRow.product_name} (${matchedRow.unit_name ?? matchedRow.unit_shortcut ?? "UOM"}).`;
-                    toast.success(successMessage);
-
-                    pushHistory({
-                        rfidTag: normalized,
-                        status: "success",
-                        message: successMessage,
-                        productId: matchedRow.product_id,
-                        productName: matchedRow.product_name,
-                        unitName: matchedRow.unit_name ?? matchedRow.unit_shortcut ?? null,
+                    toast.success(successMessage, {
+                        description: `RFID: ${normalized}`,
                     });
-
                     setTemporarySignal("success", successMessage, normalized);
                 } else {
                     nextRfidCount =
@@ -604,17 +565,9 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
                     });
 
                     const successMessage = `Tag saved and count incremented to ${matchedRow.product_name} (${matchedRow.unit_name ?? matchedRow.unit_shortcut ?? "UOM"}). Physical count is now ${nextPhysicalCount}.`;
-                    toast.success(successMessage);
-
-                    pushHistory({
-                        rfidTag: normalized,
-                        status: "success",
-                        message: successMessage,
-                        productId: matchedRow.product_id,
-                        productName: matchedRow.product_name,
-                        unitName: matchedRow.unit_name ?? matchedRow.unit_shortcut ?? null,
+                    toast.success(successMessage, {
+                        description: `RFID: ${normalized}`,
                     });
-
                     setTemporarySignal("success", successMessage, normalized);
                 }
 
@@ -628,38 +581,28 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
                 const message =
                     error instanceof Error ? error.message : "Failed to process RFID scan.";
 
-                toast.error(message);
-                pushHistory({
-                    rfidTag: normalized,
-                    status: "error",
-                    message,
-                    productId: null,
-                    productName: null,
-                    unitName: null,
+                toast.error(message, {
+                    description: `RFID: ${normalized}`,
                 });
                 setTemporarySignal("error", message, normalized);
             } finally {
                 setIsProcessing(false);
-
-                if (hiddenInputRef.current) {
-                    hiddenInputRef.current.value = "";
-                }
-
+                resetScannerBuffer();
                 focusHiddenReceiver();
             }
         },
         [
             branchId,
             canEdit,
-            existingPiTags,
             flattenedRows.length,
             focusHiddenReceiver,
             hasDuplicateInCurrentPi,
             onSaved,
             phId,
-            pushHistory,
+            resetScannerBuffer,
             rowByProductId,
             setTemporarySignal,
+            existingPiTags,
         ],
     );
 
@@ -748,32 +691,6 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
                     }
                 }
 
-                @keyframes historySlideIn {
-                    0% {
-                        opacity: 0;
-                        transform: translateY(-10px) scale(0.985);
-                        background-color: rgba(16, 185, 129, 0.08);
-                    }
-                    100% {
-                        opacity: 1;
-                        transform: translateY(0) scale(1);
-                        background-color: transparent;
-                    }
-                }
-
-                @keyframes historySlideInError {
-                    0% {
-                        opacity: 0;
-                        transform: translateY(-10px) scale(0.985);
-                        background-color: rgba(239, 68, 68, 0.08);
-                    }
-                    100% {
-                        opacity: 1;
-                        transform: translateY(0) scale(1);
-                        background-color: transparent;
-                    }
-                }
-
                 @keyframes scannerRipple {
                     0% {
                         transform: scale(0.8);
@@ -791,228 +708,250 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
             `}</style>
 
             <Dialog open={open} onOpenChange={onOpenChange}>
-                <DialogContent className="w-[96vw] max-w-2xl gap-0 overflow-hidden p-0">
-                    <DialogHeader className="border-b px-4 py-3">
-                        <DialogTitle className="text-lg">Global RFID Scanner</DialogTitle>
-                        <DialogDescription className="text-xs">
-                            Direct scan mode is active. Keep this dialog open and scan RFID tags
-                            directly.
-                        </DialogDescription>
-                    </DialogHeader>
+                <DialogPortal>
+                    <DialogOverlay className="fixed inset-0 z-50 bg-black/50 backdrop-blur-[1px]" />
 
-                    <input
-                        ref={hiddenInputRef}
-                        type="text"
-                        autoComplete="off"
-                        autoCapitalize="off"
-                        autoCorrect="off"
-                        spellCheck={false}
-                        tabIndex={-1}
-                        aria-hidden="true"
-                        className="pointer-events-none absolute left-0 top-0 h-0 w-0 opacity-0"
-                        disabled={!open || !canEdit || isProcessing}
-                        onBlur={() => {
-                            if (!open || !canEdit || isProcessing) return;
-                            focusHiddenReceiver();
-                        }}
-                        onKeyDown={(event) => {
-                            if (event.key !== "Enter") return;
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
+                        <div className="flex w-[min(640px,96vw)] max-w-2xl flex-col overflow-hidden rounded-2xl border bg-background shadow-2xl">
+                            <div className="flex items-start justify-between border-b px-4 py-3 sm:px-5">
+                                <div className="min-w-0">
+                                    <h2 className="text-base font-semibold sm:text-lg">
+                                        Global RFID Scanner
+                                    </h2>
+                                    <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
+                                        Pure scanner mode. Results are shown in toast notifications.
+                                    </p>
+                                </div>
 
-                            event.preventDefault();
-
-                            if (isProcessing) return;
-
-                            const rawValue = hiddenInputRef.current?.value ?? "";
-                            void processScan(rawValue);
-                        }}
-                    />
-
-                    <div className="space-y-3 p-4">
-                        <div className="grid grid-cols-2 gap-2 rounded-xl border bg-muted/30 p-3 text-xs md:grid-cols-4">
-                            <div>
-                                <span className="font-medium">Branch:</span> {branchId ?? "—"}
-                            </div>
-                            <div>
-                                <span className="font-medium">PI:</span> {phId ?? "—"}
-                            </div>
-                            <div>
-                                <span className="font-medium">RFID Rows:</span>{" "}
-                                {totalRfidEligibleRows}
-                            </div>
-                            <div>
-                                <span className="font-medium">Saved:</span>{" "}
-                                <span
-                                    className={[
-                                        "inline-block font-semibold text-emerald-700 dark:text-emerald-300",
-                                        savedCountAnimationClasses,
-                                    ].join(" ")}
+                                <button
+                                    type="button"
+                                    aria-label="Close"
+                                    className="ml-3 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-background text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                                    onClick={() => onOpenChange(false)}
                                 >
-                                    {totalRfidRows}
-                                </span>
+                                    <X className="h-4 w-4" />
+                                </button>
                             </div>
-                        </div>
 
-                        <div
-                            className={[
-                                "rounded-xl border px-4 py-4 transition-colors will-change-transform",
-                                signalToneClasses,
-                                signalAnimationClasses,
-                            ].join(" ")}
-                        >
-                            <div className="flex flex-col items-center justify-center gap-2 text-center">
-                                <div className="flex items-center gap-2">
-                                    <div className="relative flex h-8 w-8 items-center justify-center">
-                                        {scannerSignal === "ready" && canEdit ? (
-                                            <>
-                                                <span
-                                                    className={[
-                                                        "absolute h-8 w-8 rounded-full border border-emerald-400/40",
-                                                        readyRippleClasses,
-                                                    ].join(" ")}
-                                                />
-                                                <Wifi className="relative z-10 h-5 w-5" />
-                                            </>
-                                        ) : scannerSignal === "processing" ? (
-                                            <Loader2 className="h-5 w-5 animate-spin" />
-                                        ) : scannerSignal === "success" ? (
-                                            <CheckCircle2 className="h-5 w-5" />
-                                        ) : scannerSignal === "error" ? (
-                                            <AlertCircle className="h-5 w-5" />
-                                        ) : (
-                                            <Wifi className="h-5 w-5" />
-                                        )}
+                            <input
+                                ref={hiddenInputRef}
+                                type="text"
+                                autoComplete="off"
+                                autoCapitalize="off"
+                                autoCorrect="off"
+                                spellCheck={false}
+                                tabIndex={-1}
+                                aria-hidden="true"
+                                className="pointer-events-none absolute left-0 top-0 h-0 w-0 opacity-0"
+                                disabled={!open || !canEdit || isProcessing}
+                                onBlur={() => {
+                                    if (!open || !canEdit || isProcessing) return;
+                                    focusHiddenReceiver();
+                                }}
+                                onChange={(event) => {
+                                    scanBufferRef.current = extractHexCharacters(event.target.value);
+                                }}
+                                onKeyDown={(event) => {
+                                    if (isProcessing) {
+                                        event.preventDefault();
+                                        return;
+                                    }
+
+                                    const now = Date.now();
+
+                                    if (now - lastKeyAtRef.current > 1000) {
+                                        scanBufferRef.current = "";
+                                        if (hiddenInputRef.current) {
+                                            hiddenInputRef.current.value = "";
+                                        }
+                                    }
+
+                                    lastKeyAtRef.current = now;
+
+                                    if (event.key === "Enter") {
+                                        event.preventDefault();
+
+                                        clearFinalizeScanTimer();
+
+                                        finalizeScanTimerRef.current = window.setTimeout(() => {
+                                            const rawFromInput = hiddenInputRef.current?.value ?? "";
+                                            const rawFromBuffer = scanBufferRef.current;
+
+                                            const finalizedFromInput = finalizeHexTag(rawFromInput);
+                                            const finalizedFromBuffer = finalizeHexTag(rawFromBuffer);
+
+                                            const finalTag =
+                                                finalizedFromInput.length >=
+                                                finalizedFromBuffer.length
+                                                    ? finalizedFromInput
+                                                    : finalizedFromBuffer;
+
+                                            if (!finalTag) {
+                                                const partial = extractHexCharacters(
+                                                    rawFromInput || rawFromBuffer,
+                                                );
+
+                                                toast.error("Incomplete RFID scan.", {
+                                                    description: partial
+                                                        ? `Received: ${partial}`
+                                                        : "No valid hex characters received.",
+                                                });
+
+                                                resetScannerBuffer();
+                                                focusHiddenReceiver();
+                                                return;
+                                            }
+
+                                            void processScan(finalTag);
+                                        }, 35);
+
+                                        return;
+                                    }
+
+                                    if (event.key === "Backspace") {
+                                        scanBufferRef.current = scanBufferRef.current.slice(0, -1);
+                                        return;
+                                    }
+
+                                    if (
+                                        event.key.length === 1 &&
+                                        !event.ctrlKey &&
+                                        !event.altKey &&
+                                        !event.metaKey &&
+                                        isHexKey(event.key)
+                                    ) {
+                                        scanBufferRef.current += event.key.toUpperCase();
+                                    }
+                                }}
+                            />
+
+                            <div className="space-y-4 p-4 sm:p-5">
+                                <div className="grid grid-cols-2 gap-2 rounded-xl border bg-muted/30 p-3 text-xs sm:grid-cols-4">
+                                    <div>
+                                        <span className="font-medium">Branch:</span> {branchId ?? "—"}
                                     </div>
-
-                                    <span className="text-base font-semibold">
-                                        {scannerSignal === "processing"
-                                            ? "Processing"
-                                            : scannerSignal === "success"
-                                                ? "Success"
-                                                : scannerSignal === "error"
-                                                    ? "Error"
-                                                    : canEdit
-                                                        ? "Ready to Scan"
-                                                        : "Scanner Disabled"}
-                                    </span>
-                                </div>
-
-                                <p className="text-xs opacity-90">{lastSignalMessage}</p>
-
-                                <div className="flex flex-wrap items-center justify-center gap-1.5 text-[11px] opacity-90">
-                                    <span className="rounded-full border border-current/20 px-2 py-0.5">
-                                        No field
-                                    </span>
-                                    <span className="rounded-full border border-current/20 px-2 py-0.5">
-                                        Direct scan
-                                    </span>
-                                    <span className="rounded-full border border-current/20 px-2 py-0.5">
-                                        Auto re-arm
-                                    </span>
-                                </div>
-
-                                <div className="rounded-lg border border-current/15 bg-background/70 px-3 py-2 text-xs text-foreground shadow-sm">
-                                    <div className="flex items-center justify-center gap-2">
-                                        <ScanLine
+                                    <div>
+                                        <span className="font-medium">PI:</span> {phId ?? "—"}
+                                    </div>
+                                    <div>
+                                        <span className="font-medium">RFID Rows:</span>{" "}
+                                        {totalRfidEligibleRows}
+                                    </div>
+                                    <div>
+                                        <span className="font-medium">Saved:</span>{" "}
+                                        <span
                                             className={[
-                                                "h-3.5 w-3.5",
-                                                scannerSignal === "processing" ? "animate-pulse" : "",
+                                                "inline-block font-semibold text-emerald-700 dark:text-emerald-300",
+                                                savedCountAnimationClasses,
                                             ].join(" ")}
-                                        />
-                                        <span className="font-medium">
-                                            {lastScannedTag
-                                                ? lastScannedTag
-                                                : "Waiting for RFID scan..."}
+                                        >
+                                            {totalRfidRows}
                                         </span>
                                     </div>
                                 </div>
-                            </div>
-                        </div>
 
-                        <div className="overflow-hidden rounded-xl border">
-                            <div className="border-b px-4 py-2">
-                                <p className="text-sm font-medium">Scan History</p>
-                                <p className="text-[11px] text-muted-foreground">
-                                    Latest scans are shown first.
-                                    {isLoadingExisting ? " Loading current PI saved tags..." : ""}
-                                </p>
-                            </div>
-
-                            <ScrollArea className="h-[260px]">
-                                <div className="divide-y">
-                                    {history.length ? (
-                                        history.map((item) => {
-                                            const isNewest = item.id === latestHistoryId;
-                                            const historyAnimationClass = isNewest
-                                                ? item.status === "success"
-                                                    ? "animate-[historySlideIn_520ms_ease-out]"
-                                                    : "animate-[historySlideInError_520ms_ease-out]"
-                                                : "";
-
-                                            return (
-                                                <div
-                                                    key={item.id}
-                                                    className={[
-                                                        "flex flex-col gap-1 p-3 text-xs",
-                                                        historyAnimationClass,
-                                                    ].join(" ")}
-                                                >
-                                                    <div className="flex flex-wrap items-center gap-2">
-                                                        <span className="font-semibold">
-                                                            {item.rfidTag}
-                                                        </span>
+                                <div
+                                    className={[
+                                        "rounded-xl border px-4 py-5 text-center transition-colors will-change-transform",
+                                        signalToneClasses,
+                                        signalAnimationClasses,
+                                    ].join(" ")}
+                                >
+                                    <div className="flex flex-col items-center justify-center gap-3">
+                                        <div className="flex items-center gap-2">
+                                            <div className="relative flex h-9 w-9 items-center justify-center">
+                                                {scannerSignal === "ready" && canEdit ? (
+                                                    <>
                                                         <span
                                                             className={[
-                                                                "rounded-full border px-2 py-0.5 text-[10px]",
-                                                                item.status === "success"
-                                                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-300"
-                                                                    : "border-red-200 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300",
+                                                                "absolute h-9 w-9 rounded-full border border-emerald-400/40",
+                                                                readyRippleClasses,
                                                             ].join(" ")}
-                                                        >
-                                                            {item.status === "success"
-                                                                ? "Success"
-                                                                : "Error"}
-                                                        </span>
-                                                        <span className="text-[10px] text-muted-foreground">
-                                                            {item.createdAt}
-                                                        </span>
-                                                    </div>
+                                                        />
+                                                        <Wifi className="relative z-10 h-5 w-5" />
+                                                    </>
+                                                ) : scannerSignal === "processing" ? (
+                                                    <Loader2 className="h-5 w-5 animate-spin" />
+                                                ) : scannerSignal === "success" ? (
+                                                    <CheckCircle2 className="h-5 w-5" />
+                                                ) : scannerSignal === "error" ? (
+                                                    <AlertCircle className="h-5 w-5" />
+                                                ) : (
+                                                    <Wifi className="h-5 w-5" />
+                                                )}
+                                            </div>
 
-                                                    <p>{item.message}</p>
-
-                                                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
-                                                        <span>
-                                                            Product ID: {item.productId ?? "—"}
-                                                        </span>
-                                                        <span>
-                                                            Product: {item.productName ?? "—"}
-                                                        </span>
-                                                        <span>UOM: {item.unitName ?? "—"}</span>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })
-                                    ) : (
-                                        <div className="flex h-24 items-center justify-center text-xs text-muted-foreground">
-                                            No scans yet.
+                                            <span className="text-lg font-semibold">
+                                                {scannerSignal === "processing"
+                                                    ? "Processing"
+                                                    : scannerSignal === "success"
+                                                        ? "Success"
+                                                        : scannerSignal === "error"
+                                                            ? "Error"
+                                                            : canEdit
+                                                                ? "Ready to Scan"
+                                                                : "Scanner Disabled"}
+                                            </span>
                                         </div>
-                                    )}
-                                </div>
-                            </ScrollArea>
-                        </div>
 
-                        <div className="flex justify-end pt-1">
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="cursor-pointer"
-                                onClick={() => onOpenChange(false)}
-                            >
-                                Close
-                            </Button>
+                                        <p className="text-sm opacity-90">{lastSignalMessage}</p>
+
+                                        <div className="flex flex-wrap items-center justify-center gap-1.5 text-[11px] opacity-90">
+                                            <span className="rounded-full border border-current/20 px-2 py-0.5">
+                                                Pure scanner
+                                            </span>
+                                            <span className="rounded-full border border-current/20 px-2 py-0.5">
+                                                Hex-safe buffer
+                                            </span>
+                                            <span className="rounded-full border border-current/20 px-2 py-0.5">
+                                                Toast feedback
+                                            </span>
+                                        </div>
+
+                                        <div className="w-full rounded-lg border border-current/15 bg-background/70 px-3 py-2 text-sm text-foreground shadow-sm">
+                                            <div className="flex items-center justify-center gap-2">
+                                                <ScanLine
+                                                    className={[
+                                                        "h-4 w-4 shrink-0",
+                                                        scannerSignal === "processing"
+                                                            ? "animate-pulse"
+                                                            : "",
+                                                    ].join(" ")}
+                                                />
+                                                <span className="break-all font-medium">
+                                                    {lastScannedTag
+                                                        ? lastScannedTag
+                                                        : "Waiting for RFID scan..."}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="rounded-xl border bg-muted/10 p-3 text-xs text-muted-foreground">
+                                    <p className="font-medium text-foreground">Notes</p>
+                                    <p className="mt-1">
+                                        This mode does not keep an in-modal scan history. Every scan
+                                        result is shown through toast notifications, while the last
+                                        full 24-character hex RFID remains visible above.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end border-t px-4 py-3 sm:px-5">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="cursor-pointer"
+                                    onClick={() => onOpenChange(false)}
+                                >
+                                    Close
+                                </Button>
+                            </div>
                         </div>
                     </div>
-                </DialogContent>
+                </DialogPortal>
             </Dialog>
         </>
     );
