@@ -11,12 +11,14 @@ import {
     Route,
     Truck,
     Warehouse,
-    Activity // <-- Added an icon for monitoring if you want to use it
+    Search
 } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
+import { useState, useMemo } from "react";
 
-import {Separator} from "@/components/ui/separator";
+import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input"; // Make sure you have the shadcn Input component installed!
 import {
     Sidebar,
     SidebarContent,
@@ -26,8 +28,9 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import {NavMain} from "./nav-main";
+import { NavMain } from "./nav-main";
 
+// 👇 Here is the data object the compiler was looking for 👇
 const data = {
     navMain: [
         {
@@ -218,7 +221,7 @@ const data = {
                         },
                     ],
                 },
-                {title: "Driver Management", url: "#"},
+                { title: "Driver Management", url: "#" },
                 {
                     title: "Trip Management",
                     url: "#",
@@ -289,7 +292,7 @@ const data = {
                         },
                     ],
                 },
-                {title: "Fleet Inventory", url: "#"},
+                { title: "Fleet Inventory", url: "#" },
             ],
         },
         {
@@ -316,7 +319,6 @@ const data = {
             url: "#",
             icon: Route,
             items: [
-                // 👇 ADDED THE MONITORING ROUTE HERE 👇
                 {
                     title: "Monitoring",
                     url: "#",
@@ -327,7 +329,6 @@ const data = {
                         }
                     ]
                 },
-                // 👆 END OF NEW ROUTE 👆
                 {
                     title: "Vehicle Management",
                     url: "#",
@@ -393,7 +394,37 @@ const data = {
     ],
 };
 
-export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
+export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+    const [searchQuery, setSearchQuery] = useState("");
+
+    // Recursive function to filter the nested navigation items
+    const filteredNavMain = useMemo(() => {
+        if (!searchQuery.trim()) return data.navMain;
+        const lowerQuery = searchQuery.toLowerCase();
+
+        const filterItems = (items: any[]) => {
+            return items.reduce((acc, item) => {
+                // Check if current item matches
+                const isMatch = item.title.toLowerCase().includes(lowerQuery);
+                // Recursively check children
+                const childMatches = item.items ? filterItems(item.items) : [];
+
+                // If parent matches, show it and all its original children
+                if (isMatch) {
+                    acc.push(item);
+                }
+                // If a child matches, show the parent but ONLY the matching children
+                else if (childMatches.length > 0) {
+                    acc.push({ ...item, items: childMatches });
+                }
+
+                return acc;
+            }, []);
+        };
+
+        return filterItems(data.navMain);
+    }, [searchQuery]);
+
     return (
         <Sidebar variant="inset" {...props}>
             <SidebarHeader>
@@ -401,9 +432,8 @@ export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" asChild>
                             <Link href="/main-dashboard">
-                                <div
-                                    className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                                    <Command className="size-4"/>
+                                <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
+                                    <Command className="size-4" />
                                 </div>
                                 <div className="grid flex-1 text-left text-sm leading-tight">
                                     <span className="truncate font-medium">VOS Web</span>
@@ -415,19 +445,34 @@ export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
                         </SidebarMenuButton>
                     </SidebarMenuItem>
                 </SidebarMenu>
+
+                {/* 👇 The Search Bar UI 👇 */}
+                <div className="px-4 py-2">
+                    <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            type="search"
+                            placeholder="Search modules..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="pl-9 h-8 text-xs bg-sidebar-accent/50 focus-visible:ring-1"
+                        />
+                    </div>
+                </div>
             </SidebarHeader>
 
-            <Separator/>
+            <Separator />
 
             <SidebarContent>
                 <div className="px-4 pt-3 pb-2 text-xs font-medium text-muted-foreground">
                     Platform
                 </div>
-                <NavMain items={data.navMain}/>
+                {/* 👇 Pass the filtered data instead of the raw data 👇 */}
+                <NavMain items={filteredNavMain} />
             </SidebarContent>
 
             <SidebarFooter className="p-0">
-                <Separator/>
+                <Separator />
                 <div className="py-3 text-center text-xs text-muted-foreground">
                     VOS Web v2.0
                 </div>
