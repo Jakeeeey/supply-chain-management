@@ -11,7 +11,8 @@ import {
     Route,
     Truck,
     Warehouse,
-    Search
+    Search,
+    icons
 } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
@@ -368,6 +369,16 @@ const data = {
                             title: "For Consolidation Queue",
                             url: "/scm/monitoring/for-consolidation",
                         }
+                    ]
+                },
+                {
+                    title: "File Maintenance",
+                    url: "/scm/logistics/file-maintenance/cluster-management",
+                    items: [
+                        {
+                            title: "Cluster Management",
+                            url: "/scm/logistics/file-maintenance/cluster-management",
+                        },
                     ]
                 },
                 {
