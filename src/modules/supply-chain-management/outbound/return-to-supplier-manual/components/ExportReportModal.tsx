@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
 // Removed useReactToPrint
-import { Printer, X, Check, ChevronsUpDown, ExternalLink } from "lucide-react";
+import { Printer, X, Check, ChevronsUpDown } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -43,6 +43,16 @@ interface ExportReportModalProps {
   allData: ReturnToSupplier[];
 }
 
+interface SelectionSupplier {
+  id: number;
+  supplier_name: string;
+}
+
+interface SelectionBranch {
+  id: number;
+  branch_name: string;
+}
+
 export function ExportReportModal({
   isOpen,
   onClose,
@@ -59,7 +69,7 @@ export function ExportReportModal({
   const [openBranch, setOpenBranch] = useState(false);
   const [supplierSearch, setSupplierSearch] = useState("");
   const [branchSearch, setBranchSearch] = useState("");
-  const [refs, setRefs] = useState<{ suppliers: any[]; branches: any[] }>({
+  const [refs, setRefs] = useState<{ suppliers: SelectionSupplier[]; branches: SelectionBranch[] }>({
     suppliers: [],
     branches: [],
   });
@@ -463,12 +473,12 @@ export function ExportReportModal({
               supplierId === "all"
                 ? "All Suppliers"
                 : refs.suppliers.find((s) => String(s.id) === supplierId)
-                    ?.supplier_name,
+                    ?.supplier_name || "Unknown Supplier",
             branch:
               branchId === "all"
                 ? "All Branches"
                 : refs.branches.find((b) => String(b.id) === branchId)
-                    ?.branch_name,
+                    ?.branch_name || "Unknown Branch",
             status: status,
             customStart,
             customEnd,

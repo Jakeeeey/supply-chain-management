@@ -30,6 +30,20 @@ interface ReturnDetailsModalProps {
   onUpdateSuccess?: () => void;
 }
 
+interface VariantItem {
+  id: string;
+  masterId: string;
+  code: string;
+  name: string;
+  unit: string;
+  unitCount: number;
+  stock: number;
+  price: number;
+  uom_id: number;
+  discountType?: string;
+  supplierDiscount: number;
+}
+
 export function ReturnDetailsModal({
   isOpen,
   onClose,
@@ -56,9 +70,6 @@ export function ReturnDetailsModal({
   );
   const [currentBranchId, setCurrentBranchId] = useState<number | null>(null);
 
-  // Barcode scanning state
-  const barcodeInputRef = useRef<HTMLInputElement>(null);
-
   // 1. Initialize Data
   useEffect(() => {
     if (isOpen && data) {
@@ -81,7 +92,7 @@ export function ReturnDetailsModal({
         try {
           const fetched = await getTransactionDetails(String(data.id));
           const cartItems: CartItem[] = fetched.map((i) => {
-              const validUnitCount = i.unitCount > 0 ? i.unitCount : 1;
+            const validUnitCount = i.unitCount > 0 ? i.unitCount : 1;
             return {
               id: String(i.productId),
               code: i.code,
@@ -99,10 +110,9 @@ export function ReturnDetailsModal({
             };
           });
           setItems(cartItems);
-        } catch (err: any) {
-          toast.error("Error", {
-            description: err.message || "Failed to load details",
-          });
+        } catch (err: unknown) {
+          const msg = (err as { message?: string })?.message || "Failed to load details";
+          toast.error("Error", { description: msg });
         } finally {
           setLoading(false);
         }
@@ -160,19 +170,13 @@ export function ReturnDetailsModal({
   const availableProducts = useMemo(() => {
     if (!currentSupplierId || inventory.length === 0) return [];
 
-    const connectionMap = new Map<string, any>();
+    const connectionMap = new Map<string, (typeof refs.connections)[0]>();
     refs.connections.forEach((c) =>
       connectionMap.set(`${c.product_id}-${c.supplier_id}`, c),
     );
 
-    const discountMap = new Map<string, any>();
+    const discountMap = new Map<string, (typeof refs.lineDiscounts)[0]>();
     refs.lineDiscounts.forEach((d) => discountMap.set(String(d.id), d));
-
-    const unitOrderMap = new Map<string, number>();
-    refs.units.forEach((u) => {
-      unitOrderMap.set(u.unit_name, u.order);
-      unitOrderMap.set(u.unit_shortcut, u.order);
-    });
 
     const enrichedItems = inventory
       .map((item: InventoryRecord) => {
@@ -186,10 +190,8 @@ export function ReturnDetailsModal({
         if (connection?.discount_type) {
           const discountObj = discountMap.get(String(connection.discount_type));
           if (discountObj) {
-            computedDiscount = parseFloat(discountObj.percentage);
+            computedDiscount = parseFloat(discountObj.percentage) / 100;
             discountLabel = discountObj.line_discount;
-          } else if (typeof connection.discount_type === "string") {
-            discountLabel = connection.discount_type;
           }
         }
 
@@ -209,15 +211,19 @@ export function ReturnDetailsModal({
           uom_id: matchedUnit?.unit_id || 0,
           discountType: discountLabel,
           supplierDiscount: computedDiscount,
-        };
+        } as VariantItem;
       })
       .filter((p) => {
         const isAlreadyInCart = items.some((i) => i.id === p.id);
         return p.stock > 0 || isAlreadyInCart;
       });
 
-    // Group by familyId
-    const groups: Record<string, any> = {};
+    const groups: Record<string, {
+      masterId: string;
+      masterCode: string;
+      masterName: string;
+      variants: VariantItem[];
+    }> = {};
 
     enrichedItems.forEach((item) => {
       const groupKey = item.masterId;
@@ -233,16 +239,17 @@ export function ReturnDetailsModal({
     });
 
     return Object.values(groups).map((group) => {
-      group.variants.sort((a: any, b: any) => a.unitCount - b.unitCount);
+      group.variants.sort((a, b) => a.unitCount - b.unitCount);
       if (group.variants.length > 0) {
         group.masterName = group.variants[0].name;
       }
-      group.variants.sort((a: any, b: any) => b.unitCount - a.unitCount);
+      group.variants.sort((a, b) => b.unitCount - a.unitCount);
       return group;
     });
   }, [
     refs.connections,
     refs.lineDiscounts,
+    refs.units,
     currentSupplierId,
     inventory,
     items,
@@ -251,7 +258,8 @@ export function ReturnDetailsModal({
   /**
    * HANDLERS: Barcode Scanning
    */
-  const addToCartInternal = useCallback((p: any, qty = 1) => {
+  const addToCartInternal = useCallback((p_raw: unknown, qty = 1) => {
+    const p = p_raw as CartItem & { stock?: number; supplierDiscount?: number };
     setItems((prev) => {
       const exists = prev.find((i) => i.id === p.id);
       if (exists)
@@ -268,7 +276,7 @@ export function ReturnDetailsModal({
           onHand: p.stock || 0,
           discount: p.supplierDiscount || 0,
           customPrice: p.price,
-        },
+        } as CartItem,
       ];
     });
   }, []);
@@ -409,10 +417,9 @@ export function ReturnDetailsModal({
       });
       if (onUpdateSuccess) onUpdateSuccess();
       onClose();
-    } catch (err: any) {
-      toast.error("Error", {
-        description: err.message || "Failed to update transaction.",
-      });
+    } catch (err: unknown) {
+      const msg = (err as { message?: string })?.message || "Failed to update transaction.";
+      toast.error("Error", { description: msg });
     } finally {
       setSaving(false);
     }
@@ -421,7 +428,7 @@ export function ReturnDetailsModal({
   if (!data) return null;
 
   // Map data for printing
-  const printableItems: any[] = items.map((i) => {
+  const printableItems = items.map((i) => {
     const returnTypeObj = refs.returnTypes.find(
       (rt) => String(rt.id) === String(i.return_type_id),
     );
@@ -436,7 +443,7 @@ export function ReturnDetailsModal({
       quantity: i.quantity,
       price: i.customPrice || i.price,
       discount: i.discount,
-      total: (i.customPrice || i.price) * i.quantity * (1 - i.discount / 100),
+      total: (i.customPrice || i.price) * i.quantity,
       returnType: returnTypeName,
     };
   });
@@ -627,7 +634,7 @@ export function ReturnDetailsModal({
       </Dialog>
 
       <Dialog open={showPicker} onOpenChange={setShowPicker}>
-        <DialogContent className="max-w-[95vw]! w-[95vw]! h-[95vh] p-0 overflow-hidden bg-background shadow-2xl border-none flex flex-col z-9999 [&>button]:hidden">
+        <DialogContent className="max-w-[95vw]! w-[95vw]! h-[95vh] p-0 overflow-hidden bg-background shadow-2xl border-none flex flex-col z-[9999] [&>button]:hidden">
           <div className="flex items-center justify-between px-6 py-4 border-b">
             <DialogTitle>Select Products</DialogTitle>
             <Button
@@ -644,19 +651,19 @@ export function ReturnDetailsModal({
               onClose={() => setShowPicker(false)}
               products={availableProducts}
               addedProducts={items}
-                onAdd={(p, q) => addToCartInternal(p, q)}
-                onRemove={(id) =>
-                  setItems((prev) => prev.filter((i) => i.id !== id))
-                }
-                onUpdateQty={(id, q) =>
-                  setItems((prev) =>
-                    prev.map((i) => (i.id === id ? { ...i, quantity: q } : i)),
-                  )
-                }
-                onClearAll={() => setItems([])}
-                onBarcodeScan={handleBarcodeScan}
-                isLoading={loading || isLoadingInventory}
-              />
+              onAdd={(p, q) => addToCartInternal(p, q)}
+              onRemove={(id) =>
+                setItems((prev) => prev.filter((i) => i.id !== id))
+              }
+              onUpdateQty={(id, q) =>
+                setItems((prev) =>
+                  prev.map((i) => (i.id === id ? { ...i, quantity: q } : i)),
+                )
+              }
+              onClearAll={() => setItems([])}
+              onBarcodeScan={handleBarcodeScan}
+              isLoading={loading || isLoadingInventory}
+            />
           </div>
         </DialogContent>
       </Dialog>

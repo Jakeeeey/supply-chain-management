@@ -18,7 +18,6 @@ import {
 } from "@/components/ui/popover";
 import {
   Command,
-  CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
@@ -75,8 +74,7 @@ export function CreateReturnModal({
   const [supplierSearch, setSupplierSearch] = useState("");
   const [branchSearch, setBranchSearch] = useState("");
 
-  // Barcode scanning state
-  const barcodeInputRef = useRef<HTMLInputElement>(null);
+
 
   const filteredSuppliers = useMemo(() => {
     if (!supplierSearch) return refs.suppliers;
@@ -102,12 +100,12 @@ export function CreateReturnModal({
     if (inventory.length === 0) return [];
 
     // Build connection + discount maps for enrichment
-    const connectionMap = new Map<string, any>();
+    const connectionMap = new Map<string, (typeof refs.connections)[0]>();
     refs.connections.forEach((c) =>
       connectionMap.set(`${c.product_id}-${c.supplier_id}`, c),
     );
 
-    const discountMap = new Map<string, any>();
+    const discountMap = new Map<string, (typeof refs.lineDiscounts)[0]>();
     refs.lineDiscounts.forEach((d) =>
       discountMap.set(String(d.id), d),
     );
@@ -160,8 +158,27 @@ export function CreateReturnModal({
       // Filter: only products with stock > 0
       .filter((p) => Number(p.stock ?? 0) > 0);
 
+    interface VariantItem {
+      id: string;
+      masterId: string;
+      code: string;
+      name: string;
+      unit: string;
+      unitCount: number;
+      stock: number;
+      price: number;
+      uom_id: number;
+      discountType?: string;
+      supplierDiscount: number;
+    }
+
     // Group by familyId
-    const groups: Record<string, any> = {};
+    const groups: Record<string, {
+      masterId: string;
+      masterCode: string;
+      masterName: string;
+      variants: VariantItem[];
+    }> = {};
 
     enrichedItems.forEach((item) => {
       const groupKey = item.masterId;
@@ -179,11 +196,11 @@ export function CreateReturnModal({
     return Object.values(groups).map((group) => {
       // Propagate parent discount to children missing it
       const parentDiscount = group.variants.find(
-        (v: any) => v.supplierDiscount > 0 || v.discountType,
+        (v) => v.supplierDiscount > 0 || v.discountType,
       );
 
       if (parentDiscount) {
-        group.variants = group.variants.map((v: any) => ({
+        group.variants = group.variants.map((v) => ({
           ...v,
           supplierDiscount:
             v.supplierDiscount || parentDiscount.supplierDiscount,
@@ -192,15 +209,15 @@ export function CreateReturnModal({
       }
 
       // Sort: smallest unit first for naming, then largest first for display
-      group.variants.sort((a: any, b: any) => a.unitCount - b.unitCount);
+      group.variants.sort((a, b) => a.unitCount - b.unitCount);
       if (group.variants.length > 0) {
         group.masterName = group.variants[0].name;
       }
-      group.variants.sort((a: any, b: any) => b.unitCount - a.unitCount);
+      group.variants.sort((a, b) => b.unitCount - a.unitCount);
 
       return group;
     });
-  }, [inventory, refs.connections, refs.lineDiscounts, selection.supplierId]);
+  }, [inventory, refs.connections, refs.lineDiscounts, refs.units, selection.supplierId]);
 
   useEffect(() => {
     if (selection.supplierId && selection.branchId) {
@@ -210,7 +227,8 @@ export function CreateReturnModal({
 
 
 
-  const addToCart = (p: any, qty = 1) => {
+  const addToCart = useCallback((p_raw: unknown, qty = 1) => {
+    const p = p_raw as CartItem;
     setCart((prev) => {
       const exists = prev.find((i) => i.id === p.id);
       if (exists)
@@ -224,13 +242,13 @@ export function CreateReturnModal({
         {
           ...p,
           quantity: qty,
-          onHand: p.stock,
+          onHand: p.stock ?? 0,
           discount: (p.supplierDiscount || 0),
           customPrice: p.price,
-        },
+        } as CartItem,
       ];
     });
-  };
+  }, []);
 
   /**
    * Handles Barcode scan: finds the product in current inventory/references → adds to cart.
@@ -289,7 +307,7 @@ export function CreateReturnModal({
         description: `Added "${invRecord.product_name}"`,
       });
     },
-    [selection.branchId, selection.supplierId, inventory, addToCart],
+    [selection.branchId, selection.supplierId, inventory, addToCart, refs.units],
   );
 
   /**
@@ -359,9 +377,9 @@ export function CreateReturnModal({
       });
       onReturnCreated();
       handleCloseFull();
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error("Error", {
-        description: err.message || "Failed to create return transaction.",
+        description: (err as { message?: string })?.message || "Failed to create return transaction.",
       });
     } finally {
       setSubmitting(false);

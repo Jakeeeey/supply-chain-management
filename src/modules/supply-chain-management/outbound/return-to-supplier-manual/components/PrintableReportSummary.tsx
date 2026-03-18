@@ -3,9 +3,18 @@
 import React from "react";
 import type { ReturnToSupplier } from "../types/rts.schema";
 
+interface ReportFilters {
+  dateRange: string;
+  customStart?: string;
+  customEnd?: string;
+  supplier: string;
+  branch: string;
+  status: string;
+}
+
 interface Props {
   data: ReturnToSupplier[];
-  filters: any;
+  filters: ReportFilters;
 }
 
 export const PrintableReportSummary = React.forwardRef<HTMLDivElement, Props>(

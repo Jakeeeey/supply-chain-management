@@ -3,10 +3,13 @@
 import React from "react";
 import type { ReturnToSupplier, ReturnItem, LineDiscount } from "../types/rts.schema";
 
+interface PrintableItem extends ReturnItem {
+  returnType?: string;
+}
+
 interface Props {
   data: ReturnToSupplier;
-  // Use any[] here to allow the extended 'returnType' property without strict TS errors
-  items: any[];
+  items: PrintableItem[];
   lineDiscounts: LineDiscount[];
 }
 

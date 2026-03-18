@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { ColumnDef } from "@tanstack/react-table";
+import { ColumnDef, CellContext } from "@tanstack/react-table";
 import {
   FileDown,
   RotateCcw,
@@ -239,14 +239,14 @@ export function ReturnToSupplierList({
     () =>
       columns.map((col) => ({
         ...col,
-        cell: (props: any) => (
+        cell: (props: CellContext<ReturnToSupplier, unknown>) => (
           <div
             onClick={() => setDetailData(props.row.original)}
             className="cursor-pointer"
           >
             {typeof col.cell === "function"
-              ? col.cell(props)
-              : props.getValue()}
+              ? (col.cell as (props: CellContext<ReturnToSupplier, unknown>) => React.ReactNode)(props)
+              : (props.getValue() as React.ReactNode)}
           </div>
         ),
       })),

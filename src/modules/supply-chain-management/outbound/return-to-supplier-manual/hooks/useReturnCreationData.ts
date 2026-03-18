@@ -51,8 +51,8 @@ export function useReturnCreationData(isActive: boolean) {
       try {
         const data = await getReferences();
         if (!cancelled) setRefs(data);
-      } catch (err: any) {
-        const msg = err.message || "Failed to load reference data.";
+      } catch (err: unknown) {
+        const msg = (err as { message?: string })?.message || "Failed to load reference data.";
         if (!cancelled) {
           setError(msg);
           toast.error("Reference Error", { description: msg });
@@ -79,8 +79,8 @@ export function useReturnCreationData(isActive: boolean) {
       try {
         const data = await getInventory(branchId, supplierId);
         setInventory(data);
-      } catch (err: any) {
-        const msg = err.message || "Failed to load inventory.";
+      } catch (err: unknown) {
+        const msg = (err as { message?: string })?.message || "Failed to load inventory.";
         setError(msg);
         toast.error("Inventory Error", { description: msg });
         setInventory([]);

@@ -18,12 +18,33 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useGlobalScanner } from "../hooks/useGlobalScanner";
 import type { CartItem } from "../types/rts.schema";
 
+interface VariantItem {
+  id: string;
+  masterId: string;
+  code: string;
+  name: string;
+  unit: string;
+  unitCount: number;
+  stock: number;
+  price: number;
+  uom_id: number;
+  discountType?: string;
+  supplierDiscount: number;
+}
+
+interface ProductGroup {
+  masterId: string;
+  masterCode: string;
+  masterName: string;
+  variants: VariantItem[];
+}
+
 interface ProductPickerProps {
   isVisible: boolean;
   onClose: () => void;
-  products: any[];
+  products: ProductGroup[];
   addedProducts: CartItem[];
-  onAdd: (product: any, qty: number) => void;
+  onAdd: (product: VariantItem, qty: number) => void;
   onRemove: (id: string) => void;
   onUpdateQty: (id: string, qty: number) => void;
   onClearAll: () => void;
@@ -77,15 +98,15 @@ export function ProductPicker({
     },
   });
 
-  const filteredGroups = useMemo(() => {
+  const filteredGroups = useMemo((): ProductGroup[] => {
     if (!search) return products;
     const lowerSearch = search.toLowerCase();
 
-    return products
+    const groupsWithMatches = products
       .map((group) => {
         if (group.masterName.toLowerCase().includes(lowerSearch)) return group;
         const matchingVariants = group.variants.filter(
-          (v: any) =>
+          (v) =>
             v.name.toLowerCase().includes(lowerSearch) ||
             v.code.toLowerCase().includes(lowerSearch),
         );
@@ -93,8 +114,9 @@ export function ProductPicker({
           return { ...group, variants: matchingVariants };
         }
         return null;
-      })
-      .filter(Boolean);
+      });
+
+    return groupsWithMatches.filter((g): g is ProductGroup => g !== null);
   }, [products, search]);
 
   const totalAmount = addedProducts.reduce(
@@ -179,7 +201,7 @@ export function ProductPicker({
               </div>
             ) : (
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                {filteredGroups.map((group: any) => (
+                {filteredGroups.map((group) => (
                   <div
                     key={group.masterId}
                     className="bg-card rounded-xl border shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-shadow"
@@ -196,7 +218,7 @@ export function ProductPicker({
                       </p>
                     </div>
                     <div className="p-3 space-y-2">
-                      {group.variants.map((variant: any) => {
+                      {group.variants.map((variant) => {
                         const cartItem = addedProducts.find(
                           (i) => i.id === variant.id,
                         );

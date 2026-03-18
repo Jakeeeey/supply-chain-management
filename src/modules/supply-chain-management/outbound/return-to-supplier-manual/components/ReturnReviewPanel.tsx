@@ -27,7 +27,11 @@ interface ReturnReviewPanelProps {
   items: CartItem[];
   lineDiscounts: LineDiscount[];
   returnTypes: RTSReturnType[];
-  onUpdateItem: (id: string, field: keyof CartItem, value: number) => void;
+  onUpdateItem: (
+    id: string,
+    field: keyof CartItem,
+    value: string | number | null,
+  ) => void;
   onRemoveItem: (id: string) => void;
   remarks: string;
   setRemarks: (val: string) => void;
@@ -47,7 +51,6 @@ export function ReturnReviewPanel({
   const totalAmount = items.reduce(
     (sum, item) =>
       sum +
-      sum +
       (item.customPrice || item.price) *
         item.quantity *
         (1 - item.discount),
@@ -57,7 +60,6 @@ export function ReturnReviewPanel({
   const totalQuantity = items.reduce((acc, i) => acc + i.quantity, 0);
   const totalDiscountAmount = items.reduce(
     (sum, item) =>
-      sum +
       sum +
       (item.customPrice || item.price) * item.quantity * item.discount,
     0,
@@ -256,7 +258,7 @@ export function ReturnReviewPanel({
                             onValueChange={(val) => {
                               onUpdateItem(
                                 item.id,
-                                "return_type_id" as any,
+                                "return_type_id",
                                 Number(val),
                               );
                             }}
