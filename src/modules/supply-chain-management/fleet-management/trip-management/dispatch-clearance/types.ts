@@ -95,6 +95,7 @@ export interface ReconciliationRow {
   amount: number;
   remarks?: string;
   missingQtys?: Record<string | number, number>;
+  scannedQtys?: Record<string | number, number>;
 }
 
 export interface InvoiceLine {
@@ -117,4 +118,11 @@ export interface InvoiceDetail {
     status: string;
   };
   lines: InvoiceLine[];
+}
+
+export interface RFIDMapping {
+  id: number;
+  product_id: number;
+  dispatch_id: number;
+  rfid: string;
 }
