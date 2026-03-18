@@ -14,7 +14,7 @@ import { cookies } from "next/headers";
 
 // ✅ Wire the module you asked for
 // import ComingSoon from "../../_components/ComingSoon";
-import ReturnToSupplier from "@/modules/supply-chain-management/outbound/return-to-supplier/ReturnToSupplierModule";
+import ReturnToSupplier from "@/modules/supply-chain-management/outbound/return-to-supplier-manual/ReturnToSupplierModule";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

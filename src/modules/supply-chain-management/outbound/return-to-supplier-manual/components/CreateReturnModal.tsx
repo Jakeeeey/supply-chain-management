@@ -137,7 +137,7 @@ export function CreateReturnModal({
         if (connection?.discount_type) {
           const discountObj = discountMap.get(String(connection.discount_type));
           if (discountObj) {
-            computedDiscount = parseFloat(discountObj.percentage);
+            computedDiscount = parseFloat(discountObj.percentage) / 100;
             discountLabel = discountObj.line_discount;
           } else {
             discountLabel = String(connection.discount_type);
@@ -234,7 +234,7 @@ export function CreateReturnModal({
             id: `${p.id}-rfid-${p.rfid_tag}`, // Unique key per RFID
             quantity: 1,
             onHand: p.stock || 0,
-            discount: p.supplierDiscount || 0,
+            discount: (p.supplierDiscount || 0),
             customPrice: p.price,
             rfid_tag: p.rfid_tag,
           },
@@ -255,7 +255,7 @@ export function CreateReturnModal({
           ...p,
           quantity: qty,
           onHand: p.stock,
-          discount: p.supplierDiscount || 0,
+          discount: (p.supplierDiscount || 0),
           customPrice: p.price,
         },
       ];
@@ -352,7 +352,7 @@ export function CreateReturnModal({
             (d) => String(d.id) === String(connection.discount_type),
           );
           if (discountObj) {
-            product.supplierDiscount = parseFloat(discountObj.percentage);
+            product.supplierDiscount = parseFloat(discountObj.percentage) / 100;
           }
         }
 
@@ -503,7 +503,7 @@ export function CreateReturnModal({
           quantity: item.quantity * (item.unitCount || 1),
           gross_unit_price: item.customPrice || item.price,
           gross_amount: gross,
-          discount_rate: item.discount,
+          discount_rate: item.discount * 100,
           discount_amount: discountAmount,
           net_amount: net,
           item_remarks: "",

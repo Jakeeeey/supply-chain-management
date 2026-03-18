@@ -7,7 +7,7 @@ import type {
   CreateReturnDTO,
 } from "../types/rts.schema";
 
-const API_BASE = "/api/scm/outbound/return-to-supplier-rfid";
+const API_BASE = "/api/scm/outbound/return-to-supplier-manual";
 
 // =============================================================================
 // INTERNAL HELPERS

@@ -47,9 +47,10 @@ export function ReturnReviewPanel({
   const totalAmount = items.reduce(
     (sum, item) =>
       sum +
+      sum +
       (item.customPrice || item.price) *
         item.quantity *
-        (1 - item.discount / 100),
+        (1 - item.discount),
     0,
   );
 
@@ -57,7 +58,8 @@ export function ReturnReviewPanel({
   const totalDiscountAmount = items.reduce(
     (sum, item) =>
       sum +
-      (item.customPrice || item.price) * item.quantity * (item.discount / 100),
+      sum +
+      (item.customPrice || item.price) * item.quantity * item.discount,
     0,
   );
   const grossAmount = totalAmount + totalDiscountAmount;
@@ -66,9 +68,9 @@ export function ReturnReviewPanel({
   const getDiscountName = (percentage: number) => {
     if (percentage === 0) return "0%";
     const match = lineDiscounts.find(
-      (d) => parseFloat(d.percentage) === percentage,
+      (d) => (parseFloat(d.percentage) / 100) === percentage,
     );
-    return match ? match.line_discount : `${percentage}%`; // Fallback to % if custom
+    return match ? match.line_discount : `${(percentage * 100).toFixed(0)}%`; // Fallback to % if custom
   };
 
   return (
@@ -128,9 +130,8 @@ export function ReturnReviewPanel({
             ) : (
               items.map((item) => {
                 const unitPrice = item.customPrice || item.price;
-                const discountPerUnit = unitPrice * (item.discount / 100);
-                const rowTotal =
-                  unitPrice * item.quantity * (1 - item.discount / 100);
+                const totalLineDiscount = (unitPrice * item.quantity) * item.discount;
+                const rowTotal = (unitPrice * item.quantity) - totalLineDiscount;
 
                 return (
                   <TableRow
@@ -201,7 +202,7 @@ export function ReturnReviewPanel({
                             value={
                               lineDiscounts
                                 .find(
-                                  (d) => Number(d.percentage) === item.discount,
+                                  (d) => (Number(d.percentage) / 100) === item.discount,
                                 )
                                 ?.id.toString() || "custom"
                             }
@@ -216,7 +217,7 @@ export function ReturnReviewPanel({
                                   onUpdateItem(
                                     item.id,
                                     "discount",
-                                    Number(selected.percentage),
+                                    Number(selected.percentage) / 100,
                                   );
                               }
                             }}
@@ -238,10 +239,10 @@ export function ReturnReviewPanel({
                     </TableCell>
 
                     <TableCell className="text-right text-sm font-medium">
-                      {discountPerUnit > 0 ? (
+                      {totalLineDiscount > 0 ? (
                         <span>
                           ₱{" "}
-                          {discountPerUnit.toLocaleString(undefined, {
+                          {totalLineDiscount.toLocaleString(undefined, {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2,
                           })}

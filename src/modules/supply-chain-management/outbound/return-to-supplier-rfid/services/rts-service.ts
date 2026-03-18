@@ -87,7 +87,7 @@ export async function fetchTransactionDetails(
       unit: typeof i.uom_id === "object" ? i.uom_id.unit_shortcut : "UNIT",
       quantity: Number(i.quantity),
       price: Number(i.gross_unit_price),
-      discountRate: Number(i.discount_rate),
+      discountRate: Number(i.discount_rate) / 100,
       discountAmount: Number(i.discount_amount),
       total: Number(i.net_amount),
       unitCount: Number(rawUnitCount) > 0 ? Number(rawUnitCount) : 1,

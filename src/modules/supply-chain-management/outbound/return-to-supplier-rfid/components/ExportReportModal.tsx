@@ -470,6 +470,8 @@ export function ExportReportModal({
                 : refs.branches.find((b) => String(b.id) === branchId)
                     ?.branch_name,
             status: status,
+            customStart,
+            customEnd,
           }}
         />
       </div>
