@@ -13,6 +13,12 @@ import {
     User,
     ChevronDown,
     Scan,
+    Box,
+    Save,
+    Receipt,
+    ScrollText,
+    ScanLine,
+    Keyboard,
 } from 'lucide-react';
 import {
     Dialog,
@@ -38,59 +44,58 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { InvoiceDetail, InvoiceLine, ReconciliationRow } from '../types';
+import { InvoiceDetail, InvoiceLine, ReconciliationRow, RFIDMapping } from '../types';
 import { fetchInvoiceDetails } from '../providers/fetchProviders';
 import ScanningModal from './ScanningModal';
+import ManualInputModal from './ManualInputModal';
 
 interface ReconciliationDetailModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (id: number, data: any) => void;
-    reconciliation: ReconciliationRow;
+    reconciliation: ReconciliationRow | null;
+    onSave: (invoiceId: number, status: string, remarks: string, missingQtys: Record<string | number, number>, scannedQtys: Record<string | number, number>) => void;
+    rfidTags?: RFIDMapping[];
 }
 
 const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
     isOpen,
     onClose,
     onSave,
-    reconciliation
+    reconciliation,
+    rfidTags = []
 }) => {
     const [detail, setDetail] = useState<InvoiceDetail | null>(null);
-    const [loading, setLoading] = useState(false);
-    const [remarks, setRemarks] = useState('');
+    const [isLoading, setIsLoading] = useState(true);
     const [missingQtys, setMissingQtys] = useState<Record<string | number, number>>({});
+    const [remarks, setRemarks] = useState('');
     const [scannedQtys, setScannedQtys] = useState<Record<string | number, number>>({});
     const [isScanningOpen, setIsScanningOpen] = useState(false);
+    const [isManualInputOpen, setIsManualInputOpen] = useState(false);
 
     useEffect(() => {
-        if (isOpen && reconciliation.invoiceId) {
-            loadDetails();
+        if (isOpen && reconciliation?.invoiceId) {
+            setIsLoading(true);
+            fetchInvoiceDetails(reconciliation.invoiceId)
+                .then(data => {
+                    setDetail(data);
+                    setMissingQtys(reconciliation.missingQtys || {});
+                    setScannedQtys(reconciliation.scannedQtys || {});
+                    setRemarks(reconciliation.remarks || '');
+                })
+                .catch(err => console.error("Failed to fetch invoice details:", err))
+                .finally(() => setIsLoading(false));
         } else {
             setDetail(null);
             setRemarks('');
             setMissingQtys({});
             setScannedQtys({});
         }
-    }, [isOpen, reconciliation.invoiceId]);
+    }, [isOpen, reconciliation]);
 
-    const loadDetails = async () => {
-        setLoading(true);
-        try {
-            const data = await fetchInvoiceDetails(reconciliation.invoiceId);
-            setDetail(data);
-        } catch (error) {
-            console.error('Failed to load invoice details:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
+    if (!reconciliation) return null;
 
     const handleSave = () => {
-        onSave(reconciliation.id, {
-            remarks,
-            missingQtys,
-            status: reconciliation.status
-        });
+        onSave(reconciliation.id, reconciliation.status, remarks, missingQtys, scannedQtys);
         onClose();
     };
 
@@ -102,23 +107,21 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
     const handleScanningConfirm = (scanned: Record<string | number, number>) => {
         setScannedQtys(scanned);
 
-        // Auto-calculate quantities based on status
+        // Auto-calculate missing quantities based on the scan/input
         const newQtys: Record<string | number, number> = {};
         detail?.lines.forEach(line => {
             const scanCount = scanned[line.id] || 0;
-
-            if (reconciliation.status === 'Fulfilled with Concerns') {
-                // For concerns, the scanning records the count of items returned/affected
-                newQtys[line.id] = scanCount;
-            } else {
-                // For other statuses, we calculate what is missing
-                const diff = Math.max(0, line.qty - scanCount);
-                if (diff > 0) {
-                    newQtys[line.id] = diff;
-                }
+            const diff = Math.max(0, line.qty - scanCount);
+            if (diff > 0) {
+                newQtys[line.id] = diff;
             }
         });
         setMissingQtys(newQtys);
+    };
+
+    // Use the exact same calculation logic for manual input
+    const handleManualInputConfirm = (inputs: Record<string | number, number>) => {
+        handleScanningConfirm(inputs);
     };
 
     if (!isOpen) return null;
@@ -130,7 +133,7 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
 
         const colorClass = reconciliation.status === 'Fulfilled' ? 'text-emerald-500' :
             reconciliation.status === 'Unfulfilled' ? 'text-rose-500' :
-                reconciliation.status === 'Fulfilled with Concerns' ? 'text-amber-500' : 'text-indigo-500';
+                reconciliation.status === 'Fulfilled with Concerns' ? 'text-amber-500' : 'text-primary';
 
         const titlePrefix = reconciliation.status === 'Fulfilled' ? 'Clearance' :
             reconciliation.status === 'Fulfilled with Returns' ? 'Process Return' : 'Reconciliation';
@@ -138,7 +141,7 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
         return (
             <div className="flex items-center gap-3">
                 <Icon className={`w-6 h-6 ${colorClass}`} />
-                <DialogTitle className="text-lg font-bold">
+                <DialogTitle className="text-lg font-bold text-foreground">
                     {titlePrefix}: {reconciliation.invoiceNo}
                 </DialogTitle>
             </div>
@@ -146,18 +149,18 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
     };
 
     const renderContent = () => {
-        if (loading) {
+        if (isLoading) {
             return (
-                <div className="flex flex-col items-center justify-center py-12 gap-3">
-                    <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
-                    <p className="text-sm text-slate-500 font-medium">Fetching invoice details...</p>
+                <div className="flex flex-col items-center justify-center py-20 space-y-4">
+                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                    <p className="text-sm text-muted-foreground font-medium">Fetching invoice details...</p>
                 </div>
             );
         }
 
         if (!detail) {
             return (
-                <div className="py-12 text-center text-slate-500 italic">
+                <div className="py-12 text-center text-muted-foreground italic">
                     Failed to load details or no data found.
                 </div>
             );
@@ -166,27 +169,27 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
         if (reconciliation.status === 'Fulfilled with Returns') {
             return (
                 <div className="space-y-6">
-                    <p className="text-sm text-slate-600 leading-relaxed">
+                    <p className="text-sm text-muted-foreground leading-relaxed">
                         This customer has a return flag. How do you want to process this transaction?
                     </p>
 
-                    <div className="p-4 rounded-xl border-2 border-indigo-100 bg-indigo-50/30 flex items-center justify-between group cursor-pointer hover:border-indigo-300 transition-all">
+                    <div className="p-4 rounded-xl border-2 border-primary/10 bg-primary/5 flex items-center justify-between group cursor-pointer hover:border-primary/30 transition-all">
                         <div className="flex items-center gap-4">
-                            <div className="w-5 h-5 rounded-full border-2 border-indigo-400 flex items-center justify-center">
-                                <div className="w-2.5 h-2.5 rounded-full bg-indigo-600"></div>
+                            <div className="w-5 h-5 rounded-full border-2 border-primary/40 flex items-center justify-center">
+                                <div className="w-2.5 h-2.5 rounded-full bg-primary"></div>
                             </div>
                             <div className="space-y-1">
-                                <p className="font-bold text-slate-900">Link to Existing Sales Return</p>
-                                <div className="flex items-center gap-1 text-slate-500 text-xs font-medium">
+                                <p className="font-bold text-foreground">Link to Existing Sales Return</p>
+                                <div className="flex items-center gap-1 text-muted-foreground text-xs font-medium">
                                     -- Select Pending SR -- <ChevronDown className="w-3 h-3" />
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <div className="flex justify-end gap-3 pt-4">
-                        <Button variant="outline" onClick={onClose} className="rounded-xl px-6">Cancel</Button>
-                        <Button onClick={handleSave} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-8 font-bold">Confirm & Clear</Button>
+                    <div className="flex justify-end gap-3 pt-4 border-t border-border">
+                        <Button variant="outline" onClick={onClose} className="rounded-xl px-6 border-border">Cancel</Button>
+                        <Button onClick={handleSave} className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl px-8 font-bold">Confirm & Clear</Button>
                     </div>
                 </div>
             );
@@ -195,62 +198,101 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
         return (
             <div className="space-y-6">
                 {/* Info Card */}
-                <div className="grid grid-cols-2 gap-4 p-4 rounded-xl border border-slate-100 bg-slate-50/50">
+                <div className="grid grid-cols-2 gap-4 p-4 rounded-xl border border-border bg-muted/30">
                     <div className="space-y-1">
-                        <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Customer</p>
-                        <p className="text-sm font-bold text-slate-900">{reconciliation.customerName}</p>
+                        <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Customer</p>
+                        <p className="text-sm font-bold text-foreground">{reconciliation.customerName}</p>
                     </div>
                     <div className="space-y-1 text-right">
-                        <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Status</p>
-                        <p className={`text-sm font-bold ${reconciliation.status === 'Fulfilled' ? 'text-emerald-600' :
-                            reconciliation.status === 'Unfulfilled' ? 'text-rose-600' : 'text-amber-600'
+                        <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Status</p>
+                        <p className={`text-sm font-bold ${reconciliation.status === 'Fulfilled' ? 'text-emerald-500' :
+                            reconciliation.status === 'Unfulfilled' ? 'text-rose-500' : 'text-amber-500'
                             }`}>{reconciliation.status}</p>
                     </div>
                 </div>
 
                 {/* Items Table */}
-                <div className="rounded-xl border border-slate-200 overflow-hidden">
-                    <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
-                        <p className="text-[10px] uppercase tracking-wider font-bold text-slate-500">Transaction Details</p>
+                <div className="rounded-xl border border-border overflow-hidden bg-card">
+                    <div className="bg-muted px-4 py-2 border-b border-border">
+                        <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Transaction Details</p>
                     </div>
                     <div className="overflow-x-auto custom-scrollbar">
                         <Table className="min-w-[600px] md:min-w-full">
                             <TableHeader>
-                                <TableRow className="bg-slate-50/30 hover:bg-slate-50/30">
-                                    <TableHead className="text-xs font-bold text-slate-600">Product / Unit of Measure</TableHead>
-                                    <TableHead className="text-xs font-bold text-slate-600 text-center">
+                                <TableRow className="bg-muted/50 hover:bg-muted/50 border-border">
+                                    <TableHead className="text-xs font-bold text-muted-foreground">Product / Unit of Measure</TableHead>
+                                    <TableHead className="text-xs font-bold text-muted-foreground text-center">
                                         {reconciliation.status === 'Fulfilled' ? 'Qty' : 'Orig Qty'}
                                     </TableHead>
-                                    {reconciliation.status !== 'Fulfilled' && (
-                                        <TableHead className="text-xs font-bold text-slate-600 text-center">
-                                            {reconciliation.status === 'Fulfilled with Concerns' ? 'Count' : 'Missing'}
-                                        </TableHead>
+                                    {reconciliation.status === 'Fulfilled with Concerns' && (
+                                        <>
+                                            <TableHead className="text-xs font-bold text-muted-foreground text-center">
+                                                Count
+                                            </TableHead>
+                                            <TableHead className="text-xs font-bold text-muted-foreground text-right">
+                                                Count Amount
+                                            </TableHead>
+                                        </>
                                     )}
-                                    <TableHead className="text-xs font-bold text-slate-600 text-right pr-6">Amount</TableHead>
+                                    {reconciliation.status !== 'Fulfilled' && (
+                                        <>
+                                            <TableHead className="text-xs font-bold text-muted-foreground text-center">
+                                                Missing
+                                            </TableHead>
+                                            <TableHead className="text-xs font-bold text-muted-foreground text-right">
+                                                Missing Amount
+                                            </TableHead>
+                                        </>
+                                    )}
+                                    <TableHead className="text-xs font-bold text-muted-foreground text-right pr-6">
+                                        {reconciliation.status === 'Fulfilled' ? 'Amount' : 'Orig Amount'}
+                                    </TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {detail.lines.map((line) => (
-                                    <TableRow key={line.id} className="hover:bg-slate-50/50 transition-colors border-slate-100">
+                                    <TableRow key={line.id} className="hover:bg-muted/30 transition-colors border-border">
                                         <TableCell>
                                             <div className="space-y-0.5">
-                                                <p className="text-sm font-bold text-slate-900">{line.product_name}</p>
-                                                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500 font-bold uppercase">{line.unit}</span>
+                                                <p className="text-sm font-bold text-foreground">{line.product_name}</p>
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground font-bold uppercase border border-border">{line.unit}</span>
                                             </div>
                                         </TableCell>
-                                        <TableCell className="text-sm font-bold text-slate-900 text-center">{line.qty}</TableCell>
-                                        {reconciliation.status !== 'Fulfilled' && (
-                                            <TableCell className="text-center w-24">
-                                                <div className="flex items-center justify-center">
-                                                    <div className={`h-9 w-16 flex items-center justify-center font-bold rounded-lg border border-slate-200 transition-colors ${(missingQtys[line.id] || 0) > 0 ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-slate-50 text-slate-400'
-                                                        }`}>
-                                                        {missingQtys[line.id] || 0}
+                                        <TableCell className="text-sm font-bold text-foreground text-center tabular-nums">{line.qty}</TableCell>
+                                        {reconciliation.status === 'Fulfilled with Concerns' && (
+                                            <>
+                                                <TableCell className="text-center w-24">
+                                                    <div className="flex items-center justify-center">
+                                                        <div className="h-9 w-16 flex items-center justify-center font-bold rounded-lg border border-border transition-colors bg-muted/50 text-muted-foreground tabular-nums">
+                                                            {scannedQtys[line.id] || 0}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            </TableCell>
+                                                </TableCell>
+                                                <TableCell className="text-right text-sm font-bold text-muted-foreground tabular-nums">
+                                                    ₱{(((line.net_total || 0) / (line.qty || 1)) * (scannedQtys[line.id] || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </TableCell>
+                                            </>
                                         )}
-                                        <TableCell className="text-right text-sm font-bold text-slate-900 pr-6">
-                                            ₱{line.net_total.toLocaleString()}
+                                        {reconciliation.status !== 'Fulfilled' && (
+                                            <>
+                                                <TableCell className="text-center w-24">
+                                                    <div className="flex items-center justify-center">
+                                                        <div className={`h-9 w-16 flex items-center justify-center font-bold rounded-lg border transition-colors tabular-nums ${
+                                                            (missingQtys[line.id] || 0) > 0 
+                                                            ? 'bg-rose-500/10 text-rose-500 border-rose-500/20' 
+                                                            : 'bg-muted/50 text-muted-foreground border-border'
+                                                        }`}>
+                                                            {missingQtys[line.id] || 0}
+                                                        </div>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-right text-sm font-bold text-rose-500 tabular-nums">
+                                                    ₱{(((line.net_total || 0) / (line.qty || 1)) * (missingQtys[line.id] || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </TableCell>
+                                            </>
+                                        )}
+                                        <TableCell className="text-right text-sm font-bold text-foreground pr-6 tabular-nums">
+                                            ₱{Number(line.net_total).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </TableCell>
                                     </TableRow>
                                 ))}
@@ -261,7 +303,7 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
 
                 {/* Remarks */}
                 <div className="space-y-2">
-                    <p className="text-sm font-bold text-slate-900">
+                    <p className="text-sm font-bold text-foreground">
                         Remarks {reconciliation.status === 'Fulfilled' ? '(Optional)' : '(Mandatory)'}
                     </p>
                     <Textarea
@@ -272,33 +314,47 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                         }
                         value={remarks}
                         onChange={(e) => setRemarks(e.target.value)}
-                        className="rounded-xl border-slate-200 focus:ring-1 focus:ring-indigo-500 min-h-[100px] text-sm resize-none"
+                        className="rounded-xl border-border bg-muted/30 focus:ring-1 focus:ring-primary min-h-[100px] text-sm resize-none text-foreground placeholder:text-muted-foreground"
                     />
                 </div>
 
-                <div className="flex justify-end items-center gap-3 pt-4 border-t border-slate-100">
+                <div className="flex flex-col md:flex-row justify-end items-center gap-3 pt-4 border-t border-border mt-auto">
                     {reconciliation.status !== 'Fulfilled' && (
-                        <Button
-                            variant="outline"
-                            onClick={() => setIsScanningOpen(true)}
-                            className="rounded-xl px-6 font-bold text-indigo-600 border-indigo-200 bg-indigo-50/50 hover:bg-indigo-50 flex items-center gap-2 mr-auto"
-                        >
-                            <Scan className="w-4 h-4" />
-                            Start Scan
-                        </Button>
+                        <div className="flex items-center gap-2 w-full md:w-auto md:mr-auto">
+                            <Button
+                                variant="outline"
+                                onClick={() => setIsScanningOpen(true)}
+                                className="flex-1 md:flex-none rounded-xl px-6 font-bold text-primary border-primary/20 bg-primary/5 hover:bg-primary/10 flex items-center gap-2 h-10 transition-all active:scale-95"
+                            >
+                                <Scan className="w-4 h-4" />
+                                Start Scan
+                            </Button>
+                            
+                            <Button
+                                variant="outline"
+                                onClick={() => setIsManualInputOpen(true)}
+                                className="flex-1 md:flex-none rounded-xl px-6 font-bold text-orange-500 border-orange-500/20 bg-orange-500/5 hover:bg-orange-500/10 flex items-center gap-2 h-10 transition-all active:scale-95"
+                            >
+                                <Keyboard className="w-4 h-4" />
+                                Manual Input
+                            </Button>
+                        </div>
                     )}
 
-                    <Button variant="outline" onClick={onClose} className="rounded-xl px-6 font-semibold">Cancel</Button>
-                    <Button
-                        onClick={handleSave}
-                        disabled={reconciliation.status !== 'Fulfilled' && !remarks.trim()}
-                        className={`rounded-xl px-8 font-bold text-white shadow-lg transition-all active:scale-95 ${reconciliation.status === 'Fulfilled' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-100' :
-                            'bg-slate-400 hover:bg-slate-500 shadow-slate-100' // Using indigo/violet shade from user image
+                    <div className="flex items-center gap-3 w-full md:w-auto">
+                        <Button variant="outline" onClick={onClose} className="flex-1 md:flex-none rounded-xl px-6 font-semibold border-border h-10">Cancel</Button>
+                        <Button
+                            onClick={handleSave}
+                            disabled={reconciliation.status !== 'Fulfilled' && !remarks.trim()}
+                            className={`flex-1 md:flex-none rounded-xl px-8 font-bold text-primary-foreground shadow-lg transition-all active:scale-95 h-10 ${
+                                reconciliation.status === 'Fulfilled' 
+                                ? 'bg-emerald-600 hover:bg-emerald-700' 
+                                : 'bg-primary hover:bg-primary/90'
                             }`}
-                        style={reconciliation.status !== 'Fulfilled' ? { backgroundColor: '#a5b4fc' } : {}} // Match the light purple in image
-                    >
-                        Save & Mark Cleared
-                    </Button>
+                        >
+                            Save & Mark Cleared
+                        </Button>
+                    </div>
                 </div>
 
                 <ScanningModal
@@ -307,6 +363,15 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                     onConfirm={handleScanningConfirm}
                     items={detail.lines}
                     initialScanned={scannedQtys}
+                    rfidTags={rfidTags}
+                />
+
+                <ManualInputModal
+                    isOpen={isManualInputOpen}
+                    onClose={() => setIsManualInputOpen(false)}
+                    onConfirm={handleManualInputConfirm}
+                    items={detail.lines}
+                    initialValues={scannedQtys}
                 />
             </div>
         );
@@ -314,11 +379,11 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-3xl w-[95vw] p-4 md:p-6 bg-white rounded-2xl md:rounded-3xl border-none shadow-2xl max-h-[95vh] flex flex-col overflow-hidden">
-                <DialogHeader className="mb-2 shrink-0">
+            <DialogContent className="sm:max-w-3xl w-[95vw] p-4 md:p-6 bg-card rounded-2xl md:rounded-3xl border-border shadow-2xl max-h-[95vh] flex flex-col overflow-hidden">
+                <DialogHeader className="mb-2 shrink-0 border-b border-border pb-4">
                     {renderHeader()}
                 </DialogHeader>
-                <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar mt-4">
                     {renderContent()}
                 </div>
             </DialogContent>
