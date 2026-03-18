@@ -1,17 +1,17 @@
 "use client";
 
-import { ColumnDef } from "@tanstack/react-table";
-import { BundleDraft, BundleMasterData } from "../../../types/bundle.schema";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { MoreHorizontal, Send, Trash2, Package, Edit } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ColumnDef } from "@tanstack/react-table";
+import { Edit, MoreHorizontal, Package, Send } from "lucide-react";
+import { BundleDraft, BundleMasterData } from "../../../types/bundle.schema";
 import { DataTableColumnHeader } from "./table-column-header";
 
 interface ColumnOptions {
@@ -113,7 +113,8 @@ export function getDraftColumns({
                 <DropdownMenuItem onClick={() => onView(row.original)}>
                   <Package className="mr-2 h-4 w-4" /> View Details
                 </DropdownMenuItem>
-                {(row.original.draft_status === "DRAFT" || row.original.draft_status === "REJECTED") && (
+                {(row.original.draft_status === "DRAFT" ||
+                  row.original.draft_status === "REJECTED") && (
                   <DropdownMenuItem onClick={() => onEdit(id)}>
                     <Edit className="mr-2 h-4 w-4" /> Edit Draft
                   </DropdownMenuItem>
@@ -121,12 +122,12 @@ export function getDraftColumns({
                 <DropdownMenuItem onClick={() => onSubmit(id)}>
                   <Send className="mr-2 h-4 w-4" /> Submit for Approval
                 </DropdownMenuItem>
-                <DropdownMenuItem
+                {/* <DropdownMenuItem
                   onClick={() => onDelete(id)}
                   className="text-destructive focus:text-destructive"
                 >
                   <Trash2 className="mr-2 h-4 w-4" /> Delete
-                </DropdownMenuItem>
+                </DropdownMenuItem> */}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

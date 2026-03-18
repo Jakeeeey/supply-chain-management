@@ -63,7 +63,6 @@ export function PDPApproveModal({
         })
         .catch(console.error)
         .finally(() => {
-          clearTimeout(timer);
           setIsFetching(false);
         });
     } else {
