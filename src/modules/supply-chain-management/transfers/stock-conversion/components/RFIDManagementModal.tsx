@@ -30,8 +30,12 @@ export function RFIDManagementModal({
 
   useEffect(() => {
     if (isOpen) {
-      setRfidInput("");
-      setAssignedTags([]);
+      // Use setTimeout to avoid synchronous setState during render phase if triggered tightly
+      const timer = setTimeout(() => {
+        setRfidInput("");
+        setAssignedTags([]);
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [isOpen]);
 

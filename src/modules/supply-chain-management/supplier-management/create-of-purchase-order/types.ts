@@ -6,14 +6,14 @@ export type Supplier = {
     terms: string;
     apBalance: number;
     supplierType: string;
-    raw?: any;
+    raw?: unknown;
 };
 
 export type Branch = {
     id: number;
     name: string;
     code?: string;
-    raw?: any;
+    raw?: unknown;
 };
 
 export type DiscountType = {
@@ -31,7 +31,7 @@ export type Product = {
 
     // ✅ price is now "PRICE PER BOX"
     price: number;
-    raw?: any;
+    raw?: unknown;
     // ✅ Always BOX in UI
     uom: string; // "BOX"
     uomId?: number; // 11

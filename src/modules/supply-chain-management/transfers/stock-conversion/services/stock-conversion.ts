@@ -1,5 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { AppError } from "@/lib/error-handler";
-import { StockConversionPayload, StockConversionProduct, RFIDTag } from "../types/stock-conversion.schema";
+import { StockConversionPayload, StockConversionProduct } from "../types/stock-conversion.schema";
 
 const DIRECTUS_API = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "");
 const DIRECTUS_TOKEN = process.env.DIRECTUS_STATIC_TOKEN;
@@ -76,6 +77,7 @@ async function getMasterData(headers: any) {
 export async function fetchStockList(
   limit: number = 20,
   offset: number = 0,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   filters?: InventoryFilters
 ): Promise<{ data: StockConversionProduct[]; totalCount: number }> {
   try {

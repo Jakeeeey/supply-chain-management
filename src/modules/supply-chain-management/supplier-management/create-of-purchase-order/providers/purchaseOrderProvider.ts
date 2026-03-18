@@ -6,6 +6,7 @@ async function fetchData<T>(url: string, init?: RequestInit): Promise<T> {
         ...init,
         headers: {
             "Content-Type": "application/json",
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             ...(init?.headers as any),
         },
     });
@@ -27,11 +28,11 @@ async function fetchData<T>(url: string, init?: RequestInit): Promise<T> {
 const BASE = "/api/scm/supplier-management/create-of-purchase-order";
 
 export async function fetchSuppliers() {
-    return fetchData<any[]>(`${BASE}/suppliers`);
+    return fetchData<unknown[]>(`${BASE}/suppliers`);
 }
 
 export async function fetchBranches() {
-    return fetchData<any[]>(`${BASE}/branches`);
+    return fetchData<unknown[]>(`${BASE}/branches`);
 }
 
 export async function fetchProducts(params?: { supplierId?: string | number; ids?: Array<string | number> }) {
@@ -46,7 +47,7 @@ export async function fetchProducts(params?: { supplierId?: string | number; ids
     }
 
     const qs = sp.toString();
-    return fetchData<any[]>(`${BASE}/products${qs ? `?${qs}` : ""}`);
+    return fetchData<unknown[]>(`${BASE}/products${qs ? `?${qs}` : ""}`);
 }
 
 export async function fetchProductsByIds(ids: Array<string | number>) {
@@ -59,15 +60,17 @@ export async function fetchProductsBySupplier(supplierId: string | number) {
 export async function fetchProductSupplierLinks(supplierId: string | number) {
     const sp = new URLSearchParams();
     sp.set("supplierId", String(supplierId));
-    return fetchData<any[]>(`${BASE}/product-supplier-links?${sp.toString()}`);
+    return fetchData<unknown[]>(`${BASE}/product-supplier-links?${sp.toString()}`);
 }
 
 export async function fetchDiscountTypes() {
-    return fetchData<any[]>(`${BASE}/discount-types`);
+    return fetchData<unknown[]>(`${BASE}/discount-types`);
 }
 
 /** ✅ Save PO to API route */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function createPurchaseOrder(payload: any) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return fetchData<any>(`${BASE}`, {
         method: "POST",
         body: JSON.stringify(payload),

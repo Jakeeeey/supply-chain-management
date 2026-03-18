@@ -21,8 +21,11 @@ export function StockConversionModal({ product, isOpen, onClose, onConfirm }: St
 
   useEffect(() => {
     if (isOpen) {
-      setQtyToConvert("");
-      setSelectedTargetUnit(null);
+      const timer = setTimeout(() => {
+        setQtyToConvert("");
+        setSelectedTargetUnit(null);
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [isOpen]);
 

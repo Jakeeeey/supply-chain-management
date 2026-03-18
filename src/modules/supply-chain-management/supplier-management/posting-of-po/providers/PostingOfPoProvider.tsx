@@ -71,8 +71,9 @@ export function PostingOfPoProvider({ children }: { children: React.ReactNode })
             const r = await fetch(API, { cache: "no-store" });
             const data = await asJson(r);
             setList(Array.isArray(data) ? data : []);
-        } catch (e: any) {
-            setListError(String(e?.message ?? e));
+        } catch (e: unknown) {
+            const err = e as Error;
+            setListError(String(err?.message ?? err));
             setList([]);
         } finally {
             setListLoading(false);
@@ -99,8 +100,9 @@ export function PostingOfPoProvider({ children }: { children: React.ReactNode })
                 });
                 const data = await asJson(r);
                 setSelectedPO((data ?? null) as PurchaseOrder | null);
-            } catch (e: any) {
-                setListError(String(e?.message ?? e));
+            } catch (e: unknown) {
+                const err = e as Error;
+                setListError(String(err?.message ?? err));
             }
         },
         [clearSuccess]
@@ -130,8 +132,9 @@ export function PostingOfPoProvider({ children }: { children: React.ReactNode })
 
                 await refreshList();
                 await openPO(poId);
-            } catch (e: any) {
-                const msg = String(e?.message ?? e);
+            } catch (e: unknown) {
+                const err = e as Error;
+                const msg = String(err?.message ?? err);
 
                 toast.error("Failed to post receipt", { description: msg });
                 setPostError(msg);
@@ -166,8 +169,9 @@ export function PostingOfPoProvider({ children }: { children: React.ReactNode })
 
                 await refreshList();
                 await openPO(poId);
-            } catch (e: any) {
-                const msg = String(e?.message ?? e);
+            } catch (e: unknown) {
+                const err = e as Error;
+                const msg = String(err?.message ?? err);
 
                 toast.error("Failed to post receipts", { description: msg });
                 setPostError(msg);

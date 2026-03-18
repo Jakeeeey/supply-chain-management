@@ -50,7 +50,8 @@ export default function PDPPlannerPage() {
       await approvePlan(approvingPlan.dispatch_id);
       toast.success(`${approvingPlan.dispatch_no} approved successfully!`);
       setApprovingPlan(null);
-    } catch (err: any) {
+    } catch (e: unknown) {
+      const err = e as Error;
       toast.error(err.message || "Failed to approve plan.");
     } finally {
       setIsApproving(false);
