@@ -15,7 +15,7 @@ async function directusGet<T>(path: string): Promise<T> {
 }
 
 /** Helper for Directus POST/PATCH/DELETE requests */
-async function directusMutate<T>(path: string, method: "POST" | "PATCH" | "DELETE", body?: any): Promise<T> {
+async function directusMutate<T>(path: string, method: "POST" | "PATCH" | "DELETE", body?: unknown): Promise<T> {
   const base = getDirectusBase();
   const url = `${base}${path.startsWith("/") ? "" : "/"}${path}`;
   
@@ -35,7 +35,7 @@ async function directusMutate<T>(path: string, method: "POST" | "PATCH" | "DELET
  * Fetches raw Return-to-Supplier header records.
  */
 export async function getRawRtsHeaders() {
-  return directusGet<{ data: any[] }>(
+  return directusGet<{ data: Record<string, unknown>[] }>(
     "/items/return_to_supplier?limit=-1&fields=id,doc_no,transaction_date,is_posted,remarks,supplier_id.supplier_name,branch_id.branch_name&sort=-date_created"
   );
 }
@@ -44,7 +44,7 @@ export async function getRawRtsHeaders() {
  * Fetches raw RTS line items, including totals for summary calculation.
  */
 export async function getRawRtsAllItems() {
-  return directusGet<{ data: any[] }>(
+  return directusGet<{ data: Record<string, unknown>[] }>(
     "/items/rts_items?limit=-1&fields=rts_id,net_amount,gross_amount,discount_amount"
   );
 }
@@ -58,7 +58,7 @@ export async function getRawItemsByRtsId(id: string) {
     fields:
       "id,quantity,gross_unit_price,discount_rate,discount_amount,net_amount,return_type_id,product_id.product_name,product_id.product_code,product_id.product_id,product_id.unit_of_measurement_count,uom_id.unit_shortcut,uom_id.unit_id",
   });
-  return directusGet<{ data: any[] }>(`/items/rts_items?${params}`);
+  return directusGet<{ data: Record<string, unknown>[] }>(`/items/rts_items?${params}`);
 }
 
 /**
@@ -69,7 +69,7 @@ export async function getRawRfidsByItemIds(itemIds: number[]) {
     "filter[rts_item_id][_in]": itemIds.join(","),
     fields: "rts_item_id,rfid_tag",
   });
-  return directusGet<{ data: any[] }>(`/items/rts_item_rfid?${params}`);
+  return directusGet<{ data: { rts_item_id: number; rfid_tag: string }[] }>(`/items/rts_item_rfid?${params}`);
 }
 
 /**
@@ -77,17 +77,17 @@ export async function getRawRfidsByItemIds(itemIds: number[]) {
  */
 export async function getRawReferences() {
   return Promise.all([
-    directusGet<{ data: any[] }>("/items/suppliers?limit=-1&filter[supplier_type][_eq]=Trade"),
-    directusGet<{ data: any[] }>("/items/branches?limit=-1"),
-    directusGet<{ data: any[] }>(
+    directusGet<{ data: Record<string, unknown>[] }>("/items/suppliers?limit=-1&filter[supplier_type][_eq]=Trade"),
+    directusGet<{ data: Record<string, unknown>[] }>("/items/branches?limit=-1"),
+    directusGet<{ data: Record<string, unknown>[] }>(
       "/items/products?limit=-1&fields=product_id,product_name,description,product_code,parent_id,unit_of_measurement,unit_of_measurement_count,cost_per_unit",
     ),
-    directusGet<{ data: any[] }>("/items/units?limit=-1&fields=unit_id,unit_name,unit_shortcut,order"),
-    directusGet<{ data: any[] }>("/items/line_discount?limit=-1"),
-    directusGet<{ data: any[] }>(
-        "/items/product_per_supplier?limit=-1&fields=id,product_id,supplier_id,discount_type",
+    directusGet<{ data: Record<string, unknown>[] }>("/items/units?limit=-1&fields=unit_id,unit_name,unit_shortcut,order"),
+    directusGet<{ data: Record<string, unknown>[] }>("/items/line_discount?limit=-1"),
+    directusGet<{ data: Record<string, unknown>[] }>(
+      "/items/product_per_supplier?limit=-1&fields=id,product_id,supplier_id,discount_type",
     ),
-    directusGet<{ data: any[] }>("/items/rts_return_type?limit=-1"),
+    directusGet<{ data: Record<string, unknown>[] }>("/items/rts_return_type?limit=-1"),
   ]);
 }
 
@@ -96,7 +96,7 @@ export async function getRawReferences() {
  */
 export async function getRawProductsByIds(productIds: number[]) {
   const productFilter = JSON.stringify({ product_id: { _in: productIds } });
-  return directusGet<{ data: any[] }>(
+  return directusGet<{ data: Record<string, unknown>[] }>(
     `/items/products?limit=-1&fields=product_id,parent_id,cost_per_unit&filter=${encodeURIComponent(productFilter)}`,
   );
 }
@@ -159,28 +159,28 @@ export async function getSpringRfidLookup(rfidTag: string, branchId: number, tok
 /**
  * Persistence: Creates the RTS Header.
  */
-export async function createRtsHeader(header: any) {
+export async function createRtsHeader(header: Record<string, unknown>) {
   return directusMutate<{ data: { id: number } }>("/items/return_to_supplier", "POST", header);
 }
 
 /**
  * Persistence: Creates an RTS Line Item.
  */
-export async function createRtsItem(item: any) {
+export async function createRtsItem(item: Record<string, unknown>) {
   return directusMutate<{ data: { id: number } }>("/items/rts_items", "POST", item);
 }
 
 /**
  * Persistence: Binds an RFID tag to an RTS Item.
  */
-export async function createRtsRfidBinding(binding: any) {
+export async function createRtsRfidBinding(binding: Record<string, unknown>) {
   return directusMutate("/items/rts_item_rfid", "POST", binding);
 }
 
 /**
  * Persistence: Updates an RTS Header.
  */
-export async function updateRtsHeader(id: string, header: any) {
+export async function updateRtsHeader(id: string, header: Record<string, unknown>) {
   return directusMutate(`/items/return_to_supplier/${id}`, "PATCH", header);
 }
 
@@ -188,12 +188,12 @@ export async function updateRtsHeader(id: string, header: any) {
  * Persistence: Fetches IDs of existing items/rfids for deletion during update.
  */
 export async function getExistingRelatedIds(id: string) {
-  const itemsJson = await directusGet<{ data: any[] }>(`/items/rts_items?filter[rts_id][_eq]=${id}&fields=id`);
+  const itemsJson = await directusGet<{ data: { id: number }[] }>(`/items/rts_items?filter[rts_id][_eq]=${id}&fields=id`);
   const itemIds = (itemsJson.data || []).map(i => i.id);
   
   let rfidIds: number[] = [];
   if (itemIds.length > 0) {
-    const rfidJson = await directusGet<{ data: any[] }>(
+    const rfidJson = await directusGet<{ data: { id: number }[] }>(
         `/items/rts_item_rfid?filter[rts_item_id][_in]=${itemIds.join(",")}&fields=id`
     );
     rfidIds = (rfidJson.data || []).map(r => r.id);

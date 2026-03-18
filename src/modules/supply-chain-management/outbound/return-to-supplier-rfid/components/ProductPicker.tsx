@@ -3,7 +3,6 @@
 import React, { useState, useMemo } from "react";
 import {
   Search,
-  X,
   Plus,
   Minus,
   Trash2,
@@ -22,9 +21,14 @@ import type { CartItem } from "../types/rts.schema";
 interface ProductPickerProps {
   isVisible: boolean;
   onClose: () => void;
-  products: any[];
+  products: (Record<string, unknown> & {
+    masterId: string;
+    masterCode: string;
+    masterName: string;
+    variants: unknown[];
+  })[];
   addedProducts: CartItem[];
-  onAdd: (product: any, qty: number) => void;
+  onAdd: (product: { id: string; name: string; [key: string]: unknown }, qty: number) => void;
   onRemove: (id: string) => void;
   onUpdateQty: (id: string, qty: number) => void;
   onClearAll: () => void;
@@ -92,9 +96,11 @@ export function ProductPicker({
       .map((group) => {
         if (group.masterName.toLowerCase().includes(lowerSearch)) return group;
         const matchingVariants = group.variants.filter(
-          (v: any) =>
-            v.name.toLowerCase().includes(lowerSearch) ||
-            v.code.toLowerCase().includes(lowerSearch),
+          (v: unknown) => {
+            const variant = v as { name: string; code: string };
+            return variant.name.toLowerCase().includes(lowerSearch) ||
+                   variant.code.toLowerCase().includes(lowerSearch);
+          }
         );
         if (matchingVariants.length > 0) {
           return { ...group, variants: matchingVariants };
@@ -186,7 +192,7 @@ export function ProductPicker({
               </div>
             ) : (
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                {filteredGroups.map((group: any) => (
+                {(filteredGroups as unknown as { masterId: string; masterName: string; masterCode?: string; variants: unknown[] }[]).map((group) => (
                   <div
                     key={group.masterId}
                     className="bg-card rounded-xl border shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-shadow"
@@ -203,7 +209,7 @@ export function ProductPicker({
                       </p>
                     </div>
                     <div className="p-3 space-y-2">
-                      {group.variants.map((variant: any) => {
+                      {(group.variants as unknown as { id: string; stock: number; name: string; code: string; unit: string; price: number; uom_id: number; unitCount: number; supplierDiscount: number; discountType?: string }[]).map((variant) => {
                         const cartItem = addedProducts.find(
                           (i) => i.id === variant.id,
                         );

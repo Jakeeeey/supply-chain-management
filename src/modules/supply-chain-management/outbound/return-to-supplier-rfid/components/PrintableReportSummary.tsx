@@ -5,7 +5,14 @@ import type { ReturnToSupplier } from "../types/rts.schema";
 
 interface Props {
   data: ReturnToSupplier[];
-  filters: any;
+  filters: {
+    dateRange: string;
+    supplier?: string;
+    branch?: string;
+    status: string;
+    customStart?: string;
+    customEnd?: string;
+  };
 }
 
 export const PrintableReportSummary = React.forwardRef<HTMLDivElement, Props>(

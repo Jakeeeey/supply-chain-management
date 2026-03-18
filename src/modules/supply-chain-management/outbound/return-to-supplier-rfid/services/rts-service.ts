@@ -19,39 +19,95 @@ import type {
 
 import * as repo from "../repositories/rts-repository";
 
+interface RawHeader {
+  id: number;
+  doc_no?: string;
+  transaction_date?: string;
+  is_posted?: boolean;
+  remarks?: string;
+  supplier_id?: { supplier_name: string };
+  branch_id?: { branch_name: string };
+}
+
+interface RawItem {
+  id: number;
+  product_id?: { id: number; product_id: number; product_code: string; product_name: string; unit_of_measurement_count: number } | number | null;
+  uom_id?: { id: number; unit_id: number; unit_shortcut: string } | number | null;
+  quantity?: number;
+  unit_price?: number;
+  gross_unit_price?: number;
+  discount_rate?: number;
+  discount_type?: number;
+  discount_amount?: number;
+  net_amount?: number;
+  gross_amount?: number;
+  return_type_id?: number;
+  rts_id?: { id: number } | number | null;
+}
+
+interface RawProduct {
+  product_id: string | number;
+  product_code?: string;
+  product_name?: string;
+  description?: string;
+  unit_price?: number;
+  cost_per_unit?: number;
+  unit_of_measurement?: string | number;
+  unit_of_measurement_count?: number;
+  parent_id?: number | null;
+}
+
+interface RawInventoryVariant {
+  id: string;
+  productId: number;
+  productCode: string;
+  productName: string;
+  unitName: string;
+  unitCount: number;
+  branchId: number;
+  supplierId: number;
+  runningInventoryUnit: number;
+  familyId: number;
+  productBarcode: string | null;
+  productBrand: string;
+  productCategory: string;
+}
+
 /**
  * Fetches all Return-to-Supplier transactions for the dashboard list.
- * Decoupled from Directus via Repository.
  */
 export async function fetchTransactions(): Promise<ReturnToSupplier[]> {
   const [headerRes, itemsRes] = await Promise.all([
     repo.getRawRtsHeaders(),
-    repo.getRawRtsAllItems()
+    repo.getRawRtsAllItems(),
   ]);
 
-  const records = headerRes.data || [];
+  const records = (headerRes.data || []) as unknown as RawHeader[];
   if (records.length === 0) return [];
 
-  const allItems = itemsRes.data || [];
+  const allItems = (itemsRes.data || []) as unknown as RawItem[];
 
-  return records.map((r: any) => {
-    const parentItems = allItems.filter((i) => (typeof i.rts_id === 'object' ? i.rts_id.id : i.rts_id) === r.id);
+  return records.map((raw) => {
+    const parentItems = allItems.filter((i) => {
+      const rts_id_val = typeof i.rts_id === 'object' ? i.rts_id?.id : i.rts_id;
+      return rts_id_val === raw.id;
+    });
     const finalNet = parentItems.reduce((sum, item) => sum + Number(item.net_amount || 0), 0);
     const calculatedGross = parentItems.reduce((sum, item) => sum + Number(item.gross_amount || 0), 0);
     const calculatedDiscount = parentItems.reduce((sum, item) => sum + Number(item.discount_amount || 0), 0);
 
     return {
-      id: r.id,
-      returnNo: r.doc_no || "N/A",
-      supplier: r.supplier_id?.supplier_name || "Unknown",
-      branch: r.branch_id?.branch_name || "Unknown",
-      returnDate: r.transaction_date,
-      status: r.is_posted ? "Posted" : "Pending",
-      remarks: r.remarks,
+      id: Number(raw.id),
+      returnNo: raw.doc_no || "N/A",
+      supplier: raw.supplier_id?.supplier_name || "Unknown",
+      branch: raw.branch_id?.branch_name || "Unknown",
+      returnDate: raw.transaction_date,
+      status: raw.is_posted ? "Posted" : "Pending",
+      remarks: raw.remarks,
       totalAmount: finalNet,
       grossAmount: calculatedGross,
       discountAmount: calculatedDiscount,
-    };
+    } as ReturnToSupplier;
   });
 }
 
@@ -62,38 +118,40 @@ export async function fetchTransactionDetails(
   id: string,
 ): Promise<RTSItem[]> {
   const itemsJson = await repo.getRawItemsByRtsId(id);
-  const items = itemsJson.data || [];
+  const items = (itemsJson.data || []) as unknown as RawItem[];
   if (items.length === 0) return [];
 
-  const itemIds = items.map((i: any) => i.id);
+  const itemIds = items.map((i) => i.id);
   const rfidJson = await repo.getRawRfidsByItemIds(itemIds);
   
   const rfidMap = new Map<number, string>();
-  (rfidJson.data || []).forEach((r: any) => {
+  (rfidJson.data || []).forEach((r: { rts_item_id: number; rfid_tag: string }) => {
     rfidMap.set(Number(r.rts_item_id), r.rfid_tag);
   });
 
-  return items.map((i: any) => {
-    const rawProductId = typeof i.product_id === "object" ? i.product_id.product_id : i.product_id;
-    const rawUomId = typeof i.uom_id === "object" ? i.uom_id.unit_id : i.uom_id;
-    const rawUnitCount = typeof i.product_id === "object" ? i.product_id.unit_of_measurement_count : 1;
+  return items.map((i) => {
+    const p_obj = typeof i.product_id === "object" ? i.product_id : null;
+    const u_obj = typeof i.uom_id === "object" ? i.uom_id : null;
+    const rawProductId = p_obj ? p_obj.product_id : i.product_id;
+    const rawUomId = u_obj ? u_obj.unit_id : i.uom_id;
+    const rawUnitCount = p_obj ? p_obj.unit_of_measurement_count : 1;
 
     return {
-      id: i.id,
+      id: Number(i.id),
       productId: Number(rawProductId),
       uomId: Number(rawUomId),
-      code: typeof i.product_id === "object" ? i.product_id.product_code : "N/A",
-      name: typeof i.product_id === "object" ? i.product_id.product_name : "Unknown",
-      unit: typeof i.uom_id === "object" ? i.uom_id.unit_shortcut : "UNIT",
-      quantity: Number(i.quantity),
-      price: Number(i.gross_unit_price),
-      discountRate: Number(i.discount_rate) / 100,
-      discountAmount: Number(i.discount_amount),
-      total: Number(i.net_amount),
+      code: p_obj?.product_code || "N/A",
+      name: p_obj?.product_name || "Unknown",
+      unit: u_obj?.unit_shortcut || "UNIT",
+      quantity: Number(i.quantity || 0),
+      price: Number(i.gross_unit_price || 0),
+      discountRate: Number(i.discount_rate || 0) / 100,
+      discountAmount: Number(i.discount_amount || 0),
+      total: Number(i.net_amount || 0),
       unitCount: Number(rawUnitCount) > 0 ? Number(rawUnitCount) : 1,
       returnTypeId: i.return_type_id ? Number(i.return_type_id) : undefined,
-      rfid_tag: rfidMap.get(i.id),
-    };
+      rfid_tag: rfidMap.get(Number(i.id)),
+    } as RTSItem;
   });
 }
 
@@ -112,29 +170,33 @@ export async function fetchReferences(): Promise<ReferenceData> {
   ] = await repo.getRawReferences();
 
   const unitMap = new Map<string, string>();
-  (unitsJson.data || []).forEach((u: any) => {
-    unitMap.set(String(u.unit_id), u.unit_name);
+  (unitsJson.data || []).forEach((u: Record<string, unknown>) => {
+    const u_raw = u as unknown as { unit_id: number | string; unit_name: string };
+    unitMap.set(String(u_raw.unit_id), u_raw.unit_name);
   });
 
-  const products: Product[] = (productsJson.data || []).map((p: any) => ({
-    id: String(p.product_id),
-    code: p.product_code || "N/A",
-    name: p.description || p.product_name || "Unknown",
-    price: Number(p.cost_per_unit ?? 0),
-    unit: unitMap.get(String(p.unit_of_measurement)) || "Units",
-    uom_id: p.unit_of_measurement || 0,
-    unitCount: Number(p.unit_of_measurement_count || 1),
-    parentId: p.parent_id && p.parent_id !== 0 ? p.parent_id : null,
-  }));
+  const products: Product[] = (productsJson.data || []).map((p) => {
+    const raw = p as unknown as RawProduct;
+    return {
+      id: String(raw.product_id),
+      code: raw.product_code || "N/A",
+      name: raw.description || raw.product_name || "Unknown",
+      price: Number(raw.cost_per_unit ?? 0),
+      unit: unitMap.get(String(raw.unit_of_measurement)) || "Units",
+      uom_id: Number(raw.unit_of_measurement || 0),
+      unitCount: Number(raw.unit_of_measurement_count || 1),
+      parentId: raw.parent_id && raw.parent_id !== 0 ? raw.parent_id : null,
+    } as Product;
+  });
 
   return {
-    suppliers: (suppliersJson.data || []) as Supplier[],
-    branches: (branchesJson.data || []) as Branch[],
+    suppliers: (suppliersJson.data || []) as unknown as Supplier[],
+    branches: (branchesJson.data || []) as unknown as Branch[],
     products,
-    units: (unitsJson.data || []) as Unit[],
-    lineDiscounts: (discountsJson.data || []) as LineDiscount[],
-    connections: (connectionsJson.data || []) as ProductSupplier[],
-    returnTypes: (returnTypesJson.data || []) as RTSReturnType[],
+    units: (unitsJson.data || []) as unknown as Unit[],
+    lineDiscounts: (discountsJson.data || []) as unknown as LineDiscount[],
+    connections: (connectionsJson.data || []) as unknown as ProductSupplier[],
+    returnTypes: (returnTypesJson.data || []) as unknown as RTSReturnType[],
   };
 }
 
@@ -161,58 +223,59 @@ export async function fetchInventory(
     // Get prices and parents to calculate families
     const productIds = [...new Set(viewRows.map((r) => Number(r.productId)))];
     const productsJson = await repo.getRawProductsByIds(productIds);
-    const productsData = productsJson.data || [];
+    const productsData = (productsJson.data || []) as unknown as RawProduct[];
 
     const parentMap = new Map<number, number>();
     const priceMap = new Map<number, number>();
-    productsData.forEach((p: any) => {
+    productsData.forEach((p) => {
       const pId = Number(p.product_id);
-      const familyId = p.parent_id && p.parent_id !== 0 ? Number(p.parent_id) : pId;
+      const familyId = (p.parent_id && p.parent_id !== 0) ? Number(p.parent_id) : pId;
       parentMap.set(pId, familyId);
       priceMap.set(pId, Number(p.cost_per_unit ?? 0));
     });
 
-    const families = new Map<number, any[]>();
+    const families = new Map<number, unknown[]>();
     viewRows.forEach((row) => {
       const pId = Number(row.productId);
       const familyId = parentMap.get(pId) || pId;
       if (!families.has(familyId)) families.set(familyId, []);
-      families.get(familyId)!.push({ ...row, familyId });
+      families.get(familyId)!.push(row as unknown);
     });
 
     const result: InventoryRecord[] = [];
     families.forEach((variants) => {
       // Sort by unitCount descending for remainder cascading
-      variants.sort((a, b) => b.unitCount - a.unitCount);
+      const castVariants = variants as RawInventoryVariant[];
+      castVariants.sort((a, b) => (Number(b.unitCount) || 0) - (Number(a.unitCount) || 0));
       
       let remainderPieces = 0;
-      variants.forEach((variant) => {
-        const safeUnitCount = Math.max(variant.unitCount, 1);
-        const stockValue = Number(variant.runningInventoryUnit || 0);
+      castVariants.forEach((v) => {
+        const safeUnitCount = Math.max(v.unitCount || 1, 1);
+        const stockValue = Number(v.runningInventoryUnit || 0);
         
         const adjustedInventory = stockValue + (remainderPieces / safeUnitCount);
         const displayStock = Math.floor(adjustedInventory);
         remainderPieces = (adjustedInventory - displayStock) * safeUnitCount;
 
         result.push({
-          id: variant.id,
-          product_id: Number(variant.productId),
-          product_code: variant.productCode || "N/A",
-          product_name: variant.productName || "Unknown",
-          unit_name: variant.unitName || "Unit",
+          id: v.id,
+          product_id: Number(v.productId),
+          product_code: v.productCode || "N/A",
+          product_name: v.productName || "Unknown",
+          unit_name: v.unitName || "Unit",
           unit_count: safeUnitCount,
-          branch_id: Number(variant.branchId),
-          supplier_id: Number(variant.supplierId),
+          branch_id: Number(v.branchId),
+          supplier_id: Number(v.supplierId),
           running_inventory: displayStock,
-          familyId: Number(variant.familyId),
-          price: priceMap.get(Number(variant.productId)) ?? 0,
-          product_barcode: variant.productBarcode ?? undefined,
+          familyId: Number(v.familyId),
+          price: priceMap.get(Number(v.productId)) ?? 0,
+          product_barcode: v.productBarcode ?? undefined,
         });
       });
     });
 
     return result;
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[RTS] Service Inventory fetch error:", err);
     throw err;
   }

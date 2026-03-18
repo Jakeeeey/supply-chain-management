@@ -62,7 +62,6 @@ export function ReturnDetailsModal({
   const [lastScannedRfid, setLastScannedRfid] = useState("");
   const [rfidScanning, setRfidScanning] = useState(false);
   const rfidInputRef = useRef<HTMLInputElement>(null);
-  const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   // 1. Initialize Data
   useEffect(() => {
@@ -107,9 +106,10 @@ export function ReturnDetailsModal({
             };
           });
           setItems(cartItems);
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : "Failed to load details";
           toast.error("Error", {
-            description: err.message || "Failed to load details",
+            description: message,
           });
         } finally {
           setLoading(false);
@@ -168,12 +168,12 @@ export function ReturnDetailsModal({
   const availableProducts = useMemo(() => {
     if (!currentSupplierId || inventory.length === 0) return [];
 
-    const connectionMap = new Map<string, any>();
+    const connectionMap = new Map<string, (typeof refs.connections)[0]>();
     refs.connections.forEach((c) =>
       connectionMap.set(`${c.product_id}-${c.supplier_id}`, c),
     );
 
-    const discountMap = new Map<string, any>();
+    const discountMap = new Map<string, (typeof refs.lineDiscounts)[0]>();
     refs.lineDiscounts.forEach((d) => discountMap.set(String(d.id), d));
 
     const unitOrderMap = new Map<string, number>();
@@ -227,8 +227,25 @@ export function ReturnDetailsModal({
       });
 
     // Group by familyId
-    const groups: Record<string, any> = {};
+    interface VariantItem {
+      id: string;
+      code: string;
+      name: string;
+      unit: string;
+      unitCount: number;
+      stock: number;
+      price: number;
+      uom_id: number;
+      supplierDiscount: number;
+      discountType?: string;
+    }
 
+    const groups: Record<string, {
+      masterId: string;
+      masterCode: string;
+      masterName: string;
+      variants: VariantItem[];
+    }> = {};
     enrichedItems.forEach((item) => {
       const groupKey = item.masterId;
       if (!groups[groupKey]) {
@@ -243,16 +260,16 @@ export function ReturnDetailsModal({
     });
 
     return Object.values(groups).map((group) => {
-      group.variants.sort((a: any, b: any) => a.unitCount - b.unitCount);
-      if (group.variants.length > 0) {
-        group.masterName = group.variants[0].name;
+      const v = group.variants;
+      v.sort((a, b) => a.unitCount - b.unitCount);
+      if (v.length > 0) {
+        group.masterName = v[0].name;
       }
-      group.variants.sort((a: any, b: any) => b.unitCount - a.unitCount);
+      v.sort((a, b) => b.unitCount - a.unitCount);
       return group;
     });
   }, [
-    refs.connections,
-    refs.lineDiscounts,
+    refs,
     currentSupplierId,
     inventory,
     items,
@@ -261,7 +278,8 @@ export function ReturnDetailsModal({
   /**
    * HANDLERS: RFID & Barcode Scanning
    */
-  const addToCartInternal = useCallback((p: any, qty = 1) => {
+  const addToCartInternal = useCallback((p_raw: unknown, qty = 1) => {
+    const p = p_raw as CartItem;
     setItems((prev) => {
       // For RFID items, never merge — always add as a new line
       if (p.rfid_tag) {
@@ -275,7 +293,7 @@ export function ReturnDetailsModal({
             discount: p.supplierDiscount || 0,
             customPrice: p.price,
             rfid_tag: p.rfid_tag,
-          },
+          } as CartItem,
         ];
       }
 
@@ -365,8 +383,9 @@ export function ReturnDetailsModal({
 
         addToCartInternal(product, 1);
         toast.success("RFID Added", { description: `Added "${product.name}"` });
-      } catch (err: any) {
-        toast.error("Scan Error", { description: err.message });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "An unknown error occurred.";
+        toast.error("Scan Error", { description: message });
       } finally {
         setRfidScanning(false);
       }
@@ -514,9 +533,10 @@ export function ReturnDetailsModal({
       });
       if (onUpdateSuccess) onUpdateSuccess();
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to update transaction.";
       toast.error("Error", {
-        description: err.message || "Failed to update transaction.",
+        description: message,
       });
     } finally {
       setSaving(false);
@@ -526,7 +546,16 @@ export function ReturnDetailsModal({
   if (!data) return null;
 
   // Map data for printing
-  const printableItems: any[] = items.map((i) => {
+  const printableItems: (Record<string, unknown> & {
+    code: string;
+    name: string;
+    unit: string;
+    quantity: number;
+    price: number;
+    discount: number;
+    total: number;
+    returnType: string;
+  })[] = items.map((i) => {
     const returnTypeObj = refs.returnTypes.find(
       (rt) => String(rt.id) === String(i.return_type_id),
     );

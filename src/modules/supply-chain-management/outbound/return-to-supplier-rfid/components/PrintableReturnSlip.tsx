@@ -1,12 +1,21 @@
 "use client";
 
 import React from "react";
-import type { ReturnToSupplier, ReturnItem, LineDiscount } from "../types/rts.schema";
+import type { ReturnToSupplier, LineDiscount } from "../types/rts.schema";
 
 interface Props {
   data: ReturnToSupplier;
   // Use any[] here to allow the extended 'returnType' property without strict TS errors
-  items: any[];
+  items: (Record<string, unknown> & {
+    code: string;
+    name: string;
+    unit: string;
+    quantity: number;
+    price: number;
+    discount: number;
+    total: number;
+    returnType: string;
+  })[];
   lineDiscounts: LineDiscount[];
 }
 

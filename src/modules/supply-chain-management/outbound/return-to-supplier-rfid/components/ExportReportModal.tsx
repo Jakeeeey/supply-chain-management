@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
 // Removed useReactToPrint
-import { Printer, X, Check, ChevronsUpDown, ExternalLink } from "lucide-react";
+import { Printer, X, Check, ChevronsUpDown } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -59,7 +59,7 @@ export function ExportReportModal({
   const [openBranch, setOpenBranch] = useState(false);
   const [supplierSearch, setSupplierSearch] = useState("");
   const [branchSearch, setBranchSearch] = useState("");
-  const [refs, setRefs] = useState<{ suppliers: any[]; branches: any[] }>({
+  const [refs, setRefs] = useState<{ suppliers: { id: number; supplier_name: string }[]; branches: { id: number; branch_name: string }[] }>({
     suppliers: [],
     branches: [],
   });

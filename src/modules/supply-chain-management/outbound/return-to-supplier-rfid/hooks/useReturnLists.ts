@@ -30,8 +30,8 @@ export function useReturnLists() {
     try {
       const result = await listTransactions();
       setData(result);
-    } catch (err: any) {
-      const message = err.message || "Failed to load return transactions.";
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to load return transactions.";
       setError(message);
       toast.error("Fetch Error", { description: message });
     } finally {

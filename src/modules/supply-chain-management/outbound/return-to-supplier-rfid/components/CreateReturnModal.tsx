@@ -18,7 +18,6 @@ import {
 } from "@/components/ui/popover";
 import {
   Command,
-  CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
@@ -43,7 +42,7 @@ import { ReturnReviewPanel } from "./ReturnReviewPanel";
 import { calculateLineItem } from "../utils/calculations";
 import { validateBarcode, detectScanType } from "../utils/barcodeUtils";
 import { useGlobalScanner } from "../hooks/useGlobalScanner";
-import type { CartItem, InventoryRecord } from "../types/rts.schema";
+import type { CartItem, InventoryRecord, Product } from "../types/rts.schema";
 
 export function CreateReturnModal({
   isOpen,
@@ -81,7 +80,6 @@ export function CreateReturnModal({
   const [lastScannedRfid, setLastScannedRfid] = useState("");
   const [rfidScanning, setRfidScanning] = useState(false);
   const rfidInputRef = useRef<HTMLInputElement>(null);
-  const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   const filteredSuppliers = useMemo(() => {
     if (!supplierSearch) return refs.suppliers;
@@ -107,12 +105,12 @@ export function CreateReturnModal({
     if (inventory.length === 0) return [];
 
     // Build connection + discount maps for enrichment
-    const connectionMap = new Map<string, any>();
+    const connectionMap = new Map<string, (typeof refs.connections)[0]>();
     refs.connections.forEach((c) =>
       connectionMap.set(`${c.product_id}-${c.supplier_id}`, c),
     );
 
-    const discountMap = new Map<string, any>();
+    const discountMap = new Map<string, (typeof refs.lineDiscounts)[0]>();
     refs.lineDiscounts.forEach((d) =>
       discountMap.set(String(d.id), d),
     );
@@ -168,8 +166,27 @@ export function CreateReturnModal({
         return Number(p.stock ?? 0) > 0 && (order === 1 || order === 2);
       });
 
+    interface VariantItem {
+      id: string;
+      masterId: string;
+      code: string;
+      name: string;
+      unit: string;
+      unitCount: number;
+      stock: number;
+      price: number;
+      uom_id: number;
+      discountType?: string;
+      supplierDiscount: number;
+    }
+
     // Group by familyId
-    const groups: Record<string, any> = {};
+    const groups: Record<string, {
+      masterId: string;
+      masterCode: string;
+      masterName: string;
+      variants: VariantItem[];
+    }> = {};
 
     enrichedItems.forEach((item) => {
       const groupKey = item.masterId;
@@ -181,17 +198,17 @@ export function CreateReturnModal({
           variants: [],
         };
       }
-      groups[groupKey].variants.push(item);
+      groups[groupKey].variants.push(item as VariantItem);
     });
 
     return Object.values(groups).map((group) => {
       // Propagate parent discount to children missing it
       const parentDiscount = group.variants.find(
-        (v: any) => v.supplierDiscount > 0 || v.discountType,
+        (v) => v.supplierDiscount > 0 || v.discountType,
       );
 
       if (parentDiscount) {
-        group.variants = group.variants.map((v: any) => ({
+        group.variants = group.variants.map((v) => ({
           ...v,
           supplierDiscount:
             v.supplierDiscount || parentDiscount.supplierDiscount,
@@ -200,15 +217,15 @@ export function CreateReturnModal({
       }
 
       // Sort: smallest unit first for naming, then largest first for display
-      group.variants.sort((a: any, b: any) => a.unitCount - b.unitCount);
+      group.variants.sort((a, b) => a.unitCount - b.unitCount);
       if (group.variants.length > 0) {
         group.masterName = group.variants[0].name;
       }
-      group.variants.sort((a: any, b: any) => b.unitCount - a.unitCount);
+      group.variants.sort((a, b) => b.unitCount - a.unitCount);
 
       return group;
     });
-  }, [inventory, refs.connections, refs.lineDiscounts, selection.supplierId]);
+  }, [inventory, refs, selection.supplierId]);
 
   useEffect(() => {
     if (selection.supplierId && selection.branchId) {
@@ -223,21 +240,23 @@ export function CreateReturnModal({
     }
   }, [selection.supplierId, selection.branchId, step]);
 
-  const addToCart = useCallback((p: any, qty = 1) => {
+  const addToCart = useCallback((p_raw: unknown, qty = 1) => {
+    const p = p_raw as Product;
     setCart((prev) => {
+      const r_tag = (p as { rfid_tag?: string }).rfid_tag;
       // For RFID items, never merge — always add as a new line
-      if (p.rfid_tag) {
+      if (r_tag) {
         return [
           ...prev,
           {
             ...p,
-            id: `${p.id}-rfid-${p.rfid_tag}`, // Unique key per RFID
+            id: `${p.id}-rfid-${r_tag}`, // Unique key per RFID
             quantity: 1,
-            onHand: p.stock || 0,
-            discount: (p.supplierDiscount || 0),
+            onHand: p.stock ?? 0,
+            discount: p.supplierDiscount ?? 0,
             customPrice: p.price,
-            rfid_tag: p.rfid_tag,
-          },
+            rfid_tag: r_tag,
+          } as CartItem,
         ];
       }
 
@@ -254,10 +273,10 @@ export function CreateReturnModal({
         {
           ...p,
           quantity: qty,
-          onHand: p.stock,
-          discount: (p.supplierDiscount || 0),
+          onHand: p.stock ?? 0,
+          discount: p.supplierDiscount ?? 0,
           customPrice: p.price,
-        },
+        } as CartItem,
       ];
     });
   }, []);
@@ -366,9 +385,10 @@ export function CreateReturnModal({
         setTimeout(() => {
           setLastScannedRfid("");
         }, 2000);
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Failed to look up RFID tag.";
         toast.error("RFID Scan Error", {
-          description: err.message || "Failed to look up RFID tag.",
+          description: message,
         });
       } finally {
         setRfidScanning(false);
@@ -378,7 +398,7 @@ export function CreateReturnModal({
         }, 100);
       }
     },
-    [selection.branchId, selection.supplierId, cart, inventory, refs],
+    [selection.branchId, selection.supplierId, cart, inventory, refs, addToCart],
   );
 
   /**
@@ -438,7 +458,7 @@ export function CreateReturnModal({
         description: `Added "${invRecord.product_name}"`,
       });
     },
-    [selection.branchId, selection.supplierId, inventory, addToCart],
+    [selection.branchId, selection.supplierId, inventory, refs.units, addToCart],
   );
 
   /**
@@ -526,9 +546,10 @@ export function CreateReturnModal({
       });
       onReturnCreated();
       handleCloseFull();
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to create return transaction.";
       toast.error("Error", {
-        description: err.message || "Failed to create return transaction.",
+        description: message,
       });
     } finally {
       setSubmitting(false);

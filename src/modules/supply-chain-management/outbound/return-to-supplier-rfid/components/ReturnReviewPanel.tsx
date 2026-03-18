@@ -266,10 +266,10 @@ export function ReturnReviewPanel({
                                 ? String(item.return_type_id)
                                 : ""
                             }
-                            onValueChange={(val) => {
+                            onValueChange={(val: string) => {
                               onUpdateItem(
                                 item.id,
-                                "return_type_id" as any,
+                                "return_type_id",
                                 Number(val),
                               );
                             }}

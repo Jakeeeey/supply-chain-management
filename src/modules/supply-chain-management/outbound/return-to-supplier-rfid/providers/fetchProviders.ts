@@ -104,7 +104,7 @@ export async function lookupRfid(
  * @param dto - The create payload (validated on the server via Zod).
  * @returns The created record data, or throws on error.
  */
-export async function createTransaction(dto: CreateReturnDTO): Promise<any> {
+export async function createTransaction(dto: CreateReturnDTO): Promise<unknown> {
   const res = await fetch(API_BASE, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -122,7 +122,7 @@ export async function createTransaction(dto: CreateReturnDTO): Promise<any> {
 export async function updateTransaction(
   id: string,
   dto: CreateReturnDTO,
-): Promise<any> {
+): Promise<unknown> {
   const res = await fetch(`${API_BASE}?id=${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
