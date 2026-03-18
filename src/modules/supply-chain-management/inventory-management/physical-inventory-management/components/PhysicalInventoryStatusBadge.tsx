@@ -15,7 +15,7 @@ export function PhysicalInventoryStatusBadge({ status }: Props) {
         <Badge
             className={cn(
                 "rounded-full px-3 py-1 text-xs font-semibold",
-                status === "Draft" && "bg-amber-500/10 text-amber-700 hover:bg-amber-500/10",
+                status === "Pending" && "bg-amber-500/10 text-amber-700 hover:bg-amber-500/10",
                 status === "Committed" &&
                 "bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/10",
                 status === "Cancelled" &&
