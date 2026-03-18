@@ -147,8 +147,12 @@ const data = {
                     url: "#",
                 },
                 {
-                    title: "Return to Supplier",
-                    url: "/scm/outbound/return-to-supplier",
+                    title: "Return to Supplier RFID",
+                    url: "/scm/outbound/return-to-supplier-rfid",
+                },
+                {
+                    title: "Return to Supplier Manual",
+                    url: "/scm/outbound/return-to-supplier-manual",
                 },
                 {
                     title: "Consolidation",

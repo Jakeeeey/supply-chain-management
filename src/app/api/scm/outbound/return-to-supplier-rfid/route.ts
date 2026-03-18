@@ -4,7 +4,7 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { createReturnSchema } from "@/modules/supply-chain-management/outbound/return-to-supplier/types/rts.schema";
+import { createReturnSchema } from "@/modules/supply-chain-management/outbound/return-to-supplier-rfid/types/rts.schema";
 import {
   fetchTransactions,
   fetchTransactionDetails,
@@ -13,7 +13,7 @@ import {
   lookupRfid,
   createTransaction,
   updateTransaction,
-} from "@/modules/supply-chain-management/outbound/return-to-supplier/services/rts-service";
+} from "@/modules/supply-chain-management/outbound/return-to-supplier-rfid/services/rts-service";
 
 export const runtime = "nodejs";
 
