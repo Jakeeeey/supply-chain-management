@@ -55,17 +55,23 @@ export function PDPApproveModal({
 
   useEffect(() => {
     if (open && plan) {
-      setIsFetching(true);
+      const timer = setTimeout(() => setIsFetching(true), 0);
       fetchDetails(plan.dispatch_id)
         .then((result) => {
           setEnrichedPlan(result.plan);
           setDetails(result.details);
         })
         .catch(console.error)
-        .finally(() => setIsFetching(false));
+        .finally(() => {
+          clearTimeout(timer);
+          setIsFetching(false);
+        });
     } else {
-      setDetails([]);
-      setEnrichedPlan(null);
+      const resetTimer = setTimeout(() => {
+        setDetails([]);
+        setEnrichedPlan(null);
+      }, 0);
+      return () => clearTimeout(resetTimer);
     }
   }, [open, plan, fetchDetails]);
 

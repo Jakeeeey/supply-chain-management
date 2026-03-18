@@ -50,17 +50,23 @@ export function PDPViewModal({
 
   useEffect(() => {
     if (open && plan) {
-      setIsLoading(true);
+      const timer = setTimeout(() => setIsLoading(true), 0);
       fetchDetails(plan.dispatch_id)
         .then((result) => {
           setEnrichedPlan(result.plan);
           setDetails(result.details);
         })
         .catch(console.error)
-        .finally(() => setIsLoading(false));
+        .finally(() => {
+          clearTimeout(timer);
+          setIsLoading(false);
+        });
     } else {
-      setDetails([]);
-      setEnrichedPlan(null);
+      const resetTimer = setTimeout(() => {
+        setDetails([]);
+        setEnrichedPlan(null);
+      }, 0);
+      return () => clearTimeout(resetTimer);
     }
   }, [open, plan, fetchDetails]);
 

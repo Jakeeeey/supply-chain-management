@@ -10,7 +10,7 @@ export function money(amount: number, currency: string) {
     }
 }
 
-export function safeText(v: any, fb = "—") {
+export function safeText(v: unknown, fb = "—") {
     const s = String(v ?? "").trim();
     return s ? s : fb;
 }

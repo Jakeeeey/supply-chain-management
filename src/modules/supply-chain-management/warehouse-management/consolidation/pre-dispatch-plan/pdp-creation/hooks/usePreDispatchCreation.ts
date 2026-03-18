@@ -15,7 +15,7 @@ const API_PATH =
  * Hook for the PDP Creation sub-module.
  */
 export function usePreDispatchCreation() {
-  const { clusterId, setClusterId, search, setSearch } = usePDPFilter();
+  const { clusterId, search, setSearch } = usePDPFilter();
 
   // ─── Pending Plans State ──────────────────────────
   const [pendingData, setPendingData] = useState<DispatchPlan[]>([]);
@@ -44,7 +44,8 @@ export function usePreDispatchCreation() {
         const res = await fetch(`${API_PATH}?type=master`);
         const result = await res.json();
         if (isMounted) setMasterData(result.data || null);
-      } catch (err: any) {
+      } catch (e: unknown) {
+        const err = e as Error;
         console.error("Failed to fetch master data:", err.message);
       }
     };
@@ -76,7 +77,8 @@ export function usePreDispatchCreation() {
       setPendingTotal(
         plansRes.meta?.filter_count || plansRes.meta?.total_count || plansRes.data?.length || 0,
       );
-    } catch (err: any) {
+    } catch (e: unknown) {
+      const err = e as Error;
       setError(err.message);
     } finally {
       setIsLoading(false);
@@ -111,7 +113,8 @@ export function usePreDispatchCreation() {
         const result = await res.json();
         if (result.error) throw new Error(result.error);
         setAvailableOrders(result.data || []);
-      } catch (err: any) {
+      } catch (e: unknown) {
+        const err = e as Error;
         console.error("Failed to fetch available orders:", err.message);
         setAvailableOrders([]);
       } finally {

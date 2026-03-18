@@ -51,7 +51,8 @@ export default function PDPCreationPage() {
         setEditPlan(result.plan);
         setEditDetails(result.details);
         setIsCreateOpen(true);
-      } catch (err: any) {
+      } catch (e: unknown) {
+        const err = e as Error;
         toast.error(err.message || "Failed to load plan details.");
       } finally {
         setIsEditLoading(false);
