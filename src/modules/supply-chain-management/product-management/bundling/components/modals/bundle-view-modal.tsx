@@ -91,7 +91,9 @@ export function BundleViewModal({
       (prod) => prod.product_id === productId,
     );
     return p
-      ? `${p.product_name} (${p.product_code})`
+      ? (p.product_code 
+          ? `${p.product_name} (${p.product_code})`
+          : p.product_name)
       : `Product #${productId}`;
   };
 
