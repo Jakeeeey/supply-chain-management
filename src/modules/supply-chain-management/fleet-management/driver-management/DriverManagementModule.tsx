@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Plus, Users } from "lucide-react";
+import { Plus, Users, RotateCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -30,6 +30,7 @@ export default function DriverManagementModule() {
         setCurrentPage,
         totalPages,
         itemsPerPage,
+        setItemsPerPage,
     } = useDriverManagement();
 
     const slicedDrivers = React.useMemo(() => {
@@ -99,13 +100,22 @@ export default function DriverManagementModule() {
 
             {/* Filters & Search Section */}
             <div className="bg-card/40 backdrop-blur-md border border-white/10 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row items-center gap-6">
-                <div className="relative flex-1 w-full group">
+                <div className="relative flex-1 w-full flex gap-2">
                     <Input
                         placeholder="Search Drivers (ID or Name)..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="h-12 bg-background border-input rounded-xl transition-all outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0 focus-visible:border-ring"
+                        className="flex-1 h-12 bg-background border-input rounded-xl transition-all outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0 focus-visible:border-ring"
                     />
+                    <Button
+                        onClick={refresh}
+                        variant="outline"
+                        size="icon"
+                        className="h-12 w-12 rounded-xl border-input hover:bg-primary/10 hover:text-primary transition-all"
+                        title="Refresh data"
+                    >
+                        <RotateCw className="h-5 w-5" />
+                    </Button>
                 </div>
 
                 <div className="flex items-center gap-3 w-full md:w-auto">
@@ -152,6 +162,11 @@ export default function DriverManagementModule() {
                         currentPage={currentPage}
                         totalPages={totalPages}
                         onPageChange={setCurrentPage}
+                        itemsPerPage={itemsPerPage}
+                        onItemsPerPageChange={(value) => {
+                            setItemsPerPage(value);
+                            setCurrentPage(1);
+                        }}
                     />
                 )}
             </div>
@@ -166,6 +181,7 @@ export default function DriverManagementModule() {
                 editingDriver={editingDriver}
                 users={users}
                 branches={branches}
+                drivers={drivers}
                 onSuccess={refresh}
             />
         </div>

@@ -21,6 +21,7 @@ interface DriverModalProps {
     editingDriver: DriverWithDetails | null;
     users: User[];
     branches: Branch[];
+    drivers: DriverWithDetails[];
     onSuccess: () => void;
 }
 
@@ -30,6 +31,7 @@ export function DriverModal({
     editingDriver,
     users,
     branches,
+    drivers,
     onSuccess,
 }: DriverModalProps) {
     const [loading, setLoading] = React.useState(false);
@@ -60,13 +62,16 @@ export function DriverModal({
         return branches.filter((b) => b.isReturn === 1 || b.isReturn === true);
     }, [branches]);
 
-    // Memoize user options for combobox
+    // Memoize user options for combobox - exclude already assigned users unless editing
     const userOptions = React.useMemo((): ComboboxOption[] => {
-        return users.map((user) => ({
-            value: user.user_id.toString(),
-            label: `${user.user_fname} ${user.user_lname}`,
-        }));
-    }, [users]);
+        const assignedUserIds = new Set(drivers.map((d) => d.user_id));
+        return users
+            .filter((user) => !assignedUserIds.has(user.user_id) || (editingDriver?.user_id === user.user_id))
+            .map((user) => ({
+                value: user.user_id.toString(),
+                label: `${user.user_fname} ${user.user_lname}`,
+            }));
+    }, [users, drivers, editingDriver?.user_id]);
 
     // Memoize good branch options for combobox
     const goodBranchOptions = React.useMemo((): ComboboxOption[] => {

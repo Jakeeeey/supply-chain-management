@@ -18,7 +18,7 @@ export function useDriverManagement() {
 
     // Pagination
     const [currentPage, setCurrentPage] = React.useState(1);
-    const itemsPerPage = 10;
+    const [itemsPerPage, setItemsPerPage] = React.useState(10);
 
     const loadData = React.useCallback(async () => {
         setLoading(true);
@@ -39,10 +39,10 @@ export function useDriverManagement() {
         loadData();
     }, [loadData]);
 
-    // Reset to page 1 when search or filter changes
+    // Reset to page 1 when search or filter changes, and reset itemsPerPage when it changes
     React.useEffect(() => {
         setCurrentPage(1);
-    }, [searchQuery, filterGoodBranch, filterBadBranch]);
+    }, [searchQuery, filterGoodBranch, filterBadBranch, itemsPerPage]);
 
     const filteredDrivers = React.useMemo(() => {
         return drivers
@@ -100,5 +100,6 @@ export function useDriverManagement() {
         totalPages,
         itemsPerPage,
         refresh: loadData,
+        setItemsPerPage,
     };
 }

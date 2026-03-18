@@ -10,6 +10,13 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Edit2, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,6 +30,8 @@ interface DriverTableProps {
     currentPage: number;
     totalPages: number;
     onPageChange: (page: number) => void;
+    itemsPerPage: number;
+    onItemsPerPageChange: (value: number) => void;
 }
 
 function DriverTableSkeleton() {
@@ -62,7 +71,9 @@ export function DriverTable({
     onEdit,
     currentPage,
     totalPages,
-    onPageChange
+    onPageChange,
+    itemsPerPage,
+    onItemsPerPageChange
 }: DriverTableProps) {
     const userMap = React.useMemo(() => {
         const map = new Map<number, User>();
@@ -154,7 +165,22 @@ export function DriverTable({
             </div>
 
             {/* Pagination */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                    <span className="text-sm text-muted-foreground/70 font-medium">Show:</span>
+                    <Select value={itemsPerPage.toString()} onValueChange={(value) => onItemsPerPageChange(parseInt(value))}>
+                        <SelectTrigger className="w-20 h-9 rounded-lg border-input bg-background text-sm focus:ring-2 focus:ring-ring/40">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent align="start" className="rounded-lg border border-input bg-popover">
+                            <SelectItem value="10" className="cursor-pointer">10</SelectItem>
+                            <SelectItem value="20" className="cursor-pointer">20</SelectItem>
+                            <SelectItem value="30" className="cursor-pointer">30</SelectItem>
+                            <SelectItem value="40" className="cursor-pointer">40</SelectItem>
+                            <SelectItem value="50" className="cursor-pointer">50</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
                 <div className="text-sm text-muted-foreground/70 font-medium">
                     Page {currentPage} of {totalPages}
                 </div>
