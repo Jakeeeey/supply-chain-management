@@ -55,7 +55,7 @@ export function PDPApproveModal({
 
   useEffect(() => {
     if (open && plan) {
-      const timer = setTimeout(() => setIsFetching(true), 0);
+      queueMicrotask(() => setIsFetching(true));
       fetchDetails(plan.dispatch_id)
         .then((result) => {
           setEnrichedPlan(result.plan);
@@ -63,15 +63,13 @@ export function PDPApproveModal({
         })
         .catch(console.error)
         .finally(() => {
-          clearTimeout(timer);
           setIsFetching(false);
         });
     } else {
-      const resetTimer = setTimeout(() => {
+      queueMicrotask(() => {
         setDetails([]);
         setEnrichedPlan(null);
-      }, 0);
-      return () => clearTimeout(resetTimer);
+      });
     }
   }, [open, plan, fetchDetails]);
 

@@ -20,6 +20,7 @@ interface BundleMasterlistTableProps {
   masterData: BundleMasterData | null;
   isLoading: boolean;
   onSearch: (value: string) => void;
+  onView: (id: number) => void;
 }
 
 export function BundleMasterlistTable({
@@ -31,10 +32,11 @@ export function BundleMasterlistTable({
   masterData,
   isLoading,
   onSearch,
+  onView,
 }: BundleMasterlistTableProps) {
   const columns = React.useMemo(
-    () => getMasterlistColumns({ masterData }),
-    [masterData],
+    () => getMasterlistColumns({ masterData, onView }),
+    [masterData, onView],
   );
 
   return (

@@ -9,6 +9,13 @@ import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import ErrorPage from "@/components/shared/ErrorPage";
 import { toast } from "sonner";
 import { BundleDraft } from "../types/bundle.schema";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { CheckCircle2, XCircle } from "lucide-react";
 
 export default function BundleApprovalPage() {
@@ -24,6 +31,8 @@ export default function BundleApprovalPage() {
     error,
     setSearch,
     refresh,
+    typeFilter,
+    setTypeFilter,
     approveDraft,
     rejectDraft,
     fetchDraftDetails,
@@ -123,6 +132,23 @@ export default function BundleApprovalPage() {
 
   return (
     <div className="space-y-6">
+      {/* Header with Filter */}
+      <div className="flex flex-col items-end">
+        <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <SelectTrigger className="w-[180px] h-9">
+            <SelectValue placeholder="Bundle Type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            {masterData?.bundleTypes.map((t: any) => (
+              <SelectItem key={t.id} value={t.id.toString()}>
+                {t.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       {/* Data Table */}
       <BundleApprovalTable
         data={pendingData}
