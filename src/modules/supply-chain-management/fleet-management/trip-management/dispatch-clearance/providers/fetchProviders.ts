@@ -8,7 +8,8 @@ import {
   SalesInvoice,
   DispatchRow,
   ReconciliationRow,
-  InvoiceDetail
+  InvoiceDetail,
+  RFIDMapping
 } from '../types';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL + '/items';
@@ -69,13 +70,20 @@ export const fetchSalesInvoices = async (): Promise<SalesInvoice[]> => {
 export const getJoinedDispatchData = async (
   page: number = 1,
   limit: number = 10,
-  search: string = ''
+  search: string = '',
+  startDate?: string,
+  endDate?: string
 ): Promise<{ data: DispatchRow[]; total: number }> => {
-  const query = new URLSearchParams({
+  const params: any = {
     page: page.toString(),
     limit: limit.toString(),
     search: search
-  }).toString();
+  };
+
+  if (startDate) params.startDate = startDate;
+  if (endDate) params.endDate = endDate;
+
+  const query = new URLSearchParams(params).toString();
 
   const response = await fetch(`/api/scm/fleet-management/trip-management/dispatch-clearance?${query}`);
   if (!response.ok) {
@@ -101,6 +109,14 @@ export const submitClearance = async (dispatchId: number, invoices: Reconciliati
 
 export const fetchInvoiceDetails = async (invoiceId: number): Promise<InvoiceDetail> => {
   const response = await fetch(`/api/scm/fleet-management/trip-management/dispatch-clearance/invoice-details?invoice_id=${invoiceId}`);
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+};
+
+export const fetchRFIDTagsForDispatch = async (dispatchId: number): Promise<RFIDMapping[]> => {
+  const response = await fetch(`/api/scm/fleet-management/trip-management/dispatch-clearance/rfid-tags?dispatch_id=${dispatchId}`);
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);
   }
