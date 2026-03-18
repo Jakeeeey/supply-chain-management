@@ -23,8 +23,8 @@ export default function ApprovalPurchaseOrderModule() {
             setError("");
             const data = await provider.fetchPendingApprovalPOs();
             setPending(data);
-        } catch (e: any) {
-            setError(String(e?.message ?? e));
+        } catch (e: unknown) {
+            setError(String(e instanceof Error ? e.message : e));
         } finally {
             setLoadingList(false);
         }
@@ -41,8 +41,8 @@ export default function ApprovalPurchaseOrderModule() {
             setDetail(null);
             const d = await provider.fetchPurchaseOrderDetail(id);
             setDetail(d);
-        } catch (e: any) {
-            setError(String(e?.message ?? e));
+        } catch (e: unknown) {
+            setError(String(e instanceof Error ? e.message : e));
         } finally {
             setLoadingDetail(false);
         }
@@ -77,8 +77,8 @@ export default function ApprovalPurchaseOrderModule() {
                 setPending((prev) => prev.filter((x) => x.id !== selectedId));
                 setSelectedId(null);
                 setDetail(null);
-            } catch (e: any) {
-                setError(String(e?.message ?? e));
+            } catch (e: unknown) {
+                setError(String(e instanceof Error ? e.message : e));
             }
         },
         [selectedId]

@@ -175,3 +175,22 @@ export function formatDateInputValue(value: string | null | undefined): string {
 
     return trimmed;
 }
+export function convertBaseQtyToDisplayQty(
+    baseQty: number | null | undefined,
+    unitCount: number | null | undefined,
+): number {
+    const normalizedBaseQty = coalesceNumber(baseQty);
+    const normalizedUnitCount = normalizeUnitCount(unitCount);
+
+    return roundTo(normalizedBaseQty / normalizedUnitCount, 6);
+}
+
+export function convertDisplayQtyToBaseQty(
+    displayQty: number | null | undefined,
+    unitCount: number | null | undefined,
+): number {
+    const normalizedDisplayQty = coalesceNumber(displayQty);
+    const normalizedUnitCount = normalizeUnitCount(unitCount);
+
+    return roundTo(normalizedDisplayQty * normalizedUnitCount, 6);
+}

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import * as React from "react";
 import { Badge } from "@/components/ui/badge";
@@ -25,11 +25,12 @@ type Props = {
 // ✅ only show 3 per page
 const PAGE_SIZE = 3;
 
-function safeStr(v: any, fallback = "—") {
+function safeStr(v: unknown, fallback = "—") {
     const s = String(v ?? "").trim();
     return s ? s : fallback;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function branchLabel(branch: any) {
     if (!branch) return "—";
 
@@ -58,6 +59,7 @@ function branchLabel(branch: any) {
     return "—";
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function branchLabelFromRow(row: any) {
     const helper = safeStr(
         row?.branch_name_text ?? row?.branchNameText ?? row?.branchName ?? "",
@@ -76,6 +78,7 @@ function branchLabelFromRow(row: any) {
     return branchLabel(row?.branch_id);
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function supplierLabelFromRow(row: any) {
     const helper = safeStr(row?.supplier_name_text ?? "", "");
     if (helper) return helper;
@@ -184,7 +187,7 @@ export default function PendingApprovalList({
                     </div>
                 ) : (
                     paginated.map((x) => {
-                        const row: any = x;
+                        const row = x as Record<string, unknown>;
 
                         const id = String(row.id ?? row.purchase_order_id ?? "");
                         const poNo = safeStr(row.poNumber ?? row.purchase_order_no ?? "—");

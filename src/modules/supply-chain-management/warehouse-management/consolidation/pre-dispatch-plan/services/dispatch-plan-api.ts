@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Low-level HTTP client for the Pre Dispatch Plan module.
  * Mirrors the pattern from bundle-api.ts for consistency.

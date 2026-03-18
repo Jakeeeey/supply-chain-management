@@ -1,7 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import * as React from "react";
 import * as provider from "../providers/purchaseOrderProvider";
 import type { Branch, CartItem, CartLineItem, Product, Supplier } from "../types";
 
+ 
 function normalizeSupplier(raw: any): Supplier {
     return {
         id: String(raw?.id ?? ""),
@@ -13,6 +15,7 @@ function normalizeSupplier(raw: any): Supplier {
     };
 }
 
+ 
 function normalizeBranch(raw: any): Branch {
     return {
         id: Number(raw?.id),
@@ -22,6 +25,7 @@ function normalizeBranch(raw: any): Branch {
     };
 }
 
+ 
 function extractCategory(raw: any): string {
     const c = raw?.product_category;
     if (typeof c === "string") return c;
@@ -32,6 +36,7 @@ function extractCategory(raw: any): string {
     return raw?.category ?? raw?.category_name ?? "Uncategorized";
 }
 
+ 
 function extractUom(raw: any): string {
     const u = raw?.unit_of_measurement;
     if (typeof u === "string") return u;
@@ -42,6 +47,7 @@ function extractUom(raw: any): string {
     return raw?.uom ?? raw?.uom_name ?? "pc";
 }
 
+ 
 function normalizeProduct(raw: any): Product {
     const id = String(raw?.product_id ?? raw?.id ?? "");
     const uom = extractUom(raw);
@@ -65,6 +71,7 @@ function normalizeProduct(raw: any): Product {
     };
 }
 
+ 
 function unwrapDirectusArray(res: any): any[] {
     if (Array.isArray(res)) return res;
     if (res && Array.isArray(res.data)) return res.data;
@@ -77,6 +84,7 @@ export const useCreatePurchaseOrder = () => {
     const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
     const [branches, setBranches] = React.useState<Branch[]>([]);
     const [allProducts, setAllProducts] = React.useState<Product[]>([]);
+     
     const [supplierLinks, setSupplierLinks] = React.useState<any[]>([]);
 
     const [selectedSupplierType, setSelectedSupplierType] = React.useState<"ALL" | "TRADE" | "NON-TRADE">("TRADE");
