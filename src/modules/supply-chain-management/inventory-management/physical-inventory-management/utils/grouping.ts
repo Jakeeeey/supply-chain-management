@@ -1,4 +1,3 @@
-//src/modules/supply-chain-management/physical-inventory-management/utils/grouping.ts
 import type {
     EligibleVariantRow,
     GroupedPhysicalInventoryChildRow,
@@ -13,6 +12,7 @@ import {
     computeDifferenceCost,
     computeVariance,
     computeVarianceBase,
+    convertBaseQtyToDisplayQty,
     normalizeUnitCount,
     requiresRfid,
 } from "./compute";
@@ -105,11 +105,15 @@ export function buildGroupedPhysicalInventoryRows(
             const detailId = detail?.id ?? null;
 
             const matchedRunning = runningMap.get(`${branch_id}-${variant.product_id}`);
+            const unitCount = normalizeUnitCount(variant.unit_count);
 
-            const systemCount = coalesceNumber(
-                detail?.system_count,
-                coalesceNumber(matchedRunning?.running_inventory),
+            // running inventory is base quantity; convert it to the row UOM for display/use
+            const fallbackSystemCount = convertBaseQtyToDisplayQty(
+                matchedRunning?.running_inventory,
+                unitCount,
             );
+
+            const systemCount = coalesceNumber(detail?.system_count, fallbackSystemCount);
 
             const rfidCount =
                 detailId !== null
@@ -122,7 +126,7 @@ export function buildGroupedPhysicalInventoryRows(
                 : coalesceNumber(detail?.physical_count, 0);
 
             const variance = computeVariance(physicalCount, systemCount);
-            const varianceBase = computeVarianceBase(variance, variant.unit_count);
+            const varianceBase = computeVarianceBase(variance, unitCount);
             const differenceCost = computeDifferenceCost(variance, variant.unit_price);
             const amount = computeAmount(physicalCount, variant.unit_price);
 
@@ -142,7 +146,7 @@ export function buildGroupedPhysicalInventoryRows(
                 unit_name: variant.unit_name,
                 unit_shortcut: variant.unit_shortcut,
                 unit_order: variant.unit_order,
-                unit_count: normalizeUnitCount(variant.unit_count),
+                unit_count: unitCount,
 
                 unit_price: variant.unit_price,
 
@@ -217,8 +221,13 @@ export function buildPhysicalInventoryDetailPayloads(
 
     return variants.map((variant) => {
         const matchedRunning = runningMap.get(`${branch_id}-${variant.product_id}`);
+        const unitCount = normalizeUnitCount(variant.unit_count);
 
-        const systemCount = coalesceNumber(matchedRunning?.running_inventory);
+        const systemCount = convertBaseQtyToDisplayQty(
+            matchedRunning?.running_inventory,
+            unitCount,
+        );
+
         const initialPhysicalCount = 0;
         const variance = computeVariance(initialPhysicalCount, systemCount);
         const differenceCost = computeDifferenceCost(variance, variant.unit_price);

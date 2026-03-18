@@ -312,6 +312,7 @@ export function PhysicalInventoryTable(props: Props) {
                                                                 {rfidButtonLabel}
                                                             </Button>
                                                         ) : (
+                                                            //
                                                             <span className="text-muted-foreground">—</span>
                                                         )}
                                                     </TableCell>
