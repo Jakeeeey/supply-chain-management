@@ -10,7 +10,6 @@ import {
   fetchTransactionDetails,
   fetchReferences,
   fetchInventory,
-  lookupRfid,
   createTransaction,
   updateTransaction,
 } from "@/modules/supply-chain-management/outbound/return-to-supplier-manual/services/rts-service";
@@ -75,29 +74,6 @@ export async function GET(req: NextRequest) {
         return json({ data });
       }
 
-      case "rfid-lookup": {
-        const rfid = url.searchParams.get("rfid");
-        const rfidBranchId = Number(url.searchParams.get("branchId"));
-
-        if (!rfid || !rfidBranchId) {
-          return json(
-            { error: "rfid and branchId are required" },
-            400,
-          );
-        }
-
-        const rfidToken = req.cookies.get("vos_access_token")?.value;
-
-        if (!rfidToken) {
-          return json(
-            { error: "Unauthorized: Missing access token" },
-            401,
-          );
-        }
-
-        const result = await lookupRfid(rfid, rfidBranchId, rfidToken);
-        return json({ data: result });
-      }
 
       default:
         return json({ error: `Unknown action: ${action}` }, 400);

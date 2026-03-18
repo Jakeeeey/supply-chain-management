@@ -11,7 +11,6 @@ import type {
   ProductSupplier, 
   RTSReturnType,
   InventoryRecord,
-  RfidLookupResult,
   Supplier,
   Branch,
   CreateReturnDTO
@@ -66,12 +65,6 @@ export async function fetchTransactionDetails(
   if (items.length === 0) return [];
 
   const itemIds = items.map((i: any) => i.id);
-  const rfidJson = await repo.getRawRfidsByItemIds(itemIds);
-  
-  const rfidMap = new Map<number, string>();
-  (rfidJson.data || []).forEach((r: any) => {
-    rfidMap.set(Number(r.rts_item_id), r.rfid_tag);
-  });
 
   return items.map((i: any) => {
     const rawProductId = typeof i.product_id === "object" ? i.product_id.product_id : i.product_id;
@@ -92,7 +85,6 @@ export async function fetchTransactionDetails(
       total: Number(i.net_amount),
       unitCount: Number(rawUnitCount) > 0 ? Number(rawUnitCount) : 1,
       returnTypeId: i.return_type_id ? Number(i.return_type_id) : undefined,
-      rfid_tag: rfidMap.get(i.id),
     };
   });
 }
@@ -219,18 +211,6 @@ export async function fetchInventory(
 }
 
 /**
- * Looks up an RFID tag to find the associated product.
- */
-export async function lookupRfid(
-  rfidTag: string,
-  branchId: number,
-  token: string,
-): Promise<RfidLookupResult | null> {
-  const results: RfidLookupResult[] = await repo.getSpringRfidLookup(rfidTag, branchId, token);
-  return results.length > 0 ? results[0] : null;
-}
-
-/**
  * Creates a new Return-to-Supplier transaction.
  */
 export async function createTransaction(dto: CreateReturnDTO) {
@@ -241,16 +221,7 @@ export async function createTransaction(dto: CreateReturnDTO) {
   const parentId = parentJson.data.id;
 
   for (const item of rts_items) {
-    const { rfid_tag, ...itemData } = item;
-    const res = await repo.createRtsItem({ ...itemData, rts_id: parentId });
-    
-    if (rfid_tag) {
-      await repo.createRtsRfidBinding({
-        rts_item_id: res.data.id,
-        rfid_tag: rfid_tag,
-        status: "RETURNED"
-      });
-    }
+    await repo.createRtsItem({ ...item, rts_id: parentId });
   }
 
   return parentJson.data;
@@ -258,7 +229,7 @@ export async function createTransaction(dto: CreateReturnDTO) {
 
 /**
  * Updates an existing Return-to-Supplier transaction.
- * Cleans up old items and rfids before creating new ones.
+ * Cleans up old items before creating new ones.
  */
 export async function updateTransaction(id: string, dto: CreateReturnDTO) {
   const { rts_items, ...header } = dto;
@@ -266,27 +237,15 @@ export async function updateTransaction(id: string, dto: CreateReturnDTO) {
   // 1. Update header
   await repo.updateRtsHeader(id, header);
 
-  // 2. Cleanup old associations
-  const { itemIds, rfidIds } = await repo.getExistingRelatedIds(id);
+  // 2. Cleanup old items
+  const { itemIds } = await repo.getExistingRelatedIds(id);
   
-  if (rfidIds.length > 0) {
-    await repo.deleteRecords("rts_item_rfid", rfidIds);
-  }
   if (itemIds.length > 0) {
     await repo.deleteRecords("rts_items", itemIds);
   }
 
   // 3. Create new items
   for (const item of rts_items) {
-    const { rfid_tag, ...itemData } = item;
-    const res = await repo.createRtsItem({ ...itemData, rts_id: Number(id) });
-
-    if (rfid_tag) {
-      await repo.createRtsRfidBinding({
-        rts_item_id: res.data.id,
-        rfid_tag: rfid_tag,
-        status: "RETURNED"
-      });
-    }
+    await repo.createRtsItem({ ...item, rts_id: Number(id) });
   }
 }

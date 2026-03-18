@@ -1,4 +1,4 @@
-// src/modules/supply-chain-management/outbound/return-to-supplier-rfid/utils/barcodeUtils.ts
+// src/modules/supply-chain-management/outbound/return-to-supplier-manual/utils/barcodeUtils.ts
 
 /**
  * Calculates EAN-13 checksum (Odd positions x1, Even positions x3).
@@ -73,15 +73,4 @@ export function validateBarcode(code: string): { isValid: boolean; type?: string
   // If both fail, return a combined error or the specific failure of the most likely type
   if (/^\d+$/.test(code) && code.length === 13) return { isValid: false, error: ean.error };
   return { isValid: false, error: "Invalid barcode format (Support: EAN-13, Code 128)" };
-}
-
-/**
- * Detects if a string is likely an RFID vs a standard barcode.
- */
-export function detectScanType(val: string): "rfid" | "barcode" {
-  // RFIDs are typically 24-character hexadecimal strings.
-  if (/^[0-9A-Fa-f]{24}$/.test(val)) {
-    return "rfid";
-  }
-  return "barcode";
 }

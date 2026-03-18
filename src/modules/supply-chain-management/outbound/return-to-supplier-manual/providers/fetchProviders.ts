@@ -3,7 +3,6 @@ import type {
   RTSItem,
   InventoryRecord,
   ReferenceData,
-  RfidLookupResult,
   CreateReturnDTO,
 } from "../types/rts.schema";
 
@@ -82,22 +81,7 @@ export async function getInventory(
   return handleResponse<InventoryRecord[]>(res);
 }
 
-/**
- * Looks up an RFID tag to find the associated product at a branch.
- * @param rfidTag - The scanned RFID tag string.
- * @param branchId - The branch to check.
- * @returns { productId } or null if not found on-hand.
- */
-export async function lookupRfid(
-  rfidTag: string,
-  branchId: number,
-): Promise<RfidLookupResult | null> {
-  const res = await fetch(
-    `${API_BASE}?action=rfid-lookup&rfid=${encodeURIComponent(rfidTag)}&branchId=${branchId}`,
-    { cache: "no-store" },
-  );
-  return handleResponse<RfidLookupResult | null>(res);
-}
+
 
 /**
  * Creates a new Return-to-Supplier transaction.

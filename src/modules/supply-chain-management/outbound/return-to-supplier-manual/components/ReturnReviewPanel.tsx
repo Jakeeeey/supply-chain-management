@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Trash2, ScanLine } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -83,9 +83,6 @@ export function ReturnReviewPanel({
               <TableHead className="w-[100px] text-xs font-bold text-muted-foreground uppercase pl-4">
                 Code
               </TableHead>
-              <TableHead className="w-[120px] text-xs font-bold text-muted-foreground uppercase">
-                RFID
-              </TableHead>
               <TableHead className="text-xs font-bold text-muted-foreground uppercase">
                 Product Name
               </TableHead>
@@ -121,7 +118,7 @@ export function ReturnReviewPanel({
             {items.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={readOnly ? 10 : 11}
+                  colSpan={readOnly ? 9 : 10}
                   className="h-32 text-center text-muted-foreground/50"
                 >
                   No items selected.
@@ -140,16 +137,6 @@ export function ReturnReviewPanel({
                   >
                     <TableCell className="text-xs text-muted-foreground font-mono pl-4">
                       {item.code}
-                    </TableCell>
-                    <TableCell>
-                      {item.rfid_tag ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-primary/10 text-primary text-[10px] font-mono">
-                          <ScanLine className="h-3 w-3" />
-                          {item.rfid_tag}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground/30 text-xs">—</span>
-                      )}
                     </TableCell>
                     <TableCell className="font-medium text-sm">
                       {item.name}

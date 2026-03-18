@@ -19,7 +19,6 @@ export const createReturnItemSchema = z.object({
   net_amount: z.number().min(0),
   item_remarks: z.string().default(""),
   return_type_id: z.number().nullable().optional(),
-  rfid_tag: z.string().optional(),
 });
 
 /** Schema for the full create/update transaction payload. */
@@ -151,7 +150,6 @@ export interface CartItem extends Product {
   discount: number;
   customPrice?: number;
   return_type_id?: number | null;
-  rfid_tag?: string;
 }
 
 /** A mapped RTS parent record for the list table. */
@@ -183,7 +181,6 @@ export interface RTSItem {
   total: number;
   unitCount: number;
   returnTypeId?: number;
-  rfid_tag?: string;
 }
 
 /** A simplified return item used for print/export views. */
@@ -239,29 +236,7 @@ export interface InventoryRecord {
 }
 
 // =============================================================================
-// 5. RFID TYPES — rts_item_rfid & v_rfid_onhand (wired for future features)
-// =============================================================================
-
-/** An RFID tag linked to a specific return item line. */
-export interface RtsItemRfid {
-  id: number;
-  rts_item_id: number;
-  rfid_tag: string;
-  status: "PENDING" | "SCANNED" | "RETURNED";
-  created_at: string;
-  created_by: number | null;
-}
-
-/** A row from the v_rfid_onhand view — an RFID tag that is currently on-hand. */
-export interface RfidOnhand {
-  id: number;
-  product_id: number;
-  branch_id: number;
-  rfid: string;
-}
-
-// =============================================================================
-// 6. REFERENCE DATA BUNDLE — returned by the references endpoint
+// 5. REFERENCE DATA BUNDLE — returned by the references endpoint
 // =============================================================================
 
 /** The combined reference data returned by the references API. */
@@ -273,9 +248,4 @@ export interface ReferenceData {
   lineDiscounts: LineDiscount[];
   connections: ProductSupplier[];
   returnTypes: RTSReturnType[];
-}
-
-/** Response from the Spring Boot RFID on-hand lookup. */
-export interface RfidLookupResult {
-  productId: number;
 }

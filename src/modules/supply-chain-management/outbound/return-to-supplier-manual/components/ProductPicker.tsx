@@ -16,7 +16,6 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useGlobalScanner } from "../hooks/useGlobalScanner";
-import { detectScanType } from "../utils/barcodeUtils";
 import type { CartItem } from "../types/rts.schema";
 
 interface ProductPickerProps {
@@ -29,7 +28,7 @@ interface ProductPickerProps {
   onUpdateQty: (id: string, qty: number) => void;
   onClearAll: () => void;
   onBarcodeScan?: (barcode: string) => void;
-  isLoading?: boolean; // ✅ NEW PROP
+  isLoading?: boolean;
 }
 
 // ✅ HELPER: Skeleton Card Component for Loading State
@@ -63,24 +62,18 @@ export function ProductPicker({
   onUpdateQty,
   onClearAll,
   onBarcodeScan,
-  isLoading = false, // ✅ Defaults to false
+  isLoading = false,
 }: ProductPickerProps) {
   const [search, setSearch] = useState("");
   const [lastScanned, setLastScanned] = useState("");
 
-  // Global scanner capture: routes scans to the parent handlers
-  // and displays the value visually in the read-only box.
+  // Global scanner capture: routes scans to the parent barcode handler
   useGlobalScanner({
     enabled: isVisible,
     onScan: (val) => {
-      // Logic for picker: only show and process BARCODES here
-      // RFIDs are handled by the main modal's RFID input field
-      if (detectScanType(val) === "barcode") {
-        setLastScanned(val);
-        if (onBarcodeScan) onBarcodeScan(val);
-        // Auto-clear display after 2s
-        setTimeout(() => setLastScanned(""), 2000);
-      }
+      setLastScanned(val);
+      if (onBarcodeScan) onBarcodeScan(val);
+      setTimeout(() => setLastScanned(""), 2000);
     },
   });
 

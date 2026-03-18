@@ -8,7 +8,7 @@ interface GlobalScannerOptions {
 }
 
 /**
- * Hook to capture global keyboard input (for barcode/RFID scanners).
+ * Hook to capture global keyboard input (for barcode scanners).
  * Scanners usually act as keyboards but type very fast and end with "Enter".
  */
 export function useGlobalScanner({ onScan, enabled = true }: GlobalScannerOptions) {

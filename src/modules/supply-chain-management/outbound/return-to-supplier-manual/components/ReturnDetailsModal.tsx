@@ -2,11 +2,10 @@
 
 import React, { useRef, useEffect, useState, useMemo, useCallback } from "react";
 import { toast } from "sonner";
-import { Printer, X, Loader2, Save, Send, Plus, ScanLine } from "lucide-react";
+import { Printer, X, Loader2, Save, Send, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
 import type {
   ReturnToSupplier,
   CartItem,
@@ -15,10 +14,9 @@ import type {
 import {
   getTransactionDetails,
   updateTransaction,
-  lookupRfid,
 } from "../providers/fetchProviders";
 import { useGlobalScanner } from "../hooks/useGlobalScanner";
-import { validateBarcode, detectScanType } from "../utils/barcodeUtils";
+import { validateBarcode } from "../utils/barcodeUtils";
 import { PrintableReturnSlip } from "./PrintableReturnSlip";
 import { ReturnReviewPanel } from "./ReturnReviewPanel";
 import { ProductPicker } from "./ProductPicker";
@@ -58,10 +56,7 @@ export function ReturnDetailsModal({
   );
   const [currentBranchId, setCurrentBranchId] = useState<number | null>(null);
 
-  // Scanning state
-  const [lastScannedRfid, setLastScannedRfid] = useState("");
-  const [rfidScanning, setRfidScanning] = useState(false);
-  const rfidInputRef = useRef<HTMLInputElement>(null);
+  // Barcode scanning state
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   // 1. Initialize Data
@@ -88,9 +83,7 @@ export function ReturnDetailsModal({
           const cartItems: CartItem[] = fetched.map((i) => {
               const validUnitCount = i.unitCount > 0 ? i.unitCount : 1;
             return {
-              id: i.rfid_tag
-                ? `${i.productId}-rfid-${i.rfid_tag}`
-                : String(i.productId),
+              id: String(i.productId),
               code: i.code,
               name: i.name,
               price: i.price,
@@ -103,7 +96,6 @@ export function ReturnDetailsModal({
               unitCount: validUnitCount,
               return_type_id: i.returnTypeId,
               parentId: null,
-              rfid_tag: i.rfid_tag,
             };
           });
           setItems(cartItems);
@@ -220,10 +212,8 @@ export function ReturnDetailsModal({
         };
       })
       .filter((p) => {
-        const order = unitOrderMap.get(p.unit) ?? 0;
         const isAlreadyInCart = items.some((i) => i.id === p.id);
-        // Manual add in detail modal: only allow order 1 or 2 (small units)
-        return (p.stock > 0 && (order === 1 || order === 2)) || isAlreadyInCart;
+        return p.stock > 0 || isAlreadyInCart;
       });
 
     // Group by familyId
@@ -259,31 +249,14 @@ export function ReturnDetailsModal({
   ]);
 
   /**
-   * HANDLERS: RFID & Barcode Scanning
+   * HANDLERS: Barcode Scanning
    */
   const addToCartInternal = useCallback((p: any, qty = 1) => {
     setItems((prev) => {
-      // For RFID items, never merge — always add as a new line
-      if (p.rfid_tag) {
-        return [
-          ...prev,
-          {
-            ...p,
-            id: `${p.id}-rfid-${p.rfid_tag}`, // Unique key per RFID
-            quantity: 1,
-            onHand: p.stock || 0,
-            discount: p.supplierDiscount || 0,
-            customPrice: p.price,
-            rfid_tag: p.rfid_tag,
-          },
-        ];
-      }
-
-      // For non-RFID items, merge quantity as usual
-      const exists = prev.find((i) => i.id === p.id && !i.rfid_tag);
+      const exists = prev.find((i) => i.id === p.id);
       if (exists)
         return prev.map((i) =>
-          i.id === p.id && !i.rfid_tag
+          i.id === p.id
             ? { ...i, quantity: i.quantity + qty }
             : i,
         );
@@ -299,80 +272,6 @@ export function ReturnDetailsModal({
       ];
     });
   }, []);
-
-  const handleRfidScan = useCallback(
-    async (rfidTag: string) => {
-      if (!rfidTag.trim() || !isEditable) return;
-      if (!currentBranchId) {
-        return;
-      }
-
-      if (rfidTag.length > 24) {
-        toast.error("Invalid RFID", { description: "RFID tag must be <= 24 chars." });
-        return;
-      }
-
-      if (items.some((i) => i.rfid_tag === rfidTag)) {
-        toast.warning("Duplicate RFID", { description: `RFID "${rfidTag}" is already added.` });
-        return;
-      }
-
-      setLastScannedRfid(rfidTag);
-      setRfidScanning(true);
-      try {
-        const result = await lookupRfid(rfidTag, currentBranchId);
-        if (!result || !result.productId) {
-          toast.error("RFID Not Found", { description: `No product found for RFID "${rfidTag}" at this branch.` });
-          return;
-        }
-
-        const productId = String(result.productId);
-        const invRecord = inventory.find((r) => String(r.product_id) === productId);
-        
-        if (!invRecord) {
-          toast.error("Stock Error", { description: "Product not in current supplier inventory." });
-          return;
-        }
-
-        // Validate RFID eligibility (order 3)
-        const matchedUnit = refs.units.find((u) => u.unit_name === invRecord.unit_name);
-        if (!matchedUnit || matchedUnit.order !== 3) {
-          toast.error("Ineligible Unit", { description: `${invRecord.unit_name} is not eligible for RFID. (Order 3 only)` });
-          return;
-        }
-
-        const product = {
-          id: productId,
-          code: invRecord.product_code,
-          name: invRecord.product_name,
-          unit: invRecord.unit_name,
-          unitCount: invRecord.unit_count,
-          stock: invRecord.running_inventory,
-          price: invRecord.price,
-          uom_id: matchedUnit.unit_id,
-          supplierDiscount: 0,
-          rfid_tag: rfidTag,
-        };
-
-        // Inherit discount
-        const connection = refs.connections.find(
-          (c) => String(c.product_id) === productId && c.supplier_id === currentSupplierId,
-        );
-        if (connection?.discount_type) {
-          const disc = refs.lineDiscounts.find((d) => String(d.id) === String(connection.discount_type));
-          if (disc) product.supplierDiscount = parseFloat(disc.percentage);
-        }
-
-        addToCartInternal(product, 1);
-        toast.success("RFID Added", { description: `Added "${product.name}"` });
-      } catch (err: any) {
-        toast.error("Scan Error", { description: err.message });
-      } finally {
-        setRfidScanning(false);
-      }
-    },
-    [currentBranchId, currentSupplierId, inventory, items, refs, isEditable, addToCartInternal],
-  );
 
   const handleBarcodeScan = useCallback((barcode: string) => {
     if (!barcode.trim() || !isEditable) return;
@@ -412,16 +311,12 @@ export function ReturnDetailsModal({
   }, [inventory, isEditable, refs.units, addToCartInternal]);
 
   /**
-   * GLOBAL SCAN CAPTURE
+   * GLOBAL SCAN CAPTURE: Routes barcode scans to the handler.
    */
   useGlobalScanner({
     enabled: isOpen && isEditable && !showPicker,
     onScan: (val) => {
-      if (detectScanType(val) === "rfid") {
-        handleRfidScan(val);
-      } else {
-        handleBarcodeScan(val);
-      }
+      handleBarcodeScan(val);
     }
   });
 
@@ -490,7 +385,7 @@ export function ReturnDetailsModal({
           quantity: item.quantity * (item.unitCount || 1),
           gross_unit_price: item.customPrice || item.price,
           gross_amount: gross,
-          discount_rate: item.discount,
+          discount_rate: item.discount * 100,
           discount_amount: discountAmount,
           net_amount: net,
           return_type_id: item.return_type_id || null,
@@ -643,38 +538,6 @@ export function ReturnDetailsModal({
                   Products to Return
                 </h3>
                 <div className="flex items-center gap-2">
-                  {/* RFID Scan Field — scanner-only (no manual typing) */}
-                  {isEditable && (
-                    <div className="relative">
-                      <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500" />
-                      <input
-                        ref={rfidInputRef}
-                        type="text"
-                        className="absolute inset-0 opacity-0 cursor-default"
-                        tabIndex={-1}
-                        autoComplete="off"
-                        disabled={rfidScanning || !currentBranchId || !currentSupplierId}
-                      />
-                      <div
-                        className={cn(
-                          "pl-9 pr-3 h-9 w-[220px] text-xs border rounded-md font-mono flex items-center cursor-pointer select-none transition-all",
-                          !currentBranchId || !currentSupplierId
-                            ? "bg-muted text-muted-foreground"
-                            : "bg-primary/5 text-primary hover:border-primary/30",
-                        )}
-                        onClick={() => rfidInputRef.current?.focus()}
-                      >
-                        {rfidScanning
-                          ? "Looking up..."
-                          : lastScannedRfid
-                            ? lastScannedRfid
-                            : "Scan RFID..."}
-                      </div>
-                      {rfidScanning && (
-                        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 animate-spin text-emerald-500" />
-                      )}
-                    </div>
-                  )}
                   {isEditable && (
                     <Button
                       size="sm"
