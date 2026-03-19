@@ -45,7 +45,7 @@ export function FuelTypeDialog({
   const isEdit = !!selectedFuelType;
 
   const form = useForm<FuelTypeFormValues>({
-    resolver: zodResolver(fuelTypeSchema) as any,
+    resolver: zodResolver(fuelTypeSchema),
     defaultValues: {
       name: "",
       description: "",
@@ -72,11 +72,18 @@ export function FuelTypeDialog({
       }
       onSuccess();
       onOpenChange(false);
-    } catch (error: any) {
-      if (error.message?.includes("unique") || error.message?.includes("UNIQUE")) {
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : "Something went wrong";
+
+      if (message.includes("unique") || message.includes("UNIQUE")) {
         toast.error("This fuel type name already exists.");
       } else {
-        toast.error(error.message || "Something went wrong");
+        toast.error(message);
       }
     }
   };
@@ -98,7 +105,7 @@ export function FuelTypeDialog({
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
-              control={form.control as any}
+              control={form.control}
               name="name"
               render={({ field }) => (
                 <FormItem>
@@ -114,7 +121,7 @@ export function FuelTypeDialog({
             />
 
             <FormField
-              control={form.control as any}
+              control={form.control}
               name="description"
               render={({ field }) => (
                 <FormItem>

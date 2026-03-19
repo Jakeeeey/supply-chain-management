@@ -226,7 +226,7 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
   };
 
   return (
-    <div className="flex flex-col gap-6 p-8 max-w-7xl mx-auto w-full overflow-y-auto bg-slate-50/30 min-h-screen relative">
+    <div className="flex flex-col gap-6 p-8 max-w-7xl mx-auto w-full overflow-y-auto bg-background min-h-screen relative">
       {/* No longer using browser print styles as we switched to jsPDF */}
       <div className="print:hidden flex flex-col gap-6">
         {/* Module Header */}
@@ -236,15 +236,15 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
               <Package className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-slate-900 leading-tight">Stock Adjustment Module</h2>
-              <p className="text-xs text-slate-500 font-medium">Inventory Management System</p>
+              <h2 className="text-xl font-bold text-foreground leading-tight">Stock Adjustment Module</h2>
+              <p className="text-xs text-muted-foreground font-medium">Inventory Management System</p>
             </div>
           </div>
           <div className="flex items-center gap-2 print:hidden">
             <Button
               variant="outline"
               onClick={generatePDF}
-              className="gap-2 h-10 border-slate-200 bg-white shadow-sm font-bold text-slate-600 hover:bg-slate-50 rounded-lg"
+              className="gap-2 h-10 border-border bg-background shadow-sm font-bold text-muted-foreground hover:bg-muted rounded-lg"
             >
               <Printer className="h-4 w-4" />
               Download PDF
@@ -257,30 +257,30 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
             variant="ghost"
             size="icon"
             onClick={onBack}
-            className="rounded-full hover:bg-white shadow-sm border border-slate-100 h-10 w-10 print:hidden"
+            className="rounded-full hover:bg-muted shadow-sm border border-border h-10 w-10 print:hidden"
           >
-            <ChevronLeft className="h-5 w-5 text-slate-600" />
+            <ChevronLeft className="h-5 w-5 text-muted-foreground" />
           </Button>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900">{data.doc_no}</h1>
-              <Badge variant="outline" className={data.type === 'IN' ? 'bg-green-50 text-green-700 border-green-200 font-bold' : 'bg-red-50 text-red-700 border-red-200 font-bold'}>
+              <h1 className="text-2xl font-bold tracking-tight text-foreground">{data.doc_no}</h1>
+              <Badge variant="outline" className={data.type === 'IN' ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800/50 font-bold' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800/50 font-bold'}>
                 Stock {data.type === 'IN' ? 'In' : 'Out'}
               </Badge>
               {isPosted && (
-                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 flex items-center gap-1 font-bold">
+                <Badge variant="outline" className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800/50 flex items-center gap-1 font-bold">
                   <BadgeCheck className="h-3 w-3" />
                   Posted
                 </Badge>
               )}
             </div>
-            <p className="text-sm text-slate-500">View detailed stock adjustment information</p>
+            <p className="text-sm text-muted-foreground">View detailed stock adjustment information</p>
           </div>
         </div>
 
-        <Card className="border-none shadow-sm bg-white overflow-hidden">
+        <Card className="border-none shadow-sm bg-card overflow-hidden">
           <CardContent className="p-0">
-            <div className="bg-blue-600 p-8 text-white relative overflow-hidden">
+            <div className="bg-blue-600 dark:bg-blue-700 p-8 text-white relative overflow-hidden transition-colors duration-300">
               <div className="absolute right-[-20px] top-[-20px] opacity-10">
                 {data.type === 'IN' ? <ArrowUpCircle className="h-48 w-48" /> : <ArrowDownCircle className="h-48 w-48" />}
               </div>
@@ -321,41 +321,41 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
 
             <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-4">
-                <div className="flex items-center gap-2 text-slate-800">
+                <div className="flex items-center gap-2 text-foreground">
                   <FileText className="h-4 w-4 text-blue-500" />
                   <h3 className="font-bold">Remarks & Notes</h3>
                 </div>
-                <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-sm text-slate-600 min-h-[60px]">
+                <div className="p-4 bg-muted/30 rounded-xl border border-border text-sm text-muted-foreground min-h-[60px]">
                   {data.remarks || "No additional remarks provided."}
                 </div>
               </div>
 
               <div className={`grid gap-4 ${isPosted ? "grid-cols-2" : "grid-cols-2"}`}>
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                  <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Status</p>
-                  <p className="font-bold text-slate-700">{isPosted ? "Posted (Finalized)" : "Draft (Pending Posting)"}</p>
+                <div className="bg-muted/30 p-4 rounded-xl border border-border">
+                  <p className="text-[10px] uppercase font-bold text-muted-foreground/60 mb-1">Status</p>
+                  <p className="font-bold text-foreground/80">{isPosted ? "Posted (Finalized)" : "Draft (Pending Posting)"}</p>
                 </div>
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                  <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Items Count</p>
-                  <p className="font-bold text-slate-700">{data.items?.length || 0} Products</p>
+                <div className="bg-muted/30 p-4 rounded-xl border border-border">
+                  <p className="text-[10px] uppercase font-bold text-muted-foreground/60 mb-1">Items Count</p>
+                  <p className="font-bold text-foreground/80">{data.items?.length || 0} Products</p>
                 </div>
                 {isPosted && (
                   <>
-                    <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex flex-col gap-1">
+                    <div className="bg-blue-50/50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-800/20 flex flex-col gap-1">
                       <div className="flex items-center gap-2">
-                        <Clock className="h-3 w-3 text-blue-500" />
-                        <p className="text-[10px] uppercase font-bold text-blue-400">Posted At</p>
+                        <Clock className="h-3 w-3 text-blue-500 dark:text-blue-400" />
+                        <p className="text-[10px] uppercase font-bold text-blue-400 dark:text-blue-400/70">Posted At</p>
                       </div>
-                      <p className="font-bold text-blue-700">
+                      <p className="font-bold text-blue-700 dark:text-blue-300">
                         {data.postedAt ? format(new Date(data.postedAt), "MMM d, yyyy, hh:mm a") : "-"}
                       </p>
                     </div>
-                    <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex flex-col gap-1">
+                    <div className="bg-blue-50/50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-800/20 flex flex-col gap-1">
                       <div className="flex items-center gap-2">
-                        <UserCheck className="h-3 w-3 text-blue-500" />
-                        <p className="text-[10px] uppercase font-bold text-blue-400">Posted By</p>
+                        <UserCheck className="h-3 w-3 text-blue-500 dark:text-blue-400" />
+                        <p className="text-[10px] uppercase font-bold text-blue-400 dark:text-blue-400/70">Posted By</p>
                       </div>
-                      <p className="font-bold text-blue-700">
+                      <p className="font-bold text-blue-700 dark:text-blue-300">
                         {(() => {
                           const postedBy = data.posted_by;
                           return typeof postedBy === 'object' ? `${postedBy?.user_fname} ${postedBy?.user_lname}` : postedBy || "System User";
@@ -372,19 +372,19 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
 
       {/* Product Line Items */}
       <div className="space-y-4 print:hidden">
-        <h3 className="text-lg font-bold text-slate-800">Product Line Items</h3>
+        <h3 className="text-lg font-bold text-foreground">Product Line Items</h3>
 
-        <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm bg-white">
+        <div className="rounded-xl border border-border overflow-hidden shadow-sm bg-card">
           <Table>
-            <TableHeader className="bg-slate-50/50">
-              <TableRow className="hover:bg-transparent border-slate-100">
-                <TableHead className="w-12 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">#</TableHead>
-                <TableHead className="text-xs font-bold text-slate-500 uppercase tracking-wider">Product Information</TableHead>
-                <TableHead className="text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Unit</TableHead>
-                <TableHead className="text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Adj. Qty</TableHead>
-                <TableHead className="text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Cost/Unit</TableHead>
-                <TableHead className="text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Total Price</TableHead>
-                <TableHead className="text-xs font-bold text-slate-500 uppercase tracking-wider text-center">New Stock</TableHead>
+            <TableHeader className="bg-muted/30">
+              <TableRow className="hover:bg-transparent border-border">
+                <TableHead className="w-12 text-center text-xs font-bold text-muted-foreground uppercase tracking-wider">#</TableHead>
+                <TableHead className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Product Information</TableHead>
+                <TableHead className="text-xs font-bold text-muted-foreground uppercase tracking-wider text-center">Unit</TableHead>
+                <TableHead className="text-xs font-bold text-muted-foreground uppercase tracking-wider text-center">Adj. Qty</TableHead>
+                <TableHead className="text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Cost/Unit</TableHead>
+                <TableHead className="text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Total Price</TableHead>
+                <TableHead className="text-xs font-bold text-muted-foreground uppercase tracking-wider text-center">New Stock</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -397,27 +397,27 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
                 const newStock = data.type === 'IN' ? current + qty : current - qty;
 
                 return (
-                  <TableRow key={item.id} className="border-slate-100 hover:bg-slate-50/30 transition-colors">
-                    <TableCell className="text-center text-slate-400 font-medium">{idx + 1}</TableCell>
+                  <TableRow key={item.id} className="border-border hover:bg-muted/30 transition-colors">
+                    <TableCell className="text-center text-muted-foreground/50 font-medium">{idx + 1}</TableCell>
                     <TableCell>
                       <div className="flex flex-col">
-                        <span className="font-bold text-slate-900">{product.product_name || "Unknown Product"}</span>
+                        <span className="font-bold text-foreground">{product.product_name || "Unknown Product"}</span>
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-slate-500 font-medium tracking-wider">{product.product_code || "N/A"}</span>
+                          <span className="text-[10px] text-muted-foreground font-medium tracking-wider">{product.product_code || "N/A"}</span>
                           <span className="text-[10px] text-blue-500 font-bold uppercase">{item.brand_name || "N/A"}</span>
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="text-center font-medium text-slate-600">{item.unit_name || product.unit_name || "pcs"}</TableCell>
+                    <TableCell className="text-center font-medium text-muted-foreground">{item.unit_name || product.unit_name || "pcs"}</TableCell>
                     <TableCell className="text-center">
-                      <span className={`font-bold px-2 py-1 rounded-md ${data.type === 'IN' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                      <span className={`font-bold px-2 py-1 rounded-md ${data.type === 'IN' ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'}`}>
                         {data.type === 'OUT' ? `-${qty}` : `+${qty}`}
                       </span>
                     </TableCell>
-                    <TableCell className="text-right font-medium text-slate-600">₱{cost.toFixed(2)}</TableCell>
-                    <TableCell className="text-right font-bold text-blue-600">₱{total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                    <TableCell className="text-right font-medium text-muted-foreground">₱{cost.toFixed(2)}</TableCell>
+                    <TableCell className="text-right font-bold text-blue-600 dark:text-blue-400">₱{total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                     <TableCell className="text-center">
-                      <span className="font-bold text-slate-900">
+                      <span className="font-bold text-foreground">
                         {newStock}
                       </span>
                     </TableCell>
@@ -427,17 +427,17 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
             </TableBody>
           </Table>
 
-          <div className="p-8 bg-slate-50/50 border-t border-slate-100 flex flex-col items-end gap-3">
+          <div className="p-8 bg-muted/30 border-t border-border flex flex-col items-end gap-3">
             <div className="flex items-center gap-12 w-full max-w-md justify-between">
-              <span className="text-slate-500 font-bold uppercase tracking-wider text-[11px]">Total Quantity:</span>
-              <span className={`font-bold text-lg ${data.type === 'IN' ? 'text-green-600' : 'text-red-600'}`}>
+              <span className="text-muted-foreground font-bold uppercase tracking-wider text-[11px]">Total Quantity:</span>
+              <span className={`font-bold text-lg ${data.type === 'IN' ? 'text-green-600 dark:text-green-500' : 'text-red-600 dark:text-red-500'}`}>
                 {data.type === 'OUT' ? '-' : '+'}{data.items?.reduce((acc, item) => acc + (item.quantity || 0), 0)} units
               </span>
             </div>
-            <div className="h-px bg-slate-200 w-full max-w-md" />
+            <div className="h-px bg-border w-full max-w-md" />
             <div className="flex items-center gap-12 w-full max-w-md justify-between">
-              <span className="text-slate-500 font-bold uppercase tracking-wider text-[11px]">Total Adjusted Amount:</span>
-              <span className="text-2xl font-bold text-blue-700">₱{data.amount?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              <span className="text-muted-foreground font-bold uppercase tracking-wider text-[11px]">Total Adjusted Amount:</span>
+              <span className="text-2xl font-bold text-blue-700 dark:text-blue-400">₱{data.amount?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
           </div>
         </div>
