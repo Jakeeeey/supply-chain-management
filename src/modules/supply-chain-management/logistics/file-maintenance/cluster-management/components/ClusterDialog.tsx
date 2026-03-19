@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm, useFieldArray, SubmitHandler, Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Loader2, Plus, MapPin, Trash2 } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 
 import {
   Dialog,
@@ -27,7 +27,8 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
 import { clusterSchema, ClusterFormValues, ClusterWithAreas } from "../types";
-import { createCluster, updateCluster } from "../providers/fetchProviders";
+import { createCluster, updateCluster, fetchProvinces } from "../providers/fetchProviders";
+import { AreaRow } from "./AreaRow";
 
 // =============================================================================
 // PROPS
@@ -65,6 +66,12 @@ export function ClusterDialog({
     control: form.control,
     name: "areas",
   });
+
+  const [provinces, setProvinces] = useState<{code: string; name: string}[]>([]);
+
+  useEffect(() => {
+    fetchProvinces().then(setProvinces);
+  }, []);
 
   // Reset form when dialog opens
   useEffect(() => {
@@ -205,94 +212,14 @@ export function ClusterDialog({
               </div>
 
               {fields.map((field, index) => (
-                <div
+                <AreaRow
                   key={field.id}
-                  className="rounded-lg border p-3 space-y-3"
-                >
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                      <MapPin className="h-3 w-3" />
-                      Area {index + 1}
-                    </div>
-                    {fields.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => remove(index)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2">
-                    {/* Province */}
-                    <FormField<ClusterFormValues>
-                      control={form.control}
-                      name={`areas.${index}.province`}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs">
-                            Province{" "}
-                            <span className="text-red-500">*</span>
-                          </FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="Province"
-                              {...field}
-                              value={typeof field.value === "string" ? field.value : ""}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    {/* City */}
-                    <FormField<ClusterFormValues>
-                      control={form.control}
-                      name={`areas.${index}.city`}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs">
-                            City
-                          </FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="City"
-                              {...field}
-                              value={typeof field.value === "string" ? field.value : ""}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    {/* Barangay */}
-                    <FormField<ClusterFormValues>
-                      control={form.control}
-                      name={`areas.${index}.baranggay`}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs">
-                            Barangay
-                          </FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="Barangay"
-                              {...field}
-                              value={typeof field.value === "string" ? field.value : ""}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
+                  index={index}
+                  form={form}
+                  remove={remove}
+                  canRemove={fields.length > 1}
+                  provinces={provinces}
+                />
               ))}
 
               {/* Field-array-level error */}

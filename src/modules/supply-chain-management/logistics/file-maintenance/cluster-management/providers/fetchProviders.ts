@@ -23,6 +23,28 @@ async function readError(res: Response) {
   }
 }
 
+/** 
+ * Philippine Location APIs (PSGC)
+ * Source: https://psgc.gitlab.io/api/
+ */
+export async function fetchProvinces(): Promise<{ code: string; name: string }[]> {
+  const res = await fetch("https://psgc.gitlab.io/api/provinces");
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function fetchCities(provinceCode: string): Promise<{ code: string; name: string }[]> {
+  const res = await fetch(`https://psgc.gitlab.io/api/provinces/${provinceCode}/cities-municipalities`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function fetchBarangays(cityCode: string): Promise<{ code: string; name: string }[]> {
+  const res = await fetch(`https://psgc.gitlab.io/api/cities-municipalities/${cityCode}/barangays`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
 // =============================================================================
 // API FUNCTIONS
 // =============================================================================

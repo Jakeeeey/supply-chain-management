@@ -6,7 +6,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
-import { MapPin } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { ClusterWithAreas } from "../types";
 
 // =============================================================================
@@ -68,21 +75,25 @@ export function ViewClusterDialog({
           <div className="space-y-3">
             <h4 className="text-sm font-semibold">Associated Areas</h4>
             {cluster.areas && cluster.areas.length > 0 ? (
-              <div className="grid gap-2">
-                {cluster.areas.map((area, idx) => {
-                  const label = [area.province, area.city, area.baranggay]
-                    .filter(Boolean)
-                    .join(", ");
-                  return (
-                    <div
-                      key={area.id ?? idx}
-                      className="flex gap-2 items-center text-sm p-3 bg-muted/30 rounded-lg border border-border/50"
-                    >
-                      <MapPin className="h-4 w-4 text-muted-foreground" />
-                      <span>{label}</span>
-                    </div>
-                  );
-                })}
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Province</TableHead>
+                      <TableHead>City / Municipality</TableHead>
+                      <TableHead>Barangay</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {cluster.areas.map((area, idx) => (
+                      <TableRow key={area.id ?? idx}>
+                        <TableCell className="font-medium">{area.province || "-"}</TableCell>
+                        <TableCell>{area.city || "-"}</TableCell>
+                        <TableCell>{area.baranggay || "-"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             ) : (
               <p className="text-sm text-muted-foreground italic">

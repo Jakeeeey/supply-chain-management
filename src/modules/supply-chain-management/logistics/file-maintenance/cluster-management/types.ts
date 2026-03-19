@@ -35,7 +35,7 @@ export const clusterSchema = z.object({
   cluster_name: z.string().min(1, "Cluster name is required"),
   minimum_amount: z.coerce
     .number()
-    .min(0, "Minimum amount must be 0 or greater"),
+    .gt(0, "Minimum amount must be greater than 0"),
   areas: z.array(areaSchema).min(1, "At least one area is required"),
 });
 
