@@ -10,7 +10,7 @@ import { uploadVehicleImage } from "@/modules/supply-chain-management/fleet-mana
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
@@ -267,9 +267,12 @@ export function AddVehicleDialog({
       >
         <div className="flex max-h-[90dvh] flex-col">
           {/* HEADER */}
-          <div className="flex items-center justify-between border-b px-6 py-4">
-            <div className="text-lg font-semibold">Add New Vehicle</div>
-          </div>
+          <DialogHeader className="px-6 py-4 border-b">
+            <DialogTitle className="text-lg font-semibold">Add New Vehicle</DialogTitle>
+            <DialogDescription className="sr-only">
+              Fill in the details to add a new vehicle to the fleet.
+            </DialogDescription>
+          </DialogHeader>
 
           {/* CONTENT */}
           <div className="flex-1 overflow-y-auto px-6 py-4">
