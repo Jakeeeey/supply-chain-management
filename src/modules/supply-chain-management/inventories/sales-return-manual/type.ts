@@ -161,8 +161,10 @@ export interface SalesReturnStatusCard {
 
 // 🟢 NEW: Add this interface for the Invoice Dropdown
 export interface InvoiceOption {
-  id: number | string; // The ID from the API (or the invoice number itself if used as ID)
-  invoice_no: string; // The actual text to show
+  id: number | string;
+  invoice_no: string;
   customerCode: string;
-  amount?: number; // 🟢 Add this line
+  order_id: string; // 🟢 Added this line
+  salesman_id: number; // 🟢 Added this line
+  amount?: number;
 }

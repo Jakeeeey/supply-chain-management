@@ -106,8 +106,12 @@ export const SalesReturnProvider = {
     return refs.returnTypes;
   },
 
-  async getInvoiceReturnList(customerCode?: string): Promise<InvoiceOption[]> {
+  async getInvoiceReturnList(
+    salesmanId?: string,
+    customerCode?: string,
+  ): Promise<InvoiceOption[]> {
     const params = new URLSearchParams({ action: "invoices" });
+    if (salesmanId) params.set("salesmanId", salesmanId);
     if (customerCode) params.set("customerCode", customerCode);
     const res = await fetch(`${API_BASE}?${params}`, { cache: "no-store" });
     return handleResponse<InvoiceOption[]>(res);

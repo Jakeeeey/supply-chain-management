@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   X,
   Loader2,
@@ -14,6 +14,7 @@ import {
   Link as LinkIcon,
   FileText,
   Search,
+  ChevronDown,
 } from "lucide-react";
 import {
   Dialog,
@@ -120,6 +121,15 @@ export function UpdateSalesReturnModal({
 
   const [invoiceOptions, setInvoiceOptions] = useState<InvoiceOption[]>([]);
   const [invoiceSearch, setInvoiceSearch] = useState("");
+  const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
+  const invoiceWrapperRef = useRef<HTMLDivElement>(null);
+
+  // ORDER NO DROPDOWN STATE
+  const [orderSearch, setOrderSearch] = useState("");
+  const [isOrderOpen, setIsOrderOpen] = useState(false);
+  const orderWrapperRef = useRef<HTMLDivElement>(null);
+
+  const [returnIdRef] = useState(returnId); // Reference to original ID for state tracking
 
   // 🟢 REVISED: Edit Permissions Logic
   const isPending = headerData.status === "Pending";
@@ -129,6 +139,31 @@ export function UpdateSalesReturnModal({
   // Rule 2: Only Remarks and Applied To are editable if Received
   const canEditAll = isPending;
   const canEditLimited = isPending || isReceived;
+
+  // --- CLICK OUTSIDE HANDLERS ---
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as Node;
+
+      // Invoice
+      if (
+        invoiceWrapperRef.current &&
+        !invoiceWrapperRef.current.contains(target)
+      ) {
+        setIsInvoiceOpen(false);
+      }
+
+      // Order No
+      if (
+        orderWrapperRef.current &&
+        !orderWrapperRef.current.contains(target)
+      ) {
+        setIsOrderOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // --- INITIAL LOAD ---
   useEffect(() => {
@@ -146,7 +181,10 @@ export function UpdateSalesReturnModal({
         ] = await Promise.all([
           SalesReturnProvider.getProductsSummary(returnId, headerData.returnNo),
           SalesReturnProvider.getStatusCardData(returnId),
-          SalesReturnProvider.getInvoiceReturnList(headerData.customerCode),
+          SalesReturnProvider.getInvoiceReturnList(
+            headerData.salesmanId?.toString(),
+            headerData.customerCode,
+          ),
           SalesReturnProvider.getLineDiscounts(),
           SalesReturnProvider.getSalesReturnTypes(),
           SalesReturnProvider.getSalesmenList(),
@@ -156,6 +194,9 @@ export function UpdateSalesReturnModal({
         setDetails(items);
         setStatusCardData(statusData);
         setInvoiceOptions(invoices);
+        // Sync searches with existing data
+        setInvoiceSearch(headerData.invoiceNo || "");
+        setOrderSearch(headerData.orderNo || "");
         setDiscountOptions(discounts);
         setReturnTypeOptions(retTypes);
         setSalesmenOptions(salesmen);
@@ -170,7 +211,7 @@ export function UpdateSalesReturnModal({
     if (returnId) {
       loadFullDetails();
     }
-  }, [returnId, headerData.returnNo, headerData.customerCode]);
+  }, [returnId, headerData.returnNo, headerData.customerCode, headerData.salesmanId]);
 
   // --- HELPERS ---
   const getSalesmanName = (id: string | number) =>
@@ -382,7 +423,11 @@ export function UpdateSalesReturnModal({
     0,
   );
   const filteredInvoices = invoiceOptions.filter((inv) =>
-    inv.invoice_no.toLowerCase().includes(invoiceSearch.toLowerCase()),
+    (inv.invoice_no || "").toLowerCase().includes(invoiceSearch.toLowerCase()),
+  );
+
+  const filteredOrders = invoiceOptions.filter((inv) =>
+    (inv.order_id || "").toLowerCase().includes(orderSearch.toLowerCase()),
   );
 
   return (
@@ -771,44 +816,119 @@ export function UpdateSalesReturnModal({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-4">
             <div className="md:col-span-2 space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
+                {/* ORDER NO DROPDOWN */}
+                <div className="space-y-1.5" ref={orderWrapperRef}>
                   <Label className="text-xs uppercase font-bold text-muted-foreground">
                     Order No.
                   </Label>
                   {/* 🟢 REVISED: Disabled if not Pending */}
                   {canEditAll ? (
-                    <Input
-                      value={headerData.orderNo || ""}
-                      onChange={(e) =>
-                        setHeaderData({
-                          ...headerData,
-                          orderNo: e.target.value,
-                        })
-                      }
-                      className="h-9 bg-background border-border"
-                    />
+                    <div className="relative group">
+                      <input
+                        type="text"
+                        className="w-full h-9 border border-border rounded-md text-sm px-3 bg-background outline-none focus:ring-2 focus:border-primary"
+                        placeholder="Search Order No..."
+                        value={orderSearch}
+                        onChange={(e) => {
+                          setOrderSearch(e.target.value);
+                          setHeaderData({ ...headerData, orderNo: "" }); // Clear on type
+                          setIsOrderOpen(true);
+                        }}
+                        onFocus={() => {
+                          setIsOrderOpen(true);
+                          setOrderSearch("");
+                        }}
+                      />
+                      <ChevronDown className="h-3 w-3 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      {isOrderOpen && (
+                        <div className="absolute top-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto translate-y-0">
+                          {filteredOrders.length > 0 ? (
+                            filteredOrders.map((inv) => (
+                              <div
+                                key={`${inv.order_id}-${inv.invoice_no}`}
+                                className="px-3 py-2 text-sm cursor-pointer hover:bg-primary/10 text-foreground"
+                                onClick={() => {
+                                  setHeaderData({
+                                    ...headerData,
+                                    orderNo: inv.order_id,
+                                    invoiceNo: inv.invoice_no,
+                                  });
+                                  setOrderSearch(inv.order_id);
+                                  setInvoiceSearch(inv.invoice_no);
+                                  setIsOrderOpen(false);
+                                }}
+                              >
+                                {inv.order_id}
+                              </div>
+                            ))
+                          ) : (
+                            <div className="px-3 py-2 text-xs text-muted-foreground text-center">
+                              No related orders found
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <div className="w-full px-3 py-2.5 bg-muted/30 border border-border rounded-md text-sm font-medium text-foreground">
                       {headerData.orderNo || "-"}
                     </div>
                   )}
                 </div>
-                <div className="space-y-1.5">
+
+                {/* INVOICE NO DROPDOWN */}
+                <div className="space-y-1.5" ref={invoiceWrapperRef}>
                   <Label className="text-xs uppercase font-bold text-muted-foreground">
                     Invoice No.
                   </Label>
                   {/* 🟢 REVISED: Disabled if not Pending */}
                   {canEditAll ? (
-                    <Input
-                      value={headerData.invoiceNo || ""}
-                      onChange={(e) =>
-                        setHeaderData({
-                          ...headerData,
-                          invoiceNo: e.target.value,
-                        })
-                      }
-                      className="h-9 bg-background border-border"
-                    />
+                    <div className="relative group">
+                      <input
+                        type="text"
+                        className="w-full h-9 border border-border rounded-md text-sm px-3 bg-background outline-none focus:ring-2 focus:border-primary"
+                        placeholder="Search Invoice No..."
+                        value={invoiceSearch}
+                        onChange={(e) => {
+                          setInvoiceSearch(e.target.value);
+                          setHeaderData({ ...headerData, invoiceNo: "" }); // Clear on type
+                          setIsInvoiceOpen(true);
+                        }}
+                        onFocus={() => {
+                          setIsInvoiceOpen(true);
+                          setInvoiceSearch("");
+                        }}
+                      />
+                      <ChevronDown className="h-3 w-3 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      {isInvoiceOpen && (
+                        <div className="absolute top-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto translate-y-0">
+                          {filteredInvoices.length > 0 ? (
+                            filteredInvoices.map((inv) => (
+                              <div
+                                key={`${inv.order_id}-${inv.invoice_no}`}
+                                className="px-3 py-2 text-sm cursor-pointer hover:bg-primary/10 text-foreground"
+                                onClick={() => {
+                                  setHeaderData({
+                                    ...headerData,
+                                    invoiceNo: inv.invoice_no,
+                                    orderNo: inv.order_id,
+                                  });
+                                  setInvoiceSearch(inv.invoice_no);
+                                  setOrderSearch(inv.order_id);
+                                  setIsInvoiceOpen(false);
+                                }}
+                              >
+                                {inv.invoice_no}
+                              </div>
+                            ))
+                          ) : (
+                            <div className="px-3 py-2 text-xs text-muted-foreground text-center">
+                              No related invoices found
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <div className="w-full px-3 py-2.5 bg-muted/30 border border-border rounded-md text-sm font-medium text-foreground">
                       {headerData.invoiceNo || "-"}

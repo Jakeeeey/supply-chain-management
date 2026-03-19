@@ -65,8 +65,9 @@ export async function GET(req: NextRequest) {
       }
 
       case "invoices": {
+        const salesmanId = url.searchParams.get("salesmanId") || undefined;
         const customerCode = url.searchParams.get("customerCode") || undefined;
-        const data = await fetchInvoices(customerCode);
+        const data = await fetchInvoices(salesmanId, customerCode);
         return json({ data });
       }
 

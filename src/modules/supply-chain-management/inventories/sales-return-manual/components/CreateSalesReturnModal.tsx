@@ -90,6 +90,11 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
   const invoiceWrapperRef = useRef<HTMLDivElement>(null);
 
+  // ORDER NO DROPDOWN STATE
+  const [orderSearch, setOrderSearch] = useState("");
+  const [isOrderOpen, setIsOrderOpen] = useState(false);
+  const orderWrapperRef = useRef<HTMLDivElement>(null);
+
   // --- 3. CART STATE ---
   const [items, setItems] = useState<SalesReturnItem[]>([]);
   const [isProductLookupOpen, setIsProductLookupOpen] = useState(false);
@@ -114,21 +119,18 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
             branchesData,
             lineDiscountData,
             returnTypesData,
-            invoiceListData,
           ] = await Promise.all([
             SalesReturnProvider.getFormSalesmen(),
             SalesReturnProvider.getFormCustomers(),
             SalesReturnProvider.getFormBranches(),
             SalesReturnProvider.getLineDiscounts(),
             SalesReturnProvider.getSalesReturnTypes(),
-            SalesReturnProvider.getInvoiceReturnList(),
           ]);
           setSalesmen(salesmenData);
           setCustomers(customersData);
           setBranches(branchesData);
           setLineDiscountOptions(lineDiscountData);
           setReturnTypeOptions(returnTypesData);
-          setInvoiceOptions(invoiceListData);
         } catch (error) {
           console.error("Failed to load form data", error);
         }
@@ -136,6 +138,27 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       loadData();
     }
   }, [isOpen]);
+
+  // --- 5b. FETCH INVOICES when salesman or customer changes ---
+  useEffect(() => {
+    if (selectedSalesmanId && customerCode) {
+      const fetchInv = async () => {
+        try {
+          const data = await SalesReturnProvider.getInvoiceReturnList(
+            selectedSalesmanId,
+            customerCode,
+          );
+          setInvoiceOptions(data);
+        } catch (error) {
+          console.error("Failed to fetch invoices", error);
+          setInvoiceOptions([]);
+        }
+      };
+      fetchInv();
+    } else {
+      setInvoiceOptions([]);
+    }
+  }, [selectedSalesmanId, customerCode]);
 
   // --- 6. CLICK OUTSIDE HANDLERS ---
   useEffect(() => {
@@ -172,6 +195,14 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         !invoiceWrapperRef.current.contains(target)
       ) {
         setIsInvoiceOpen(false);
+      }
+
+      // Order No
+      if (
+        orderWrapperRef.current &&
+        !orderWrapperRef.current.contains(target)
+      ) {
+        setIsOrderOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -215,6 +246,10 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     inv.invoice_no.toLowerCase().includes(invoiceSearch.toLowerCase()),
   );
 
+  const filteredOrders = invoiceOptions.filter((inv) =>
+    inv.order_id.toLowerCase().includes(orderSearch.toLowerCase()),
+  );
+
   const handleSelectSalesman = (salesman: SalesmanOption) => {
     setSelectedSalesmanId(salesman.id.toString());
     setSalesmanSearch(salesman.name);
@@ -224,6 +259,11 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     setBranchName(linkedBranch ? linkedBranch.name : "");
     setValidationError(null);
     setIsSalesmanOpen(false);
+    // Clear order/invoice on salesman change
+    setOrderNo("");
+    setOrderSearch("");
+    setInvoiceNo("");
+    setInvoiceSearch("");
   };
 
   const handleSelectCustomer = (customer: CustomerOption) => {
@@ -232,6 +272,11 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     setCustomerCode(customer.code || "");
     setValidationError(null);
     setIsCustomerOpen(false);
+    // Clear order/invoice on customer change
+    setOrderNo("");
+    setOrderSearch("");
+    setInvoiceNo("");
+    setInvoiceSearch("");
   };
 
   // --- 8. VALIDATION & ACTIONS ---
@@ -838,16 +883,55 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                 Additional Information
               </h4>
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
+                {/* ORDER NO DROPDOWN */}
+                <div className="space-y-1.5" ref={orderWrapperRef}>
                   <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
                     Order No. <span className="text-destructive">*</span>
                   </label>
-                  <Input
-                    value={orderNo}
-                    onChange={(e) => setOrderNo(e.target.value)}
-                    className="h-9 border-border focus:bg-background"
-                    placeholder="e.g. ORD-001"
-                  />
+                  <div className="relative group">
+                    <input
+                      type="text"
+                      className="w-full h-9 border border-border rounded-md text-sm px-3 bg-background outline-none focus:ring-2 focus:border-primary"
+                      placeholder="Search Order No..."
+                      value={orderSearch}
+                      onChange={(e) => {
+                        setOrderSearch(e.target.value);
+                        setOrderNo(""); // Clear ID on type
+                        setIsOrderOpen(true);
+                      }}
+                      onFocus={() => {
+                        setIsOrderOpen(true);
+                        setOrderSearch("");
+                      }}
+                    />
+                    <ChevronDown className="h-3 w-3 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    {isOrderOpen && (
+                      <div className="absolute bottom-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto translate-y-0">
+                        {filteredOrders.length > 0 ? (
+                          filteredOrders.map((inv) => (
+                            <div
+                              key={`${inv.order_id}-${inv.invoice_no}`}
+                              className="px-3 py-2 text-sm cursor-pointer hover:bg-primary/10 text-foreground"
+                              onClick={() => {
+                                setOrderNo(inv.order_id);
+                                setOrderSearch(inv.order_id);
+                                // Auto-fill invoice
+                                setInvoiceNo(inv.invoice_no);
+                                setInvoiceSearch(inv.invoice_no);
+                                setIsOrderOpen(false);
+                              }}
+                            >
+                              {inv.order_id}
+                            </div>
+                          ))
+                        ) : (
+                          <div className="px-3 py-2 text-xs text-muted-foreground text-center">
+                            No related orders found
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* INVOICE NO DROPDOWN */}
@@ -859,26 +943,32 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                     <input
                       type="text"
                       className="w-full h-9 border border-border rounded-md text-sm px-3 bg-background outline-none focus:ring-2 focus:border-primary"
-                      placeholder="e.g. INV-2023"
-                      value={invoiceSearch || invoiceNo}
+                      placeholder="Search Invoice No..."
+                      value={invoiceSearch}
                       onChange={(e) => {
                         setInvoiceSearch(e.target.value);
-                        setInvoiceNo(e.target.value);
+                        setInvoiceNo(""); // Clear ID on type
                         setIsInvoiceOpen(true);
                       }}
-                      onFocus={() => setIsInvoiceOpen(true)}
+                      onFocus={() => {
+                        setIsInvoiceOpen(true);
+                        setInvoiceSearch("");
+                      }}
                     />
                     <ChevronDown className="h-3 w-3 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     {isInvoiceOpen && (
-                      <div className="absolute bottom-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto">
+                      <div className="absolute bottom-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto translate-y-0">
                         {filteredInvoices.length > 0 ? (
                           filteredInvoices.map((inv) => (
                             <div
-                              key={inv.id}
+                              key={`${inv.order_id}-${inv.invoice_no}`}
                               className="px-3 py-2 text-sm cursor-pointer hover:bg-primary/10 text-foreground"
                               onClick={() => {
                                 setInvoiceNo(inv.invoice_no);
                                 setInvoiceSearch(inv.invoice_no);
+                                // Auto-fill order
+                                setOrderNo(inv.order_id);
+                                setOrderSearch(inv.order_id);
                                 setIsInvoiceOpen(false);
                               }}
                             >
@@ -887,7 +977,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                           ))
                         ) : (
                           <div className="px-3 py-2 text-xs text-muted-foreground text-center">
-                            No invoices found
+                            No related invoices found
                           </div>
                         )}
                       </div>

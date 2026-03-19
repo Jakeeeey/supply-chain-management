@@ -279,18 +279,22 @@ export async function fetchProductCatalog(): Promise<{
  * Fetches invoices, optionally filtered by customer code.
  */
 export async function fetchInvoices(
+  salesmanId?: string,
   customerCode?: string,
 ): Promise<InvoiceOption[]> {
-  const result = await repo.getRawInvoices(customerCode);
+  const result = await repo.getRawInvoices(salesmanId, customerCode);
   const rawData = (result.data || []) as any[];
 
   const uniqueInvoices = new Map<string, InvoiceOption>();
   rawData.forEach((item: any) => {
-    if (item.invoice_no && !uniqueInvoices.has(item.invoice_no)) {
-      uniqueInvoices.set(item.invoice_no, {
+    const key = `${item.order_id || ""}_${item.invoice_no || ""}`;
+    if (!uniqueInvoices.has(key)) {
+      uniqueInvoices.set(key, {
         id: item.invoice_id,
-        invoice_no: item.invoice_no.toString(),
+        invoice_no: (item.invoice_no || "").toString(),
+        order_id: (item.order_id || "").toString(),
         customerCode: item.customer_code || "",
+        salesman_id: item.salesman_id || 0,
         amount: item.total_amount ? parseFloat(item.total_amount) : 0,
       });
     }

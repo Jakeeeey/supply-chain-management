@@ -16,6 +16,7 @@ import {
   Search,
   Radio,
   ChevronDown,
+  ScanLine,
 } from "lucide-react";
 import {
   Dialog,
@@ -58,6 +59,7 @@ import {
 import { ProductLookupModal } from "./ProductLookupModal";
 import { SalesReturnPrintSlip } from "./SalesReturnPrintSlip";
 import { createRoot } from "react-dom/client";
+import { useRfidScanner } from "../hooks/useRfidScanner";
 
 interface Props {
   returnId: number;
@@ -132,7 +134,6 @@ export function UpdateSalesReturnModal({
   const invoiceDropdownRef = useRef<HTMLDivElement>(null);
 
   // RFID State
-  const [rfidInput, setRfidInput] = useState("");
   const [scannedTags, setScannedTags] = useState<string[]>([]);
 
   // 🟢 REVISED: Edit Permissions Logic
@@ -208,6 +209,23 @@ export function UpdateSalesReturnModal({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // RFID Scanner Ref
+  const rfidInputRef = useRef<HTMLInputElement>(null);
+
+  // Global RFID Scanner
+  useRfidScanner({
+    onScan: (tag) => {
+      if (!tag) return;
+      if (scannedTags.includes(tag)) {
+        setValidationError(`RFID tag "${tag}" already scanned.`);
+      } else {
+        setScannedTags((prev) => [...prev, tag]);
+        setValidationError(null);
+      }
+    },
+    enabled: true, // Enabled while modal is open
+  });
 
   // --- HELPERS ---
   const getSalesmanName = (id: string | number) =>
@@ -542,32 +560,29 @@ export function UpdateSalesReturnModal({
               {/* 🟢 REVISED: Add Button hidden if not Pending */}
               {canEditAll && (
                 <div className="flex items-center gap-3">
-                  {/* RFID Scan Field */}
-                  <div className="relative flex items-center gap-2">
-                    <Radio className="h-4 w-4 text-primary" />
-                    <Input
-                      value={rfidInput}
-                      onChange={(e) => setRfidInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && rfidInput.trim()) {
-                          e.preventDefault();
-                          const tag = rfidInput.trim();
-                          if (scannedTags.includes(tag)) {
-                            setValidationError(`RFID tag "${tag}" already scanned.`);
-                          } else {
-                            setScannedTags((prev) => [...prev, tag]);
-                          }
-                          setRfidInput("");
-                        }
-                      }}
-                      placeholder="Scan RFID tag..."
-                      className="h-9 w-44 border-border text-sm"
-                    />
-                    {scannedTags.length > 0 && (
-                      <span className="text-xs text-primary font-semibold bg-primary/10 px-2 py-1 rounded">
-                        {scannedTags.length} tag{scannedTags.length > 1 ? "s" : ""}
-                      </span>
-                    )}
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500" />
+                      {/* Hidden input captures scanner keyboard wedge input */}
+                      <input
+                        ref={rfidInputRef}
+                        type="text"
+                        className="absolute inset-0 opacity-0 cursor-default"
+                        tabIndex={-1}
+                        autoComplete="off"
+                        disabled={!canEditAll}
+                      />
+                      {/* Visible read-only display */}
+                      <div
+                        className={cn(
+                          "pl-9 pr-3 h-9 w-44 text-xs border border-border rounded-md font-mono flex items-center cursor-pointer select-none transition-all",
+                          canEditAll ? "bg-muted/30 text-muted-foreground hover:border-primary/30" : "bg-muted/50 text-muted-foreground/60"
+                        )}
+                        onClick={() => canEditAll && rfidInputRef.current?.focus()}
+                      >
+                        {scannedTags.length > 0 ? `${scannedTags.length} tags scanned` : "Scan RFID..."}
+                      </div>
+                    </div>
                   </div>
                   <Button
                     size="sm"

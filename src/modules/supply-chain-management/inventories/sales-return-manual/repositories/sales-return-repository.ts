@@ -125,13 +125,18 @@ export async function getRawProductCatalog() {
 /**
  * Fetches invoice list (unposted) optionally filtered by customer code.
  */
-export async function getRawInvoices(customerCode?: string) {
+export async function getRawInvoices(
+  salesmanId?: string,
+  customerCode?: string,
+) {
   let url =
-    "/items/sales_invoice?limit=-1&fields=invoice_id,invoice_no,customer_code,isPosted,total_amount&filter[isPosted][_null]=true";
+    "/items/sales_invoice?limit=-1&fields=invoice_id,invoice_no,customer_code,order_id,salesman_id,isPosted,total_amount&filter[isPosted][_null]=true";
 
   if (customerCode) {
-    const normalized = customerCode.replace(/\s+/g, "").toUpperCase();
-    url += `&filter[customer_code][_contains]=${encodeURIComponent(normalized)}`;
+    url += `&filter[customer_code][_eq]=${encodeURIComponent(customerCode)}`;
+  }
+  if (salesmanId) {
+    url += `&filter[salesman_id][_eq]=${salesmanId}`;
   }
 
   return directusGet<{ data: Record<string, unknown>[] }>(url);
