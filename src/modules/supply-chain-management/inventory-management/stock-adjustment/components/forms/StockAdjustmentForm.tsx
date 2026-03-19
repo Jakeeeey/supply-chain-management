@@ -104,22 +104,22 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
   return (
     <div
       className={`border-b last:border-0 p-6 space-y-4 transition-colors duration-200 relative ${
-        hasRfid ? "bg-amber-50/20 border-amber-200/50" : "border-slate-100"
+        hasRfid ? "bg-amber-50/10 dark:bg-amber-900/10 border-amber-200/30 dark:border-amber-800/20" : "border-border/50"
       }`}
     >
       {/* Per-row loading overlay for RFID/inventory lookup */}
       {isLoadingDetails && (
-        <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] z-10 flex items-center justify-center rounded-md">
-          <div className="flex items-center gap-3 bg-white border border-slate-200 shadow-sm px-4 py-2.5 rounded-lg">
+        <div className="absolute inset-0 bg-background/60 backdrop-blur-[1px] z-10 flex items-center justify-center rounded-md">
+          <div className="flex items-center gap-3 bg-background border border-border shadow-sm px-4 py-2.5 rounded-lg">
             <div className="h-4 w-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
-            <span className="text-xs font-bold text-slate-600">Checking RFID data...</span>
+            <span className="text-xs font-bold text-muted-foreground">Checking RFID data...</span>
           </div>
         </div>
       )}
       <div className="flex items-start gap-4">
         {/* Product Selection */}
         <div className="flex-[3] space-y-2">
-          <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+          <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
             Product <span className="text-red-500">*</span>
           </Label>
           <Combobox
@@ -140,17 +140,17 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
               return (
                 <div className="flex items-center justify-between w-full gap-4 min-w-[300px]">
                   <div className="flex flex-col">
-                    <span className="font-medium text-slate-900 line-clamp-1 text-xs">
+                    <span className="font-medium text-foreground line-clamp-1 text-xs">
                       {p.product_name}
                     </span>
                     <div className="flex items-center gap-2">
-                      <span className="text-[9px] text-slate-500 font-mono">
+                      <span className="text-[9px] text-muted-foreground font-mono">
                         {p.product_code}
                       </span>
                       {p.unit_name && (
                         <>
-                          <span className="text-[9px] text-slate-300">•</span>
-                          <span className="text-[9px] font-bold text-blue-600 uppercase tracking-tight bg-blue-50 px-1 rounded">
+                          <span className="text-[9px] text-muted-foreground/30">•</span>
+                          <span className="text-[9px] font-bold text-blue-600 uppercase tracking-tight bg-blue-50 dark:bg-blue-900/20 px-1 rounded">
                             {p.unit_name}
                           </span>
                         </>
@@ -158,8 +158,8 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
                     </div>
                   </div>
                   {pHasRfid && (
-                    <div className="bg-amber-100 text-amber-700 px-1 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter flex items-center gap-1 shrink-0">
-                      <Tag className="h-2 w-2 fill-amber-700" />
+                    <div className="bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 px-1 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter flex items-center gap-1 shrink-0">
+                      <Tag className="h-2 w-2 fill-amber-700 dark:fill-amber-400" />
                       RFID
                     </div>
                   )}
@@ -171,17 +171,17 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
 
         {/* Unit */}
         <div className="flex-1 space-y-2">
-          <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+          <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
             Unit
           </Label>
-          <div className="h-10 w-full bg-slate-50/50 border border-slate-200 rounded-md flex items-center px-3 text-sm text-slate-600 font-medium overflow-hidden">
+          <div className="h-10 w-full bg-muted/30 border border-border rounded-md flex items-center px-3 text-sm text-muted-foreground font-medium overflow-hidden">
             <span className="truncate">{unitName || "-"}</span>
           </div>
         </div>
 
         {/* Qty */}
         <div className="flex-1 space-y-2">
-          <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+          <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
             Qty <span className="text-red-500">*</span>
           </Label>
           <Input
@@ -194,9 +194,9 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
               )
             }
             readOnly={isReadOnly || !!(rfidCount && rfidCount > 0) || unitOrder === 3}
-            className={`h-10 border-slate-200 focus:ring-blue-500 rounded-md text-sm ${
+            className={`h-10 border-input focus:ring-blue-500 rounded-md text-sm ${
               isReadOnly || (rfidCount && rfidCount > 0) || unitOrder === 3 
-                ? "bg-slate-50 text-slate-500 cursor-not-allowed font-bold" 
+                ? "bg-muted text-muted-foreground cursor-not-allowed font-bold" 
                 : ""
             }`}
             min={0}
@@ -211,7 +211,7 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
               variant="outline"
               size="sm"
               onClick={() => onOpenScanner(index)}
-              className="h-10 border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:border-blue-300 font-bold gap-2 px-3 transition-all duration-200 shadow-sm"
+              className="h-10 border-blue-200 dark:border-blue-800/50 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 hover:border-blue-300 dark:hover:border-blue-700 font-bold gap-2 px-3 transition-all duration-200 shadow-sm"
             >
               <Tag className="h-4 w-4" />
               Scan RFID
@@ -221,23 +221,23 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
 
         {/* Cost/Unit */}
         <div className="flex-1 space-y-2">
-          <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+          <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
             Cost/Unit
           </Label>
           <Input
             type="text"
             value={`₱${(costPerUnit || 0).toFixed(2)}`}
-            className="h-10 border-slate-200 bg-slate-50/50 rounded-md text-sm"
+            className="h-10 border-input bg-muted/30 rounded-md text-sm"
             readOnly
           />
         </div>
 
         {/* Total Cost */}
         <div className="flex-1 space-y-2">
-          <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+          <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
             Total Cost
           </Label>
-          <div className="h-10 border border-blue-50 bg-blue-50/30 rounded-md flex items-center px-3 font-bold text-blue-600 text-sm">
+          <div className="h-10 border border-blue-100/20 dark:border-blue-900/20 bg-blue-50/30 dark:bg-blue-900/10 rounded-md flex items-center px-3 font-bold text-blue-600 text-sm">
             ₱
             {totalCost.toLocaleString(undefined, {
               minimumFractionDigits: 2,
@@ -255,7 +255,7 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
             onClick={() => onRemove(index)}
             disabled={isReadOnly || !!dbId}
             className={`shrink-0 self-end mb-0.5 rounded-full transition-all ${
-              isReadOnly ? "hidden" : "hover:bg-red-50 hover:text-red-500 text-slate-400"
+              isReadOnly ? "hidden" : "hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500 text-muted-foreground/50"
             } ${!!dbId && !isReadOnly ? "opacity-50 cursor-not-allowed grayscale" : ""}`}
             title={!!dbId && !isReadOnly ? "Existing items cannot be deleted" : "Remove item"}
           >
@@ -267,15 +267,15 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
       {/* Metadata Section */}
       {productId ? (
         <div className="flex flex-col gap-2 pt-1">
-          <div className="flex items-center gap-6 text-[11px] text-slate-500 font-medium">
+          <div className="flex items-center gap-6 text-[11px] text-muted-foreground font-medium">
             <span className="flex items-center gap-1">
-              <span className="text-slate-400 font-bold uppercase tracking-tighter">
+              <span className="text-muted-foreground/70 font-bold uppercase tracking-tighter">
                 Brand:
               </span>{" "}
               {brandName || "N/A"}
             </span>
             <span className="flex items-center gap-1">
-              <span className="text-slate-400 font-bold uppercase tracking-tighter">
+              <span className="text-muted-foreground/70 font-bold uppercase tracking-tighter">
                 Barcode:
               </span>{" "}
               {barcode || "N/A"}
@@ -283,15 +283,15 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
           </div>
 
           {hasRfid && (
-            <div className="flex items-center gap-2 bg-amber-50/80 border border-amber-100/50 w-fit px-2.5 py-1 rounded-md">
+            <div className="flex items-center gap-2 bg-amber-50/80 dark:bg-amber-900/20 border border-amber-100/50 dark:border-amber-800/30 w-fit px-2.5 py-1 rounded-md">
               <Tag className="h-3 w-3 text-amber-500 fill-amber-500" />
-              <span className="text-[10px] font-black text-amber-700">
+              <span className="text-[10px] font-black text-amber-700 dark:text-amber-500">
                 {rfidCount || 0} RFID tag(s) tracked system-wide
               </span>
             </div>
           )}
 
-          <p className="text-[11px] text-slate-400 italic font-medium">
+          <p className="text-[11px] text-muted-foreground/60 italic font-medium">
             {description || "No description available."}
           </p>
         </div>
@@ -299,12 +299,12 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
 
       {/* Remarks Section */}
       <div className="space-y-2">
-        <Label className="text-xs font-bold text-slate-600">Item Remarks</Label>
+        <Label className="text-xs font-bold text-muted-foreground">Item Remarks</Label>
         <Input
           placeholder="Enter remarks for this item..."
           value={useWatch({ control, name: `items.${index}.remarks` }) || ""}
           onChange={(e) => setValue(`items.${index}.remarks`, e.target.value)}
-          className="h-10 border-slate-200 focus:ring-blue-500 rounded-md text-sm bg-white"
+          className="h-10 border-input focus:ring-blue-500 rounded-md text-sm bg-background"
           readOnly={isReadOnly}
         />
       </div>
@@ -339,27 +339,27 @@ function FormSummary({
   }, [items]);
 
   return (
-    <div className="border-t border-slate-100 px-8 py-5 flex justify-end bg-slate-50/20">
+    <div className="border-t border-border px-8 py-5 flex justify-end bg-muted/30">
       <div className="w-full max-w-[400px] space-y-3">
         <div className="flex justify-between items-center text-sm">
-          <span className="font-bold text-slate-600">Total Items:</span>
-          <span className="font-bold text-slate-900">
+          <span className="font-bold text-muted-foreground">Total Items:</span>
+          <span className="font-bold text-foreground">
             {fieldCount} product(s)
           </span>
         </div>
-        <div className="h-px bg-slate-100 w-full" />
+        <div className="h-px bg-border w-full" />
         <div className="flex justify-between items-center text-sm">
-          <span className="font-bold text-slate-600">Total Quantity:</span>
-          <span className="font-bold text-slate-900">
+          <span className="font-bold text-muted-foreground">Total Quantity:</span>
+          <span className="font-bold text-foreground">
             {totalQuantity} units
           </span>
         </div>
-        <div className="h-px bg-slate-100 w-full" />
+        <div className="h-px bg-border w-full" />
         <div className="flex justify-between items-center pt-1">
-          <span className="font-bold text-slate-600 text-sm">
+          <span className="font-bold text-muted-foreground text-sm">
             Total Amount:
           </span>
-          <span className="text-xl font-bold text-blue-600">
+          <span className="text-xl font-bold text-blue-600 dark:text-blue-400">
             ₱
             {totalAmount.toLocaleString(undefined, {
               minimumFractionDigits: 2,
@@ -370,20 +370,20 @@ function FormSummary({
 
         {(rfidItemsCount > 0 || isRfidLoading) && (
           <>
-            <div className="h-px bg-slate-100 w-full" />
+            <div className="h-px bg-border w-full" />
             <div className="flex justify-between items-center text-sm">
-              <span className="font-bold text-amber-600">
+              <span className="font-bold text-amber-600 dark:text-amber-400">
                 Items with RFID:
               </span>
               {isRfidLoading ? (
                 <div className="flex items-center gap-2">
-                  <Skeleton className="h-4 w-16 bg-amber-100/50 animate-pulse" />
+                  <Skeleton className="h-4 w-16 bg-amber-100/20 dark:bg-amber-900/20 animate-pulse" />
                   <span className="text-[10px] text-amber-400 animate-pulse">
                     Checking...
                   </span>
                 </div>
               ) : (
-                <span className="font-bold text-amber-700">
+                <span className="font-bold text-amber-700 dark:text-amber-400">
                   {rfidItemsCount} product(s)
                 </span>
               )}
@@ -406,15 +406,15 @@ function RfidBanner({ control }: { control: Control<any> }) {
   if (rfidItemsCount === 0) return null;
 
   return (
-    <div className="bg-amber-50 border border-amber-200 px-6 py-4 rounded-xl flex items-start gap-4 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
-      <div className="p-2 bg-amber-100 rounded-lg">
-        <AlertCircle className="h-5 w-5 text-amber-600" />
+    <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 px-6 py-4 rounded-xl flex items-start gap-4 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+      <div className="p-2 bg-amber-100 dark:bg-amber-800/30 rounded-lg">
+        <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
       </div>
       <div>
-        <h4 className="font-bold text-amber-900">
+        <h4 className="font-bold text-amber-900 dark:text-amber-400">
           RFID Tracked Items Detected
         </h4>
-        <p className="text-sm text-amber-800 opacity-90">
+        <p className="text-sm text-amber-800 dark:text-amber-300 opacity-90">
           {rfidItemsCount} item(s) in this adjustment have RFID tags in
           inventory. Please ensure proper RFID tag management during stock
           adjustment.
@@ -795,7 +795,7 @@ export function StockAdjustmentForm({
   const watchedType = useWatch({ control: form.control, name: "type" });
 
   return (
-    <div className="flex flex-col gap-6 p-8 max-w-7xl mx-auto w-full overflow-y-auto bg-slate-50/30 min-h-screen">
+    <div className="flex flex-col gap-6 p-8 max-w-7xl mx-auto w-full overflow-y-auto bg-background min-h-screen">
       {/* Module Header */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-3">
@@ -803,10 +803,10 @@ export function StockAdjustmentForm({
             <Package className="h-6 w-6 text-white" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-slate-900 leading-tight">
+            <h2 className="text-xl font-bold text-foreground leading-tight">
               Stock Adjustment Module
             </h2>
-            <p className="text-xs text-slate-500 font-medium">
+            <p className="text-xs text-muted-foreground font-medium">
               Inventory Management System
             </p>
           </div>
@@ -815,7 +815,7 @@ export function StockAdjustmentForm({
           <Button
             variant="outline"
             onClick={onCancel}
-            className="gap-2 h-10 border-slate-200 bg-white shadow-sm font-bold text-slate-600 hover:bg-slate-50 rounded-lg"
+            className="gap-2 h-10 border-border bg-card shadow-sm font-bold text-muted-foreground hover:bg-muted rounded-lg"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to List
@@ -825,7 +825,7 @@ export function StockAdjustmentForm({
 
       <div className="flex flex-col gap-1 mb-2">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
             {id ? "Edit Stock Adjustment" : "New Stock Adjustment"}
           </h1>
           {id && (
@@ -833,29 +833,29 @@ export function StockAdjustmentForm({
               variant="outline" 
               className={`px-3 py-1 font-bold shadow-sm ${
                 isPosted 
-                  ? 'bg-blue-50 text-blue-700 border-blue-200 uppercase tracking-wider' 
-                  : 'bg-amber-50 text-amber-700 border-amber-200 uppercase tracking-wider'
+                  ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800/50 uppercase tracking-wider' 
+                  : 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800/50 uppercase tracking-wider'
               }`}
             >
               {isPosted ? 'Posted' : 'Draft / Unposted'}
             </Badge>
           )}
         </div>
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-muted-foreground">
           Record stock movement and adjust inventory levels
         </p>
         
         {isPosted && (
           <div className="flex items-center gap-6 mt-2 animate-in fade-in slide-in-from-left-2 duration-300">
-            <div className="flex items-center gap-2 bg-blue-50/50 px-3 py-1.5 rounded-lg border border-blue-100">
+            <div className="flex items-center gap-2 bg-blue-50/50 dark:bg-blue-900/10 px-3 py-1.5 rounded-lg border border-blue-100 dark:border-blue-800/30">
               <span className="text-[10px] uppercase font-black text-blue-400">Posted At:</span>
-              <span className="text-xs font-bold text-blue-700">
+              <span className="text-xs font-bold text-blue-700 dark:text-blue-300">
                 {form.getValues("postedAt") ? format(new Date(form.getValues("postedAt")), "MMMM d, yyyy, hh:mm a") : "-"}
               </span>
             </div>
-            <div className="flex items-center gap-2 bg-blue-50/50 px-3 py-1.5 rounded-lg border border-blue-100">
+            <div className="flex items-center gap-2 bg-blue-50/50 dark:bg-blue-900/10 px-3 py-1.5 rounded-lg border border-blue-100 dark:border-blue-800/30">
               <span className="text-[10px] uppercase font-black text-blue-400">Posted By:</span>
-              <span className="text-xs font-bold text-blue-700">
+              <span className="text-xs font-bold text-blue-700 dark:text-blue-300">
                 {(() => {
                   const postedBy = form.getValues("posted_by");
                   return typeof postedBy === 'object' ? `${postedBy?.user_fname} ${postedBy?.user_lname}` : postedBy || "System User";
@@ -870,19 +870,19 @@ export function StockAdjustmentForm({
 
       {/* RFID Scanner Preparation Overlay */}
       {isScannerPreparing && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] z-[100] flex items-center justify-center animate-in fade-in duration-300">
-          <Card className="w-full max-w-sm border-none shadow-2xl bg-white overflow-hidden p-0">
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-[2px] z-[100] flex items-center justify-center animate-in fade-in duration-300">
+          <Card className="w-full max-w-sm border-none shadow-2xl bg-card overflow-hidden p-0">
             <div className="bg-blue-600 h-1.5 w-full">
               <div className="bg-blue-400 h-full animate-[loading_1.5s_infinite_linear]" style={{ width: '40%' }} />
             </div>
             <CardContent className="p-8 flex flex-col items-center gap-4">
               <div className="relative">
-                <div className="h-16 w-16 rounded-full border-4 border-slate-100 border-t-blue-500 animate-spin" />
+                <div className="h-16 w-16 rounded-full border-4 border-muted border-t-blue-500 animate-spin" />
                 <Tag className="h-6 w-6 text-blue-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
               </div>
               <div className="text-center space-y-1">
-                <h3 className="font-bold text-slate-900">Preparing RFID Scanner</h3>
-                <p className="text-sm text-slate-500">Please wait a moment...</p>
+                <h3 className="font-bold text-foreground">Preparing RFID Scanner</h3>
+                <p className="text-sm text-muted-foreground">Please wait a moment...</p>
               </div>
             </CardContent>
           </Card>
@@ -890,28 +890,28 @@ export function StockAdjustmentForm({
       )}
 
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <Card className="border-slate-200 shadow-sm border-none bg-white">
-          <CardHeader className="bg-white border-b border-slate-100 py-4 px-6">
-            <CardTitle className="text-base font-bold text-slate-800">
+        <Card className="border-border shadow-sm bg-card">
+          <CardHeader className="bg-card border-b border-border py-4 px-6">
+            <CardTitle className="text-base font-bold text-foreground">
               Adjustment Information
             </CardTitle>
           </CardHeader>
           <CardContent className="p-6 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label htmlFor="doc_no" className="text-sm font-bold text-slate-600">
+                <Label htmlFor="doc_no" className="text-sm font-bold text-muted-foreground">
                   Document Number
                 </Label>
                 <Input
                   id="doc_no"
                   {...form.register("doc_no")}
                   readOnly
-                  className="bg-slate-50/50 border-slate-200 h-11"
+                  className="bg-muted/50 border-input h-11"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="branch" className="text-sm font-bold text-slate-600">
+                <Label htmlFor="branch" className="text-sm font-bold text-muted-foreground">
                   Branch <span className="text-red-500">*</span>
                 </Label>
                 <Combobox
@@ -923,7 +923,7 @@ export function StockAdjustmentForm({
                   onValueChange={(v) => form.setValue("branch_id", v ? Number(v) : undefined)}
                   placeholder="Select Branch"
                   disabled={isReadOnly}
-                  className={form.formState.errors.branch_id ? "border-red-500 bg-red-50" : ""}
+                  className={form.formState.errors.branch_id ? "border-red-500 bg-red-50 dark:bg-red-900/10" : ""}
                 />
                 {form.formState.errors.branch_id && (
                   <p className="text-xs text-red-500 font-medium">
@@ -933,7 +933,7 @@ export function StockAdjustmentForm({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="supplier" className="text-sm font-bold text-slate-600">
+                <Label htmlFor="supplier" className="text-sm font-bold text-muted-foreground">
                   Supplier <span className="text-red-500">*</span>
                 </Label>
                 <Combobox
@@ -945,7 +945,7 @@ export function StockAdjustmentForm({
                   onValueChange={(v) => form.setValue("supplier_id", v ? Number(v) : undefined)}
                   placeholder={isSuppliersLoading ? "Loading suppliers..." : "Select Supplier"}
                   disabled={isReadOnly}
-                  className={form.formState.errors.supplier_id ? "border-red-500 bg-red-50" : ""}
+                  className={form.formState.errors.supplier_id ? "border-red-500 bg-red-50 dark:bg-red-900/10" : ""}
                 />
                 {form.formState.errors.supplier_id && (
                   <p className="text-xs text-red-500 font-medium">
@@ -953,9 +953,9 @@ export function StockAdjustmentForm({
                   </p>
                 )}
                 {id && !watchedSupplierIdForSelect && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2 mt-2">
-                    <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5" />
-                    <p className="text-xs text-amber-700 font-medium">
+                  <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/30 rounded-lg p-3 flex items-start gap-2 mt-2">
+                    <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5" />
+                    <p className="text-xs text-amber-700 dark:text-amber-300 font-medium">
                       Supplier information is missing for this record. Please select the correct supplier to unlock product management.
                     </p>
                   </div>
@@ -964,7 +964,7 @@ export function StockAdjustmentForm({
             </div>
 
             <div className="space-y-2">
-              <Label className="text-sm font-bold text-slate-600">
+              <Label className="text-sm font-bold text-muted-foreground">
                 Adjustment Type <span className="text-red-500">*</span>
               </Label>
               <RadioGroup
@@ -979,7 +979,7 @@ export function StockAdjustmentForm({
                     id="type-in"
                     className="border-blue-500 text-blue-600 h-4 w-4"
                   />
-                  <Label htmlFor="type-in" className="text-sm font-bold text-slate-700">
+                  <Label htmlFor="type-in" className="text-sm font-bold text-foreground/80">
                     Stock In
                   </Label>
                 </div>
@@ -987,9 +987,9 @@ export function StockAdjustmentForm({
                   <RadioGroupItem
                     value="OUT"
                     id="type-out"
-                    className="border-slate-300 text-blue-600 h-4 w-4"
+                    className="border-input text-blue-600 h-4 w-4"
                   />
-                  <Label htmlFor="type-out" className="text-sm font-bold text-slate-700">
+                  <Label htmlFor="type-out" className="text-sm font-bold text-foreground/80">
                     Stock Out
                   </Label>
                 </div>
@@ -1002,23 +1002,23 @@ export function StockAdjustmentForm({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="remarks" className="text-sm font-bold text-slate-600">
+              <Label htmlFor="remarks" className="text-sm font-bold text-muted-foreground">
                 Remarks
               </Label>
               <Textarea
                 id="remarks"
                 {...form.register("remarks")}
                 placeholder="Additional information about this adjustment..."
-                className="min-h-[120px] bg-white border-slate-200 focus:ring-blue-500 rounded-xl p-4 text-sm"
+                className="min-h-[120px] bg-background border-input focus:ring-blue-500 rounded-xl p-4 text-sm"
                 disabled={isReadOnly}
               />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200 shadow-sm border-none bg-white">
-          <CardHeader className="bg-white border-b border-slate-100 flex flex-row items-center justify-between py-4 px-6">
-            <CardTitle className="text-base font-bold text-slate-800">
+        <Card className="border-border shadow-sm bg-card">
+          <CardHeader className="bg-card border-b border-border flex flex-row items-center justify-between py-4 px-6">
+            <CardTitle className="text-base font-bold text-foreground">
               Product Items
             </CardTitle>
             <Button
@@ -1027,7 +1027,7 @@ export function StockAdjustmentForm({
               disabled={!watchedSupplierIdForSelect || isReadOnly}
               className={`${
                 (!watchedSupplierIdForSelect || isReadOnly)
-                  ? "bg-slate-100 text-slate-400 border-slate-200" 
+                  ? "bg-muted text-muted-foreground border-border" 
                   : "bg-blue-600 hover:bg-blue-700 text-white"
               } font-bold h-9 px-4 rounded-lg shadow-sm flex items-center gap-2 text-sm transition-all`}
             >
@@ -1053,20 +1053,20 @@ export function StockAdjustmentForm({
                     ))}
                   </div>
                 ) : fields.length === 0 ? (
-                  <div className="bg-slate-50/30 border-2 border-dashed border-slate-100 rounded-xl p-16 text-center">
+                  <div className="bg-muted/10 border-2 border-dashed border-border rounded-xl p-16 text-center">
                     <div className="flex justify-center mb-4">
                       <div className={`p-5 rounded-full border border-dashed ${
-                        watchedSupplierIdForSelect ? "bg-blue-50 border-blue-200" : "bg-slate-50 border-slate-200"
+                        watchedSupplierIdForSelect ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800/50" : "bg-muted border-border"
                       }`}>
                         <Package className={`h-10 w-10 ${
-                          watchedSupplierIdForSelect ? "text-blue-400" : "text-slate-300"
+                          watchedSupplierIdForSelect ? "text-blue-400" : "text-muted-foreground/30"
                         }`} />
                       </div>
                     </div>
-                    <h3 className="text-lg font-bold text-slate-900 mb-1">
+                    <h3 className="text-lg font-bold text-foreground mb-1">
                       {watchedSupplierIdForSelect ? "Ready to add products" : "Supplier required"}
                     </h3>
-                    <p className="text-slate-500 font-medium max-w-xs mx-auto text-sm">
+                    <p className="text-muted-foreground font-medium max-w-xs mx-auto text-sm">
                       {watchedSupplierIdForSelect 
                         ? "Click 'Add Product' to start building your adjustment from this supplier." 
                         : "Select a supplier first to see the products linked to them."}
@@ -1079,7 +1079,7 @@ export function StockAdjustmentForm({
                       )}
                     {!watchedSupplierIdForSelect && (
                       <div className="mt-8">
-                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200 shadow-sm">
+                         <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest bg-muted px-3 py-1.5 rounded-full border border-border shadow-sm">
                             Supplier selection filter active
                          </span>
                       </div>
@@ -1123,7 +1123,7 @@ export function StockAdjustmentForm({
             type="button"
             variant="outline"
             onClick={onCancel}
-            className="h-10 px-8 font-bold border-slate-200 text-slate-600 hover:bg-white rounded-lg"
+            className="h-10 px-8 font-bold border-border text-muted-foreground hover:bg-card rounded-lg"
           >
             Cancel
           </Button>
@@ -1173,17 +1173,17 @@ export function StockAdjustmentForm({
 
       {/* RFID Warning Modal */}
       <AlertDialog open={showRFIDWarning} onOpenChange={setShowRFIDWarning}>
-        <AlertDialogContent className="max-w-md bg-white p-0 overflow-hidden border-none shadow-2xl">
-          <div className="bg-amber-50 p-6 flex items-start gap-4">
-            <div className="p-2 bg-amber-100 rounded-full">
-              <AlertCircle className="h-6 w-6 text-amber-600" />
+        <AlertDialogContent className="max-w-md bg-card p-0 overflow-hidden border-none shadow-2xl">
+          <div className="bg-amber-50 dark:bg-amber-900/20 p-6 flex items-start gap-4">
+            <div className="p-2 bg-amber-100 dark:bg-amber-800/30 rounded-full">
+              <AlertCircle className="h-6 w-6 text-amber-600 dark:text-amber-400" />
             </div>
             <div className="flex-1">
               <AlertDialogHeader>
-                <AlertDialogTitle className="text-lg font-bold text-amber-900">
+                <AlertDialogTitle className="text-lg font-bold text-amber-900 dark:text-amber-400">
                   RFID Tracking Detected
                 </AlertDialogTitle>
-                <AlertDialogDescription className="text-amber-700/80 text-sm mt-1">
+                <AlertDialogDescription className="text-amber-700/80 dark:text-amber-300/80 text-sm mt-1">
                   Product has existing RFID tags
                 </AlertDialogDescription>
               </AlertDialogHeader>
@@ -1192,36 +1192,36 @@ export function StockAdjustmentForm({
               variant="ghost"
               size="icon"
               onClick={() => setShowRFIDWarning(false)}
-              className="rounded-full h-8 w-8 text-amber-400 hover:text-amber-600 hover:bg-amber-100/50"
+              className="rounded-full h-8 w-8 text-amber-400 hover:text-amber-600 dark:hover:text-amber-300 hover:bg-amber-100/50 dark:hover:bg-amber-800/20"
             >
               ✕
             </Button>
           </div>
 
           <div className="p-6 space-y-6">
-            <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-3">
-              <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-                <span className="font-black text-slate-900">
+            <div className="bg-muted/30 border border-border rounded-xl p-4 space-y-3">
+              <div className="flex justify-between items-center pb-2 border-b border-border">
+                <span className="font-black text-foreground">
                   {pendingRFIDProduct?.product_name}
                 </span>
               </div>
               <div className="grid grid-cols-2 gap-y-2 text-xs">
-                <span className="text-slate-500">Branch:</span>
-                <span className="text-slate-900 font-bold text-right">
+                <span className="text-muted-foreground">Branch:</span>
+                <span className="text-foreground font-bold text-right">
                   {branches.find(
                     (b) =>
                       String(b.id) === String(form.getValues("branch_id"))
                   )?.branch_name || "Selected Branch"}
                 </span>
-                <span className="text-slate-500">Current Stock:</span>
-                <span className="text-slate-900 font-bold text-right">
+                <span className="text-muted-foreground">Current Stock:</span>
+                <span className="text-foreground font-bold text-right">
                   {pendingRFIDProduct?.current_stock || 0}{" "}
                   {pendingRFIDProduct?.unit_name || "units"}
                 </span>
-                <span className="text-slate-500 font-bold">
+                <span className="text-muted-foreground font-bold">
                   RFID Tags On Hand:
                 </span>
-                <span className="text-slate-900 font-black text-right text-amber-600">
+                <span className="text-foreground font-black text-right text-amber-600 dark:text-amber-400">
                   {pendingRFIDProduct?.rfidData?.quantity ||
                     pendingRFIDProduct?.rfidData?.count ||
                     1}{" "}
@@ -1231,11 +1231,11 @@ export function StockAdjustmentForm({
             </div>
 
             <div className="space-y-4">
-              <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
+              <h4 className="text-sm font-black text-foreground flex items-center gap-2">
                 <Info className="h-4 w-4 text-blue-500" />
                 Important Notice:
               </h4>
-              <ul className="text-xs text-slate-600 space-y-2.5 list-disc pl-4 font-medium opacity-90">
+              <ul className="text-xs text-muted-foreground space-y-2.5 list-disc pl-4 font-medium opacity-90">
                 <li>
                   This product has RFID tags currently in inventory
                 </li>
@@ -1250,12 +1250,12 @@ export function StockAdjustmentForm({
               </ul>
             </div>
 
-            <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-xl">
+            <div className="bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800/30 p-4 rounded-xl">
               <div className="flex gap-3">
-                <div className="p-1 bg-blue-100 rounded-md h-fit mt-0.5">
-                  <AlertCircle className="h-3 w-3 text-blue-600" />
+                <div className="p-1 bg-blue-100 dark:bg-blue-800/30 rounded-md h-fit mt-0.5">
+                  <AlertCircle className="h-3 w-3 text-blue-600 dark:text-blue-400" />
                 </div>
-                <p className="text-[11px] leading-relaxed text-blue-700 font-medium">
+                <p className="text-[11px] leading-relaxed text-blue-700 dark:text-blue-300 font-medium">
                   <span className="font-black">Recommendation:</span> For
                   products with RFID tracking, use the RFID scanner to ensure
                   accurate inventory management.
@@ -1267,7 +1267,7 @@ export function StockAdjustmentForm({
               <Button
                 variant="outline"
                 onClick={() => setShowRFIDWarning(false)}
-                className="flex-1 h-11 font-bold text-slate-600 border-slate-200 hover:bg-slate-50 rounded-lg"
+                className="flex-1 h-11 font-bold text-muted-foreground border-border hover:bg-muted rounded-lg"
               >
                 Cancel
               </Button>
@@ -1303,13 +1303,13 @@ export function StockAdjustmentForm({
 
       {/* Post Confirmation Modal */}
       <AlertDialog open={showPostConfirmation} onOpenChange={setShowPostConfirmation}>
-        <AlertDialogContent className="max-w-md bg-white p-6 rounded-xl shadow-2xl border-none">
+        <AlertDialogContent className="max-w-md bg-card p-6 rounded-xl shadow-2xl border-none">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl font-bold text-slate-900 flex items-center gap-2">
+            <AlertDialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
               <Send className="h-5 w-5 text-blue-600" />
               Confirm Post Adjustment
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-slate-600 py-4">
+            <AlertDialogDescription className="text-muted-foreground py-4">
               Are you sure you want to post this adjustment? Once posted, the record will become **READ-ONLY** and inventory levels will be updated across the system. 
               <br/><br/>
               This action cannot be undone.
@@ -1319,13 +1319,13 @@ export function StockAdjustmentForm({
             <Button
               variant="outline"
               onClick={() => setShowPostConfirmation(false)}
-              className="flex-1 h-11 font-bold text-slate-600 border-slate-200 hover:bg-slate-50 rounded-lg"
+              className="flex-1 h-11 font-bold text-muted-foreground border-border hover:bg-muted rounded-lg"
             >
               Cancel
             </Button>
             <Button
               onClick={confirmPost}
-              className="flex-1 h-11 font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-100 rounded-lg"
+              className="flex-1 h-11 font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-100 dark:shadow-none rounded-lg"
             >
               Confirm and Post
             </Button>
