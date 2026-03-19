@@ -44,7 +44,7 @@ export function VehicleTypeDialog({
   const isEdit = !!selectedVehicleType;
 
   const form = useForm<VehicleTypeFormValues>({
-    resolver: zodResolver(vehicleTypeSchema) as any,
+    resolver: zodResolver(vehicleTypeSchema),
     defaultValues: {
       type_name: "",
     },
@@ -69,11 +69,18 @@ export function VehicleTypeDialog({
       }
       onSuccess();
       onOpenChange(false);
-    } catch (error: any) {
-      if (error.message?.includes("unique") || error.message?.includes("UNIQUE")) {
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : "Something went wrong";
+
+      if (message.includes("unique") || message.includes("UNIQUE")) {
         toast.error("This vehicle type name already exists.");
       } else {
-        toast.error(error.message || "Something went wrong");
+        toast.error(message);
       }
     }
   };
@@ -95,7 +102,7 @@ export function VehicleTypeDialog({
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
-              control={form.control as any}
+              control={form.control}
               name="type_name"
               render={({ field }) => (
                 <FormItem>
