@@ -1,4 +1,3 @@
-// src/app/login/page.tsx
 "use client"
 
 import * as React from "react"
@@ -6,6 +5,7 @@ import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Eye, EyeOff, Lock, Mail } from "lucide-react"
 import { toast } from "sonner"
+import { Suspense } from "react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -26,7 +26,6 @@ function normalizeLoginErrorMessage(rawMsg: string, httpStatus?: number) {
     const msg = String(rawMsg || "")
     const m = msg.toLowerCase()
 
-    // ✅ Invalid credentials (401)
     if (
         httpStatus === 401 ||
         m.includes("http 401") ||
@@ -36,7 +35,6 @@ function normalizeLoginErrorMessage(rawMsg: string, httpStatus?: number) {
         return "Credentials invalid."
     }
 
-    // ✅ Backend unreachable / connection problems -> friendly message
     if (
         m.includes("cannot reach spring api") ||
         m.includes("econnrefused") ||
@@ -56,7 +54,11 @@ type FieldErrors = {
     hashPassword?: string
 }
 
-export default function LoginPage() {
+/**
+ * 🚀 INNER COMPONENT
+ * This contains all the logic that uses useSearchParams()
+ */
+function LoginForm() {
     const router = useRouter()
     const searchParams = useSearchParams()
 
@@ -71,20 +73,15 @@ export default function LoginPage() {
 
     const validate = React.useCallback((): boolean => {
         const next: FieldErrors = {}
-
         if (!String(email).trim()) next.email = "Email is required"
         if (!String(hashPassword).trim()) next.hashPassword = "Password is required"
-
         setErrors(next)
         return Object.keys(next).length === 0
     }, [email, hashPassword])
 
     const onSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
-
-        // ✅ client-side required validation (no HTML required attr)
         if (!validate()) return
-
         setLoading(true)
 
         try {
@@ -132,7 +129,6 @@ export default function LoginPage() {
                                 vos-web-v2
                             </Badge>
                         </div>
-
                         <div className="mt-6 space-y-3">
                             <div className="text-3xl font-semibold tracking-tight">Welcome back.</div>
                             <div className="text-sm text-muted-foreground">
@@ -140,9 +136,7 @@ export default function LoginPage() {
                                 Audit. Authentication is JWT-based and stored via secure HttpOnly cookies.
                             </div>
                         </div>
-
                         <Separator className="my-8" />
-
                         <div className="text-sm text-muted-foreground">
                             Tip: If you are redirected here, you are not authenticated yet.
                         </div>
@@ -155,10 +149,8 @@ export default function LoginPage() {
                                 <CardTitle className="text-2xl">Sign in</CardTitle>
                                 <CardDescription>Enter your credentials to continue.</CardDescription>
                             </CardHeader>
-
                             <CardContent>
                                 <form onSubmit={onSubmit} className="space-y-4">
-                                    {/* Email */}
                                     <div className="space-y-2">
                                         <Label htmlFor="email">Email</Label>
                                         <div className="relative">
@@ -167,10 +159,7 @@ export default function LoginPage() {
                                                 id="email"
                                                 type="email"
                                                 placeholder="name@company.com"
-                                                className={cn(
-                                                    "pl-9",
-                                                    emailHasError && "border-destructive focus-visible:ring-destructive"
-                                                )}
+                                                className={cn("pl-9", emailHasError && "border-destructive focus-visible:ring-destructive")}
                                                 autoComplete="email"
                                                 value={email}
                                                 onChange={(e) => {
@@ -178,18 +167,11 @@ export default function LoginPage() {
                                                     if (errors.email) setErrors((p) => ({ ...p, email: undefined }))
                                                 }}
                                                 disabled={loading}
-                                                aria-invalid={emailHasError}
-                                                aria-describedby={emailHasError ? "email-error" : undefined}
                                             />
                                         </div>
-                                        {emailHasError ? (
-                                            <p id="email-error" className="text-xs text-destructive">
-                                                {errors.email}
-                                            </p>
-                                        ) : null}
+                                        {emailHasError && <p className="text-xs text-destructive">{errors.email}</p>}
                                     </div>
 
-                                    {/* Password */}
                                     <div className="space-y-2">
                                         <Label htmlFor="password">Password</Label>
                                         <div className="relative">
@@ -198,39 +180,25 @@ export default function LoginPage() {
                                                 id="password"
                                                 type={showPw ? "text" : "password"}
                                                 placeholder="••••••••"
-                                                className={cn(
-                                                    "pl-9 pr-10",
-                                                    pwHasError && "border-destructive focus-visible:ring-destructive"
-                                                )}
+                                                className={cn("pl-9 pr-10", pwHasError && "border-destructive focus-visible:ring-destructive")}
                                                 autoComplete="current-password"
                                                 value={hashPassword}
                                                 onChange={(e) => {
                                                     setHashPassword(e.target.value)
-                                                    if (errors.hashPassword)
-                                                        setErrors((p) => ({ ...p, hashPassword: undefined }))
+                                                    if (errors.hashPassword) setErrors((p) => ({ ...p, hashPassword: undefined }))
                                                 }}
                                                 disabled={loading}
-                                                aria-invalid={pwHasError}
-                                                aria-describedby={pwHasError ? "password-error" : undefined}
                                             />
                                             <button
                                                 type="button"
                                                 onClick={() => setShowPw((s) => !s)}
-                                                className={cn(
-                                                    "absolute right-2 top-1 inline-flex h-7 w-7 items-center justify-center rounded-md",
-                                                    "text-muted-foreground hover:bg-accent hover:text-foreground"
-                                                )}
-                                                aria-label={showPw ? "Hide password" : "Show password"}
+                                                className="absolute right-2 top-1 inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
                                                 disabled={loading}
                                             >
                                                 {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                             </button>
                                         </div>
-                                        {pwHasError ? (
-                                            <p id="password-error" className="text-xs text-destructive">
-                                                {errors.hashPassword}
-                                            </p>
-                                        ) : null}
+                                        {pwHasError && <p className="text-xs text-destructive">{errors.hashPassword}</p>}
                                     </div>
 
                                     <div className="flex items-center justify-between">
@@ -243,7 +211,6 @@ export default function LoginPage() {
                                             />
                                             Remember me
                                         </label>
-
                                         <Button variant="link" type="button" className="px-0 text-sm" disabled>
                                             Forgot password
                                         </Button>
@@ -253,18 +220,13 @@ export default function LoginPage() {
                                         {loading ? "Signing in..." : "Sign in"}
                                     </Button>
 
-                                    <div className="pt-2 text-center text-xs text-muted-foreground">
-                                        By continuing you agree to the internal policies of your organization.
-                                    </div>
-
                                     <Separator />
 
                                     <div className="text-center text-xs text-muted-foreground">
                                         Go to{" "}
                                         <Link className="underline underline-offset-4 hover:text-foreground" href="/public">
                                             home
-                                        </Link>{" "}
-                                        (middleware will redirect you back here if not authenticated)
+                                        </Link>
                                     </div>
                                 </form>
                             </CardContent>
@@ -273,5 +235,24 @@ export default function LoginPage() {
                 </div>
             </div>
         </div>
+    )
+}
+
+/**
+ * 🚀 DEFAULT EXPORT
+ * Wraps the form in Suspense to prevent build errors during static generation.
+ */
+export default function LoginPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-dvh flex items-center justify-center bg-background">
+                <div className="text-center animate-pulse">
+                    <div className="text-lg font-semibold">VOS ERP</div>
+                    <div className="text-sm text-muted-foreground">Initializing secure session...</div>
+                </div>
+            </div>
+        }>
+            <LoginForm />
+        </Suspense>
     )
 }
