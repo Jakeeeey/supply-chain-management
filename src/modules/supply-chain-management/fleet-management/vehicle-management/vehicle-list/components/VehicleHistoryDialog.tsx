@@ -13,7 +13,7 @@ import {
 
 import type { VehicleRow } from "@/modules/supply-chain-management/fleet-management/vehicle-management/vehicle-list/types";
 
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
@@ -76,12 +76,12 @@ export function VehicleHistoryDialog({
         "
       >
         {/* Header */}
-        <div className="px-6 py-5">
-          <div className="text-lg font-semibold">Vehicle History</div>
-          <div className="text-sm text-muted-foreground">
+        <DialogHeader className="px-6 py-5 border-b space-y-1 text-left sm:text-left">
+          <DialogTitle className="text-lg font-semibold">Vehicle History</DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground">
             {vehicle.vehicleName} - {vehicle.plateNo}
-          </div>
-        </div>
+          </DialogDescription>
+        </DialogHeader>
 
         <div className="border-t">
           <Tabs defaultValue="details" className="w-full">
