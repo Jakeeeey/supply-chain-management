@@ -11,15 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
-import { Download, FileText, Printer, X } from "lucide-react";
+import { Download, FileText, X } from "lucide-react";
 import { ReceiptSavedInfo } from "../providers/ReceivingProductsProvider";
 import { generateOfficialSupplierReceiptV5 } from "../utils/printUtils";
 

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   BranchOption,
   ClusterOption,
@@ -140,7 +141,7 @@ export const dispatchPlanQueryService = {
 
     // Resolve Sales Order Details and Product Weights
     const soIds = details.map((d) => d.sales_order_id);
-    let soWeightMap = new Map<number, number>();
+    const soWeightMap = new Map<number, number>();
 
     if (soIds.length) {
       // Step 1: Fetch all sales order details for these orders

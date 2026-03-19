@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { bundleService } from "../services/bundle";
 import {
   BundleDraft,
   Bundle,
@@ -102,6 +103,21 @@ export function useBundles() {
     return result.data;
   };
 
+  const updateDraft = async (
+    id: number | string,
+    values: BundleDraftFormValues,
+  ) => {
+    const response = await fetch(`/api/scm/product-management/bundling/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(values),
+    });
+    const result = await response.json();
+    if (result.error) throw new Error(result.error);
+    await refresh();
+    return result.data;
+  };
+
   const deleteDraft = async (id: number | string) => {
     const response = await fetch(`/api/scm/product-management/bundling/${id}`, {
       method: "DELETE",
@@ -136,11 +152,16 @@ export function useBundles() {
 
   const bulkSubmitForApproval = async (ids: (number | string)[]) => {
     for (const id of ids) {
-      await fetch(`/api/scm/product-management/bundling/${id}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "submit" }),
-      });
+      const response = await fetch(
+        `/api/scm/product-management/bundling/${id}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "submit" }),
+        },
+      );
+      const result = await response.json();
+      if (result.error) throw new Error(result.error);
     }
     await refresh();
   };
@@ -206,6 +227,7 @@ export function useBundles() {
     setSearch,
     refresh,
     createDraft,
+    updateDraft,
     deleteDraft,
     bulkDeleteDrafts,
     submitForApproval,

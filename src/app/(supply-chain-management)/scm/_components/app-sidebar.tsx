@@ -11,14 +11,16 @@ import {
     Route,
     Truck,
     Warehouse,
-    Search
+    Search,
+    BookOpen
 } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
 import { useState, useMemo } from "react";
 
+import { NavMain } from "./nav-main";
 import { Separator } from "@/components/ui/separator";
-import { Input } from "@/components/ui/input"; // Make sure you have the shadcn Input component installed!
+import { Input } from "@/components/ui/input";
 import {
     Sidebar,
     SidebarContent,
@@ -28,7 +30,6 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { NavMain } from "./nav-main";
 
 // 👇 Here is the data object the compiler was looking for 👇
 const data = {
@@ -221,6 +222,7 @@ const data = {
                         },
                     ],
                 },
+                { title: "Driver Management", url: "#" },
                 {
                     title: "Trip Management",
                     url: "#",
@@ -291,14 +293,7 @@ const data = {
                         },
                     ],
                 },
-                {
-                    title: "Driver Management",
-                    url: "/scm/fleet-management/driver-management",
-                },
-                {
-                    title: "Fleet Inventory",
-                    url: "#",
-                },
+                { title: "Fleet Inventory", url: "#" },
             ],
         },
         {
@@ -328,6 +323,10 @@ const data = {
                 {
                     title: "Branch Management",
                     url: "/scm/inventory-management/branch-management",
+                },
+                {
+                    title: "Stock Adjustment",
+                    url: "/scm/inventory-management/stock-adjustment",
                 },
             ],
         },
@@ -408,38 +407,42 @@ const data = {
                 },
             ],
         },
+        {
+            title: "Inbound/Outbound Kiosk",
+            url: "/scm/inbound-outbound-kiosk",
+            icon: BookOpen,
+        },
     ],
 };
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const [searchQuery, setSearchQuery] = useState("");
 
-    // Recursive function to filter the nested navigation items
     const filteredNavMain = useMemo(() => {
-        if (!searchQuery.trim()) return data.navMain;
-        const lowerQuery = searchQuery.toLowerCase();
+        if (!searchQuery) return data.navMain;
 
-        const filterItems = (items: any[]) => {
-            return items.reduce((acc, item) => {
-                // Check if current item matches
-                const isMatch = item.title.toLowerCase().includes(lowerQuery);
-                // Recursively check children
-                const childMatches = item.items ? filterItems(item.items) : [];
+        const query = searchQuery.toLowerCase();
 
-                // If parent matches, show it and all its original children
-                if (isMatch) {
-                    acc.push(item);
+        return data.navMain
+            .map((section) => {
+                const filteredItems = section.items?.filter((item) => {
+                    const matchesTitle = item.title.toLowerCase().includes(query);
+                    const matchesSubItems = item.items?.some((subItem) =>
+                        subItem.title.toLowerCase().includes(query)
+                    );
+                    return matchesTitle || matchesSubItems;
+                });
+
+                if (section.title.toLowerCase().includes(query) || (filteredItems && filteredItems.length > 0)) {
+                    return {
+                        ...section,
+                        items: filteredItems || section.items,
+                        isActive: true,
+                    };
                 }
-                // If a child matches, show the parent but ONLY the matching children
-                else if (childMatches.length > 0) {
-                    acc.push({ ...item, items: childMatches });
-                }
-
-                return acc;
-            }, []);
-        };
-
-        return filterItems(data.navMain);
+                return null;
+            })
+            .filter((section) => section !== null) as typeof data.navMain;
     }, [searchQuery]);
 
     return (
@@ -449,7 +452,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" asChild>
                             <Link href="/main-dashboard">
-                                <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
+                                <div
+                                    className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
                                     <Command className="size-4" />
                                 </div>
                                 <div className="grid flex-1 text-left text-sm leading-tight">
@@ -484,7 +488,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <div className="px-4 pt-3 pb-2 text-xs font-medium text-muted-foreground">
                     Platform
                 </div>
-                {/* 👇 Pass the filtered data instead of the raw data 👇 */}
                 <NavMain items={filteredNavMain} />
             </SidebarContent>
 

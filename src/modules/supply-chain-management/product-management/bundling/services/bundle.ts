@@ -13,7 +13,7 @@ import {
   BundleType,
   PaginatedBundles,
   ProductOption,
-} from "../../types/bundle.schema";
+} from "../types/bundle.schema";
 import { API_BASE_URL, fetchItems, request } from "./bundle-api";
 
 export const bundleService = {
@@ -32,8 +32,12 @@ export const bundleService = {
     const productsRes = await fetchItems<any>("/items/products", {
       limit: -1,
       "filter[isActive][_eq]": 1,
-      fields: "product_id,product_name,product_code,isActive",
+      fields:
+        "product_id,product_name,product_code,isActive,unit_of_measurement.*",
       sort: "product_name",
+    });
+    const unitsRes = await fetchItems<any>("/items/units", {
+      limit: -1,
     });
 
     const bundleTypes: BundleType[] = (typesRes.data || []).map((t: any) => ({
@@ -41,14 +45,35 @@ export const bundleService = {
       name: String(t.name || t.title || `Type #${t.id}`),
     }));
 
-    const products: ProductOption[] = (productsRes.data || []).map(
-      (p: any) => ({
+    const units = (unitsRes.data || []).map((u: any) => ({
+      id: u.unit_id ?? u.id ?? 0,
+      name: String(u.unit_name || u.name || u.unit_shortcut || ""),
+    }));
+
+    const unitMap = new Map<number, string>(
+      units.map((u: any) => [Number(u.id), u.name] as [number, string]),
+    );
+
+    const products: ProductOption[] = (productsRes.data || []).map((p: any) => {
+      const uom = p.unit_of_measurement;
+      let unit_name = "";
+
+      if (uom && typeof uom === "object") {
+        unit_name = String(
+          uom.unit_name || uom.name || uom.unit_shortcut || "",
+        );
+      } else if (uom !== null && uom !== undefined && !Array.isArray(uom)) {
+        unit_name = unitMap.get(Number(uom)) || "";
+      }
+
+      return {
         product_id: Number(p.product_id || p.id),
         product_name: String(p.product_name || ""),
         product_code: String(p.product_code || ""),
         isActive: Number(p.isActive ?? 0),
-      }),
-    );
+        unit_name,
+      };
+    });
 
     return { bundleTypes, products };
   },
@@ -128,6 +153,7 @@ export const bundleService = {
    * @param offset - Record offset
    * @param status - Filter by status (DRAFT or FOR_APPROVAL)
    * @param search - Optional search term for bundle_name or bundle_sku
+   * @param typeId - Optional filter by bundle_type_id
    * @returns {Promise<PaginatedBundles>} Paginated draft results
    */
   async fetchDrafts(
@@ -135,11 +161,16 @@ export const bundleService = {
     offset: number = 0,
     status?: string,
     search?: string,
+    typeId?: number,
   ): Promise<PaginatedBundles> {
     const filter: any = { _and: [] };
 
     if (status) {
       filter._and.push({ draft_status: { _eq: status } });
+    }
+
+    if (typeId) {
+      filter._and.push({ bundle_type_id: { _eq: typeId } });
     }
 
     if (search) {
@@ -222,11 +253,11 @@ export const bundleService = {
 
     const masterRes = fetchMaster
       ? await fetchItems<Bundle>("/items/product_bundles", {
-          limit: limit,
-          offset: offset,
+          limit: 200, // Fetch a larger pool from both tables
+          offset: 0, // Always fetch from the beginning to ensure correct merging
           fields: "*.*",
           meta: "filter_count",
-          sort: "updated_at",
+          sort: "-id",
           filter:
             masterFilter._and.length > 0
               ? JSON.stringify(masterFilter)
@@ -236,11 +267,11 @@ export const bundleService = {
 
     const draftRes = fetchRejected
       ? await fetchItems<BundleDraft>("/items/product_bundles_draft", {
-          limit: limit,
-          offset: offset,
+          limit: 200, // Fetch a larger pool from both tables
+          offset: 0, // Always fetch from the beginning to ensure correct merging
           fields: "*.*",
           meta: "filter_count",
-          sort: "created_at",
+          sort: "-id",
           filter: JSON.stringify(draftFilter),
         })
       : { data: [], meta: { filter_count: 0 } };
@@ -250,21 +281,26 @@ export const bundleService = {
     totalCount =
       (masterRes.meta?.filter_count || 0) + (draftRes.meta?.filter_count || 0);
 
-    // Sort by updated_at descending so the most recently modified items appear first
+    // Sort: most recently updated/created first (strictly chronological)
     results.sort((a, b) => {
-      const dateA = new Date(a.updated_at || a.created_at || 0).getTime();
-      const dateB = new Date(b.updated_at || b.created_at || 0).getTime();
-      return dateB - dateA;
+      const getSortTime = (item: any) => {
+        const dateStr =
+          item.updated_at ||
+          item.last_updated ||
+          item.date_updated ||
+          item.created_at ||
+          item.date_created ||
+          0;
+        return new Date(dateStr).getTime();
+      };
+      return getSortTime(b) - getSortTime(a);
     });
 
-    // If both were fetched, we might have too many items per 'limit'.
-    // We'll slice them for the UI consistency.
-    if (results.length > limit) {
-      results = results.slice(0, limit);
-    }
+    // Unified pagination: slice the merged and sorted results
+    const paginatedResults = results.slice(offset, offset + limit);
 
     return {
-      data: results,
+      data: paginatedResults,
       meta: {
         total_count: totalCount,
         filter_count: totalCount,
@@ -339,6 +375,113 @@ export const bundleService = {
     }
 
     return draft;
+  },
+
+  /**
+   * Updates an existing draft bundle and replaces its associated product items.
+   * Only allows updating bundles in DRAFT status. Keeps original SKU intact.
+   * @param id - Draft bundle ID
+   * @param values - Validated form values
+   * @returns The updated draft record
+   */
+  async updateDraft(id: number | string, values: BundleDraftFormValues) {
+    // 1. Verify it exists and is in a mutable status
+    const { data: currentDraft } = await request<{ data: any }>(
+      `${API_BASE_URL}/items/product_bundles_draft/${id}`,
+    );
+
+    if (!currentDraft) {
+      throw new Error("Draft bundle not found.");
+    }
+
+    if (
+      currentDraft.draft_status !== "DRAFT" &&
+      currentDraft.draft_status !== "REJECTED"
+    ) {
+      throw new Error(
+        "Only bundles in DRAFT or REJECTED status can be edited.",
+      );
+    }
+
+    // 2. Enforce unique bundle name (excluding self)
+    const [nameInDraft, nameInMaster] = await Promise.all([
+      fetchItems<any>("/items/product_bundles_draft", {
+        filter: JSON.stringify({
+          _and: [
+            { bundle_name: { _eq: values.bundle_name.trim() } },
+            { id: { _neq: id } },
+          ],
+        }),
+        limit: 1,
+      }),
+      fetchItems<any>("/items/product_bundles", {
+        filter: JSON.stringify({
+          bundle_name: { _eq: values.bundle_name.trim() },
+        }),
+        limit: 1,
+      }),
+    ]);
+
+    if (
+      (nameInDraft.data && nameInDraft.data.length > 0) ||
+      (nameInMaster.data && nameInMaster.data.length > 0)
+    ) {
+      throw new Error(
+        "A bundle with this name already exists. Please choose a unique name.",
+      );
+    }
+
+    // 3. Update the draft bundle record (preserving original bundle_sku)
+    const { data: updatedDraft } = await request<{ data: BundleDraft }>(
+      `${API_BASE_URL}/items/product_bundles_draft/${id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          bundle_name: values.bundle_name,
+          bundle_type_id: values.bundle_type_id,
+        }),
+      },
+    );
+
+    // 4. Delete old associated bundle items
+    const { data: oldItems } = await fetchItems<any>(
+      "/items/product_bundle_items_draft",
+      {
+        filter: JSON.stringify({ bundle_draft_id: { _eq: id } }),
+        limit: -1,
+      },
+    );
+
+    if (oldItems && oldItems.length > 0) {
+      await Promise.all(
+        oldItems.map((item: any) =>
+          request(
+            `${API_BASE_URL}/items/product_bundle_items_draft/${item.id}`,
+            {
+              method: "DELETE",
+            },
+          ),
+        ),
+      );
+    }
+
+    // 5. Create the new associated bundle items
+    if (values.items.length > 0) {
+      await Promise.all(
+        values.items.map((item: BundleItem) =>
+          request(`${API_BASE_URL}/items/product_bundle_items_draft`, {
+            method: "POST",
+            body: JSON.stringify({
+              bundle_draft_id: id,
+              product_id: item.product_id,
+              quantity: item.quantity,
+            }),
+          }),
+        ),
+      );
+    }
+
+    return updatedDraft;
   },
 
   /**
@@ -503,7 +646,10 @@ export const bundleService = {
   async rejectDraft(id: number | string) {
     await request(`${API_BASE_URL}/items/product_bundles_draft/${id}`, {
       method: "PATCH",
-      body: JSON.stringify({ draft_status: "REJECTED" }),
+      body: JSON.stringify({
+        draft_status: "REJECTED",
+        updated_at: new Date().toISOString(),
+      }),
     });
     return true;
   },

@@ -32,6 +32,7 @@ interface ComboboxProps {
   emptyMessage?: string
   className?: string
   disabled?: boolean
+  renderItem?: (option: ComboboxOption) => React.ReactNode
 }
 
 export function Combobox({
@@ -41,7 +42,8 @@ export function Combobox({
   placeholder = "Select option...",
   emptyMessage = "No option found.",
   className,
-  disabled
+  disabled,
+  renderItem
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
 
@@ -56,7 +58,7 @@ export function Combobox({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className={cn("w-full justify-between font-normal", className)}
+          className={cn("w-full justify-between font-normal h-10 border-slate-200 bg-white", className)}
           disabled={disabled}
         >
           <span className="truncate">
@@ -65,16 +67,16 @@ export function Combobox({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-full p-0" align="start">
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
         <Command>
           <CommandInput placeholder={`Search ${placeholder.toLowerCase()}...`} />
           <CommandList>
             <CommandEmpty>{emptyMessage}</CommandEmpty>
-            <CommandGroup>
+            <CommandGroup className="max-h-[300px] overflow-auto">
               {options.map((option) => (
                 <CommandItem
                   key={option.value}
-                  value={String(option.label)}
+                  value={`${option.label} ${option.value}`}
                   onSelect={() => {
                     onValueChange(option.value === value ? "" : option.value)
                     setOpen(false)
@@ -82,11 +84,11 @@ export function Combobox({
                 >
                   <Check
                     className={cn(
-                      "mr-2 h-4 w-4",
+                      "mr-2 h-4 w-4 shrink-0",
                       value === option.value ? "opacity-100" : "opacity-0"
                     )}
                   />
-                  {option.label}
+                  {renderItem ? renderItem(option) : option.label}
                 </CommandItem>
               ))}
             </CommandGroup>

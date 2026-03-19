@@ -37,13 +37,15 @@ export function useStockConversion(branchId?: number) {
       setData(products);
       setTotalCount(total);
       setIsLoading(false);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (e: unknown) {
+      const err = e as Error;
+      setError(err?.message ?? "An error occurred");
       setIsLoading(false);
     }
   }, [page, pageSize]);
 
   // 2. Targeted Inventory Fetch: Triggered by UI/Filters
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const loadInventory = useCallback(async (filters?: any) => {
     console.log("[useStockConversion] Triggering inventory fetch. Filters:", filters);
     
@@ -86,7 +88,8 @@ export function useStockConversion(branchId?: number) {
           // but if it was a broad fetch, we might. For now, only update if present in map.
           return p;
       }));
-    } catch (err: any) {
+    } catch (e: unknown) {
+        const err = e as Error;
         console.error("Inventory fetch failed:", err);
         setData(prev => prev.map(p => ({ ...p, inventoryLoaded: true })));
         // Surface auth errors as a critical error on the page
@@ -147,7 +150,8 @@ export function useStockConversion(branchId?: number) {
           return p;
         });
       });
-    } catch (err: any) {
+    } catch (e: unknown) {
+      const err = e as Error;
       console.error("Batch inventory fetch failed:", err);
       // Surface auth errors as critical
       if (err?.message?.includes("session") || err?.message?.includes("expired") || err?.message?.includes("401") || err?.message?.includes("403")) {
@@ -201,7 +205,8 @@ export function useStockConversion(branchId?: number) {
       }));
 
       return data;
-    } catch (err: any) {
+    } catch (e: unknown) {
+      const err = e as Error;
       toast.error(err.message || "Failed to process conversion");
       throw err;
     } finally {

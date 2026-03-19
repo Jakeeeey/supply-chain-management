@@ -27,6 +27,9 @@ export type POItem = {
     expectedQty: number; // tagged RFIDs count
     receivedQty: number; // received_quantity
     requiresRfid?: boolean;
+    unitPrice?: number;
+    grossAmount?: number;
+    discountTypeId?: string;
 };
 
 export type POBranchAllocation = {
@@ -53,6 +56,11 @@ export type PurchaseOrder = {
     allocations: POBranchAllocation[];
     receipts: PostingReceipt[];
     createdAt: string;
+
+    grossAmount?: number;
+    discountAmount?: number;
+    vatAmount?: number;
+    withholdingTaxAmount?: number;
 };
 
 // ✅ removed lot fields (per request)
@@ -62,11 +70,18 @@ export type ReceiptForm = {
     receiptDate: string; // yyyy-mm-dd
 };
 
+export type DiscountType = {
+    id: string;
+    name: string;
+    percent: number;
+    active: boolean;
+};
+
 export type ReceiptTypeOption = {
     code: string;
     label: string;
 };
 export type PostingPODetail = PurchaseOrder & {
     postingReady?: boolean;
-    [key: string]: any;
+    [key: string]: unknown;
 };
