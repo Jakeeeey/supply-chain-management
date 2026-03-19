@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import type { POListItem, PurchaseOrder } from "../types";
+import type { POListItem, PurchaseOrder, DiscountType } from "../types";
 
 // ✅ Use the existing global toaster (Sonner) — do NOT mount another Toaster here
 import { toast } from "sonner";
@@ -43,6 +43,9 @@ type Ctx = {
     // success banner (no global toast dependency)
     successMsg: string;
     clearSuccess: () => void;
+
+    // config
+    discountTypes: DiscountType[];
 };
 
 const PostingOfPoContext = React.createContext<Ctx | null>(null);
@@ -64,6 +67,8 @@ export function PostingOfPoProvider({ children }: { children: React.ReactNode })
     const [successMsg, setSuccessMsg] = React.useState("");
     const clearSuccess = React.useCallback(() => setSuccessMsg(""), []);
 
+    const [discountTypes, setDiscountTypes] = React.useState<DiscountType[]>([]);
+
     const refreshList = React.useCallback(async () => {
         setListLoading(true);
         setListError("");
@@ -71,8 +76,9 @@ export function PostingOfPoProvider({ children }: { children: React.ReactNode })
             const r = await fetch(API, { cache: "no-store" });
             const data = await asJson(r);
             setList(Array.isArray(data) ? data : []);
-        } catch (e: any) {
-            setListError(String(e?.message ?? e));
+        } catch (e: unknown) {
+            const err = e as Error;
+            setListError(String(err?.message ?? err));
             setList([]);
         } finally {
             setListLoading(false);
@@ -81,6 +87,23 @@ export function PostingOfPoProvider({ children }: { children: React.ReactNode })
 
     React.useEffect(() => {
         refreshList();
+
+        // also fetch discount types
+        fetch("/api/scm/supplier-management/create-of-purchase-order/discount-types")
+            .then(r => r.json())
+            .then(j => {
+                if (j?.data && Array.isArray(j.data)) {
+                    // Map API fields `discount_type` -> `name` and `total_percent` -> `percent`
+                    const mapped = j.data.map((d: { id?: string | number; discount_type?: string; total_percent?: string | number }) => ({
+                        id: String(d.id),
+                        name: String(d.discount_type || ""),
+                        percent: Number(d.total_percent || 0),
+                        active: true
+                    }));
+                    setDiscountTypes(mapped);
+                }
+            })
+            .catch(() => {});
     }, [refreshList]);
 
     const openPO = React.useCallback(
@@ -99,8 +122,9 @@ export function PostingOfPoProvider({ children }: { children: React.ReactNode })
                 });
                 const data = await asJson(r);
                 setSelectedPO((data ?? null) as PurchaseOrder | null);
-            } catch (e: any) {
-                setListError(String(e?.message ?? e));
+            } catch (e: unknown) {
+                const err = e as Error;
+                setListError(String(err?.message ?? err));
             }
         },
         [clearSuccess]
@@ -130,8 +154,9 @@ export function PostingOfPoProvider({ children }: { children: React.ReactNode })
 
                 await refreshList();
                 await openPO(poId);
-            } catch (e: any) {
-                const msg = String(e?.message ?? e);
+            } catch (e: unknown) {
+                const err = e as Error;
+                const msg = String(err?.message ?? err);
 
                 toast.error("Failed to post receipt", { description: msg });
                 setPostError(msg);
@@ -166,8 +191,9 @@ export function PostingOfPoProvider({ children }: { children: React.ReactNode })
 
                 await refreshList();
                 await openPO(poId);
-            } catch (e: any) {
-                const msg = String(e?.message ?? e);
+            } catch (e: unknown) {
+                const err = e as Error;
+                const msg = String(err?.message ?? err);
 
                 toast.error("Failed to post receipts", { description: msg });
                 setPostError(msg);
@@ -201,6 +227,7 @@ export function PostingOfPoProvider({ children }: { children: React.ReactNode })
 
         successMsg,
         clearSuccess,
+        discountTypes,
     };
 
     return <PostingOfPoContext.Provider value={value}>{children}</PostingOfPoContext.Provider>;

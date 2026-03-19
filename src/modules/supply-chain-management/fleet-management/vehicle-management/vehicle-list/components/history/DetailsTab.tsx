@@ -105,6 +105,14 @@ export default function DetailsTab({ vehicle }: { vehicle: VehicleRow }) {
     ? fmtDateShort(raw?.next_maintenance_date)
     : "Not scheduled";
 
+  const seats = cleanStr(raw?.seats, "N/A");
+  const purchasedDate = raw?.purchased_date ? fmtDateShort(raw?.purchased_date) : "N/A";
+  const maxWeight = cleanStr(raw?.maximum_weight, "N/A");
+  const maxLoad = cleanStr(raw?.minimum_load, "N/A"); // Using minimum_load as per API reference
+  const maxLiters = cleanStr(raw?.max_liters, "N/A");
+  const cbmLength = cleanStr(raw?.cbm_length, "N/A");
+  const cbmWidth = cleanStr(raw?.cbm_width, "N/A");
+
   return (
     <div className="grid gap-4">
       {loading ? (
@@ -126,6 +134,7 @@ export default function DetailsTab({ vehicle }: { vehicle: VehicleRow }) {
                     <Field label="Vehicle Name/Model" value={model} />
                     <Field label="Year" value={year} />
                     <Field label="Type" value={vehicle.vehicleTypeName || "N/A"} />
+                    <Field label="Purchased Date" value={purchasedDate} />
                     <Field
                       label="Status"
                       value={
@@ -162,7 +171,23 @@ export default function DetailsTab({ vehicle }: { vehicle: VehicleRow }) {
               <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2">
                 <Field label="Current Mileage" value={mileage} />
                 <Field label="Fuel Type" value={fuelType} />
+                <Field label="Seats" value={seats} />
+                <Field label="Max Liters" value={maxLiters} />
                 <Field label="Current Driver" value={vehicle.driverName || "N/A"} />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Technical Specifications */}
+          <Card>
+            <CardContent className="p-6">
+              <div className="text-sm font-semibold">Technical Specifications</div>
+
+              <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2">
+                <Field label="Maximum Weight" value={maxWeight} />
+                <Field label="Maximum Load" value={maxLoad} />
+                <Field label="CBM Length" value={cbmLength} />
+                <Field label="CBM Width" value={cbmWidth} />
               </div>
             </CardContent>
           </Card>

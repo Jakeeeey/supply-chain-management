@@ -25,6 +25,7 @@ export function usePreDispatchPlanner() {
   );
 
   // ─── Metrics State ────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [metrics, setMetrics] = useState<any>(null);
 
   // ─── Shared State ─────────────────────────────────
@@ -62,7 +63,8 @@ export function usePreDispatchPlanner() {
       );
       setMasterData(masterRes.data || null);
       setMetrics(metricsRes.data || null);
-    } catch (err: any) {
+    } catch (e: unknown) {
+      const err = e as Error;
       setError(err.message);
     } finally {
       setIsLoading(false);

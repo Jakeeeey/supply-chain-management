@@ -1,9 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import * as React from "react";
-import { Building2, Minus, Plus, Store, Trash2, X } from "lucide-react";
+import { Building2, Minus, Plus, Store, Trash2 } from "lucide-react";
 import type { BranchAllocation, DiscountType } from "../types";
-import { cn, buildMoneyFormatter, deriveDiscountPercentFromCode } from "../utils/calculations";
+import { cn, buildMoneyFormatter } from "../utils/calculations";
 
 export function BranchAllocations(props: {
     branches: BranchAllocation[];

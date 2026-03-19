@@ -56,13 +56,23 @@ function nowISO() {
     return new Date().toISOString();
 }
 function timeDisplay(iso: string) {
-    const d = new Date(iso);
+    if (!iso) return "—";
+    
+    // Directus usually returns UTC time (sometimes without the 'Z' suffix).
+    // Ensure the string is treated as UTC if it doesn't specify a timezone.
+    const dateStr = iso.endsWith("Z") || iso.includes("+") ? iso : `${iso}Z`;
+    const d = new Date(dateStr);
+    
+    if (isNaN(d.getTime())) return "—";
+
     return d.toLocaleString("en-PH", {
+        timeZone: "Asia/Manila",
         year: "numeric",
         month: "short",
         day: "2-digit",
         hour: "2-digit",
         minute: "2-digit",
+        hour12: true
     });
 }
 

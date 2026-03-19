@@ -1,0 +1,71 @@
+
+C:\Users\Neil Russel\Documents\supply-chain-management\src\modules\supply-chain-management\supplier-management\receiving-products\components\ReceiptPreviewModal.tsx
+  15:5   warning  'Table' is defined but never used        @typescript-eslint/no-unused-vars
+  16:5   warning  'TableBody' is defined but never used    @typescript-eslint/no-unused-vars
+  17:5   warning  'TableCell' is defined but never used    @typescript-eslint/no-unused-vars
+  18:5   warning  'TableHead' is defined but never used    @typescript-eslint/no-unused-vars
+  19:5   warning  'TableHeader' is defined but never used  @typescript-eslint/no-unused-vars
+  20:5   warning  'TableRow' is defined but never used     @typescript-eslint/no-unused-vars
+  22:30  warning  'Printer' is defined but never used      @typescript-eslint/no-unused-vars
+
+C:\Users\Neil Russel\Documents\supply-chain-management\src\modules\supply-chain-management\supplier-management\receiving-products\components\steps\ReceiptDetailsStep.tsx
+  56:52  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  57:54  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Neil Russel\Documents\supply-chain-management\src\modules\supply-chain-management\supplier-management\receiving-products\components\steps\ScanProductsStep.tsx
+    7:10  warning  'Switch' is defined but never used                                                                                                                                                                 @typescript-eslint/no-unused-vars
+    9:10  warning  'ScrollArea' is defined but never used                                                                                                                                                             @typescript-eslint/no-unused-vars
+   17:10  warning  'Printer' is defined but never used                                                                                                                                                                @typescript-eslint/no-unused-vars
+   17:19  warning  'Eye' is defined but never used                                                                                                                                                                    @typescript-eslint/no-unused-vars
+   17:24  warning  'Trash2' is defined but never used                                                                                                                                                                 @typescript-eslint/no-unused-vars
+   18:10  warning  'generateOfficialSupplierReceiptV5' is defined but never used                                                                                                                                      @typescript-eslint/no-unused-vars
+   22:11  warning  'router' is assigned a value but never used                                                                                                                                                        @typescript-eslint/no-unused-vars
+   31:9   warning  'lastMatched' is assigned a value but never used                                                                                                                                                   @typescript-eslint/no-unused-vars
+   37:9   warning  'removeActivity' is assigned a value but never used                                                                                                                                                @typescript-eslint/no-unused-vars
+   40:9   warning  'clearReceiptSaved' is assigned a value but never used                                                                                                                                             @typescript-eslint/no-unused-vars
+   89:45  warning  Unexpected any. Specify a different type                                                                                                                                                           @typescript-eslint/no-explicit-any
+   90:28  warning  Unexpected any. Specify a different type                                                                                                                                                           @typescript-eslint/no-explicit-any
+   90:65  warning  Unexpected any. Specify a different type                                                                                                                                                           @typescript-eslint/no-explicit-any
+   91:28  warning  Unexpected any. Specify a different type                                                                                                                                                           @typescript-eslint/no-explicit-any
+   91:74  warning  Unexpected any. Specify a different type                                                                                                                                                           @typescript-eslint/no-explicit-any
+   97:8   warning  React Hook React.useEffect has a missing dependency: 'selectedPO.allocations'. Either include it or remove the dependency array                                                                    react-hooks/exhaustive-deps
+  103:8   warning  React Hook React.useEffect has a missing dependency: 'receiptSaved'. Either include it or remove the dependency array                                                                              react-hooks/exhaustive-deps
+  105:11  warning  The 'safeCounts' conditional could make the dependencies of useMemo Hook (at line 138) change on every render. To fix this, wrap the initialization of 'safeCounts' in its own useMemo() Hook      react-hooks/exhaustive-deps
+  105:11  warning  The 'safeCounts' conditional could make the dependencies of useCallback Hook (at line 197) change on every render. To fix this, wrap the initialization of 'safeCounts' in its own useMemo() Hook  react-hooks/exhaustive-deps
+  115:42  warning  Unexpected any. Specify a different type                                                                                                                                                           @typescript-eslint/no-explicit-any
+  117:49  warning  Unexpected any. Specify a different type                                                                                                                                                           @typescript-eslint/no-explicit-any
+  117:71  warning  Unexpected any. Specify a different type                                                                                                                                                           @typescript-eslint/no-explicit-any
+  120:30  warning  Unexpected any. Specify a different type                                                                                                                                                           @typescript-eslint/no-explicit-any
+  133:50  warning  Unexpected any. Specify a different type                                                                                                                                                           @typescript-eslint/no-explicit-any
+  143:61  warning  Unexpected any. Specify a different type                                                                                                                                                           @typescript-eslint/no-explicit-any
+  154:8   warning  React Hook React.useEffect has a missing dependency: 'receiptSaved'. Either include it or remove the dependency array                                                                              react-hooks/exhaustive-deps
+  464:64  warning  Unexpected any. Specify a different type                                                                                                                                                           @typescript-eslint/no-explicit-any
+  525:84  warning  Unexpected any. Specify a different type                                                                                                                                                           @typescript-eslint/no-explicit-any
+  629:51  warning  Unexpected any. Specify a different type                                                                                                                                                           @typescript-eslint/no-explicit-any
+  663:47  warning  Unexpected any. Specify a different type                                                                                                                                                           @typescript-eslint/no-explicit-any
+  668:45  warning  Unexpected any. Specify a different type                                                                                                                                                           @typescript-eslint/no-explicit-any
+  668:76  warning  Unexpected any. Specify a different type                                                                                                                                                           @typescript-eslint/no-explicit-any
+  669:42  warning  Unexpected any. Specify a different type                                                                                                                                                           @typescript-eslint/no-explicit-any
+
+C:\Users\Neil Russel\Documents\supply-chain-management\src\modules\supply-chain-management\supplier-management\receiving-products\providers\ReceivingProductsProvider.tsx
+  205:21  warning  Unexpected any. Specify a different type                                                                             @typescript-eslint/no-explicit-any
+  297:25  warning  Unexpected any. Specify a different type                                                                             @typescript-eslint/no-explicit-any
+  325:25  warning  Unexpected any. Specify a different type                                                                             @typescript-eslint/no-explicit-any
+  335:21  warning  Unexpected any. Specify a different type                                                                             @typescript-eslint/no-explicit-any
+  438:21  warning  Unexpected any. Specify a different type                                                                             @typescript-eslint/no-explicit-any
+  482:49  warning  Unexpected any. Specify a different type                                                                             @typescript-eslint/no-explicit-any
+  486:60  warning  Unexpected any. Specify a different type                                                                             @typescript-eslint/no-explicit-any
+  491:63  warning  Unexpected any. Specify a different type                                                                             @typescript-eslint/no-explicit-any
+  494:33  warning  Unexpected any. Specify a different type                                                                             @typescript-eslint/no-explicit-any
+  495:30  warning  Unexpected any. Specify a different type                                                                             @typescript-eslint/no-explicit-any
+  527:21  warning  Unexpected any. Specify a different type                                                                             @typescript-eslint/no-explicit-any
+  532:8   warning  React Hook React.useCallback has a missing dependency: 'activity'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Neil Russel\Documents\supply-chain-management\src\modules\supply-chain-management\supplier-management\receiving-products\utils\printUtils.ts
+   84:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  134:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  134:56  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  256:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+✖ 58 problems (0 errors, 58 warnings)
+

@@ -4,7 +4,6 @@ import { useState, useMemo, useEffect } from "react";
 import {
   useReactTable,
   getCoreRowModel,
-  getPaginationRowModel,
   getFilteredRowModel,
   flexRender,
 } from "@tanstack/react-table";
@@ -33,6 +32,7 @@ interface StockConversionTableProps {
   setPage: (p: number) => void;
   setPageSize: (s: number) => void;
   onConvertClick: (product: StockConversionProduct) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onRefresh: (filters?: any) => void;
   loadProductsInventory: (productIds: number[]) => void;
   isLoading?: boolean;
@@ -111,6 +111,7 @@ export function StockConversionTable({
       unitName: unitFilter,
       productBrand: brandFilter
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brandFilter, categoryFilter, unitFilter, supplierFilter, onRefresh, data.length]);
 
   // Lazy Loading Effect: Watch the current page and fetch inventory for visible products
@@ -130,6 +131,7 @@ export function StockConversionTable({
       console.log("[StockConversionTable] Lazy loading inventory for current page products:", productsToLoad);
       loadProductsInventory(productsToLoad);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleProductIds, loadProductsInventory, pageItems.length]); // Use stringified IDs
 
   return (

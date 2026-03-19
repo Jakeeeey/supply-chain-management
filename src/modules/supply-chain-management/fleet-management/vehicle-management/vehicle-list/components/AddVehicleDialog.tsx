@@ -10,7 +10,7 @@ import { uploadVehicleImage } from "@/modules/supply-chain-management/fleet-mana
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
@@ -60,6 +60,13 @@ export function AddVehicleDialog({
     fuelTypeId: null,
     engineTypeId: null,
     rfid: "",
+    seats: "",
+    maximumWeight: "",
+    minimumLoad: "",
+    maxLiters: "",
+    purchasedDate: "",
+    cbmLength: "",
+    cbmWidth: "",
     imageFile: null,
   });
 
@@ -94,7 +101,14 @@ export function AddVehicleDialog({
     form.typeId !== null &&
     requiredOk(form.rfid) &&
     form.fuelTypeId !== null &&
-    form.engineTypeId !== null;
+    form.engineTypeId !== null &&
+    requiredOk(form.seats || "") &&
+    requiredOk(form.maximumWeight || "") &&
+    requiredOk(form.minimumLoad || "") &&
+    requiredOk(form.maxLiters || "") &&
+    requiredOk(form.purchasedDate || "") &&
+    requiredOk(form.cbmLength || "") &&
+    requiredOk(form.cbmWidth || "");
 
   function set<K extends keyof CreateVehicleForm>(k: K, v: CreateVehicleForm[K]) {
     setForm((p) => ({ ...p, [k]: v }));
@@ -109,6 +123,13 @@ export function AddVehicleDialog({
     if (!requiredOk(form.rfid)) missing.push("RFID");
     if (form.fuelTypeId === null) missing.push("Fuel Type");
     if (form.engineTypeId === null) missing.push("Engine Type");
+    if (!requiredOk(form.seats || "")) missing.push("Seats");
+    if (!requiredOk(form.maximumWeight || "")) missing.push("Maximum Weight");
+    if (!requiredOk(form.minimumLoad || "")) missing.push("Maximum Load");
+    if (!requiredOk(form.maxLiters || "")) missing.push("Max Liters");
+    if (!requiredOk(form.purchasedDate || "")) missing.push("Purchased Date");
+    if (!requiredOk(form.cbmLength || "")) missing.push("CBM Length");
+    if (!requiredOk(form.cbmWidth || "")) missing.push("CBM Width");
     return missing;
   }
 
@@ -181,6 +202,17 @@ export function AddVehicleDialog({
 
     if (form.rfid.trim()) payload.rfid_code = form.rfid.trim();
 
+    // new fields
+    const seatsInt = toIntOrNull(form.seats || "");
+    if (seatsInt !== null) payload.seats = seatsInt;
+
+    payload.maximum_weight = form.maximumWeight;
+    payload.minimum_load = form.minimumLoad;
+    payload.max_liters = form.maxLiters;
+    payload.purchased_date = form.purchasedDate;
+    payload.cbm_length = form.cbmLength;
+    payload.cbm_width = form.cbmWidth;
+
     // ✅ reuse vehicles.image
     if (imageId) payload.image = imageId;
 
@@ -201,6 +233,13 @@ export function AddVehicleDialog({
         fuelTypeId: null,
         engineTypeId: null,
         rfid: "",
+        seats: "",
+        maximumWeight: "",
+        minimumLoad: "",
+        maxLiters: "",
+        purchasedDate: "",
+        cbmLength: "",
+        cbmWidth: "",
         imageFile: null,
       });
 
@@ -228,9 +267,12 @@ export function AddVehicleDialog({
       >
         <div className="flex max-h-[90dvh] flex-col">
           {/* HEADER */}
-          <div className="flex items-center justify-between border-b px-6 py-4">
-            <div className="text-lg font-semibold">Add New Vehicle</div>
-          </div>
+          <DialogHeader className="px-6 py-4 border-b">
+            <DialogTitle className="text-lg font-semibold">Add New Vehicle</DialogTitle>
+            <DialogDescription className="sr-only">
+              Fill in the details to add a new vehicle to the fleet.
+            </DialogDescription>
+          </DialogHeader>
 
           {/* CONTENT */}
           <div className="flex-1 overflow-y-auto px-6 py-4">
@@ -367,6 +409,91 @@ export function AddVehicleDialog({
                   onChange={(e) => set("rfid", e.target.value)}
                   className={touched && !requiredOk(form.rfid) ? "ring-1 ring-destructive" : ""}
                   placeholder="Enter RFID code"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label>
+                  Seats <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  value={form.seats || ""}
+                  onChange={(e) => set("seats", e.target.value)}
+                  className={touched && !requiredOk(form.seats || "") ? "ring-1 ring-destructive" : ""}
+                  placeholder="0"
+                  inputMode="numeric"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label>
+                  Maximum Weight <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  value={form.maximumWeight || ""}
+                  onChange={(e) => set("maximumWeight", e.target.value)}
+                  className={touched && !requiredOk(form.maximumWeight || "") ? "ring-1 ring-destructive" : ""}
+                  placeholder="0.00"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label>
+                  Maximum Load <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  value={form.minimumLoad || ""}
+                  onChange={(e) => set("minimumLoad", e.target.value)}
+                  className={touched && !requiredOk(form.minimumLoad || "") ? "ring-1 ring-destructive" : ""}
+                  placeholder="0.00"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label>
+                  Max Liters <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  value={form.maxLiters || ""}
+                  onChange={(e) => set("maxLiters", e.target.value)}
+                  className={touched && !requiredOk(form.maxLiters || "") ? "ring-1 ring-destructive" : ""}
+                  placeholder="0.00"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label>
+                  Purchased Date <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  type="date"
+                  value={form.purchasedDate || ""}
+                  onChange={(e) => set("purchasedDate", e.target.value)}
+                  className={touched && !requiredOk(form.purchasedDate || "") ? "ring-1 ring-destructive" : ""}
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label>
+                  CBM Length <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  value={form.cbmLength || ""}
+                  onChange={(e) => set("cbmLength", e.target.value)}
+                  className={touched && !requiredOk(form.cbmLength || "") ? "ring-1 ring-destructive" : ""}
+                  placeholder="0.00"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label>
+                  CBM Width <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  value={form.cbmWidth || ""}
+                  onChange={(e) => set("cbmWidth", e.target.value)}
+                  className={touched && !requiredOk(form.cbmWidth || "") ? "ring-1 ring-destructive" : ""}
+                  placeholder="0.00"
                 />
               </div>
             </div>

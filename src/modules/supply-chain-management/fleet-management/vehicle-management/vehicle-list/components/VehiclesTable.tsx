@@ -16,6 +16,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
 function statusVariant(s: string) {
   const v = String(s || "").toLowerCase();
@@ -27,7 +35,7 @@ function VehiclesTableSkeleton({ rows = 6 }: { rows?: number }) {
   return (
     <>
       {Array.from({ length: rows }).map((_, i) => (
-        <TableRow key={`sk-${i}`}>
+        <TableRow key={`sk-${i}`} className="odd:bg-muted/40">
           <TableCell className="font-medium">
             <Skeleton className="h-4 w-[120px]" />
           </TableCell>
@@ -142,10 +150,16 @@ function VehicleCard({
 export function VehiclesTable({
   rows,
   loading,
+  currentPage,
+  totalPages,
+  onPageChange,
   onViewHistory,
 }: {
   rows: VehicleRow[];
   loading?: boolean;
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
   onViewHistory: (row: VehicleRow) => void;
 }) {
   return (
@@ -194,7 +208,7 @@ export function VehiclesTable({
               </TableRow>
             ) : (
               rows.map((r) => (
-                <TableRow key={r.id}>
+                <TableRow key={r.id} className="group hover:bg-muted/60 odd:bg-muted/30 transition-colors">
                   <TableCell className="font-medium">{r.plateNo}</TableCell>
                   <TableCell>{r.vehicleName}</TableCell>
                   <TableCell>{r.driverName}</TableCell>
@@ -219,6 +233,71 @@ export function VehiclesTable({
           </TableBody>
         </Table>
       </div>
+
+      {/* ✅ Pagination Controls */}
+      {!loading && totalPages > 1 && (
+        <div className="border-t p-4 flex justify-end">
+          <Pagination className="mx-0 w-auto">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (currentPage > 1) onPageChange(currentPage - 1);
+                  }}
+                  className={currentPage <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+
+              {Array.from({ length: totalPages }).map((_, i) => {
+                const page = i + 1;
+                // Simple logic to show current, first, last, and neighbors
+                if (
+                  page === 1 ||
+                  page === totalPages ||
+                  (page >= currentPage - 1 && page <= currentPage + 1)
+                ) {
+                  return (
+                    <PaginationItem key={page}>
+                      <PaginationLink
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          onPageChange(page);
+                        }}
+                        isActive={page === currentPage}
+                        className="cursor-pointer"
+                      >
+                        {page}
+                      </PaginationLink>
+                    </PaginationItem>
+                  );
+                }
+                if (page === currentPage - 2 || page === currentPage + 2) {
+                  return (
+                    <PaginationItem key={page}>
+                      <span className="px-2 text-muted-foreground">...</span>
+                    </PaginationItem>
+                  );
+                }
+                return null;
+              })}
+
+              <PaginationItem>
+                <PaginationNext
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (currentPage < totalPages) onPageChange(currentPage + 1);
+                  }}
+                  className={currentPage >= totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
+      )}
     </div>
   );
 }

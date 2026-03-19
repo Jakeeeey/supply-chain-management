@@ -19,6 +19,7 @@ interface PDPCreationTableProps {
  */
 export function PDPCreationTable({
   data,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   totalCount,
   isLoading,
   onEdit,

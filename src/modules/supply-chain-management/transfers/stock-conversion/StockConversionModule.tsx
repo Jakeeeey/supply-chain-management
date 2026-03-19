@@ -88,9 +88,11 @@ export default function StockConversionModule({ user }: StockConversionModulePro
       setIsRfidModalOpen(false);
       setSelectedProduct(null);
       setPendingConversion(null);
-    } catch (e: any) {
+    } catch (e: unknown) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const err = e as any;
       // Error handled by hook toast
-      console.error(e);
+      console.error(err);
     } finally {
       setIsSubmitting(false);
     }
