@@ -213,6 +213,10 @@ const data = {
             isActive: false,
             items: [
                 {
+                    title: "Driver Management",
+                    url: "/scm/fleet-management/driver-management",
+                },
+                {
                     title: "Vehicle Management",
                     url: "#",
                     items: [
@@ -222,7 +226,6 @@ const data = {
                         },
                     ],
                 },
-                { title: "Driver Management", url: "#" },
                 {
                     title: "Trip Management",
                     url: "#",
