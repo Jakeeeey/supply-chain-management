@@ -127,6 +127,15 @@ export type CreateVehicleForm = {
 
   rfid: string;
 
+  // new fields
+  seats?: string;
+  maximumWeight?: string;
+  minimumLoad?: string;
+  maxLiters?: string;
+  purchasedDate?: string;
+  cbmLength?: string;
+  cbmWidth?: string;
+
   // ✅ file upload
   imageFile?: File | null;
 };
