@@ -151,10 +151,6 @@ const data = {
                     title: "PurchaseOrderSummary",
                     url: "/scm/supplier-management/purchase-order-summary",
                 },
-                {
-                    title: "Inbound/Outbound Kiosk",
-                    url: "/scm/inbound-outbound-kiosk",
-                },
             ],
         },
         {
@@ -409,11 +405,6 @@ const data = {
                     url: "/scm/transfers/stock-conversion",
                 },
             ],
-        },
-        {
-            title: "Inbound/Outbound Kiosk",
-            url: "/scm/inbound-outbound-kiosk",
-            icon: BookOpen,
         },
     ],
 };
