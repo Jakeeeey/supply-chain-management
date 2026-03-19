@@ -161,6 +161,17 @@ const data = {
             ],
         },
         {
+            title: "Inventories",
+            url: "#",
+            icon: Package,
+            items: [
+                {
+                    title: "Sales Return",
+                    url: "/scm/inventories/sales-return",
+                },
+            ]
+        },
+        {
             title: "Supplier Management",
             url: "#",
             icon: Building2,

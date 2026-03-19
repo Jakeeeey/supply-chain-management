@@ -213,15 +213,29 @@ export async function fetchInventory(
     const allRows = await repo.getSpringInventory(branchId, supplierId, token);
     
     // Filter by branch and supplier using camelCase names (Standardized in Repo/Schema)
-    const viewRows = allRows.filter((r) => 
+    const rawViewRows = allRows.filter((r: any) => 
       Number(r.branchId) === Number(branchId) && 
       Number(r.supplierId) === Number(supplierId)
     );
 
-    if (viewRows.length === 0) return [];
+    if (rawViewRows.length === 0) return [];
+
+    // Aggregate inventory by productId to prevent duplicate batches in UI
+    const aggregatedRowsMap = new Map<number, any>();
+    rawViewRows.forEach((r: any) => {
+      const pId = Number(r.productId);
+      if (aggregatedRowsMap.has(pId)) {
+        const existing = aggregatedRowsMap.get(pId);
+        existing.runningInventoryUnit = Number(existing.runningInventoryUnit || 0) + Number(r.runningInventoryUnit || 0);
+      } else {
+        aggregatedRowsMap.set(pId, { ...r, runningInventoryUnit: Number(r.runningInventoryUnit || 0) });
+      }
+    });
+
+    const viewRows = Array.from(aggregatedRowsMap.values());
 
     // Get prices and parents to calculate families
-    const productIds = [...new Set(viewRows.map((r) => Number(r.productId)))];
+    const productIds = [...new Set(viewRows.map((r: any) => Number(r.productId)))];
     const productsJson = await repo.getRawProductsByIds(productIds);
     const productsData = (productsJson.data || []) as unknown as RawProduct[];
 
@@ -243,7 +257,7 @@ export async function fetchInventory(
     });
 
     const result: InventoryRecord[] = [];
-    families.forEach((variants) => {
+    families.forEach((variants, familyId) => {
       // Sort by unitCount descending for remainder cascading
       const castVariants = variants as RawInventoryVariant[];
       castVariants.sort((a, b) => (Number(b.unitCount) || 0) - (Number(a.unitCount) || 0));
@@ -267,7 +281,7 @@ export async function fetchInventory(
           branch_id: Number(v.branchId),
           supplier_id: Number(v.supplierId),
           running_inventory: displayStock,
-          familyId: Number(v.familyId),
+          familyId: Number(familyId),
           price: priceMap.get(Number(v.productId)) ?? 0,
           product_barcode: v.productBarcode ?? undefined,
         });

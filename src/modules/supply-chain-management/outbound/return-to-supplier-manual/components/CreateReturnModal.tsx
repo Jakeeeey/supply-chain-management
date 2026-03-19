@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -217,6 +217,7 @@ export function CreateReturnModal({
 
       return group;
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inventory, refs.connections, refs.lineDiscounts, refs.units, selection.supplierId]);
 
   useEffect(() => {

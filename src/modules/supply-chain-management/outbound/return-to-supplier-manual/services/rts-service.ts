@@ -201,12 +201,26 @@ export async function fetchInventory(
     const allRows = await repo.getSpringInventory(branchId, supplierId, token);
     
     // Filter by branch and supplier using camelCase names (Standardized in Repo/Schema)
-    const viewRows = allRows.filter((r) => 
+    const rawViewRows = allRows.filter((r: any) => 
       Number(r.branchId) === Number(branchId) && 
       Number(r.supplierId) === Number(supplierId)
     );
 
-    if (viewRows.length === 0) return [];
+    if (rawViewRows.length === 0) return [];
+
+    // Aggregate inventory by productId to prevent duplicate batches in UI
+    const aggregatedRowsMap = new Map<number, any>();
+    rawViewRows.forEach((r: any) => {
+      const pId = Number(r.productId);
+      if (aggregatedRowsMap.has(pId)) {
+        const existing = aggregatedRowsMap.get(pId);
+        existing.runningInventoryUnit = Number(existing.runningInventoryUnit || 0) + Number(r.runningInventoryUnit || 0);
+      } else {
+        aggregatedRowsMap.set(pId, { ...r, runningInventoryUnit: Number(r.runningInventoryUnit || 0) });
+      }
+    });
+
+    const viewRows = Array.from(aggregatedRowsMap.values());
 
     // Get prices and parents to calculate families
     const productIds = [...new Set(viewRows.map((r) => Number(r.productId)))];
@@ -231,7 +245,7 @@ export async function fetchInventory(
     });
 
     const result: InventoryRecord[] = [];
-    families.forEach((variants) => {
+    families.forEach((variants, familyId) => {
       // Sort by unitCount descending for remainder cascading
       const castVariants = variants as RawInventoryVariant[];
       castVariants.sort((a, b) => b.unitCount - a.unitCount);
@@ -255,7 +269,7 @@ export async function fetchInventory(
           branch_id: Number(variant.branchId),
           supplier_id: Number(variant.supplierId),
           running_inventory: displayStock,
-          familyId: Number(variant.familyId),
+          familyId: Number(familyId),
           price: priceMap.get(Number(variant.productId)) ?? 0,
           product_barcode: variant.productBarcode ?? undefined,
         });
