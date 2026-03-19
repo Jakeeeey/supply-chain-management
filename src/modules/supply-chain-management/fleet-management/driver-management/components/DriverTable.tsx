@@ -105,7 +105,7 @@ export function DriverTable({
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {drivers.map((driver) => {
+                        {drivers.map((driver, index) => {
                             const user = driver.user;
                             const driverName = user
                                 ? `${user.user_fname} ${user.user_mname ? user.user_mname + " " : ""}${user.user_lname}`.trim()
@@ -116,7 +116,7 @@ export function DriverTable({
                             return (
                                 <TableRow key={driver.id} className="hover:bg-primary/[0.02] border-white/5 transition-colors group">
                                     <TableCell className="py-4 font-bold text-sm text-foreground/80 w-12">
-                                        {driver.user_id}
+                                        {startIndex + index}
                                     </TableCell>
                                     <TableCell className="py-4">
                                         <div className="flex flex-col">
