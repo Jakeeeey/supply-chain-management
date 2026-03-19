@@ -11,14 +11,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Printer, Download, Package, MapPin } from "lucide-react";
+import { Printer, Download, Package } from "lucide-react";
 import { generatePurchaseOrderPDF } from "../../receiving-products/utils/printUtils";
 import { cn, buildMoneyFormatter } from "../utils/calculations";
 
 interface POPreviewModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onConfirmSave?: () => void | Promise<any>;
+    onConfirmSave?: () => void | Promise<unknown>;
     isSubmitting?: boolean;
     locked?: boolean;
     isInvoice?: boolean;
@@ -58,10 +58,6 @@ export function POPreviewModal({
     data 
 }: POPreviewModalProps) {
     const money = React.useMemo(() => buildMoneyFormatter(), []);
-
-    const handleDownloadOnly = () => {
-        generatePurchaseOrderPDF({ ...data, isInvoice: !!isInvoice });
-    };
 
     const handleSaveAndDownload = async () => {
         if (onConfirmSave) {

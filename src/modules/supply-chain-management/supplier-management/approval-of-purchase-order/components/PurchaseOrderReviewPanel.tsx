@@ -7,7 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
+
 import {
     Select,
     SelectContent,
@@ -38,8 +38,7 @@ import { cn } from "@/lib/utils";
 
 import type { PurchaseOrderDetail, PaymentTerm } from "../types";
 
-// ✅ Local toast (no layout.tsx changes needed)
-import { Toaster as SonnerToaster, toast } from "sonner";
+import { toast } from "sonner";
 
 function money() {
     try {
@@ -53,7 +52,7 @@ function money() {
     }
 }
 
-function toNum(v: any): number {
+function toNum(v: unknown): number {
     if (v === null || v === undefined) return 0;
     const s = String(v).trim();
     if (!s) return 0;
@@ -61,22 +60,23 @@ function toNum(v: any): number {
     return Number.isFinite(n) ? n : 0;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function unwrap(po: any) {
     return po?.data ?? po;
 }
 
-function safeStr(v: any, fallback = "—") {
+function safeStr(v: unknown, fallback = "—") {
     const s = String(v ?? "").trim();
     return s ? s : fallback;
 }
 
-function isNumericString(v: any) {
+function isNumericString(v: unknown) {
     const s = String(v ?? "").trim();
     if (!s) return false;
     return /^[0-9]+$/.test(s);
 }
 
-function pickText(v: any): string {
+function pickText(v: unknown): string {
     // ✅ never stringify objects into "[object Object]"
     if (v === null || v === undefined) return "";
     if (typeof v === "string") return v.trim();
@@ -86,6 +86,7 @@ function pickText(v: any): string {
     return "";
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function formatBranchOne(raw: any): string {
     if (!raw) return "";
 
@@ -111,6 +112,7 @@ function formatBranchOne(raw: any): string {
     return "";
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function formatBranches(raw: any): string {
     // 1) Array form
     if (Array.isArray(raw)) {
@@ -144,8 +146,10 @@ type NormalizedLine = {
     total: number;
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function normalizeLines(rawItems: any[]): NormalizedLine[] {
     if (!Array.isArray(rawItems)) return [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return rawItems.map((it: any, idx: number) => {
         const key = String(it?.po_item_id ?? it?.id ?? idx);
         const name = safeStr(it?.item_name ?? it?.name ?? it?.product_name ?? `Item ${idx + 1}`);
@@ -186,6 +190,7 @@ export default function PurchaseOrderReviewPanel(props: {
     const [currentPage, setCurrentPage] = React.useState(1);
     const [pageSize, setPageSize] = React.useState(10);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const poAny: any = React.useMemo(() => unwrap(props.po), [props.po]);
 
     React.useEffect(() => {
@@ -199,7 +204,7 @@ export default function PurchaseOrderReviewPanel(props: {
 
         // Reset pagination
         setCurrentPage(1);
-    }, [poAny?.purchase_order_id ?? poAny?.id ?? null, poAny?.is_invoice, poAny?.isInvoice]);
+    }, [poAny?.purchase_order_id, poAny?.id, poAny?.is_invoice, poAny?.isInvoice]);
 
     /**
      * ✅ FIX: Branch label resolver
@@ -250,9 +255,6 @@ export default function PurchaseOrderReviewPanel(props: {
         );
     }, [poAny]);
 
-    const apBalance = React.useMemo(() => {
-        return toNum(poAny?.supplier_name?.ap_balance ?? poAny?.apBalance ?? 0);
-    }, [poAny]);
 
     const lines = React.useMemo(() => normalizeLines(poAny?.items ?? []), [poAny]);
 
@@ -319,9 +321,9 @@ export default function PurchaseOrderReviewPanel(props: {
             });
 
             setConfirmOpen(false);
-        } catch (e: any) {
+        } catch (e: unknown) {
             toast.error("Failed to approve Purchase Order", {
-                description: String(e?.message ?? e ?? "Unknown error"),
+                description: String(e instanceof Error ? e.message : e || "Unknown error"),
             });
             setConfirmOpen(false);
             throw e;

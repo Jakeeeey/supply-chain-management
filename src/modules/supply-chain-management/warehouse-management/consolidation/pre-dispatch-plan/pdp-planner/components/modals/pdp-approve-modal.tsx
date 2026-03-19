@@ -55,17 +55,21 @@ export function PDPApproveModal({
 
   useEffect(() => {
     if (open && plan) {
-      setIsFetching(true);
+      queueMicrotask(() => setIsFetching(true));
       fetchDetails(plan.dispatch_id)
         .then((result) => {
           setEnrichedPlan(result.plan);
           setDetails(result.details);
         })
         .catch(console.error)
-        .finally(() => setIsFetching(false));
+        .finally(() => {
+          setIsFetching(false);
+        });
     } else {
-      setDetails([]);
-      setEnrichedPlan(null);
+      queueMicrotask(() => {
+        setDetails([]);
+        setEnrichedPlan(null);
+      });
     }
   }, [open, plan, fetchDetails]);
 

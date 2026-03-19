@@ -398,7 +398,7 @@ function buildTagMapsForScopes(args: {
     return { taggedCountByKey, rfidsByKey };
 }
 
-function isTaggingComplete(poId: number, lines: PoProductRow[], taggedCountByKey: Map<string, number>) {
+function isPartiallyTagged(poId: number, lines: PoProductRow[], taggedCountByKey: Map<string, number>) {
     if (!lines.length) return false;
 
     for (const ln of lines) {
@@ -409,9 +409,9 @@ function isTaggingComplete(poId: number, lines: PoProductRow[], taggedCountByKey
 
         const k = keyLine(poId, pid, bid);
         const tagged = taggedCountByKey.get(k) ?? 0;
-        if (tagged < expected) return false;
+        if (tagged > 0) return true; // ✅ Allow PO to appear in Receiving if at least 1 item is tagged
     }
-    return true;
+    return false; // ❌ Only hide PO if absolutely nothing is tagged yet
 }
 
 function isFullyReceived(
@@ -425,13 +425,11 @@ function isFullyReceived(
     const porIdsByKey = buildPorIdsByKey(porRows);
 
     const recByPor = new Map<number, number>();
-    const postedAny = (porRows ?? []).some((r) => toNum(r?.isPosted) === 1);
     for (const r of porRows) {
         const porId = toNum(r?.purchase_order_product_id);
         if (!porId) continue;
         recByPor.set(porId, effectiveReceivedQty(r));
     }
-    if (postedAny) return true;
 
     for (const ln of lines) {
         const pid = toNum(ln.product_id);
@@ -519,13 +517,9 @@ export async function GET() {
             const porRows = porByPo.get(poId) ?? [];
             const lines = linesByPo.get(poId) ?? [];
 
-            // ✅ must be tagging-complete
-            const taggingOk = isTaggingComplete(poId, lines, taggedCountByKey);
-            if (!taggingOk) continue;
-
-            // ✅ exclude posted (posting/archived na)
-            const postedAny = porRows.some((r) => toNum(r?.isPosted) === 1);
-            if (postedAny) continue;
+            // ✅ PO will show up in list as long as it's partially tagged
+            const isTagged = isPartiallyTagged(poId, lines, taggedCountByKey);
+            if (!isTagged) continue;
 
             // ✅ exclude fully received (for posting page na)
             const fully = isFullyReceived(poId, lines, porRows, taggedCountByKey);
@@ -587,18 +581,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
             const lines = await fetchPOProductsByPOId(base, poId);
             const porRows = await fetchPORByPOIds(base, [poId]);
-
-            const postedAny = porRows.some((r: any) => toNum(r?.isPosted) === 1);
-            if (postedAny) return bad("PO is already posted. Proceed to Posting of PO.", 409);
-
             const porIds = porRows.map((r: any) => toNum(r?.purchase_order_product_id)).filter(Boolean);
             const popIds = lines.map((l: any) => toNum(l?.purchase_order_product_id)).filter(Boolean);
 
             const receivingItems = await fetchReceivingItemsByLinkIds(base, [...porIds, ...popIds]);
             const { taggedCountByKey, rfidsByKey } = buildTagMapsForScopes({ poLines: lines, porRows, receivingItems });
 
-            const ready = isTaggingComplete(poId, lines, taggedCountByKey);
-            if (!ready) return bad("PO is not ready for receiving. Complete RFID tagging first.", 409);
+            const ready = isPartiallyTagged(poId, lines, taggedCountByKey);
+            if (!ready) return bad("PO is not ready for receiving. Please tag at least one item first.", 409);
 
             // We allow opening even if fully received, so that save_receipt can get the final state for printing.
             // scan_rfid already has checks to prevent double-receiving.

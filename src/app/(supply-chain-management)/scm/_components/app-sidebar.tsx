@@ -15,10 +15,10 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
-import {useState, useMemo} from "react";
+import { useState, useMemo } from "react";
 
-import {Separator} from "@/components/ui/separator";
-import {Input} from "@/components/ui/input"; // Make sure you have the shadcn Input component installed!
+import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input"; // Make sure you have the shadcn Input component installed!
 import {
     Sidebar,
     SidebarContent,
@@ -28,7 +28,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import {NavMain} from "./nav-main";
+import { NavMain } from "./nav-main";
 
 // 👇 Here is the data object the compiler was looking for 👇
 const data = {
@@ -309,13 +309,6 @@ const data = {
                 {
                     title: "Inventory Controls",
                     url: "/scm/inventory-management/inventory-controls",
-                    items: [
-                        {
-                            title: "Purchase Planning",
-                            url: "/scm/inventory-management/inventory-controls/purchase-planning",
-                        },
-                    ]
-
                 },
                 {
                     title: "Physical Inventory",
@@ -433,14 +426,15 @@ export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
                 // Recursively check children
                 const childMatches = item.items ? filterItems(item.items) : [];
 
-                // If parent matches, show it and all its original children
-                if (isMatch) {
-                    acc.push(item);
-                }
-                // If a child matches, show the parent but ONLY the matching children
-                else if (childMatches.length > 0) {
-                    acc.push({...item, items: childMatches});
-                }
+        return data.navMain
+            .map((section) => {
+                const filteredItems = section.items?.filter((item) => {
+                    const matchesTitle = item.title.toLowerCase().includes(query);
+                    const matchesSubItems = item.items?.some((subItem) =>
+                        subItem.title.toLowerCase().includes(query)
+                    );
+                    return matchesTitle || matchesSubItems;
+                });
 
                 return acc;
             }, []);
@@ -492,12 +486,11 @@ export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
                 <div className="px-4 pt-3 pb-2 text-xs font-medium text-muted-foreground">
                     Platform
                 </div>
-                {/* 👇 Pass the filtered data instead of the raw data 👇 */}
                 <NavMain items={filteredNavMain}/>
             </SidebarContent>
 
             <SidebarFooter className="p-0">
-                <Separator/>
+                <Separator />
                 <div className="py-3 text-center text-xs text-muted-foreground">
                     VOS Web v2.0
                 </div>

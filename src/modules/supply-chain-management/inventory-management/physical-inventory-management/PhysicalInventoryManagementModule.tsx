@@ -28,6 +28,7 @@ import {
     computeAmount,
     computeDifferenceCost,
     computeVariance,
+    convertBaseQtyToDisplayQty,
     createPhysicalInventoryDetailsBulk,
     createPhysicalInventoryHeader,
     derivePhysicalInventoryStatus,
@@ -668,6 +669,33 @@ export function PhysicalInventoryManagementModule(props: Props) {
                     setRunningInventoryRows(nextRunningRows);
                     setRfidCountByDetailId(nextRfidCountByDetailId);
 
+                    if (
+                        nextFilters.branch_id &&
+                        nextFilters.supplier_id &&
+                        nextFilters.category_id &&
+                        nextFilters.price_type_id &&
+                        existingDetails.length > 0
+                    ) {
+                        const variants = buildVariantsFromSavedDetails({
+                            details: existingDetails,
+                            priceTypeId: nextFilters.price_type_id,
+                            lookup: nextLookup,
+                        });
+
+                        const nextGrouped = buildGroupedPhysicalInventoryRows({
+                            branch_id: nextFilters.branch_id,
+                            variants,
+                            details: existingDetails,
+                            runningInventoryRows: nextRunningRows,
+                            ph_id: existingHeader.id ?? null,
+                            rfidCountByDetailId: nextRfidCountByDetailId,
+                        });
+
+                        setGroupedRows(nextGrouped);
+                    } else {
+                        setGroupedRows([]);
+                    }
+
                     setIsHydratingRecord(false);
                     return;
                 }
@@ -809,7 +837,6 @@ export function PhysicalInventoryManagementModule(props: Props) {
 
         rebuildGroupedRows();
     }, [
-        detailRows,
         filters.branch_id,
         filters.supplier_id,
         filters.category_id,
@@ -1003,7 +1030,11 @@ export function PhysicalInventoryManagementModule(props: Props) {
             const detailPayloads = eligibleVariants.map((variant) => {
                 const matchedRunning = runningInventoryByProductId.get(variant.product_id);
 
-                const systemCount = matchedRunning?.running_inventory ?? 0;
+                const systemCount = convertBaseQtyToDisplayQty(
+                    matchedRunning?.running_inventory,
+                    variant.unit_count,
+                );
+
                 const physicalCount = 0;
                 const variance = computeVariance(physicalCount, systemCount);
                 const differenceCost = computeDifferenceCost(variance, variant.unit_price);
@@ -1144,12 +1175,9 @@ export function PhysicalInventoryManagementModule(props: Props) {
         [],
     );
 
-    const handlePhysicalCountBlur = React.useCallback(
-        async (_row: GroupedPhysicalInventoryChildRow) => {
-            await flushDirtyDetails();
-        },
-        [flushDirtyDetails],
-    );
+    const handlePhysicalCountBlur = React.useCallback(async () => {
+        await flushDirtyDetails();
+    }, [flushDirtyDetails]);
 
     const handleRefreshGroups = React.useCallback(async () => {
         try {
