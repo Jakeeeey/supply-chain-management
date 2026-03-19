@@ -16,7 +16,7 @@ export const generatePOSummaryPDF = (data: PurchaseOrder[], suppliers: Supplier[
 
   // Define Columns exactly as requested (Discount Type removed)
   const head = [
-    ["DATE", "SUPPLIER", "INVOICE NO", "GROSS", "DISCOUNT", "NET"]
+    ["DATE", "SUPPLIER", "PO #", "REMARKS", "GROSS AMOUNT", "DISCOUNT", "NET AMOUNT"]
   ];
 
   const body = data.map((po) => {
@@ -31,6 +31,7 @@ export const generatePOSummaryPDF = (data: PurchaseOrder[], suppliers: Supplier[
       po.date || "--",
       sName.toUpperCase(),
       po.purchase_order_no || "--",
+      po.remark || "--",
       gross.toLocaleString(undefined, { minimumFractionDigits: 2 }),
       discAmt.toLocaleString(undefined, { minimumFractionDigits: 2 }),
       net.toLocaleString(undefined, { minimumFractionDigits: 2 }),
@@ -65,13 +66,14 @@ export const generatePOSummaryPDF = (data: PurchaseOrder[], suppliers: Supplier[
       fontStyle: "bold" 
     },
     columnStyles: {
-      3: { halign: "right" }, // Gross
-      4: { halign: "right" }, // Discount
-      5: { halign: "right", fontStyle: "bold" } // Net
+      4: { halign: "right" }, // Gross
+      5: { halign: "right" }, // Discount
+      6: { halign: "right", fontStyle: "bold" } // Net
     },
     foot: [
       [
         "TOTAL", 
+        "", 
         "", 
         "", 
         totalGross.toLocaleString(undefined, { minimumFractionDigits: 2 }), 

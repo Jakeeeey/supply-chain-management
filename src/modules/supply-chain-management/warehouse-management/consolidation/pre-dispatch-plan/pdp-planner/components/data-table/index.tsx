@@ -20,6 +20,7 @@ interface PDPPlannerTableProps {
  */
 export function PDPPlannerTable({
   data,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   totalCount,
   isLoading,
   onView,

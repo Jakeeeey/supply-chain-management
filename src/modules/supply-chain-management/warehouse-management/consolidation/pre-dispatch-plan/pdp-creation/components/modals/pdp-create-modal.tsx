@@ -96,6 +96,7 @@ export function PDPCreateModal({
       if (editPlan) {
         // Edit mode: pre-fill from existing plan
         // Directus may return relational IDs as objects (e.g. {vehicle_id: 5})
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const toId = (val: any): number | null => {
           if (val == null) return null;
           if (typeof val === "number") return val;
@@ -139,6 +140,7 @@ export function PDPCreateModal({
               province: d.province,
               total_amount: d.amount ?? null,
               net_amount: d.amount ?? null,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               po_no: (d as any).po_no || null,
               total_weight: d.weight,
             }),
@@ -306,7 +308,8 @@ export function PDPCreateModal({
           : "Pre-dispatch plan created successfully!",
       );
       onClose();
-    } catch (err: any) {
+    } catch (e: unknown) {
+      const err = e as Error;
       toast.error(err.message || "Failed to save plan.");
     } finally {
       setIsSaving(false);

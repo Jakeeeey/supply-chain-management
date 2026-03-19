@@ -21,7 +21,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 
-
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { TaggingPODetail, TaggingPOItem } from "../types";
 import { ArrowLeft, BadgeCheck, BadgeX, ScanLine, Radio, Printer } from "lucide-react";
@@ -192,9 +192,6 @@ export default function ProductTaggingPanel(props: {
                                 {/* Header */}
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="space-y-1">
-                                        <div className="text-xs font-black uppercase tracking-widest text-muted-foreground">
-                                            1. Scan Barcode (SKU)
-                                        </div>
                                     </div>
 
                                     {/* Right-side actions intentionally removed */}
@@ -203,7 +200,17 @@ export default function ProductTaggingPanel(props: {
 
                                 <div className="mt-3 grid grid-cols-1 lg:grid-cols-[1fr_1fr_auto] gap-3 items-start">
                                     {/* SKU */}
-                                    <div className="space-y-2">
+                                    <div className="space-y-2 flex flex-col justify-end">
+                                        <div className="flex items-center gap-2 h-5">
+                                            <div className="text-xs font-black uppercase tracking-widest text-muted-foreground">
+                                                1. Scan Barcode (SKU)
+                                            </div>
+                                            {!sku.trim() ? (
+                                                <div className="text-[10px] italic text-muted-foreground/80 lowercase">
+                                                    (waiting for scan...)
+                                                </div>
+                                            ) : null}
+                                        </div>
                                         <Input
                                             ref={skuRef}
                                             value={sku}
@@ -222,11 +229,6 @@ export default function ProductTaggingPanel(props: {
                                             }}
                                         />
 
-                                        {!sku.trim() ? (
-                                            <div className="text-xs italic text-muted-foreground/80">
-                                                Waiting for scan...
-                                            </div>
-                                        ) : null}
 
                                         {skuRejected ? (
                                             <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive flex gap-2">
@@ -244,8 +246,8 @@ export default function ProductTaggingPanel(props: {
                                     </div>
 
                                     {/* RFID */}
-                                    <div className="space-y-2">
-                                        <div className="flex items-center justify-between">
+                                    <div className="space-y-2 flex flex-col justify-end">
+                                        <div className="flex items-center justify-between h-5">
                                             <div className="text-xs font-black uppercase tracking-widest text-muted-foreground">
                                                 2. Scan RFID Tag
                                             </div>
@@ -416,6 +418,26 @@ export default function ProductTaggingPanel(props: {
                                         </Badge>
                                     )}
                                 </div>
+
+                                {totalTagged > 0 && totalTagged < totalExpected && (
+                                    <div className="pt-2">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            className="w-full text-xs font-bold border-primary/30 hover:bg-primary/10 text-primary"
+                                            onClick={() => {
+                                                props.onBack();
+                                                setTimeout(() => {
+                                                    toast.success("Ready for Receiving", {
+                                                        description: "This partially tagged PO is now visible in Receiving Products."
+                                                    });
+                                                }, 100);
+                                            }}
+                                        >
+                                            Send Partially Tagged to Receiving
+                                        </Button>
+                                    </div>
+                                )}
                             </div>
                         </div>
 

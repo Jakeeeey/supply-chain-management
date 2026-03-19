@@ -13,20 +13,9 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
-import { RefreshCw, FileCheck2, ChevronRight, UploadCloud } from "lucide-react";
+import { RefreshCw, FileCheck2, ChevronRight } from "lucide-react";
 import { usePostingOfPo } from "../providers/PostingOfPoProvider";
-import type { POListItem } from "../types";
 
 function statusBadge(status: string) {
     const s = String(status || "").toUpperCase();
@@ -54,13 +43,10 @@ export function PostingPOList() {
         setPage,
         pageSize,
         setPageSize,
-
-        posting,
     } = usePostingOfPo();
 
     // ✅ confirm dialog state (for the "Post" button)
-    const [confirmPo, setConfirmPo] = React.useState<POListItem | null>(null);
-    const confirmOpen = Boolean(confirmPo);
+    // Dialog removed
 
     const filtered = React.useMemo(() => {
         const s = q.trim().toLowerCase();
@@ -191,7 +177,6 @@ export function PostingPOList() {
                 ) : (
                     pageItems.map((po) => {
                         const active = selectedPO?.id === po.id;
-                        const canPost = (po.unpostedReceiptsCount ?? 0) > 0;
 
                         return (
                             // ✅ FIX: not a <button> anymore (prevents nested button + hydration error)

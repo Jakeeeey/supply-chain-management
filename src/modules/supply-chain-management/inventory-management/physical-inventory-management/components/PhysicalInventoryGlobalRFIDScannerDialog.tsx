@@ -103,7 +103,7 @@ function playTone(
 export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
     const { open, branchId, phId, rows, canEdit, onOpenChange, onSaved } = props;
 
-    const [isLoadingExisting, setIsLoadingExisting] = React.useState(false);
+    const [, setIsLoadingExisting] = React.useState(false);
     const [isProcessing, setIsProcessing] = React.useState(false);
     const [existingPiTags, setExistingPiTags] = React.useState<PhysicalInventoryDetailRFIDRow[]>(
         [],

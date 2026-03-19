@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const DIRECTUS_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://goatedcodoer:8056";
+const DIRECTUS_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 const AUTH_TOKEN = process.env.DIRECTUS_STATIC_TOKEN || "";
 
 export async function POST(req: NextRequest) {

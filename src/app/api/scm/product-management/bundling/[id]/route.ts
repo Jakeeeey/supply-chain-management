@@ -1,5 +1,5 @@
+import { bundleService } from "@/modules/supply-chain-management/product-management/bundling/services/bundle";
 import { NextRequest, NextResponse } from "next/server";
-import { bundleService } from "@/modules/supply-chain-management/product-management/bundling/bundle-creation/services/bundle";
 
 export const runtime = "nodejs";
 
@@ -57,6 +57,23 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
   } catch (error: any) {
     console.error("[Bundle Action Error]:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+/**
+ * PATCH /api/scm/product-management/bundling/[id]
+ * Updates a draft bundle and replaces its items.
+ */
+export async function PATCH(req: NextRequest, { params }: { params: Params }) {
+  try {
+    const { id } = await params;
+    const body = await req.json();
+
+    const data = await bundleService.updateDraft(id, body);
+    return NextResponse.json({ data });
+  } catch (error: any) {
+    console.error("[Bundle PATCH Error]:", error.message);
+    return NextResponse.json({ error: error.message }, { status: 400 });
   }
 }
 

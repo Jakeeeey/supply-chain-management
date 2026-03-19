@@ -40,14 +40,24 @@ function buildHeaders(contentType?: string | null): HeadersInit {
 }
 
 async function passthrough(response: Response): Promise<NextResponse> {
+    const status = response.status;
+
+    if (status === 204 || status === 205 || status === 304) {
+        return new NextResponse(null, {
+            status,
+        });
+    }
+
     const text = await response.text();
-    const contentType = response.headers.get("content-type") ?? "application/json";
+    const contentType = response.headers.get("content-type");
 
     return new NextResponse(text, {
-        status: response.status,
-        headers: {
-            "Content-Type": contentType,
-        },
+        status,
+        headers: contentType
+            ? {
+                "Content-Type": contentType,
+            }
+            : undefined,
     });
 }
 

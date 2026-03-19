@@ -138,6 +138,9 @@ type PoProductRow = {
     product_id: number;
     branch_id?: number | null;
     ordered_quantity: number;
+    unit_price?: number;
+    total_amount?: number;
+    discount_type?: number | string | null;
 };
 
 async function fetchPOProductsByPOIds(base: string, poIds: number[]) {
@@ -147,7 +150,7 @@ async function fetchPOProductsByPOIds(base: string, poIds: number[]) {
         const url =
             `${base}/items/${PO_PRODUCTS_COLLECTION}?limit=-1` +
             `&filter[purchase_order_id][_in]=${encodeURIComponent(ids.join(","))}` +
-            `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,ordered_quantity`;
+            `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,ordered_quantity,unit_price,total_amount`;
         const j = await fetchJson(url);
         rows.push(...(Array.isArray(j?.data) ? j.data : []));
     }
@@ -158,7 +161,7 @@ async function fetchPOProductsByPOId(base: string, poId: number) {
     const url =
         `${base}/items/${PO_PRODUCTS_COLLECTION}?limit=-1` +
         `&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}` +
-        `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,ordered_quantity`;
+        `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,ordered_quantity,unit_price,total_amount`;
     const j = await fetchJson(url);
     return (Array.isArray(j?.data) ? j.data : []) as PoProductRow[];
 }
@@ -170,7 +173,7 @@ async function fetchPOHeadersByIds(base: string, poIds: number[]) {
         const url =
             `${base}/items/${PO_COLLECTION}?limit=-1` +
             `&filter[purchase_order_id][_in]=${encodeURIComponent(ids.join(","))}` +
-            `&fields=purchase_order_id,purchase_order_no,date,date_encoded,supplier_name,total_amount,date_received,inventory_status`;
+            `&fields=purchase_order_id,purchase_order_no,date,date_encoded,supplier_name,total_amount,date_received,inventory_status,gross_amount,discounted_amount,vat_amount,withholding_tax_amount`;
         const j = await fetchJson(url);
         rows.push(...(Array.isArray(j?.data) ? j.data : []));
     }
@@ -212,6 +215,22 @@ async function patchPO(base: string, poId: number, payload: any) {
 async function patchPOR(base: string, porId: number, payload: any) {
     const url = `${base}/items/${POR_COLLECTION}/${encodeURIComponent(String(porId))}`;
     await fetchJson(url, { method: "PATCH", body: JSON.stringify(payload) });
+}
+
+// ✅ newly added for getting discount_type matching supplier and product
+async function fetchProductSupplierLinks(base: string, supplierId: number) {
+    const url =
+        `${base}/items/product_per_supplier?limit=-1` +
+        `&filter[supplier_id][_eq]=${encodeURIComponent(String(supplierId))}` +
+        `&fields=id,product_id,supplier_id,discount_type`;
+    const j = await fetchJson(url);
+    const rows = Array.isArray(j?.data) ? j.data : [];
+    const map = new Map<number, any>();
+    for (const r of rows) {
+        const pid = toNum(r?.product_id);
+        if (pid) map.set(pid, r);
+    }
+    return map;
 }
 
 // =====================
@@ -262,7 +281,7 @@ function buildPorIdsByKey(porRows: any[]) {
     return map;
 }
 
-function isTaggingComplete(
+function isPartiallyTagged(
     poId: number,
     lines: PoProductRow[],
     porRows: any[],
@@ -278,12 +297,12 @@ function isTaggingComplete(
         if (!pid || !bid || expected <= 0) continue;
 
         const porIds = porIdsByKey.get(keyLine(poId, pid, bid)) ?? [];
-        if (!porIds.length) return false;
+        if (!porIds.length) continue;
 
         const taggedQty = porIds.reduce((sum, id) => sum + (rfidsByPorId.get(id) ?? []).length, 0);
-        if (taggedQty < expected) return false;
+        if (taggedQty > 0) return true; // ✅ Allow PO to appear in Posting if at least 1 item is tagged
     }
-    return true;
+    return false; // ❌ Only hide PO if absolutely nothing is tagged yet
 }
 
 function isFullyReceived(
@@ -478,6 +497,10 @@ type PostingPOItem = {
 
     rfids: string[];
     isReceived: boolean;
+
+    unitPrice: number;
+    grossAmount: number;
+    discountTypeId?: string;
 };
 
 type PostingPODetail = {
@@ -510,6 +533,11 @@ type PostingPODetail = {
     postingReady: boolean;
     latestReceiptNo?: string;
     latestReceiptDate?: string;
+
+    grossAmount: number;
+    discountAmount: number;
+    vatAmount: number;
+    withholdingTaxAmount?: number;
 };
 
 // =====================
@@ -580,12 +608,11 @@ export async function GET() {
             const porRows = porByPo.get(poId) ?? [];
             const lines = linesByPo.get(poId) ?? [];
 
-            // must be tagging-complete AND fully received
-            const taggingOk = isTaggingComplete(poId, lines, porRows, rfidsByPorId);
+            // must be at least partially tagged
+            const taggingOk = isPartiallyTagged(poId, lines, porRows, rfidsByPorId);
             if (!taggingOk) continue;
 
             const fully = isFullyReceived(poId, lines, porRows, rfidsByPorId);
-            if (!fully) continue;
 
             const sid = toNum(po?.supplier_name);
             const supplierName = sid ? toStr(supplierMap.get(sid), "—") : "—";
@@ -606,8 +633,8 @@ export async function GET() {
 
             // ✅ allPosted used only to mark CLOSED
             const allPosted = rs.receiptsCount > 0 && rs.unpostedReceiptsCount === 0;
-            // ✅ fullyReceived: PO passed isFullyReceived gate → mark as RECEIVED when not all posted
-            const fullyReceived = !allPosted;
+            // ✅ fullyReceived: mark as RECEIVED when full and not all posted
+            const fullyReceived = fully && !allPosted;
 
             list.push({
                 id: String(poId),
@@ -651,7 +678,7 @@ export async function POST(req: NextRequest) {
 
             const poUrl =
                 `${base}/items/${PO_COLLECTION}/${encodeURIComponent(String(poId))}` +
-                `?fields=purchase_order_id,purchase_order_no,date,date_encoded,supplier_name,total_amount,date_received,inventory_status`;
+                `?fields=purchase_order_id,purchase_order_no,date,date_encoded,supplier_name,total_amount,date_received,inventory_status,gross_amount,discounted_amount,vat_amount,withholding_tax_amount`;
 
             const pj = await fetchJson(poUrl);
             const po = pj?.data ?? null;
@@ -664,11 +691,10 @@ export async function POST(req: NextRequest) {
             const receivingItems = porIds.length ? await fetchReceivingItems(base, porIds) : [];
             const rfidsByPorId = groupRfidsByPorId(receivingItems);
 
-            const taggingOk = isTaggingComplete(poId, lines, porRows, rfidsByPorId);
-            if (!taggingOk) return bad("PO is not ready for posting. Complete RFID tagging first.", 409);
+            const taggingOk = isPartiallyTagged(poId, lines, porRows, rfidsByPorId);
+            if (!taggingOk) return bad("PO is not ready for posting. Please tag at least one item first.", 409);
 
             const fully = isFullyReceived(poId, lines, porRows, rfidsByPorId);
-            if (!fully) return bad("PO is not ready for posting. Complete receiving first.", 409);
 
             const sid = toNum(po?.supplier_name);
             const supplierMap = await fetchSupplierNames(base, sid ? [sid] : []);
@@ -679,6 +705,9 @@ export async function POST(req: NextRequest) {
 
             const productsMap = await fetchProductsMap(base, productIds);
             const branchesMap = await fetchBranchesMap(base, branchIds);
+            
+            // ✅ fetch explicit supplier links to grab discount_type
+            const productSupplierLinks = sid ? await fetchProductSupplierLinks(base, sid) : new Map();
 
             const porIdsByKey = buildPorIdsByKey(porRows);
 
@@ -699,7 +728,6 @@ export async function POST(req: NextRequest) {
 
                 const k = keyLine(poId, pid, bid);
                 const porIdsForLine = porIdsByKey.get(k) ?? [];
-                if (!porIdsForLine.length) continue;
 
                 const rfids = porIdsForLine.flatMap((id) => rfidsByPorId.get(id) ?? []);
                 const taggedQty = rfids.length;
@@ -708,7 +736,7 @@ export async function POST(req: NextRequest) {
                 const isReceived = receivedQty >= expected;
 
                 const p = productsMap.get(pid) ?? null;
-                const primaryPorId = porIdsForLine[0];
+                const primaryPorId = porIdsForLine[0] || ln.purchase_order_product_id;
 
                 const item: PostingPOItem = {
                     id: String(primaryPorId),
@@ -722,6 +750,13 @@ export async function POST(req: NextRequest) {
                     receivedQty,
                     rfids,
                     isReceived,
+
+                    unitPrice: toNum(ln.unit_price),
+                    grossAmount: toNum(ln.total_amount),
+                    // pull discount type from the mapped supplier links
+                    discountTypeId: productSupplierLinks.get(pid)?.discount_type 
+                        ? String(productSupplierLinks.get(pid)?.discount_type) 
+                        : undefined,
                 };
 
                 const arr = itemsByBranch.get(bid) ?? [];
@@ -740,7 +775,7 @@ export async function POST(req: NextRequest) {
             const lr = latestReceiptInfo(porRows);
             const rs = buildReceiptSummary(porRows);
             const allPosted = rs.receiptsCount > 0 && rs.unpostedReceiptsCount === 0;
-            const fullyReceived = !allPosted;
+            const fullyReceived = fully && !allPosted;
 
             const branchName = branchesLabelFromLines(lines, branchesMap);
 
@@ -767,6 +802,11 @@ export async function POST(req: NextRequest) {
                 postingReady: true,
                 latestReceiptNo: lr.receipt_no || undefined,
                 latestReceiptDate: lr.received_date || lr.receipt_date || undefined,
+
+                grossAmount: toNum(po?.gross_amount),
+                discountAmount: toNum(po?.discounted_amount),
+                vatAmount: toNum(po?.vat_amount),
+                withholdingTaxAmount: toNum(po?.withholding_tax_amount),
             };
 
             return ok(detail);
@@ -809,7 +849,7 @@ export async function POST(req: NextRequest) {
             const receivingItems = porIds.length ? await fetchReceivingItems(base, porIds) : [];
             const rfidsByPorId = groupRfidsByPorId(receivingItems);
 
-            const taggingOk = isTaggingComplete(poId, lines, porRows, rfidsByPorId);
+            const taggingOk = isPartiallyTagged(poId, lines, porRows, rfidsByPorId);
             if (!taggingOk) return bad("Cannot post. Complete RFID tagging first.", 409);
 
             const fully = isFullyReceived(poId, lines, porRows, rfidsByPorId);
@@ -856,7 +896,7 @@ export async function POST(req: NextRequest) {
             const receivingItems = porIds.length ? await fetchReceivingItems(base, porIds) : [];
             const rfidsByPorId = groupRfidsByPorId(receivingItems);
 
-            const taggingOk = isTaggingComplete(poId, lines, porRows, rfidsByPorId);
+            const taggingOk = isPartiallyTagged(poId, lines, porRows, rfidsByPorId);
             if (!taggingOk) return bad("Cannot post. Complete RFID tagging first.", 409);
 
             const fully = isFullyReceived(poId, lines, porRows, rfidsByPorId);

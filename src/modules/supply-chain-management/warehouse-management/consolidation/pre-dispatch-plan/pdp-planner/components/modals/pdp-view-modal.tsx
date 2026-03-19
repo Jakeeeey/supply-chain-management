@@ -50,17 +50,22 @@ export function PDPViewModal({
 
   useEffect(() => {
     if (open && plan) {
-      setIsLoading(true);
+      queueMicrotask(() => setIsLoading(true));
       fetchDetails(plan.dispatch_id)
         .then((result) => {
           setEnrichedPlan(result.plan);
           setDetails(result.details);
         })
         .catch(console.error)
-        .finally(() => setIsLoading(false));
+        .finally(() => {
+          clearTimeout(timer);
+          setIsLoading(false);
+        });
     } else {
-      setDetails([]);
-      setEnrichedPlan(null);
+      queueMicrotask(() => {
+        setDetails([]);
+        setEnrichedPlan(null);
+      });
     }
   }, [open, plan, fetchDetails]);
 
