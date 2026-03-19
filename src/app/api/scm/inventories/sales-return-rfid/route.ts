@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // =============================================================================
-// Sales Return — Next.js API Route (Server Gateway)
+// Sales Return RFID — Next.js API Route (Server Gateway)
 // Thin wrapper around the service layer.
 // =============================================================================
 
@@ -12,10 +12,11 @@ import {
   fetchProductCatalog,
   fetchInvoices,
   fetchStatusCard,
+  fetchRfidTags,
   submitReturn,
   updateReturn,
   updateStatus,
-} from "@/modules/supply-chain-management/inventories/sales-return/services/sales-return-service";
+} from "@/modules/supply-chain-management/inventories/sales-return-rfid/services/sales-return-service";
 
 export const runtime = "nodejs";
 
@@ -65,8 +66,18 @@ export async function GET(req: NextRequest) {
       }
 
       case "invoices": {
+        const salesmanId = url.searchParams.get("salesmanId") || undefined;
         const customerCode = url.searchParams.get("customerCode") || undefined;
-        const data = await fetchInvoices(customerCode);
+        const data = await fetchInvoices(salesmanId, customerCode);
+        return json({ data });
+      }
+
+      case "rfidTags": {
+        const detailId = url.searchParams.get("detailId");
+        if (!detailId) {
+          return json({ error: "detailId is required" }, 400);
+        }
+        const data = await fetchRfidTags(Number(detailId));
         return json({ data });
       }
 
@@ -83,7 +94,7 @@ export async function GET(req: NextRequest) {
         return json({ error: `Unknown action: ${action}` }, 400);
     }
   } catch (error: any) {
-    console.error("Sales Return API GET Error:", error);
+    console.error("Sales Return RFID API GET Error:", error);
     return json({ error: error.message || "Internal server error" }, 500);
   }
 }
@@ -97,7 +108,7 @@ export async function POST(req: NextRequest) {
     const data = await submitReturn(body);
     return json({ data }, 201);
   } catch (error: any) {
-    console.error("Sales Return API POST Error:", error);
+    console.error("Sales Return RFID API POST Error:", error);
     return json(
       { error: error.message || "Failed to create sales return" },
       500,
@@ -128,7 +139,7 @@ export async function PATCH(req: NextRequest) {
     const data = await updateReturn(body);
     return json({ data });
   } catch (error: any) {
-    console.error("Sales Return API PATCH Error:", error);
+    console.error("Sales Return RFID API PATCH Error:", error);
     return json(
       { error: error.message || "Failed to update sales return" },
       500,

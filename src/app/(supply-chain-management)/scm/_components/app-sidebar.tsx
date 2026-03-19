@@ -166,8 +166,12 @@ const data = {
             icon: Package,
             items: [
                 {
-                    title: "Sales Return",
-                    url: "/scm/inventories/sales-return",
+                    title: "Sales Return Manual",
+                    url: "/scm/inventories/sales-return-manual",
+                },
+                {
+                    title: "Sales Return RFID",
+                    url: "/scm/inventories/sales-return-rfid",
                 },
             ]
         },

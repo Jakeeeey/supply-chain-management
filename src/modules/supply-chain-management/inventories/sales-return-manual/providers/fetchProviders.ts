@@ -21,7 +21,7 @@ import type {
   API_SalesReturnType,
 } from "../type";
 
-const API_BASE = "/api/scm/inventories/sales-return";
+const API_BASE = "/api/scm/inventories/sales-return-manual";
 
 // =============================================================================
 // INTERNAL HELPERS

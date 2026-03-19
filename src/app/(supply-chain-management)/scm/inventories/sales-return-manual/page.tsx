@@ -12,6 +12,8 @@ import { NavUser } from "../../_components/nav-user";
 
 import { cookies } from "next/headers";
 
+// ✅ Wire the module you asked for
+// import ComingSoon from "../../_components/ComingSoon";
 import SalesReturn from "@/modules/supply-chain-management/inventories/sales-return-manual/SalesReturnModule";
 
 export const runtime = "nodejs";
@@ -72,13 +74,16 @@ function buildHeaderUserFromToken(token: string | null | undefined) {
 }
 
 export default async function Page() {
+    // ✅ Next.js 16: cookies() is async
     const cookieStore = await cookies();
     const token = cookieStore.get(COOKIE_NAME)?.value ?? null;
 
     const headerUser = buildHeaderUserFromToken(token);
 
     return (
+        // ✅ This fills the RIGHT column provided by SidebarInset (which is now fixed-height).
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            {/* ✅ Topbar is fixed in place because ONLY <main> scrolls */}
             <header className="relative z-10 flex h-14 shrink-0 items-center justify-between border-b shadow-sm bg-background sm:h-16 overflow-hidden">
                 <div className="flex h-full min-w-0 items-center gap-2 px-3 sm:px-4 overflow-hidden">
                     <SidebarTrigger className="-ml-1 shrink-0" />
@@ -92,7 +97,7 @@ export default async function Page() {
                         <Breadcrumb>
                             <BreadcrumbList className="min-w-0 overflow-hidden">
                                 <BreadcrumbItem className="hidden md:block shrink-0">
-                                    <BreadcrumbLink href="#">Returns &amp; Reverse Logistics</BreadcrumbLink>
+                                    <BreadcrumbLink href="#">Inventories</BreadcrumbLink>
                                 </BreadcrumbItem>
                                 <BreadcrumbSeparator className="hidden md:block shrink-0" />
                                 <BreadcrumbItem className="min-w-0 overflow-hidden">
@@ -110,6 +115,7 @@ export default async function Page() {
                 </div>
             </header>
 
+            {/* ✅ Only content scrolls inside RIGHT column */}
             <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-2 sm:p-4">
                 <SalesReturn />
             </main>
