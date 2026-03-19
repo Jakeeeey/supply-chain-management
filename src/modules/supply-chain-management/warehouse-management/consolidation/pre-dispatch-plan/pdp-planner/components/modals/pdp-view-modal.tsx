@@ -50,7 +50,7 @@ export function PDPViewModal({
 
   useEffect(() => {
     if (open && plan) {
-      const timer = setTimeout(() => setIsLoading(true), 0);
+      queueMicrotask(() => setIsLoading(true));
       fetchDetails(plan.dispatch_id)
         .then((result) => {
           setEnrichedPlan(result.plan);
@@ -62,11 +62,10 @@ export function PDPViewModal({
           setIsLoading(false);
         });
     } else {
-      const resetTimer = setTimeout(() => {
+      queueMicrotask(() => {
         setDetails([]);
         setEnrichedPlan(null);
-      }, 0);
-      return () => clearTimeout(resetTimer);
+      });
     }
   }, [open, plan, fetchDetails]);
 

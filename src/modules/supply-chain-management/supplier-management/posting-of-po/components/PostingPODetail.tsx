@@ -9,6 +9,8 @@ import { usePostingOfPo } from "../providers/PostingOfPoProvider";
 import { money } from "../utils/format";
 import { ProductsReceivingStatusCard } from "./cards/ProductsReceivingStatusCard";
 import { ReceiptsCard } from "./cards/ReceiptsCard";
+import { PODetailsBreakdownCard } from "./cards/PODetailsBreakdownCard";
+import { PostingPOPrintAction } from "./PostingPOPrintAction";
 
 function statusBadge(status: string) {
     const s = String(status || "").toUpperCase();
@@ -60,6 +62,10 @@ export function PostingPODetail() {
             </span>
                     </div>
                 </div>
+                
+                <div className="shrink-0 pt-1">
+                    <PostingPOPrintAction />
+                </div>
             </div>
 
             {successMsg ? (
@@ -82,6 +88,10 @@ export function PostingPODetail() {
             <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
                 <ProductsReceivingStatusCard />
                 <ReceiptsCard />
+            </div>
+
+            <div className="mt-4">
+                <PODetailsBreakdownCard />
             </div>
         </Card>
     );
