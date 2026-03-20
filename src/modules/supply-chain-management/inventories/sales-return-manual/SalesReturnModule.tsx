@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 
 // Hooks & Components
 import { useSalesReturnList } from "./hooks/useSalesReturnList";
@@ -22,7 +23,7 @@ export default function SalesReturnModule() {
     setFilters,
     filters,
     refresh,
-    options, // 🟢 Get options from hook
+    options,
   } = useSalesReturnList();
 
   const [isCreateOpen, setCreateOpen] = useState(false);
@@ -48,21 +49,24 @@ export default function SalesReturnModule() {
         </Button>
       </div>
 
-      {/* TABLE & FILTERS (Presenter) */}
-      {/* We pass the options down here */}
-      <SalesReturnHistory
-        data={data}
-        loading={loading}
-        page={page}
-        totalPages={totalPages}
-        filters={filters}
-        salesmenOptions={options.salesmen} // 🟢 Pass Salesmen
-        customerOptions={options.customers} // 🟢 Pass Customers
-        onPageChange={setPage}
-        onSearchChange={setSearch}
-        onFilterChange={setFilters}
-        onRowClick={(record) => setSelectedReturn(record)}
-      />
+      {/* TABLE & FILTERS */}
+      {loading && data.length === 0 ? (
+        <ModuleSkeleton rowCount={5} columnCount={7} />
+      ) : (
+        <SalesReturnHistory
+          data={data}
+          loading={loading}
+          page={page}
+          totalPages={totalPages}
+          filters={filters}
+          salesmenOptions={options.salesmen}
+          customerOptions={options.customers}
+          onPageChange={setPage}
+          onSearchChange={setSearch}
+          onFilterChange={setFilters}
+          onRowClick={(record) => setSelectedReturn(record)}
+        />
+      )}
 
       {/* MODALS */}
       <CreateSalesReturnModal

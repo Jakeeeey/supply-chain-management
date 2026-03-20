@@ -22,12 +22,12 @@ interface Props {
 export const PrintableReturnSlip = React.forwardRef<HTMLDivElement, Props>(
   ({ data, items, lineDiscounts }, ref) => {
     // Helper to find discount name
-    const getDiscountName = (percentage: number) => {
-      if (percentage === 0) return "-";
+    const getDiscountName = (rate: number) => {
+      if (rate === 0) return "-";
       const match = lineDiscounts.find(
-        (d) => parseFloat(d.percentage) === percentage,
+        (d) => Number(d.percentage) / 100 === rate,
       );
-      return match ? match.line_discount : `${percentage}%`;
+      return match ? match.line_discount : `${(rate * 100).toFixed(0)}%`;
     };
 
     // Calculate Totals

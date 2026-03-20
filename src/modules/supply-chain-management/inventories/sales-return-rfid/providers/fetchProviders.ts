@@ -251,7 +251,35 @@ export const SalesReturnProvider = {
     return result;
   },
 
-  // --- 6. RFID TAGS ---
+  // --- 6. RFID LOOKUP ---
+  async lookupRfid(
+    rfidTag: string,
+    branchId: number,
+  ): Promise<{
+    productId: number;
+    productCode: string;
+    productName: string;
+    unitPrice: number;
+    unitShortcut: string;
+    unitOfMeasurementCount: number;
+  } | null> {
+    const params = new URLSearchParams({
+      action: "rfid-lookup",
+      rfid: rfidTag,
+      branchId: String(branchId),
+    });
+    const res = await fetch(`${API_BASE}?${params}`, { cache: "no-store" });
+    return handleResponse<{
+      productId: number;
+      productCode: string;
+      productName: string;
+      unitPrice: number;
+      unitShortcut: string;
+      unitOfMeasurementCount: number;
+    } | null>(res);
+  },
+
+  // --- 7. RFID TAGS ---
   async getRfidTags(detailId: number): Promise<{ id: number; rfid_tag: string; created_at?: string }[]> {
     const params = new URLSearchParams({ action: "rfidTags", detailId: String(detailId) });
     const res = await fetch(`${API_BASE}?${params}`, { cache: "no-store" });

@@ -100,7 +100,8 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const orderWrapperRef = useRef<HTMLDivElement>(null);
 
   // --- RFID STATE ---
-  const [scannedTags, setScannedTags] = useState<string[]>([]);
+  const [rfidScanning, setRfidScanning] = useState(false);
+  const [lastScannedRfid, setLastScannedRfid] = useState("");
 
   // --- 3. CART STATE ---
   const [items, setItems] = useState<SalesReturnItem[]>([]);
@@ -118,17 +119,100 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   // RFID Scanner Ref
   const rfidInputRef = useRef<HTMLInputElement>(null);
 
+  /**
+   * Resolves the correct unit price based on the selected salesman's priceType.
+   * Falls back to priceA if the specific price type is not available.
+   */
+  const resolvePrice = (product: any, currentPriceType: string): number => {
+    const key = `price${currentPriceType}` as string;
+    return Number(product[key]) || Number(product.priceA) || Number(product.unitPrice) || 0;
+  };
+
+  /**
+   * RFID Scan Handler — looks up the product and auto-adds to items table.
+   */
+  const handleRfidScan = async (tag: string) => {
+    if (!tag.trim()) return;
+
+    // Validate: must select salesman first (to know the branchId)
+    const selectedSalesmanObj = salesmen.find(
+      (s) => s.id.toString() === selectedSalesmanId,
+    );
+    if (!selectedSalesmanObj) {
+      setValidationError("Please select a Salesman before scanning RFID.");
+      return;
+    }
+
+    const branchId = selectedSalesmanObj.branchId;
+    if (!branchId) {
+      setValidationError("The selected salesman has no branch assigned.");
+      return;
+    }
+
+    // Check for duplicate RFID already in items
+    const isDuplicate = items.some(
+      (item) => item.rfidTags && item.rfidTags.includes(tag),
+    );
+    if (isDuplicate) {
+      setValidationError(`RFID tag "${tag}" is already in the list.`);
+      return;
+    }
+
+    setRfidScanning(true);
+    setLastScannedRfid(tag);
+    setValidationError(null);
+
+    try {
+      const result = await SalesReturnProvider.lookupRfid(tag, branchId);
+
+      if (!result || !result.productId) {
+        setValidationError(
+          `No product found for RFID "${tag}" at this branch.`,
+        );
+        return;
+      }
+
+      // Build item from lookup result
+      const unitPrice = resolvePrice(result, priceType);
+      const grossAmount = unitPrice * 1;
+
+      const newItem: SalesReturnItem = {
+        id: `rfid-${tag}-${Date.now()}`,
+        tempId: `rfid-${tag}`,
+        productId: result.productId,
+        product_id: result.productId,
+        code: result.productCode,
+        description: result.productName,
+        unit: result.unitShortcut,
+        quantity: 1,
+        unitPrice,
+        grossAmount,
+        discountType: "",
+        discountAmount: 0,
+        totalAmount: grossAmount,
+        reason: "",
+        returnType: "",
+        rfidTags: [tag],
+      };
+
+      setItems((prev) => [...prev, newItem]);
+
+      // Auto-clear display after 2 seconds
+      setTimeout(() => setLastScannedRfid(""), 2000);
+    } catch (err: unknown) {
+      console.error("RFID lookup error:", err);
+      const error = err as Error;
+      setValidationError(
+        error.message || `Failed to look up RFID tag "${tag}".`,
+      );
+    } finally {
+      setRfidScanning(false);
+    }
+  };
+
   // Global RFID Scanner
   useRfidScanner({
-    onScan: (tag) => {
-      if (!tag) return;
-      if (scannedTags.includes(tag)) {
-        setValidationError(`RFID tag "${tag}" already scanned.`);
-      } else {
-        setScannedTags((prev) => [...prev, tag]);
-        setValidationError(null);
-      }
-    },
+    onScan: (tag) => handleRfidScan(tag),
     enabled: isOpen,
   });
 
@@ -252,7 +336,8 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     setInvoiceSearch("");
     setIsThirdParty(false);
     setValidationError(null);
-    setScannedTags([]);
+    setLastScannedRfid("");
+    setRfidScanning(false);
     setInvoiceOptions([]);
   };
 
@@ -357,12 +442,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         ? selectedSalesmanObj.branchId
         : null;
 
-      // Distribute scanned RFID tags across items (round-robin or all to first)
-      const itemsWithRfid = items.map((item) => ({
-        ...item,
-        rfidTags: scannedTags.filter((_, idx) => idx % items.length === items.indexOf(item)),
-      }));
-
       const payload = {
         invoiceNo,
         orderNo,
@@ -375,7 +454,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         returnDate,
         priceType,
         remarks,
-        items: itemsWithRfid,
+        items: items,
       };
 
       await SalesReturnProvider.submitReturn(payload);
@@ -720,13 +799,26 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                       className="absolute inset-0 opacity-0 cursor-default"
                       tabIndex={-1}
                       autoComplete="off"
+                      disabled={rfidScanning}
                     />
                     {/* Visible read-only display */}
                     <div
-                      className="pl-9 pr-3 h-9 w-44 text-xs border border-border rounded-md font-mono flex items-center cursor-pointer select-none transition-all bg-muted/30 text-muted-foreground hover:border-primary/30"
+                      className={`pl-9 pr-3 h-9 w-52 text-xs border border-border rounded-md font-mono flex items-center cursor-pointer select-none transition-all ${
+                        rfidScanning
+                          ? "bg-primary/10 text-primary animate-pulse"
+                          : lastScannedRfid
+                            ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-300"
+                            : "bg-muted/30 text-muted-foreground hover:border-primary/30"
+                      }`}
                       onClick={() => rfidInputRef.current?.focus()}
                     >
-                      {scannedTags.length > 0 ? `${scannedTags.length} tags scanned` : "Scan RFID..."}
+                      {rfidScanning
+                        ? "Looking up..."
+                        : lastScannedRfid
+                          ? `✓ ${lastScannedRfid.slice(0, 16)}...`
+                          : items.filter((i) => i.rfidTags && i.rfidTags.length > 0).length > 0
+                            ? `${items.filter((i) => i.rfidTags && i.rfidTags.length > 0).length} RFID items`
+                            : "Scan RFID..."}
                     </div>
                   </div>
                 </div>

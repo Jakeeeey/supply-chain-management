@@ -13,6 +13,7 @@ import {
   fetchInvoices,
   fetchStatusCard,
   fetchRfidTags,
+  lookupRfid,
   submitReturn,
   updateReturn,
   updateStatus,
@@ -88,6 +89,29 @@ export async function GET(req: NextRequest) {
         }
         const data = await fetchStatusCard(Number(id));
         return json({ data });
+      }
+
+      case "rfid-lookup": {
+        const rfid = url.searchParams.get("rfid");
+        const rfidBranchId = Number(url.searchParams.get("branchId"));
+
+        if (!rfid || !rfidBranchId) {
+          return json(
+            { error: "rfid and branchId are required" },
+            400,
+          );
+        }
+
+        const rfidToken = req.cookies.get("vos_access_token")?.value;
+        if (!rfidToken) {
+          return json(
+            { error: "Unauthorized: Missing access token" },
+            401,
+          );
+        }
+
+        const result = await lookupRfid(rfid, rfidBranchId, rfidToken);
+        return json({ data: result });
       }
 
       default:

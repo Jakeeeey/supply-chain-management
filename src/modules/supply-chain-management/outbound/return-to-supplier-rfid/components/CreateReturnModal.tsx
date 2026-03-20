@@ -323,9 +323,9 @@ export function CreateReturnModal({
         }
 
         // Find product in LOADED inventory (Filtered by Supplier + Branch)
-        const productId = String(result.productId);
+        const productIdNumeric = Number(result.productId);
         const invRecord = inventory.find(
-          (r) => String(r.product_id) === productId,
+          (r) => r.product_id === productIdNumeric,
         );
 
         if (!invRecord) {
@@ -348,7 +348,8 @@ export function CreateReturnModal({
 
         // Build the cart item from inventory
         const product = {
-          id: productId,
+          id: String(productIdNumeric),
+          productId: productIdNumeric,
           code: invRecord.product_code || "N/A",
           name: invRecord.product_name,
           unit: invRecord.unit_name,
@@ -358,12 +359,13 @@ export function CreateReturnModal({
           uom_id: matchedUnit.unit_id,
           supplierDiscount: 0,
           rfid_tag: rfidTag,
+          parentId: invRecord.familyId || null,
         };
 
         // Inherit supplier discount if available
         const connection = refs.connections.find(
           (c) =>
-            String(c.product_id) === productId &&
+            c.product_id === productIdNumeric &&
             String(c.supplier_id) === selection.supplierId,
         );
         if (connection?.discount_type) {
@@ -444,14 +446,16 @@ export function CreateReturnModal({
       // Add to cart
       addToCart({
         id: String(invRecord!.product_id),
+        productId: invRecord!.product_id,
         code: invRecord!.product_code,
         name: invRecord!.product_name,
         unit: invRecord!.unit_name,
         unitCount: invRecord!.unit_count,
         stock: invRecord!.running_inventory,
         price: invRecord!.price,
-        uom_id: matchedUnit.unit_id,
+        uom_id: matchedUnit?.unit_id || 0,
         supplierDiscount: 0,
+        parentId: invRecord!.familyId || null,
       }, 1);
 
       toast.success("Barcode Scanned", {
@@ -513,12 +517,8 @@ export function CreateReturnModal({
     try {
       const rts_items = cart.map((item) => {
         const { gross, discountAmount, net } = calculateLineItem(item);
-        // Extract real product_id from RFID-keyed id
-        const realProductId = item.rfid_tag
-          ? Number(item.id.split("-rfid-")[0])
-          : Number(item.id);
         return {
-          product_id: realProductId,
+          product_id: item.productId,
           uom_id: item.uom_id || 1,
           quantity: item.quantity * (item.unitCount || 1),
           gross_unit_price: item.customPrice || item.price,

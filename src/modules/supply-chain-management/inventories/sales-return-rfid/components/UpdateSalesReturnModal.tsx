@@ -134,7 +134,8 @@ export function UpdateSalesReturnModal({
   const invoiceDropdownRef = useRef<HTMLDivElement>(null);
 
   // RFID State
-  const [scannedTags, setScannedTags] = useState<string[]>([]);
+  const [rfidScanning, setRfidScanning] = useState(false);
+  const [lastScannedRfid, setLastScannedRfid] = useState("");
 
   // 🟢 REVISED: Edit Permissions Logic
   const isPending = headerData.status === "Pending";
@@ -213,18 +214,110 @@ export function UpdateSalesReturnModal({
   // RFID Scanner Ref
   const rfidInputRef = useRef<HTMLInputElement>(null);
 
+  /**
+   * RFID Scan Handler — looks up the product and auto-adds to details table.
+   */
+  const handleRfidScan = async (tag: string) => {
+    if (!tag.trim()) return;
+    if (!canEditAll) {
+      setValidationError("Cannot add items when status is not Pending.");
+      return;
+    }
+
+    // Resolve branch from the salesman
+    const salesmanOpt = salesmenOptions.find(
+      (s) => String(s.value) === String(headerData.salesmanId),
+    );
+    // Try to extract branchId from salesmanOpt
+    // The salesmenOptions have { value, label, code, branch } where branch is the branch name
+    // We need a numeric branchId. The headerData doesn't store branchId directly.
+    // We'll get it from the salesman's branch relationship via the form references.
+    let branchId: number | null = null;
+    try {
+      const formSalesmen = await SalesReturnProvider.getFormSalesmen();
+      const formSalesman = formSalesmen.find(
+        (s) => String(s.id) === String(headerData.salesmanId),
+      );
+      branchId = formSalesman?.branchId || null;
+    } catch {
+      // fallback: can't resolve branch
+    }
+
+    if (!branchId) {
+      setValidationError("Cannot determine branch for RFID lookup.");
+      return;
+    }
+
+    // Check for duplicate RFID already in details
+    const isDuplicate = details.some(
+      (item) => item.rfidTags && item.rfidTags.includes(tag),
+    );
+    if (isDuplicate) {
+      setValidationError(`RFID tag "${tag}" is already in the list.`);
+      return;
+    }
+
+    setRfidScanning(true);
+    setLastScannedRfid(tag);
+    setValidationError(null);
+
+    try {
+      const result = await SalesReturnProvider.lookupRfid(tag, branchId);
+
+      if (!result || !result.productId) {
+        setValidationError(
+          `No product found for RFID "${tag}" at this branch.`,
+        );
+        return;
+      }
+
+      // Resolve price based on header's priceType
+      const currentPriceType = headerData.priceType || "A";
+      const priceKey = `price${currentPriceType}` as string;
+      const unitPrice =
+        Number((result as any)[priceKey]) ||
+        Number(result.unitPrice) ||
+        0;
+      const grossAmount = unitPrice * 1;
+
+      const newItem: SalesReturnItem = {
+        id: `added-rfid-${tag}-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+        tempId: `rfid-${tag}`,
+        productId: result.productId,
+        product_id: result.productId,
+        code: result.productCode,
+        description: result.productName,
+        unit: result.unitShortcut,
+        quantity: 1,
+        unitPrice,
+        grossAmount,
+        discountType: "",
+        discountAmount: 0,
+        totalAmount: grossAmount,
+        reason: "",
+        returnType: "",
+        rfidTags: [tag],
+      };
+
+      setDetails((prev) => [...prev, newItem]);
+
+      // Auto-clear display after 2 seconds
+      setTimeout(() => setLastScannedRfid(""), 2000);
+    } catch (err: unknown) {
+      console.error("RFID lookup error:", err);
+      const error = err as Error;
+      setValidationError(
+        error.message || `Failed to look up RFID tag "${tag}".`,
+      );
+    } finally {
+      setRfidScanning(false);
+    }
+  };
+
   // Global RFID Scanner
   useRfidScanner({
-    onScan: (tag) => {
-      if (!tag) return;
-      if (scannedTags.includes(tag)) {
-        setValidationError(`RFID tag "${tag}" already scanned.`);
-      } else {
-        setScannedTags((prev) => [...prev, tag]);
-        setValidationError(null);
-      }
-    },
-    enabled: true, // Enabled while modal is open
+    onScan: (tag) => handleRfidScan(tag),
+    enabled: canEditAll,
   });
 
   // --- HELPERS ---
@@ -570,17 +663,29 @@ export function UpdateSalesReturnModal({
                         className="absolute inset-0 opacity-0 cursor-default"
                         tabIndex={-1}
                         autoComplete="off"
-                        disabled={!canEditAll}
+                        disabled={!canEditAll || rfidScanning}
                       />
                       {/* Visible read-only display */}
                       <div
                         className={cn(
-                          "pl-9 pr-3 h-9 w-44 text-xs border border-border rounded-md font-mono flex items-center cursor-pointer select-none transition-all",
-                          canEditAll ? "bg-muted/30 text-muted-foreground hover:border-primary/30" : "bg-muted/50 text-muted-foreground/60"
+                          "pl-9 pr-3 h-9 w-52 text-xs border border-border rounded-md font-mono flex items-center cursor-pointer select-none transition-all",
+                          rfidScanning
+                            ? "bg-primary/10 text-primary animate-pulse"
+                            : lastScannedRfid
+                              ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-300"
+                              : canEditAll
+                                ? "bg-muted/30 text-muted-foreground hover:border-primary/30"
+                                : "bg-muted/50 text-muted-foreground/60"
                         )}
                         onClick={() => canEditAll && rfidInputRef.current?.focus()}
                       >
-                        {scannedTags.length > 0 ? `${scannedTags.length} tags scanned` : "Scan RFID..."}
+                        {rfidScanning
+                          ? "Looking up..."
+                          : lastScannedRfid
+                            ? `✓ ${lastScannedRfid.slice(0, 16)}...`
+                            : details.filter((i) => i.rfidTags && i.rfidTags.length > 0).length > 0
+                              ? `${details.filter((i) => i.rfidTags && i.rfidTags.length > 0).length} RFID items`
+                              : "Scan RFID..."}
                       </div>
                     </div>
                   </div>

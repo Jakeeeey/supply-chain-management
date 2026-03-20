@@ -289,3 +289,47 @@ export async function deleteRfidTag(id: number) {
     "DELETE",
   );
 }
+
+// =============================================================================
+// REPOSITORY METHODS — RFID LOOKUP (Spring Boot VOS API)
+// =============================================================================
+
+/**
+ * Looks up an RFID tag via Spring Boot VOS API to find the associated product.
+ * Same endpoint used by return-to-supplier-rfid.
+ */
+export async function getSpringRfidLookup(
+  rfidTag: string,
+  branchId: number,
+  token: string,
+): Promise<{ productId: number; [key: string]: unknown }[]> {
+  const SPRING_URL = process.env.SPRING_API_BASE_URL;
+  if (!SPRING_URL) throw new Error("SPRING_API_BASE_URL is not defined");
+
+  const targetUrl = `${SPRING_URL.replace(/\/$/, "")}/api/view-rfid-onhand?rfid=${encodeURIComponent(rfidTag)}&branchId=${branchId}`;
+
+  const springRes = await fetch(targetUrl, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    cache: "no-store",
+  });
+
+  if (!springRes.ok) {
+    const text = await springRes.text().catch(() => `HTTP ${springRes.status}`);
+    throw new Error(`RFID lookup failed (${springRes.status}): ${text}`);
+  }
+
+  return springRes.json();
+}
+
+/**
+ * Fetches a single product by product_id with price and unit information.
+ */
+export async function getRawProductById(productId: number) {
+  return directusGet<{ data: Record<string, unknown> }>(
+    `/items/products/${productId}?fields=product_id,product_code,product_name,description,priceA,priceB,priceC,unit_of_measurement,unit_of_measurement_count`,
+  );
+}

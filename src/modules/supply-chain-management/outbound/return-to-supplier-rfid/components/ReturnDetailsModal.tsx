@@ -90,6 +90,7 @@ export function ReturnDetailsModal({
               id: i.rfid_tag
                 ? `${i.productId}-rfid-${i.rfid_tag}`
                 : String(i.productId),
+              productId: i.productId,
               code: i.code,
               name: i.name,
               price: i.price,
@@ -137,7 +138,7 @@ export function ReturnDetailsModal({
         let hasChanges = false;
         const nextItems = prevItems.map((item) => {
           const invRecord = inventory.find(
-            (r) => String(r.product_id) === item.id,
+            (r) => r.product_id === item.productId,
           );
 
           if (invRecord) {
@@ -207,6 +208,7 @@ export function ReturnDetailsModal({
 
         return {
           id: String(item.product_id),
+          productId: item.product_id,
           masterId: String(item.familyId),
           code: item.product_code || "N/A",
           name: item.product_name,
@@ -217,6 +219,7 @@ export function ReturnDetailsModal({
           uom_id: matchedUnit?.unit_id || 0,
           discountType: discountLabel,
           supplierDiscount: computedDiscount,
+          parentId: item.familyId || null,
         };
       })
       .filter((p) => {
@@ -298,10 +301,10 @@ export function ReturnDetailsModal({
       }
 
       // For non-RFID items, merge quantity as usual
-      const exists = prev.find((i) => i.id === p.id && !i.rfid_tag);
+      const exists = prev.find((i) => i.productId === p.productId && !i.rfid_tag);
       if (exists)
         return prev.map((i) =>
-          i.id === p.id && !i.rfid_tag
+          i.productId === p.productId && !i.rfid_tag
             ? { ...i, quantity: i.quantity + qty }
             : i,
         );
@@ -344,8 +347,8 @@ export function ReturnDetailsModal({
           return;
         }
 
-        const productId = String(result.productId);
-        const invRecord = inventory.find((r) => String(r.product_id) === productId);
+        const productIdNumeric = Number(result.productId);
+        const invRecord = inventory.find((r) => r.product_id === productIdNumeric);
         
         if (!invRecord) {
           toast.error("Stock Error", { description: "Product not in current supplier inventory." });
@@ -360,7 +363,8 @@ export function ReturnDetailsModal({
         }
 
         const product = {
-          id: productId,
+          id: String(productIdNumeric),
+          productId: productIdNumeric,
           code: invRecord.product_code,
           name: invRecord.product_name,
           unit: invRecord.unit_name,
@@ -370,11 +374,14 @@ export function ReturnDetailsModal({
           uom_id: matchedUnit.unit_id,
           supplierDiscount: 0,
           rfid_tag: rfidTag,
+          parentId: invRecord.familyId || null,
         };
 
         // Inherit discount
         const connection = refs.connections.find(
-          (c) => String(c.product_id) === productId && c.supplier_id === currentSupplierId,
+          (c) =>
+            c.product_id === productIdNumeric &&
+            c.supplier_id === currentSupplierId,
         );
         if (connection?.discount_type) {
           const disc = refs.lineDiscounts.find((d) => String(d.id) === String(connection.discount_type));
@@ -412,6 +419,7 @@ export function ReturnDetailsModal({
 
     addToCartInternal({
       id: String(inv.product_id),
+      productId: inv.product_id,
       code: inv.product_code,
       name: inv.product_name,
       unit: inv.unit_name,
@@ -420,6 +428,7 @@ export function ReturnDetailsModal({
       price: inv.price,
       uom_id: matchedUnit?.unit_id || 0,
       supplierDiscount: 0,
+      parentId: inv.familyId || null,
     }, 1);
 
     if (!matchedUnit) {
@@ -504,7 +513,7 @@ export function ReturnDetailsModal({
       const rts_items = items.map((item) => {
         const { gross, discountAmount, net } = calculateLineItem(item);
         return {
-          product_id: Number(item.id),
+          product_id: item.productId,
           uom_id: item.uom_id,
           quantity: item.quantity * (item.unitCount || 1),
           gross_unit_price: item.customPrice || item.price,
@@ -514,6 +523,7 @@ export function ReturnDetailsModal({
           net_amount: net,
           return_type_id: item.return_type_id || null,
           item_remarks: "",
+          rfid_tag: item.rfid_tag,
         };
       });
 
@@ -570,7 +580,7 @@ export function ReturnDetailsModal({
       quantity: i.quantity,
       price: i.customPrice || i.price,
       discount: i.discount,
-      total: (i.customPrice || i.price) * i.quantity * (1 - i.discount / 100),
+      total: (i.customPrice || i.price) * i.quantity * (1 - i.discount),
       returnType: returnTypeName,
     };
   });

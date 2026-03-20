@@ -1,28 +1,14 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useMemo } from "react";
+import { ColumnDef, CellContext } from "@tanstack/react-table";
 import {
-  Loader2,
-  ChevronLeft,
-  ChevronRight,
-  Search,
-  MoreHorizontal,
-  ChevronsLeft,
-  ChevronsRight,
-  X,
-  ChevronDown,
+  RotateCcw,
+  Filter,
+  ChevronsUpDown,
   Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -31,8 +17,132 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { cn } from "@/lib/utils";
+import { DataTable } from "@/components/ui/new-data-table";
+
 import { SalesReturn } from "../type";
+
+// =============================================================================
+// COLUMN DEFINITIONS
+// =============================================================================
+
+const columns: ColumnDef<SalesReturn>[] = [
+  {
+    accessorKey: "returnNo",
+    header: "Return No.",
+    meta: { label: "Return No." },
+    cell: ({ row }) => (
+      <span className="font-mono text-sm font-bold text-primary hover:underline cursor-pointer">
+        {row.original.returnNo}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "salesmanName",
+    header: "Salesman",
+    meta: { label: "Salesman" },
+    cell: ({ row }) => (
+      <span
+        className="text-sm font-medium truncate max-w-[200px] block"
+        title={row.original.salesmanName}
+      >
+        {row.original.salesmanName || "-"}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "customerName",
+    header: "Customer",
+    meta: { label: "Customer" },
+    cell: ({ row }) => (
+      <span
+        className="text-sm font-medium truncate max-w-[220px] block"
+        title={row.original.customerName}
+      >
+        {row.original.customerName || row.original.customerCode}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "returnDate",
+    header: "Date",
+    meta: { label: "Date" },
+    cell: ({ row }) => (
+      <span className="text-sm text-muted-foreground">
+        {row.original.returnDate}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "totalAmount",
+    header: () => <div className="text-right">Total Amount</div>,
+    meta: { label: "Total Amount" },
+    cell: ({ row }) => (
+      <div className="text-right font-bold text-sm">
+        ₱{" "}
+        {row.original.totalAmount.toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}
+      </div>
+    ),
+  },
+  {
+    accessorKey: "status",
+    header: () => <div className="text-center">Status</div>,
+    meta: { label: "Status" },
+    cell: ({ row }) => {
+      const status = row.original.status?.toLowerCase();
+      return (
+        <div className="flex justify-center">
+          <Badge
+            variant="outline"
+            className={cn(
+              "font-medium shadow-sm px-2.5 py-0.5 rounded-full border text-[10px] uppercase",
+              status === "received"
+                ? "bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-500/20"
+                : status === "pending"
+                  ? "bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-500/20"
+                  : "bg-muted text-foreground border-border",
+            )}
+          >
+            {row.original.status}
+          </Badge>
+        </div>
+      );
+    },
+  },
+  {
+    accessorKey: "remarks",
+    header: "Remarks",
+    meta: { label: "Remarks" },
+    cell: ({ row }) => (
+      <span
+        className="text-sm text-muted-foreground italic truncate max-w-[250px] block"
+        title={row.original.remarks}
+      >
+        {row.original.remarks || "-"}
+      </span>
+    ),
+  },
+];
+
+// =============================================================================
+// COMPONENT
+// =============================================================================
 
 interface SalesReturnHistoryProps {
   data: SalesReturn[];
@@ -65,513 +175,274 @@ export function SalesReturnHistory({
   onFilterChange,
   onRowClick,
 }: SalesReturnHistoryProps) {
-  // --- STATE FOR CUSTOM DROPDOWNS ---
-  const [isSalesmanOpen, setIsSalesmanOpen] = useState(false);
+  // --- Filter Dropdown State ---
+  const [openSalesman, setOpenSalesman] = useState(false);
+  const [openCustomer, setOpenCustomer] = useState(false);
   const [salesmanSearch, setSalesmanSearch] = useState("");
-  const salesmanRef = useRef<HTMLDivElement>(null);
-
-  const [isCustomerOpen, setIsCustomerOpen] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
-  const customerRef = useRef<HTMLDivElement>(null);
 
-  // --- CLICK OUTSIDE LISTENER ---
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (
-        salesmanRef.current &&
-        !salesmanRef.current.contains(event.target as Node)
-      ) {
-        setIsSalesmanOpen(false);
-      }
-      if (
-        customerRef.current &&
-        !customerRef.current.contains(event.target as Node)
-      ) {
-        setIsCustomerOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  // --- Derived Filter Lists ---
+  const filteredSalesmenList = useMemo(
+    () =>
+      salesmanSearch
+        ? salesmenOptions.filter((s) =>
+            s.label.toLowerCase().includes(salesmanSearch.toLowerCase()),
+          )
+        : salesmenOptions,
+    [salesmenOptions, salesmanSearch],
+  );
 
-  // --- HELPERS ---
-  const getStatusColor = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case "received":
-        return "bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-500/20";
-      case "pending":
-        return "bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-500/20";
-      default:
-        return "bg-muted text-foreground border-border";
-    }
-  };
+  const filteredCustomerList = useMemo(
+    () =>
+      customerSearch
+        ? customerOptions.filter((c) =>
+            c.label.toLowerCase().includes(customerSearch.toLowerCase()),
+          )
+        : customerOptions,
+    [customerOptions, customerSearch],
+  );
 
-  const handleReset = () => {
-    onFilterChange({
-      salesman: "All",
-      customer: "All",
-      status: "All",
-    });
+  const hasActiveFilters =
+    filters.salesman !== "All" ||
+    filters.customer !== "All" ||
+    filters.status !== "All";
+
+  const clearFilters = () => {
+    onFilterChange({ salesman: "All", customer: "All", status: "All" });
     setSalesmanSearch("");
     setCustomerSearch("");
     onSearchChange("");
   };
 
-  const getPageNumbers = () => {
-    const pageNumbers = [];
-    if (totalPages <= 5) {
-      for (let i = 1; i <= totalPages; i++) pageNumbers.push(i);
-    } else {
-      if (page <= 3) pageNumbers.push(1, 2, 3, "...", totalPages);
-      else if (page >= totalPages - 2)
-        pageNumbers.push(1, "...", totalPages - 2, totalPages - 1, totalPages);
-      else
-        pageNumbers.push(1, "...", page - 1, page, page + 1, "...", totalPages);
-    }
-    return pageNumbers;
-  };
-
-  // Filter the options based on the internal search inputs
-  const filteredSalesmen = salesmenOptions.filter((s) =>
-    s.label.toLowerCase().includes(salesmanSearch.toLowerCase()),
+  // --- Clickable column wrapper (open detail on row click) ---
+  const clickableColumns: ColumnDef<SalesReturn>[] = useMemo(
+    () =>
+      columns.map((col) => ({
+        ...col,
+        cell: (props: CellContext<SalesReturn, unknown>) => (
+          <div
+            onClick={() => onRowClick(props.row.original)}
+            className="cursor-pointer"
+          >
+            {typeof col.cell === "function"
+              ? (
+                  col.cell as (
+                    props: CellContext<SalesReturn, unknown>,
+                  ) => React.ReactNode
+                )(props)
+              : (props.getValue() as React.ReactNode)}
+          </div>
+        ),
+      })),
+    [onRowClick],
   );
-  const filteredCustomers = customerOptions.filter((c) =>
-    c.label.toLowerCase().includes(customerSearch.toLowerCase()),
-  );
 
-  // Helper to get selected label for the button text
-  const getSelectedLabel = (
-    options: { value: string; label: string }[],
-    currentValue: string,
-    placeholder: string,
-  ) => {
-    if (currentValue === "All" || !currentValue) return placeholder;
-    return (
-      options.find((o) => o.value.toString() === currentValue)?.label ||
-      placeholder
-    );
-  };
+  // --- Selected labels for filter buttons ---
+  const selectedSalesmanLabel =
+    filters.salesman === "All"
+      ? "All Salesmen"
+      : salesmenOptions.find((s) => s.value === filters.salesman)?.label ||
+        "All Salesmen";
+  const selectedCustomerLabel =
+    filters.customer === "All"
+      ? "All Customers"
+      : customerOptions.find((c) => c.value === filters.customer)?.label ||
+        "All Customers";
 
   return (
-    <div className="flex flex-col space-y-6">
-      {/* --- 1. SEARCH BAR --- */}
-      <div className="bg-background p-1 rounded-xl border border-primary/20 shadow-sm">
-        <div className="relative w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search return #, invoice, customer..."
-            className="pl-10 h-11 border-none focus-visible:ring-0 text-base"
-            onChange={(e) => onSearchChange(e.target.value)}
-          />
-        </div>
-      </div>
-
-      {/* --- 2. FILTERS CONTAINER --- */}
-      <div className="bg-background p-5 rounded-xl border border-border shadow-sm">
-        <div className="flex flex-col md:flex-row gap-4 items-end w-full">
-          {/* SALESMAN FILTER (Custom Searchable) */}
-          <div
-            className="w-full md:flex-1 space-y-1.5 relative"
-            ref={salesmanRef}
-          >
-            <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-              Salesman
-            </label>
-            <div
-              className="h-10 w-full bg-muted/30 border border-border rounded-md flex items-center justify-between px-3 cursor-pointer hover:bg-muted transition-colors"
-              onClick={() => setIsSalesmanOpen(!isSalesmanOpen)}
+    <div className="space-y-4">
+      {/* ===== FILTER BAR ===== */}
+      <div className="flex flex-col lg:flex-row gap-3 items-start lg:items-center">
+        {/* Filter: Salesman Combobox */}
+        <Popover open={openSalesman} onOpenChange={setOpenSalesman}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              role="combobox"
+              className="w-[220px] justify-between h-10"
             >
-              <span className="text-sm text-foreground truncate">
-                {getSelectedLabel(
-                  salesmenOptions,
-                  filters.salesman,
-                  "All Salesmen",
-                )}
-              </span>
-              <ChevronDown className="h-4 w-4 text-muted-foreground opacity-50" />
-            </div>
-
-            {/* Dropdown Content */}
-            {isSalesmanOpen && (
-              <div className="absolute top-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-lg max-h-[300px] flex flex-col">
-                <div className="p-2 border-b border-border sticky top-0 bg-background z-10">
-                  <div className="relative">
-                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                    <input
-                      className="w-full h-8 pl-8 pr-2 text-xs bg-muted/30 border border-border rounded-sm focus:outline-none focus:border-primary"
-                      placeholder="Search salesman..."
-                      value={salesmanSearch}
-                      onChange={(e) => setSalesmanSearch(e.target.value)}
-                      autoFocus
-                    />
-                  </div>
-                </div>
-                <div className="overflow-y-auto flex-1 p-1">
-                  <div
-                    className={cn(
-                      "px-2 py-1.5 text-sm rounded-sm cursor-pointer flex items-center justify-between",
-                      filters.salesman === "All"
-                        ? "bg-primary/10 text-primary"
-                        : "hover:bg-muted/30 text-foreground",
-                    )}
-                    onClick={() => {
+              <span className="truncate">{selectedSalesmanLabel}</span>
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[260px] p-0" align="start">
+            <Command shouldFilter={false}>
+              <CommandInput
+                placeholder="Search salesman..."
+                value={salesmanSearch}
+                onValueChange={setSalesmanSearch}
+              />
+              <CommandList className="max-h-[200px]">
+                <CommandEmpty>No salesman found.</CommandEmpty>
+                <CommandGroup>
+                  <CommandItem
+                    onSelect={() => {
                       onFilterChange({ ...filters, salesman: "All" });
-                      setIsSalesmanOpen(false);
+                      setOpenSalesman(false);
                     }}
                   >
-                    All Salesmen
-                    {filters.salesman === "All" && (
-                      <Check className="h-4 w-4" />
-                    )}
-                  </div>
-                  {filteredSalesmen.map((s) => (
-                    <div
-                      key={s.value}
+                    <Check
                       className={cn(
-                        "px-2 py-1.5 text-sm rounded-sm cursor-pointer flex items-center justify-between",
-                        filters.salesman === s.value.toString()
-                          ? "bg-primary/10 text-primary"
-                          : "hover:bg-muted/30 text-foreground",
+                        "mr-2 h-4 w-4",
+                        filters.salesman === "All"
+                          ? "opacity-100"
+                          : "opacity-0",
                       )}
-                      onClick={() => {
+                    />
+                    All Salesmen
+                  </CommandItem>
+                  {filteredSalesmenList.map((s) => (
+                    <CommandItem
+                      key={s.value}
+                      onSelect={() => {
                         onFilterChange({
                           ...filters,
                           salesman: s.value.toString(),
                         });
-                        setIsSalesmanOpen(false);
+                        setOpenSalesman(false);
                       }}
                     >
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4",
+                          filters.salesman === s.value.toString()
+                            ? "opacity-100"
+                            : "opacity-0",
+                        )}
+                      />
                       {s.label}
-                      {filters.salesman === s.value.toString() && (
-                        <Check className="h-4 w-4" />
-                      )}
-                    </div>
+                    </CommandItem>
                   ))}
-                  {filteredSalesmen.length === 0 && (
-                    <div className="p-2 text-xs text-center text-muted-foreground">
-                      No results found
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
 
-          {/* CUSTOMER FILTER (Custom Searchable) */}
-          <div
-            className="w-full md:flex-1 space-y-1.5 relative"
-            ref={customerRef}
-          >
-            <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-              Customer
-            </label>
-            <div
-              className="h-10 w-full bg-muted/30 border border-border rounded-md flex items-center justify-between px-3 cursor-pointer hover:bg-muted transition-colors"
-              onClick={() => setIsCustomerOpen(!isCustomerOpen)}
+        {/* Filter: Customer Combobox */}
+        <Popover open={openCustomer} onOpenChange={setOpenCustomer}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              role="combobox"
+              className="w-[220px] justify-between h-10"
             >
-              <span className="text-sm text-foreground truncate">
-                {getSelectedLabel(
-                  customerOptions,
-                  filters.customer,
-                  "All Customers",
-                )}
-              </span>
-              <ChevronDown className="h-4 w-4 text-muted-foreground opacity-50" />
-            </div>
-
-            {/* Dropdown Content */}
-            {isCustomerOpen && (
-              <div className="absolute top-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-lg max-h-[300px] flex flex-col">
-                <div className="p-2 border-b border-border sticky top-0 bg-background z-10">
-                  <div className="relative">
-                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                    <input
-                      className="w-full h-8 pl-8 pr-2 text-xs bg-muted/30 border border-border rounded-sm focus:outline-none focus:border-primary"
-                      placeholder="Search customer..."
-                      value={customerSearch}
-                      onChange={(e) => setCustomerSearch(e.target.value)}
-                      autoFocus
-                    />
-                  </div>
-                </div>
-                <div className="overflow-y-auto flex-1 p-1">
-                  <div
-                    className={cn(
-                      "px-2 py-1.5 text-sm rounded-sm cursor-pointer flex items-center justify-between",
-                      filters.customer === "All"
-                        ? "bg-primary/10 text-primary"
-                        : "hover:bg-muted/30 text-foreground",
-                    )}
-                    onClick={() => {
+              <span className="truncate">{selectedCustomerLabel}</span>
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[260px] p-0" align="start">
+            <Command shouldFilter={false}>
+              <CommandInput
+                placeholder="Search customer..."
+                value={customerSearch}
+                onValueChange={setCustomerSearch}
+              />
+              <CommandList className="max-h-[200px]">
+                <CommandEmpty>No customer found.</CommandEmpty>
+                <CommandGroup>
+                  <CommandItem
+                    onSelect={() => {
                       onFilterChange({ ...filters, customer: "All" });
-                      setIsCustomerOpen(false);
+                      setOpenCustomer(false);
                     }}
                   >
-                    All Customers
-                    {filters.customer === "All" && (
-                      <Check className="h-4 w-4" />
-                    )}
-                  </div>
-                  {filteredCustomers.map((c) => (
-                    <div
-                      key={c.value}
+                    <Check
                       className={cn(
-                        "px-2 py-1.5 text-sm rounded-sm cursor-pointer flex items-center justify-between",
-                        filters.customer === c.value
-                          ? "bg-primary/10 text-primary"
-                          : "hover:bg-muted/30 text-foreground",
+                        "mr-2 h-4 w-4",
+                        filters.customer === "All"
+                          ? "opacity-100"
+                          : "opacity-0",
                       )}
-                      onClick={() => {
+                    />
+                    All Customers
+                  </CommandItem>
+                  {filteredCustomerList.map((c) => (
+                    <CommandItem
+                      key={c.value}
+                      onSelect={() => {
                         onFilterChange({ ...filters, customer: c.value });
-                        setIsCustomerOpen(false);
+                        setOpenCustomer(false);
                       }}
                     >
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4",
+                          filters.customer === c.value
+                            ? "opacity-100"
+                            : "opacity-0",
+                        )}
+                      />
                       {c.label}
-                      {filters.customer === c.value && (
-                        <Check className="h-4 w-4" />
-                      )}
-                    </div>
+                    </CommandItem>
                   ))}
-                  {filteredCustomers.length === 0 && (
-                    <div className="p-2 text-xs text-center text-muted-foreground">
-                      No results found
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
 
-          {/* STATUS FILTER (Standard Select is fine here as options are few) */}
-          <div className="w-full md:flex-1 space-y-1.5">
-            <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-              Status
-            </label>
-            <Select
-              value={filters.status}
-              onValueChange={(val) =>
-                onFilterChange({ ...filters, status: val })
-              }
-            >
-              <SelectTrigger className="h-10 bg-muted/30 border-border text-foreground text-sm focus:ring-primary/20 w-full">
-                <SelectValue placeholder="All Statuses" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="All">All Statuses</SelectItem>
-                <SelectItem value="Pending">Pending</SelectItem>
-                <SelectItem value="Received">Received</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        {/* Filter: Status Select */}
+        <Select
+          value={filters.status}
+          onValueChange={(val) =>
+            onFilterChange({ ...filters, status: val })
+          }
+        >
+          <SelectTrigger className="w-[150px] h-10">
+            <SelectValue placeholder="All Statuses" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="All">All Statuses</SelectItem>
+            <SelectItem value="Pending">Pending</SelectItem>
+            <SelectItem value="Received">Received</SelectItem>
+          </SelectContent>
+        </Select>
 
-          {/* Reset Button */}
-          <div className="w-full md:w-auto pb-0.5">
-            <Button
-              variant="ghost"
-              onClick={handleReset}
-              className="w-full md:w-auto h-9 px-4 text-primary hover:text-primary hover:bg-primary/10 font-medium text-sm transition-colors whitespace-nowrap"
-            >
-              <X className="h-3.5 w-3.5 mr-1.5" /> Reset Filters
-            </Button>
-          </div>
-        </div>
+        {hasActiveFilters && (
+          <Button
+            variant="outline"
+            onClick={clearFilters}
+            className="h-10 text-muted-foreground"
+          >
+            <Filter className="mr-2 h-4 w-4" /> Clear
+          </Button>
+        )}
       </div>
 
-      {/* --- 3. DATA TABLE --- */}
-      <div className="bg-background rounded-xl border border-border shadow-sm overflow-hidden flex flex-col min-h-[500px]">
-        <div className="flex-1 overflow-auto">
-          <Table>
-            <TableHeader className="bg-muted/50 sticky top-0 z-10 backdrop-blur-sm border-b border-border">
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="font-bold text-foreground pl-6 w-[140px] h-12">
-                  Return No.
-                </TableHead>
-                <TableHead className="font-bold text-foreground min-w-[180px] h-12">
-                  Salesman
-                </TableHead>
-                <TableHead className="font-bold text-foreground min-w-[220px] h-12">
-                  Customer
-                </TableHead>
-                <TableHead className="font-bold text-foreground w-[120px] h-12">
-                  Date
-                </TableHead>
-                <TableHead className="font-bold text-foreground text-right w-[120px] h-12">
-                  Total Amount
-                </TableHead>
-
-                {/* 🟢 CENTERED STATUS HEADER */}
-                <TableHead className="font-bold text-foreground text-center w-[120px] h-12">
-                  Status
-                </TableHead>
-
-                <TableHead className="font-bold text-foreground min-w-[200px] h-12">
-                  Remarks
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="h-64 text-center">
-                    <div className="flex flex-col items-center justify-center text-muted-foreground gap-3">
-                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                      <p className="text-sm font-medium">Loading records...</p>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : data.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={7}
-                    className="h-64 text-center text-muted-foreground"
-                  >
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <p>No return records found.</p>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                data.map((row) => (
-                  <TableRow
-                    key={row.id}
-                    className="group cursor-pointer hover:bg-muted/60 transition-colors border-b last:border-0"
-                    onClick={() => onRowClick(row)}
-                  >
-                    <TableCell className="py-4 pl-6 font-semibold text-primary group-hover:text-primary transition-colors">
-                      {row.returnNo}
-                    </TableCell>
-
-                    <TableCell className="py-4 text-foreground font-medium">
-                      <div
-                        className="truncate w-full max-w-[220px]"
-                        title={row.salesmanName}
-                      >
-                        {row.salesmanName || "-"}
-                      </div>
-                    </TableCell>
-
-                    <TableCell className="py-4 font-medium text-foreground">
-                      <div
-                        className="truncate w-full max-w-[300px]"
-                        title={row.customerName}
-                      >
-                        {row.customerName || row.customerCode}
-                      </div>
-                    </TableCell>
-
-                    <TableCell className="py-4 text-muted-foreground text-sm">
-                      {row.returnDate}
-                    </TableCell>
-
-                    <TableCell className="py-4 text-right font-bold text-foreground">
-                      {row.totalAmount.toLocaleString(undefined, {
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 2,
-                      })}
-                    </TableCell>
-
-                    {/* 🟢 CENTERED STATUS CELL */}
-                    <TableCell className="py-4">
-                      <div className="flex w-full justify-center">
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            "font-medium shadow-sm px-2.5 py-0.5 rounded-full border",
-                            getStatusColor(row.status),
-                          )}
-                        >
-                          {row.status}
-                        </Badge>
-                      </div>
-                    </TableCell>
-
-                    <TableCell className="py-4 text-muted-foreground text-xs italic">
-                      <div
-                        className="truncate w-full max-w-[250px]"
-                        title={row.remarks}
-                      >
-                        {row.remarks || "-"}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-
-        {/* --- 4. PAGINATION --- */}
-        <div className="p-4 border-t border-border bg-background flex flex-col sm:flex-row justify-between items-center gap-4 sticky bottom-0 z-20">
-          <div className="text-sm text-muted-foreground">
-            Showing page{" "}
-            <span className="font-bold text-foreground">{page}</span> of{" "}
-            <span className="font-bold text-foreground">{totalPages}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => onPageChange(1)}
-              disabled={page === 1 || loading}
-            >
-              <ChevronsLeft className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => onPageChange(Math.max(1, page - 1))}
-              disabled={page === 1 || loading}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-
-            <div className="flex items-center px-2">
-              {getPageNumbers().map((pNum, idx) => (
-                <React.Fragment key={idx}>
-                  {pNum === "..." ? (
-                    <span className="text-xs text-muted-foreground mx-1">...</span>
-                  ) : (
-                    <button
-                      onClick={() => onPageChange(Number(pNum))}
-                      disabled={loading}
-                      className={cn(
-                        "w-8 h-8 flex items-center justify-center rounded-md text-xs font-medium transition-colors mx-0.5",
-                        page === pNum
-                          ? "bg-muted text-white shadow-sm"
-                          : "text-muted-foreground hover:bg-muted",
-                      )}
-                    >
-                      {pNum}
-                    </button>
-                  )}
-                </React.Fragment>
-              ))}
-            </div>
-
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => onPageChange(Math.min(totalPages, page + 1))}
-              disabled={page === totalPages || loading}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => onPageChange(totalPages)}
-              disabled={page === totalPages || loading}
-            >
-              <ChevronsRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      </div>
+      {/* ===== DATA TABLE ===== */}
+      <DataTable
+        columns={clickableColumns}
+        data={data}
+        searchKey="returnNo"
+        onSearch={onSearchChange}
+        isLoading={loading}
+        manualPagination={true}
+        pageCount={totalPages}
+        pagination={{ pageIndex: page - 1, pageSize: 10 }}
+        onPaginationChange={(p) => onPageChange(p.pageIndex + 1)}
+        emptyTitle="No return records found"
+        emptyDescription={
+          hasActiveFilters
+            ? "Try adjusting your filters."
+            : "No Sales Return transactions yet."
+        }
+        actionComponent={
+          <Button
+            variant="outline"
+            onClick={() => {
+              clearFilters();
+            }}
+            disabled={loading}
+            className="h-10"
+          >
+            <RotateCcw
+              className={cn("mr-2 h-4 w-4", loading && "animate-spin")}
+            />
+            Refresh
+          </Button>
+        }
+      />
     </div>
   );
 }

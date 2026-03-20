@@ -616,3 +616,55 @@ export async function fetchRfidTags(
     created_at: item.created_at,
   }));
 }
+
+/**
+ * Looks up an RFID tag to find the associated product and returns product info.
+ * Used for automatic product addition on RFID scan.
+ */
+export async function lookupRfid(
+  rfidTag: string,
+  branchId: number,
+  token: string,
+): Promise<{
+  productId: number;
+  productCode: string;
+  productName: string;
+  unitPrice: number;
+  unitShortcut: string;
+  unitOfMeasurementCount: number;
+} | null> {
+  const results = await repo.getSpringRfidLookup(rfidTag, branchId, token);
+  if (!results || results.length === 0) return null;
+
+  const firstResult = results[0];
+  const productId = Number(firstResult.productId);
+  if (!productId) return null;
+
+  // Fetch product details from Directus
+  try {
+    const productRes = await repo.getRawProductById(productId);
+    const product = productRes.data as any;
+    if (!product) return null;
+
+    // Resolve unit shortcut
+    const unitsRes = await repo.getRawUnits();
+    const units = (unitsRes.data || []) as any[];
+    const unitId =
+      typeof product.unit_of_measurement === "object"
+        ? product.unit_of_measurement?.unit_id
+        : product.unit_of_measurement;
+    const matchedUnit = units.find((u: any) => u.unit_id === unitId);
+
+    return {
+      productId: product.product_id,
+      productCode: product.product_code || "N/A",
+      productName: product.product_name || product.description || "Unknown",
+      unitPrice: Number(product.priceA) || 0,
+      unitShortcut: matchedUnit?.unit_shortcut || "Pcs",
+      unitOfMeasurementCount: Number(product.unit_of_measurement_count) || 1,
+    };
+  } catch (err) {
+    console.error("[Sales Return RFID] Product lookup failed:", err);
+    return null;
+  }
+}

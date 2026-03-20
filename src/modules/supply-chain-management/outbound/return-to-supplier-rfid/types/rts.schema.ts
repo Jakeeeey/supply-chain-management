@@ -101,7 +101,8 @@ export interface Branch {
 
 /** A product as used in the product picker / price lookup. */
 export interface Product {
-  id: string;
+  id: string; // React key / Unique ID
+  productId: number; // Database ID
   code: string;
   name: string;
   price: number; // cost_per_unit

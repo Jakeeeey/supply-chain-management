@@ -47,7 +47,6 @@ export function ReturnReviewPanel({
   const totalAmount = items.reduce(
     (sum, item) =>
       sum +
-      sum +
       (item.customPrice || item.price) *
         item.quantity *
         (1 - item.discount),
@@ -57,7 +56,6 @@ export function ReturnReviewPanel({
   const totalQuantity = items.reduce((acc, i) => acc + i.quantity, 0);
   const totalDiscountAmount = items.reduce(
     (sum, item) =>
-      sum +
       sum +
       (item.customPrice || item.price) * item.quantity * item.discount,
     0,
