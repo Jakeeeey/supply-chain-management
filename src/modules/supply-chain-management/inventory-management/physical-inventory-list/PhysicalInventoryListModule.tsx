@@ -33,6 +33,7 @@ type Props = {
     selectedHeaderId?: number | null;
     onOpenRecord?: (row: PhysicalInventoryListRow) => void;
     onCreateNew?: () => void;
+    hideCreateButton?: boolean;
 };
 
 const PAGE_SIZE = 6;
@@ -42,6 +43,7 @@ export function PhysicalInventoryListModule(props: Props) {
         selectedHeaderId = null,
         onOpenRecord,
         onCreateNew,
+        hideCreateButton = false,
     } = props;
 
     const [isLoading, setIsLoading] = React.useState(true);
@@ -168,14 +170,16 @@ export function PhysicalInventoryListModule(props: Props) {
                             )}
                         </Button>
 
-                        <Button
-                            type="button"
-                            className="cursor-pointer"
-                            onClick={onCreateNew}
-                        >
-                            <Plus className="mr-2 h-4 w-4" />
-                            New Physical Inventory
-                        </Button>
+                        {!hideCreateButton && (
+                            <Button
+                                type="button"
+                                className="cursor-pointer"
+                                onClick={onCreateNew}
+                            >
+                                <Plus className="mr-2 h-4 w-4" />
+                                New Physical Inventory
+                            </Button>
+                        )}
                     </div>
                 </div>
             </div>

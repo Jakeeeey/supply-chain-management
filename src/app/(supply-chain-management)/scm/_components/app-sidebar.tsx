@@ -15,10 +15,10 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
-import {useState, useMemo} from "react";
+import { useState, useMemo } from "react";
 
-import {Separator} from "@/components/ui/separator";
-import {Input} from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
 import {
     Sidebar,
     SidebarContent,
@@ -28,11 +28,11 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import {NavMain} from "./nav-main";
+import { NavMain } from "./nav-main";
 
 const data = {
     navMain: [
-        {title: "Dashboard", url: "/scm/", icon: LayoutDashboard, isActive: true},
+        { title: "Dashboard", url: "/scm/", icon: LayoutDashboard, isActive: true },
         {
             title: "Product Management",
             url: "#",
@@ -42,18 +42,18 @@ const data = {
                     title: "SKU",
                     url: "/scm/product-management/sku",
                     items: [
-                        {title: "SKU Masterlist", url: "/scm/product-management/sku/sku-masterlist"},
-                        {title: "SKU Registration", url: "/scm/product-management/sku/sku-creation"},
-                        {title: "SKU Approval Queue", url: "/scm/product-management/sku/sku-approval"},
+                        { title: "SKU Masterlist", url: "/scm/product-management/sku/sku-masterlist" },
+                        { title: "SKU Registration", url: "/scm/product-management/sku/sku-creation" },
+                        { title: "SKU Approval Queue", url: "/scm/product-management/sku/sku-approval" },
                     ],
                 },
                 {
                     title: "Bundling",
                     url: "#",
                     items: [
-                        {title: "Bundle Creation", url: "/scm/product-management/bundle-creation"},
-                        {title: "Bundle Approval", url: "/scm/product-management/bundle-approval"},
-                        {title: "Bundle Masterlist", url: "/scm/product-management/bundle-masterlist"},
+                        { title: "Bundle Creation", url: "/scm/product-management/bundle-creation" },
+                        { title: "Bundle Approval", url: "/scm/product-management/bundle-approval" },
+                        { title: "Bundle Masterlist", url: "/scm/product-management/bundle-masterlist" },
                     ],
                 },
                 {
@@ -64,32 +64,32 @@ const data = {
                             title: "Barcode Masterlist",
                             url: "/scm/product-management/barcode-management/barcode-masterlist"
                         },
-                        {title: "Barcode Linking", url: "/scm/product-management/barcode-management/barcode-linking"},
+                        { title: "Barcode Linking", url: "/scm/product-management/barcode-management/barcode-linking" },
                     ],
                 },
-                {title: "Brand", url: "/scm/product-management/brand"},
-                {title: "Category", url: "/scm/product-management/category"},
-                {title: "Unit of Measurement", url: "/scm/product-management/unit-of-measurement"},
+                { title: "Brand", url: "/scm/product-management/brand" },
+                { title: "Category", url: "/scm/product-management/category" },
+                { title: "Unit of Measurement", url: "/scm/product-management/unit-of-measurement" },
             ],
         },
         {
             title: "Outbound",
             url: "#",
             icon: Package,
-            items: [{title: "Return to Supplier", url: "/scm/outbound/return-to-supplier"}],
+            items: [{ title: "Return to Supplier", url: "/scm/outbound/return-to-supplier" }],
         },
         {
             title: "Supplier Management",
             url: "#",
             icon: Building2,
             items: [
-                {title: "Create Purchase Order", url: "/scm/supplier-management/create-of-purchase-order"},
-                {title: "Approval of PO", url: "/scm/supplier-management/approval-of-purchase-order"},
-                {title: "Tagging of PO", url: "/scm/supplier-management/tagging-of-po"},
-                {title: "Receiving Products", url: "/scm/supplier-management/receiving-products"},
-                {title: "Posting Of PO", url: "/scm/supplier-management/posting-of-purchase-order"},
-                {title: "PurchaseOrderSummary", url: "/scm/supplier-management/purchase-order-summary"},
-                {title: "Inbound/Outbound Kiosk", url: "/scm/inbound-outbound-kiosk"},
+                { title: "Create Purchase Order", url: "/scm/supplier-management/create-of-purchase-order" },
+                { title: "Approval of PO", url: "/scm/supplier-management/approval-of-purchase-order" },
+                { title: "Tagging of PO", url: "/scm/supplier-management/tagging-of-po" },
+                { title: "Receiving Products", url: "/scm/supplier-management/receiving-products" },
+                { title: "Posting Of PO", url: "/scm/supplier-management/posting-of-purchase-order" },
+                { title: "PurchaseOrderSummary", url: "/scm/supplier-management/purchase-order-summary" },
+                { title: "Inbound/Outbound Kiosk", url: "/scm/inbound-outbound-kiosk" },
             ],
         },
         {
@@ -97,8 +97,8 @@ const data = {
             url: "#",
             icon: Warehouse,
             items: [
-                {title: "Warehouse Unit Conversion", url: "/scm/warehouse-management/warehouse-unit-conversion"},
-                {title: "Stock Transfer", url: "/scm/warehouse-management/stock-transfer"},
+                { title: "Warehouse Unit Conversion", url: "/scm/warehouse-management/warehouse-unit-conversion" },
+                { title: "Stock Transfer", url: "/scm/warehouse-management/stock-transfer" },
                 {
                     title: "Consolidation",
                     url: "/scm/warehouse-management/consolidation",
@@ -117,10 +117,10 @@ const data = {
                                 },
                             ],
                         },
-                        {title: "Delivery Picking", url: "/scm/warehouse-management/consolidation/delivery-picking"},
-                        {title: "Delivery Auditing", url: "/scm/warehouse-management/consolidation/delivery-auditing"},
-                        {title: "Withdrawals Picking", url: "/scm/warehouse-management/withdrawals-picking"},
-                        {title: "Active Picking", url: "/scm/warehouse-management/active-picking"},
+                        { title: "Delivery Picking", url: "/scm/warehouse-management/consolidation/delivery-picking" },
+                        { title: "Delivery Auditing", url: "/scm/warehouse-management/consolidation/delivery-auditing" },
+                        { title: "Withdrawals Picking", url: "/scm/warehouse-management/withdrawals-picking" },
+                        { title: "Active Picking", url: "/scm/warehouse-management/active-picking" },
                     ],
                 },
             ],
@@ -133,14 +133,14 @@ const data = {
                 {
                     title: "Vehicle Management",
                     url: "#",
-                    items: [{title: "Vehicle List", url: "/scm/fleet-management/vehicle-management/vehicle-list"}],
+                    items: [{ title: "Vehicle List", url: "/scm/fleet-management/vehicle-management/vehicle-list" }],
                 },
                 {
                     title: "Trip Management",
                     url: "#",
                     items: [
-                        {title: "Dispatch Summary", url: "/scm/fleet-management/trip-management/dispatch-summary"},
-                        {title: "Dispatch Creation", url: "/scm/fleet-management/trip-management/dispatch-creation"},
+                        { title: "Dispatch Summary", url: "/scm/fleet-management/trip-management/dispatch-summary" },
+                        { title: "Dispatch Creation", url: "/scm/fleet-management/trip-management/dispatch-creation" },
                         {
                             title: "Dispatch Plan",
                             url: "#",
@@ -157,14 +157,14 @@ const data = {
                                     title: "Clearance",
                                     url: "/scm/fleet-management/trip-management/dispatch-plan/clearance"
                                 },
-                                {title: "Inbound", url: "/scm/fleet-management/trip-management/dispatch-plan/inbound"},
+                                { title: "Inbound", url: "/scm/fleet-management/trip-management/dispatch-plan/inbound" },
                                 {
                                     title: "Outbound",
                                     url: "/scm/fleet-management/trip-management/dispatch-plan/outbound"
                                 },
                             ],
                         },
-                        {title: "Dispatch Clearance", url: "/scm/fleet-management/trip-management/dispatch-clearance"},
+                        { title: "Dispatch Clearance", url: "/scm/fleet-management/trip-management/dispatch-clearance" },
                     ],
                 },
                 {
@@ -183,11 +183,11 @@ const data = {
                             title: "Pending Deliveries",
                             url: "/scm/fleet-management/logistics-deliveries/pending-deliveries"
                         },
-                        {title: "PDP Summary", url: "/scm/fleet-management/logistics-deliveries/pre-dispatch-summary"},
-                        {title: "Pending Invoices", url: "/scm/fleet-management/logistics-deliveries/pending-invoices"},
+                        { title: "PDP Summary", url: "/scm/fleet-management/logistics-deliveries/pre-dispatch-summary" },
+                        { title: "Pending Invoices", url: "/scm/fleet-management/logistics-deliveries/pending-invoices" },
                     ],
                 },
-                {title: "Driver Management", url: "/scm/fleet-management/driver-management"},
+                { title: "Driver Management", url: "/scm/fleet-management/driver-management" },
             ],
         },
         {
@@ -195,16 +195,29 @@ const data = {
             url: "#",
             icon: ClipboardList,
             items: [
-                {title: "Inventory Controls", url: "/scm/inventory-management/inventory-controls"},
+                { title: "Inventory Controls", url: "/scm/inventory-management/inventory-controls" },
                 {
                     title: "Physical Inventory",
                     url: "/scm/inventory-management/physical-inventory",
                     items: [
-                        {title: "List/Create", url: "/scm/inventory-management/physical-inventory"},
-                        {title: "Offsetting", url: "/scm/inventory-management/physical-inventory/offsetting"},
-                    ],
+                        {
+                            title: "Physical Count (RFID)",
+                            url: "/scm/inventory-management/physical-inventory   ",
+                        },
+                        {
+                            title: "Offsetting",
+                            url: "/scm/inventory-management/physical-inventory/offsetting   ",
+                        },
+                        {
+                            title: "Manual Count (No RFID)",
+                            url: "/scm/inventory-management/physical-inventory-manual",
+                        },
+                    ]
                 },
-                {title: "Branch Management", url: "/scm/inventory-management/branch-management"},
+                {
+                    title: "Branch Management",
+                    url: "/scm/inventory-management/branch-management",
+                },
             ],
         },
         {
@@ -215,16 +228,16 @@ const data = {
                 {
                     title: "Monitoring",
                     url: "#",
-                    items: [{title: "For Consolidation Queue", url: "/scm/monitoring/for-consolidation"}],
+                    items: [{ title: "For Consolidation Queue", url: "/scm/monitoring/for-consolidation" }],
                 },
                 {
                     title: "Vehicle Management",
                     url: "#",
                     items: [
-                        {title: "Vehicle Type", url: "/scm/logistics/vehicle-management/vehicle-type"},
-                        {title: "Fuel Type", url: "/scm/logistics/vehicle-management/fuel-type"},
-                        {title: "Category", url: "/scm/logistics/vehicle-management/category"},
-                        {title: "Engine Type", url: "/scm/logistics/vehicle-management/engine-type"},
+                        { title: "Vehicle Type", url: "/scm/logistics/vehicle-management/vehicle-type" },
+                        { title: "Fuel Type", url: "/scm/logistics/vehicle-management/fuel-type" },
+                        { title: "Category", url: "/scm/logistics/vehicle-management/category" },
+                        { title: "Engine Type", url: "/scm/logistics/vehicle-management/engine-type" },
                     ],
                 },
             ],
@@ -238,7 +251,7 @@ const data = {
                     title: "Inventory Performance Dashboard",
                     url: "/scm/business-analytics/inventory-performance-dashboard"
                 },
-                {title: "Stock Health Monitor", url: "/scm/business-analytics/stock-health-monitor"},
+                { title: "Stock Health Monitor", url: "/scm/business-analytics/stock-health-monitor" },
                 {
                     title: "Supplier Reliability Scorecard",
                     url: "/scm/business-analytics/supplier-reliability-scorecard"
@@ -250,15 +263,15 @@ const data = {
             url: "#",
             icon: ArrowRightLeft,
             items: [
-                {title: "Stock Withdrawal", url: "/scm/transfers/stock-withdrawal"},
-                {title: "Bad Stock Transfer", url: "/scm/transfers/bad-stock-transfer"},
-                {title: "Stock Conversion", url: "/scm/transfers/stock-conversion"},
+                { title: "Stock Withdrawal", url: "/scm/transfers/stock-withdrawal" },
+                { title: "Bad Stock Transfer", url: "/scm/transfers/bad-stock-transfer" },
+                { title: "Stock Conversion", url: "/scm/transfers/stock-conversion" },
             ],
         },
     ],
 };
 
-export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
+export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const [searchQuery, setSearchQuery] = useState("");
 
     const filteredNavMain = useMemo(() => {
@@ -296,7 +309,7 @@ export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
                             <Link href="/main-dashboard">
                                 <div
                                     className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                                    <Command className="size-4"/>
+                                    <Command className="size-4" />
                                 </div>
                                 <div className="grid flex-1 text-left text-sm leading-tight">
                                     <span className="truncate font-medium">VOS Web</span>
@@ -310,7 +323,7 @@ export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
 
                 <div className="px-4 py-2">
                     <div className="relative">
-                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input
                             type="search"
                             placeholder="Search modules..."
@@ -322,14 +335,14 @@ export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
                 </div>
             </SidebarHeader>
 
-            <Separator/>
+            <Separator />
 
             <SidebarContent>
                 <div
                     className="px-4 pt-3 pb-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground opacity-50">
                     Platform Navigation
                 </div>
-                <NavMain items={filteredNavMain}/>
+                <NavMain items={filteredNavMain} />
                 {filteredNavMain.length === 0 && (
                     <div className="px-6 py-4 text-xs text-muted-foreground italic">
                         No modules found matching &quot;{searchQuery}&quot;

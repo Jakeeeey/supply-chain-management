@@ -13,6 +13,10 @@ import {
     commitPhysicalInventoryFromOffsetting,
     loadPhysicalInventoryOffsettingSnapshot,
 } from "./providers/fetchProvider";
+import {
+    canEditPhysicalInventory,
+    derivePhysicalInventoryStatus,
+} from "../physical-inventory-management/utils/compute";
 import { printPhysicalInventoryOffsettingReport } from "./utils/printPhysicalInventoryOffsettingReport";
 
 import { Button } from "@/components/ui/button";
@@ -80,6 +84,7 @@ export function PhysicalInventoryOffsettingModule({
         branch_name: "",
         supplier_name: "",
         category_name: "",
+        encoder_name: "",
     });
 
     const [selectedShortIds, setSelectedShortIds] = React.useState<number[]>([]);
@@ -301,10 +306,29 @@ export function PhysicalInventoryOffsettingModule({
         }
     }, [header?.id, onCommitted]);
 
-    const canCreateGroup =
-        selectedShortRows.length > 0 && selectedOverRows.length > 0 && !isCreatingGroup;
+    const isPending = React.useMemo(() => {
+        if (!header) return false;
+        return canEditPhysicalInventory({
+            isCancelled: header.isCancelled,
+            isComitted: header.isComitted,
+        });
+    }, [header]);
 
-    const canCommit = Boolean(header?.id) && !isLoading && !isCommitting;
+    const statusText = React.useMemo(() => {
+        if (!header) return "";
+        return derivePhysicalInventoryStatus({
+            isCancelled: header.isCancelled,
+            isComitted: header.isComitted,
+        });
+    }, [header]);
+
+    const canCreateGroup =
+        selectedShortRows.length > 0 &&
+        selectedOverRows.length > 0 &&
+        !isCreatingGroup &&
+        isPending;
+
+    const canCommit = Boolean(header?.id) && !isLoading && !isCommitting && isPending;
 
     if (isLoading || !header) {
         return (
@@ -381,19 +405,30 @@ export function PhysicalInventoryOffsettingModule({
                             disabled={!canCommit}
                         >
                             <CheckCircle2 className="mr-2 h-3.5 w-3.5" />
-                            Commit PI
+                            {statusText === "Pending" ? "Commit PI" : statusText}
                         </Button>
                     </div>
                 </div>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
                 <Card className="rounded-2xl">
                     <CardContent className="px-4 py-3">
                         <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
                             PI No
                         </p>
                         <p className="mt-1 text-sm font-semibold">{header.ph_no || `PI #${header.id}`}</p>
+                    </CardContent>
+                </Card>
+
+                <Card className="rounded-2xl">
+                    <CardContent className="px-4 py-3">
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                            Created By
+                        </p>
+                        <p className="mt-1 text-sm font-semibold truncate" title={reportMeta.encoder_name}>
+                            {reportMeta.encoder_name || "—"}
+                        </p>
                     </CardContent>
                 </Card>
 
@@ -437,7 +472,7 @@ export function PhysicalInventoryOffsettingModule({
                     selectedIds={selectedShortIds}
                     onToggleRow={handleToggleShortRow}
                     onToggleAll={handleToggleAllShort}
-                    disabled={isCreatingGroup || isCommitting}
+                    disabled={isCreatingGroup || isCommitting || !isPending}
                 />
 
                 <OffsettingSelectionTable
@@ -447,45 +482,43 @@ export function PhysicalInventoryOffsettingModule({
                     selectedIds={selectedOverIds}
                     onToggleRow={handleToggleOverRow}
                     onToggleAll={handleToggleAllOver}
-                    disabled={isCreatingGroup || isCommitting}
+                    disabled={isCreatingGroup || isCommitting || !isPending}
                 />
             </div>
 
             <Card className="rounded-2xl">
                 <CardContent className="px-4 py-3">
                     <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                        <div className="grid gap-3 sm:grid-cols-3 xl:w-full">
-                            <div>
+                        <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-3">
+                            <div className="rounded-xl border bg-muted/20 px-4 py-2.5">
                                 <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
                                     Selected Short Total
                                 </p>
-                                <p className="mt-0.5 text-sm font-semibold text-red-700 dark:text-red-300">
+                                <p className="mt-1 text-sm font-semibold text-red-700 dark:text-red-300">
                                     ₱ {fmtMoney(selectedShortTotal)}
                                 </p>
                             </div>
 
-                            <div>
+                            <div className="rounded-xl border bg-muted/20 px-4 py-2.5">
                                 <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
                                     Selected Over Total
                                 </p>
-                                <p className="mt-0.5 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                                <p className="mt-1 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
                                     ₱ {fmtMoney(selectedOverTotal)}
                                 </p>
                             </div>
 
-                            <div>
+                            <div className="rounded-xl border bg-muted/20 px-4 py-2.5">
                                 <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
                                     Difference
                                 </p>
-                                <p className="mt-0.5 text-sm font-semibold">
+                                <p className="mt-1 text-sm font-semibold">
                                     ₱ {fmtMoney(selectedDifference)}
                                 </p>
                             </div>
                         </div>
 
-                        <Separator className="hidden xl:block xl:h-8 xl:w-px" />
-
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex shrink-0 flex-wrap gap-2">
                             <Button
                                 size="sm"
                                 className="cursor-pointer"

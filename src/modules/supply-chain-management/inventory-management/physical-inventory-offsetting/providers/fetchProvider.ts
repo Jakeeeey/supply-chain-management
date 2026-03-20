@@ -121,10 +121,21 @@ function buildReportMeta(args: {
     const categoryName =
         scopedCategories.find((row) => row.category_id === header.category_id)?.category_name ?? "";
 
+    const encoder = header.encoder_id;
+    let encoderName = "—";
+    if (encoder && typeof encoder === "object") {
+        const first = encoder.user_fname || "";
+        const last = encoder.user_lname || "";
+        encoderName = `${first} ${last}`.trim() || "—";
+    } else if (encoder) {
+        encoderName = `ID: ${encoder}`;
+    }
+
     return {
         branch_name: branchName,
         supplier_name: supplierName,
         category_name: categoryName,
+        encoder_name: encoderName,
     };
 }
 
