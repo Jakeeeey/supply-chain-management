@@ -10,10 +10,14 @@ import { Input } from "@/components/ui/input";
 export function VehicleListToolbar({
   query,
   onQueryChange,
+  statusFilter,
+  onStatusFilterChange,
   onAdd,
 }: {
   query: string;
   onQueryChange: (v: string) => void;
+  statusFilter: string;
+  onStatusFilterChange: (v: string) => void;
   onAdd: () => void;
 }) {
   return (
@@ -34,15 +38,48 @@ export function VehicleListToolbar({
         </Button>
       </div>
 
-      {/* Search: full width always */}
-      <div className="relative w-full">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={query}
-          onChange={(e) => onQueryChange(e.target.value)}
-          placeholder="Search by plate no., vehicle name, or driver..."
-          className="w-full pl-9"
-        />
+      {/* Search & Filter row */}
+      <div className="flex flex-col gap-3 md:flex-row md:items-center">
+        {/* Search: flex-1 */}
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => onQueryChange(e.target.value)}
+            placeholder="Search by plate no., vehicle name, or driver..."
+            className="w-full pl-9"
+          />
+        </div>
+
+        {/* Status Filter Buttons */}
+        <div className="flex items-center gap-2">
+          <Button
+            variant={statusFilter === "all" ? "default" : "outline"}
+            size="sm"
+            onClick={() => onStatusFilterChange("all")}
+            className="h-9 px-4"
+          >
+            All
+          </Button>
+          <Button
+            variant={statusFilter === "active" ? "default" : "outline"}
+            size="sm"
+            onClick={() => onStatusFilterChange("active")}
+            className="flex h-9 items-center gap-2 px-4"
+          >
+            <div className="h-2 w-2 rounded-full bg-emerald-500" />
+            Active
+          </Button>
+          <Button
+            variant={statusFilter === "inactive" ? "default" : "outline"}
+            size="sm"
+            onClick={() => onStatusFilterChange("inactive")}
+            className="flex h-9 items-center gap-2 px-4"
+          >
+            <div className="h-2 w-2 rounded-full bg-slate-400" />
+            Inactive
+          </Button>
+        </div>
       </div>
     </div>
   );

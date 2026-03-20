@@ -23,10 +23,6 @@ export default function PDPCreationPage() {
   const {
     pendingData,
     pendingTotal,
-    pendingPage,
-    setPendingPage,
-    pendingLimit,
-    setPendingLimit,
     masterData,
     availableOrders,
     isLoadingOrders,
@@ -55,7 +51,8 @@ export default function PDPCreationPage() {
         setEditPlan(result.plan);
         setEditDetails(result.details);
         setIsCreateOpen(true);
-      } catch (err: any) {
+      } catch (e: unknown) {
+        const err = e as Error;
         toast.error(err.message || "Failed to load plan details.");
       } finally {
         setIsEditLoading(false);
@@ -92,17 +89,11 @@ export default function PDPCreationPage() {
 
   return (
     <div className="space-y-0">
-      <PDPGlobalFilter masterData={masterData} />
+      <PDPGlobalFilter masterData={masterData} showStatus={false} />
 
       <PDPCreationTable
         data={pendingData}
         totalCount={pendingTotal}
-        pageIndex={pendingPage}
-        pageSize={pendingLimit}
-        onPaginationChange={(p: { pageIndex: number; pageSize: number }) => {
-          setPendingPage(p.pageIndex);
-          setPendingLimit(p.pageSize);
-        }}
         isLoading={isLoading || isEditLoading}
         onEdit={handleEdit}
         onSearch={(v: string) => setSearch(v)}

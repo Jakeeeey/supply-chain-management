@@ -1,6 +1,8 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/ui/combobox";
+import { formatNumber, formatPeso } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/utils/format";
 import {
   Dialog,
   DialogContent,
@@ -11,13 +13,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -83,7 +78,9 @@ export function PDPCreateModal({
   const [clusterId, setClusterId] = useState<number | null>(null);
   const [branchId, setBranchId] = useState<number | null>(null);
   const [dispatchDate, setDispatchDate] = useState<string>(
-    new Date().toISOString().split("T")[0],
+    new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000)
+      .toISOString()
+      .split("T")[0],
   );
   const [remarks, setRemarks] = useState("");
   const [vehicleId, setVehicleId] = useState<number | null>(null);
@@ -99,6 +96,7 @@ export function PDPCreateModal({
       if (editPlan) {
         // Edit mode: pre-fill from existing plan
         // Directus may return relational IDs as objects (e.g. {vehicle_id: 5})
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const toId = (val: any): number | null => {
           if (val == null) return null;
           if (typeof val === "number") return val;
@@ -142,6 +140,7 @@ export function PDPCreateModal({
               province: d.province,
               total_amount: d.amount ?? null,
               net_amount: d.amount ?? null,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               po_no: (d as any).po_no || null,
               total_weight: d.weight,
             }),
@@ -160,7 +159,13 @@ export function PDPCreateModal({
         setDriverId(null);
         setClusterId(null);
         setBranchId(null);
-        setDispatchDate(new Date().toISOString().split("T")[0]);
+        setDispatchDate(
+          new Date(
+            new Date().getTime() - new Date().getTimezoneOffset() * 60000,
+          )
+            .toISOString()
+            .split("T")[0],
+        );
         setRemarks("");
         setVehicleId(null);
         setOrderSearch("");
@@ -193,7 +198,7 @@ export function PDPCreateModal({
   const totalAmount = useMemo(
     () =>
       manifestOrders.reduce(
-        (sum, o) => sum + (o.net_amount ?? o.total_amount ?? 0),
+        (sum, o) => sum + (o.allocated_amount ?? o.net_amount ?? o.total_amount ?? 0),
         0,
       ),
     [manifestOrders],
@@ -234,6 +239,15 @@ export function PDPCreateModal({
   // ─── Selection Handlers ─────────────────────────
   const handleClusterChange = (value: string) => {
     const id = Number(value);
+    if (id === clusterId) return;
+    if (manifestOrders.length > 0) {
+      if (
+        !window.confirm(
+          "Changing the target cluster will clear your current manifest. Proceed?",
+        )
+      )
+        return;
+    }
     setClusterId(id);
     setManifestOrders([]); // Reset manifest when cluster changes
     onFilterChange(id, branchId || undefined);
@@ -241,6 +255,15 @@ export function PDPCreateModal({
 
   const handleBranchChange = (value: string) => {
     const id = Number(value);
+    if (id === branchId) return;
+    if (manifestOrders.length > 0) {
+      if (
+        !window.confirm(
+          "Changing the source branch will clear your current manifest. Proceed?",
+        )
+      )
+        return;
+    }
     setBranchId(id);
     setManifestOrders([]); // Reset manifest when branch changes
     onFilterChange(clusterId || undefined, id);
@@ -285,7 +308,8 @@ export function PDPCreateModal({
           : "Pre-dispatch plan created successfully!",
       );
       onClose();
-    } catch (err: any) {
+    } catch (e: unknown) {
+      const err = e as Error;
       toast.error(err.message || "Failed to save plan.");
     } finally {
       setIsSaving(false);
@@ -305,7 +329,7 @@ export function PDPCreateModal({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="w-full sm:max-w-8xl h-[95vh] max-h-[95vh] flex flex-col p-0 gap-0 overflow-hidden">
+      <DialogContent className="w-full sm:max-w-8xl h-[95vh] max-h-[95vh] flex flex-col p-0 gap-0 overflow-hidden min-h-0 pointer-events-auto">
         <DialogHeader className="px-6 py-4 border-b shrink-0">
           <DialogTitle className="text-xl font-semibold">
             {isEditMode ? "Edit Trip Configuration" : "Trip Configuration"}
@@ -316,105 +340,80 @@ export function PDPCreateModal({
         <div className="px-6 py-4 border-b shrink-0">
           <div className="grid grid-cols-6 gap-4">
             {/* Assigned Driver */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 flex flex-col">
               <Label htmlFor="pdp-driver">
                 Assigned Driver <span className="text-destructive">*</span>
               </Label>
-              <Select
+              <Combobox
+                options={
+                  masterData?.drivers?.map((d) => ({
+                    value: String(d.user_id),
+                    label: getDriverLabel(d),
+                  })) || []
+                }
                 value={driverId ? String(driverId) : ""}
-                onValueChange={(v) => setDriverId(Number(v))}
-              >
-                <SelectTrigger id="pdp-driver">
-                  <SelectValue placeholder="Select driver" />
-                </SelectTrigger>
-                <SelectContent>
-                  {masterData?.drivers?.map((driver) => (
-                    <SelectItem
-                      key={driver.user_id}
-                      value={String(driver.user_id)}
-                    >
-                      {getDriverLabel(driver)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onValueChange={(v) => setDriverId(v ? Number(v) : null)}
+                placeholder="Select driver"
+              />
             </div>
 
             {/* Vehicle Selection */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 flex flex-col">
               <Label htmlFor="pdp-vehicle">
                 Vehicle <span className="text-destructive">*</span>
               </Label>
-              <Select
+              <Combobox
+                options={
+                  masterData?.vehicles?.map((v) => ({
+                    value: String(v.vehicle_id),
+                    label: `${v.vehicle_plate}${v.vehicle_type_name ? ` (${v.vehicle_type_name})` : ""}`,
+                  })) || []
+                }
                 value={vehicleId ? String(vehicleId) : ""}
-                onValueChange={(v) => setVehicleId(Number(v))}
-              >
-                <SelectTrigger id="pdp-vehicle">
-                  <SelectValue placeholder="Select vehicle" />
-                </SelectTrigger>
-                <SelectContent>
-                  {masterData?.vehicles?.map((vehicle) => (
-                    <SelectItem
-                      key={vehicle.vehicle_id}
-                      value={String(vehicle.vehicle_id)}
-                    >
-                      {vehicle.vehicle_plate}
-                      {vehicle.vehicle_type_name
-                        ? ` (${vehicle.vehicle_type_name})`
-                        : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onValueChange={(v) => setVehicleId(v ? Number(v) : null)}
+                placeholder="Select vehicle"
+              />
               {selectedVehicle && (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground mt-1">
                   Max Capacity: {vehicleCapacity.toLocaleString()} kg
                 </p>
               )}
             </div>
 
             {/* Target Cluster */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 flex flex-col">
               <Label htmlFor="pdp-cluster">
                 Target Cluster <span className="text-destructive">*</span>
               </Label>
-              <Select
+              <Combobox
+                options={
+                  masterData?.clusters?.map((c) => ({
+                    value: String(c.id),
+                    label: c.cluster_name,
+                  })) || []
+                }
                 value={clusterId ? String(clusterId) : ""}
                 onValueChange={handleClusterChange}
-              >
-                <SelectTrigger id="pdp-cluster">
-                  <SelectValue placeholder="Select cluster" />
-                </SelectTrigger>
-                <SelectContent>
-                  {masterData?.clusters?.map((cluster) => (
-                    <SelectItem key={cluster.id} value={String(cluster.id)}>
-                      {cluster.cluster_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                placeholder="Select cluster"
+              />
             </div>
 
             {/* Source Branch */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 flex flex-col">
               <Label htmlFor="pdp-branch">
                 Source Branch <span className="text-destructive">*</span>
               </Label>
-              <Select
+              <Combobox
+                options={
+                  masterData?.branches?.map((b) => ({
+                    value: String(b.id),
+                    label: b.branch_name,
+                  })) || []
+                }
                 value={branchId ? String(branchId) : ""}
                 onValueChange={handleBranchChange}
-              >
-                <SelectTrigger id="pdp-branch">
-                  <SelectValue placeholder="Select branch" />
-                </SelectTrigger>
-                <SelectContent>
-                  {masterData?.branches?.map((branch) => (
-                    <SelectItem key={branch.id} value={String(branch.id)}>
-                      {branch.branch_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                placeholder="Select branch"
+              />
             </div>
 
             {/* Dispatch Date */}
@@ -452,11 +451,21 @@ export function PDPCreateModal({
                 <Package className="h-4 w-4" />
                 Available Deliveries
               </h3>
-              {clusterId && (
+              {(clusterId || branchId) && (
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Showing orders for{" "}
-                  {masterData?.clusters?.find((c) => c.id === clusterId)
-                    ?.cluster_name || "selected cluster"}
+                  {[
+                    clusterId
+                      ? masterData?.clusters?.find((c) => c.id === clusterId)
+                          ?.cluster_name
+                      : null,
+                    branchId
+                      ? masterData?.branches?.find((b) => b.id === branchId)
+                          ?.branch_name
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" • ") || "selected filters"}
                 </p>
               )}
               <div className="relative mt-2">
@@ -470,7 +479,7 @@ export function PDPCreateModal({
               </div>
             </div>
 
-            <ScrollArea className="flex-1 min-h-0">
+            <ScrollArea className="flex-1 min-h-0 flex flex-col">
               <div className="p-2 space-y-2">
                 {!clusterId ? (
                   <div className="text-center py-8 text-muted-foreground text-sm">
@@ -534,18 +543,15 @@ export function PDPCreateModal({
                         </div>
                         <div className="text-right">
                           <p className="text-sm font-semibold">
-                            ₱
-                            {(
+                            {formatPeso(
                               order.allocated_amount ??
                               order.net_amount ??
                               order.total_amount ??
                               0
-                            ).toLocaleString("en-PH", {
-                              minimumFractionDigits: 2,
-                            })}
+                            )}
                           </p>
                           <p className="text-xs text-muted-foreground mt-1 font-medium">
-                            {order.total_weight?.toLocaleString() || 0} kg
+                            {formatNumber(order.total_weight || 0)} kg
                           </p>
                         </div>
                       </div>
@@ -563,12 +569,9 @@ export function PDPCreateModal({
           <div className="flex-1 flex flex-col min-w-0">
             <div className="px-4 py-3 border-b shrink-0">
               <h3 className="font-semibold text-sm">Detailed Trip Manifest</h3>
-              <p className="text-xs text-muted-foreground">
-                Drag orders here or click to add to the delivery route
-              </p>
             </div>
 
-            <ScrollArea className="flex-1 min-h-0">
+            <ScrollArea className="flex-1 min-h-0 flex flex-col">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -614,17 +617,15 @@ export function PDPCreateModal({
                             .join(", ") || "—"}
                         </TableCell>
                         <TableCell className="text-right">
-                          {order.total_weight?.toLocaleString() || 0}
+                          {formatNumber(order.total_weight || 0)}
                         </TableCell>
                         <TableCell className="text-right">
-                          {(
+                          {formatPeso(
                             order.allocated_amount ??
                             order.net_amount ??
                             order.total_amount ??
                             0
-                          ).toLocaleString("en-PH", {
-                            minimumFractionDigits: 2,
-                          })}
+                          )}
                         </TableCell>
                         <TableCell className="text-right">
                           <Button
@@ -645,13 +646,10 @@ export function PDPCreateModal({
                         Totals:
                       </TableCell>
                       <TableCell className="text-right">
-                        {totalWeight.toLocaleString()} kg
+                        {formatNumber(totalWeight)} kg
                       </TableCell>
                       <TableCell className="text-right">
-                        ₱
-                        {totalAmount.toLocaleString("en-PH", {
-                          minimumFractionDigits: 2,
-                        })}
+                        {formatPeso(totalAmount)}
                       </TableCell>
                       <TableCell />
                     </TableRow>
@@ -665,14 +663,11 @@ export function PDPCreateModal({
               {manifestOrders.length} order(s) in manifest &nbsp;&bull;&nbsp;
               Total Value:{" "}
               <span className="font-semibold text-foreground">
-                ₱
-                {totalAmount.toLocaleString("en-PH", {
-                  minimumFractionDigits: 2,
-                })}
+                {formatPeso(totalAmount)}
               </span>
               &nbsp;&bull;&nbsp; Total Weight:{" "}
               <span className="font-semibold text-foreground">
-                {totalWeight.toLocaleString()} kg
+                {formatNumber(totalWeight)} kg
               </span>
             </div>
           </div>
@@ -695,10 +690,10 @@ export function PDPCreateModal({
                       : "text-muted-foreground",
                 )}
               >
-                {totalWeight.toLocaleString()} /{" "}
+                {formatNumber(totalWeight)} /{" "}
                 {vehicleCapacity > 0
-                  ? `${vehicleCapacity.toLocaleString()} kg`
-                  : "N/A"}
+                  ? `${formatNumber(vehicleCapacity)} kg`
+                  : "0 kg"}
               </span>
             </div>
             <Progress

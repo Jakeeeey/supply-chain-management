@@ -45,7 +45,7 @@ export function EngineTypeDialog({
   const isEdit = !!selectedEngineType;
 
   const form = useForm<EngineTypeFormValues>({
-    resolver: zodResolver(engineTypeSchema) as any,
+    resolver: zodResolver(engineTypeSchema),
     defaultValues: {
       name: "",
       description: "",
@@ -72,11 +72,18 @@ export function EngineTypeDialog({
       }
       onSuccess();
       onOpenChange(false);
-    } catch (error: any) {
-      if (error.message?.includes("unique") || error.message?.includes("UNIQUE")) {
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : "Something went wrong";
+
+      if (message.includes("unique") || message.includes("UNIQUE")) {
         toast.error("This engine type name already exists.");
       } else {
-        toast.error(error.message || "Something went wrong");
+        toast.error(message);
       }
     }
   };
@@ -86,11 +93,11 @@ export function EngineTypeDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {isEdit ? "Edit Engine Type" : "Create Engine Type"}
+            {isEdit ? "Edit Engine" : "Create Engine Type"}
           </DialogTitle>
           <DialogDescription>
             {isEdit
-              ? "Update engine type details below."
+              ? "Update engine details below."
               : "Register a new engine type to the system."}
           </DialogDescription>
         </DialogHeader>
@@ -98,7 +105,7 @@ export function EngineTypeDialog({
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
-              control={form.control as any}
+              control={form.control}
               name="name"
               render={({ field }) => (
                 <FormItem>
@@ -114,7 +121,7 @@ export function EngineTypeDialog({
             />
 
             <FormField
-              control={form.control as any}
+              control={form.control}
               name="description"
               render={({ field }) => (
                 <FormItem>

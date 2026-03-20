@@ -2,7 +2,9 @@
 
 import ErrorPage from "@/components/shared/ErrorPage";
 import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
+import { Button } from "@/components/ui/button";
 import { DispatchPlan } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/types/dispatch-plan.schema";
+import { RefreshCw } from "lucide-react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { PDPPlannerTable } from "./components/data-table";
@@ -19,10 +21,6 @@ export default function PDPPlannerPage() {
   const {
     plansData,
     plansTotal,
-    plansPage,
-    setPlansPage,
-    plansLimit,
-    setPlansLimit,
     masterData,
     metrics,
     isLoading,
@@ -52,7 +50,8 @@ export default function PDPPlannerPage() {
       await approvePlan(approvingPlan.dispatch_id);
       toast.success(`${approvingPlan.dispatch_no} approved successfully!`);
       setApprovingPlan(null);
-    } catch (err: any) {
+    } catch (e: unknown) {
+      const err = e as Error;
       toast.error(err.message || "Failed to approve plan.");
     } finally {
       setIsApproving(false);
@@ -71,16 +70,23 @@ export default function PDPPlannerPage() {
       <PDPPlannerTable
         data={plansData}
         totalCount={plansTotal}
-        pageIndex={plansPage}
-        pageSize={plansLimit}
-        onPaginationChange={(p: { pageIndex: number; pageSize: number }) => {
-          setPlansPage(p.pageIndex);
-          setPlansLimit(p.pageSize);
-        }}
         isLoading={isLoading}
         onView={handleView}
         onApprove={handleApproveClick}
         onSearch={(v: string) => setSearch(v)}
+        actionComponent={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refresh()}
+            disabled={isLoading}
+          >
+            <RefreshCw
+              className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
+            />
+            Refresh
+          </Button>
+        }
       />
 
       {/* View Modal */}
@@ -98,6 +104,7 @@ export default function PDPPlannerPage() {
         plan={approvingPlan}
         onConfirm={handleApproveConfirm}
         isLoading={isApproving}
+        fetchDetails={fetchPlanDetails}
       />
     </div>
   );

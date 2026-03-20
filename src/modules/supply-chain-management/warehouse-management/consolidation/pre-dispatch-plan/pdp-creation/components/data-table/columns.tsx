@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { DispatchPlan } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/types/dispatch-plan.schema";
 import { ColumnDef } from "@tanstack/react-table";
 import { Pencil } from "lucide-react";
+import { formatPeso } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/utils/format";
 
 /**
  * Column definitions for the PDP Creation (Pending) table.
@@ -92,12 +93,7 @@ export function getPDPCreationColumns({
       accessorKey: "total_amount",
       header: "Amount",
       cell: ({ row }) => {
-        const amount = row.original.total_amount;
-        if (!amount) return "₱0.00";
-        return `₱${Number(amount).toLocaleString("en-PH", {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })}`;
+        return formatPeso(row.original.total_amount ?? 0);
       },
     },
     {

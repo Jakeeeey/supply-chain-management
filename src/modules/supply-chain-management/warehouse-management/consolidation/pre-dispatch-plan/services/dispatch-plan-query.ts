@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   BranchOption,
   ClusterOption,
@@ -140,7 +141,7 @@ export const dispatchPlanQueryService = {
 
     // Resolve Sales Order Details and Product Weights
     const soIds = details.map((d) => d.sales_order_id);
-    let soWeightMap = new Map<number, number>();
+    const soWeightMap = new Map<number, number>();
 
     if (soIds.length) {
       // Step 1: Fetch all sales order details for these orders
@@ -312,11 +313,12 @@ export const dispatchPlanQueryService = {
           customer_code: string;
           total_amount: number;
           net_amount: number;
+          allocated_amount: number | null;
           po_no: string | null;
         }>("/items/sales_order", {
           "filter[order_id][_in]": soIds.join(","),
           fields:
-            "order_id,order_no,customer_code,total_amount,net_amount,po_no",
+            "order_id,order_no,customer_code,total_amount,net_amount,allocated_amount,po_no",
           limit: -1,
         }),
       ]);
@@ -359,7 +361,7 @@ export const dispatchPlanQueryService = {
             customer?.customer_name || customer?.store_name || "\u2014",
           city: customer?.city ?? undefined,
           province: customer?.province ?? undefined,
-          amount: order?.net_amount ?? order?.total_amount ?? 0,
+          amount: order?.allocated_amount ?? order?.net_amount ?? order?.total_amount ?? 0,
           po_no: order?.po_no ?? undefined,
         } as any);
       }

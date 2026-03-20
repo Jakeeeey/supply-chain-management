@@ -18,8 +18,6 @@ export function usePreDispatchPlanner() {
   // ─── Plans State ──────────────────────────────────
   const [plansData, setPlansData] = useState<DispatchPlan[]>([]);
   const [plansTotal, setPlansTotal] = useState(0);
-  const [plansPage, setPlansPage] = useState(0);
-  const [plansLimit, setPlansLimit] = useState(10);
 
   // ─── Master Data (for filters) ───────────────────
   const [masterData, setMasterData] = useState<DispatchPlanMasterData | null>(
@@ -27,6 +25,7 @@ export function usePreDispatchPlanner() {
   );
 
   // ─── Metrics State ────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [metrics, setMetrics] = useState<any>(null);
 
   // ─── Shared State ─────────────────────────────────
@@ -39,8 +38,7 @@ export function usePreDispatchPlanner() {
     setError(null);
     try {
       const params = new URLSearchParams({
-        limit: String(plansLimit),
-        offset: String(plansPage * plansLimit),
+        limit: "-1",
         search: search,
       });
 
@@ -65,15 +63,19 @@ export function usePreDispatchPlanner() {
       );
       setMasterData(masterRes.data || null);
       setMetrics(metricsRes.data || null);
-    } catch (err: any) {
+    } catch (e: unknown) {
+      const err = e as Error;
       setError(err.message);
     } finally {
-      setIsLoading(false);   
+      setIsLoading(false);
     }
-  }, [plansLimit, plansPage, search, clusterId, status]);
+  }, [search, clusterId, status]);
 
   useEffect(() => {
-    refresh();
+    const handler = setTimeout(() => {
+      refresh();
+    }, 300);
+    return () => clearTimeout(handler);
   }, [refresh]);
 
   // ─── Fetch Plan Details ───────────────────────────
@@ -106,10 +108,6 @@ export function usePreDispatchPlanner() {
   return {
     plansData,
     plansTotal,
-    plansPage,
-    setPlansPage,
-    plansLimit,
-    setPlansLimit,
 
     masterData,
     metrics,
