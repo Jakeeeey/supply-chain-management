@@ -12,7 +12,6 @@ import {
     createPhysicalInventoryDetailRfid,
     fetchPhysicalInventoryDetailRfid,
     fetchRfidOnhandByTag,
-    fetchRfidOnhandByBranch,
     updatePhysicalInventoryDetail,
 } from "../providers/fetchProvider";
 import {
@@ -105,11 +104,10 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
     const { open, branchId, phId, rows, canEdit, onOpenChange, onSaved } = props;
 
     const [, setIsLoadingExisting] = React.useState(false);
-    const [isInternalProcessing, setIsInternalProcessing] = React.useState(false);
+    const [isProcessing, setIsProcessing] = React.useState(false);
     const [existingPiTags, setExistingPiTags] = React.useState<PhysicalInventoryDetailRFIDRow[]>(
         [],
     );
-    const [onhandCache, setOnhandCache] = React.useState<Map<string, number>>(new Map());
     const [scannerSignal, setScannerSignal] = React.useState<ScannerSignalState>("idle");
     const [lastScannedTag, setLastScannedTag] = React.useState<string>("");
     const [lastSignalMessage, setLastSignalMessage] = React.useState<string>(
@@ -117,8 +115,6 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
     );
     const [scanAnimation, setScanAnimation] = React.useState<ScanAnimationState>("none");
     const [savedCountPulse, setSavedCountPulse] = React.useState(false);
-    const [pendingTags, setPendingTags] = React.useState<Set<string>>(new Set());
-    const isProcessing = isInternalProcessing || pendingTags.size > 0;
 
     const hiddenInputRef = React.useRef<HTMLInputElement | null>(null);
     const signalResetTimerRef = React.useRef<number | null>(null);
@@ -293,7 +289,7 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
                 setScanAnimation("none");
                 resetScannerBuffer();
                 focusHiddenReceiver();
-            }, 450);
+            }, 1400);
         },
         [
             canEdit,
@@ -315,17 +311,8 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
 
         try {
             setIsLoadingExisting(true);
-            const [tags, onhandRows] = await Promise.all([
-                fetchPhysicalInventoryDetailRfid(phId),
-                branchId ? fetchRfidOnhandByBranch(branchId) : Promise.resolve([]),
-            ]);
+            const tags = await fetchPhysicalInventoryDetailRfid(phId);
             setExistingPiTags(tags);
-
-            const nextCache = new Map<string, number>();
-            for (const row of onhandRows) {
-                nextCache.set(row.rfid, row.productId);
-            }
-            setOnhandCache(nextCache);
         } catch (error) {
             const message =
                 error instanceof Error ? error.message : "Failed to load existing RFID tags.";
@@ -333,7 +320,7 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
         } finally {
             setIsLoadingExisting(false);
         }
-    }, [phId, branchId]);
+    }, [phId]);
 
     React.useEffect(() => {
         if (!open) {
@@ -419,13 +406,9 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
 
     const hasDuplicateInCurrentPi = React.useCallback(
         (rfidTag: string): boolean => {
-            const normalized = finalizeHexTag(rfidTag);
-            if (existingPiTags.some((row) => sameTag(row.rfid_tag, normalized))) {
-                return true;
-            }
-            return pendingTags.has(normalized);
+            return existingPiTags.some((row) => sameTag(row.rfid_tag, rfidTag));
         },
-        [existingPiTags, pendingTags],
+        [existingPiTags],
     );
 
     const processScan = React.useCallback(
@@ -473,7 +456,7 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
             }
 
             if (hasDuplicateInCurrentPi(normalized)) {
-                const message = "This RFID tag already exists or is being processed.";
+                const message = "This RFID tag already exists in the current PI.";
                 toast.error(message, {
                     description: `RFID: ${normalized}`,
                 });
@@ -481,50 +464,21 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
                 return;
             }
 
-            // Immediately reset buffer and refocus for next scan
-            resetScannerBuffer();
-            focusHiddenReceiver();
-
             try {
-                // Track as pending to prevent duplicate scans while processing
-                setPendingTags((prev) => {
-                    const next = new Set(prev);
-                    next.add(normalized);
-                    return next;
-                });
-
-                setIsInternalProcessing(true);
+                setIsProcessing(true);
                 setScannerSignal("processing");
                 setLastSignalMessage("Processing scan...");
                 setLastScannedTag(normalized);
                 setScanAnimation("none");
 
-                // Verify where it belongs (Current On-hand)
-                // Use local cache for instant lookup to support fast scan
-                let rfidProductId: number | null = null;
-                const cachedProductId = onhandCache.get(normalized);
+                const resolved = await fetchRfidOnhandByTag(normalized, branchId);
 
-                if (cachedProductId !== undefined) {
-                    rfidProductId = cachedProductId;
-                } else {
-                    // Background fallback to API if not in cache
-                    const resolved = await fetchRfidOnhandByTag(normalized, branchId);
-                    if (!resolved.ok) {
-                        throw new Error(resolved.message || "RFID lookup failed.");
-                    }
-                    if (resolved.item) {
-                        rfidProductId = resolved.item.productId;
-                        // Update cache for future scans in this session
-                        setOnhandCache((prev) => {
-                            const next = new Map(prev);
-                            next.set(normalized, rfidProductId!);
-                            return next;
-                        });
-                    }
+                if (!resolved.ok) {
+                    throw new Error(resolved.message || "RFID lookup failed.");
                 }
 
-                if (rfidProductId === null) {
-                    const message = "RFID not found in on-hand records.";
+                if (!resolved.item) {
+                    const message = resolved.message || "RFID not found in on-hand records.";
                     toast.error(message, {
                         description: `RFID: ${normalized}`,
                     });
@@ -532,10 +486,10 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
                     return;
                 }
 
-                const matchedRow = rowByProductId.get(rfidProductId);
+                const matchedRow = rowByProductId.get(resolved.item.productId);
 
                 if (!matchedRow) {
-                    const message = `Scanned RFID belongs to product ID ${rfidProductId}, but that product is not loaded in the current PI.`;
+                    const message = `Scanned RFID belongs to product ID ${resolved.item.productId}, but that product is not loaded in the current PI.`;
                     toast.error(message, {
                         description: `RFID: ${normalized}`,
                     });
@@ -632,13 +586,9 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
                 });
                 setTemporarySignal("error", message, normalized);
             } finally {
-                // Clear from pending
-                setPendingTags((prev) => {
-                    const next = new Set(prev);
-                    next.delete(normalized);
-                    return next;
-                });
-                setIsInternalProcessing(false);
+                setIsProcessing(false);
+                resetScannerBuffer();
+                focusHiddenReceiver();
             }
         },
         [
@@ -762,7 +712,7 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
                     <DialogOverlay className="fixed inset-0 z-50 bg-black/50 backdrop-blur-[1px]" />
 
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
-                        <div className="flex w-[min(640px,96vw)] max-h-[90vh] max-w-2xl flex-col overflow-hidden rounded-2xl border bg-background shadow-2xl">
+                        <div className="flex w-[min(640px,96vw)] max-w-2xl flex-col overflow-hidden rounded-2xl border bg-background shadow-2xl">
                             <div className="flex items-start justify-between border-b px-4 py-3 sm:px-5">
                                 <div className="min-w-0">
                                     <h2 className="text-base font-semibold sm:text-lg">
@@ -793,7 +743,7 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
                                 tabIndex={-1}
                                 aria-hidden="true"
                                 className="pointer-events-none absolute left-0 top-0 h-0 w-0 opacity-0"
-                                disabled={!open || !canEdit}
+                                disabled={!open || !canEdit || isProcessing}
                                 onBlur={() => {
                                     if (!open || !canEdit || isProcessing) return;
                                     focusHiddenReceiver();
@@ -802,6 +752,11 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
                                     scanBufferRef.current = extractHexCharacters(event.target.value);
                                 }}
                                 onKeyDown={(event) => {
+                                    if (isProcessing) {
+                                        event.preventDefault();
+                                        return;
+                                    }
+
                                     const now = Date.now();
 
                                     if (now - lastKeyAtRef.current > 1000) {

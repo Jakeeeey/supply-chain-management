@@ -25,6 +25,12 @@ function fmtMoney(value: number): string {
     });
 }
 
+function fmtQty(value: number): string {
+    return value.toLocaleString("en-PH", {
+        maximumFractionDigits: 2,
+    });
+}
+
 export function OffsettingGroupsTable({ groups }: Props) {
     return (
         <Card className="rounded-2xl">
@@ -80,7 +86,7 @@ export function OffsettingGroupsTable({ groups }: Props) {
                                                             variant="outline"
                                                             className="rounded-full border-red-200 bg-red-50 px-2 py-0 text-[10px] text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-300"
                                                         >
-                                                            {row.product_label}
+                                                            {`${row.product_label} (${fmtQty(Math.abs(row.variance))} ${row.unit_shortcut || row.unit_name || "PCS"})`}
                                                         </Badge>
                                                     ))}
                                                 </div>
@@ -94,7 +100,7 @@ export function OffsettingGroupsTable({ groups }: Props) {
                                                             variant="outline"
                                                             className="rounded-full border-emerald-200 bg-emerald-50 px-2 py-0 text-[10px] text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-300"
                                                         >
-                                                            {row.product_label}
+                                                            {`${row.product_label} (${fmtQty(Math.abs(row.variance))} ${row.unit_shortcut || row.unit_name || "PCS"})`}
                                                         </Badge>
                                                     ))}
                                                 </div>

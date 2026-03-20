@@ -36,7 +36,7 @@ function fmtMoney(value: number): string {
 
 function fmtQty(value: number): string {
     return value.toLocaleString("en-PH", {
-        maximumFractionDigits: 0,
+        maximumFractionDigits: 2,
     });
 }
 
@@ -96,6 +96,7 @@ export function OffsettingSelectionTable({
                                         />
                                     </TableHead>
                                     <TableHead className="py-2 text-xs">Product</TableHead>
+                                    <TableHead className="py-2 text-xs">UOM</TableHead>
                                     <TableHead className="py-2 text-right text-xs">Variance</TableHead>
                                     <TableHead className="py-2 text-right text-xs">Diff Cost</TableHead>
                                     <TableHead className="py-2 text-right text-xs">Selection Total</TableHead>
@@ -135,6 +136,9 @@ export function OffsettingSelectionTable({
                                                     </p>
                                                 </div>
                                             </TableCell>
+                                            <TableCell className="py-2 text-xs">
+                                                {row.unit_shortcut || row.unit_name || "PCS"}
+                                            </TableCell>
                                             <TableCell
                                                 className={`py-2 text-right text-xs font-medium ${
                                                     direction === "SHORT"
@@ -142,7 +146,7 @@ export function OffsettingSelectionTable({
                                                         : "text-emerald-700 dark:text-emerald-300"
                                                 }`}
                                             >
-                                                {fmtQty(Math.abs(row.variance_base ?? row.variance ?? 0))}
+                                                {fmtQty(Math.abs(row.variance))}
                                             </TableCell>
                                             <TableCell
                                                 className={`py-2 text-right text-xs font-medium ${

@@ -302,14 +302,17 @@ const data = {
                     url: "/scm/inventory-management/physical-inventory",
                     items: [
                         {
-                            title: "List/Create",
+                            title: "Physical Count (RFID)",
                             url: "/scm/inventory-management/physical-inventory   ",
                         },
                         {
                             title: "Offsetting",
                             url: "/scm/inventory-management/physical-inventory/offsetting   ",
                         },
-
+                        {
+                            title: "Manual Count (No RFID)",
+                            url: "/scm/inventory-management/physical-inventory-manual",
+                        },
                     ]
                 },
                 {
