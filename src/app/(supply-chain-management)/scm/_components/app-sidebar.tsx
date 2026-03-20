@@ -259,11 +259,24 @@ const data = {
                     title: "Physical Inventory",
                     url: "/scm/inventory-management/physical-inventory",
                     items: [
-                        { title: "List/Create", url: "/scm/inventory-management/physical-inventory" },
-                        { title: "Offsetting", url: "/scm/inventory-management/physical-inventory/offsetting" },
-                    ],
+                        {
+                            title: "Physical Count (RFID)",
+                            url: "/scm/inventory-management/physical-inventory   ",
+                        },
+                        {
+                            title: "Offsetting",
+                            url: "/scm/inventory-management/physical-inventory/offsetting   ",
+                        },
+                        {
+                            title: "Manual Count (No RFID)",
+                            url: "/scm/inventory-management/physical-inventory-manual",
+                        },
+                    ]
                 },
-                { title: "Branch Management", url: "/scm/inventory-management/branch-management" },
+                {
+                    title: "Branch Management",
+                    url: "/scm/inventory-management/branch-management",
+                },
             ],
         },
         {
