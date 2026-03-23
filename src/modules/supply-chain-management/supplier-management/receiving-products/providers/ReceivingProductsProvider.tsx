@@ -192,7 +192,7 @@ const playBeep = (type: "success" | "error" = "success") => {
             osc.start(ctx.currentTime);
             osc.stop(ctx.currentTime + 0.3);
         }
-    } catch (e) {
+    } catch {
         // Ignored if audio is blocked or unsupported
     }
 };

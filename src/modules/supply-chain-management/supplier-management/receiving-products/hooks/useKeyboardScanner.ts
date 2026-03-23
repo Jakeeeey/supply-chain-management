@@ -22,7 +22,7 @@ export function useKeyboardScanner({
     const bufferRef = React.useRef<string>("");
     const lastTsRef = React.useRef<number>(0);
     const lastScanTsRef = React.useRef<number>(0);
-    const processingRef = React.useRef<boolean>(false);
+
 
     React.useEffect(() => {
         if (!enabled) return;
