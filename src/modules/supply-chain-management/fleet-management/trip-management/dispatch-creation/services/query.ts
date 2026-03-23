@@ -8,6 +8,34 @@ import {
   VehicleOption,
 } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/types/schema";
 
+const READY_STATUSES = ["For Loading", "On Hold"];
+
+interface RawDispatchPlan {
+  dispatch_id: number;
+  dispatch_no: string;
+  driver_id?: number;
+  vehicle_id?: number;
+  cluster_id?: number;
+  branch_id?: number;
+  total_amount: number;
+  status: string;
+}
+
+interface RawSalesOrder {
+  order_id: number;
+  order_no: string;
+  order_status: string;
+  customer_code?: string;
+  total_amount?: number;
+  net_amount?: number;
+}
+
+interface RawSalesInvoice {
+  invoice_id: number;
+  order_id: string;
+  transaction_status: string;
+}
+
 export const dispatchCreationQueryService = {
   /**
    * Fetches all master lookup data required for the Dispatch Creation form.
@@ -100,8 +128,7 @@ export const dispatchCreationQueryService = {
   async fetchApprovedPreDispatchPlans(branchId?: number, currentPlanId?: number) {
     const params: Record<string, any> = {
       "filter[_or][0][status][_eq]": "Picked",
-      fields:
-        "dispatch_id,dispatch_no,driver_id,vehicle_id,cluster_id,branch_id,total_amount,status",
+      fields: "dispatch_id,dispatch_no,driver_id,vehicle_id,cluster_id,branch_id,total_amount,status",
       limit: -1,
     };
 
@@ -112,13 +139,12 @@ export const dispatchCreationQueryService = {
       params["filter[branch_id][_eq]"] = branchId;
     }
 
-    const plansRes = await fetchItems<any>("/items/dispatch_plan", params);
+    const plansRes = await fetchItems<RawDispatchPlan>("/items/dispatch_plan", params);
     const plans = plansRes.data || [];
 
     if (!plans.length) return plansRes;
 
-    // Enrich with Cluster Names & Item Counts (Filtered by SO status)
-    const planIds = plans.map((p: any) => p.dispatch_id || p.id);
+    const planIds = plans.map((p) => p.dispatch_id);
 
     const [clustersRes, detailsRes] = await Promise.all([
       fetchItems<{ id: number; cluster_name: string }>("/items/cluster", {
@@ -137,31 +163,22 @@ export const dispatchCreationQueryService = {
 
     const details = detailsRes.data || [];
     const soIds = [...new Set(details.map((d) => d.sales_order_id))];
+    if (!soIds.length) return { data: [] };
 
-    // Fetch SO statuses and order numbers for these IDs
-    const ordersRes = await fetchItems<{ order_id: number; order_no: string; order_status: string }>(
-      "/items/sales_order",
-      {
-        "filter[order_id][_in]": soIds.join(","),
-        fields: "order_id,order_no,order_status",
-        limit: -1,
-      },
-    );
+    const ordersRes = await fetchItems<RawSalesOrder>("/items/sales_order", {
+      "filter[order_id][_in]": soIds.join(","),
+      fields: "order_id,order_no,order_status",
+      limit: -1,
+    });
 
     const orders = ordersRes.data || [];
     const orderNos = orders.map((o) => o.order_no).filter(Boolean);
 
-    const READY_STATUSES = ["For Loading", "On Hold"];
-
-    // Fetch Invoice statuses
-    let invoicesRes: { data: { order_id: string; transaction_status: string }[] } | undefined;
+    let invoicesRes: { data: RawSalesInvoice[] } | undefined;
     if (orderNos.length) {
-      invoicesRes = await fetchItems<{
-        order_id: string;
-        transaction_status: string;
-      }>("/items/sales_invoice", {
+      invoicesRes = await fetchItems<RawSalesInvoice>("/items/sales_invoice", {
         "filter[order_id][_in]": orderNos.join(","),
-        fields: "order_id,transaction_status",
+        fields: "invoice_id,order_id,transaction_status",
         limit: -1,
       });
     }
@@ -187,11 +204,11 @@ export const dispatchCreationQueryService = {
     });
 
     const enrichedData = plans
-      .map((p: any) => {
-        const planId = p.dispatch_id || p.id;
+      .map((p) => {
+        const planId = p.dispatch_id;
         return {
           ...p,
-          cluster_name: clusterMap.get(p.cluster_id) || "Unassigned",
+          cluster_name: clusterMap.get(p.cluster_id || -1) || "Unassigned",
           total_items: detailCountMap.get(planId) || 0,
         };
       })
@@ -220,11 +237,10 @@ export const dispatchCreationQueryService = {
         limit: -1,
       });
 
-      // We need to map invoice_id back to sales_order_id for consistent enrichment
       const tripInvoices = tripInvoicesRes.data || [];
       if (tripInvoices.length > 0) {
         const invIds = tripInvoices.map((ti) => ti.invoice_id);
-        const invoicesRes = await fetchItems<{ invoice_id: number; order_id: string }>(
+        const invoicesRes = await fetchItems<RawSalesInvoice>(
           "/items/sales_invoice",
           {
             "filter[invoice_id][_in]": invIds.join(","),
@@ -234,7 +250,7 @@ export const dispatchCreationQueryService = {
         );
         const invToOrderMap = new Map((invoicesRes.data || []).map(i => [i.invoice_id, i.order_id]));
         
-        const orderRes = await fetchItems<{ order_id: number; order_no: string }>(
+        const orderRes = await fetchItems<RawSalesOrder>(
           "/items/sales_order",
           {
             "filter[order_no][_in]": Array.from(invToOrderMap.values()).join(","),
@@ -274,83 +290,46 @@ export const dispatchCreationQueryService = {
 
     if (!details.length) return { data: [] };
 
-    // 2. Fetch linked sales orders
     const soIds = details.map((d) => d.sales_order_id);
-    const ordersRes = await fetchItems<{
-      order_id: number;
-      order_no: string;
-      customer_code: string;
-      order_status: string;
-      total_amount: number;
-      net_amount: number;
-    }>("/items/sales_order", {
+    const ordersRes = await fetchItems<RawSalesOrder>("/items/sales_order", {
       "filter[order_id][_in]": soIds.join(","),
-      fields:
-        "order_id,order_no,customer_code,order_status,total_amount,net_amount",
+      fields: "order_id,order_no,customer_code,order_status,total_amount,net_amount",
       limit: -1,
     });
 
     const orders = ordersRes.data || [];
     const orderMap = new Map(orders.map((o) => [o.order_id, o]));
 
-    // 3. Fetch linked invoices (SO.order_no -> SI.order_id)
     const orderNos = orders.map((o) => o.order_no).filter(Boolean);
-    let invoiceMap = new Map<string, { invoice_id: number; order_id: string; transaction_status: string }>();
+    let invoiceMap = new Map<string, RawSalesInvoice>();
 
     if (orderNos.length) {
-      const invoicesRes = await fetchItems<{
-        invoice_id: number;
-        order_id: string;
-        transaction_status: string;
-      }>("/items/sales_invoice", {
+      const invoicesRes = await fetchItems<RawSalesInvoice>("/items/sales_invoice", {
         "filter[order_id][_in]": orderNos.join(","),
         fields: "invoice_id,order_id,transaction_status",
         limit: -1,
       });
-      invoiceMap = new Map(
-        (invoicesRes.data || []).map((i) => [i.order_id, i]),
-      );
+      invoiceMap = new Map((invoicesRes.data || []).map((i) => [i.order_id, i]));
     }
 
-    // 4. Resolve customer info
-    const customerCodes = [
-      ...new Set(orders.map((o) => o.customer_code).filter(Boolean)),
-    ];
+    const customerCodes = [...new Set(orders.map((o) => o.customer_code).filter((c): c is string => !!c))];
 
-    let customerMap = new Map<
-      string,
-      {
-        customer_code: string;
-        customer_name: string;
-        store_name?: string;
-        city?: string;
-      }
-    >();
+    let customerMap = new Map<string, { customer_code: string; customer_name: string; store_name?: string; city?: string }>();
     if (customerCodes.length) {
-      const custRes = await fetchItems<{
-        customer_code: string;
-        customer_name: string;
-        store_name: string;
-        city: string;
-      }>("/items/customer", {
+      const custRes = await fetchItems<{ customer_code: string; customer_name: string; store_name: string; city: string }>("/items/customer", {
         "filter[customer_code][_in]": customerCodes.join(","),
         fields: "customer_code,customer_name,store_name,city",
         limit: -1,
       });
-      customerMap = new Map(
-        (custRes.data || []).map((c) => [c.customer_code, c]),
-      );
+      customerMap = new Map((custRes.data || []).map((c) => [c.customer_code, c]));
     }
-
-    // 5. Build enriched result
-    const READY_STATUSES = ["For Loading", "On Hold"];
 
     const enrichedDetails = details
       .map((d) => {
         const order = orderMap.get(d.sales_order_id);
         if (!order) return null;
 
-        const customer = customerMap.get(order.customer_code);
+        const customer = order.customer_code ? customerMap.get(order.customer_code) : undefined;
         const invoice = invoiceMap.get(order.order_no);
 
         const orderStatus = order.order_status || "—";
@@ -363,8 +342,6 @@ export const dispatchCreationQueryService = {
           sales_order_id: d.sales_order_id,
           invoice_id: invoice?.invoice_id || d.invoice_id,
           order_no: order.order_no || "—",
-          // The UI expects order_status for its displays right now, so we will assign the invoice status here.
-          // BUT, we will additionally pass the true_order_status so the validation logic can use it instead.
           order_status: invoice?.transaction_status || orderStatus,
           true_order_status: orderStatus,
           customer_name: customer?.customer_name || customer?.store_name || "—",
