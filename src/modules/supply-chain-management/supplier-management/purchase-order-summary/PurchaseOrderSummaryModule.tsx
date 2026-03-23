@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, ChevronRight, ChevronLeft, FilterX, ListFilter, Printer, Calendar } from "lucide-react";
+import { ChevronRight, ChevronLeft, FilterX, ListFilter, Printer, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -201,7 +201,7 @@ export default function PurchaseOrderSummaryModule({
                   <SelectContent>
                     <SelectItem value="all">All Types</SelectItem>
                     <SelectItem value="1">Trade</SelectItem>
-                    <SelectItem value="2">Non-Trade</SelectItem>
+                    <SelectItem value="0">Non-Trade</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -380,47 +380,80 @@ export default function PurchaseOrderSummaryModule({
       <Dialog open={!!selectedPO} onOpenChange={(open) => !open && setSelectedPO(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold">Details of the transaction</DialogTitle>
+            <DialogTitle className="text-lg font-bold">Transaction Details</DialogTitle>
           </DialogHeader>
           
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Search Details</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input 
-                  placeholder="Search inside transaction..." 
-                  className="pl-9 h-10 bg-muted/20 border-border"
-                  readOnly
-                />
-              </div>
-              <p className="text-[10px] text-muted-foreground italic ml-1">* Search is currently non-functional</p>
-            </div>
+            {selectedPO && (() => {
+               const invStatusText = transactionStatuses.find(s => s.id === selectedPO.inventory_status)?.status || "Unknown";
+               const payStatusText = paymentStatuses.find(s => s.id === selectedPO.payment_status)?.status || "Unknown";
+               const supplierName = suppliers.find(s => s.id === selectedPO.supplier_name)?.supplier_name || selectedPO.supplier_name;
+               const gross = Number(selectedPO.gross_amount ?? selectedPO.grossAmount ?? selectedPO.subtotal ?? 0);
+               const disc = Number(selectedPO.discounted_amount ?? selectedPO.discountAmount ?? selectedPO.discount_amount ?? selectedPO.discount_value ?? 0);
+               const net = Number(selectedPO.total_amount ?? selectedPO.total ?? selectedPO.net_amount ?? 0);
+               
+               return (
+                 <div className="space-y-3">
+                    <div className="flex flex-col gap-1 p-3 bg-muted/30 rounded-lg border border-border">
+                        <span className="text-[10px] font-bold uppercase text-muted-foreground">Transaction type</span>
+                        <span className="text-sm font-semibold text-foreground">
+                          {selectedPO.transaction_type === 1 ? "Trade" : "Non-Trade"}
+                        </span>
+                    </div>
 
-            <div className="pt-2">
-              <div className="flex flex-col gap-1 p-3 bg-muted/30 rounded-lg border border-border">
-                  <span className="text-[10px] font-bold uppercase text-muted-foreground">Transaction type</span>
-                  <span className="text-sm font-semibold text-foreground">
-                    {selectedPO?.transaction_type === 1 ? "Trade" : "Non-Trade"}
-                  </span>
-              </div>
-            </div>
-            
-            {/* Displaying some additional basic Info since it's a detail modal */}
-            {selectedPO && (
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                 <div className="flex flex-col gap-1 p-3 bg-muted/30 rounded-lg border border-border">
-                    <span className="text-[10px] font-bold uppercase text-muted-foreground">PO Number</span>
-                    <span className="text-sm font-semibold text-foreground">{selectedPO.purchase_order_no}</span>
+                    <div className="grid grid-cols-2 gap-3">
+                       <div className="flex flex-col gap-1 p-3 bg-muted/30 rounded-lg border border-border">
+                          <span className="text-[10px] font-bold uppercase text-muted-foreground">PO Number</span>
+                          <span className="text-sm font-semibold text-foreground">{selectedPO.purchase_order_no}</span>
+                       </div>
+                       <div className="flex flex-col gap-1 p-3 bg-muted/30 rounded-lg border border-border">
+                          <span className="text-[10px] font-bold uppercase text-muted-foreground">Date Requested</span>
+                          <span className="text-sm font-semibold text-foreground">{selectedPO.date || "--"}</span>
+                       </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1 p-3 bg-muted/30 rounded-lg border border-border">
+                       <span className="text-[10px] font-bold uppercase text-muted-foreground">Supplier</span>
+                       <span className="text-sm font-semibold text-foreground">{supplierName}</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                       <div className="flex flex-col gap-1 p-3 bg-muted/30 rounded-lg border border-border items-start">
+                          <span className="text-[10px] font-bold uppercase text-muted-foreground">Inventory Status</span>
+                          <Badge variant="outline" className={`${getInventoryStatusColor(invStatusText)} px-2 py-0.5 mt-1 text-[10px] font-black border shadow-none uppercase`}>
+                             {invStatusText}
+                          </Badge>
+                       </div>
+                       <div className="flex flex-col gap-1 p-3 bg-muted/30 rounded-lg border border-border items-start">
+                          <span className="text-[10px] font-bold uppercase text-muted-foreground">Payment Status</span>
+                          <Badge variant="outline" className={`${getPaymentStatusColor(payStatusText)} px-2 py-0.5 mt-1 text-[10px] font-black border shadow-none uppercase`}>
+                             {payStatusText}
+                          </Badge>
+                       </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1 p-3 bg-muted/30 rounded-lg border border-border">
+                       <span className="text-[10px] font-bold uppercase text-muted-foreground">Remarks</span>
+                       <span className="text-sm font-semibold text-foreground italic">{selectedPO.remark || "--"}</span>
+                    </div>
+
+                    <div className="flex flex-col gap-2 p-4 bg-muted/20 rounded-lg border border-border">
+                       <div className="flex justify-between items-center">
+                          <span className="text-xs font-semibold text-muted-foreground">Gross Amount</span>
+                          <span className="text-sm font-mono text-muted-foreground">₱{gross.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                       </div>
+                       <div className="flex justify-between items-center text-destructive">
+                          <span className="text-xs font-semibold">Discount</span>
+                          <span className="text-sm font-mono">- ₱{disc.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                       </div>
+                       <div className="pt-2 border-t border-border mt-1 flex justify-between items-center">
+                          <span className="text-[11px] font-bold uppercase text-foreground">Total Net Amount</span>
+                          <span className="text-base font-bold font-mono text-primary">₱{net.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                       </div>
+                    </div>
                  </div>
-                 <div className="flex flex-col gap-1 p-3 bg-muted/30 rounded-lg border border-border">
-                    <span className="text-[10px] font-bold uppercase text-muted-foreground">Total Amount</span>
-                    <span className="text-sm font-bold font-mono text-foreground">
-                      ₱{(Number(selectedPO.total_amount ?? selectedPO.total ?? selectedPO.net_amount ?? 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </span>
-                 </div>
-              </div>
-            )}
+               );
+            })()}
           </div>
         </DialogContent>
       </Dialog>
