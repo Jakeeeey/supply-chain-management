@@ -15,6 +15,58 @@ function directusHeaders() {
   return h;
 }
 
+// ─── Helpers ──────────────────────────────────────────────────
+
+/**
+ * Generates a human-readable dispatch number: DP-YYYYMMDD-HHMM
+ */
+function generateDispatchNo() {
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0, 10).replace(/-/g, "");
+  const timeStr = now.getHours().toString().padStart(2, "0") + 
+                 now.getMinutes().toString().padStart(2, "0");
+  const randomStr = Math.floor(Math.random() * 1000).toString().padStart(3, "0");
+  return `DP-${dateStr}-${timeStr}${randomStr}`;
+}
+
+/**
+ * Prepares the staff payloads for a dispatch plan.
+ */
+function prepareStaffPayload(planId: number, driverId: number, helpers: { user_id: number }[]) {
+  return [
+    {
+      post_dispatch_plan_id: planId,
+      user_id: driverId,
+      role: "Driver",
+      is_present: false,
+    },
+    ...(helpers ?? []).map((h) => ({
+      post_dispatch_plan_id: planId,
+      user_id: h.user_id,
+      role: "Helper",
+      is_present: false,
+    })),
+  ];
+}
+
+/**
+ * Performs a batch POST request to a Directus collection.
+ */
+async function batchCreate(collection: string, payloads: any[]) {
+  if (!payloads.length) return;
+  const res = await fetch(`${DIRECTUS_BASE}/items/${collection}`, {
+    method: "POST",
+    headers: directusHeaders(),
+    body: JSON.stringify(payloads),
+  });
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => ({}));
+    throw new Error(`Batch create failed for ${collection}: ${JSON.stringify(errorBody.errors || errorBody)}`);
+  }
+}
+
+// ─── Handlers ─────────────────────────────────────────────────
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -97,29 +149,20 @@ export async function POST(req: NextRequest) {
 
     const data = parsed.data;
 
-    // 2. Insert into post_dispatch_plan
+    // 2. Insert into post_dispatch_plan (Header)
     const planPayload = {
-      doc_no: `DP-${Date.now()}`,
+      doc_no: generateDispatchNo(),
       dispatch_id: data.pre_dispatch_plan_id,
       driver_id: data.driver_id,
       vehicle_id: data.vehicle_id,
       starting_point: data.starting_point,
       status: "For Approval",
       amount: data.amount,
-      encoder_id: data.driver_id, // Fallback to driver as encoder
-      estimated_time_of_dispatch: new Date(
-        data.estimated_time_of_dispatch,
-      ).toISOString(),
-      estimated_time_of_arrival: new Date(
-        data.estimated_time_of_arrival,
-      ).toISOString(),
+      encoder_id: data.driver_id, 
+      estimated_time_of_dispatch: new Date(data.estimated_time_of_dispatch).toISOString(),
+      estimated_time_of_arrival: new Date(data.estimated_time_of_arrival).toISOString(),
       remarks: data.remarks,
     };
-
-    console.log(
-      "[Dispatch POST] Sending Payload:",
-      JSON.stringify(planPayload, null, 2),
-    );
 
     const planRes = await fetch(`${DIRECTUS_BASE}/items/post_dispatch_plan`, {
       method: "POST",
@@ -129,33 +172,14 @@ export async function POST(req: NextRequest) {
 
     if (!planRes.ok) {
       const errorBody = await planRes.json().catch(() => ({}));
-      console.error(
-        "[Dispatch POST] Header creation failed:",
-        JSON.stringify(errorBody, null, 2),
-      );
-      throw new Error(
-        `Failed to create dispatch plan header: ${JSON.stringify(errorBody.errors || errorBody)}`,
-      );
+      throw new Error(`Failed to create dispatch plan header: ${JSON.stringify(errorBody.errors || errorBody)}`);
     }
     const planDoc = await planRes.json();
     const newPlanId = planDoc.data.id;
 
-    // 3-6. Secondary Insertions in Parallel
-    const staffPayloads = [
-      {
-        post_dispatch_plan_id: newPlanId,
-        user_id: data.driver_id,
-        role: "Driver",
-        is_present: false,
-      },
-      ...(data.helpers ?? []).map((h: { user_id: number }) => ({
-        post_dispatch_plan_id: newPlanId,
-        user_id: h.user_id,
-        role: "Helper",
-        is_present: false,
-      })),
-    ];
-
+    // 3. Prepare Sub-Payloads
+    const staffPayloads = prepareStaffPayload(newPlanId, data.driver_id, data.helpers ?? []);
+    
     const junctionPayload = {
       post_dispatch_plan_id: newPlanId,
       dispatch_plan_id: data.pre_dispatch_plan_id,
@@ -178,44 +202,17 @@ export async function POST(req: NextRequest) {
       status: "Not Fulfilled",
     }));
 
-    // Execute multiple sub-tasks in parallel
-    const subTasks = [
-      // Staff
-      ...staffPayloads.map(sp => 
-        fetch(`${DIRECTUS_BASE}/items/post_dispatch_plan_staff`, {
-          method: "POST", headers: directusHeaders(), body: JSON.stringify(sp),
-        }).then(r => r.ok ? r : Promise.reject(`Staff assignment failed: ${sp.user_id}`))
-      ),
-      // Junction
-      fetch(`${DIRECTUS_BASE}/items/post_dispatch_dispatch_plans`, {
-        method: "POST", headers: directusHeaders(), body: JSON.stringify(junctionPayload),
-      }).then(r => r.ok ? r : Promise.reject("Failed to link PDP junction")),
-      // Budgets
-      ...budgetPayloads.map(bp => 
-        fetch(`${DIRECTUS_BASE}/items/post_dispatch_budgeting`, {
-          method: "POST", headers: directusHeaders(), body: JSON.stringify(bp),
-        }).then(r => r.ok ? r : Promise.reject(`Budget allocation failed: ${bp.coa_id}`))
-      ),
-      // Invoices
-      ...invoicePayloads.map(ip => 
-        fetch(`${DIRECTUS_BASE}/items/post_dispatch_invoices`, {
-          method: "POST", headers: directusHeaders(), body: JSON.stringify(ip),
-        }).then(r => r.ok ? r : Promise.reject(`Invoice sync failed: ${ip.invoice_id}`))
-      ),
+    // 4. Batch Inserts for better performance and atomicity
+    await Promise.all([
+      batchCreate("post_dispatch_plan_staff", staffPayloads),
+      batchCreate("post_dispatch_dispatch_plans", [junctionPayload]),
+      batchCreate("post_dispatch_budgeting", budgetPayloads),
+      batchCreate("post_dispatch_invoices", invoicePayloads),
       // Update source status
       fetch(`${DIRECTUS_BASE}/items/dispatch_plan/${data.pre_dispatch_plan_id}`, {
         method: "PATCH", headers: directusHeaders(), body: JSON.stringify({ status: "Dispatched" }),
       }).then(r => r.ok ? r : Promise.reject("Failed to update source PDP status")),
-    ];
-
-    try {
-      await Promise.all(subTasks);
-    } catch (err: any) {
-      console.error("[Dispatch POST] Sub-task failed:", err);
-      // We don't throw yet as partial success is still meaningful, but we log it.
-      // In a more complex system, we'd attempt a rollback here.
-      throw new Error(err.toString());
-    }
+    ]);
 
     return NextResponse.json({ success: true, id: newPlanId });
   } catch (error) {
@@ -236,9 +233,20 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (action === "update_trip") {
-      const { pre_dispatch_plan_id: newPdpId, driver_id, vehicle_id, starting_point, estimated_time_of_dispatch, estimated_time_of_arrival, remarks, amount, helpers, invoices } = body;
+      const { 
+        pre_dispatch_plan_id: newPdpId, 
+        driver_id, 
+        vehicle_id, 
+        starting_point, 
+        estimated_time_of_dispatch, 
+        estimated_time_of_arrival, 
+        remarks, 
+        amount, 
+        helpers, 
+        invoices 
+      } = body;
 
-      // 1-2. Resolve PDP Swapping
+      // 1. Resolve PDP Swapping
       const junctionFetchRes = await fetch(`${DIRECTUS_BASE}/items/post_dispatch_dispatch_plans?filter[post_dispatch_plan_id][_eq]=${planId}`, { headers: directusHeaders() });
       const junctionData = await junctionFetchRes.json();
       const junctionRecord = junctionData.data?.[0];
@@ -262,28 +270,35 @@ export async function PATCH(req: NextRequest) {
         );
       }
 
-      // 3. Sync Invoices (sequential for safety with DELETE)
+      // 2. Sync Invoices
+      let newInvoicePayloads: any[] = [];
       if (invoices && invoices.length > 0) {
+        newInvoicePayloads = invoices.map((inv: any, idx: number) => ({
+          post_dispatch_plan_id: Number(planId),
+          invoice_id: inv.invoice_id,
+          sequence: inv.sequence || idx + 1,
+          status: "Not Fulfilled"
+        }));
+      } else if (newPdpId && oldPdpId && newPdpId !== oldPdpId) {
+        const invIds = await dispatchCreationQueryService.fetchPdpInvoiceIds(newPdpId);
+        newInvoicePayloads = invIds.map((id, idx) => ({
+          post_dispatch_plan_id: Number(planId),
+          invoice_id: id,
+          sequence: idx + 1,
+          status: "Not Fulfilled"
+        }));
+      }
+
+      if (newInvoicePayloads.length > 0) {
         const oldInvoicesRes = await fetch(`${DIRECTUS_BASE}/items/post_dispatch_invoices?filter[post_dispatch_plan_id][_eq]=${planId}&fields=id`, { headers: directusHeaders() });
-        const oldInvoicesData = await oldInvoicesRes.json();
-        const oldIds = (oldInvoicesData.data || []).map((i: any) => i.id);
+        const oldIds = ((await oldInvoicesRes.json()).data || []).map((i: any) => i.id);
         if (oldIds.length > 0) {
           await fetch(`${DIRECTUS_BASE}/items/post_dispatch_invoices`, { method: "DELETE", headers: directusHeaders(), body: JSON.stringify(oldIds) });
         }
-        const invPayloads = invoices.map((inv: any, idx: number) => ({ post_dispatch_plan_id: Number(planId), invoice_id: inv.invoice_id, sequence: inv.sequence || idx + 1, status: "Not Fulfilled" }));
-        await Promise.all(invPayloads.map((ip: any) => fetch(`${DIRECTUS_BASE}/items/post_dispatch_invoices`, { method: "POST", headers: directusHeaders(), body: JSON.stringify(ip) })));
-      } else if (newPdpId && oldPdpId && newPdpId !== oldPdpId) {
-        // Swap PDP -> fetch new default invoices
-        const oldInvoicesRes = await fetch(`${DIRECTUS_BASE}/items/post_dispatch_invoices?filter[post_dispatch_plan_id][_eq]=${planId}&fields=id`, { headers: directusHeaders() });
-        const oldIds = ((await oldInvoicesRes.json()).data || []).map((i: any) => i.id);
-        if (oldIds.length > 0) await fetch(`${DIRECTUS_BASE}/items/post_dispatch_invoices`, { method: "DELETE", headers: directusHeaders(), body: JSON.stringify(oldIds) });
-
-        const invIds = await dispatchCreationQueryService.fetchPdpInvoiceIds(newPdpId);
-        const invPayloads = invIds.map((id, idx) => ({ post_dispatch_plan_id: Number(planId), invoice_id: id, sequence: idx + 1, status: "Not Fulfilled" }));
-        await Promise.all(invPayloads.map(ip => fetch(`${DIRECTUS_BASE}/items/post_dispatch_invoices`, { method: "POST", headers: directusHeaders(), body: JSON.stringify(ip) })));
+        await batchCreate("post_dispatch_invoices", newInvoicePayloads);
       }
 
-      // 4. Update Header & Staff in parallel
+      // 3. Update Header & Staff
       const headerPayload = {
         dispatch_id: newPdpId, driver_id, vehicle_id, starting_point,
         estimated_time_of_dispatch: new Date(estimated_time_of_dispatch).toISOString(),
@@ -291,12 +306,9 @@ export async function PATCH(req: NextRequest) {
         remarks, amount, encoder_id: driver_id,
       };
 
-      const staffPayloads = [
-        { post_dispatch_plan_id: Number(planId), user_id: driver_id, role: "Driver", is_present: false },
-        ...(helpers ?? []).map((h: { user_id: number }) => ({ post_dispatch_plan_id: Number(planId), user_id: h.user_id, role: "Helper", is_present: false })),
-      ];
+      const staffPayloads = prepareStaffPayload(Number(planId), driver_id, helpers ?? []);
 
-      const finalizeTasks = [
+      await Promise.all([
         fetch(`${DIRECTUS_BASE}/items/post_dispatch_plan/${planId}`, { method: "PATCH", headers: directusHeaders(), body: JSON.stringify(headerPayload) }),
         ...pdpSwapTasks,
         // Staff replacement (Clear then Add)
@@ -304,19 +316,16 @@ export async function PATCH(req: NextRequest) {
           const sRes = await fetch(`${DIRECTUS_BASE}/items/post_dispatch_plan_staff?filter[post_dispatch_plan_id][_eq]=${planId}&fields=id`, { headers: directusHeaders() });
           const ids = ((await sRes.json()).data || []).map((s: any) => s.id);
           if (ids.length > 0) await fetch(`${DIRECTUS_BASE}/items/post_dispatch_plan_staff`, { method: "DELETE", headers: directusHeaders(), body: JSON.stringify(ids) });
-          await Promise.all(staffPayloads.map(sp => fetch(`${DIRECTUS_BASE}/items/post_dispatch_plan_staff`, { method: "POST", headers: directusHeaders(), body: JSON.stringify(sp) })));
+          await batchCreate("post_dispatch_plan_staff", staffPayloads);
         })()
-      ];
+      ]);
 
-      await Promise.all(finalizeTasks);
       return NextResponse.json({ success: true });
     }
 
-    // Default: Budget Update (if no action, or action='budget')
+    // Default: Budget Update
     const { budgets } = body;
 
-    // 1. Delete existing budgets for this plan
-    // We fetch them first to get their IDs if direct delete-by-filter is not supported or to be safer
     const existingRes = await fetch(
       `${DIRECTUS_BASE}/items/post_dispatch_budgeting?filter[post_dispatch_plan_id][_eq]=${planId}&fields=id`,
       { headers: directusHeaders() },
@@ -325,15 +334,13 @@ export async function PATCH(req: NextRequest) {
     const existingIds = (existingData.data || []).map((b: any) => b.id);
 
     if (existingIds.length > 0) {
-      const deleteRes = await fetch(`${DIRECTUS_BASE}/items/post_dispatch_budgeting`, {
+      await fetch(`${DIRECTUS_BASE}/items/post_dispatch_budgeting`, {
         method: "DELETE",
         headers: directusHeaders(),
         body: JSON.stringify(existingIds),
       });
-      if (!deleteRes.ok) throw new Error("Failed to clear existing budgets");
     }
 
-    // 2. Insert new budgets
     if (budgets && budgets.length > 0) {
       const budgetPayloads = budgets.map((b: any) => ({
         post_dispatch_plan_id: Number(planId),
@@ -341,17 +348,7 @@ export async function PATCH(req: NextRequest) {
         amount: b.amount,
         remarks: b.remarks,
       }));
-
-      const insertRes = await fetch(`${DIRECTUS_BASE}/items/post_dispatch_budgeting`, {
-        method: "POST",
-        headers: directusHeaders(),
-        body: JSON.stringify(budgetPayloads),
-      });
-
-      if (!insertRes.ok) {
-        const errorText = await insertRes.text();
-        throw new Error(`Failed to insert new budgets: ${errorText}`);
-      }
+      await batchCreate("post_dispatch_budgeting", budgetPayloads);
     }
 
     return NextResponse.json({ success: true });
