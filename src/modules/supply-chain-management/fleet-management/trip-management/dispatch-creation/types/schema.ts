@@ -74,6 +74,7 @@ export interface HelperOption {
 export interface VehicleOption {
   vehicle_id: number;
   vehicle_plate: string;
+  vehicle_type_name?: string;
 }
 
 export interface BranchOption {
