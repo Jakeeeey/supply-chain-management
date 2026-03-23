@@ -22,7 +22,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, MapPin, ShoppingCart } from "lucide-react";
-import { PlanDetailItem, getStatusColor } from "./types";
+import { getStatusColor, PlanDetailItem } from "./types";
 
 interface InvoiceItemsSidebarProps {
   selectedPlanId: number;
@@ -126,7 +126,7 @@ export function InvoiceItemsSidebar({
       <div className="p-4 border-b border-border/50 bg-background/60">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
           <ShoppingCart className="w-3.5 h-3.5" />
-          Sales Invoices
+          Sales Transactions
         </p>
         <p className="text-[11px] text-muted-foreground mt-1">
           {selectedPlanId > 0
@@ -139,7 +139,9 @@ export function InvoiceItemsSidebar({
         {!selectedPlanId || selectedPlanId === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground/30">
             <ShoppingCart className="w-8 h-8 mb-2" />
-            <p className="text-xs text-center px-4">Select a plan to see invoices</p>
+            <p className="text-xs text-center px-4">
+              Select a plan to see invoices
+            </p>
           </div>
         ) : isLoadingDetails ? (
           <div className="space-y-2 p-1">
