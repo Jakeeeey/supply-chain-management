@@ -251,20 +251,7 @@ export function ScanProductsStep() {
                 </div>
 
                 <div className="space-y-3">
-                    <div className="flex gap-2">
-                        <Input
-                            value={rfid}
-                            onChange={(e) => setRfid(e.target.value)}
-                            placeholder="Or enter RFID manually..."
-                            className="text-xs"
-                            onKeyDown={(e) => {
-                                if (e.key === "Enter") scanRFID();
-                            }}
-                        />
-                        <Button size="sm" onClick={() => scanRFID()} type="button" className="shrink-0">
-                            Verify
-                        </Button>
-                    </div>
+                    {/* Manual RFID Input removed per user request */}
 
                     {scanError ? (
                         <div className="text-xs text-destructive animate-in fade-in duration-200 p-2 bg-destructive/5 rounded-lg border border-destructive/20 text-center">

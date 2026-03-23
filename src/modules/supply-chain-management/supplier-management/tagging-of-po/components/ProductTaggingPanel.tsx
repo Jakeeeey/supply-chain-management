@@ -363,10 +363,11 @@ export default function ProductTaggingPanel(props: {
                                     </div>
                                 ) : (
                                     <div className="rounded-xl border border-border overflow-hidden">
-                                        <Table>
-                                            <TableHeader>
-                                                <TableRow>
-                                                    <TableHead className="w-[160px]">SKU</TableHead>
+                                        <div className="max-h-[400px] overflow-y-auto relative [&_[data-slot=table-container]]:overflow-visible">
+                                            <Table>
+                                                <TableHeader className="sticky top-0 z-10 bg-muted/95 backdrop-blur-sm shadow-sm">
+                                                    <TableRow>
+                                                        <TableHead className="w-[160px]">SKU</TableHead>
                                                     <TableHead>Product Name</TableHead>
                                                     <TableHead className="w-[180px]">RFID Code</TableHead>
                                                     <TableHead className="w-[120px] text-right">Time</TableHead>
@@ -383,6 +384,7 @@ export default function ProductTaggingPanel(props: {
                                                 ))}
                                             </TableBody>
                                         </Table>
+                                        </div>
                                     </div>
                                 )}
                             </div>
