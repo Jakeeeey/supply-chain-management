@@ -502,7 +502,7 @@ export async function fetchRunningInventoryFiltered(input: {
 export async function fetchPhysicalInventoryList(): Promise<PhysicalInventoryHeaderRow[]> {
     return directusGetItems<PhysicalInventoryHeaderRow>(TABLES.physical_inventory, {
         fields:
-            "id,ph_no,date_encoded,cutOff_date,starting_date,price_type,stock_type,branch_id,remarks,isComitted,isCancelled,total_amount,supplier_id,category_id,encoder_id",
+            "id,ph_no,date_encoded,cutOff_date,starting_date,price_type,stock_type,branch_id,remarks,isComitted,isCancelled,total_amount,supplier_id,category_id,encoder_id.user_id,encoder_id.user_fname,encoder_id.user_lname",
         sort: "-id",
         limit: "-1",
     });
@@ -513,7 +513,7 @@ export async function fetchPhysicalInventoryById(
 ): Promise<PhysicalInventoryHeaderRow> {
     return directusGetItem<PhysicalInventoryHeaderRow>(TABLES.physical_inventory, id, {
         fields:
-            "id,ph_no,date_encoded,cutOff_date,starting_date,price_type,stock_type,branch_id,remarks,isComitted,isCancelled,total_amount,supplier_id,category_id,encoder_id",
+            "id,ph_no,date_encoded,cutOff_date,starting_date,price_type,stock_type,branch_id,remarks,isComitted,isCancelled,total_amount,supplier_id,category_id,encoder_id.user_id,encoder_id.user_fname,encoder_id.user_lname",
     });
 }
 
@@ -597,6 +597,70 @@ export async function fetchRfidOnhandByTag(
         rfid: normalized,
         branchId: String(branchId),
     });
+}
+
+/**
+ * Fetches all available on-hand RFIDs for a specific branch.
+ * This is used for caching to enable fast continuous scanning.
+ */
+export async function fetchRfidOnhandByBranch(
+    branchId: number,
+): Promise<Array<{ rfid: string; productId: number }>> {
+    const branch = String(branchId);
+    if (!branch || branch === "0") {
+        throw new Error("Branch is required for RFID lookup.");
+    }
+
+    try {
+        const res = await apiGet<{ ok: boolean; data: any[] }>(
+            `${API_BASE}/rfid-onhand/all`,
+            {
+                branchId: branch,
+            },
+        );
+
+        if (!res.ok || !Array.isArray(res.data)) {
+            return [];
+        }
+
+        return res.data.map((row) => ({
+            rfid: String(row.rfid || row.tag || ""),
+            productId: Number(row.productId || row.product_id || 0),
+        }));
+    } catch (error) {
+        console.error("fetchRfidOnhandByBranch failed:", error);
+        return [];
+    }
+}
+
+/**
+ * Performs a global search in physical_inventory_details_rfid to see if an RFID
+ * was previously scanned and which product it belonged to.
+ */
+export async function fetchHistoricalRfidScan(
+    rfidTag: string,
+): Promise<{ product_id: number } | null> {
+    const rows = await directusGetItems<any>(TABLES.physical_inventory_details_rfid, {
+        filter: JSON.stringify({
+            rfid_tag: { _eq: rfidTag.trim() },
+        }),
+        fields: "pi_detail_id,pi_detail_id.product_id",
+        limit: "1",
+    });
+
+    if (rows.length > 0 && rows[0].pi_detail_id) {
+        // Handle both cases: flat response or nested object
+        const productId =
+            typeof rows[0].pi_detail_id === "object"
+                ? rows[0].pi_detail_id.product_id
+                : null;
+
+        if (productId !== null && productId !== undefined) {
+            return { product_id: Number(productId) };
+        }
+    }
+
+    return null;
 }
 
 export async function fetchPhysicalInventoryDetailRfidByDetailId(

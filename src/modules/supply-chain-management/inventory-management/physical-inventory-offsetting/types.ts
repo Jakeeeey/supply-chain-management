@@ -28,6 +28,7 @@ export type PhysicalInventoryOffsettingReportMeta = {
     branch_name: string;
     supplier_name: string;
     category_name: string;
+    encoder_name: string;
 };
 
 export type PhysicalInventoryOffsettingSnapshot = {
