@@ -97,10 +97,18 @@ export default function ProductTaggingPanel(props: {
 
             props.onChange(updated);
 
-            // ✅ clear both SKU and RFID to speed up scanning the next entirely different item
+            // ✅ Check if this SKU is now fully tagged
+            const updatedItem = updated.items.find((x) => x.sku.toLowerCase() === sku.trim().toLowerCase());
+            const isCompleted = updatedItem && updatedItem.taggedQty >= updatedItem.expectedQty;
+
             setRfid("");
-            setSku("");
-            skuRef.current?.focus();
+            
+            if (isCompleted) {
+                setSku("");
+                skuRef.current?.focus();
+            } else {
+                rfidRef.current?.focus();
+            }
         } finally {
             setSaving(false);
         }
@@ -201,15 +209,26 @@ export default function ProductTaggingPanel(props: {
                                 <div className="mt-3 grid grid-cols-1 lg:grid-cols-[1fr_1fr_auto] gap-3 items-start">
                                     {/* SKU */}
                                     <div className="space-y-2 flex flex-col justify-end">
-                                        <div className="flex items-center gap-2 h-5">
-                                            <div className="text-xs font-black uppercase tracking-widest text-muted-foreground">
-                                                1. Scan Barcode (SKU)
-                                            </div>
-                                            {!sku.trim() ? (
-                                                <div className="text-[10px] italic text-muted-foreground/80 lowercase">
-                                                    (waiting for scan...)
+                                        <div className="flex items-center justify-between h-5">
+                                            <div className="flex items-center gap-2">
+                                                <div className="text-xs font-black uppercase tracking-widest text-muted-foreground">
+                                                    1. Scan Barcode (SKU)
                                                 </div>
-                                            ) : null}
+                                                {!sku.trim() ? (
+                                                    <div className="text-[10px] italic text-muted-foreground/80 lowercase">
+                                                        (waiting for scan...)
+                                                    </div>
+                                                ) : null}
+                                            </div>
+                                            {sku.trim() && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setSku(""); skuRef.current?.focus(); }}
+                                                    className="text-[10px] font-bold text-primary hover:underline"
+                                                >
+                                                    CLEAR SKU
+                                                </button>
+                                            )}
                                         </div>
                                         <Input
                                             ref={skuRef}
