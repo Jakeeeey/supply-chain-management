@@ -29,16 +29,18 @@ export function PlanningFooter({
         let totalOrderValue = 0
         let totalSuggestedValue = 0
         let totalMavValue = 0
+        let totalInventoryValue = 0 // 👈 ADDED: Track Inventory Value
 
         safeData.forEach((row) => {
             const pricePerBox = Number(row.computedPricePerBox || 0)
             const orderQty = Number(row.orderQty || 0)
             const suggestedQty = Number(row.suggestedQty || 0)
             const mavQty = Number(row.mav || 0)
-
+            const sohQty = Number(row.currentStockBoxes || 0) // ✅ Correct key
             totalOrderValue += (orderQty * pricePerBox)
             totalSuggestedValue += (suggestedQty * pricePerBox)
             totalMavValue += (mavQty * pricePerBox)
+            totalInventoryValue += (sohQty * pricePerBox) // 👈 ADDED: Calculate total inventory value
         })
 
         const itemsToOrder = safeData.filter((row) => Number(row.orderQty || 0) > 0)
@@ -47,6 +49,7 @@ export function PlanningFooter({
             totalSkus: safeData.length,
             totalSuggestedValue,
             totalMavValue,
+            totalInventoryValue, // 👈 Exported to UI
             grandTotalOrderValue: totalOrderValue,
             itemsToOrder,
         }
@@ -88,6 +91,13 @@ export function PlanningFooter({
 
                         {/* MIDDLE: Financial Insights (Desktop Only) */}
                         <div className="hidden lg:flex items-center gap-10 border-l border-slate-200 dark:border-slate-800 pl-10">
+                            {/* 👈 RESTORED: Inventory Value Block */}
+                            <div className="space-y-1">
+                                <p className="text-[9px] font-black text-amber-500 uppercase tracking-widest">Inventory Value</p>
+                                <p className="text-sm font-black text-slate-900 dark:text-slate-200">
+                                    ₱{stats.totalInventoryValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </p>
+                            </div>
                             <div className="space-y-1">
                                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Suggested</p>
                                 <p className="text-sm font-black text-slate-900 dark:text-slate-200">
