@@ -518,7 +518,7 @@ export function ReturnDetailsModal({
           quantity: item.quantity * (item.unitCount || 1),
           gross_unit_price: item.customPrice || item.price,
           gross_amount: gross,
-          discount_rate: item.discount,
+          discount_rate: item.discount * 100,
           discount_amount: discountAmount,
           net_amount: net,
           return_type_id: item.return_type_id || null,

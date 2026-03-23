@@ -303,6 +303,11 @@ export async function lookupRfid(
   branchId: number,
   token: string,
 ): Promise<RfidLookupResult | null> {
+  const isBound = await repo.checkRfidAlreadyBound(rfidTag);
+  if (isBound) {
+    throw new Error(`RFID tag "${rfidTag}" is already part of another Return record.`);
+  }
+
   const results: RfidLookupResult[] = await repo.getSpringRfidLookup(rfidTag, branchId, token);
   return results.length > 0 ? results[0] : null;
 }

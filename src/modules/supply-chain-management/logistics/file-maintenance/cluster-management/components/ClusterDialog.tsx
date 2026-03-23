@@ -159,7 +159,7 @@ export function ClusterDialog({
                     <Input
                       placeholder="e.g. NCR Metro, Cebu Cluster"
                       {...field}
-                      value={typeof field.value === "string" ? field.value : ""}
+                      value={(field.value as string) ?? ""}
                     />
                   </FormControl>
                   <FormMessage />
@@ -183,7 +183,8 @@ export function ClusterDialog({
                       step="any"
                       placeholder="e.g. 5000"
                       {...field}
-                      value={typeof field.value === "number" ? field.value : 0}
+                      onChange={(e) => field.onChange(e.target.valueAsNumber || 0)}
+                      value={(field.value as number) ?? 0}
                     />
                   </FormControl>
                   <FormMessage />

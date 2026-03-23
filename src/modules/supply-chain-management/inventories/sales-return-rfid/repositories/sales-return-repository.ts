@@ -133,8 +133,7 @@ export async function getRawInvoices(salesmanId?: string, customerCode?: string)
     url += `&filter[salesman_id][_eq]=${salesmanId}`;
   }
   if (customerCode) {
-    const normalized = customerCode.replace(/\s+/g, "").toUpperCase();
-    url += `&filter[customer_code][_contains]=${encodeURIComponent(normalized)}`;
+    url += `&filter[customer_code][_eq]=${encodeURIComponent(customerCode)}`;
   }
 
   return directusGet<{ data: Record<string, unknown>[] }>(url);

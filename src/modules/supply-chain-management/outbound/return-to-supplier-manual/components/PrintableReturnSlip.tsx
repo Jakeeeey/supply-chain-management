@@ -19,9 +19,9 @@ export const PrintableReturnSlip = React.forwardRef<HTMLDivElement, Props>(
     const getDiscountName = (percentage: number) => {
       if (percentage === 0) return "-";
       const match = lineDiscounts.find(
-        (d) => parseFloat(d.percentage) === percentage,
+        (d) => (parseFloat(d.percentage) / 100) === percentage,
       );
-      return match ? match.line_discount : `${percentage}%`;
+      return match ? match.line_discount : `${(percentage * 100).toFixed(0)}%`;
     };
 
     // Calculate Totals
