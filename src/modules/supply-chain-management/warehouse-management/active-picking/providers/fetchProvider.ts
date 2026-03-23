@@ -72,6 +72,26 @@ export const fetchActivePickingBatches = async (
  * /api/scm/warehouse-management/consolidation/picking/scan/route.ts
  */
 // --- 📱 REAL-TIME RFID/BARCODE SCANNING ---
+
+export async function submitManualPick(payload: {
+    batchId: number;
+    productId: number;
+    quantity: number;
+}) {
+    const res = await fetch("/api/scm/warehouse-management/consolidation/picking/manual", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+    if (!res.ok || data.ok === false) {
+        throw new Error(data.message || "Failed to update manual quantity");
+    }
+    return data;
+}
+
+
 export const transmitItemScan = async (payload: {
     detailId: number;
     rfidTag: string;
