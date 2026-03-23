@@ -55,9 +55,9 @@ export const dispatchCreationQueryService = {
         limit: -1,
       }),
       // Fetch Vehicles
-      fetchItems<VehicleOption>("/items/vehicles", {
+      fetchItems<any>("/items/vehicles", {
         "filter[status][_eq]": "Active",
-        fields: "vehicle_id,vehicle_plate",
+        fields: "vehicle_id,vehicle_plate,vehicle_type.type_name",
         limit: -1,
       }),
       // Fetch Branches (Starting Points)
@@ -76,7 +76,11 @@ export const dispatchCreationQueryService = {
     return {
       drivers: drivers.data || [],
       helpers: helpers.data || [],
-      vehicles: vehicles.data || [],
+      vehicles: (vehicles.data || []).map((v: any) => ({
+        vehicle_id: v.vehicle_id,
+        vehicle_plate: v.vehicle_plate,
+        vehicle_type_name: v.vehicle_type?.type_name,
+      })),
       branches: branches.data || [],
       coa: coas.data || [],
     };

@@ -9,21 +9,16 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Truck } from "lucide-react";
+import { Combobox } from "@/components/ui/combobox";
+import { Truck, X } from "lucide-react";
 import { useFieldArray, useFormContext } from "react-hook-form";
 import { DateTimePicker } from "../../shared/date-time-picker";
 import { DispatchCreationFormValues } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/types/schema";
+import { useMemo } from "react";
 
 interface MasterData {
   branches: { id: number; branch_name: string }[];
-  vehicles: { vehicle_id: number; vehicle_plate: string }[];
+  vehicles: { vehicle_id: number; vehicle_plate: string; vehicle_type_name?: string }[];
   drivers: { user_id: number; user_fname: string; user_lname: string }[];
   helpers: { user_id: number; user_fname: string; user_lname: string }[];
 }
@@ -39,6 +34,23 @@ export function TripConfigurationForm({ masterData }: TripConfigurationFormProps
     name: "helpers",
   });
 
+  // Watch helper values for filtering duplicates
+  const selectedHelpers = form.watch("helpers") || [];
+  const selectedHelperIds = useMemo(() => 
+    new Set(selectedHelpers.map(h => h.user_id).filter(id => id > 0)),
+    [selectedHelpers]
+  );
+
+  const getHelperOptions = (currentIndex: number) => {
+    if (!masterData?.helpers) return [];
+    const currentId = selectedHelpers[currentIndex]?.user_id;
+    return masterData.helpers.map(h => ({
+      value: String(h.user_id),
+      label: `${h.user_fname} ${h.user_lname}`,
+      disabled: h.user_id !== currentId && selectedHelperIds.has(h.user_id)
+    }));
+  };
+
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-6">
       <section className="space-y-4">
@@ -52,27 +64,21 @@ export function TripConfigurationForm({ masterData }: TripConfigurationFormProps
             control={form.control}
             name="starting_point"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className="flex flex-col">
                 <FormLabel className="text-[11px] font-medium text-muted-foreground uppercase tracking-tight">
                   Source Branch
                 </FormLabel>
-                <Select
-                  onValueChange={(val) => field.onChange(Number(val))}
-                  value={field.value ? String(field.value) : undefined}
-                >
-                  <FormControl>
-                    <SelectTrigger className="h-9 text-sm bg-background/50">
-                      <SelectValue placeholder="Select branch" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {masterData?.branches.map((b) => (
-                      <SelectItem key={b.id} value={String(b.id)}>
-                        {b.branch_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <Combobox
+                    options={masterData?.branches.map(b => ({
+                      value: String(b.id),
+                      label: b.branch_name
+                    })) || []}
+                    value={field.value ? String(field.value) : ""}
+                    onValueChange={(val) => field.onChange(Number(val))}
+                    placeholder="Select branch"
+                  />
+                </FormControl>
                 <FormMessage className="text-[10px]" />
               </FormItem>
             )}
@@ -83,30 +89,21 @@ export function TripConfigurationForm({ masterData }: TripConfigurationFormProps
             control={form.control}
             name="vehicle_id"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className="flex flex-col">
                 <FormLabel className="text-[11px] font-medium text-muted-foreground uppercase tracking-tight">
                   Vehicle
                 </FormLabel>
-                <Select
-                  onValueChange={(val) => field.onChange(Number(val))}
-                  value={field.value ? String(field.value) : undefined}
-                >
-                  <FormControl>
-                    <SelectTrigger className="h-9 text-sm bg-background/50">
-                      <SelectValue placeholder="Select vehicle" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {masterData?.vehicles.map((v) => (
-                      <SelectItem
-                        key={v.vehicle_id}
-                        value={String(v.vehicle_id)}
-                      >
-                        {v.vehicle_plate}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <Combobox
+                    options={masterData?.vehicles.map(v => ({
+                      value: String(v.vehicle_id),
+                      label: `${v.vehicle_plate}${v.vehicle_type_name ? ` (${v.vehicle_type_name})` : ""}`
+                    })) || []}
+                    value={field.value ? String(field.value) : ""}
+                    onValueChange={(val) => field.onChange(Number(val))}
+                    placeholder="Select vehicle"
+                  />
+                </FormControl>
                 <FormMessage className="text-[10px]" />
               </FormItem>
             )}
@@ -159,30 +156,21 @@ export function TripConfigurationForm({ masterData }: TripConfigurationFormProps
             control={form.control}
             name="driver_id"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className="flex flex-col">
                 <FormLabel className="text-[11px] font-medium text-muted-foreground uppercase tracking-tight">
                   Driver
                 </FormLabel>
-                <Select
-                  onValueChange={(val) => field.onChange(Number(val))}
-                  value={field.value ? String(field.value) : undefined}
-                >
-                  <FormControl>
-                    <SelectTrigger className="h-9 text-sm bg-background/50">
-                      <SelectValue placeholder="Assign a driver" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {masterData?.drivers.map((d) => (
-                      <SelectItem
-                        key={d.user_id}
-                        value={String(d.user_id)}
-                      >
-                        {d.user_fname} {d.user_lname}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <Combobox
+                    options={masterData?.drivers.map(d => ({
+                      value: String(d.user_id),
+                      label: `${d.user_fname} ${d.user_lname}`
+                    })) || []}
+                    value={field.value ? String(field.value) : ""}
+                    onValueChange={(val) => field.onChange(Number(val))}
+                    placeholder="Assign a driver"
+                  />
+                </FormControl>
                 <FormMessage className="text-[10px]" />
               </FormItem>
             )}
@@ -193,30 +181,18 @@ export function TripConfigurationForm({ masterData }: TripConfigurationFormProps
             control={form.control}
             name="helpers.0.user_id"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className="flex flex-col">
                 <FormLabel className="text-[11px] font-medium text-muted-foreground uppercase tracking-tight">
                   Helper
                 </FormLabel>
-                <Select
-                  onValueChange={(val) => field.onChange(Number(val))}
-                  value={field.value ? String(field.value) : undefined}
-                >
-                  <FormControl>
-                    <SelectTrigger className="h-9 text-sm bg-background/50">
-                      <SelectValue placeholder="Assign a helper" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {masterData?.helpers.map((h) => (
-                      <SelectItem
-                        key={h.user_id}
-                        value={String(h.user_id)}
-                      >
-                        {h.user_fname} {h.user_lname}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <Combobox
+                    options={getHelperOptions(0)}
+                    value={field.value ? String(field.value) : ""}
+                    onValueChange={(val) => field.onChange(Number(val))}
+                    placeholder="Assign a helper"
+                  />
+                </FormControl>
                 <FormMessage className="text-[10px]" />
               </FormItem>
             )}
@@ -260,7 +236,7 @@ export function TripConfigurationForm({ masterData }: TripConfigurationFormProps
                   control={form.control}
                   name={`helpers.${index}.user_id`}
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="flex flex-col">
                       <FormLabel className="text-[11px] font-medium text-muted-foreground uppercase tracking-tight flex items-center justify-between">
                         Helper {index + 1}
                         <button
@@ -268,29 +244,18 @@ export function TripConfigurationForm({ masterData }: TripConfigurationFormProps
                           onClick={() => remove(index)}
                           className="text-destructive hover:text-destructive/80 transition-colors"
                         >
-                          Remove
+                          <X className="h-3 w-3" />
                         </button>
                       </FormLabel>
-                      <Select
-                        onValueChange={(val) => field.onChange(Number(val))}
-                        value={field.value ? String(field.value) : undefined}
-                      >
-                        <FormControl>
-                          <SelectTrigger className="h-9 text-sm bg-background/50">
-                            <SelectValue placeholder="Select additional helper" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {masterData?.helpers.map((h) => (
-                            <SelectItem
-                              key={h.user_id}
-                              value={String(h.user_id)}
-                            >
-                              {h.user_fname} {h.user_lname}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FormControl>
+                        <Combobox
+                          options={getHelperOptions(index)}
+                          value={field.value ? String(field.value) : ""}
+                          onValueChange={(val) => field.onChange(Number(val))}
+                          placeholder="Select additional helper"
+                        />
+                      </FormControl>
+                      <FormMessage className="text-[10px]" />
                     </FormItem>
                   )}
                 />
