@@ -34,8 +34,7 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "**/*.mts",
-    "src/modules/supply-chain-management/fleet-management/driver-management/hooks/sample"
+    "**/*.mts"
   ],
   "exclude": [
     "node_modules"

@@ -1,5 +1,6 @@
 "use client";
 
+import { motion, AnimatePresence } from "framer-motion";
 import * as React from "react";
 
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import {
 export default function PhysicalInventoryWorkspaceClient() {
     const [selectedHeaderId, setSelectedHeaderId] = React.useState<number | null>(null);
     const [isListCollapsed, setIsListCollapsed] = React.useState(false);
+    const [newClickCount, setNewClickCount] = React.useState(0);
 
     React.useEffect(() => {
         if (typeof window === "undefined") return;
@@ -38,8 +40,15 @@ export default function PhysicalInventoryWorkspaceClient() {
 
     const handleCreateNew = React.useCallback(() => {
         setSelectedHeaderId(null);
+        setNewClickCount((prev) => prev + 1);
         setIsListCollapsed(true);
     }, []);
+
+    const handleRecordChange = React.useCallback((header: any) => {
+        if (header.id && header.id !== selectedHeaderId) {
+            setSelectedHeaderId(header.id);
+        }
+    }, [selectedHeaderId]);
 
     return (
         <div className="space-y-3 lg:space-y-4">
@@ -70,31 +79,35 @@ export default function PhysicalInventoryWorkspaceClient() {
                 </Button>
             </div>
 
-            {isListCollapsed ? (
-                <div className="min-w-0">
+            <div className="flex flex-col lg:flex-row lg:items-start lg:gap-4">
+                <AnimatePresence initial={false}>
+                    {!isListCollapsed && (
+                        <motion.div
+                            initial={{ width: 0, opacity: 0 }}
+                            animate={{ width: "auto", opacity: 1 }}
+                            exit={{ width: 0, opacity: 0 }}
+                            transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                            className="overflow-hidden"
+                        >
+                            <div className="w-full pb-4 lg:w-[360px] lg:pb-0 xl:w-[380px] 2xl:w-[420px]">
+                                <PhysicalInventoryListModule
+                                    selectedHeaderId={selectedHeaderId}
+                                    onOpenRecord={handleOpenRecord}
+                                    onCreateNew={handleCreateNew}
+                                />
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                <div className="min-w-0 flex-1">
                     <PhysicalInventoryManagementModule
-                        key={selectedHeaderId ?? "new"}
+                        key={`${selectedHeaderId ?? "new"}-${newClickCount}`}
                         initialHeaderId={selectedHeaderId}
+                        onRecordChange={handleRecordChange}
                     />
                 </div>
-            ) : (
-                <div className="grid gap-4 lg:grid-cols-[360px_minmax(0,1fr)] xl:grid-cols-[380px_minmax(0,1fr)] 2xl:grid-cols-[420px_minmax(0,1fr)]">
-                    <div className="min-w-0">
-                        <PhysicalInventoryListModule
-                            selectedHeaderId={selectedHeaderId}
-                            onOpenRecord={handleOpenRecord}
-                            onCreateNew={handleCreateNew}
-                        />
-                    </div>
-
-                    <div className="min-w-0">
-                        <PhysicalInventoryManagementModule
-                            key={selectedHeaderId ?? "new"}
-                            initialHeaderId={selectedHeaderId}
-                        />
-                    </div>
-                </div>
-            )}
+            </div>
         </div>
     );
 }

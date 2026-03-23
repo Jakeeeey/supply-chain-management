@@ -23,6 +23,66 @@ async function proxyRequest(req: NextRequest, method: string) {
 
   let upstreamUrl = `${DIRECTUS_URL}${ENDPOINT}`;
 
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${ACCESS_TOKEN}`,
+  };
+
+  // Check for duplicates before creating or updating
+  if (["POST", "PATCH"].includes(method)) {
+    const body = await req.json().catch(() => ({}));
+    const typeName = body.type_name;
+
+    if (typeName) {
+      // Check if a record with the same name exists
+      const checkUrl = `${DIRECTUS_URL}${ENDPOINT}?filter=${encodeURIComponent(
+        JSON.stringify({ type_name: { _eq: typeName } })
+      )}`;
+
+      const checkResponse = await fetch(checkUrl, {
+        headers,
+        cache: "no-store",
+      });
+
+      const checkData = await checkResponse.json().catch(() => ({ data: [] }));
+      const existingRecords = checkData?.data || [];
+
+      // If updating, filter out the current record
+      const duplicates = id
+        ? existingRecords.filter((r: any) => r.id !== parseInt(id))
+        : existingRecords;
+
+      if (duplicates.length > 0) {
+        return json({ error: "UNIQUE constraint failed: type_name already exists" }, 400);
+      }
+    }
+
+    if (id) {
+      upstreamUrl += `/${id}`;
+    }
+
+    const options: RequestInit = {
+      method,
+      headers,
+      body: JSON.stringify(body),
+      cache: "no-store",
+    };
+
+    try {
+      const response = await fetch(upstreamUrl, options);
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        return json(data, response.status);
+      }
+
+      return json(data, 200);
+    } catch (error: any) {
+      return json({ error: error.message }, 500);
+    }
+  }
+
+  // GET request
   if (id) {
     upstreamUrl += `/${id}`;
   } else if (method === "GET") {
@@ -36,17 +96,7 @@ async function proxyRequest(req: NextRequest, method: string) {
     }
   }
 
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${ACCESS_TOKEN}`,
-  };
-
   const options: RequestInit = { method, headers, cache: "no-store" };
-
-  if (["POST", "PATCH"].includes(method)) {
-    const body = await req.json().catch(() => ({}));
-    options.body = JSON.stringify(body);
-  }
 
   try {
     const response = await fetch(upstreamUrl, options);

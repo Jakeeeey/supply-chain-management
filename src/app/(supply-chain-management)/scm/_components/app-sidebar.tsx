@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
-import { useState, useMemo } from "react";
+import {useState, useMemo} from "react";
 
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input"; // Make sure you have the shadcn Input component installed!
@@ -28,9 +28,8 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { NavMain } from "./nav-main";
+import {NavMain} from "./nav-main";
 
-// 👇 Here is the data object the compiler was looking for 👇
 const data = {
     navMain: [
         {
@@ -124,7 +123,6 @@ const data = {
             title: "Supplier Management",
             url: "#",
             icon: Building2,
-            isActive: false,
             items: [
                 {
                     title: "Create Purchase Order",
@@ -179,11 +177,11 @@ const data = {
                             items: [
                                 {
                                     title: "PDP Creation",
-                                    url: "/scm/warehouse-management/consolidation/pre-dispatch-plan/pdp-creation",
+                                    url: "/scm/warehouse-management/consolidation/pre-dispatch-plan/pdp-creation"
                                 },
                                 {
                                     title: "PDP Planner",
-                                    url: "/scm/warehouse-management/consolidation/pre-dispatch-plan/pdp-planner",
+                                    url: "/scm/warehouse-management/consolidation/pre-dispatch-plan/pdp-planner"
                                 },
                             ],
                         },
@@ -209,7 +207,6 @@ const data = {
             title: "Fleet Management",
             url: "#",
             icon: Truck,
-            isActive: false,
             items: [
                 {
                     title: "Vehicle Management",
@@ -235,19 +232,19 @@ const data = {
                         },
                         {
                             title: "Dispatch Plan",
-                            url: "/scm/fleet-management/trip-management/dispatch-plan",
+                            url: "#",
                             items: [
                                 {
                                     title: "Creation",
-                                    url: "/scm/fleet-management/trip-management/dispatch-plan/dispatch-creation",
+                                    url: "/scm/fleet-management/trip-management/dispatch-plan/dispatch-creation"
                                 },
                                 {
                                     title: "Approval",
-                                    url: "/scm/fleet-management/trip-management/dispatch-plan/approval",
+                                    url: "/scm/fleet-management/trip-management/dispatch-plan/approval"
                                 },
                                 {
                                     title: "Clearance",
-                                    url: "/scm/fleet-management/trip-management/dispatch-plan/clearance",
+                                    url: "/scm/fleet-management/trip-management/dispatch-plan/clearance"
                                 },
                                 {
                                     title: "Inbound",
@@ -255,7 +252,7 @@ const data = {
                                 },
                                 {
                                     title: "Outbound",
-                                    url: "/scm/fleet-management/trip-management/dispatch-plan/outbound",
+                                    url: "/scm/fleet-management/trip-management/dispatch-plan/outbound"
                                 },
                             ],
                         },
@@ -271,11 +268,11 @@ const data = {
                     items: [
                         {
                             title: "Delivery Statistics",
-                            url: "/scm/fleet-management/logistics-deliveries/delivery-statistics",
+                            url: "/scm/fleet-management/logistics-deliveries/delivery-statistics"
                         },
                         {
                             title: "Logistics Summary",
-                            url: "/scm/fleet-management/logistics-deliveries/logistics-summary",
+                            url: "/scm/fleet-management/logistics-deliveries/logistics-summary"
                         },
                         {
                             title: "Pending Deliveries",
@@ -309,20 +306,30 @@ const data = {
                 {
                     title: "Inventory Controls",
                     url: "/scm/inventory-management/inventory-controls",
+                    items: [
+                        {
+                            title: "Purchase Planning",
+                            url: "/scm/inventory-management/inventory-controls/purchase-planning",
+                        },
+                    ]
+
                 },
                 {
                     title: "Physical Inventory",
                     url: "/scm/inventory-management/physical-inventory",
                     items: [
                         {
-                            title: "List/Create",
+                            title: "Physical Count (RFID)",
                             url: "/scm/inventory-management/physical-inventory   ",
                         },
                         {
                             title: "Offsetting",
                             url: "/scm/inventory-management/physical-inventory/offsetting   ",
                         },
-
+                        {
+                            title: "Manual Count (No RFID)",
+                            url: "/scm/inventory-management/physical-inventory-manual",
+                        },
                     ]
                 },
                 {
@@ -377,7 +384,7 @@ const data = {
             items: [
                 {
                     title: "Inventory Performance Dashboard",
-                    url: "/scm/business-analytics/inventory-performance-dashboard",
+                    url: "/scm/business-analytics/inventory-performance-dashboard"
                 },
                 {
                     title: "Stock Health Monitor",
@@ -385,7 +392,7 @@ const data = {
                 },
                 {
                     title: "Supplier Reliability Scorecard",
-                    url: "/scm/business-analytics/supplier-reliability-scorecard",
+                    url: "/scm/business-analytics/supplier-reliability-scorecard"
                 },
             ],
         },
@@ -411,10 +418,9 @@ const data = {
     ],
 };
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
     const [searchQuery, setSearchQuery] = useState("");
 
-    // Recursive function to filter the nested navigation items
     const filteredNavMain = useMemo(() => {
         if (!searchQuery.trim()) return data.navMain;
         const lowerQuery = searchQuery.toLowerCase();
@@ -432,7 +438,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 }
                 // If a child matches, show the parent but ONLY the matching children
                 else if (childMatches.length > 0) {
-                    acc.push({ ...item, items: childMatches });
+                    acc.push({...item, items: childMatches});
                 }
 
                 return acc;
@@ -449,8 +455,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" asChild>
                             <Link href="/main-dashboard">
-                                <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                                    <Command className="size-4" />
+                                <div
+                                    className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
+                                    <Command className="size-4"/>
                                 </div>
                                 <div className="grid flex-1 text-left text-sm leading-tight">
                                     <span className="truncate font-medium">VOS Web</span>
@@ -463,10 +470,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     </SidebarMenuItem>
                 </SidebarMenu>
 
-                {/* 👇 The Search Bar UI 👇 */}
                 <div className="px-4 py-2">
                     <div className="relative">
-                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
                         <Input
                             type="search"
                             placeholder="Search modules..."
@@ -478,7 +484,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 </div>
             </SidebarHeader>
 
-            <Separator />
+            <Separator/>
 
             <SidebarContent>
                 <div className="px-4 pt-3 pb-2 text-xs font-medium text-muted-foreground">
@@ -489,7 +495,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarContent>
 
             <SidebarFooter className="p-0">
-                <Separator />
+                <Separator/>
                 <div className="py-3 text-center text-xs text-muted-foreground">
                     VOS Web v2.0
                 </div>
