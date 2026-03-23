@@ -17,8 +17,8 @@ import Link from "next/link";
 import * as React from "react";
 import {useState, useMemo} from "react";
 
-import {Separator} from "@/components/ui/separator";
-import {Input} from "@/components/ui/input"; // Make sure you have the shadcn Input component installed!
+import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input"; // Make sure you have the shadcn Input component installed!
 import {
     Sidebar,
     SidebarContent,
@@ -30,7 +30,6 @@ import {
 } from "@/components/ui/sidebar";
 import {NavMain} from "./nav-main";
 
-// 👇 Here is the data object the compiler was looking for 👇
 const data = {
     navMain: [
         {
@@ -124,7 +123,6 @@ const data = {
             title: "Supplier Management",
             url: "#",
             icon: Building2,
-            isActive: false,
             items: [
                 {
                     title: "Create Purchase Order",
@@ -179,11 +177,11 @@ const data = {
                             items: [
                                 {
                                     title: "PDP Creation",
-                                    url: "/scm/warehouse-management/consolidation/pre-dispatch-plan/pdp-creation",
+                                    url: "/scm/warehouse-management/consolidation/pre-dispatch-plan/pdp-creation"
                                 },
                                 {
                                     title: "PDP Planner",
-                                    url: "/scm/warehouse-management/consolidation/pre-dispatch-plan/pdp-planner",
+                                    url: "/scm/warehouse-management/consolidation/pre-dispatch-plan/pdp-planner"
                                 },
                             ],
                         },
@@ -209,7 +207,6 @@ const data = {
             title: "Fleet Management",
             url: "#",
             icon: Truck,
-            isActive: false,
             items: [
                 {
                     title: "Vehicle Management",
@@ -235,19 +232,19 @@ const data = {
                         },
                         {
                             title: "Dispatch Plan",
-                            url: "/scm/fleet-management/trip-management/dispatch-plan",
+                            url: "#",
                             items: [
                                 {
                                     title: "Creation",
-                                    url: "/scm/fleet-management/trip-management/dispatch-plan/dispatch-creation",
+                                    url: "/scm/fleet-management/trip-management/dispatch-plan/dispatch-creation"
                                 },
                                 {
                                     title: "Approval",
-                                    url: "/scm/fleet-management/trip-management/dispatch-plan/approval",
+                                    url: "/scm/fleet-management/trip-management/dispatch-plan/approval"
                                 },
                                 {
                                     title: "Clearance",
-                                    url: "/scm/fleet-management/trip-management/dispatch-plan/clearance",
+                                    url: "/scm/fleet-management/trip-management/dispatch-plan/clearance"
                                 },
                                 {
                                     title: "Inbound",
@@ -255,7 +252,7 @@ const data = {
                                 },
                                 {
                                     title: "Outbound",
-                                    url: "/scm/fleet-management/trip-management/dispatch-plan/outbound",
+                                    url: "/scm/fleet-management/trip-management/dispatch-plan/outbound"
                                 },
                             ],
                         },
@@ -271,11 +268,11 @@ const data = {
                     items: [
                         {
                             title: "Delivery Statistics",
-                            url: "/scm/fleet-management/logistics-deliveries/delivery-statistics",
+                            url: "/scm/fleet-management/logistics-deliveries/delivery-statistics"
                         },
                         {
                             title: "Logistics Summary",
-                            url: "/scm/fleet-management/logistics-deliveries/logistics-summary",
+                            url: "/scm/fleet-management/logistics-deliveries/logistics-summary"
                         },
                         {
                             title: "Pending Deliveries",
@@ -322,14 +319,17 @@ const data = {
                     url: "/scm/inventory-management/physical-inventory",
                     items: [
                         {
-                            title: "List/Create",
+                            title: "Physical Count (RFID)",
                             url: "/scm/inventory-management/physical-inventory   ",
                         },
                         {
                             title: "Offsetting",
                             url: "/scm/inventory-management/physical-inventory/offsetting   ",
                         },
-
+                        {
+                            title: "Manual Count (No RFID)",
+                            url: "/scm/inventory-management/physical-inventory-manual",
+                        },
                     ]
                 },
                 {
@@ -384,7 +384,7 @@ const data = {
             items: [
                 {
                     title: "Inventory Performance Dashboard",
-                    url: "/scm/business-analytics/inventory-performance-dashboard",
+                    url: "/scm/business-analytics/inventory-performance-dashboard"
                 },
                 {
                     title: "Stock Health Monitor",
@@ -392,7 +392,7 @@ const data = {
                 },
                 {
                     title: "Supplier Reliability Scorecard",
-                    url: "/scm/business-analytics/supplier-reliability-scorecard",
+                    url: "/scm/business-analytics/supplier-reliability-scorecard"
                 },
             ],
         },
@@ -421,7 +421,6 @@ const data = {
 export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
     const [searchQuery, setSearchQuery] = useState("");
 
-    // Recursive function to filter the nested navigation items
     const filteredNavMain = useMemo(() => {
         if (!searchQuery.trim()) return data.navMain;
         const lowerQuery = searchQuery.toLowerCase();
@@ -471,7 +470,6 @@ export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
                     </SidebarMenuItem>
                 </SidebarMenu>
 
-                {/* 👇 The Search Bar UI 👇 */}
                 <div className="px-4 py-2">
                     <div className="relative">
                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
@@ -493,7 +491,7 @@ export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
                     Platform
                 </div>
                 {/* 👇 Pass the filtered data instead of the raw data 👇 */}
-                <NavMain items={filteredNavMain}/>
+                <NavMain items={filteredNavMain} />
             </SidebarContent>
 
             <SidebarFooter className="p-0">

@@ -100,14 +100,7 @@ export type PhysicalInventoryHeaderRow = {
     total_amount: number | null;
     supplier_id: number | null;
     category_id: number | null;
-    encoder_id:
-        | number
-        | {
-            user_id: number;
-            user_fname: string | null;
-            user_lname: string | null;
-        }
-        | null;
+    encoder_id: number | null;
 
     // optional future-ready field
     isPending?: number;
