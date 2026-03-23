@@ -44,14 +44,13 @@ export default function ActivePickingExecution({
 
             <div className="flex-1 min-h-0 flex overflow-hidden">
                 <ActivePickingGroupedList
+                    cldtoNo={batch.consolidatorNo} // 👈 Add this line
                     groupedDetails={pickingState.groupedDetails}
                     activeDetailId={pickingState.activeDetailId}
                     setActiveDetailId={pickingState.setActiveDetailId}
                     onOpenManualModal={() => pickingState.setIsManualModalOpen(true)}
-                    // 🚀 THE FIX: Pass the completion handler to the list component
                     onFinalizeBatch={onBatchComplete}
                 />
-
                 <ActivePickingLiveFeed
                     scanLogs={pickingState.scanLogs}
                     activeDetailId={pickingState.activeDetailId}

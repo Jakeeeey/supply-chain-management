@@ -63,6 +63,7 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+    ArrowRightCircle,
     Ban,
     Boxes,
     ClipboardList,
@@ -70,6 +71,7 @@ import {
     RefreshCcw,
     ScanLine,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import {
     PhysicalInventoryFilters as PhysicalInventoryFiltersCard,
@@ -196,6 +198,7 @@ function groupedRowHasUncounted(row: GroupedPhysicalInventoryRow): boolean {
 
 export function PhysicalInventoryManagementModule(props: Props) {
     const { initialHeaderId = null, onRecordChange } = props;
+    const router = useRouter();
 
     const [isBootLoading, setIsBootLoading] = React.useState(true);
     const [isLoadingProducts, setIsLoadingProducts] = React.useState(false);
@@ -889,6 +892,10 @@ export function PhysicalInventoryManagementModule(props: Props) {
             throw new Error("Price type is required.");
         }
 
+        if (!header.starting_date) {
+            throw new Error("Starting date is required.");
+        }
+
         const payload: PhysicalInventoryHeaderUpsertPayload = {
             ph_no: (header.ph_no ?? "").trim(),
             cutOff_date: header.cutOff_date,
@@ -1300,6 +1307,20 @@ export function PhysicalInventoryManagementModule(props: Props) {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
+                        <Button
+                            variant="outline"
+                            className="cursor-pointer border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-900/40"
+                            onClick={() =>
+                                router.push(
+                                    `/scm/inventory-management/physical-inventory/offsetting?id=${header.id}`,
+                                )
+                            }
+                            disabled={!header.id}
+                        >
+                            <ArrowRightCircle className="mr-2 h-4 w-4" />
+                            Go to Offsetting
+                        </Button>
+
                         <Button
                             variant="outline"
                             className="cursor-pointer"

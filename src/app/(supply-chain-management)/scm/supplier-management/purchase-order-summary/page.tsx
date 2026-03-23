@@ -81,12 +81,12 @@ async function getData() {
         const pays = await payRes.json();
         const trans = await transRes.json();
 
-        // Filter only TRADE suppliers
-        const tradeSuppliers = sups.data?.filter((s: Supplier) => s.supplier_type === "TRADE") || [];
+        // Use all suppliers so that both Trade and Non-Trade POs can map their supplier names
+        const allSuppliers = sups.data || [];
 
         return { 
             poData: pos.data || [], 
-            suppliers: tradeSuppliers,
+            suppliers: allSuppliers,
             paymentStatuses: pays.data || [],
             transactionStatuses: trans.data || []
         };

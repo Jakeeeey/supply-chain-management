@@ -13,6 +13,9 @@ import {
     deletePhysicalInventoryDetailRfid,
     fetchPhysicalInventoryDetailRfid,
     fetchPhysicalInventoryDetailRfidByDetailId,
+    fetchHistoricalRfidScan,
+    fetchRfidOnhandByTag,
+    fetchRfidOnhandByBranch,
     updatePhysicalInventoryDetail,
 } from "../providers/fetchProvider";
 import {
@@ -46,12 +49,45 @@ type Props = {
     onSaved?: (payload: RfidSavedPayload) => Promise<void> | void;
 };
 
+const RFID_EXACT_LENGTH = 24;
+const RFID_PATTERN = /^[A-F0-9]{24}$/;
+
 function normalizeTag(value: string): string {
-    return value.trim();
+    return value.trim().toUpperCase();
 }
 
 function sameTag(a: string, b: string): boolean {
-    return normalizeTag(a).toLowerCase() === normalizeTag(b).toLowerCase();
+    return normalizeTag(a) === normalizeTag(b);
+}
+
+function isValidExactRfidTag(value: string): boolean {
+    return RFID_PATTERN.test(normalizeTag(value));
+}
+
+function getRfidValidationMessage(value: string): string {
+    const normalized = normalizeTag(value);
+
+    if (!normalized) {
+        return "RFID tag is required.";
+    }
+
+    if (normalized.length !== RFID_EXACT_LENGTH) {
+        return `RFID tag must be exactly ${RFID_EXACT_LENGTH} characters.`;
+    }
+
+    if (!/^[A-F0-9]+$/.test(normalized)) {
+        return "RFID tag must contain uppercase letters A-F and numbers 0-9 only.";
+    }
+
+    if (!normalized.startsWith("E")) {
+        return 'RFID tag must start with "E".';
+    }
+
+    if (!RFID_PATTERN.test(normalized)) {
+        return "Invalid RFID tag format.";
+    }
+
+    return "";
 }
 
 export function PhysicalInventoryRFIDDialog(props: Props) {
@@ -61,6 +97,7 @@ export function PhysicalInventoryRFIDDialog(props: Props) {
     const [allPiTags, setAllPiTags] = React.useState<PhysicalInventoryDetailRFIDRow[]>([]);
     const [rfidInput, setRfidInput] = React.useState("");
     const [isLoading, setIsLoading] = React.useState(false);
+    const [onhandCache, setOnhandCache] = React.useState<Map<string, number>>(new Map());
     const [isSaving, setIsSaving] = React.useState(false);
     const [deletingId, setDeletingId] = React.useState<number | null>(null);
 
@@ -102,13 +139,20 @@ export function PhysicalInventoryRFIDDialog(props: Props) {
         try {
             setIsLoading(true);
 
-            const [detailTags, piTags] = await Promise.all([
+            const [detailTags, piTags, onhandRows] = await Promise.all([
                 fetchPhysicalInventoryDetailRfidByDetailId(detailId),
                 phId ? fetchPhysicalInventoryDetailRfid(phId) : Promise.resolve([]),
+                branchId ? fetchRfidOnhandByBranch(branchId) : Promise.resolve([]),
             ]);
 
             setTags(detailTags);
             setAllPiTags(piTags);
+
+            const nextCache = new Map<string, number>();
+            for (const row of onhandRows) {
+                nextCache.set(row.rfid, row.productId);
+            }
+            setOnhandCache(nextCache);
         } catch (error) {
             const message =
                 error instanceof Error ? error.message : "Failed to load RFID tags.";
@@ -117,7 +161,7 @@ export function PhysicalInventoryRFIDDialog(props: Props) {
             setIsLoading(false);
             focusInput();
         }
-    }, [detailId, phId, focusInput]);
+    }, [detailId, phId, branchId, focusInput]);
 
     React.useEffect(() => {
         if (!open) {
@@ -185,8 +229,72 @@ export function PhysicalInventoryRFIDDialog(props: Props) {
                 return;
             }
 
+            if (!isValidExactRfidTag(rfidTag)) {
+                toast.error(
+                    `Invalid RFID tag. It must be exactly ${RFID_EXACT_LENGTH} uppercase hexadecimal characters.`,
+                );
+                setRfidInput("");
+                focusInput(true);
+                return;
+            }
+
             if (hasDuplicateInCurrentPi(rfidTag)) {
                 toast.error("This RFID tag already exists in the current PI.");
+                setRfidInput("");
+                focusInput();
+                return;
+            }
+
+            if (!branchId) {
+                const message = "Branch is required before verifying RFID.";
+                toast.error(message);
+                setRfidInput("");
+                focusInput();
+                return;
+            }
+
+            // Verify where it belongs (Current On-hand)
+            // Use local cache for instant lookup to support fast scan
+            let rfidProductId: number | null = null;
+            const cachedProductId = onhandCache.get(rfidTag);
+
+            if (cachedProductId !== undefined) {
+                rfidProductId = cachedProductId;
+            } else {
+                // Background fallback to API if not in cache (though pre-fetch should cover most)
+                const resolved = await fetchRfidOnhandByTag(rfidTag, branchId);
+                if (!resolved.ok) {
+                    throw new Error(resolved.message || "RFID lookup failed.");
+                }
+                if (resolved.item) {
+                    rfidProductId = resolved.item.productId;
+                    // Update cache for future scans in this session
+                    setOnhandCache((prev) => {
+                        const next = new Map(prev);
+                        next.set(rfidTag, rfidProductId!);
+                        return next;
+                    });
+                }
+            }
+
+            // If the RFID belongs to a DIFFERENT product, prohibit it
+            if (rfidProductId !== null && rfidProductId !== row?.product_id) {
+                const message = `Scanned RFID belongs to product ID ${rfidProductId}, but this row is for "${row?.product_name || "a different product"}".`;
+                toast.error(message, {
+                    description: `RFID: ${rfidTag}`,
+                });
+                setRfidInput("");
+                focusInput();
+                return;
+            }
+
+            // Verify historical records
+            const historical = await fetchHistoricalRfidScan(rfidTag);
+            if (historical && historical.product_id !== row?.product_id) {
+                const message = `This RFID was previously registered to product ID ${historical.product_id}, but this row is for "${row?.product_name || "a different product"}".`;
+                toast.error(message, {
+                    description: `RFID: ${rfidTag}`,
+                });
                 setRfidInput("");
                 focusInput();
                 return;
@@ -226,10 +334,11 @@ export function PhysicalInventoryRFIDDialog(props: Props) {
 
     const handleAddTagManual = React.useCallback(async () => {
         const normalized = normalizeTag(rfidInput);
+        const validationMessage = getRfidValidationMessage(normalized);
 
-        if (!normalized) {
-            toast.error("RFID tag is required.");
-            focusInput();
+        if (validationMessage) {
+            toast.error(validationMessage);
+            focusInput(true);
             return;
         }
 
@@ -280,46 +389,44 @@ export function PhysicalInventoryRFIDDialog(props: Props) {
         [focusInput, onSaved, persistRowFromRfidCount, tags.length],
     );
 
+    const inputErrorMessage = React.useMemo(() => {
+        if (!rfidInput) return "";
+        return getRfidValidationMessage(rfidInput);
+    }, [rfidInput]);
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-2xl">
-                <DialogHeader>
+            <DialogContent className="max-h-[96vh] w-[94vw] overflow-hidden p-0 sm:max-w-2xl sm:w-full sm:rounded-2xl">
+                <DialogHeader className="px-6 pt-6">
                     <DialogTitle>RFID Tag Review</DialogTitle>
-                    <DialogDescription>
-                        Review saved RFID tags for this row, manually add missing tags, or
+                    <DialogDescription className="text-xs sm:text-sm">
+                        Review saved RFID tags, manually add missing tags, or
                         remove incorrect ones.
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-4">
-                    <div className="rounded-2xl border bg-muted/30 p-4 text-sm">
-                        <div className="grid gap-2 md:grid-cols-2">
-                            <p>
-                                <span className="font-medium">Product:</span>{" "}
-                                {row?.product_name ?? "—"}
-                            </p>
-                            <p>
-                                <span className="font-medium">UOM:</span>{" "}
-                                {row?.unit_name ?? row?.unit_shortcut ?? "—"}
-                            </p>
-                            <p>
-                                <span className="font-medium">Product ID:</span>{" "}
-                                {row?.product_id ?? "—"}
-                            </p>
-                            <p>
-                                <span className="font-medium">Detail ID:</span>{" "}
-                                {row?.detail_id ?? "—"}
-                            </p>
-                            <p>
-                                <span className="font-medium">Branch ID:</span>{" "}
-                                {branchId ?? "—"}
-                            </p>
-                            <p>
-                                <span className="font-medium">Current RFID Count:</span>{" "}
-                                {tags.length}
-                            </p>
+                <div className="flex flex-col overflow-hidden px-6 pb-6">
+                    <div className="mb-4 space-y-4">
+                        <div className="rounded-xl border bg-muted/30 p-3 text-[11px] sm:p-4 sm:text-sm">
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                                <p className="col-span-2 sm:col-span-1">
+                                    <span className="font-semibold text-muted-foreground mr-1">Product:</span>
+                                    <span className="font-medium text-foreground">{row?.product_name ?? "—"}</span>
+                                </p>
+                                <p>
+                                    <span className="font-semibold text-muted-foreground mr-1">UOM:</span>
+                                    <span className="font-medium text-foreground">{row?.unit_name ?? row?.unit_shortcut ?? "—"}</span>
+                                </p>
+                                <p className="hidden sm:block">
+                                    <span className="font-semibold text-muted-foreground mr-1">Product ID:</span>
+                                    <span className="font-medium text-foreground">{row?.product_id ?? "—"}</span>
+                                </p>
+                                <p>
+                                    <span className="font-semibold text-muted-foreground mr-1">Count:</span>
+                                    <span className="font-bold text-primary">{tags.length}</span>
+                                </p>
+                            </div>
                         </div>
-                    </div>
 
                     <div className="space-y-2">
                         <div className="flex flex-col gap-2 sm:flex-row">
@@ -327,7 +434,11 @@ export function PhysicalInventoryRFIDDialog(props: Props) {
                                 ref={inputRef}
                                 placeholder="Scan or enter RFID tag"
                                 value={rfidInput}
-                                onChange={(e) => setRfidInput(e.target.value)}
+                                maxLength={RFID_EXACT_LENGTH}
+                                onChange={(e) => {
+                                    const nextValue = e.target.value.toUpperCase().replace(/[^A-F0-9]/g, "");
+                                    setRfidInput(nextValue.slice(0, RFID_EXACT_LENGTH));
+                                }}
                                 onKeyDown={(e) => {
                                     if (e.key === "Enter") {
                                         e.preventDefault();
@@ -341,6 +452,7 @@ export function PhysicalInventoryRFIDDialog(props: Props) {
                                     focusInput();
                                 }}
                                 disabled={!detailId || isSaving}
+                                className={inputErrorMessage ? "border-destructive" : ""}
                             />
 
                             <Button
@@ -365,13 +477,21 @@ export function PhysicalInventoryRFIDDialog(props: Props) {
                         </div>
 
                         <p className="text-xs text-muted-foreground">
-                            This field stays armed for continuous scan input. After each scan, it
-                            auto-focuses again so you can scan the next RFID immediately.
+                            Accepted format: exactly {RFID_EXACT_LENGTH} uppercase hexadecimal
+                            characters, for example: <span className="font-medium">E280F302000000010EC7C500</span>
+                        </p>
+
+                        {inputErrorMessage ? (
+                            <p className="text-xs text-destructive">{inputErrorMessage}</p>
+                        ) : null}
+
+                        <p className="text-[10px] text-muted-foreground sm:text-xs">
+                            This field stays armed for continuous scan input.
                         </p>
                     </div>
 
-                    <div className="rounded-2xl border">
-                        <ScrollArea className="h-[320px]">
+                    <div className="min-h-0 flex-1 rounded-xl border">
+                        <ScrollArea className="h-full min-h-[220px] max-h-[360px]">
                             <div className="divide-y">
                                 {isLoading ? (
                                     <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
@@ -420,7 +540,7 @@ export function PhysicalInventoryRFIDDialog(props: Props) {
                         </ScrollArea>
                     </div>
 
-                    <div className="flex justify-end">
+                    <div className="mt-4 flex justify-end">
                         <Button
                             variant="outline"
                             className="cursor-pointer"
@@ -428,6 +548,7 @@ export function PhysicalInventoryRFIDDialog(props: Props) {
                         >
                             Close
                         </Button>
+                        </div>
                     </div>
                 </div>
             </DialogContent>

@@ -14,7 +14,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { CalendarDays, FileText, Package2, PhilippinePeso } from "lucide-react";
+import { CalendarDays, FileText, Package2, PhilippinePeso, User } from "lucide-react";
 
 import { PhysicalInventoryStatusBadge } from "./PhysicalInventoryStatusBadge";
 
@@ -66,6 +66,16 @@ function stockTypeTone(stockType: string | null | undefined): string {
     return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300";
 }
 
+function getEncoderName(encoderId: PhysicalInventoryHeaderRow["encoder_id"] | undefined): string {
+    if (!encoderId) return "—";
+    if (typeof encoderId === "object") {
+        const first = encoderId.user_fname || "";
+        const last = encoderId.user_lname || "";
+        return `${first} ${last}`.trim() || "—";
+    }
+    return `ID: ${encoderId}`;
+}
+
 export function PhysicalInventoryHeader(props: Props) {
     const {
         header,
@@ -92,7 +102,7 @@ export function PhysicalInventoryHeader(props: Props) {
                         </p>
                     </div>
 
-                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                         <div className="flex min-w-[180px] items-start gap-3 rounded-2xl border bg-background px-4 py-3 shadow-sm">
                             <PhilippinePeso className="mt-0.5 h-4 w-4 text-muted-foreground" />
                             <div className="min-w-0">
@@ -113,6 +123,18 @@ export function PhysicalInventoryHeader(props: Props) {
                                 </p>
                                 <p className="truncate text-sm font-medium">
                                     {formatDisplayDate(header?.date_encoded)}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex min-w-[180px] items-start gap-3 rounded-2xl border bg-background px-4 py-3 shadow-sm">
+                            <User className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                            <div className="min-w-0">
+                                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                                    Encoder
+                                </p>
+                                <p className="truncate text-sm font-medium">
+                                    {getEncoderName(header?.encoder_id)}
                                 </p>
                             </div>
                         </div>
@@ -167,7 +189,9 @@ export function PhysicalInventoryHeader(props: Props) {
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="pi-starting-date">Starting Date</Label>
+                        <Label htmlFor="pi-starting-date">
+                            Starting Date <span className="text-destructive">*</span>
+                        </Label>
                         <Input
                             id="pi-starting-date"
                             type="date"
