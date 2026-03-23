@@ -6,16 +6,15 @@ import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
-import { PhysicalInventoryManagementModule } from "@/modules/supply-chain-management/inventory-management/physical-inventory-management/PhysicalInventoryManagementModule";
+import { PhysicalInventoryManualManagementModule } from "@/modules/supply-chain-management/inventory-management/physical-inventory-manual-management";
 import {
     PhysicalInventoryListModule,
     type PhysicalInventoryListRow,
 } from "@/modules/supply-chain-management/inventory-management/physical-inventory-list";
 
-export default function PhysicalInventoryWorkspaceClient() {
+export default function PhysicalInventoryManualWorkspaceClient() {
     const [selectedHeaderId, setSelectedHeaderId] = React.useState<number | null>(null);
     const [isListCollapsed, setIsListCollapsed] = React.useState(false);
-    const [newClickCount, setNewClickCount] = React.useState(0);
 
     React.useEffect(() => {
         if (typeof window === "undefined") return;
@@ -40,15 +39,8 @@ export default function PhysicalInventoryWorkspaceClient() {
 
     const handleCreateNew = React.useCallback(() => {
         setSelectedHeaderId(null);
-        setNewClickCount((prev) => prev + 1);
         setIsListCollapsed(true);
     }, []);
-
-    const handleRecordChange = React.useCallback((header: any) => {
-        if (header.id && header.id !== selectedHeaderId) {
-            setSelectedHeaderId(header.id);
-        }
-    }, [selectedHeaderId]);
 
     return (
         <div className="space-y-3 lg:space-y-4">
@@ -56,7 +48,7 @@ export default function PhysicalInventoryWorkspaceClient() {
                 <div className="min-w-0 text-sm text-muted-foreground">
                     {isListCollapsed
                         ? "PI list is hidden for a wider work area."
-                        : "Open a record from the list or hide it for a wider work area."}
+                        : "Open a record from the list or hide it for a wider work area (Manual Count)."}
                 </div>
 
                 <Button
@@ -101,10 +93,9 @@ export default function PhysicalInventoryWorkspaceClient() {
                 </AnimatePresence>
 
                 <div className="min-w-0 flex-1">
-                    <PhysicalInventoryManagementModule
-                        key={`${selectedHeaderId ?? "new"}-${newClickCount}`}
+                    <PhysicalInventoryManualManagementModule
+                        key={selectedHeaderId ?? "new"}
                         initialHeaderId={selectedHeaderId}
-                        onRecordChange={handleRecordChange}
                     />
                 </div>
             </div>

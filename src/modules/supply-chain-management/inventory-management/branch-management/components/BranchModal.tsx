@@ -36,7 +36,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 
-import { Combobox } from "@/components/ui/combobox";
+import { 
+    Combobox,
+    ComboboxInput,
+    ComboboxContent,
+    ComboboxList,
+    ComboboxItem,
+    ComboboxEmpty,
+} from "@/components/ui/combobox";
 
 import type { User, Province, City, Barangay, Branch } from "../types";
 import {
@@ -170,7 +177,7 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }
     }, [isOpen, editingBranch, provinces.length]); // Added provinces.length to trigger location data load once provinces are available
 
     // Handle Province Change -> Load Cities
-    const onProvinceChange = async (provinceCode: string) => {
+    const onProvinceChange = async (provinceCode: string | null) => {
         const provinceName = provinces.find((p) => p.code === provinceCode)?.name || "";
         form.setValue("state_province", provinceName);
         form.setValue("city", "");
@@ -179,6 +186,11 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }
         setCities([]);
         setBarangays([]);
 
+        if (!provinceCode) {
+            form.setValue("state_province", "");
+            return;
+        }
+
         if (provinceCode) {
             const data = await fetchCities(provinceCode);
             setCities(data);
@@ -186,12 +198,17 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }
     };
 
     // Handle City Change -> Load Barangays
-    const onCityChange = async (cityCode: string) => {
+    const onCityChange = async (cityCode: string | null) => {
         const cityName = cities.find((c) => c.code === cityCode)?.name || "";
         form.setValue("city", cityName);
         form.setValue("brgy", "");
         form.setValue("postal_code", "");
         setBarangays([]);
+
+        if (!cityCode) {
+            form.setValue("city", "");
+            return;
+        }
 
         if (cityCode) {
             const data = await fetchBarangays(cityCode);
@@ -200,7 +217,11 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }
     };
 
     // Handle Barangay Change -> Remove Auto-populate Zip Code
-    const onBarangayChange = (barangayCode: string) => {
+    const onBarangayChange = (barangayCode: string | null) => {
+        if (!barangayCode) {
+            form.setValue("brgy", "");
+            return;
+        }
         const brgyName = barangays.find((b) => b.code === barangayCode)?.name || "";
         form.setValue("brgy", brgyName);
     };
@@ -208,16 +229,22 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }
     async function onSubmit(values: FormValues) {
         setIsSubmitting(true);
         try {
+            const selectedUser = users.find(u =>
+                `${u.user_fname} ${u.user_lname}` === values.branch_head ||
+                u.user_id.toString() === values.branch_head
+            );
+            const branchHeadId = selectedUser ? selectedUser.user_id : parseInt(values.branch_head) || 0;
+
             if (editingBranch) {
                 await updateBranch(editingBranch.id, {
                     ...values,
-                    branch_head: parseInt(values.branch_head),
+                    branch_head: branchHeadId,
                 });
                 toast.success("Branch updated successfully!");
             } else {
                 await saveBranch({
                     ...values,
-                    branch_head: parseInt(values.branch_head),
+                    branch_head: branchHeadId,
                 });
                 toast.success("Branch registered successfully!");
             }
@@ -314,16 +341,37 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }
                                                     Branch Head
                                                 </FormLabel>
                                                 <FormControl>
-                                                    <Combobox
-                                                        options={users.map((user) => ({
-                                                            value: user.user_id.toString(),
-                                                            label: `${user.user_fname} ${user.user_lname}`,
-                                                        }))}
-                                                        value={field.value}
-                                                        onValueChange={field.onChange}
-                                                        placeholder="Assign a manager"
-                                                        className={cn(selectBase, selectFocus)}
-                                                    />
+                                                    {(() => {
+                                                        const selectedUser = users.find(u => 
+                                                            u.user_id.toString() === field.value || 
+                                                            `${u.user_fname} ${u.user_lname}` === field.value
+                                                        );
+                                                        const displayValue = selectedUser ? `${selectedUser.user_fname} ${selectedUser.user_lname}` : "";
+                                                        
+                                                        return (
+                                                            <Combobox
+                                                                value={displayValue}
+                                                                onValueChange={field.onChange}
+                                                            >
+                                                                <ComboboxInput 
+                                                                    placeholder="Assign a manager" 
+                                                                    className={cn(selectBase, selectFocus)} 
+                                                                />
+                                                                <ComboboxContent className="z-[9999] !pointer-events-auto">
+                                                                    <ComboboxList className="max-h-[300px] !overflow-y-auto !pointer-events-auto">
+                                                                        {users.map((user) => (
+                                                                            <ComboboxItem 
+                                                                                key={user.user_id} 
+                                                                                value={`${user.user_fname} ${user.user_lname}`}
+                                                                            >
+                                                                                {user.user_fname} {user.user_lname}
+                                                                            </ComboboxItem>
+                                                                        ))}
+                                                                    </ComboboxList>
+                                                                </ComboboxContent>
+                                                            </Combobox>
+                                                        );
+                                                    })()}
                                                 </FormControl>
                                                 <FormMessage className="text-[10px]" />
                                             </FormItem>
@@ -393,15 +441,26 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }
                                                 </FormLabel>
                                                 <FormControl>
                                                     <Combobox
-                                                        options={provinces.map((p) => ({
-                                                            value: p.code,
-                                                            label: p.name,
-                                                        }))}
-                                                        value={provinces.find((p) => p.name === field.value)?.code}
-                                                        onValueChange={(val) => onProvinceChange(val)}
-                                                        placeholder="Select Province"
-                                                        className={cn(selectBase, selectFocus)}
-                                                    />
+                                                        value={field.value}
+                                                        onValueChange={(val) => {
+                                                            const code = provinces.find(p => p.name === val)?.code;
+                                                            onProvinceChange(code || null);
+                                                        }}
+                                                    >
+                                                        <ComboboxInput 
+                                                            placeholder="Select Province" 
+                                                            className={cn(selectBase, selectFocus)} 
+                                                        />
+                                                        <ComboboxContent className="z-[9999] !pointer-events-auto">
+                                                            <ComboboxList className="max-h-[300px] !overflow-y-auto !pointer-events-auto">
+                                                                {provinces.map((p) => (
+                                                                    <ComboboxItem key={p.code} value={p.name}>
+                                                                        {p.name}
+                                                                    </ComboboxItem>
+                                                                ))}
+                                                            </ComboboxList>
+                                                        </ComboboxContent>
+                                                    </Combobox>
                                                 </FormControl>
                                                 <FormMessage className="text-[10px]" />
                                             </FormItem>
@@ -418,16 +477,27 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }
                                                 </FormLabel>
                                                 <FormControl>
                                                     <Combobox
-                                                        options={cities.map((c) => ({
-                                                            value: c.code,
-                                                            label: c.name,
-                                                        }))}
-                                                        value={cities.find((c) => c.name === field.value)?.code}
-                                                        onValueChange={(val) => onCityChange(val)}
-                                                        placeholder="Select City"
-                                                        disabled={!cities.length}
-                                                        className={cn(selectBase, selectFocus)}
-                                                    />
+                                                        value={field.value}
+                                                        onValueChange={(val) => {
+                                                            const code = cities.find(c => c.name === val)?.code;
+                                                            onCityChange(code || null);
+                                                        }}
+                                                    >
+                                                        <ComboboxInput 
+                                                            placeholder="Select City" 
+                                                            disabled={!cities.length}
+                                                            className={cn(selectBase, selectFocus)} 
+                                                        />
+                                                        <ComboboxContent className="z-[9999] !pointer-events-auto">
+                                                            <ComboboxList className="max-h-[300px] !overflow-y-auto !pointer-events-auto">
+                                                                {cities.map((c) => (
+                                                                    <ComboboxItem key={c.code} value={c.name}>
+                                                                        {c.name}
+                                                                    </ComboboxItem>
+                                                                ))}
+                                                            </ComboboxList>
+                                                        </ComboboxContent>
+                                                    </Combobox>
                                                 </FormControl>
                                                 <FormMessage className="text-[10px]" />
                                             </FormItem>
@@ -444,16 +514,27 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }
                                                 </FormLabel>
                                                 <FormControl>
                                                     <Combobox
-                                                        options={barangays.map((b) => ({
-                                                            value: b.code,
-                                                            label: b.name,
-                                                        }))}
-                                                        value={barangays.find((b) => b.name === field.value)?.code}
-                                                        onValueChange={(val) => onBarangayChange(val)}
-                                                        placeholder="Select Barangay"
-                                                        disabled={!barangays.length}
-                                                        className={cn(selectBase, selectFocus)}
-                                                    />
+                                                        value={field.value}
+                                                        onValueChange={(val) => {
+                                                            const code = barangays.find(b => b.name === val)?.code;
+                                                            onBarangayChange(code || null);
+                                                        }}
+                                                    >
+                                                        <ComboboxInput 
+                                                            placeholder="Select Barangay" 
+                                                            disabled={!barangays.length}
+                                                            className={cn(selectBase, selectFocus)} 
+                                                        />
+                                                        <ComboboxContent className="z-[9999] !pointer-events-auto">
+                                                            <ComboboxList className="max-h-[300px] !overflow-y-auto !pointer-events-auto">
+                                                                {barangays.map((b) => (
+                                                                    <ComboboxItem key={b.code} value={b.name}>
+                                                                        {b.name}
+                                                                    </ComboboxItem>
+                                                                ))}
+                                                            </ComboboxList>
+                                                        </ComboboxContent>
+                                                    </Combobox>
                                                 </FormControl>
                                                 <FormMessage className="text-[10px]" />
                                             </FormItem>

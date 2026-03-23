@@ -1,4 +1,4 @@
-// src/modules/supply-chain-management/physical-inventory-management/components/PhysicalInventoryTable.tsx
+// src/modules/supply-chain-management/physical-inventory-manual-management/components/PhysicalInventoryTable.tsx
 "use client";
 
 import * as React from "react";
@@ -20,7 +20,6 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ScanLine } from "lucide-react";
 
 type Props = {
     rows: GroupedPhysicalInventoryRow[];
@@ -28,7 +27,6 @@ type Props = {
     canEdit: boolean;
     onPhysicalCountChange: (row: GroupedPhysicalInventoryChildRow, value: string) => void;
     onPhysicalCountBlur: (row: GroupedPhysicalInventoryChildRow) => void;
-    onOpenRfid: (row: GroupedPhysicalInventoryChildRow) => void;
 };
 
 function fmtQty(value: number): string {
@@ -131,7 +129,6 @@ export function PhysicalInventoryTable(props: Props) {
         canEdit,
         onPhysicalCountChange,
         onPhysicalCountBlur,
-        onOpenRfid,
     } = props;
 
     if (isLoading) {
@@ -191,20 +188,19 @@ export function PhysicalInventoryTable(props: Props) {
                         </div>
 
                         <ScrollArea className="w-full">
-                            <div className="min-w-[720px] lg:min-w-0">
+                            <div className="min-w-[1100px]">
                                 <Table>
                                     <TableHeader>
                                         <TableRow className="bg-background">
-                                            <TableHead className="w-[100px]">UOM</TableHead>
+                                            <TableHead>UOM</TableHead>
                                             <TableHead className="text-right">Factor</TableHead>
-                                            <TableHead className="text-right">System</TableHead>
-                                            <TableHead className="text-right">Physical</TableHead>
+                                            <TableHead className="text-right">System Count</TableHead>
+                                            <TableHead className="text-right">Physical Count</TableHead>
                                             <TableHead className="text-right">Variance</TableHead>
-                                            <TableHead className="hidden text-right lg:table-cell">Var Base</TableHead>
-                                            <TableHead className="hidden text-right xl:table-cell">Price</TableHead>
-                                            <TableHead className="hidden text-right xl:table-cell">Amount</TableHead>
-                                            <TableHead className="hidden text-right lg:table-cell">Diff Cost</TableHead>
-                                            <TableHead className="text-center">RFID</TableHead>
+                                            <TableHead className="text-right">Variance Base</TableHead>
+                                            <TableHead className="text-right">Unit Price</TableHead>
+                                            <TableHead className="text-right">Amount</TableHead>
+                                            <TableHead className="text-right">Difference Cost</TableHead>
                                         </TableRow>
                                     </TableHeader>
 
@@ -214,107 +210,62 @@ export function PhysicalInventoryTable(props: Props) {
                                             const varianceBaseClass = qtyTone(row.variance_base);
                                             const amountClass = moneyTone(row.amount);
                                             const diffCostClass = moneyTone(row.difference_cost);
-                                            const hasRfidCount = row.rfid_count > 0;
-                                            const rfidButtonLabel = hasRfidCount
-                                                ? `View RFID (${row.rfid_count})`
-                                                : "Scan RFID";
-
                                             return (
                                                 <TableRow key={row.product_id} className="hover:bg-muted/20">
-                                                    <TableCell className="px-3 py-3 font-medium lg:px-4">
+                                                    <TableCell className="font-medium">
                                                         {row.unit_name ?? row.unit_shortcut ?? "—"}
                                                     </TableCell>
 
-                                                    <TableCell className="text-right px-3 py-3 font-medium tabular-nums lg:px-4">
+                                                    <TableCell className="text-right font-medium tabular-nums">
                                                         {fmtQty(row.unit_count)}
                                                     </TableCell>
 
-                                                    <TableCell className="px-3 py-3 text-right tabular-nums lg:px-4">
+                                                    <TableCell className="text-right tabular-nums">
                                                         {fmtQty(row.system_count)}
                                                     </TableCell>
 
-                                                    <TableCell className="px-3 py-3 text-right lg:px-4">
-                                                        {row.requires_rfid ? (
-                                                            <div className="ml-auto flex w-24 flex-col items-end sm:w-28">
-                                                                <Input
-                                                                    inputMode="decimal"
-                                                                    value={String(row.physical_count ?? 0)}
-                                                                    onChange={(event) =>
-                                                                        onPhysicalCountChange(
-                                                                            row,
-                                                                            event.target.value,
-                                                                        )
-                                                                    }
-                                                                    onBlur={() => onPhysicalCountBlur(row)}
-                                                                    disabled
-                                                                    readOnly
-                                                                    placeholder="Scan RFID"
-                                                                    className="ml-auto w-24 sm:w-28 cursor-not-allowed border-border bg-muted text-right font-semibold tabular-nums text-muted-foreground shadow-sm opacity-100"
-                                                                />
-                                                                <p className="mt-1 text-[10px] text-muted-foreground">
-                                                                    Scan-controlled.
-                                                                </p>
-                                                            </div>
-                                                        ) : (
-                                                            <Input
-                                                                inputMode="decimal"
-                                                                className="ml-auto w-24 sm:w-28 border-border bg-background text-right font-semibold tabular-nums shadow-sm focus-visible:ring-2"
-                                                                value={String(row.physical_count)}
-                                                                onChange={(e) =>
-                                                                    onPhysicalCountChange(row, e.target.value)
-                                                                }
-                                                                onBlur={() => onPhysicalCountBlur(row)}
-                                                                disabled={!canEdit}
-                                                                placeholder="0"
-                                                            />
-                                                        )}
+                                                    <TableCell className="text-right">
+                                                        <Input
+                                                            inputMode="decimal"
+                                                            className="ml-auto w-28 border-border bg-background text-right font-semibold tabular-nums shadow-sm focus-visible:ring-2"
+                                                            value={String(row.physical_count)}
+                                                            onChange={(e) =>
+                                                                onPhysicalCountChange(row, e.target.value)
+                                                            }
+                                                            onBlur={() => onPhysicalCountBlur(row)}
+                                                            disabled={!canEdit}
+                                                            placeholder="0"
+                                                        />
                                                     </TableCell>
 
                                                     <TableCell
-                                                        className={`px-3 py-3 text-right font-medium tabular-nums lg:px-4 ${varianceClass}`}
+                                                        className={`text-right font-medium tabular-nums ${varianceClass}`}
                                                     >
                                                         {fmtQty(row.variance)}
                                                     </TableCell>
 
                                                     <TableCell
-                                                        className={`hidden text-right font-medium tabular-nums lg:table-cell ${varianceBaseClass}`}
+                                                        className={`text-right font-medium tabular-nums ${varianceBaseClass}`}
                                                     >
                                                         {fmtQty(row.variance_base)}
                                                     </TableCell>
 
-                                                    <TableCell className="hidden text-right tabular-nums xl:table-cell">
+                                                    <TableCell className="text-right tabular-nums">
                                                         ₱ {fmtMoney(row.unit_price ?? 0)}
                                                     </TableCell>
 
                                                     <TableCell
-                                                        className={`hidden text-right font-medium tabular-nums xl:table-cell ${amountClass}`}
+                                                        className={`text-right font-medium tabular-nums ${amountClass}`}
                                                     >
                                                         ₱ {fmtMoney(row.amount)}
                                                     </TableCell>
 
                                                     <TableCell
-                                                        className={`hidden text-right font-medium tabular-nums lg:table-cell ${diffCostClass}`}
+                                                        className={`text-right font-medium tabular-nums ${diffCostClass}`}
                                                     >
                                                         ₱ {fmtMoney(row.difference_cost)}
                                                     </TableCell>
 
-                                                    <TableCell className="text-center">
-                                                        {row.requires_rfid ? (
-                                                            <Button
-                                                                type="button"
-                                                                variant={hasRfidCount ? "default" : "outline"}
-                                                                size="sm"
-                                                                className="cursor-pointer"
-                                                                onClick={() => onOpenRfid(row)}
-                                                                disabled={!canEdit}
-                                                            >
-                                                                <ScanLine className="mr-2 h-4 w-4" />
-                                                                {rfidButtonLabel}
-                                                            </Button>
-                                                        ) : (
-                                                            <span className="text-muted-foreground">—</span>
-                                                        )}
-                                                    </TableCell>
                                                 </TableRow>
                                             );
                                         })}

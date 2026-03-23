@@ -3,18 +3,21 @@
 export interface ConsolidatorDetailsDto {
     id: number;
     productId: number;
-    productName?: string; // 🚀 Added ? to fix the string | undefined error
-    barcode?: string;
-    brandName?: string;
-    categoryName?: string;
-    unitName?: string;
-    unitOrder?: number;   // 🚀 Ensure this is here!
     orderedQuantity: number;
     pickedQuantity: number;
+    appliedQuantity: number;
     pickedAt?: string;
     pickedBy?: number;
-}
 
+    // 🚀 Add these computed fields from Spring Boot
+    productName?: string;
+    barcode?: string;
+    unitOrder?: number;
+    brandName?: string;
+    categoryName?: string;
+    supplierName?: string;
+    unitName?: string;
+}
 export interface ConsolidatorDto {
     id: number;
     consolidatorNo: string;

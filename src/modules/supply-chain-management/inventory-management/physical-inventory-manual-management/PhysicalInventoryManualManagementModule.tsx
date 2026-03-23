@@ -1,4 +1,4 @@
-//src/modules/supply-chain-management/physical-inventory-management/PhysicalInventoryManagementModule.tsx
+//src/modules/supply-chain-management/physical-inventory-manual-management/PhysicalInventoryManualManagementModule.tsx
 "use client";
 
 import * as React from "react";
@@ -37,7 +37,6 @@ import {
     fetchNextPhysicalInventoryNumber,
     fetchPhysicalInventoryById,
     fetchPhysicalInventoryDetails,
-    fetchPhysicalInventoryRfidCountByHeader,
     fetchPriceTypes,
     fetchProductLookupBundle,
     fetchRunningInventoryFiltered,
@@ -69,15 +68,12 @@ import {
     ClipboardList,
     Loader2,
     RefreshCcw,
-    ScanLine,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import {
     PhysicalInventoryFilters as PhysicalInventoryFiltersCard,
-    PhysicalInventoryGlobalRFIDScannerDialog,
     PhysicalInventoryHeader,
-    PhysicalInventoryRFIDDialog,
     PhysicalInventoryTable,
 } from "./components";
 
@@ -91,12 +87,6 @@ type RebuildInput = {
     nextHeader?: PhysicalInventoryHeaderRow | null;
     nextFilters?: PhysicalInventoryFiltersType;
     nextRunningInventoryRows?: RunningInventoryRow[];
-    nextRfidCountByDetailId?: Record<number, number>;
-};
-
-type LocalRfidSavedPayload = {
-    updatedDetail: PhysicalInventoryDetailRow;
-    rfidCount: number;
 };
 
 function todayInputValue(): string {
@@ -188,15 +178,11 @@ function groupedRowHasVariance(row: GroupedPhysicalInventoryRow): boolean {
     return row.rows.some((child) => child.variance !== 0 || child.variance_base !== 0);
 }
 
-function groupedRowHasRfid(row: GroupedPhysicalInventoryRow): boolean {
-    return row.rows.some((child) => child.requires_rfid);
-}
-
 function groupedRowHasUncounted(row: GroupedPhysicalInventoryRow): boolean {
     return row.rows.some((child) => child.physical_count === 0);
 }
 
-export function PhysicalInventoryManagementModule(props: Props) {
+export function PhysicalInventoryManualManagementModule(props: Props) {
     const { initialHeaderId = null, onRecordChange } = props;
     const router = useRouter();
 
@@ -220,16 +206,10 @@ export function PhysicalInventoryManagementModule(props: Props) {
     const dirtyDetailIdsRef = React.useRef<Set<number>>(new Set());
 
     const [runningInventoryRows, setRunningInventoryRows] = React.useState<RunningInventoryRow[]>([]);
-    const [rfidCountByDetailId, setRfidCountByDetailId] = React.useState<Record<number, number>>(
-        {},
-    );
 
     const [header, setHeader] = React.useState<PhysicalInventoryHeaderRow | null>(null);
     const [detailRows, setDetailRows] = React.useState<PhysicalInventoryDetailRow[]>([]);
     const [groupedRows, setGroupedRows] = React.useState<GroupedPhysicalInventoryRow[]>([]);
-    const [rfidDialogRow, setRfidDialogRow] =
-        React.useState<GroupedPhysicalInventoryChildRow | null>(null);
-    const [isGlobalScannerOpen, setIsGlobalScannerOpen] = React.useState(false);
 
     const [filters, setFilters] = React.useState<PhysicalInventoryFiltersType>({
         branch_id: null,
@@ -240,7 +220,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
 
     const [productSearch, setProductSearch] = React.useState("");
     const [activeQuickFilter, setActiveQuickFilter] = React.useState<
-        "ALL" | "VARIANCE" | "RFID" | "UNCOUNTED"
+        "ALL" | "VARIANCE" | "UNCOUNTED"
     >("ALL");
     const [activeQuickCategory, setActiveQuickCategory] = React.useState<string>("ALL");
 
@@ -279,15 +259,11 @@ export function PhysicalInventoryManagementModule(props: Props) {
     }, [groupedRows]);
 
     const operationalSummary = React.useMemo(() => {
-        let rfidRowsCount = 0;
         let rowsWithVariance = 0;
         let uncountedRows = 0;
 
         for (const group of groupedRows) {
             for (const row of group.rows) {
-                if (row.requires_rfid) {
-                    rfidRowsCount += 1;
-                }
                 if (row.variance !== 0 || row.variance_base !== 0) {
                     rowsWithVariance += 1;
                 }
@@ -301,7 +277,6 @@ export function PhysicalInventoryManagementModule(props: Props) {
             skuGroups: groupedRows.length,
             detailRows: detailRows.length,
             rowsWithVariance,
-            rfidRowsCount,
             uncountedRows,
         };
     }, [detailRows.length, groupedRows]);
@@ -310,7 +285,6 @@ export function PhysicalInventoryManagementModule(props: Props) {
         return {
             ALL: groupedRows.length,
             VARIANCE: groupedRows.filter(groupedRowHasVariance).length,
-            RFID: groupedRows.filter(groupedRowHasRfid).length,
             UNCOUNTED: groupedRows.filter(groupedRowHasUncounted).length,
         };
     }, [groupedRows]);
@@ -351,7 +325,6 @@ export function PhysicalInventoryManagementModule(props: Props) {
             const matchesOperationalFilter =
                 activeQuickFilter === "ALL" ||
                 (activeQuickFilter === "VARIANCE" && groupedRowHasVariance(group)) ||
-                (activeQuickFilter === "RFID" && groupedRowHasRfid(group)) ||
                 (activeQuickFilter === "UNCOUNTED" && groupedRowHasUncounted(group));
 
             return matchesCategory && matchesSearch && matchesOperationalFilter;
@@ -371,8 +344,6 @@ export function PhysicalInventoryManagementModule(props: Props) {
             const activeLookup = lookupBundle;
             const activeRunningInventoryRows =
                 input?.nextRunningInventoryRows ?? runningInventoryRows;
-            const activeRfidCountByDetailId =
-                input?.nextRfidCountByDetailId ?? rfidCountByDetailId;
 
             if (
                 !activeLookup ||
@@ -405,7 +376,6 @@ export function PhysicalInventoryManagementModule(props: Props) {
                     details: activeDetails,
                     runningInventoryRows: activeRunningInventoryRows,
                     ph_id: activeHeader?.id ?? null,
-                    rfidCountByDetailId: activeRfidCountByDetailId,
                 });
 
                 setGroupedRows(nextGrouped);
@@ -413,16 +383,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
                 setIsRebuildingGroups(false);
             }
         },
-        [detailRows, filters, header, lookupBundle, rfidCountByDetailId, runningInventoryRows],
-    );
-
-    const refreshRfidCountMap = React.useCallback(
-        async (phId: number): Promise<Record<number, number>> => {
-            const nextMap = await fetchPhysicalInventoryRfidCountByHeader(phId);
-            setRfidCountByDetailId(nextMap);
-            return nextMap;
-        },
-        [],
+        [detailRows, filters, header, lookupBundle, runningInventoryRows],
     );
 
     const refreshRunningInventoryReadModel = React.useCallback(
@@ -522,55 +483,6 @@ export function PhysicalInventoryManagementModule(props: Props) {
         }
     }, [detailRows, filters, header, onRecordChange, rebuildGroupedRows]);
 
-    const applyLocalRfidSavedPayload = React.useCallback(
-        (payload: LocalRfidSavedPayload) => {
-            const nextDetails = detailRows.map((detail) =>
-                detail.id === payload.updatedDetail.id ? payload.updatedDetail : detail,
-            );
-
-            const nextRfidCountByDetailId = {
-                ...rfidCountByDetailId,
-                [payload.updatedDetail.id]: payload.rfidCount,
-            };
-
-            setDetailRows(nextDetails);
-            setRfidCountByDetailId(nextRfidCountByDetailId);
-
-            if (header) {
-                const nextHeader: PhysicalInventoryHeaderRow = {
-                    ...header,
-                    total_amount: sumHeaderTotalAmount(nextDetails),
-                };
-
-                setHeader(nextHeader);
-                onRecordChange?.(nextHeader);
-
-                if (header.id > 0) {
-                    void updatePhysicalInventoryHeader(header.id, {
-                        total_amount: nextHeader.total_amount,
-                    }).catch(() => {
-                        // keep UI responsive; explicit refresh still re-syncs
-                    });
-                }
-
-                rebuildGroupedRows({
-                    nextDetails,
-                    nextHeader,
-                    nextFilters: filters,
-                    nextRfidCountByDetailId,
-                });
-                return;
-            }
-
-            rebuildGroupedRows({
-                nextDetails,
-                nextFilters: filters,
-                nextRfidCountByDetailId,
-            });
-        },
-        [detailRows, filters, header, onRecordChange, rebuildGroupedRows, rfidCountByDetailId],
-    );
-
     React.useEffect(() => {
         let cancelled = false;
 
@@ -581,7 +493,6 @@ export function PhysicalInventoryManagementModule(props: Props) {
                 setDetailRows([]);
                 setCategories([]);
                 setRunningInventoryRows([]);
-                setRfidCountByDetailId({});
                 dirtyDetailIdsRef.current.clear();
 
                 const [nextBranches, nextSuppliers, nextPriceTypes, nextLookup] =
@@ -664,13 +575,9 @@ export function PhysicalInventoryManagementModule(props: Props) {
                         return rows;
                     })();
 
-                    const nextRfidCountByDetailId =
-                        await fetchPhysicalInventoryRfidCountByHeader(initialHeaderId);
-
                     if (cancelled) return;
 
                     setRunningInventoryRows(nextRunningRows);
-                    setRfidCountByDetailId(nextRfidCountByDetailId);
 
                     if (
                         nextFilters.branch_id &&
@@ -691,7 +598,6 @@ export function PhysicalInventoryManagementModule(props: Props) {
                             details: existingDetails,
                             runningInventoryRows: nextRunningRows,
                             ph_id: existingHeader.id ?? null,
-                            rfidCountByDetailId: nextRfidCountByDetailId,
                         });
 
                         setGroupedRows(nextGrouped);
@@ -730,7 +636,6 @@ export function PhysicalInventoryManagementModule(props: Props) {
                 setGroupedRows([]);
                 setCategories([]);
                 setRunningInventoryRows([]);
-                setRfidCountByDetailId({});
                 setFilters({
                     branch_id: null,
                     supplier_id: null,
@@ -847,7 +752,6 @@ export function PhysicalInventoryManagementModule(props: Props) {
         isBootLoading,
         lookupBundle,
         rebuildGroupedRows,
-        rfidCountByDetailId,
         runningInventoryRows,
     ]);
 
@@ -945,7 +849,6 @@ export function PhysicalInventoryManagementModule(props: Props) {
         setDetailRows([]);
         setGroupedRows([]);
         setRunningInventoryRows([]);
-        setRfidCountByDetailId({});
         setProductSearch("");
         setActiveQuickFilter("ALL");
         setActiveQuickCategory("ALL");
@@ -1064,7 +967,6 @@ export function PhysicalInventoryManagementModule(props: Props) {
 
             const persistedDetails = await fetchPhysicalInventoryDetails(savedHeader.id);
             setDetailRows(persistedDetails);
-            setRfidCountByDetailId({});
             dirtyDetailIdsRef.current.clear();
 
             const nextHeader = await updatePhysicalInventoryHeader(savedHeader.id, {
@@ -1079,7 +981,6 @@ export function PhysicalInventoryManagementModule(props: Props) {
                 nextHeader,
                 nextFilters: filters,
                 nextRunningInventoryRows,
-                nextRfidCountByDetailId: {},
             });
 
             toast.success("Products loaded successfully.");
@@ -1190,10 +1091,9 @@ export function PhysicalInventoryManagementModule(props: Props) {
         try {
             if (!header?.id) return;
 
-            const [nextDetails, nextRfidCountByDetailId, nextRunningInventoryRows] =
+            const [nextDetails, nextRunningInventoryRows] =
                 await Promise.all([
                     fetchPhysicalInventoryDetails(header.id),
-                    refreshRfidCountMap(header.id),
                     refreshRunningInventoryReadModel(filters),
                 ]);
 
@@ -1205,7 +1105,6 @@ export function PhysicalInventoryManagementModule(props: Props) {
                 nextHeader: header,
                 nextFilters: filters,
                 nextRunningInventoryRows,
-                nextRfidCountByDetailId,
             });
 
             toast.success("Detail view refreshed.");
@@ -1214,21 +1113,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
                 error instanceof Error ? error.message : "Failed to refresh details.";
             toast.error(message);
         }
-    }, [filters, header, rebuildGroupedRows, refreshRfidCountMap, refreshRunningInventoryReadModel]);
-
-    const handleRfidSaved = React.useCallback(
-        async (payload: LocalRfidSavedPayload) => {
-            applyLocalRfidSavedPayload(payload);
-        },
-        [applyLocalRfidSavedPayload],
-    );
-
-    const handleAfterAnyScan = React.useCallback(
-        async (payload: LocalRfidSavedPayload) => {
-            applyLocalRfidSavedPayload(payload);
-        },
-        [applyLocalRfidSavedPayload],
-    );
+    }, [filters, header, rebuildGroupedRows, refreshRunningInventoryReadModel]);
 
     const handleCancel = React.useCallback(async () => {
         if (!header?.id) {
@@ -1296,7 +1181,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
                             </div>
                             <div>
                                 <h1 className="text-lg font-semibold tracking-tight">
-                                    Physical Inventory Management
+                                    Physical Inventory Manual Count
                                 </h1>
                                 <p className="text-sm text-muted-foreground">
                                     Review the header, scope products, count inventory, and save
@@ -1307,6 +1192,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
+
                         <Button
                             variant="outline"
                             className="cursor-pointer border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-900/40"
@@ -1319,16 +1205,6 @@ export function PhysicalInventoryManagementModule(props: Props) {
                         >
                             <ArrowRightCircle className="mr-2 h-4 w-4" />
                             Go to Offsetting
-                        </Button>
-
-                        <Button
-                            variant="outline"
-                            className="cursor-pointer"
-                            onClick={() => setIsGlobalScannerOpen(true)}
-                            disabled={!canEdit || !header.id || !hasLoadedDetails}
-                        >
-                            <ScanLine className="mr-2 h-4 w-4" />
-                            Global RFID Scanner
                         </Button>
 
                         <Button
@@ -1556,18 +1432,6 @@ export function PhysicalInventoryManagementModule(props: Props) {
                         </div>
 
                         <div className="rounded-2xl border bg-muted/15 px-4 py-3 shadow-sm">
-                            <div className="flex items-center gap-2">
-                                <ScanLine className="h-4 w-4 text-muted-foreground" />
-                                <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                                    RFID Rows
-                                </p>
-                            </div>
-                            <p className="mt-1 text-base font-semibold tabular-nums">
-                                {fmtInteger(operationalSummary.rfidRowsCount)}
-                            </p>
-                        </div>
-
-                        <div className="rounded-2xl border bg-muted/15 px-4 py-3 shadow-sm">
                             <p className="text-xs uppercase tracking-wide text-muted-foreground">
                                 Rows With Variance
                             </p>
@@ -1623,11 +1487,6 @@ export function PhysicalInventoryManagementModule(props: Props) {
                                 key: "VARIANCE" as const,
                                 label: "With Variance",
                                 count: quickFilterCounts.VARIANCE,
-                            },
-                            {
-                                key: "RFID" as const,
-                                label: "RFID",
-                                count: quickFilterCounts.RFID,
                             },
                             {
                                 key: "UNCOUNTED" as const,
@@ -1733,28 +1592,8 @@ export function PhysicalInventoryManagementModule(props: Props) {
                 canEdit={canEdit}
                 onPhysicalCountChange={handlePhysicalCountChange}
                 onPhysicalCountBlur={handlePhysicalCountBlur}
-                onOpenRfid={(row) => setRfidDialogRow(row)}
             />
 
-            <PhysicalInventoryRFIDDialog
-                open={rfidDialogRow !== null}
-                row={rfidDialogRow}
-                branchId={filters.branch_id}
-                onOpenChange={(open) => {
-                    if (!open) setRfidDialogRow(null);
-                }}
-                onSaved={handleRfidSaved}
-            />
-
-            <PhysicalInventoryGlobalRFIDScannerDialog
-                open={isGlobalScannerOpen}
-                branchId={filters.branch_id}
-                phId={header.id > 0 ? header.id : null}
-                rows={allGroupedChildRows}
-                canEdit={canEdit}
-                onOpenChange={setIsGlobalScannerOpen}
-                onSaved={handleAfterAnyScan}
-            />
 
             <AlertDialog open={openCancelDialog} onOpenChange={setOpenCancelDialog}>
                 <AlertDialogContent>

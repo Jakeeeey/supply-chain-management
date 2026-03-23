@@ -1,6 +1,8 @@
 "use client";
 
+import { motion, AnimatePresence } from "framer-motion";
 import * as React from "react";
+import { useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
@@ -12,8 +14,21 @@ import {
 } from "@/modules/supply-chain-management/inventory-management/physical-inventory-list";
 
 export default function PhysicalInventoryOffsettingWorkspaceClient() {
+    const searchParams = useSearchParams();
+    const urlPhId = searchParams.get("id");
+
     const [selectedHeaderId, setSelectedHeaderId] = React.useState<number | null>(null);
     const [isListCollapsed, setIsListCollapsed] = React.useState(false);
+
+    React.useEffect(() => {
+        if (urlPhId) {
+            const parsed = parseInt(urlPhId, 10);
+            if (!isNaN(parsed)) {
+                setSelectedHeaderId(parsed);
+                setIsListCollapsed(true);
+            }
+        }
+    }, [urlPhId]);
 
     React.useEffect(() => {
         if (typeof window === "undefined") return;
@@ -69,56 +84,49 @@ export default function PhysicalInventoryOffsettingWorkspaceClient() {
                 </Button>
             </div>
 
-            {isListCollapsed ? (
-                <div className="min-w-0">
+            <div className="flex flex-col lg:flex-row lg:items-start lg:gap-3">
+                <AnimatePresence initial={false}>
+                    {!isListCollapsed && (
+                        <motion.div
+                            initial={{ width: 0, opacity: 0 }}
+                            animate={{ width: "auto", opacity: 1 }}
+                            exit={{ width: 0, opacity: 0 }}
+                            transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                            className="overflow-hidden"
+                        >
+                            <div className="w-full pb-3 lg:w-[340px] lg:pb-0 xl:w-[360px] 2xl:w-[400px]">
+                                <PhysicalInventoryListModule
+                                    selectedHeaderId={selectedHeaderId}
+                                    onOpenRecord={handleOpenRecord}
+                                    hideCreateButton={true}
+                                />
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                <div className="min-w-0 flex-1">
                     {selectedHeaderId ? (
                         <PhysicalInventoryOffsettingModule
                             key={selectedHeaderId}
                             phId={selectedHeaderId}
                         />
                     ) : (
-                        <div className="flex min-h-[220px] items-center justify-center rounded-2xl border bg-background">
+                        <div className="flex min-h-[420px] items-center justify-center rounded-2xl border bg-background">
                             <div className="text-center">
                                 <p className="text-sm font-medium">
                                     No Physical Inventory selected
                                 </p>
                                 <p className="mt-1 text-xs text-muted-foreground">
-                                    Click “Show List” and open a record to start offsetting.
+                                    {isListCollapsed
+                                        ? "Click “Show List” and open a record to start offsetting."
+                                        : "Choose a record from the list to open the offsetting module."}
                                 </p>
                             </div>
                         </div>
                     )}
                 </div>
-            ) : (
-                <div className="grid gap-3 lg:grid-cols-[340px_minmax(0,1fr)] xl:grid-cols-[360px_minmax(0,1fr)] 2xl:grid-cols-[400px_minmax(0,1fr)]">
-                    <div className="min-w-0">
-                        <PhysicalInventoryListModule
-                            selectedHeaderId={selectedHeaderId}
-                            onOpenRecord={handleOpenRecord}
-                        />
-                    </div>
-
-                    <div className="min-w-0">
-                        {selectedHeaderId ? (
-                            <PhysicalInventoryOffsettingModule
-                                key={selectedHeaderId}
-                                phId={selectedHeaderId}
-                            />
-                        ) : (
-                            <div className="flex min-h-[420px] items-center justify-center rounded-2xl border bg-background">
-                                <div className="text-center">
-                                    <p className="text-sm font-medium">
-                                        Select a Physical Inventory record
-                                    </p>
-                                    <p className="mt-1 text-xs text-muted-foreground">
-                                        Choose a record from the list to open the offsetting module.
-                                    </p>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
+            </div>
         </div>
     );
 }
