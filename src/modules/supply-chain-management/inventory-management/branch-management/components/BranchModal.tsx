@@ -357,8 +357,15 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }
                                                                     placeholder="Assign a manager" 
                                                                     className={cn(selectBase, selectFocus)} 
                                                                 />
-                                                                <ComboboxContent className="z-[9999] !pointer-events-auto">
-                                                                    <ComboboxList className="max-h-[300px] !overflow-y-auto !pointer-events-auto">
+                                                                <ComboboxContent 
+                                                                    className="z-[9999] !pointer-events-auto h-[300px] !overflow-hidden"
+                                                                    onPointerDown={(e) => e.stopPropagation()}
+                                                                >
+                                                                    <ComboboxList 
+                                                                        className="h-full !overflow-y-auto !pointer-events-auto"
+                                                                        onWheel={(e) => e.stopPropagation()}
+                                                                        onPointerDown={(e) => e.stopPropagation()}
+                                                                    >
                                                                         {users.map((user) => (
                                                                             <ComboboxItem 
                                                                                 key={user.user_id} 
@@ -451,8 +458,15 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }
                                                             placeholder="Select Province" 
                                                             className={cn(selectBase, selectFocus)} 
                                                         />
-                                                        <ComboboxContent className="z-[9999] !pointer-events-auto">
-                                                            <ComboboxList className="max-h-[300px] !overflow-y-auto !pointer-events-auto">
+                                                        <ComboboxContent 
+                                                            className="z-[9999] !pointer-events-auto h-[300px] !overflow-hidden"
+                                                            onPointerDown={(e) => e.stopPropagation()}
+                                                        >
+                                                            <ComboboxList 
+                                                                className="h-full !overflow-y-auto !pointer-events-auto"
+                                                                onWheel={(e) => e.stopPropagation()}
+                                                                onPointerDown={(e) => e.stopPropagation()}
+                                                            >
                                                                 {provinces.map((p) => (
                                                                     <ComboboxItem key={p.code} value={p.name}>
                                                                         {p.name}
@@ -488,8 +502,15 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }
                                                             disabled={!cities.length}
                                                             className={cn(selectBase, selectFocus)} 
                                                         />
-                                                        <ComboboxContent className="z-[9999] !pointer-events-auto">
-                                                            <ComboboxList className="max-h-[300px] !overflow-y-auto !pointer-events-auto">
+                                                        <ComboboxContent 
+                                                            className="z-[9999] !pointer-events-auto h-[300px] !overflow-hidden"
+                                                            onPointerDown={(e) => e.stopPropagation()}
+                                                        >
+                                                            <ComboboxList 
+                                                                className="h-full !overflow-y-auto !pointer-events-auto"
+                                                                onWheel={(e) => e.stopPropagation()}
+                                                                onPointerDown={(e) => e.stopPropagation()}
+                                                            >
                                                                 {cities.map((c) => (
                                                                     <ComboboxItem key={c.code} value={c.name}>
                                                                         {c.name}
@@ -525,8 +546,15 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }
                                                             disabled={!barangays.length}
                                                             className={cn(selectBase, selectFocus)} 
                                                         />
-                                                        <ComboboxContent className="z-[9999] !pointer-events-auto">
-                                                            <ComboboxList className="max-h-[300px] !overflow-y-auto !pointer-events-auto">
+                                                        <ComboboxContent 
+                                                            className="z-[9999] !pointer-events-auto h-[300px] !overflow-hidden"
+                                                            onPointerDown={(e) => e.stopPropagation()}
+                                                        >
+                                                            <ComboboxList 
+                                                                className="h-full !overflow-y-auto !pointer-events-auto"
+                                                                onWheel={(e) => e.stopPropagation()}
+                                                                onPointerDown={(e) => e.stopPropagation()}
+                                                            >
                                                                 {barangays.map((b) => (
                                                                     <ComboboxItem key={b.code} value={b.name}>
                                                                         {b.name}
