@@ -9,7 +9,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Combobox } from "@/components/ui/combobox";
+import { Combobox } from "../../shared/Combobox";
 import { Truck, X } from "lucide-react";
 import { useFieldArray, useFormContext } from "react-hook-form";
 import { DateTimePicker } from "../../shared/date-time-picker";
@@ -251,7 +251,7 @@ export function TripConfigurationForm({ masterData }: TripConfigurationFormProps
                         <Combobox
                           options={getHelperOptions(index)}
                           value={field.value ? String(field.value) : ""}
-                          onValueChange={(val) => field.onChange(Number(val))}
+                          onValueChange={(val: string) => field.onChange(Number(val))}
                           placeholder="Select additional helper"
                         />
                       </FormControl>
@@ -268,12 +268,13 @@ export function TripConfigurationForm({ masterData }: TripConfigurationFormProps
       {helperFields.length < 3 && (
         <Button
           type="button"
-          variant="ghost"
+          variant="outline"
           size="sm"
+          className="w-full border-dashed h-9 text-xs font-medium text-muted-foreground hover:text-foreground transition-all flex items-center justify-center gap-2"
           onClick={() => append({ user_id: 0 })}
-          className="text-[11px] h-7 w-fit text-primary hover:text-primary hover:bg-primary/5 -mt-2"
         >
-          + Add Additional Helper
+          <X className="w-3.5 h-3.5 rotate-45" />
+          Add Additional Helper
         </Button>
       )}
     </div>
