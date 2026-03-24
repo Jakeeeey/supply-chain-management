@@ -13,7 +13,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { Truck, X } from "lucide-react";
 import { useFieldArray, useFormContext } from "react-hook-form";
 import { DateTimePicker } from "../../shared/date-time-picker";
-import { DispatchCreationFormValues } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/types/schema";
+import { DispatchCreationFormValues } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/types/dispatch.schema";
 import { useMemo } from "react";
 
 interface MasterData {

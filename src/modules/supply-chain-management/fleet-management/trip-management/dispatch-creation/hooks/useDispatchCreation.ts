@@ -1,8 +1,10 @@
 import { dispatchCreationLifecycleService } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/services";
 import {
   DispatchCreationFormValues,
+} from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/types/dispatch.schema";
+import {
   DispatchCreationMasterData,
-} from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/types/schema";
+} from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/types/dispatch.types";
 import { useCallback, useEffect, useState } from "react";
 
 export function useDispatchCreation() {

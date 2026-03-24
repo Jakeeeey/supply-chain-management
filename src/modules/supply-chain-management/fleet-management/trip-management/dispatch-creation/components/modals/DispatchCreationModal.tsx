@@ -15,7 +15,7 @@ import { useDispatchCreation } from "@/modules/supply-chain-management/fleet-man
 import {
   DispatchCreationFormSchema,
   DispatchCreationFormValues,
-} from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/types/schema";
+} from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/types/dispatch.schema";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Truck } from "lucide-react";
 import { useEffect, useState } from "react";

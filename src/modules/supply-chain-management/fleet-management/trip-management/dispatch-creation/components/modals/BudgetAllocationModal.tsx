@@ -15,7 +15,7 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { dispatchCreationLifecycleService } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/services";
 import { DispatchPlanSummary } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/components/data-table/columns";
-import { COAOption } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/types/schema";
+import { COAOption } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/types/dispatch.types";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Clock, Loader2, Plus, Trash2, Users, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
