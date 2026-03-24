@@ -40,7 +40,7 @@ interface StockConversionTableProps {
 }
 
 export function StockConversionTable({ 
-  data, totalCount, page, pageSize, setPage, setPageSize,
+  data, page, pageSize, setPage, setPageSize,
   onConvertClick, onRefresh, loadProductsInventory, isLoading 
 }: StockConversionTableProps) {
   const [brandFilter, setBrandFilter] = useState("all");
