@@ -119,7 +119,7 @@ export function useStockConversion(branchId?: number) {
         // Surface auth errors as a critical error on the page
         if (err?.message?.includes("session") || err?.message?.includes("expired") || err?.message?.includes("401") || err?.message?.includes("403")) {
             setError(err.message);
-        } else {
+        } else if (!err?.message?.toLowerCase().includes("aborted")) {
             toast.error(`Inventory failed: ${err.message}`);
         }
     }

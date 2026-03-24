@@ -17,6 +17,7 @@ function springHeaders(token?: string) {
   return {
     "Content-Type": "application/json",
     "Accept": "application/json",
+    "Accept-Encoding": "gzip, deflate, br", // Emphasize compression
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 }
@@ -219,6 +220,12 @@ export interface InventoryFilters {
   productIds?: number[];
 }
 
+let localInventoryCache: { data: Record<number, number> | null; timestamp: number } = {
+  data: null,
+  timestamp: 0,
+};
+const INVENTORY_CACHE_TTL = 1000 * 60 * 2; // 2 minutes TTL for this massive payload
+
 export async function fetchInventoryMap(token?: string, branchId?: number, filters?: InventoryFilters): Promise<Record<number, number>> {
   if (!SPRING_API) return {};
   try {
@@ -245,12 +252,20 @@ export async function fetchInventoryMap(token?: string, branchId?: number, filte
     } else {
       url = `${SPRING_API}/api/view-running-inventory/all${branchId !== undefined ? `?branch_id=${branchId}` : ""}`;
     }
+    if (url.includes("/all")) {
+      const now = Date.now();
+      if (localInventoryCache.data && now - localInventoryCache.timestamp < INVENTORY_CACHE_TTL) {
+        console.log(`[Stock-Conversion] Serving /all inventory from custom Node memory cache! (Bypassed NextJS 2MB limit in ${Date.now() - start}ms)`);
+        return localInventoryCache.data;
+      }
+    }
+
     console.log(`[Stock-Conversion] Fetching inventory from: ${url}`);
     
     const res = await fetchWithTimeout(url, { 
       headers: springHeaders(token), 
-      next: { revalidate: 60 } // NextJS ISR cache for 60s
-    }, 120000);
+      cache: "no-store" // Force dynamic fetch to evade NextJS 2MB error. We use custom cache above.
+    }, 300000); // Expanded timeout to 5 mins for massive payload
     
     if (!res.ok) {
         const status = res.status;
@@ -280,6 +295,11 @@ export async function fetchInventoryMap(token?: string, branchId?: number, filte
               const qty = Number(i.runningInventory ?? i.running_inventory ?? 0);
               if (!isNaN(pId)) invMap[pId] = (invMap[pId] || 0) + qty;
             });
+            
+            // Save to memory cache to defeat the 110MB proxy lag
+            localInventoryCache.data = invMap;
+            localInventoryCache.timestamp = Date.now();
+            
             return invMap;
           }
         }
@@ -298,6 +318,13 @@ export async function fetchInventoryMap(token?: string, branchId?: number, filte
     });
     
     console.log(`[Stock-Conversion] Inventory Map built in ${Date.now() - start}ms`);
+
+    // Save to memory cache to defeat the 110MB proxy lag for next 2 minutes
+    if (url.includes("/all")) {
+      localInventoryCache.data = invMap;
+      localInventoryCache.timestamp = Date.now();
+    }
+
     return invMap;
   } catch (err: any) {
     console.error("[Stock-Conversion] fetchInventoryMap error:", err.message);
