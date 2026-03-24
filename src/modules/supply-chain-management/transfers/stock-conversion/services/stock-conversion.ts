@@ -249,8 +249,8 @@ export async function fetchInventoryMap(token?: string, branchId?: number, filte
     
     const res = await fetchWithTimeout(url, { 
       headers: springHeaders(token), 
-      cache: "no-store" 
-    }, 90000);
+      next: { revalidate: 60 } // NextJS ISR cache for 60s
+    }, 120000);
     
     if (!res.ok) {
         const status = res.status;
@@ -268,8 +268,8 @@ export async function fetchInventoryMap(token?: string, branchId?: number, filte
           const fallbackUrl = `${SPRING_API}/api/view-running-inventory/all${branchId !== undefined ? `?branch_id=${branchId}` : ""}`;
           const fallbackRes = await fetchWithTimeout(fallbackUrl, { 
             headers: springHeaders(token), 
-            cache: "no-store" 
-          }, 90000);
+            next: { revalidate: 60 } // NextJS ISR cache for 60s
+          }, 120000);
           
           if (fallbackRes.ok) {
             const json = await fallbackRes.json();

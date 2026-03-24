@@ -1,13 +1,14 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { StockConversionProduct } from "../types/stock-conversion.schema";
 import { Button } from "@/components/ui/button";
-import { ArrowLeftRight } from "lucide-react";
+import { ArrowLeftRight, AlertTriangle, RefreshCw } from "lucide-react";
 
 export const formatCurrency = (amount: number) =>
     `₱${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export const getColumns = (
-  onConvertClick: (product: StockConversionProduct) => void
+  onConvertClick: (product: StockConversionProduct) => void,
+  onRetryInventory: (productId: number) => void
 ): ColumnDef<StockConversionProduct>[] => [
   {
     accessorKey: "supplierName",
@@ -39,6 +40,24 @@ export const getColumns = (
     header: "QUANTITY",
     cell: ({ row }) => {
       const p = row.original;
+      if (p.inventoryError) {
+        return (
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1 text-xs font-bold text-destructive bg-destructive/10 px-2 py-0.5 rounded border border-destructive/20">
+               <AlertTriangle className="w-3.5 h-3.5" /> Error
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-muted-foreground hover:text-blue-500 rounded-full"
+              onClick={() => onRetryInventory(p.productId)}
+              title="Retry fetching inventory"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+        );
+      }
       if (p.inventoryLoaded === false) {
         return (
           <span className="flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
@@ -59,6 +78,7 @@ export const getColumns = (
     header: "TOTAL AMOUNT",
     cell: ({ row }) => {
       const p = row.original;
+      if (p.inventoryError) return <span className="text-muted-foreground italic text-xs">-</span>;
       if (p.inventoryLoaded === false) return <span className="text-muted-foreground italic text-xs">...</span>;
       return (
         <span className="font-black text-foreground tracking-tight">

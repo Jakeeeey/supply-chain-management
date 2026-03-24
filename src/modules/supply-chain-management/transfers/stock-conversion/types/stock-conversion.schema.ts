@@ -26,6 +26,7 @@ export const stockConversionProductSchema = z.object({
   totalAmount: z.number(), // Qty * price per unit
   pricePerUnit: z.number(),
   inventoryLoaded: z.boolean().optional(),
+  inventoryError: z.boolean().optional(),
   
   // Available conversion targets mapped from units
   availableUnits: z.array(z.object({

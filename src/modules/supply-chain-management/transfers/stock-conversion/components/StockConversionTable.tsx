@@ -21,9 +21,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Filter, Cuboid, Layers, Users, RefreshCw } from "lucide-react";
+import { Filter, Cuboid, Layers, Users, RefreshCw, Search } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 interface StockConversionTableProps {
   data: StockConversionProduct[];
@@ -47,6 +48,7 @@ export function StockConversionTable({
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [unitFilter, setUnitFilter] = useState("all");
   const [supplierFilter, setSupplierFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [isGrouped, setIsGrouped] = useState(false);
 
   const uniqueBrands = useMemo(() => Array.from(new Set(data.map(d => d.brand))), [data]);
@@ -54,13 +56,28 @@ export function StockConversionTable({
   const uniqueUnits = useMemo(() => Array.from(new Set(data.map(d => d.currentUnit))), [data]);
   const uniqueSuppliers = useMemo(() => Array.from(new Set(data.map(d => d.supplierName || "No Supplier"))), [data]);
 
+  const hasRequiredFilter = supplierFilter !== "all" || brandFilter !== "all" || categoryFilter !== "all" || searchQuery.trim().length >= 3;
+  const hasAnyFilter = hasRequiredFilter || unitFilter !== "all" || searchQuery.trim().length > 0;
+
   const filteredData = useMemo(() => {
+    if (!hasRequiredFilter) return [];
+
     let result = data.filter(item => {
       const matchBrand = brandFilter === "all" || item.brand === brandFilter;
       const matchCat = categoryFilter === "all" || item.category === categoryFilter;
       const matchUnit = unitFilter === "all" || item.currentUnit === unitFilter;
       const matchSupplier = supplierFilter === "all" || (item.supplierName || "No Supplier") === supplierFilter;
-      return matchBrand && matchCat && matchUnit && matchSupplier;
+      
+      const q = searchQuery.trim().toLowerCase();
+      const matchSearch = q.length === 0 || 
+        (String(item.productDescription || "").toLowerCase().includes(q)) || 
+        (String(item.productCode || "").toLowerCase().includes(q)) ||
+        (String(item.supplierName || "").toLowerCase().includes(q)) ||
+        (String(item.brand || "").toLowerCase().includes(q)) ||
+        (String(item.category || "").toLowerCase().includes(q)) ||
+        (String(item.currentUnit || "").toLowerCase().includes(q));
+
+      return matchBrand && matchCat && matchUnit && matchSupplier && matchSearch;
     });
 
     if (isGrouped) {
@@ -69,9 +86,9 @@ export function StockConversionTable({
     }
 
     return result;
-  }, [data, brandFilter, categoryFilter, unitFilter, supplierFilter, isGrouped]);
+  }, [data, brandFilter, categoryFilter, unitFilter, supplierFilter, isGrouped, searchQuery]);
 
-  const columns = useMemo(() => getColumns(onConvertClick), [onConvertClick]);
+  const columns = useMemo(() => getColumns(onConvertClick, (id: number) => loadProductsInventory([id])), [onConvertClick, loadProductsInventory]);
 
   const table = useReactTable({
     data: filteredData,
@@ -86,58 +103,6 @@ export function StockConversionTable({
       },
     },
   });
-
-  // Effect to trigger filtered inventory fetch when filters change
-  useEffect(() => {
-    // Only fetch if we actually have products loaded
-    if (!data.length) return;
-
-    // Skip initial bulk fetch if no specific filter is active. 
-    // The table relies on lazy-loading visible rows efficiently instead.
-    if (supplierFilter === "all" && categoryFilter === "all" && unitFilter === "all" && brandFilter === "all") {
-        return;
-    }
-
-    const selectedShortcut = data.find(d => d.supplierName === supplierFilter)?.supplierShortcut || 
-                            (supplierFilter === "all" ? "all" : undefined);
-
-    // If everything is "all", the backend /all endpoint is slow. 
-    // We only trigger if at least one meaningful filter is set, OR on the very first load.
-    // However, the user wants /filter to be used.
-    
-    onRefresh({
-      supplierShortcut: selectedShortcut,
-      productCategory: categoryFilter,
-      unitName: unitFilter,
-      productBrand: brandFilter
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [brandFilter, categoryFilter, unitFilter, supplierFilter, onRefresh, data.length]);
-
-  // Lazy Loading Effect: Watch the current page and fetch inventory for visible products
-  const pageItems = table.getRowModel().rows;
-  const visibleProductIds = JSON.stringify(pageItems.map(row => row.original.productId));
-
-  useEffect(() => {
-    if (!pageItems.length) return;
-
-    // Grab products from current page that need loading
-    const productsToLoad = pageItems
-      .map(row => row.original)
-      .filter(p => p.inventoryLoaded === false)
-      .map(p => p.productId);
-
-    if (productsToLoad.length > 0) {
-      // Debounce the call so rapid pagination doesn't overwhelm the backend
-      const timer = setTimeout(() => {
-        console.log("[StockConversionTable] Lazy loading inventory for current page products:", productsToLoad);
-        loadProductsInventory(productsToLoad);
-      }, 350);
-      
-      return () => clearTimeout(timer);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleProductIds, loadProductsInventory, pageItems.length]); // Use stringified IDs
 
   return (
     <Card className="border-none shadow-sm h-full flex flex-col pt-3 bg-background">
@@ -160,12 +125,24 @@ export function StockConversionTable({
       </CardHeader>
       <CardContent className="flex-1 flex flex-col gap-4 overflow-hidden pt-4">
         {/* Filters */}
-        <div className="flex items-center gap-4 bg-background p-3 rounded-lg border shadow-sm relative z-20">
+        <div className="flex flex-wrap items-center gap-4 bg-background p-3 rounded-lg border shadow-sm relative z-20">
            <div className="flex items-center gap-2 text-muted-foreground font-medium text-sm">
              <Filter className="w-4 h-4" />
              Filters:
            </div>
            
+           <div className="relative w-full sm:w-[250px]">
+             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+             <Input
+               placeholder="Search product, brand, supplier..."
+               className="pl-9 h-9 bg-background focus-visible:ring-1"
+               value={searchQuery}
+               onChange={(e) => setSearchQuery(e.target.value)}
+             />
+           </div>
+
+           <div className="h-4 w-px bg-border mx-1 hidden sm:block" />
+
            <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-foreground flex items-center gap-1">
                 <Users className="w-3.5 h-3.5 text-muted-foreground" />
@@ -228,8 +205,25 @@ export function StockConversionTable({
                 </SelectContent>
               </Select>
            </div>
+           
+           {hasAnyFilter && (
+             <Button
+               variant="ghost"
+               size="sm"
+               className="h-8 px-2 ml-1 text-muted-foreground hover:text-foreground hover:bg-muted"
+               onClick={() => {
+                 setSupplierFilter("all");
+                 setBrandFilter("all");
+                 setCategoryFilter("all");
+                 setUnitFilter("all");
+                 setSearchQuery("");
+               }}
+             >
+               Clear
+             </Button>
+           )}
 
-           <div className="h-4 w-px bg-border mx-2" />
+           <div className="h-4 w-px bg-border mx-2 hidden sm:block" />
 
            <div className="flex items-center space-x-2">
               <Checkbox 
@@ -244,10 +238,21 @@ export function StockConversionTable({
            </div>
         </div>
 
-        {/* Table */}
-        <div className="rounded-md border bg-background flex-1 overflow-auto">
-          <Table>
-            <TableHeader className="bg-muted/30 sticky top-0 z-10 shadow-sm border-b">
+        {/* Table Area */}
+        {!hasRequiredFilter ? (
+          <div className="flex-1 flex flex-col items-center justify-center border rounded-md bg-muted/10 p-8 text-center animate-in fade-in zoom-in duration-300">
+            <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mb-4 shadow-sm">
+              <Filter className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+            </div>
+            <h3 className="text-xl font-semibold text-foreground tracking-tight mb-2">Select a Filter to Begin</h3>
+            <p className="text-muted-foreground text-sm max-w-md mx-auto">
+              Please choose a Supplier, Brand, Category, or type at least 3 letters in the Search bar to view specific products for conversion.
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-md border bg-background flex-1 overflow-auto">
+            <Table>
+              <TableHeader className="bg-muted/30 sticky top-0 z-10 shadow-sm border-b">
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id}>
                   {headerGroup.headers.map((header) => (
@@ -293,6 +298,7 @@ export function StockConversionTable({
             </TableBody>
           </Table>
         </div>
+        )}
         
         {/* Pagination Controls */}
         <div className="flex items-center justify-between py-2 border-t mt-auto">

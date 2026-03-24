@@ -8,6 +8,7 @@ import { type StockConversionProduct, type StockConversionPayload } from "../typ
 // This safely preserves data when moving between modules without refetching.
 let cachedData: StockConversionProduct[] | null = null;
 let cachedTotalCount: number = 0;
+let hasBeganGlobalFetch: boolean = false;
 // ----------------------------------------------
 
 export function useStockConversion(branchId?: number) {
@@ -32,6 +33,10 @@ export function useStockConversion(branchId?: number) {
       setData(cachedData);
       setTotalCount(cachedTotalCount);
       setIsLoading(false);
+      if (!hasBeganGlobalFetch) {
+        hasBeganGlobalFetch = true;
+        loadInventory();
+      }
       return;
     }
 
@@ -56,6 +61,11 @@ export function useStockConversion(branchId?: number) {
       setData(products);
       setTotalCount(total);
       setIsLoading(false);
+
+      if (!hasBeganGlobalFetch || forceRefresh) {
+        hasBeganGlobalFetch = true;
+        loadInventory();
+      }
     } catch (e: unknown) {
       const err = e as Error;
       setError(err?.message ?? "An error occurred");
@@ -64,27 +74,18 @@ export function useStockConversion(branchId?: number) {
   }, []);
 
   // 2. Targeted Inventory Fetch: Triggered by UI/Filters
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const loadInventory = useCallback(async (filters?: any) => {
-    console.log("[useStockConversion] Triggering inventory fetch. Filters:", filters);
+  const loadInventory = useCallback(async () => {
+    console.log("[useStockConversion] Triggering global background inventory fetch...");
     
     // Set loading state for products matching these filters
     // If we have filters, we might not know which products match yet locally,
     // so we set all to loading if it's a "big refresh" or just the specific ones if known.
-    setData(prev => prev.map(p => ({ ...p, inventoryLoaded: false })));
+    setData(prev => prev.map(p => p.inventoryLoaded !== true ? { ...p, inventoryLoaded: false } : p));
 
     try {
       const sp = new URLSearchParams();
       sp.set("type", "inventory");
       if (branchId !== undefined) sp.set("branchId", String(branchId));
-      
-      if (filters) {
-        if (filters.supplierShortcut && filters.supplierShortcut !== "all") sp.set("supplierShortcut", filters.supplierShortcut);
-        if (filters.productCategory && filters.productCategory !== "all") sp.set("productCategory", filters.productCategory);
-        if (filters.unitName && filters.unitName !== "all") sp.set("unitName", filters.unitName);
-        if (filters.productBrand && filters.productBrand !== "all") sp.set("productBrand", filters.productBrand);
-        if (filters.productIds && filters.productIds.length > 0) sp.set("productIds", filters.productIds.join(","));
-      }
 
       const invUrl = `/api/scm/transfers/stock-conversion?${sp.toString()}`;
       const res = await fetch(invUrl);
@@ -113,7 +114,8 @@ export function useStockConversion(branchId?: number) {
     } catch (e: unknown) {
         const err = e as Error;
         console.error("Inventory fetch failed:", err);
-        setData(prev => prev.map(p => ({ ...p, inventoryLoaded: true })));
+        hasBeganGlobalFetch = false;
+        setData(prev => prev.map(p => p.inventoryLoaded === false ? { ...p, inventoryLoaded: true, inventoryError: true } : p));
         // Surface auth errors as a critical error on the page
         if (err?.message?.includes("session") || err?.message?.includes("expired") || err?.message?.includes("401") || err?.message?.includes("403")) {
             setError(err.message);
@@ -139,7 +141,7 @@ export function useStockConversion(branchId?: number) {
       const next = prev.map(p => {
         if (fetchableIds.includes(p.productId) && p.inventoryLoaded !== false) {
            changed = true;
-           return { ...p, inventoryLoaded: false };
+           return { ...p, inventoryLoaded: false, inventoryError: false };
         }
         return p;
       });
@@ -166,7 +168,8 @@ export function useStockConversion(branchId?: number) {
               ...p,
               quantity: finalQty,
               totalAmount: Number((finalQty * (p.pricePerUnit || 0)).toFixed(2)),
-              inventoryLoaded: true
+              inventoryLoaded: true,
+              inventoryError: false
             };
           }
           return p;
@@ -181,11 +184,9 @@ export function useStockConversion(branchId?: number) {
       // Surface auth errors as critical
       if (err?.message?.includes("session") || err?.message?.includes("expired") || err?.message?.includes("401") || err?.message?.includes("403")) {
           setError(err.message);
-      } else {
-          toast.error(`Batch Inventory failed: ${err.message}`);
       }
       setData(prev => prev.map(p => 
-        fetchableIds.includes(p.productId) ? { ...p, inventoryLoaded: true } : p
+        fetchableIds.includes(p.productId) ? { ...p, inventoryLoaded: true, inventoryError: true } : p
       ));
     } finally {
       // Remove from tracking ref
