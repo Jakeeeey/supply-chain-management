@@ -229,14 +229,11 @@ export async function generatePurchaseOrderPDF(data: {
         formatMoney(it.price).replace("P", ""),
         it.uom,
         it.orderQty,
-        formatMoney(it.grossAmount).replace("P", ""),
-        `${it.discountType}\n${formatMoney(it.discountAmount).replace("P", "")}`,
-        formatMoney(it.netAmount).replace("P", ""),
     ]);
 
     autoTable(doc, {
         startY: 68,
-        head: [["Brand", "Category", "Product Name", "Price", "UOM", "Qty", "Gross", "Discount", "Net"]],
+        head: [["Brand", "Category", "Product Name", "Price", "UOM", "Qty"]],
         body: tableRows,
         theme: "grid",
         headStyles: { fillColor: [37, 99, 235], textColor: 255, fontSize: 7, halign: 'left' },
@@ -244,60 +241,15 @@ export async function generatePurchaseOrderPDF(data: {
         columnStyles: {
             0: { cellWidth: 20 },
             1: { cellWidth: 20 },
-            2: { cellWidth: 40 },
+            2: { cellWidth: 105 },
             3: { cellWidth: 15, halign: "right" },
             4: { cellWidth: 12, halign: "center" },
-            5: { cellWidth: 10, halign: "center" },
-            6: { cellWidth: 20, halign: "right" },
-            7: { cellWidth: 25, halign: "right" },
-            8: { cellWidth: 20, halign: "right" }
+            5: { cellWidth: 10, halign: "center" }
         }
     });
 
     const lastAutoTable = (doc as any).lastAutoTable;
     const lastY = lastAutoTable ? lastAutoTable.finalY + 10 : 150;
 
-    // Financial Summary
-    const summaryX = pageWidth - 80;
-    doc.setFontSize(9);
-    
-    // Subtotal
-    doc.setFont("helvetica", "normal");
-    doc.text("Gross Amount:", summaryX, lastY);
-    doc.text(formatMoney(data.subtotal), pageWidth - 15, lastY, { align: "right" });
-
-    // Discount
-    doc.text("Discount:", summaryX, lastY + 5);
-    doc.setTextColor(220, 38, 38); // Red for discount
-    doc.text(`${formatMoney(data.discount)}`, pageWidth - 15, lastY + 5, { align: "right" });
-    doc.setTextColor(0, 0, 0);
-
-    // Net Amount (derived)
-    const netAmount = data.subtotal - data.discount;
-    doc.text("Net Amount:", summaryX, lastY + 10);
-    doc.text(formatMoney(netAmount), pageWidth - 15, lastY + 10, { align: "right" });
-
-    let finalY = lastY + 10;
-
-    if (data.isInvoice) {
-        // VAT
-        doc.text("VAT:", summaryX, lastY + 15);
-        doc.text(formatMoney(data.vat), pageWidth - 15, lastY + 15, { align: "right" });
-
-        // EWT
-        doc.text("EWT (1%):", summaryX, lastY + 20);
-        doc.text(formatMoney(data.ewt), pageWidth - 15, lastY + 20, { align: "right" });
-        
-        finalY = lastY + 20;
-    }
-
-    // Total
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "bold");
-    doc.line(summaryX, finalY + 3, pageWidth - 15, finalY + 3);
-    doc.text("TOTAL PAYABLE:", summaryX, finalY + 10);
-    doc.setTextColor(37, 99, 235); // Blue
-    doc.text(formatMoney(netAmount), pageWidth - 15, finalY + 10, { align: "right" });
-
-    doc.save(`${data.isInvoice ? "Invoice" : "PO"}_${data.poNumber}.pdf`);
+    doc.save(`PO_${data.poNumber}.pdf`);
 }
