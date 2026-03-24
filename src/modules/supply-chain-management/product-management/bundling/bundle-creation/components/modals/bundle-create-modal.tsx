@@ -3,7 +3,6 @@
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Combobox } from "@/components/ui/combobox";
 import {
   Dialog,
   DialogContent,
@@ -33,6 +32,7 @@ import {
   BundleType,
   ProductOption,
 } from "../../../types/bundle.schema";
+import { Combobox } from "../Combobox";
 
 interface BundleCreateModalProps {
   open: boolean;
@@ -135,7 +135,7 @@ export function BundleCreateModal({
   const showWarning = items.length === 1 && totalQuantity <= 1;
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+    <Dialog open={open} onOpenChange={(v: boolean) => !v && onClose()}>
       <DialogContent className="w-full sm:max-w-4xl max-h-[90vh] overflow-y-auto bg-background">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -235,7 +235,7 @@ export function BundleCreateModal({
                                     }),
                                   )}
                                   value={field.value?.toString() || ""}
-                                  onValueChange={(v) =>
+                                  onValueChange={(v: string) =>
                                     field.onChange(v ? parseInt(v) : 0)
                                   }
                                   placeholder="Select Bundle Type"
@@ -288,7 +288,7 @@ export function BundleCreateModal({
                                           }),
                                         )}
                                         value={field.value?.toString() || ""}
-                                        onValueChange={(v) =>
+                                        onValueChange={(v: string) =>
                                           field.onChange(v ? parseInt(v) : 0)
                                         }
                                         placeholder="Select Product"

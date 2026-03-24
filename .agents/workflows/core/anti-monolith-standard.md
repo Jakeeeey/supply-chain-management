@@ -34,11 +34,17 @@ A "Feature Monolith" occurs when a single file or hook takes on too many respons
 
 When a module grows complex, follow the **Barrel & Composer** pattern used in the SKU module:
 
-### 2.1 Service Decomposition (Barrels)
+### 2.1 The 5-File Tiered Service (Standard)
 
-1.  Break `module.ts` into specific files: `module-query.ts`, `module-lifecycle.ts`, `module-actions.ts`.
-2.  Repurpose the original `module.ts` as a **Barrel File** that re-exports a single object.
-3.  **Benefit**: Zero breaking changes for existing UI components.
+When decomposing a complex service, split it into these 5 specialized files to ensure zero logic overlap:
+
+1.  **`[name].types.ts`**: Pure TS interfaces (No Zod).
+2.  **`[name].schema.ts`**: All Zod validation (POST/PATCH).
+3.  **`[name].helpers.ts`**: Pure utility functions.
+4.  **`[name].repo.ts`**: Directus `fetch` calls only.
+5.  **`[name].service.ts`**: Orchestration & Business Logic.
+
+**Barrel File**: Maintain an `index.ts` to re-export the Service and Repo methods, ensuring no breaking changes for UI callers.
 
 ### 2.2 Hook Decomposition (Composers)
 
