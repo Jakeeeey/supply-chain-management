@@ -1,6 +1,3 @@
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-
 interface PickerItem {
     productId: string | number;
     productName: string;
@@ -13,7 +10,15 @@ interface PickerItem {
     orderedQuantity?: number;
 }
 
-export const generatePickerPDF = (groupedManifest: Record<string, PickerItem[]>, batchNo: string) => {
+export const generatePickerPDF = async (groupedManifest: Record<string, PickerItem[]>, batchNo: string) => {
+
+    // ✅ 2. Dynamically import libraries ONLY when the function runs
+    const jsPDFModule = await import("jspdf");
+    const jsPDF = jsPDFModule.default || jsPDFModule.jsPDF || (jsPDFModule as any);
+
+    const autoTableModule = await import("jspdf-autotable");
+    const autoTable = autoTableModule.default || (autoTableModule as any);
+
     const doc = new jsPDF();
 
     Object.entries(groupedManifest).forEach(([rawPickerName, items], index) => {
@@ -95,7 +100,7 @@ export const generatePickerPDF = (groupedManifest: Record<string, PickerItem[]>,
                 3: { cellWidth: 15, halign: 'center', fontStyle: 'bold' },
                 4: { cellWidth: 25, halign: 'center' }
             },
-            didDrawCell: (data) => {
+            didDrawCell: (data: any) => { // Added 'any' typing to data to prevent strict TS errors from the dynamic import
                 // Draw square checkbox for product rows
                 if (data.column.index === 0 && data.cell.section === 'body' && data.cell.raw === "") {
                     const size = 3.5;
@@ -104,7 +109,7 @@ export const generatePickerPDF = (groupedManifest: Record<string, PickerItem[]>,
                     doc.setLineWidth(0.2).setDrawColor(0).rect(x, y, size, size);
                 }
             },
-            didDrawPage: (data) => {
+            didDrawPage: (data: any) => {
                 doc.setFontSize(7).setTextColor(161, 161, 170);
                 doc.text(`Batch: ${batchNo} | Page ${data.pageNumber}`, 14, doc.internal.pageSize.height - 8);
             }
