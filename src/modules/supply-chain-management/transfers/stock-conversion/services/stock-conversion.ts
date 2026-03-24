@@ -85,8 +85,8 @@ export async function fetchStockList(
     const startTime = Date.now();
     const headers = getHeaders();
 
-    // 1. Fetch products with limit and offset
-    const prodRes = await fetchWithTimeout(`${DIRECTUS_API}/items/products?limit=${limit}&offset=${offset}&meta=filter_count&fields=product_id,product_name,description,product_code,parent_id,unit_of_measurement,product_brand,product_category,cost_per_unit,price_per_unit`, { headers, cache: "no-store" });
+    // 1. Fetch products with limit and offset (Cached for 60 seconds because inventory is handled entirely dynamically elsewhere)
+    const prodRes = await fetchWithTimeout(`${DIRECTUS_API}/items/products?limit=${limit}&offset=${offset}&meta=filter_count&fields=product_id,product_name,description,product_code,parent_id,unit_of_measurement,product_brand,product_category,cost_per_unit,price_per_unit`, { headers, next: { revalidate: 120 } });
 
     // 2. Fetch or retrieve cached master dictionaries
     const cache = await getMasterData(headers);

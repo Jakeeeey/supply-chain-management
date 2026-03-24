@@ -410,9 +410,9 @@ function buildReceiptSummary(porRows: any[]) {
     return { receipts, receiptsCount, unpostedReceiptsCount };
 }
 
-function receivingStatusFrom(porRows: any[], opts?: { allPosted?: boolean; fullyReceived?: boolean }) {
-    // CLOSED only if all receipts/rows are posted
-    if (opts?.allPosted) return "CLOSED" as POStatus;
+function receivingStatusFrom(porRows: any[], opts?: { isClosed?: boolean; fullyReceived?: boolean }) {
+    // CLOSED only if fully received AND all receipts/rows are posted
+    if (opts?.isClosed) return "CLOSED" as POStatus;
     // RECEIVED: all items received, receipts exist but not yet posted
     if (opts?.fullyReceived) return "RECEIVED" as POStatus;
 
@@ -631,8 +631,10 @@ export async function GET() {
             const lr = latestReceiptInfo(porRows);
             const rs = buildReceiptSummary(porRows);
 
-            // ✅ allPosted used only to mark CLOSED
+            // ✅ allPosted used to help determine CLOSED state
             const allPosted = rs.receiptsCount > 0 && rs.unpostedReceiptsCount === 0;
+            // ✅ isClosed: requires being fully received AND all receipts posted
+            const isClosed = fully && allPosted;
             // ✅ fullyReceived: mark as RECEIVED when full and not all posted
             const fullyReceived = fully && !allPosted;
 
@@ -640,7 +642,7 @@ export async function GET() {
                 id: String(poId),
                 poNumber,
                 supplierName,
-                status: receivingStatusFrom(porRows, { allPosted, fullyReceived }),
+                status: receivingStatusFrom(porRows, { isClosed, fullyReceived }),
                 totalAmount: toNum(po?.total_amount ?? 0),
                 currency: "PHP",
                 itemsCount: products.size,
@@ -775,6 +777,7 @@ export async function POST(req: NextRequest) {
             const lr = latestReceiptInfo(porRows);
             const rs = buildReceiptSummary(porRows);
             const allPosted = rs.receiptsCount > 0 && rs.unpostedReceiptsCount === 0;
+            const isClosed = fully && allPosted;
             const fullyReceived = fully && !allPosted;
 
             const branchName = branchesLabelFromLines(lines, branchesMap);
@@ -786,7 +789,7 @@ export async function POST(req: NextRequest) {
                 supplier: { id: String(sid || ""), name: supplierName },
                 supplierName,
 
-                status: receivingStatusFrom(porRows, { allPosted, fullyReceived }),
+                status: receivingStatusFrom(porRows, { isClosed, fullyReceived }),
                 totalAmount: toNum(po?.total_amount ?? 0),
                 currency: "PHP",
 
@@ -852,8 +855,8 @@ export async function POST(req: NextRequest) {
             const taggingOk = isPartiallyTagged(poId, lines, porRows, rfidsByPorId);
             if (!taggingOk) return bad("Cannot post. Complete RFID tagging first.", 409);
 
+            // Removing fully constraint to allow partial posts
             const fully = isFullyReceived(poId, lines, porRows, rfidsByPorId);
-            if (!fully) return bad("Cannot post. PO is not fully received yet.", 409);
 
             const target = porRows.filter((r: any) => toStr(r?.receipt_no) === receiptNo);
             if (!target.length) return bad("Receipt not found for this PO.", 404);
@@ -899,8 +902,8 @@ export async function POST(req: NextRequest) {
             const taggingOk = isPartiallyTagged(poId, lines, porRows, rfidsByPorId);
             if (!taggingOk) return bad("Cannot post. Complete RFID tagging first.", 409);
 
+            // Removing fully constraint to allow partial posts
             const fully = isFullyReceived(poId, lines, porRows, rfidsByPorId);
-            if (!fully) return bad("Cannot post. PO is not fully received yet.", 409);
 
             const toPost = porRows
                 .map((r: any) => ({
