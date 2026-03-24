@@ -248,8 +248,6 @@ export async function generatePurchaseOrderPDF(data: {
         }
     });
 
-    const lastAutoTable = (doc as any).lastAutoTable;
-    const lastY = lastAutoTable ? lastAutoTable.finalY + 10 : 150;
 
     doc.save(`PO_${data.poNumber}.pdf`);
 }

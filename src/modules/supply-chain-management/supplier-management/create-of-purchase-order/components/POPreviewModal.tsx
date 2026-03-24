@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+
 import { Printer, Download, Package } from "lucide-react";
 import { generatePurchaseOrderPDF } from "../../receiving-products/utils/printUtils";
 import { cn, buildMoneyFormatter } from "../utils/calculations";
