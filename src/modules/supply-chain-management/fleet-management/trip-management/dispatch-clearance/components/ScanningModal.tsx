@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     Scan,
     X,
@@ -49,15 +49,49 @@ const ScanningModal: React.FC<ScanningModalProps> = ({
 }) => {
     const [scannedQtys, setScannedQtys] = useState<Record<string | number, number>>(initialScanned);
     const [scannedTags, setScannedTags] = useState<Set<string>>(new Set());
-    const [scanInput, setScanInput] = useState('');
     const [lastScanned, setLastScanned] = useState<InvoiceLine | null>(null);
     const [isScanning, setIsScanning] = useState(true);
+    
+    const bufferRef = useRef('');
+    const lastKeystrokeTime = useRef(0);
+
+    const playSound = (type: 'success' | 'error') => {
+        try {
+            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+            if (!AudioContextClass) return;
+            const ctx = new AudioContextClass();
+            const osc = ctx.createOscillator();
+            const gainNode = ctx.createGain();
+
+            osc.connect(gainNode);
+            gainNode.connect(ctx.destination);
+
+            if (type === 'success') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.1);
+                gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.1);
+            } else {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, ctx.currentTime);
+                gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.3);
+            }
+        } catch (e) {
+            console.warn('Audio play failed', e);
+        }
+    };
 
     useEffect(() => {
         if (isOpen) {
             setScannedQtys(initialScanned);
             setScannedTags(new Set());
-            setScanInput('');
+            bufferRef.current = '';
             setLastScanned(null);
             setIsScanning(true);
         }
@@ -67,72 +101,87 @@ const ScanningModal: React.FC<ScanningModalProps> = ({
         const rawInput = input.trim().toUpperCase();
         if (!rawInput) return;
 
-        // Clear input immediately to prevent accumulation
-        setScanInput('');
-
-        // 1. Determine if we have multiple tags concatenated or delimited
         let tags: string[] = [];
         if (rawInput.length > 24 && !/[\s\n\r,]+/.test(rawInput)) {
-            // Concatenated block of 24-char hex strings
             for (let i = 0; i < rawInput.length; i += 24) {
                 const chunk = rawInput.substring(i, i + 24);
                 if (chunk.length === 24) tags.push(chunk);
             }
         } else {
-            // Standard delimited tags (whitespace, newline, etc.)
             tags = rawInput.split(/[\s\n\r,]+/).filter(Boolean);
         }
 
         if (tags.length === 0) return;
 
-        // 2. Process each detected tag individually
         tags.forEach(tag => {
             if (scannedTags.has(tag)) {
-                // Duplicate detection - don't show too many toasts if bulk scanning
                 if (tags.length < 5) toast.warning(`RFID Tag ${tag} already scanned!`);
+                playSound('error');
                 return;
             }
 
-            // 3. Find the tag in the provided RFID mappings
             const mapping = rfidTags.find(t => t.rfid?.toUpperCase() === tag);
             
             if (!mapping) {
                 toast.error(`Invalid RFID Tag: ${tag.substring(0, 8)}...`);
+                playSound('error');
                 return;
             }
 
-            // 4. Find the item in the current manifest
             const item = items.find(i => Number(i.product_id) === Number(mapping.product_id));
 
             if (!item) {
                 toast.error(`Product for Tag ${tag.substring(0, 8)}... not in manifest.`);
+                playSound('error');
                 return;
             }
 
-            // 5. Check if we already reached the required quantity
-            // We use the functional update to ensure we use the latest state if processing many tags
             setScannedQtys(prev => {
                 if ((prev[item.id] || 0) >= item.qty) {
                     if (tags.length < 5) toast.warning(`Product ${item.product_name} is already fully scanned.`);
+                    playSound('error');
                     return prev;
                 }
 
                 const newQty = (prev[item.id] || 0) + 1;
-                
-                // Track tag as scanned
                 setScannedTags(tagsPrev => new Set(tagsPrev).add(tag));
                 setLastScanned(item);
-                
                 if (tags.length < 5) toast.success(`Scanned: ${item.product_name}`);
-                
+                playSound('success');
                 return { ...prev, [item.id]: newQty };
             });
         });
-
-        // 6. Check if everything is complete (de-bounced check after state updates would be better, but we do it here)
-        // Note: The progress check below might use stale data since setScannedQtys is async.
-        // For reliability in bulk scanning, we rely on the final manifest check during confirmation.
     };
+
+    // Global Keydown Listener for Hardware Scanners
+    useEffect(() => {
+        if (!isOpen || !isScanning) return;
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Ignore if user is manually typing elsewhere (shouldn't happen without input, but safe)
+            if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
+            if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+            const now = Date.now();
+            // Reset buffer if delay is too long (>100ms indicates human typing, hardware scanners are 5-30ms)
+            if (now - lastKeystrokeTime.current > 100) {
+                bufferRef.current = '';
+            }
+            lastKeystrokeTime.current = now;
+
+            if (e.key === 'Enter') {
+                if (bufferRef.current) {
+                    handleRFIDScan(bufferRef.current);
+                    bufferRef.current = '';
+                }
+            } else if (e.key.length === 1) {
+                bufferRef.current += e.key;
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, isScanning, rfidTags, items, scannedQtys, scannedTags]);
 
     // Internal simulation for RFID scan - Updated to use real RFID tags
     const simulateScan = () => {
@@ -210,21 +259,7 @@ const ScanningModal: React.FC<ScanningModalProps> = ({
                         <div className="flex items-center gap-2">
                             {isScanning && (
                                 <>
-                                    <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-muted border border-border shadow-sm focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all">
-                                        <Search className="w-3.5 h-3.5 text-muted-foreground" />
-                                        <Input
-                                            autoFocus
-                                            value={scanInput}
-                                            onChange={(e) => setScanInput(e.target.value)}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter') {
-                                                    handleRFIDScan(scanInput);
-                                                }
-                                            }}
-                                            placeholder="Scan RFID..."
-                                            className="h-6 w-32 border-none bg-transparent p-0 text-xs font-bold text-foreground placeholder:text-muted-foreground/30 focus-visible:ring-0 focus-visible:ring-offset-0"
-                                        />
-                                    </div>
+                                    {/* Manual Input Removed for Security/Scanner-only Constraint */}
                                     <Button
                                         variant="secondary"
                                         size="sm"
