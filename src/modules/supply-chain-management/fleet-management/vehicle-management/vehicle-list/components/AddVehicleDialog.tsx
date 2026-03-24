@@ -99,7 +99,6 @@ export function AddVehicleDialog({
     requiredOk(form.vehicleName) &&
     requiredOk(form.year) &&
     form.typeId !== null &&
-    requiredOk(form.rfid) &&
     form.fuelTypeId !== null &&
     form.engineTypeId !== null &&
     requiredOk(form.seats || "") &&
@@ -120,7 +119,6 @@ export function AddVehicleDialog({
     if (!requiredOk(form.vehicleName)) missing.push("Vehicle Name");
     if (!requiredOk(form.year)) missing.push("Year");
     if (form.typeId === null) missing.push("Type");
-    if (!requiredOk(form.rfid)) missing.push("RFID");
     if (form.fuelTypeId === null) missing.push("Fuel Type");
     if (form.engineTypeId === null) missing.push("Engine Type");
     if (!requiredOk(form.seats || "")) missing.push("Seats");
@@ -303,7 +301,7 @@ export function AddVehicleDialog({
 
               <div className="grid gap-2">
                 <Label>
-                  Year <span className="text-destructive">*</span>
+                  Year To Last <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   value={form.year}
@@ -316,7 +314,7 @@ export function AddVehicleDialog({
 
               <div className="grid gap-2">
                 <Label>
-                  Type <span className="text-destructive">*</span>
+                  Vehicle Type <span className="text-destructive">*</span>
                 </Label>
                 <Select
                   value={form.typeId === null ? "" : String(form.typeId)}
@@ -326,11 +324,17 @@ export function AddVehicleDialog({
                     <SelectValue placeholder="Select Type" />
                   </SelectTrigger>
                   <SelectContent>
-                    {typeOptions.map((t) => (
-                      <SelectItem key={t.id} value={String(t.id)}>
-                        {t.name}
+                    {typeOptions.length === 0 ? (
+                      <SelectItem value="no-options" disabled>
+                        No Types Available
                       </SelectItem>
-                    ))}
+                    ) : (
+                      typeOptions.map((t) => (
+                        <SelectItem key={t.id} value={String(t.id)}>
+                          {t.name}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -370,11 +374,17 @@ export function AddVehicleDialog({
                     <SelectValue placeholder="Select Fuel Type" />
                   </SelectTrigger>
                   <SelectContent>
-                    {fuelOptions.map((f) => (
-                      <SelectItem key={f.id} value={String(f.id)}>
-                        {f.name}
+                    {fuelOptions.length === 0 ? (
+                      <SelectItem value="no-options" disabled>
+                        No Fuel Types Available
                       </SelectItem>
-                    ))}
+                    ) : (
+                      fuelOptions.map((f) => (
+                        <SelectItem key={f.id} value={String(f.id)}>
+                          {f.name}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -391,23 +401,26 @@ export function AddVehicleDialog({
                     <SelectValue placeholder="Select Engine Type" />
                   </SelectTrigger>
                   <SelectContent>
-                    {engineOptions.map((en) => (
-                      <SelectItem key={en.id} value={String(en.id)}>
-                        {en.name}
+                    {engineOptions.length === 0 ? (
+                      <SelectItem value="no-options" disabled>
+                        No Engine Types Available
                       </SelectItem>
-                    ))}
+                    ) : (
+                      engineOptions.map((en) => (
+                        <SelectItem key={en.id} value={String(en.id)}>
+                          {en.name}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="grid gap-2">
-                <Label>
-                  RFID <span className="text-destructive">*</span>
-                </Label>
+                <Label>RFID</Label>
                 <Input
                   value={form.rfid}
                   onChange={(e) => set("rfid", e.target.value)}
-                  className={touched && !requiredOk(form.rfid) ? "ring-1 ring-destructive" : ""}
                   placeholder="Enter RFID code"
                 />
               </div>
