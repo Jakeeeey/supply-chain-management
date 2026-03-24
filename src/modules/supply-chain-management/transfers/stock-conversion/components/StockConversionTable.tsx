@@ -5,6 +5,7 @@ import {
   useReactTable,
   getCoreRowModel,
   getFilteredRowModel,
+  getPaginationRowModel,
   flexRender,
 } from "@tanstack/react-table";
 import { StockConversionProduct } from "../types/stock-conversion.schema";
@@ -75,10 +76,9 @@ export function StockConversionTable({
   const table = useReactTable({
     data: filteredData,
     columns,
-    pageCount: Math.ceil(totalCount / pageSize),
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    manualPagination: true,
+    getPaginationRowModel: getPaginationRowModel(),
     state: {
       pagination: {
         pageIndex: page - 1,
@@ -128,8 +128,13 @@ export function StockConversionTable({
       .map(p => p.productId);
 
     if (productsToLoad.length > 0) {
-      console.log("[StockConversionTable] Lazy loading inventory for current page products:", productsToLoad);
-      loadProductsInventory(productsToLoad);
+      // Debounce the call so rapid pagination doesn't overwhelm the backend
+      const timer = setTimeout(() => {
+        console.log("[StockConversionTable] Lazy loading inventory for current page products:", productsToLoad);
+        loadProductsInventory(productsToLoad);
+      }, 350);
+      
+      return () => clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleProductIds, loadProductsInventory, pageItems.length]); // Use stringified IDs
