@@ -140,8 +140,8 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
             reconciliation.status === 'Unfulfilled' ? 'text-rose-500' :
                 reconciliation.status === 'Fulfilled with Concerns' ? 'text-amber-500' : 'text-primary';
 
-        const titlePrefix = reconciliation.status === 'Fulfilled' ? 'Clearance' :
-            reconciliation.status === 'Fulfilled with Returns' ? 'Process Return' : 'Reconciliation';
+        const titlePrefix = reconciliation.status === 'Fulfilled' ? 'Invoice No' :
+            reconciliation.status === 'Fulfilled with Returns' ? 'Invoice No' : 'Invoice No';
 
         return (
             <div className="flex items-center gap-3">
@@ -232,18 +232,14 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                                     <TableHead className="text-xs font-bold text-muted-foreground text-center">
                                         {reconciliation.status === 'Fulfilled' ? 'Qty' : 'Orig Qty'}
                                     </TableHead>
-                                    {reconciliation.status === 'Fulfilled with Concerns' && (
-                                        <>
-                                            <TableHead className="text-xs font-bold text-muted-foreground text-center">
-                                                Count
-                                            </TableHead>
-                                            <TableHead className="text-xs font-bold text-muted-foreground text-right">
-                                                Count Amount
-                                            </TableHead>
-                                        </>
-                                    )}
                                     {reconciliation.status !== 'Fulfilled' && (
                                         <>
+                                            <TableHead className="text-xs font-bold text-muted-foreground text-center">
+                                                Scanned Qty
+                                            </TableHead>
+                                            <TableHead className="text-xs font-bold text-muted-foreground text-right border-r border-border/50">
+                                                Scanned Amount
+                                            </TableHead>
                                             <TableHead className="text-xs font-bold text-muted-foreground text-center">
                                                 Missing
                                             </TableHead>
@@ -274,7 +270,7 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-sm font-bold text-foreground text-center tabular-nums">{line.qty}</TableCell>
-                                        {reconciliation.status === 'Fulfilled with Concerns' && (
+                                        {reconciliation.status !== 'Fulfilled' && (
                                             <>
                                                 <TableCell className="text-center w-24">
                                                     <div className="flex items-center justify-center">
@@ -283,13 +279,10 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                                                         </div>
                                                     </div>
                                                 </TableCell>
-                                                <TableCell className="text-right text-sm font-bold text-muted-foreground tabular-nums">
+                                                <TableCell className="text-right text-sm font-bold text-muted-foreground tabular-nums border-r border-border/50">
                                                     ₱{(((line.net_total || 0) / (line.qty || 1)) * (scannedQtys[line.id] || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </TableCell>
-                                            </>
-                                        )}
-                                        {reconciliation.status !== 'Fulfilled' && (
-                                            <>
+
                                                 <TableCell className="text-center w-24">
                                                     <div className="flex items-center justify-center">
                                                         <div className={`h-9 w-16 flex items-center justify-center font-bold rounded-lg border transition-colors tabular-nums ${
@@ -360,7 +353,7 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                         <Button variant="outline" onClick={onClose} className="flex-1 md:flex-none rounded-xl px-6 font-semibold border-border h-10">Cancel</Button>
                         <Button
                             onClick={handleSave}
-                            disabled={reconciliation.status !== 'Fulfilled' && !remarks.trim()}
+                            disabled={reconciliation.status !== 'Fulfilled' && (!remarks.trim() || Object.values(scannedQtys).reduce((a, b) => a + b, 0) === 0)}
                             className={`flex-1 md:flex-none rounded-xl px-8 font-bold text-primary-foreground shadow-lg transition-all active:scale-95 h-10 ${
                                 reconciliation.status === 'Fulfilled' 
                                 ? 'bg-emerald-600 hover:bg-emerald-700' 

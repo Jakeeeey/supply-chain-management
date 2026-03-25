@@ -84,13 +84,13 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
 
     const isRowCheckable = (inv: ReconciliationRow) => {
         if (!inv.status) return false;
-        
+
         if (inv.status === 'Unfulfilled' || inv.status === 'Fulfilled with Concerns') {
             const hasMissingQtys = inv.missingQtys && Object.keys(inv.missingQtys).length > 0;
             const hasScannedQtys = inv.scannedQtys && Object.keys(inv.scannedQtys).length > 0;
             return !!(hasMissingQtys || hasScannedQtys);
         }
-        
+
         return true;
     };
 
@@ -124,8 +124,8 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
             if (inv.id === id) {
                 // If status changed, we clear reconciliation data to force fresh input
                 const statusChanged = inv.status !== newStatus;
-                return { 
-                    ...inv, 
+                return {
+                    ...inv,
                     status: newStatus,
                     missingQtys: statusChanged ? {} : inv.missingQtys,
                     scannedQtys: statusChanged ? {} : inv.scannedQtys,
@@ -135,7 +135,7 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
             }
             return inv;
         }));
-        
+
         // Always uncheck when status is manually changed via dropdown
         setSelectedIds(prev => {
             const next = new Set(prev);
@@ -195,7 +195,7 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                                 <ClipboardList className="w-5 h-5" />
                             </div>
                             <DialogTitle className="text-lg md:text-xl font-bold text-foreground leading-tight">
-                                Dispatch Clearance & Reconciliation
+                                Dispatch Clearance
                             </DialogTitle>
                         </div>
                         <p className="text-xs md:text-sm text-muted-foreground pl-11">
@@ -232,7 +232,7 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                         </Card>
                         <Card className="border-border bg-card shadow-sm">
                             <CardContent className="p-4 space-y-1">
-                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Total Items</p>
+                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Total Invoices</p>
                                 <p className="font-bold text-foreground">
                                     {selectedIds.size > 0 ? `${selectedIds.size} / ` : ''}{invoices.length} Invoices
                                 </p>
