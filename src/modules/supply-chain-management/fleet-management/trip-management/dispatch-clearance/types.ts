@@ -96,6 +96,7 @@ export interface ReconciliationRow {
   remarks?: string;
   missingQtys?: Record<string | number, number>;
   scannedQtys?: Record<string | number, number>;
+  scannedRFIDs?: Record<string | number, string[]>;
 }
 
 export interface InvoiceLine {
