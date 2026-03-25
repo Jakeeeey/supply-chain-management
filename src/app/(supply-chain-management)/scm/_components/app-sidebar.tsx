@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
-import { useState, useMemo } from "react";
+import {useState, useMemo} from "react";
 
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
@@ -28,32 +28,56 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { NavMain } from "./nav-main";
+import {NavMain} from "./nav-main";
 
 const data = {
     navMain: [
-        { title: "Dashboard", url: "/scm/", icon: LayoutDashboard, isActive: true },
+        {
+            title: "Dashboard",
+            url: "/scm/",
+            icon: LayoutDashboard,
+            isActive: true,
+        },
         {
             title: "Product Management",
             url: "#",
             icon: Package,
+            isActive: false,
             items: [
                 {
                     title: "SKU",
                     url: "/scm/product-management/sku",
                     items: [
-                        { title: "SKU Masterlist", url: "/scm/product-management/sku/sku-masterlist" },
-                        { title: "SKU Registration", url: "/scm/product-management/sku/sku-creation" },
-                        { title: "SKU Approval Queue", url: "/scm/product-management/sku/sku-approval" },
+                        {
+                            title: "SKU Masterlist",
+                            url: "/scm/product-management/sku/sku-masterlist",
+                        },
+                        {
+                            title: "SKU Registration",
+                            url: "/scm/product-management/sku/sku-creation",
+                        },
+                        {
+                            title: "SKU Approval Queue",
+                            url: "/scm/product-management/sku/sku-approval",
+                        },
                     ],
                 },
                 {
                     title: "Bundling",
                     url: "#",
                     items: [
-                        { title: "Bundle Creation", url: "/scm/product-management/bundle-creation" },
-                        { title: "Bundle Approval", url: "/scm/product-management/bundle-approval" },
-                        { title: "Bundle Masterlist", url: "/scm/product-management/bundle-masterlist" },
+                        {
+                            title: "Bundle Creation",
+                            url: "/scm/product-management/bundle-creation",
+                        },
+                        {
+                            title: "Bundle Approval",
+                            url: "/scm/product-management/bundle-approval",
+                        },
+                        {
+                            title: "Bundle Masterlist",
+                            url: "/scm/product-management/bundle-masterlist",
+                        },
                     ],
                 },
                 {
@@ -62,36 +86,25 @@ const data = {
                     items: [
                         {
                             title: "Barcode Masterlist",
-                            url: "/scm/product-management/barcode-management/barcode-masterlist"
+                            url: "/scm/product-management/barcode-management/barcode-masterlist",
                         },
-                        { title: "Barcode Linking", url: "/scm/product-management/barcode-management/barcode-linking" },
+                        {
+                            title: "Barcode Linking",
+                            url: "/scm/product-management/barcode-management/barcode-linking",
+                        },
                     ],
                 },
-                { title: "Brand", url: "/scm/product-management/brand" },
-                { title: "Category", url: "/scm/product-management/category" },
-                { title: "Unit of Measurement", url: "/scm/product-management/unit-of-measurement" },
-            ],
-        },
-        {
-            title: "Inbound",
-            url: "#",
-            icon: Package,
-            items: [
                 {
-                    title: "Receiving",
-                    url: "#",
+                    title: "Brand",
+                    url: "/scm/product-management/brand",
                 },
                 {
-                    title: "Rejected Upon Delivery",
-                    url: "#",
+                    title: "Category",
+                    url: "/scm/product-management/category",
                 },
                 {
-                    title: "Reserve Logistics",
-                    url: "#",
-                },
-                {
-                    title: "RTV Sales Return",
-                    url: "#",
+                    title: "Unit of Measurement",
+                    url: "/scm/product-management/unit-of-measurement",
                 },
             ],
         },
@@ -101,54 +114,48 @@ const data = {
             icon: Package,
             items: [
                 {
-                    title: "Good Stock",
-                    url: "#",
-                },
-                {
-                    title: "Bad Stock",
-                    url: "#",
-                },
-                {
-                    title: "Return to Supplier RFID",
-                    url: "/scm/outbound/return-to-supplier-rfid",
-                },
-                {
-                    title: "Return to Supplier Manual",
-                    url: "/scm/outbound/return-to-supplier-manual",
-                },
-                {
-                    title: "Consolidation",
-                    url: "#",
+                    title: "Return to Supplier",
+                    url: "/scm/outbound/return-to-supplier",
                 },
             ],
-        },
-        {
-            title: "Inventories",
-            url: "#",
-            icon: Package,
-            items: [
-                {
-                    title: "Sales Return Manual",
-                    url: "/scm/inventories/sales-return-manual",
-                },
-                {
-                    title: "Sales Return RFID",
-                    url: "/scm/inventories/sales-return-rfid",
-                },
-            ]
         },
         {
             title: "Supplier Management",
             url: "#",
             icon: Building2,
             items: [
-                { title: "Create Purchase Order", url: "/scm/supplier-management/create-of-purchase-order" },
-                { title: "Approval of PO", url: "/scm/supplier-management/approval-of-purchase-order" },
-                { title: "Tagging of PO", url: "/scm/supplier-management/tagging-of-po" },
-                { title: "Receiving Products", url: "/scm/supplier-management/receiving-products" },
-                { title: "Posting Of PO", url: "/scm/supplier-management/posting-of-purchase-order" },
-                { title: "PurchaseOrderSummary", url: "/scm/supplier-management/purchase-order-summary" },
-                { title: "Inbound/Outbound Kiosk", url: "/scm/inbound-outbound-kiosk" },
+                {
+                    title: "Purchase Order",
+                    url: "/scm/supplier-management/purchase-order-summary",
+                    items: [{
+                        title: "Summary",
+                        url: "/scm/supplier-management/purchase-order-summary",
+                    },
+                        {
+                            title: "Creation",
+                            url: "/scm/supplier-management/create-of-purchase-order",
+                        },
+                        {
+                            title: "Approval",
+                            url: "/scm/supplier-management/approval-of-purchase-order",
+                        },
+                        {
+                            title: "Tagging",
+                            url: "/scm/supplier-management/tagging-of-po",
+                        },
+                        {
+                            title: "Receiving",
+                            url: "/scm/supplier-management/receiving-products",
+                        },
+                        {
+                            title: "Posting",
+                            url: "/scm/supplier-management/posting-of-purchase-order",
+                        },]
+                },
+                {
+                    title: "Logistics Kiosk",
+                    url: "/scm/inbound-outbound-kiosk",
+                },
             ],
         },
         {
@@ -156,8 +163,14 @@ const data = {
             url: "#",
             icon: Warehouse,
             items: [
-                { title: "Warehouse Unit Conversion", url: "/scm/warehouse-management/warehouse-unit-conversion" },
-                { title: "Stock Transfer", url: "/scm/warehouse-management/stock-transfer" },
+                {
+                    title: "Warehouse Unit Conversion",
+                    url: "/scm/warehouse-management/warehouse-unit-conversion",
+                },
+                {
+                    title: "Stock Transfer",
+                    url: "/scm/warehouse-management/stock-transfer",
+                },
                 {
                     title: "Consolidation",
                     url: "/scm/warehouse-management/consolidation",
@@ -176,10 +189,20 @@ const data = {
                                 },
                             ],
                         },
-                        { title: "Delivery Picking", url: "/scm/warehouse-management/consolidation/delivery-picking" },
-                        { title: "Delivery Auditing", url: "/scm/warehouse-management/consolidation/delivery-auditing" },
-                        { title: "Withdrawals Picking", url: "/scm/warehouse-management/withdrawals-picking" },
-                        { title: "Active Picking", url: "/scm/warehouse-management/active-picking" },
+                        {
+                            title: "Delivery Picking",
+                            url: "/scm/warehouse-management/consolidation/delivery-picking",
+                        }, {
+                            title: "Delivery Auditing",
+                            url: "/scm/warehouse-management/consolidation/delivery-auditing",
+                        },
+                        {
+                            title: "Withdrawals Picking",
+                            url: "/scm/warehouse-management/withdrawals-picking",
+                        }, {
+                            title: "Active Picking",
+                            url: "/scm/warehouse-management/active-picking",
+                        },
                     ],
                 },
             ],
@@ -192,14 +215,25 @@ const data = {
                 {
                     title: "Vehicle Management",
                     url: "#",
-                    items: [{ title: "Vehicle List", url: "/scm/fleet-management/vehicle-management/vehicle-list" }],
+                    items: [
+                        {
+                            title: "Vehicle List",
+                            url: "/scm/fleet-management/vehicle-management/vehicle-list",
+                        },
+                    ],
                 },
                 {
                     title: "Trip Management",
                     url: "#",
                     items: [
-                        { title: "Dispatch Summary", url: "/scm/fleet-management/trip-management/dispatch-summary" },
-                        { title: "Dispatch Creation", url: "/scm/fleet-management/trip-management/dispatch-creation" },
+                        {
+                            title: "Dispatch Summary",
+                            url: "/scm/fleet-management/trip-management/dispatch-summary",
+                        },
+                        {
+                            title: "Dispatch Creation",
+                            url: "/scm/fleet-management/trip-management/dispatch-creation",
+                        },
                         {
                             title: "Dispatch Plan",
                             url: "#",
@@ -216,14 +250,20 @@ const data = {
                                     title: "Clearance",
                                     url: "/scm/fleet-management/trip-management/dispatch-plan/clearance"
                                 },
-                                { title: "Inbound", url: "/scm/fleet-management/trip-management/dispatch-plan/inbound" },
+                                {
+                                    title: "Inbound",
+                                    url: "/scm/fleet-management/trip-management/dispatch-plan/inbound",
+                                },
                                 {
                                     title: "Outbound",
                                     url: "/scm/fleet-management/trip-management/dispatch-plan/outbound"
                                 },
                             ],
                         },
-                        { title: "Dispatch Clearance", url: "/scm/fleet-management/trip-management/dispatch-clearance" },
+                        {
+                            title: "Dispatch Clearance",
+                            url: "/scm/fleet-management/trip-management/dispatch-clearance",
+                        },
                     ],
                 },
                 {
