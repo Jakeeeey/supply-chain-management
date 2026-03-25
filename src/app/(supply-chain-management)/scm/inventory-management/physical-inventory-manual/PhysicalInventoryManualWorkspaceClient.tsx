@@ -14,6 +14,7 @@ import {
 
 export default function PhysicalInventoryManualWorkspaceClient() {
     const [selectedHeaderId, setSelectedHeaderId] = React.useState<number | null>(null);
+    const [activeKey, setActiveKey] = React.useState<string>("new-0");
     const [isListCollapsed, setIsListCollapsed] = React.useState(false);
 
     React.useEffect(() => {
@@ -34,13 +35,28 @@ export default function PhysicalInventoryManualWorkspaceClient() {
 
     const handleOpenRecord = React.useCallback((row: PhysicalInventoryListRow) => {
         setSelectedHeaderId(row.id);
+        setActiveKey(`record-${row.id}`);
         setIsListCollapsed(true);
     }, []);
 
     const handleCreateNew = React.useCallback(() => {
         setSelectedHeaderId(null);
+        setActiveKey(`new-${Date.now()}`);
         setIsListCollapsed(true);
     }, []);
+
+    const handleRecordChange = React.useCallback((header: any) => {
+        if (header.id && header.id !== selectedHeaderId) {
+            setSelectedHeaderId(header.id);
+        }
+    }, [selectedHeaderId]);
+
+    const activeHeaderId = React.useMemo(() => {
+        if (activeKey.startsWith("record-")) {
+            return Number(activeKey.split("-")[1]);
+        }
+        return null;
+    }, [activeKey]);
 
     return (
         <div className="space-y-3 lg:space-y-4">
@@ -94,8 +110,9 @@ export default function PhysicalInventoryManualWorkspaceClient() {
 
                 <div className="min-w-0 flex-1">
                     <PhysicalInventoryManualManagementModule
-                        key={selectedHeaderId ?? "new"}
-                        initialHeaderId={selectedHeaderId}
+                        key={activeKey}
+                        initialHeaderId={activeHeaderId}
+                        onRecordChange={handleRecordChange}
                     />
                 </div>
             </div>

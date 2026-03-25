@@ -315,16 +315,34 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
 
         try {
             setIsLoadingExisting(true);
-            const [tags, onhandRows] = await Promise.all([
-                fetchPhysicalInventoryDetailRfid(phId),
-                branchId ? fetchRfidOnhandByBranch(branchId) : Promise.resolve([]),
-            ]);
+            const CACHE_KEY = `rfid_onhand_${branchId}`;
+            const cachedStorage = localStorage.getItem(CACHE_KEY);
+            const nextCache = new Map<string, number>();
+
+            if (cachedStorage) {
+                try {
+                    const parsed = JSON.parse(cachedStorage);
+                    if (Array.isArray(parsed)) {
+                        for (const [key, val] of parsed) {
+                            nextCache.set(key, val);
+                        }
+                    }
+                } catch {
+                    // ignore parse error
+                }
+            }
+
+            const tags = await fetchPhysicalInventoryDetailRfid(phId);
             setExistingPiTags(tags);
 
-            const nextCache = new Map<string, number>();
-            for (const row of onhandRows) {
-                nextCache.set(row.rfid, row.productId);
+            if (nextCache.size === 0 && branchId) {
+                const onhandRows = await fetchRfidOnhandByBranch(branchId);
+                for (const row of onhandRows) {
+                    nextCache.set(row.rfid, row.productId);
+                }
+                localStorage.setItem(CACHE_KEY, JSON.stringify(Array.from(nextCache.entries())));
             }
+
             setOnhandCache(nextCache);
         } catch (error) {
             const message =
@@ -518,6 +536,7 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
                         setOnhandCache((prev) => {
                             const next = new Map(prev);
                             next.set(normalized, rfidProductId!);
+                            localStorage.setItem(`rfid_onhand_${branchId}`, JSON.stringify(Array.from(next.entries())));
                             return next;
                         });
                     }

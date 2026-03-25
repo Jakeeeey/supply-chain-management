@@ -139,19 +139,39 @@ export function PhysicalInventoryRFIDDialog(props: Props) {
         try {
             setIsLoading(true);
 
-            const [detailTags, piTags, onhandRows] = await Promise.all([
+            const CACHE_KEY = `rfid_onhand_${branchId}`;
+            const cachedStorage = localStorage.getItem(CACHE_KEY);
+            const nextCache = new Map<string, number>();
+
+            if (cachedStorage) {
+                try {
+                    const parsed = JSON.parse(cachedStorage);
+                    if (Array.isArray(parsed)) {
+                        for (const [key, val] of parsed) {
+                            nextCache.set(key, val);
+                        }
+                    }
+                } catch {
+                    // ignore parse error
+                }
+            }
+
+            const [detailTags, piTags] = await Promise.all([
                 fetchPhysicalInventoryDetailRfidByDetailId(detailId),
                 phId ? fetchPhysicalInventoryDetailRfid(phId) : Promise.resolve([]),
-                branchId ? fetchRfidOnhandByBranch(branchId) : Promise.resolve([]),
             ]);
 
             setTags(detailTags);
             setAllPiTags(piTags);
 
-            const nextCache = new Map<string, number>();
-            for (const row of onhandRows) {
-                nextCache.set(row.rfid, row.productId);
+            if (nextCache.size === 0 && branchId) {
+                const onhandRows = await fetchRfidOnhandByBranch(branchId);
+                for (const row of onhandRows) {
+                    nextCache.set(row.rfid, row.productId);
+                }
+                localStorage.setItem(CACHE_KEY, JSON.stringify(Array.from(nextCache.entries())));
             }
+
             setOnhandCache(nextCache);
         } catch (error) {
             const message =
@@ -272,6 +292,7 @@ export function PhysicalInventoryRFIDDialog(props: Props) {
                     setOnhandCache((prev) => {
                         const next = new Map(prev);
                         next.set(rfidTag, rfidProductId!);
+                        localStorage.setItem(`rfid_onhand_${branchId}`, JSON.stringify(Array.from(next.entries())));
                         return next;
                     });
                 }
