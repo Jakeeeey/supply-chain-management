@@ -129,6 +129,7 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                     status: newStatus,
                     missingQtys: statusChanged ? {} : inv.missingQtys,
                     scannedQtys: statusChanged ? {} : inv.scannedQtys,
+                    scannedRFIDs: statusChanged ? {} : inv.scannedRFIDs,
                     remarks: statusChanged ? '' : inv.remarks
                 };
             }
@@ -172,9 +173,9 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
         });
     };
 
-    const handleConfirmProductReconciliation = (id: number, status: string, remarks: string, missingQtys: Record<string | number, number>, scannedQtys: Record<string | number, number>) => {
+    const handleConfirmProductReconciliation = (id: number, status: string, remarks: string, missingQtys: Record<string | number, number>, scannedQtys: Record<string | number, number>, scannedRFIDs: Record<string | number, string[]>) => {
         setInvoices(prev => prev.map(inv =>
-            inv.id === id ? { ...inv, status: status as any, remarks, missingQtys, scannedQtys } : inv
+            inv.id === id ? { ...inv, status: status as any, remarks, missingQtys, scannedQtys, scannedRFIDs } : inv
         ));
         // Auto-select row after reconciliation if not already selected
         setSelectedIds(prev => {

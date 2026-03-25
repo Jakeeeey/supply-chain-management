@@ -337,9 +337,13 @@ export async function POST(request: Request) {
         const dispatchPlanContextRes = await fetcher(`/post_dispatch_plan/${dispatchId}?fields=encoder_id`);
         const validCheckedBy = dispatchPlanContextRes.data?.encoder_id || null;
 
+        console.log(`[Clearance POST] Processing ${invoices.length} invoices...`);
+
         // 6. Handle unfulfilled transactions log
         for (const inv of invoices) {
+            console.log(`[Clearance POST] Checking invoice ${inv.invoiceNo} (id: ${inv.id}, status: ${inv.status})`);
             if (inv.status !== 'Fulfilled') {
+                console.log(`[Clearance POST]   -> Creating unfulfilled transaction log for invoice ${inv.invoiceNo}`);
                 // Fetch original detail items to get qty and unit price
                 const detailsRes = await fetcher(`/sales_invoice_details?filter[invoice_no][_eq]=${inv.invoiceId}&limit=-1`);
                 const originalDetails = detailsRes.data || [];
@@ -347,9 +351,17 @@ export async function POST(request: Request) {
                 let varianceAmount = 0;
                 const detailLogs: any[] = [];
                 
-                if (inv.missingQtys && Object.keys(inv.missingQtys).length > 0) {
-                    Object.entries(inv.missingQtys).forEach(([detailId, missingQty]: [any, any]) => {
-                        const original = originalDetails.find((d: any) => (d.detail_id || d.id) === Number(detailId));
+                // Collect IDs from both sources to ensure we create records for items with RFIDs even if missingQty is 0
+                const detailIdsToLog = new Set([
+                    ...Object.keys(inv.missingQtys || {}),
+                    ...Object.keys(inv.scannedRFIDs || {})
+                ]);
+
+                if (detailIdsToLog.size > 0) {
+                    detailIdsToLog.forEach((detailIdStr) => {
+                        const detailId = Number(detailIdStr);
+                        const missingQty = (inv.missingQtys || {})[detailIdStr] || 0;
+                        const original = originalDetails.find((d: any) => (d.detail_id || d.id) === detailId);
                         
                         let unitPrice = 0;
                         if (original) {
@@ -364,7 +376,7 @@ export async function POST(request: Request) {
                         varianceAmount += missingAmount;
 
                         detailLogs.push({
-                            sales_invoice_detail_id: Number(detailId),
+                            sales_invoice_detail_id: detailId,
                             // unfulfilled_sales_transaction_id will be appended below
                             missing_quantity: missingQty,
                             invoice_quantity: original?.quantity || 0,
@@ -372,6 +384,11 @@ export async function POST(request: Request) {
                         });
                     });
                 }
+
+                console.log(`[Clearance POST]   -> Found ${detailLogs.length} detail logs to be persisted.`);
+
+                // Make sure to process scannedQtys if they are treated as returns, ensuring they are logged too
+                // For simplicity, we assume missingQtys already captures the differences correctly per frontend logic.
 
                 const payload: any = {
                     sales_invoice_id: inv.invoiceId,
@@ -423,8 +440,61 @@ export async function POST(request: Request) {
                     }));
 
                     // We could also check and patch existing details here, but typically there are no collision constraints on these details
-                    await poster('/unfulfilled_sales_transaction_details', finalDetailLogs);
+                    const detailsResult = await poster('/unfulfilled_sales_transaction_details', finalDetailLogs);
+                    const createdDetails = Array.isArray(detailsResult.data) ? detailsResult.data : [detailsResult.data];
+
+                    // Insert RFID tags mapping
+                    if (inv.scannedRFIDs && Object.keys(inv.scannedRFIDs).length > 0) {
+                        const rfidPayloads: any[] = [];
+                        console.log(`[Clearance POST]   -> Bulk Saving RFIDs for Invoice ${inv.invoiceNo}...`);
+                        console.log(`[Clearance POST]   -> Scanned RFID Data:`, JSON.stringify(inv.scannedRFIDs));
+                        
+                        // We map by matching the sales_invoice_detail_id we sent with the one returned by DB
+                        createdDetails.forEach((createdDetail: any) => {
+                            // Extract ID - handle both number and potentially nested object from Directus
+                            const dbSalesDetailId = typeof createdDetail.sales_invoice_detail_id === 'object' 
+                                ? createdDetail.sales_invoice_detail_id?.id 
+                                : createdDetail.sales_invoice_detail_id;
+                            
+                            const matchedTags = inv.scannedRFIDs[dbSalesDetailId];
+                            
+                            if (matchedTags && Array.isArray(matchedTags)) {
+                                console.log(`[Clearance POST]     -> Detail ID ${createdDetail.id} matched ${matchedTags.length} tags`);
+                                matchedTags.forEach((tag: string) => {
+                                    const rfidLog: any = {
+                                        unfulfilled_sales_transaction_detail_id: createdDetail.id,
+                                        rfid_tag: tag,
+                                        created_at: new Date().toISOString()
+                                    };
+                                    
+                                    if (validCheckedBy) {
+                                        rfidLog.created_by = validCheckedBy;
+                                    }
+                                    
+                                    rfidPayloads.push(rfidLog);
+                                });
+                            } else {
+                                console.log(`[Clearance POST]     -> Detail ID ${createdDetail.id} (SalesDetail ${dbSalesDetailId}) had no matching scanned RFIDs.`);
+                            }
+                        });
+
+                        if (rfidPayloads.length > 0) {
+                            console.log(`[Clearance POST]   -> Final RFID Payload count: ${rfidPayloads.length}`);
+                            console.log(`[Clearance POST]   -> Sending to Directus:`, JSON.stringify(rfidPayloads));
+                            try {
+                                const rfidResult = await poster('/unfulfilled_sales_transaction_rfid', rfidPayloads);
+                                console.log(`[Clearance POST]   -> RFID save success. Rows created:`, Array.isArray(rfidResult.data) ? rfidResult.data.length : 1);
+                            } catch (rfidErr: any) {
+                                console.error(`[Clearance POST]   !! Failed to bulk insert RFIDs:`, rfidErr.message);
+                                // We don't throw here to avoid failing entire clearance, but we log it
+                            }
+                        } else {
+                            console.log(`[Clearance POST]   !! No RFIDs were matched to any created transaction details.`);
+                        }
+                    }
                 }
+            } else {
+                console.log(`[Clearance POST]   -> Status is Fulfilled. Skipping unfulfilled transaction logic.`);
             }
         }
 

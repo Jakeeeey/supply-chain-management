@@ -33,10 +33,11 @@ import { InvoiceLine, RFIDMapping } from '../types';
 interface ScanningModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onConfirm: (scannedQtys: Record<string | number, number>) => void;
+    onConfirm: (scannedQtys: Record<string | number, number>, scannedRFIDs: Record<string | number, string[]>) => void;
     items: InvoiceLine[];
     rfidTags?: RFIDMapping[];
     initialScanned?: Record<string | number, number>;
+    initialScannedRFIDs?: Record<string | number, string[]>;
 }
 
 const ScanningModal: React.FC<ScanningModalProps> = ({
@@ -45,10 +46,12 @@ const ScanningModal: React.FC<ScanningModalProps> = ({
     onConfirm,
     items,
     initialScanned = {},
+    initialScannedRFIDs = {},
     rfidTags = []
 }) => {
     const [scannedQtys, setScannedQtys] = useState<Record<string | number, number>>(initialScanned);
     const scannedQtysRef = useRef<Record<string | number, number>>(initialScanned);
+    const scannedRFIDsRef = useRef<Record<string | number, string[]>>(initialScannedRFIDs);
     const [scannedTags, setScannedTags] = useState<Set<string>>(new Set());
     const scannedTagsRef = useRef<Set<string>>(new Set());
     const [lastScanned, setLastScanned] = useState<InvoiceLine | null>(null);
@@ -93,6 +96,7 @@ const ScanningModal: React.FC<ScanningModalProps> = ({
         if (isOpen) {
             setScannedQtys(initialScanned);
             scannedQtysRef.current = initialScanned;
+            scannedRFIDsRef.current = initialScannedRFIDs;
             setScannedTags(new Set());
             scannedTagsRef.current = new Set();
             bufferRef.current = '';
@@ -156,6 +160,11 @@ const ScanningModal: React.FC<ScanningModalProps> = ({
             
             scannedQtysRef.current = { ...scannedQtysRef.current, [item.id]: newQty };
             setScannedQtys(scannedQtysRef.current);
+
+            // Track the exact tag for the API payload
+            const previousTags = scannedRFIDsRef.current[item.id] || [];
+            scannedRFIDsRef.current = { ...scannedRFIDsRef.current, [item.id]: [...previousTags, tag] };
+
             setLastScanned(item);
             
             if (tags.length < 5) toast.success(`Scanned: ${item.product_name}`);
@@ -231,6 +240,12 @@ const ScanningModal: React.FC<ScanningModalProps> = ({
         
         scannedQtysRef.current = { ...scannedQtysRef.current, [item.id]: newQty };
         setScannedQtys(scannedQtysRef.current);
+
+        // Map dummy/generated simulation tag if no real tags are supplied, to prevent API payload errors
+        const previousTags = scannedRFIDsRef.current[item.id] || [];
+        const simTag = `SIMULATED-${item.id}-${newQty}`.padEnd(24, '0').substring(0, 24);
+        scannedRFIDsRef.current = { ...scannedRFIDsRef.current, [item.id]: [...previousTags, simTag] };
+
         setLastScanned(item);
         toast.success(`Simulated scan for: ${item.product_name}`);
         
@@ -244,7 +259,7 @@ const ScanningModal: React.FC<ScanningModalProps> = ({
     };
 
     const handleConfirm = () => {
-        onConfirm(scannedQtys);
+        onConfirm(scannedQtys, scannedRFIDsRef.current);
         onClose();
     };
 
