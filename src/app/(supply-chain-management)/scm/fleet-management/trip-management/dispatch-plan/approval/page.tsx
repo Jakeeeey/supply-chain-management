@@ -12,6 +12,10 @@ import { NavUser } from "../../../../_components/nav-user";
 
 import { cookies } from "next/headers";
 
+// 🚀 IMPORT YOUR NEW CLIENT COMPONENT HERE
+// Make sure this path matches exactly what you named your file!
+import DispatchApprovalDashboard from "@/../src/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/approval/DispatchApprovalClient";
+
 // Configuration for Node.js runtime and dynamic rendering
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -69,9 +73,9 @@ export default async function DispatchPlanApprovalPage() {
   const headerUser = buildHeaderUserFromToken(token);
 
   return (
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-slate-50 dark:bg-slate-950">
         {/* Topbar: Fixed at the top, non-scrolling */}
-        <header className="relative z-10 flex h-14 shrink-0 items-center justify-between border-b shadow-sm bg-background sm:h-16 overflow-hidden">
+        <header className="relative z-10 flex h-14 shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 shadow-sm bg-background sm:h-16 overflow-hidden">
           <div className="flex h-full min-w-0 items-center gap-2 px-3 sm:px-4 overflow-hidden">
             <SidebarTrigger className="-ml-1 shrink-0" />
 
@@ -105,11 +109,9 @@ export default async function DispatchPlanApprovalPage() {
         </header>
 
         {/* Main Content: This area is scrollable */}
-        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-2 sm:p-4">
-          {/* <DispatchApprovalContainer />  Insert your Approval logic/component here */}
-          <div className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">
-            Dispatch Plan Approval Module Content
-          </div>
+        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
+          {/* 🚀 THE DASHBOARD MODULE */}
+          <DispatchApprovalDashboard />
         </main>
       </div>
   );
