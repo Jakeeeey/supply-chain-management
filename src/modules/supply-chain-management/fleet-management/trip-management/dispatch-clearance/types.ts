@@ -81,6 +81,8 @@ export interface DispatchRow {
   tripValue: number;
   budget: number;
   status: string;
+  vehicleType?: string;
+  branchName?: string;
   invoices: ReconciliationRow[];
 }
 

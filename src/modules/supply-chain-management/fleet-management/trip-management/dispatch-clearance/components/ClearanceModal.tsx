@@ -83,8 +83,11 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
     }, [isOpen, dispatch.invoices]);
 
     const isRowCheckable = (inv: ReconciliationRow) => {
-        if (!inv.status) return false;
+        // Strictly require a valid status first
+        const validStatuses = ['Fulfilled', 'Unfulfilled', 'Fulfilled with Concerns', 'Fulfilled with Returns'];
+        if (!inv.status || !validStatuses.includes(inv.status as string)) return false;
 
+        // Special validation for statuses requiring detailed input
         if (inv.status === 'Unfulfilled' || inv.status === 'Fulfilled with Concerns') {
             const hasMissingQtys = inv.missingQtys && Object.keys(inv.missingQtys).length > 0;
             const hasScannedQtys = inv.scannedQtys && Object.keys(inv.scannedQtys).length > 0;
@@ -163,6 +166,11 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
     };
 
     const handleRowDoubleClick = (inv: ReconciliationRow) => {
+        const validStatuses = ['Fulfilled', 'Unfulfilled', 'Fulfilled with Concerns', 'Fulfilled with Returns'];
+        if (!inv.status || !validStatuses.includes(inv.status as string)) {
+            toast.error("Please Select a Status first.");
+            return;
+        }
         setActiveReconciliation(inv);
         setIsDetailOpen(true);
         // Uncheck while editing/reviewing to ensure they explicitly save/re-validate
@@ -217,7 +225,7 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
 
                 <div className="p-4 md:p-6 space-y-6 overflow-y-auto flex-1 custom-scrollbar bg-background">
                     {/* Summary Cards */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
                         <Card className="border-border bg-card shadow-sm">
                             <CardContent className="p-4 space-y-1">
                                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Driver</p>
@@ -227,7 +235,16 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                         <Card className="border-border bg-card shadow-sm">
                             <CardContent className="p-4 space-y-1">
                                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Vehicle</p>
-                                <p className="font-bold text-foreground">{dispatch.vehiclePlate}</p>
+                                <div className="space-y-0.5">
+                                    <p className="font-bold text-foreground">{dispatch.vehiclePlate}</p>
+                                    <p className="text-[10px] font-medium text-muted-foreground">{dispatch.vehicleType}</p>
+                                </div>
+                            </CardContent>
+                        </Card>
+                        <Card className="border-border bg-card shadow-sm">
+                            <CardContent className="p-4 space-y-1">
+                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Branch</p>
+                                <p className="font-bold text-foreground">{dispatch.branchName || 'N/A'}</p>
                             </CardContent>
                         </Card>
                         <Card className="border-border bg-card shadow-sm">
@@ -240,8 +257,10 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                         </Card>
                         <Card className="border-border bg-card shadow-sm">
                             <CardContent className="p-4 space-y-1">
-                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Status</p>
-                                <p className="font-bold text-primary">Ready for Clearance</p>
+                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Total Amount</p>
+                                <p className="font-bold text-foreground text-primary">
+                                    ₱ {invoices.reduce((sum, inv) => sum + (inv.amount || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </p>
                             </CardContent>
                         </Card>
                     </div>
@@ -257,7 +276,7 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                             </div>
                         </CardHeader>
                         <CardContent className="p-0 overflow-x-auto custom-scrollbar">
-                            <Table className="min-w-[800px] md:min-w-full">
+                            <Table className="min-w-[1000px] md:min-w-full">
                                 <TableHeader className="bg-muted/50">
                                     <TableRow className="border-border hover:bg-transparent">
                                         <TableHead className="w-[50px]">
@@ -272,13 +291,14 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                                         <TableHead className="text-muted-foreground font-semibold text-xs py-3">Invoice No.</TableHead>
                                         <TableHead className="text-muted-foreground font-semibold text-xs py-3">Invoice Date</TableHead>
                                         <TableHead className="text-muted-foreground font-semibold text-xs py-3">Customer</TableHead>
-                                        <TableHead className="text-right text-muted-foreground font-semibold text-xs py-3 pr-6">Amount</TableHead>
+                                        <TableHead className="text-right text-muted-foreground font-semibold text-xs py-3">Amount</TableHead>
+                                        <TableHead className="text-muted-foreground font-semibold text-xs py-3 pr-6">Remarks</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {loading ? (
                                         <TableRow>
-                                            <TableCell colSpan={7} className="h-64 text-center">
+                                            <TableCell colSpan={8} className="h-64 text-center">
                                                 <div className="flex flex-col items-center gap-2">
                                                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                                                     <span className="text-sm text-muted-foreground">Loading invoices...</span>
@@ -287,17 +307,21 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                                         </TableRow>
                                     ) : invoices.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={7} className="h-48 text-center text-muted-foreground italic text-sm">
+                                            <TableCell colSpan={8} className="h-48 text-center text-muted-foreground italic text-sm">
                                                 No invoices attached to this dispatch.
                                             </TableCell>
                                         </TableRow>
                                     ) : (
-                                        invoices.map((inv) => (
-                                            <TableRow
-                                                key={inv.id}
-                                                className="hover:bg-muted/40 transition-colors border-border cursor-pointer select-none"
-                                                onClick={() => handleRowDoubleClick(inv)}
-                                            >
+                                        invoices.map((inv) => {
+                                            const checkable = isRowCheckable(inv);
+                                            const hasValidStatus = inv.status && ['Fulfilled', 'Unfulfilled', 'Fulfilled with Concerns', 'Fulfilled with Returns'].includes(inv.status as string);
+                                            
+                                            return (
+                                                <TableRow
+                                                    key={inv.id}
+                                                    className={`transition-colors border-border select-none ${!hasValidStatus ? 'opacity-50 grayscale bg-muted/20 cursor-not-allowed' : 'hover:bg-muted/40 cursor-pointer'}`}
+                                                    onClick={() => handleRowDoubleClick(inv)}
+                                                >
                                                 <TableCell onClick={(e) => e.stopPropagation()}>
                                                     <Checkbox
                                                         disabled={!isRowCheckable(inv)}
@@ -345,12 +369,16 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                                                 <TableCell className="text-foreground font-bold text-sm">
                                                     {inv.customerName || 'No Name'}
                                                 </TableCell>
-                                                <TableCell className="text-right font-bold text-foreground pr-6 tabular-nums">
+                                                <TableCell className="text-right font-bold text-foreground tabular-nums">
                                                     ₱{inv.amount.toLocaleString()}
                                                 </TableCell>
+                                                <TableCell className="text-muted-foreground text-xs py-3 pr-6 max-w-[200px] truncate">
+                                                    {inv.status !== 'Fulfilled with Returns' ? inv.remarks || '---' : ''}
+                                                </TableCell>
                                             </TableRow>
-                                        ))
-                                    )}
+                                        );
+                                    })
+                                )}
                                 </TableBody>
                             </Table>
                         </CardContent>

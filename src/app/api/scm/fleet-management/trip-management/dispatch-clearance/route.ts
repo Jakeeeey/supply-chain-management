@@ -129,9 +129,22 @@ export async function GET(request: Request) {
 
         const users = usersRes?.data || [];
         const salesInvoices = salesInvoicesRes?.data || [];
+
+        // 4. Fetch Vehicle Types and Branches
+        const vehicleTypeIds = [...new Set(vehicles.map((v: any) => v.vehicle_type).filter(Boolean))];
+        const branchIds = [...new Set(plans.map((p: any) => p.starting_point).filter(Boolean))];
+
+        const [typesRes, branchesRes] = await Promise.all([
+            vehicleTypeIds.length > 0 ? fetcher(`/vehicle_type?filter[id][_in]=${vehicleTypeIds.join(',')}&limit=-1`) : Promise.resolve({ data: [] }),
+            branchIds.length > 0 ? fetcher(`/branches?filter[id][_in]=${branchIds.join(',')}&limit=-1`) : Promise.resolve({ data: [] }),
+        ]);
+
+        const vehicleTypes = typesRes?.data || [];
+        const branches = branchesRes?.data || [];
+
         const customerCodes = [...new Set(salesInvoices.map((si: any) => si.customer_code).filter(Boolean))];
 
-        // 4. Fetch ONLY relevant customers
+        // 5. Fetch ONLY relevant customers
         const customersRes = customerCodes.length > 0
             ? await fetcher(`/customer?filter[customer_code][_in]=${customerCodes.join(',')}&limit=-1`)
             : { data: [] };
@@ -166,7 +179,7 @@ export async function GET(request: Request) {
                     return {
                         id: inv.id,
                         invoiceId: salesInv?.invoice_id || inv.invoice_id || 0,
-                        status: inv.status || 'Fulfilled',
+                        status: inv.status,
                         orderNo: salesInv?.order_id || 'N/A',
                         invoiceNo: salesInv?.invoice_no || 'N/A',
                         invoiceDate: salesInv?.invoice_date || 'N/A',
@@ -186,6 +199,8 @@ export async function GET(request: Request) {
                 tripValue: Number(plan.amount) || 0,
                 budget,
                 status: plan.status,
+                vehicleType: vehicleTypes.find((t: any) => t.id === vehicle?.vehicle_type)?.type_name || 'N/A',
+                branchName: branches.find((b: any) => b.id === plan?.starting_point)?.branch_name || 'N/A',
                 invoices: planInvoices
             };
         });
