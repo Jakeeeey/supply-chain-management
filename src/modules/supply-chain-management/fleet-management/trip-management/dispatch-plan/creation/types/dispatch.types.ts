@@ -127,6 +127,17 @@ export interface PostDispatchInvoiceRow {
   post_dispatch_plan_id: number;
   invoice_id: number;
   sequence: number;
+  invoiceNo?: string;
+  status: string;
+}
+
+/** Row from the `post_dispatch_plan_others` collection. */
+export interface PostDispatchOtherRow {
+  id?: number;
+  post_dispatch_plan_id: number;
+  remarks: string;
+  distance?: number;
+  sequence: number;
   status: string;
 }
 

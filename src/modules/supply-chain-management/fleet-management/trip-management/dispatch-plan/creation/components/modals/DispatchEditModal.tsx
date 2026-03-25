@@ -84,7 +84,10 @@ export function DispatchEditModal({
     }
   }, [selectedBranch, selectedPlanIds]);
 
-  const loadApprovedPlans = async (branchId: number, currentPdpIds?: number[]) => {
+  const loadApprovedPlans = async (
+    branchId: number,
+    currentPdpIds?: number[],
+  ) => {
     setIsLoadingPlans(true);
     try {
       const url = new URL(
@@ -177,7 +180,11 @@ export function DispatchEditModal({
           if (!res.ok) throw new Error("Failed to load details");
           const result = await res.json();
           const p = result.data;
-          const loadedIds = p.dispatch_ids?.length ? p.dispatch_ids.map(Number) : (p.dispatch_id ? [Number(p.dispatch_id)] : []);
+          const loadedIds = p.dispatch_ids?.length
+            ? p.dispatch_ids.map(Number)
+            : p.dispatch_id
+              ? [Number(p.dispatch_id)]
+              : [];
           const branchId = p.starting_point || 0;
 
           form.reset({
@@ -240,7 +247,6 @@ export function DispatchEditModal({
     form.setValue("amount", total);
   }, [planDetails, form]);
 
-
   const onSubmit = async (values: DispatchCreationFormValues) => {
     if (!planId) return;
 
@@ -250,6 +256,7 @@ export function DispatchEditModal({
         .filter((d: PlanDetailItem) => d.invoice_id !== undefined)
         .map((details: PlanDetailItem, index: number) => ({
           invoice_id: details.invoice_id!,
+          invoice_no: details.order_no,
           sequence: index + 1,
         })),
     };
@@ -271,7 +278,7 @@ export function DispatchEditModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[1400px] w-full p-0 gap-0 overflow-hidden rounded-xl border border-border/60 shadow-xl">
+      <DialogContent className="sm:max-w-[1400px] h-[80vh] max-h-[80vh] min-h-0 w-full p-0 gap-0 overflow-hidden rounded-xl border border-border/60 shadow-xl flex flex-col justify-start">
         <DialogHeader className="px-6 py-5 border-b border-border/50">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-primary/8 border border-border/60 flex items-center justify-center">
@@ -292,8 +299,11 @@ export function DispatchEditModal({
           <DispatchModalSkeleton />
         ) : (
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)}>
-              <div className="flex divide-x divide-border/50 max-h-[70vh]">
+            <form
+              onSubmit={form.handleSubmit(onSubmit)}
+              className="flex flex-col flex-1 min-h-0 m-0"
+            >
+              <div className="flex divide-x divide-border/50 flex-1 min-h-0">
                 <PdpListSidebar
                   approvedPlans={approvedPlans}
                   isLoadingPlans={isLoadingPlans}

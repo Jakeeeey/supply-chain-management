@@ -2,18 +2,8 @@
 
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -59,20 +49,38 @@ export function DateTimePicker({
     commit(d, hour, minute);
   };
 
-  const handleHourChange = (h: string) => {
-    setHour(h);
-    commit(date, h, minute);
+  const handleHourChange = (v: string) => {
+    const numeric = v.replace(/\D/g, "").slice(0, 2);
+    if (numeric === "") {
+      setHour("");
+      return;
+    }
+    const val = parseInt(numeric, 10);
+    const clamped = Math.min(val, 23);
+    const finalStr = String(clamped);
+    setHour(finalStr);
+    commit(date, finalStr.padStart(2, "0"), minute);
   };
 
-  const handleMinuteChange = (m: string) => {
-    setMinute(m);
-    commit(date, hour, m);
+  const handleMinuteChange = (v: string) => {
+    const numeric = v.replace(/\D/g, "").slice(0, 2);
+    if (numeric === "") {
+      setMinute("");
+      return;
+    }
+    const val = parseInt(numeric, 10);
+    const clamped = Math.min(val, 59);
+    const finalStr = String(clamped);
+    setMinute(finalStr);
+    commit(date, hour, finalStr.padStart(2, "0"));
   };
 
-  const hours = Array.from({ length: 24 }, (_, i) =>
-    String(i).padStart(2, "0"),
-  );
-  const minutes = ["00", "15", "30", "45"];
+  const handleBlur = () => {
+    // Ensure padding on blur
+    setHour(prev => (prev ? prev.padStart(2, "0") : "00"));
+    setMinute(prev => (prev ? prev.padStart(2, "0") : "00"));
+    commit(date, hour.padStart(2, "0"), minute.padStart(2, "0"));
+  };
 
   const displayValue = date
     ? `${format(date, "MMM d, yyyy")} · ${hour}:${minute}`
@@ -110,33 +118,27 @@ export function DateTimePicker({
           <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
           <p className="text-xs text-muted-foreground mr-1">Time</p>
 
-          <Select value={hour} onValueChange={handleHourChange}>
-            <SelectTrigger className="h-7 w-[64px] text-xs px-2">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="max-h-48">
-              {hours.map((h) => (
-                <SelectItem key={h} value={h} className="text-xs">
-                  {h}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center group/hour">
+            <Input
+              className="h-7 w-12 text-center text-xs px-1 focus-visible:ring-1 focus-visible:ring-primary border-muted-foreground/20"
+              value={hour}
+              onChange={(e) => handleHourChange(e.target.value)}
+              onBlur={handleBlur}
+              placeholder="HH"
+            />
+          </div>
 
-          <span className="text-muted-foreground text-sm font-medium">:</span>
+          <span className="text-muted-foreground text-sm font-medium mx-0.5">:</span>
 
-          <Select value={minute} onValueChange={handleMinuteChange}>
-            <SelectTrigger className="h-7 w-[64px] text-xs px-2">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {minutes.map((m) => (
-                <SelectItem key={m} value={m} className="text-xs">
-                  {m}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center group/minute">
+            <Input
+              className="h-7 w-12 text-center text-xs px-1 focus-visible:ring-1 focus-visible:ring-primary border-muted-foreground/20"
+              value={minute}
+              onChange={(e) => handleMinuteChange(e.target.value)}
+              onBlur={handleBlur}
+              placeholder="MM"
+            />
+          </div>
 
           <Button
             size="sm"

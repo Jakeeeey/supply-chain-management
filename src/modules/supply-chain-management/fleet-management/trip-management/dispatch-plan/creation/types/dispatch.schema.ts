@@ -29,6 +29,7 @@ export const CrewHelperSchema = z.object({
 /** A single invoice reference entry. */
 export const InvoiceRefSchema = z.object({
   invoice_id: z.number(),
+  invoice_no: z.string().optional(),
   sequence: z.number(),
 });
 

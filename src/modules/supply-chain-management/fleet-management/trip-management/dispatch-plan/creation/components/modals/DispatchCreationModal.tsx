@@ -1,6 +1,5 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -9,8 +8,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Form } from "@/components/ui/form";
-import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
 import { useDispatchCreation } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/creation/hooks/useDispatchCreation";
 import {
   DispatchCreationFormSchema,
@@ -21,12 +18,11 @@ import { Loader2, Truck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { DispatchModalSkeleton } from "./DispatchSkeleton";
+import { InvoiceItemsSidebar } from "./parts/InvoiceItemsSidebar";
 import { PdpListSidebar } from "./parts/PdpListSidebar";
 import { TripConfigurationForm } from "./parts/TripConfigurationForm";
-import { InvoiceItemsSidebar } from "./parts/InvoiceItemsSidebar";
 import { PlanDetailItem } from "./parts/types";
-import { DispatchModalSkeleton } from "./DispatchSkeleton";
-
 
 interface DispatchCreationModalProps {
   open: boolean;
@@ -46,8 +42,6 @@ export function DispatchCreationModal({
   const [searchQuery, setSearchQuery] = useState("");
   const [planDetails, setPlanDetails] = useState<PlanDetailItem[]>([]);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
-
-
 
   const form = useForm<DispatchCreationFormValues>({
     resolver: zodResolver(DispatchCreationFormSchema),
@@ -121,30 +115,27 @@ export function DispatchCreationModal({
 
     const currentIds = form.getValues("pre_dispatch_plan_ids") || [];
     const isSelected = currentIds.includes(selectedPdpId);
-    
+
     let newIds: number[];
     if (isSelected) {
-      newIds = currentIds.filter(id => id !== selectedPdpId);
+      newIds = currentIds.filter((id) => id !== selectedPdpId);
     } else {
       newIds = [...currentIds, selectedPdpId];
     }
-    
-    form.setValue("pre_dispatch_plan_ids", newIds, { shouldValidate: true });
 
-    // Recalculate amount - REMOVED manual setValue to let useEffect handle it
-    // const totalAmount = approvedPlans
-    //   .filter((p) => newIds.includes(p.dispatch_id))
-    //   .reduce((sum, p) => sum + (p.total_amount || 0), 0);
-    // form.setValue("amount", totalAmount);
+    form.setValue("pre_dispatch_plan_ids", newIds, { shouldValidate: true });
 
     // Initial inheritance mapping (from the first selected plan, if any)
     if (newIds.length > 0) {
       const firstPlan = approvedPlans.find((p) => p.dispatch_id === newIds[0]);
       if (firstPlan && newIds.length === 1) {
         // Only override on the first selection to avoid wiping out user changes
-        if (firstPlan.driver_id) form.setValue("driver_id", Number(firstPlan.driver_id));
-        if (firstPlan.vehicle_id) form.setValue("vehicle_id", Number(firstPlan.vehicle_id));
-        if (firstPlan.branch_id) form.setValue("starting_point", Number(firstPlan.branch_id));
+        if (firstPlan.driver_id)
+          form.setValue("driver_id", Number(firstPlan.driver_id));
+        if (firstPlan.vehicle_id)
+          form.setValue("vehicle_id", Number(firstPlan.vehicle_id));
+        if (firstPlan.branch_id)
+          form.setValue("starting_point", Number(firstPlan.branch_id));
       }
     }
 
@@ -178,8 +169,21 @@ export function DispatchCreationModal({
   }, [planDetails, form]);
 
   const onSubmit = async (values: DispatchCreationFormValues) => {
+    // Map the current visual order of invoices (from planDetails state) 
+    // to the payload so the backend can save the correct sequence.
+    const payload = {
+      ...values,
+      invoices: planDetails
+        .filter((d) => d.invoice_id)
+        .map((d, index) => ({
+          invoice_id: d.invoice_id!,
+          invoice_no: d.order_no, // Mapping order_no to invoice_no field
+          sequence: index + 1,
+        })),
+    };
+
     try {
-      await createTrip(values);
+      await createTrip(payload);
       toast.success("Dispatch trip created successfully.");
       onOpenChange(false);
       onSuccess?.();
@@ -192,7 +196,7 @@ export function DispatchCreationModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[1400px] w-full p-0 gap-0 overflow-hidden rounded-xl border border-border/60 shadow-xl">
+      <DialogContent className="sm:max-w-[1400px] h-[80vh] max-h-[80vh] min-h-0 w-full p-0 gap-0 overflow-hidden rounded-xl border border-border/60 shadow-xl flex flex-col justify-start">
         {/* Header */}
         <DialogHeader className="px-6 py-5 border-b border-border/50">
           <div className="flex items-center gap-3">
@@ -214,8 +218,11 @@ export function DispatchCreationModal({
           <DispatchModalSkeleton />
         ) : (
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)}>
-              <div className="flex divide-x divide-border/50 max-h-[70vh]">
+            <form
+              onSubmit={form.handleSubmit(onSubmit)}
+              className="flex flex-col flex-1 min-h-0 m-0"
+            >
+              <div className="flex divide-x divide-border/50 flex-1 min-h-0">
                 <PdpListSidebar
                   approvedPlans={approvedPlans}
                   isLoadingPlans={isLoadingPlans}
