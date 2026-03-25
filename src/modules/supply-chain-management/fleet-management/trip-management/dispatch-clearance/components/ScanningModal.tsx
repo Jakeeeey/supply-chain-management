@@ -259,7 +259,14 @@ const ScanningModal: React.FC<ScanningModalProps> = ({
     };
 
     const handleConfirm = () => {
-        onConfirm(scannedQtys, scannedRFIDsRef.current);
+        // Ensure ALL items have a value (at least 0) to distinguish from "not yet reconciled"
+        const finalScanned = { ...scannedQtys };
+        items.forEach(item => {
+            if (finalScanned[item.id] === undefined) {
+                finalScanned[item.id] = 0;
+            }
+        });
+        onConfirm(finalScanned, scannedRFIDsRef.current);
         onClose();
     };
 

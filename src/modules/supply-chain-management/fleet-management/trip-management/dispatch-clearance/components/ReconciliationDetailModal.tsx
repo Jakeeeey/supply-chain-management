@@ -262,7 +262,7 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                                                     <p className="text-sm font-bold text-foreground">{line.product_name}</p>
                                                     {(reconciliation.status === 'Unfulfilled' || reconciliation.status === 'Fulfilled with Concerns') && (
                                                         <Badge variant="outline" className="text-[10px] h-4 bg-emerald-500/5 text-emerald-500 border-emerald-500/10 gap-1 px-1.5 font-medium">
-                                                            <Scan className="w-2.5 h-2.5" /> {(scannedQtys[line.id] || 0)} Scanned
+                                                            <Scan className="w-2.5 h-2.5" /> {(scannedQtys[line.id] !== undefined ? scannedQtys[line.id] : "-")} Scanned
                                                         </Badge>
                                                     )}
                                                 </div>
@@ -275,7 +275,7 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                                                 <TableCell className="text-center w-24">
                                                     <div className="flex items-center justify-center">
                                                         <div className="h-9 w-16 flex items-center justify-center font-bold rounded-lg border border-border transition-colors bg-muted/50 text-muted-foreground tabular-nums">
-                                                            {scannedQtys[line.id] || 0}
+                                                            {scannedQtys[line.id] !== undefined ? scannedQtys[line.id] : "-"}
                                                         </div>
                                                     </div>
                                                 </TableCell>
@@ -353,7 +353,7 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                         <Button variant="outline" onClick={onClose} className="flex-1 md:flex-none rounded-xl px-6 font-semibold border-border h-10">Cancel</Button>
                         <Button
                             onClick={handleSave}
-                            disabled={reconciliation.status !== 'Fulfilled' && (!remarks.trim() || Object.values(scannedQtys).reduce((a, b) => a + b, 0) === 0)}
+                            disabled={reconciliation.status !== 'Fulfilled' && (!remarks.trim() || !detail || detail.lines.some(line => scannedQtys[line.id] === undefined))}
                             className={`flex-1 md:flex-none rounded-xl px-8 font-bold text-primary-foreground shadow-lg transition-all active:scale-95 h-10 ${
                                 reconciliation.status === 'Fulfilled' 
                                 ? 'bg-emerald-600 hover:bg-emerald-700' 

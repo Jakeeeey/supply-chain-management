@@ -76,7 +76,14 @@ const ManualInputModal: React.FC<ManualInputModalProps> = ({
     };
 
     const handleConfirm = () => {
-        onConfirm(inputQtys);
+        // Ensure ALL items have a value (at least 0) to distinguish from "not yet reconciled"
+        const finalQtys = { ...inputQtys };
+        items.forEach(item => {
+            if (finalQtys[item.id] === undefined) {
+                finalQtys[item.id] = 0;
+            }
+        });
+        onConfirm(finalQtys);
         onClose();
     };
 

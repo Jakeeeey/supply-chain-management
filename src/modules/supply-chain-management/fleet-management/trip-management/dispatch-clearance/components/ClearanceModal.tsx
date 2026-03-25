@@ -206,8 +206,16 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                                 Dispatch Clearance
                             </DialogTitle>
                         </div>
-                        <p className="text-xs md:text-sm text-muted-foreground pl-11">
-                            Reconcile items for Dispatch <span className="font-bold text-primary">{dispatch.dispatchNo}</span>
+                        <p className="text-xs md:text-sm text-muted-foreground pl-11 flex items-center gap-2">
+                            <span>Reconcile items for Dispatch <span className="font-bold text-primary">{dispatch.dispatchNo}</span></span>
+                            {dispatch.clusterName && (
+                                <>
+                                    <span className="text-muted-foreground/30">•</span>
+                                    <span className="px-2 py-0.5 bg-primary/5 text-primary rounded-full text-[10px] font-bold uppercase tracking-wider border border-primary/10">
+                                        {dispatch.clusterName}
+                                    </span>
+                                </>
+                            )}
                         </p>
                     </div>
                     <div className="flex w-full md:w-auto gap-2 justify-end">

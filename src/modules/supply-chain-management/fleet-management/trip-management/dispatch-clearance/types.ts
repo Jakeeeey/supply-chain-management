@@ -83,6 +83,7 @@ export interface DispatchRow {
   status: string;
   vehicleType?: string;
   branchName?: string;
+  clusterName?: string;
   invoices: ReconciliationRow[];
 }
 

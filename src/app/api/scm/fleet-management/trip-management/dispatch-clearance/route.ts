@@ -142,6 +142,24 @@ export async function GET(request: Request) {
         const vehicleTypes = typesRes?.data || [];
         const branches = branchesRes?.data || [];
 
+        // 6. Fetch Cluster information
+        const [pdpRes] = await Promise.all([
+            fetcher(`/post_dispatch_dispatch_plans?filter[post_dispatch_plan_id][_in]=${planIds.join(',')}&limit=-1`),
+        ]);
+        const postDispatchPlans = pdpRes?.data || [];
+        const dispatchPlanIds = [...new Set(postDispatchPlans.map((p: any) => p.dispatch_plan_id).filter(Boolean))];
+
+        const [dpRes] = await Promise.all([
+            dispatchPlanIds.length > 0 ? fetcher(`/dispatch_plan?filter[dispatch_id][_in]=${dispatchPlanIds.join(',')}&limit=-1`) : Promise.resolve({ data: [] }),
+        ]);
+        const dispatchPlans = dpRes?.data || [];
+        const clusterIds = [...new Set(dispatchPlans.map((d: any) => d.cluster_id).filter(Boolean))];
+
+        const [clustersRes] = await Promise.all([
+            clusterIds.length > 0 ? fetcher(`/cluster?filter[id][_in]=${clusterIds.join(',')}&limit=-1`) : Promise.resolve({ data: [] }),
+        ]);
+        const clusters = clustersRes?.data || [];
+
         const customerCodes = [...new Set(salesInvoices.map((si: any) => si.customer_code).filter(Boolean))];
 
         // 5. Fetch ONLY relevant customers
@@ -201,6 +219,11 @@ export async function GET(request: Request) {
                 status: plan.status,
                 vehicleType: vehicleTypes.find((t: any) => t.id === vehicle?.vehicle_type)?.type_name || 'N/A',
                 branchName: branches.find((b: any) => b.id === plan?.starting_point)?.branch_name || 'N/A',
+                clusterName: clusters.find((c: any) => {
+                    const pdp = postDispatchPlans.find((p: any) => p.post_dispatch_plan_id === plan.id);
+                    const dp = pdp ? dispatchPlans.find((d: any) => d.dispatch_id === pdp.dispatch_plan_id) : null;
+                    return dp && c.id === dp.cluster_id;
+                })?.cluster_name || 'N/A',
                 invoices: planInvoices
             };
         });
