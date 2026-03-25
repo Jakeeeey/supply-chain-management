@@ -8,6 +8,9 @@ Copy and paste the block below to start building a new feature. Choose the **Str
 
 ---
 
+> [!IMPORTANT]
+> **Before starting**, I will always execute `.agents/rules/00-context-sentinel.md` to synchronize with the current module's phase and strategy.
+
 ### [MODULE NAME] Build Request
 
 **Goal**: [DESCRIBE THE GOAL/FIELDS HERE]
@@ -30,10 +33,12 @@ Best for: Simple lookups, single tables, or minor features.
 
 Best for: Complex subsystems, multi-step lifecycles, or high-risk business logic.
 
-1.  **Phase 1 (PM Agent)**: Execute `/orchestration/pm-agent` to map fields.
-2.  **Phase 2 (Architect Agent)**: Execute `/orchestration/architect-agent` for complexity audit.
-3.  **Phase 3 (Dev Agent)**: Execute `/orchestration/dev-agent` for implementation.
-4.  **Phase 4 (QA Agent)**: Execute `/orchestration/qa-agent` for final polish.
+1.  **Phase 0 (Setup)**: Initialize `task.md` using the **Orchestrated Template**.
+2.  **Phase 1 (PM Agent)**: Execute `/orchestration/pm-agent` → Output `requirements.md`.
+3.  **Phase 2 (Architect Agent)**: Execute `/orchestration/architect-agent` → Complexity Audit & `architecture.md`.
+4.  **🛑 PAUSE**: Request user approval before proceeding to implementation.
+5.  **Phase 3 (Dev Agent)**: Execute `/orchestration/dev-agent` → Implementation.
+6.  **Phase 4 (QA Agent)**: Execute `/orchestration/qa-agent` → Final polish & Walkthrough.
 
 ---
 

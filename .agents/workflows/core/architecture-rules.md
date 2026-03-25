@@ -27,22 +27,27 @@ For complex modules with distinct lifecycle states (e.g., Draft → Approval →
 ```text
 /module/sub-module-name/
 ├── components/          # UI Components (DataTable, Forms, Modals)
-│   ├── data-table/      # (columns, index (DataTable), data-table-header)
-│   ├── modals/          # (modals)
-│   └── forms/           # (forms)
 ├── hooks/               # Custom React hooks (Data fetching & state)
-├── services/            # Pure TypeScript business logic
-├── providers/           # Context providers for shared state (only use if necessary ex: date filtering that use of all sub-module inside the parent module)
-├── utils/               # Helpers
-├── types/ or types.ts   # Zod schemas and TypeScript interfaces
+├── services/            # Business Logic & I/O
+│   ├── [name].repo.ts     # Directus I/O only (No business logic)
+│   ├── [name].service.ts  # Logic orchestration (Calls repo, no fetch)
+│   ├── [name].helpers.ts  # Pure utility functions
+│   └── index.ts           # Barrel file
+├── types/               # Type and Validation Definitions
+│   ├── [name].types.ts    # TS interfaces only
+│   └── [name].schema.ts   # Zod schemas (Import from .types)
 └── [Module]Page.tsx     # Main entry point for the module
 ```
 
-**Example (Bundling Module):**
+### 1.2 The "Dispatch Pattern" (Standard for Complex Modules)
 
-- `/bundling/bundle-creation/`
-- `/bundling/bundle-approval/`
-- `/bundling/bundle-masterlist/`
+When a module involves multi-table writes or complex orchestration, follows this 5-file split:
+
+1.  **`.types.ts`**: All TypeScript interfaces. No Zod.
+2.  **`.schema.ts`**: All Zod schemas. Handles all `POST` and `PATCH ?action=` validations.
+3.  **`.helpers.ts`**: Pure functions. No side effects.
+4.  **`.repo.ts`**: All Directus `fetch` calls. Zero business logic.
+5.  **`.service.ts`**: Orchestration logic. Calls Repo & Helpers. Thin `route.ts` calls this.
 
 ## 2. The Data Flow Protocol
 
@@ -63,6 +68,6 @@ For complex modules with distinct lifecycle states (e.g., Draft → Approval →
 
 ## 4. Quality Guardrails
 
-- **Complexity Limit**: Avoid "Feature Monoliths". If a service exceeds 300 lines or a hook manages state for 3+ major tables, split it. See [/anti-monolith-standard](file:///c:/Users/elija/supply-chain-management/.agent/workflows/anti-monolith-standard.md) for heuristics.
+- **Complexity Limit**: Avoid "Feature Monoliths". If a service exceeds 300 lines or a hook manages state for 3+ major tables, split it. See [/anti-monolith-standard](file:/.agent/workflows/anti-monolith-standard.md) for heuristics.
 - **Validation First**: No data should enter the Service layer without being verified by a Zod schema.
 - **Fail Gracefully**: Every API call should have a `try/catch` block that reports errors to a central logging utility or a user-facing toast.

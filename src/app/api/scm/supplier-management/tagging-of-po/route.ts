@@ -682,31 +682,10 @@ export async function POST(req: NextRequest) {
                 );
             }
 
-            // ✅ RFID idempotency / conflict detection
+            // ✅ RFID duplicate detection
             const existing = await fetchExistingRfidRow(base, rfid);
             if (existing) {
-                const existingLinkId = toNum(existing.purchase_order_product_id);
-                const owner = await resolveOwnerOfReceivingItem(base, existingLinkId);
-
-                if (!owner) {
-                    return bad(
-                        "RFID already exists but owner cannot be resolved. Please contact admin to clean old data.",
-                        409,
-                        { rfid, existingLinkId }
-                    );
-                }
-
-                const sameTarget = owner.poId === poId && owner.productId === productId && owner.branchId === branchId;
-                if (sameTarget) {
-                    const detail = await buildDetail(base, poId);
-                    return ok(detail);
-                }
-
-                return bad("RFID already exists and is assigned to a different PO/item.", 409, {
-                    rfid,
-                    attempted: { poId, productId, branchId },
-                    existingOwner: owner,
-                });
+                return bad("RFID already exists. Cannot be duplicate.", 409, { rfid });
             }
 
             // do not exceed expected qty

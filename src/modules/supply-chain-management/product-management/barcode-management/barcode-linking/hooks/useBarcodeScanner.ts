@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { toast } from "sonner";
-import { Product, Supplier, RefData, UpdateBarcodeDTO } from "../types";
+import { Product, RefData, UpdateBarcodeDTO } from "../types";
 
 export function useBarcodeScanner() {
   const [allProducts, setAllProducts] = useState<Product[]>([]);
@@ -79,7 +79,15 @@ export function useBarcodeScanner() {
       let eligibleBundles: Product[] = [];
       if (bundlesRes.ok) {
         const bundlesData = await bundlesRes.json();
-        eligibleBundles = (bundlesData.data || []).map((b: any) => ({
+        eligibleBundles = (bundlesData.data || []).map((b: {
+          id: number;
+          bundle_sku?: string;
+          bundle_name?: string;
+          barcode_value?: string;
+          barcode_date?: string;
+          barcode_type_id?: { id: number; name: string };
+          bundle_type_id?: { id: number; name: string };
+        }) => ({
           product_id: String(b.id),
           product_code: b.bundle_sku || "",
           product_name: b.bundle_name || "",
@@ -109,9 +117,10 @@ export function useBarcodeScanner() {
         const data = await cuRes.json();
         setCbmUnits(Array.isArray(data.data) ? data.data : []);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Fetch error", err);
-      setError(err.message || "Failed to load barcode linking data.");
+      const message = err instanceof Error ? err.message : "Failed to load barcode linking data.";
+      setError(message);
       toast.error("Failed to load data.");
     } finally {
       setIsLoading(false);
@@ -220,10 +229,11 @@ export function useBarcodeScanner() {
         "Barcode & Logistics linked successfully! Moved to Masterlist.",
       );
       setSelectedProduct(null);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Update failed", error);
+      const message = error instanceof Error ? error.message : "Please try again.";
       toast.error("Failed to update barcode", {
-        description: error.message || "Please try again.",
+        description: message,
       });
       setAllProducts((prev) => [...prev, selectedProduct]);
     }

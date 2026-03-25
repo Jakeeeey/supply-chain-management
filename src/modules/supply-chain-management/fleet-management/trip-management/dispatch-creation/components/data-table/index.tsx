@@ -19,7 +19,7 @@ interface DispatchPlanTableProps {
   emptyDescription?: string;
 }
 
-export function DispatchPlanTable({
+export const DispatchPlanTable = React.memo(function DispatchPlanTable({
   data,
   isLoading,
   onEdit,
@@ -50,4 +50,4 @@ export function DispatchPlanTable({
       />
     </div>
   );
-}
+});
