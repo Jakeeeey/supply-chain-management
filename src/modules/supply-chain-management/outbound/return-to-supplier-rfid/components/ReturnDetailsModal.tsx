@@ -293,7 +293,7 @@ export function ReturnDetailsModal({
             id: `${p.id}-rfid-${p.rfid_tag}`, // Unique key per RFID
             quantity: 1,
             onHand: p.stock || 0,
-            discount: p.supplierDiscount || 0,
+            discount: (p.supplierDiscount || 0) / 100,
             customPrice: p.price,
             rfid_tag: p.rfid_tag,
           } as CartItem,
@@ -314,7 +314,7 @@ export function ReturnDetailsModal({
           ...p,
           quantity: qty,
           onHand: p.stock || 0,
-          discount: p.supplierDiscount || 0,
+          discount: (p.supplierDiscount || 0) / 100,
           customPrice: p.price,
         },
       ];
@@ -814,7 +814,7 @@ export function ReturnDetailsModal({
               <X className="h-4 w-4" />
             </Button>
           </div>
-          <div className="flex-1 overflow-hidden">
+          <div className="h-[calc(95vh-72px)] overflow-hidden">
             <ProductPicker
               isVisible={true}
               onClose={() => setShowPicker(false)}

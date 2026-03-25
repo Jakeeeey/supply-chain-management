@@ -142,7 +142,8 @@ export function CreateReturnModal({
         );
 
         return {
-          id: String(item.product_id),
+          id: String(item.product_id), // Search ID (for quantity increment logic)
+          product_id: item.product_id,
           masterId: String(item.familyId),
           code: item.product_code || "N/A",
           name: item.product_name,
@@ -231,10 +232,10 @@ export function CreateReturnModal({
   const addToCart = useCallback((p_raw: unknown, qty = 1) => {
     const p = p_raw as CartItem;
     setCart((prev) => {
-      const exists = prev.find((i) => i.id === p.id);
+      const exists = prev.find((i) => String(i.id) === String(p.id) && i.uom_id === p.uom_id);
       if (exists)
         return prev.map((i) =>
-          i.id === p.id
+          String(i.id) === String(p.id) && i.uom_id === p.uom_id
             ? { ...i, quantity: i.quantity + qty }
             : i,
         );
@@ -242,6 +243,7 @@ export function CreateReturnModal({
         ...prev,
         {
           ...p,
+          cartId: crypto.randomUUID(),
           quantity: qty,
           onHand: p.stock ?? 0,
           discount: (p.supplierDiscount || 0),
@@ -293,7 +295,8 @@ export function CreateReturnModal({
 
       // Add to cart
       addToCart({
-        id: String(invRecord!.product_id),
+        id: String(invRecord!.product_id), // Standard Identity
+        cartId: crypto.randomUUID(),
         code: invRecord!.product_code,
         name: invRecord!.product_name,
         unit: invRecord!.unit_name,
@@ -321,9 +324,9 @@ export function CreateReturnModal({
     }
   });
 
-  const updateCart = (id: string, field: keyof CartItem, val: number) => {
+  const updateCart = (cartId: string, field: keyof CartItem, val: any) => {
     setCart((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, [field]: val } : i)),
+      prev.map((i) => ((i.cartId || i.id) === cartId ? { ...i, [field]: val } : i)),
     );
   };
 
@@ -351,7 +354,7 @@ export function CreateReturnModal({
       const rts_items = cart.map((item) => {
         const { gross, discountAmount, net } = calculateLineItem(item);
         return {
-          product_id: Number(item.id),
+          product_id: Number(item.product_id), // Clean mapping
           uom_id: item.uom_id || 1,
           quantity: item.quantity * (item.unitCount || 1),
           gross_unit_price: item.customPrice || item.price,
@@ -430,8 +433,8 @@ export function CreateReturnModal({
               products={groupedProducts}
               addedProducts={cart}
               onAdd={addToCart}
-              onRemove={(id) => setCart((c) => c.filter((i) => i.id !== id))}
-              onUpdateQty={(id, q) => updateCart(id, "quantity", q)}
+              onRemove={(cartId) => setCart((c) => c.filter((i) => (i.cartId || i.id) !== cartId))}
+              onUpdateQty={(cartId, q) => updateCart(cartId, "quantity", q)}
               onClearAll={() => setCart([])}
               onBarcodeScan={handleBarcodeScan}
               isLoading={isLoadingInventory}
@@ -621,8 +624,8 @@ export function CreateReturnModal({
                       lineDiscounts={refs.lineDiscounts}
                       returnTypes={refs.returnTypes || []}
                       onUpdateItem={updateCart}
-                      onRemoveItem={(id) =>
-                        setCart((c) => c.filter((i) => i.id !== id))
+                      onRemoveItem={(cartId) =>
+                        setCart((c) => c.filter((i) => (i.cartId || i.id) !== cartId))
                       }
                       remarks={selection.remarks}
                       setRemarks={(r) =>

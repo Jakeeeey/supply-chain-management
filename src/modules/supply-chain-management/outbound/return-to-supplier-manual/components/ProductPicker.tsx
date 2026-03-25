@@ -14,7 +14,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useGlobalScanner } from "../hooks/useGlobalScanner";
 import type { CartItem } from "../types/rts.schema";
 
@@ -220,7 +219,7 @@ export function ProductPicker({
                     <div className="p-3 space-y-2">
                       {group.variants.map((variant) => {
                         const cartItem = addedProducts.find(
-                          (i) => i.id === variant.id,
+                          (i) => i.id === variant.id && i.uom_id === variant.uom_id,
                         );
                         const currentQty = cartItem ? cartItem.quantity : 0;
                         const maxStock = Number(variant.stock || 0);
@@ -289,7 +288,7 @@ export function ProductPicker({
       </div>
 
       {/* RIGHT SIDE: SELECTED ITEMS (CART) */}
-      <div className="w-[400px] bg-card flex flex-col h-full min-h-0 shadow-xl z-20 border-l">
+      <div className="w-[400px] bg-card flex flex-col h-full min-h-0 max-h-full overflow-hidden shadow-xl z-20 border-l">
         <div className="p-5 border-b flex justify-between items-center bg-card shrink-0">
           <div className="flex items-center gap-2 font-bold text-sm uppercase tracking-wide">
             <span className="h-2 w-2 rounded-full bg-primary"></span>
@@ -305,7 +304,7 @@ export function ProductPicker({
           )}
         </div>
 
-        <ScrollArea className="flex-1 bg-background">
+        <div className="flex-1 min-h-0 overflow-y-auto bg-background">
           <div className="p-4 pb-6">
             {addedProducts.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-muted-foreground/50 gap-3 p-10 mt-10">
@@ -322,7 +321,7 @@ export function ProductPicker({
 
                   return (
                     <div
-                      key={item.id}
+                      key={item.cartId}
                       className="group bg-card rounded-lg border p-3 shadow-sm hover:shadow-md hover:border-primary/20 transition-all relative"
                     >
                       <div className="flex justify-between items-start mb-2">
@@ -340,7 +339,7 @@ export function ProductPicker({
                           </div>
                         </div>
                         <button
-                          onClick={() => onRemove(item.id)}
+                          onClick={() => onRemove(item.cartId || item.id)}
                           className="text-muted-foreground/30 hover:text-destructive transition-colors absolute top-3 right-3"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -365,8 +364,8 @@ export function ProductPicker({
                             size="icon"
                             className="h-7 w-7 rounded-none rounded-l-md hover:bg-background hover:text-destructive"
                             onClick={() => {
-                              if (item.quantity <= 1) onRemove(item.id);
-                              else onUpdateQty(item.id, item.quantity - 1);
+                              if (item.quantity <= 1) onRemove(item.cartId || item.id);
+                              else onUpdateQty(item.cartId || item.id, item.quantity - 1);
                             }}
                           >
                             <Minus className="h-3 w-3" />
@@ -384,7 +383,7 @@ export function ProductPicker({
                                 if (isNaN(val)) return;
                                 if (val > maxStock) val = maxStock;
                                 if (val < 1) val = 1;
-                                onUpdateQty(item.id, val);
+                                onUpdateQty(item.cartId, val);
                               }}
                             />
                           </div>
@@ -395,7 +394,7 @@ export function ProductPicker({
                             className={`h-7 w-7 rounded-none rounded-r-md transition-colors ${isMaxed ? "opacity-50 cursor-not-allowed" : "hover:bg-background hover:text-primary"}`}
                             disabled={isMaxed}
                             onClick={() =>
-                              onUpdateQty(item.id, item.quantity + 1)
+                              onUpdateQty(item.cartId || item.id, item.quantity + 1)
                             }
                           >
                             <Plus className="h-3 w-3" />
@@ -408,9 +407,9 @@ export function ProductPicker({
               </div>
             )}
           </div>
-        </ScrollArea>
+        </div>
 
-        <div className="p-5 border-t pb-15 bg-muted/20 shrink-0">
+        <div className="p-5 border-t pb-5 bg-muted/20 shrink-0">
           <div className="flex justify-between items-center mb-4 text-sm">
             <span className="font-bold text-muted-foreground uppercase text-xs">
               Total Price

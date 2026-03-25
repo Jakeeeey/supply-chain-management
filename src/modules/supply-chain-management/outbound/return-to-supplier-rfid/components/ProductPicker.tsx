@@ -13,7 +13,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useGlobalScanner } from "../hooks/useGlobalScanner";
 import { detectScanType } from "../utils/barcodeUtils";
 import type { CartItem } from "../types/rts.schema";
@@ -280,7 +279,7 @@ export function ProductPicker({
       </div>
 
       {/* RIGHT SIDE: SELECTED ITEMS (CART) */}
-      <div className="w-[400px] bg-card flex flex-col h-full min-h-0 shadow-xl z-20 border-l">
+      <div className="w-[400px] bg-card flex flex-col h-full min-h-0 max-h-full overflow-hidden shadow-xl z-20 border-l">
         <div className="p-5 border-b flex justify-between items-center bg-card shrink-0">
           <div className="flex items-center gap-2 font-bold text-sm uppercase tracking-wide">
             <span className="h-2 w-2 rounded-full bg-primary"></span>
@@ -296,7 +295,7 @@ export function ProductPicker({
           )}
         </div>
 
-        <ScrollArea className="flex-1 bg-background">
+        <div className="flex-1 min-h-0 overflow-y-auto bg-background">
           <div className="p-4 pb-6">
             {addedProducts.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-muted-foreground/50 gap-3 p-10 mt-10">
@@ -399,9 +398,9 @@ export function ProductPicker({
               </div>
             )}
           </div>
-        </ScrollArea>
+        </div>
 
-        <div className="p-5 border-t pb-15 bg-muted/20 shrink-0">
+        <div className="p-5 border-t pb-5 bg-muted/20 shrink-0">
           <div className="flex justify-between items-center mb-4 text-sm">
             <span className="font-bold text-muted-foreground uppercase text-xs">
               Total Price

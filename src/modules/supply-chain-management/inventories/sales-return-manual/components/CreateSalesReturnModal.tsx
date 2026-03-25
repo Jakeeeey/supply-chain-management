@@ -575,7 +575,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                   <ChevronDown className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
                 {isSalesmanOpen && (
-                  <div className="absolute top-[calc(100%+4px)] left-0 w-full z-20 bg-background border border-border rounded-md shadow-xl max-h-60 overflow-y-auto">
+                  <div className="absolute top-[calc(100%+4px)] left-0 w-full z-20 bg-background border border-border rounded-md shadow-xl max-h-60 overflow-y-auto font-medium">
                     {filteredSalesmen.map((s) => (
                       <div
                         key={s.id}
@@ -587,6 +587,16 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                     ))}
                   </div>
                 )}
+              </div>
+
+              {/* Salesman Code */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
+                  Salesman Code
+                </label>
+                <div className="h-9 w-full bg-muted/20 border border-border rounded-md px-3 flex items-center text-sm font-medium text-foreground italic shadow-sm">
+                  {salesmanCode || "-"}
+                </div>
               </div>
 
               {/* Customer */}
@@ -613,7 +623,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                   <ChevronDown className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
                 {isCustomerOpen && (
-                  <div className="absolute top-[calc(100%+4px)] left-0 w-full z-20 bg-background border border-border rounded-md shadow-xl max-h-60 overflow-y-auto">
+                  <div className="absolute top-[calc(100%+4px)] left-0 w-full z-20 bg-background border border-border rounded-md shadow-xl max-h-60 overflow-y-auto font-medium">
                     {filteredCustomers.map((c) => (
                       <div
                         key={c.id}
@@ -632,7 +642,28 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                 )}
               </div>
 
-              {/* Date */}
+              {/* Customer Code */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
+                  Customer Code
+                </label>
+                <div className="h-9 w-full bg-muted/20 border border-border rounded-md px-3 flex items-center text-sm font-medium text-foreground italic shadow-sm">
+                  {customerCode || "-"}
+                </div>
+              </div>
+
+              {/* ROW 2 */}
+              {/* Branch */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
+                  Branch
+                </label>
+                <div className="h-9 w-full bg-muted/20 border border-border rounded-md px-3 flex items-center text-sm font-medium text-foreground italic shadow-sm">
+                  {branchName || "-"}
+                </div>
+              </div>
+
+              {/* Return Date */}
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
                   Return Date <span className="text-destructive">*</span>
@@ -645,40 +676,20 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                 />
               </div>
 
-              {/* Salesman Code */}
-              <div className="space-y-1.5" title={salesmanCode || "-"}>
+              {/* Received Date Placeholder */}
+              <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
-                  Salesman Code
+                  Received Date
                 </label>
-                <div className="w-full h-9 px-3 flex items-center bg-muted/20 border border-border rounded-md text-sm font-medium text-foreground shadow-sm truncate">
-                  <span className="truncate">{salesmanCode || "-"}</span>
-                </div>
-              </div>
-
-              {/* Customer Code */}
-              <div className="space-y-1.5" title={customerCode || "-"}>
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
-                  Customer Code
-                </label>
-                <div className="w-full h-9 px-3 flex items-center bg-muted/20 border border-border rounded-md text-sm font-medium text-foreground shadow-sm truncate">
-                  <span className="truncate">{customerCode || "-"}</span>
-                </div>
-              </div>
-
-              {/* Branch */}
-              <div className="space-y-1.5" title={branchName || "-"}>
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
-                  Branch
-                </label>
-                <div className="w-full h-9 px-3 flex items-center bg-muted/20 border border-border rounded-md text-sm font-medium text-foreground shadow-sm truncate">
-                  <span className="truncate">{branchName || "-"}</span>
+                <div className="h-9 w-full bg-muted/20 border border-border rounded-md px-3 flex items-center text-sm font-medium text-muted-foreground italic shadow-sm opacity-60">
+                  (Auto-generated)
                 </div>
               </div>
 
               {/* Price Type */}
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
-                  Price Type
+                  Price Type <span className="text-destructive">*</span>
                 </label>
                 <div className="relative">
                   <select
@@ -686,26 +697,23 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                     value={priceType}
                     onChange={(e) => setPriceType(e.target.value)}
                   >
-                    <option value="A">Type A</option>
                     <option value="B">Type B</option>
-                    <option value="C">Type C</option>
-                    <option value="D">Type D</option>
-                    <option value="E">Type E</option>
+                    <option value="O">Type O</option>
                   </select>
                   <ChevronDown className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
               </div>
 
               {/* Third Party Checkbox */}
-              <div className="flex items-center space-x-2 pt-2 col-span-2 lg:col-span-4">
+              <div className="flex items-center space-x-2 pt-2 col-span-2 lg:col-span-4 translate-y-2">
                 <Checkbox
-                  id="thirdParty"
+                  id="create-manual-isThirdParty"
                   checked={isThirdParty}
                   onCheckedChange={(c) => setIsThirdParty(c as boolean)}
                   className="data-[state=checked]:bg-primary border-border"
                 />
                 <label
-                  htmlFor="thirdParty"
+                  htmlFor="create-manual-isThirdParty"
                   className="text-sm font-medium text-foreground cursor-pointer select-none"
                 >
                   Third Party Transaction

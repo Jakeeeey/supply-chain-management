@@ -48,23 +48,24 @@ export function ReturnReviewPanel({
   setRemarks,
   readOnly = false,
 }: ReturnReviewPanelProps) {
-  const totalAmount = items.reduce(
-    (sum, item) =>
-      sum +
-      (item.customPrice || item.price) *
-        item.quantity *
-        (1 - item.discount),
-    0,
-  );
+  // Unified calculation: use the SAME per-row formula as the table rows,
+  // rounding each row to 2 decimal places before accumulating.
+  const { totalAmount, totalQuantity, totalDiscountAmount, grossAmount } =
+    items.reduce(
+      (acc, item) => {
+        const unitPrice = item.customPrice || item.price;
+        const rowGross = Math.round(unitPrice * item.quantity * 100) / 100;
+        const rowDiscount = Math.round(rowGross * item.discount * 100) / 100;
+        const rowNet = Math.round((rowGross - rowDiscount) * 100) / 100;
 
-  const totalQuantity = items.reduce((acc, i) => acc + i.quantity, 0);
-  const totalDiscountAmount = items.reduce(
-    (sum, item) =>
-      sum +
-      (item.customPrice || item.price) * item.quantity * item.discount,
-    0,
-  );
-  const grossAmount = totalAmount + totalDiscountAmount;
+        acc.grossAmount += rowGross;
+        acc.totalDiscountAmount += rowDiscount;
+        acc.totalAmount += rowNet;
+        acc.totalQuantity += item.quantity;
+        return acc;
+      },
+      { totalAmount: 0, totalQuantity: 0, totalDiscountAmount: 0, grossAmount: 0 },
+    );
 
   // Helper to find discount name by percentage
   const getDiscountName = (percentage: number) => {
@@ -134,7 +135,7 @@ export function ReturnReviewPanel({
 
                 return (
                   <TableRow
-                    key={item.id}
+                    key={item.cartId}
                     className="hover:bg-muted/30 border-b last:border-0"
                   >
                     <TableCell className="text-xs text-muted-foreground font-mono pl-4">
@@ -160,7 +161,7 @@ export function ReturnReviewPanel({
                           value={item.quantity}
                           onChange={(e) =>
                             onUpdateItem(
-                              item.id,
+                              item.cartId,
                               "quantity",
                               Math.max(1, parseFloat(e.target.value) || 0),
                             )
@@ -204,7 +205,7 @@ export function ReturnReviewPanel({
                                 );
                                 if (selected)
                                   onUpdateItem(
-                                    item.id,
+                                    item.cartId,
                                     "discount",
                                     Number(selected.percentage) / 100,
                                   );
@@ -257,7 +258,7 @@ export function ReturnReviewPanel({
                             }
                             onValueChange={(val) => {
                               onUpdateItem(
-                                item.id,
+                                item.cartId,
                                 "return_type_id",
                                 Number(val),
                               );
@@ -290,7 +291,7 @@ export function ReturnReviewPanel({
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => onRemoveItem(item.id)}
+                          onClick={() => onRemoveItem(item.cartId)}
                           className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
                         >
                           <Trash2 className="h-4 w-4" />

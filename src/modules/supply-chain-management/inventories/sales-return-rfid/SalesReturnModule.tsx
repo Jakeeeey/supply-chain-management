@@ -17,8 +17,10 @@ export default function SalesReturnModule() {
     data,
     loading,
     page,
+    pageSize,
     totalPages,
     setPage,
+    setPageSize,
     setSearch,
     setFilters,
     filters,
@@ -57,11 +59,13 @@ export default function SalesReturnModule() {
           data={data}
           loading={loading}
           page={page}
+          pageSize={pageSize}
           totalPages={totalPages}
           filters={filters}
           salesmenOptions={options.salesmen}
           customerOptions={options.customers}
           onPageChange={setPage}
+          onPageSizeChange={setPageSize}
           onSearchChange={setSearch}
           onFilterChange={setFilters}
           onRowClick={(record) => setSelectedReturn(record)}

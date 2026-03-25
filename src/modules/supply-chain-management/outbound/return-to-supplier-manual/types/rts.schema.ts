@@ -100,7 +100,8 @@ export interface Branch {
 
 /** A product as used in the product picker / price lookup. */
 export interface Product {
-  id: string;
+  id: string; // Used for React keys / Cart uniqueness
+  product_id: number; // Used for backend DB IDs
   code: string;
   name: string;
   price: number; // cost_per_unit
@@ -145,6 +146,7 @@ export interface RTSReturnType {
 
 /** An item in the shopping cart / return builder. */
 export interface CartItem extends Product {
+  cartId: string;
   quantity: number;
   onHand: number;
   discount: number;

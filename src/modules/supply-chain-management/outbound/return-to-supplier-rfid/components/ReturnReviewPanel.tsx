@@ -44,23 +44,24 @@ export function ReturnReviewPanel({
   setRemarks,
   readOnly = false,
 }: ReturnReviewPanelProps) {
-  const totalAmount = items.reduce(
-    (sum, item) =>
-      sum +
-      (item.customPrice || item.price) *
-        item.quantity *
-        (1 - item.discount),
-    0,
-  );
+  // Unified calculation: use the SAME per-row formula as the table rows,
+  // rounding each row to 2 decimal places before accumulating.
+  const { totalAmount, totalQuantity, totalDiscountAmount, grossAmount } =
+    items.reduce(
+      (acc, item) => {
+        const unitPrice = item.customPrice || item.price;
+        const rowGross = Math.round(unitPrice * item.quantity * 100) / 100;
+        const rowDiscount = Math.round(rowGross * item.discount * 100) / 100;
+        const rowNet = Math.round((rowGross - rowDiscount) * 100) / 100;
 
-  const totalQuantity = items.reduce((acc, i) => acc + i.quantity, 0);
-  const totalDiscountAmount = items.reduce(
-    (sum, item) =>
-      sum +
-      (item.customPrice || item.price) * item.quantity * item.discount,
-    0,
-  );
-  const grossAmount = totalAmount + totalDiscountAmount;
+        acc.grossAmount += rowGross;
+        acc.totalDiscountAmount += rowDiscount;
+        acc.totalAmount += rowNet;
+        acc.totalQuantity += item.quantity;
+        return acc;
+      },
+      { totalAmount: 0, totalQuantity: 0, totalDiscountAmount: 0, grossAmount: 0 },
+    );
 
   // Helper to find discount name by percentage
   const getDiscountName = (percentage: number) => {

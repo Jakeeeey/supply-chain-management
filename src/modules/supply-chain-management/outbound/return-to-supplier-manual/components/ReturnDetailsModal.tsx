@@ -94,7 +94,9 @@ export function ReturnDetailsModal({
           const cartItems: CartItem[] = fetched.map((i) => {
             const validUnitCount = i.unitCount > 0 ? i.unitCount : 1;
             return {
-              id: String(i.productId),
+              cartId: crypto.randomUUID(),
+              id: String(i.productId), // Simple ID for matching logic
+              product_id: i.productId, // actual DB item reference
               code: i.code,
               name: i.name,
               price: i.price,
@@ -200,7 +202,8 @@ export function ReturnDetailsModal({
         );
 
         return {
-          id: String(item.product_id),
+          id: String(item.product_id), // Search ID (for quantity increment logic)
+          product_id: item.product_id, // actual DB item reference
           masterId: String(item.familyId),
           code: item.product_code || "N/A",
           name: item.product_name,
@@ -261,10 +264,11 @@ export function ReturnDetailsModal({
   const addToCartInternal = useCallback((p_raw: unknown, qty = 1) => {
     const p = p_raw as CartItem & { stock?: number; supplierDiscount?: number };
     setItems((prev) => {
-      const exists = prev.find((i) => i.id === p.id);
+      // Find exact same product variant to increment quantity
+      const exists = prev.find((i) => String(i.id) === String(p.id) && i.uom_id === p.uom_id);
       if (exists)
         return prev.map((i) =>
-          i.id === p.id
+          String(i.id) === String(p.id) && i.uom_id === p.uom_id
             ? { ...i, quantity: i.quantity + qty }
             : i,
         );
@@ -272,6 +276,7 @@ export function ReturnDetailsModal({
         ...prev,
         {
           ...p,
+          cartId: crypto.randomUUID(),
           quantity: qty,
           onHand: p.stock || 0,
           discount: p.supplierDiscount || 0,
@@ -299,7 +304,9 @@ export function ReturnDetailsModal({
     const matchedUnit = refs.units.find((u) => u.unit_name === inv.unit_name);
 
     addToCartInternal({
-      id: String(inv.product_id),
+      id: String(inv.product_id), // Standard Identity
+      cartId: crypto.randomUUID(),
+      product_id: inv.product_id,
       code: inv.product_code,
       name: inv.product_name,
       unit: inv.unit_name,
@@ -388,7 +395,7 @@ export function ReturnDetailsModal({
       const rts_items = items.map((item) => {
         const { gross, discountAmount, net } = calculateLineItem(item);
         return {
-          product_id: Number(item.id),
+          product_id: Number(item.product_id), // Clean mapping
           uom_id: item.uom_id,
           quantity: item.quantity * (item.unitCount || 1),
           gross_unit_price: item.customPrice || item.price,
@@ -562,15 +569,15 @@ export function ReturnDetailsModal({
                   items={items}
                   lineDiscounts={refs.lineDiscounts}
                   returnTypes={refs.returnTypes || []}
-                  onUpdateItem={(id, field, val) =>
+                  onUpdateItem={(cartId, field, val) =>
                     setItems((prev) =>
                       prev.map((i) =>
-                        i.id === id ? { ...i, [field]: val } : i,
+                        i.cartId === cartId ? { ...i, [field]: val } : i,
                       ),
                     )
                   }
-                  onRemoveItem={(id) =>
-                    setItems((prev) => prev.filter((i) => i.id !== id))
+                  onRemoveItem={(cartId) =>
+                    setItems((prev) => prev.filter((i) => i.cartId !== cartId))
                   }
                   remarks={remarks}
                   setRemarks={setRemarks}
@@ -645,19 +652,19 @@ export function ReturnDetailsModal({
               <X className="h-4 w-4" />
             </Button>
           </div>
-          <div className="flex-1 overflow-hidden">
+          <div className="h-[calc(95vh-72px)] overflow-hidden">
             <ProductPicker
               isVisible={true}
               onClose={() => setShowPicker(false)}
               products={availableProducts}
               addedProducts={items}
               onAdd={(p, q) => addToCartInternal(p, q)}
-              onRemove={(id) =>
-                setItems((prev) => prev.filter((i) => i.id !== id))
+              onRemove={(cartId) =>
+                setItems((prev) => prev.filter((i) => (i.cartId || i.id) !== cartId))
               }
-              onUpdateQty={(id, q) =>
+              onUpdateQty={(cartId, q) =>
                 setItems((prev) =>
-                  prev.map((i) => (i.id === id ? { ...i, quantity: q } : i)),
+                  prev.map((i) => ((i.cartId || i.id) === cartId ? { ...i, quantity: q } : i)),
                 )
               }
               onClearAll={() => setItems([])}

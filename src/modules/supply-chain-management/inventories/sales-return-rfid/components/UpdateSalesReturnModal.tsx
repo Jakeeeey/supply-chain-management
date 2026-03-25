@@ -620,13 +620,13 @@ export function UpdateSalesReturnModal({
             <div className="absolute top-0 left-0 w-1 h-full bg-primary rounded-l-xl"></div>
             
             <ReadOnlyField label="Salesman" value={getSalesmanName(headerData.salesmanId)} />
-            <ReadOnlyField label="Customer" value={getCustomerName(headerData.customerCode)} />
-            <ReadOnlyField label="Return Date" value={headerData.returnDate} />
             <ReadOnlyField label="Salesman Code" value={getSalesmanCode(headerData.salesmanId)} />
-            
+            <ReadOnlyField label="Customer" value={getCustomerName(headerData.customerCode)} />
             <ReadOnlyField label="Customer Code" value={headerData.customerCode} />
-            <ReadOnlyField label="Received Date" value={headerData.createdAt} />
+            
             <ReadOnlyField label="Branch" value={getSalesmanBranch(headerData.salesmanId)} />
+            <ReadOnlyField label="Return Date" value={headerData.returnDate} />
+            <ReadOnlyField label="Received Date" value={headerData.createdAt} />
             <ReadOnlyField label="Price Type" value={headerData.priceType} />
             
             <div className="flex items-center space-x-2 pt-2 col-span-2 lg:col-span-4">
