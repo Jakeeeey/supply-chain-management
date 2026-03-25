@@ -44,6 +44,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import { InvoiceDetail, InvoiceLine, ReconciliationRow, RFIDMapping } from '../types';
 import { fetchInvoiceDetails } from '../providers/fetchProviders';
 import ScanningModal from './ScanningModal';
@@ -53,7 +54,7 @@ interface ReconciliationDetailModalProps {
     isOpen: boolean;
     onClose: () => void;
     reconciliation: ReconciliationRow | null;
-    onSave: (invoiceId: number, status: string, remarks: string, missingQtys: Record<string | number, number>, scannedQtys: Record<string | number, number>) => void;
+    onSave: (invoiceId: number, status: string, remarks: string, missingQtys: Record<string | number, number>, scannedQtys: Record<string | number, number>, scannedRFIDs: Record<string | number, string[]>) => void;
     rfidTags?: RFIDMapping[];
 }
 
@@ -69,6 +70,7 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
     const [missingQtys, setMissingQtys] = useState<Record<string | number, number>>({});
     const [remarks, setRemarks] = useState('');
     const [scannedQtys, setScannedQtys] = useState<Record<string | number, number>>({});
+    const [scannedRFIDs, setScannedRFIDs] = useState<Record<string | number, string[]>>({});
     const [isScanningOpen, setIsScanningOpen] = useState(false);
     const [isManualInputOpen, setIsManualInputOpen] = useState(false);
 
@@ -80,6 +82,7 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                     setDetail(data);
                     setMissingQtys(reconciliation.missingQtys || {});
                     setScannedQtys(reconciliation.scannedQtys || {});
+                    setScannedRFIDs(reconciliation.scannedRFIDs || {});
                     setRemarks(reconciliation.remarks || '');
                 })
                 .catch(err => console.error("Failed to fetch invoice details:", err))
@@ -95,7 +98,7 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
     if (!reconciliation) return null;
 
     const handleSave = () => {
-        onSave(reconciliation.id, reconciliation.status, remarks, missingQtys, scannedQtys);
+        onSave(reconciliation.id, reconciliation.status, remarks, missingQtys, scannedQtys, scannedRFIDs);
         onClose();
     };
 
@@ -104,15 +107,17 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
         setMissingQtys(prev => ({ ...prev, [lineId]: num }));
     };
 
-    const handleScanningConfirm = (scanned: Record<string | number, number>) => {
+    const handleScanningConfirm = (scanned: Record<string | number, number>, returnedRFIDs: Record<string | number, string[]> = {}) => {
         setScannedQtys(scanned);
+        setScannedRFIDs(returnedRFIDs);
 
         // Auto-calculate missing quantities based on the scan/input
         const newQtys: Record<string | number, number> = {};
         detail?.lines.forEach(line => {
             const scanCount = scanned[line.id] || 0;
             const diff = Math.max(0, line.qty - scanCount);
-            if (diff > 0) {
+            if (diff > 0 || (reconciliation.status !== 'Fulfilled' && scanCount > 0)) {
+                // We track it if there is a difference or if it's an unfulfilled mode with scans
                 newQtys[line.id] = diff;
             }
         });
@@ -257,7 +262,14 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                                     <TableRow key={line.id} className="hover:bg-muted/30 transition-colors border-border">
                                         <TableCell>
                                             <div className="space-y-0.5">
-                                                <p className="text-sm font-bold text-foreground">{line.product_name}</p>
+                                                <div className="flex items-center gap-2">
+                                                    <p className="text-sm font-bold text-foreground">{line.product_name}</p>
+                                                    {(reconciliation.status === 'Unfulfilled' || reconciliation.status === 'Fulfilled with Concerns') && (
+                                                        <Badge variant="outline" className="text-[10px] h-4 bg-emerald-500/5 text-emerald-500 border-emerald-500/10 gap-1 px-1.5 font-medium">
+                                                            <Scan className="w-2.5 h-2.5" /> {(scannedQtys[line.id] || 0)} Scanned
+                                                        </Badge>
+                                                    )}
+                                                </div>
                                                 <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground font-bold uppercase border border-border">{line.unit}</span>
                                             </div>
                                         </TableCell>
@@ -366,6 +378,7 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                     onConfirm={handleScanningConfirm}
                     items={detail.lines}
                     initialScanned={scannedQtys}
+                    initialScannedRFIDs={scannedRFIDs}
                     rfidTags={rfidTags}
                 />
 
