@@ -1,13 +1,20 @@
 export interface PlanDetailItem {
-  detail_id: number;
-  sales_order_id: number;
+  detail_id: string | number;
+  sales_order_id?: number;
   invoice_id?: number;
-  order_no: string;
-  order_status: string;
+  order_no?: string;
+  order_status?: string;
   true_order_status?: string;
-  customer_name: string;
-  city: string;
+  customer_name?: string;
+  city?: string;
   amount: number;
+  isManualStop?: boolean;
+  remarks?: string;
+  distance?: number;
+  status?: string;
+  isPoStop?: boolean;
+  po_id?: number;
+  po_no?: string;
 }
 
 export const getStatusColor = (status: string) => {

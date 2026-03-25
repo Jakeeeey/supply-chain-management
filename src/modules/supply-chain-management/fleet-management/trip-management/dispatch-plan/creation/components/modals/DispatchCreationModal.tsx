@@ -173,13 +173,18 @@ export function DispatchCreationModal({
     // to the payload so the backend can save the correct sequence.
     const payload = {
       ...values,
-      invoices: planDetails
-        .filter((d) => d.invoice_id)
-        .map((d, index) => ({
-          invoice_id: d.invoice_id!,
-          invoice_no: d.order_no, // Mapping order_no to invoice_no field
-          sequence: index + 1,
-        })),
+      invoices: planDetails.map((d, index) => ({
+        invoice_id: d.invoice_id,
+        invoice_no: d.order_no,
+        sequence: index + 1,
+        remarks: d.remarks,
+        distance: d.distance,
+        isManualStop: d.isManualStop,
+        isPoStop: d.isPoStop,
+        po_id: d.po_id,
+        po_no: d.po_no,
+        status: d.status,
+      })),
     };
 
     try {

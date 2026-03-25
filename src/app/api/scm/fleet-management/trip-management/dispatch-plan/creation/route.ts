@@ -90,6 +90,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ data });
     }
 
+    if (type === "purchase_orders") {
+      const query = searchParams.get("query");
+      const data = await dispatchService.getPurchaseOrders(query || undefined);
+      return NextResponse.json({ data });
+    }
+
     return NextResponse.json({ error: "Invalid type" }, { status: 400 });
   } catch (error) {
     console.error("[Dispatch GET Error]:", error);

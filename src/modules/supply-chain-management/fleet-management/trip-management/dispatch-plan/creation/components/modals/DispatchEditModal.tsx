@@ -128,12 +128,6 @@ export function DispatchEditModal({
 
     form.setValue("pre_dispatch_plan_ids", newIds, { shouldValidate: true });
 
-    const totalAmount = approvedPlans
-      .filter((p) => newIds.includes(p.dispatch_id))
-      .reduce((sum, p) => sum + (p.total_amount || 0), 0);
-    // REMOVED manual form.setValue("amount") here to let useEffect handle it based on planDetails sum
-    // form.setValue("amount", totalAmount);
-
     if (newIds.length > 0) {
       const firstPlan = approvedPlans.find((p) => p.dispatch_id === newIds[0]);
       if (firstPlan && newIds.length === 1) {
@@ -252,13 +246,18 @@ export function DispatchEditModal({
 
     const payload = {
       ...values,
-      invoices: planDetails
-        .filter((d: PlanDetailItem) => d.invoice_id !== undefined)
-        .map((details: PlanDetailItem, index: number) => ({
-          invoice_id: details.invoice_id!,
-          invoice_no: details.order_no,
-          sequence: index + 1,
-        })),
+      invoices: planDetails.map((details: PlanDetailItem, index: number) => ({
+        invoice_id: details.invoice_id,
+        invoice_no: details.order_no,
+        sequence: index + 1,
+        remarks: details.remarks,
+        distance: details.distance,
+        isManualStop: details.isManualStop,
+        isPoStop: details.isPoStop,
+        po_id: details.po_id,
+        po_no: details.po_no,
+        status: details.status,
+      })),
     };
 
     try {

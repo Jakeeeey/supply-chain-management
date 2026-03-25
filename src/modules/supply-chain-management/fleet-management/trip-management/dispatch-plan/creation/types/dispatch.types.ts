@@ -141,6 +141,16 @@ export interface PostDispatchOtherRow {
   status: string;
 }
 
+/** Row from the `post_dispatch_purchases` collection. */
+export interface PostDispatchPurchaseRow {
+  id?: number;
+  post_dispatch_plan_id: number;
+  po_id: number;
+  distance?: number;
+  sequence: number;
+  status: string;
+}
+
 /** Row from the `cluster` collection. */
 export interface ClusterRow {
   id: number;
@@ -172,15 +182,23 @@ export interface EnrichedApprovedPlan extends RawDispatchPlan {
 
 /** Enriched detail row returned by `fetchPlanDetails`. */
 export interface EnrichedPlanDetail {
-  detail_id: number | undefined;
-  sales_order_id: number;
-  invoice_id: number | undefined;
-  order_no: string;
-  order_status: string;
-  true_order_status: string;
-  customer_name: string;
-  city: string;
+  detail_id: number | string | undefined;
+  sales_order_id?: number;
+  invoice_id?: number;
+  order_no?: string;
+  order_status?: string;
+  true_order_status?: string;
+  customer_name?: string;
+  city?: string;
   amount: number;
+  isManualStop?: boolean;
+  remarks?: string;
+  distance?: number;
+  sequence?: number;
+  status?: string;
+  isPoStop?: boolean;
+  po_id?: number;
+  po_no?: string;
 }
 
 /** Shape of the payload sent to Directus to create a plan header. */

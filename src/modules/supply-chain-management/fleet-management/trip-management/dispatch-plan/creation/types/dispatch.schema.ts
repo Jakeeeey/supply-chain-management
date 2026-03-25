@@ -26,11 +26,18 @@ export const CrewHelperSchema = z.object({
 });
 
 
-/** A single invoice reference entry. */
+/** A single invoice reference or manual route stop entry. */
 export const InvoiceRefSchema = z.object({
-  invoice_id: z.number(),
+  invoice_id: z.number().optional(),
   invoice_no: z.string().optional(),
   sequence: z.number(),
+  remarks: z.string().optional(),
+  distance: z.number().optional(),
+  isManualStop: z.boolean().optional(),
+  isPoStop: z.boolean().optional(),
+  po_id: z.number().optional(),
+  po_no: z.string().optional(),
+  status: z.string().optional(),
 });
 
 // ─── POST — Create Dispatch Plan ────────────────────────────
@@ -82,4 +89,3 @@ export const UpdateTripSchema = z.object({
 });
 
 export type UpdateTripValues = z.infer<typeof UpdateTripSchema>;
-
