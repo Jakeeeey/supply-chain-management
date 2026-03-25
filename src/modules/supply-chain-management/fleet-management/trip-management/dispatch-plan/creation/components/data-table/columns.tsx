@@ -4,19 +4,38 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
-
 import { DataTableColumnHeader } from "./table-column-header";
+import { Users } from "lucide-react";
+
+export type CustomerTransaction = {
+  id: string;
+  customerName: string;
+  address: string;
+  itemsOrdered: string;
+  amount: number;
+  status: string;
+};
 
 export type DispatchPlanSummary = {
   id: string;
   dpNumber: string;
   driverName: string;
+  driverId?: string;
   vehiclePlateNo: string;
+  vehicleId?: string;
+  helpers?: string[];
   estimatedDispatch: string;
   estimatedArrival: string;
   amount: number;
   budgetTotal?: number;
   status: string;
+  salesmanName?: string;
+  salesmanId?: string;
+  startingPoint?: string;
+  timeOfDispatch?: string | null;
+  timeOfArrival?: string | null;
+  customerTransactions?: CustomerTransaction[];
+  createdAt?: string;
 };
 
 const statusVariant: Record<
@@ -65,6 +84,36 @@ export const getDispatchPlanColumns = (
         </p>
       </div>
     ),
+  },
+  {
+    accessorKey: "helpers",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Trip Staff" />
+    ),
+    meta: { label: "Trip Staff" },
+    enableSorting: false,
+    cell: ({ row }) => {
+      const helpers = row.original.helpers || [];
+      if (helpers.length === 0) {
+        return (
+          <span className="text-xs text-muted-foreground/50 italic">
+            No helpers
+          </span>
+        );
+      }
+      return (
+        <div className="flex flex-col gap-0.5">
+          {helpers.map((name: string, i: number) => (
+            <div key={i} className="flex items-center gap-1.5">
+              <Users className="w-3 h-3 text-muted-foreground shrink-0" />
+              <span className="text-xs text-foreground truncate max-w-[140px]">
+                {name}
+              </span>
+            </div>
+          ))}
+        </div>
+      );
+    },
   },
   {
     accessorKey: "estimatedDispatch",

@@ -23,6 +23,7 @@ import { InvoiceItemsSidebar } from "./parts/InvoiceItemsSidebar";
 import { PdpListSidebar } from "./parts/PdpListSidebar";
 import { TripConfigurationForm } from "./parts/TripConfigurationForm";
 import { PlanDetailItem } from "./parts/types";
+import { DispatchConfirmationModal } from "./parts/DispatchConfirmationModal";
 
 interface DispatchCreationModalProps {
   open: boolean;
@@ -42,6 +43,8 @@ export function DispatchCreationModal({
   const [searchQuery, setSearchQuery] = useState("");
   const [planDetails, setPlanDetails] = useState<PlanDetailItem[]>([]);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [pendingPayload, setPendingPayload] = useState<any>(null);
 
   const form = useForm<DispatchCreationFormValues>({
     resolver: zodResolver(DispatchCreationFormSchema),
@@ -74,6 +77,8 @@ export function DispatchCreationModal({
       form.reset();
       setApprovedPlans([]);
       setSearchQuery("");
+      setIsConfirming(false);
+      setPendingPayload(null);
     }
   }, [open, form]);
 
@@ -187,9 +192,16 @@ export function DispatchCreationModal({
       })),
     };
 
+    setPendingPayload(payload);
+    setIsConfirming(true);
+  };
+
+  const handleConfirmCreate = async () => {
+    if (!pendingPayload) return;
     try {
-      await createTrip(payload);
+      await createTrip(pendingPayload);
       toast.success("Dispatch trip created successfully.");
+      setIsConfirming(false);
       onOpenChange(false);
       onSuccess?.();
     } catch (err: any) {
@@ -200,8 +212,9 @@ export function DispatchCreationModal({
   const isDataReady = !isLoadingMasterData && masterData;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[1400px] h-[80vh] max-h-[80vh] min-h-0 w-full p-0 gap-0 overflow-hidden rounded-xl border border-border/60 shadow-xl flex flex-col justify-start">
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[1400px] h-[80vh] max-h-[80vh] min-h-0 w-full p-0 gap-0 overflow-hidden rounded-xl border border-border/60 shadow-xl flex flex-col justify-start">
         {/* Header */}
         <DialogHeader className="px-6 py-5 border-b border-border/50">
           <div className="flex items-center gap-3">
@@ -303,7 +316,20 @@ export function DispatchCreationModal({
             </form>
           </Form>
         )}
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+      {isDataReady && (
+        <DispatchConfirmationModal
+          open={isConfirming}
+          onOpenChange={setIsConfirming}
+          onConfirm={handleConfirmCreate}
+          isSubmitting={isSubmitting}
+          payload={pendingPayload}
+          masterData={masterData}
+          planDetails={planDetails}
+          approvedPlans={approvedPlans}
+        />
+      )}
+    </>
   );
 }

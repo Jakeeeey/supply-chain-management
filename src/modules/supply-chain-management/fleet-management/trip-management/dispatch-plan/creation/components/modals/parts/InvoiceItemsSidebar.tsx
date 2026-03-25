@@ -22,6 +22,12 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, MapPin, Package, Plus, ShoppingCart, Trash2 } from "lucide-react";
 import { useState } from "react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { AddManualStopModal } from "./AddManualStopModal";
 import { AddPoStopModal } from "./AddPoStopModal";
 import { PlanDetailItem } from "./types";
@@ -92,21 +98,42 @@ function DraggableInvoiceItem({
           {order.isManualStop ? (
             <div className="flex items-center gap-1.5 min-w-0">
               <MapPin className="w-3 h-3 text-primary shrink-0" />
-              <span className="text-xs font-semibold text-foreground leading-tight truncate">
-                {order.remarks}
-              </span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="text-xs font-semibold text-foreground leading-tight truncate cursor-default">
+                    {order.remarks}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{order.remarks}</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
           ) : order.isPoStop ? (
             <div className="flex items-center gap-1.5 min-w-0">
               <Package className="w-3 h-3 text-amber-600 shrink-0" />
-              <span className="text-xs font-semibold text-foreground leading-tight truncate">
-                {order.po_no}
-              </span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="text-xs font-semibold text-foreground leading-tight truncate cursor-default">
+                    {order.po_no}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{order.po_no}</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
           ) : (
-            <span className="text-xs font-semibold text-foreground leading-tight truncate">
-              {order.customer_name}
-            </span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="text-xs font-semibold text-foreground leading-tight truncate cursor-default">
+                  {order.customer_name}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{order.customer_name}</p>
+              </TooltipContent>
+            </Tooltip>
           )}
           
           <div className="flex flex-col items-end gap-1 shrink-0 translate-y-[-2px]">
@@ -178,7 +205,6 @@ export function InvoiceItemsSidebar({
 }: InvoiceItemsSidebarProps) {
   const [isAddingStop, setIsAddingStop] = useState(false);
   const [isAddingPo, setIsAddingPo] = useState(false);
-  const [isReordering, setIsReordering] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -225,8 +251,9 @@ export function InvoiceItemsSidebar({
   };
 
   return (
-    <div className="w-[320px] flex flex-col overflow-hidden shrink-0">
-      {/* Header */}
+    <TooltipProvider delayDuration={300}>
+      <div className="w-[320px] flex flex-col overflow-hidden shrink-0">
+        {/* Header */}
       <div className="px-4 pt-4 pb-3 border-b border-border/50">
         <div className="flex items-center justify-between mb-1">
           <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
@@ -234,48 +261,39 @@ export function InvoiceItemsSidebar({
             Route Sequence
           </p>
           <div className="flex items-center gap-1">
-            {isReordering ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 px-2 text-[10px] border-primary text-primary bg-primary/5"
-                onClick={() => setIsReordering(false)}
-              >
-                Done
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-[10px] text-muted-foreground hover:text-foreground"
-                onClick={() => setIsReordering(true)}
-              >
-                Reorder
-              </Button>
-            )}
             <div className="flex items-center gap-0.5">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                title="Add Manual Stop"
-                className="h-7 w-7 rounded-md hover:bg-primary/10 text-primary transition-colors"
-                onClick={() => setIsAddingStop(true)}
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                title="Add PO Stop"
-                className="h-7 w-7 rounded-md hover:bg-amber-600/10 text-amber-600 transition-colors"
-                onClick={() => setIsAddingPo(true)}
-              >
-                <Package className="h-4 w-4" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 rounded-md hover:bg-primary/10 text-primary transition-colors"
+                    onClick={() => setIsAddingStop(true)}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Add Manual Stop</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 rounded-md hover:bg-amber-600/10 text-amber-600 transition-colors"
+                    onClick={() => setIsAddingPo(true)}
+                  >
+                    <Package className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Add PO Stop</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
           </div>
         </div>
@@ -360,6 +378,7 @@ export function InvoiceItemsSidebar({
         onOpenChange={setIsAddingPo}
         onAdd={handleAddPoStop}
       />
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }

@@ -78,11 +78,11 @@ export function DispatchEditModal({
     // Skip during initial load — the fetch effect handles the first call
     if (isInitialLoadRef.current) return;
     if (selectedBranch && selectedBranch > 0) {
-      loadApprovedPlans(selectedBranch, selectedPlanIds);
+      loadApprovedPlans(selectedBranch, form.getValues("pre_dispatch_plan_ids"));
     } else {
       setApprovedPlans([]);
     }
-  }, [selectedBranch, selectedPlanIds]);
+  }, [selectedBranch]); // Only depend on selectedBranch to prevent PDP vanishing when deselected
 
   const loadApprovedPlans = async (
     branchId: number,
@@ -146,15 +146,38 @@ export function DispatchEditModal({
     }
 
     setIsLoadingDetails(true);
-    setPlanDetails([]);
+
+    // Save current sequence and manual/PO stops
+    const currentSeqMap = new Map();
+    planDetails.forEach((d, idx) => {
+      if (d.order_no) currentSeqMap.set(d.order_no, idx);
+      if (d.isManualStop) currentSeqMap.set(d.detail_id, idx);
+      if (d.isPoStop) currentSeqMap.set(d.detail_id, idx);
+    });
+    
+    const retainedStops = planDetails.filter(d => d.isManualStop || d.isPoStop);
+
     try {
+      // Do not append trip_id here so we only fetch exactly the invoices for the selected plans.
       const res = await fetch(
-        `/api/scm/fleet-management/trip-management/dispatch-plan/creation?type=plan_details&plan_ids=${newIds.join(",")}${planId ? `&trip_id=${planId}` : ""}`,
+        `/api/scm/fleet-management/trip-management/dispatch-plan/creation?type=plan_details&plan_ids=${newIds.join(",")}`,
         { cache: "no-store" },
       );
       const result = await res.json();
       if (result.error) throw new Error(result.error);
-      setPlanDetails(result.data || []);
+      
+      const fetchedInvoices = result.data || [];
+      const combined = [...fetchedInvoices, ...retainedStops];
+      
+      combined.sort((a, b) => {
+        const keyA = a.isManualStop || a.isPoStop ? a.detail_id : a.order_no;
+        const keyB = b.isManualStop || b.isPoStop ? b.detail_id : b.order_no;
+        const seqA = currentSeqMap.has(keyA) ? currentSeqMap.get(keyA) : 9999;
+        const seqB = currentSeqMap.has(keyB) ? currentSeqMap.get(keyB) : 9999;
+        return seqA - seqB;
+      });
+
+      setPlanDetails(combined);
     } catch {
       toast.error("Failed to load plan details");
     } finally {
