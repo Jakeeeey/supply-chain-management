@@ -27,10 +27,18 @@ export async function GET(req: NextRequest) {
 
     if (type === "approved_plans") {
       const branchId = searchParams.get("branch_id");
-      const currentPlanId = searchParams.get("current_plan_id");
+      const currentPlanIdRaw = searchParams.get("current_plan_id");
+      let currentPlanId: number | number[] | undefined = undefined;
+      if (currentPlanIdRaw) {
+        if (currentPlanIdRaw.includes(",")) {
+          currentPlanId = currentPlanIdRaw.split(",").map(id => Number(id.trim())).filter(id => !isNaN(id));
+        } else {
+          currentPlanId = Number(currentPlanIdRaw);
+        }
+      }
       const result = await dispatchService.getApprovedPlans(
         branchId ? Number(branchId) : undefined,
-        currentPlanId ? Number(currentPlanId) : undefined,
+        currentPlanId,
       );
       return NextResponse.json(result);
     }

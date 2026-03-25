@@ -31,7 +31,7 @@ export async function getMasterData(): Promise<DispatchCreationMasterData> {
  */
 export async function getApprovedPlans(
   branchId?: number,
-  currentPlanId?: number,
+  currentPlanId?: number | number[],
 ): Promise<DirectusResponse<EnrichedApprovedPlan>> {
   return repo.fetchApprovedPreDispatchPlans(branchId, currentPlanId);
 }

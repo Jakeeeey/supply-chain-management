@@ -216,6 +216,7 @@ export interface PostDispatchPlanDetails {
   estimated_time_of_dispatch: string;
   estimated_time_of_arrival: string;
   remarks?: string;
+  dispatch_ids?: number[];
   helpers: { user_id: number }[];
 }
 

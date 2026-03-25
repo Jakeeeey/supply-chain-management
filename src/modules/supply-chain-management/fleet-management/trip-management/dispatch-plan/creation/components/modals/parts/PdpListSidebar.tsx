@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { Check, Search } from "lucide-react";
 
-interface PdpListSidebarProps {
+interface PdpListSidebarProps {
   approvedPlans: any[];
   isLoadingPlans: boolean;
   searchQuery: string;
@@ -14,7 +14,6 @@ interface PdpListSidebarProps {
   selectedPlanIds: number[];
   onPlanSelect: (planId: string) => void;
   selectedBranch: number;
-  selectedAmount?: number;
 }
 
 export function PdpListSidebar({
@@ -25,7 +24,6 @@ export function PdpListSidebar({
   selectedPlanIds,
   onPlanSelect,
   selectedBranch,
-  selectedAmount,
 }: PdpListSidebarProps) {
   const filteredPlans = approvedPlans.filter(
     (p) =>
@@ -123,31 +121,6 @@ export function PdpListSidebar({
         )}
       </div>
 
-      {/* Route value summary */}
-      <div className="p-4 border-t border-border/50 bg-background/60">
-        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
-          Selected Route Value
-        </p>
-        <p
-          className={cn(
-            "text-xl font-bold tracking-tight transition-colors",
-            selectedPlanIds.length > 0
-              ? "text-foreground"
-              : "text-muted-foreground/40",
-          )}
-        >
-          ₱
-          {(selectedAmount || 0).toLocaleString(undefined, {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })}
-        </p>
-        {selectedPlanIds.length > 0 && (
-          <Badge variant="secondary" className="mt-1.5 text-[10px] h-5">
-            {selectedPlanIds.length} Plan{selectedPlanIds.length !== 1 ? 's' : ''} selected
-          </Badge>
-        )}
-      </div>
     </div>
   );
 }

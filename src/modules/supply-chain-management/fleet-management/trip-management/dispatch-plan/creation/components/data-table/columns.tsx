@@ -2,17 +2,8 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
 import { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
-import { EllipsisVertical, Pencil } from "lucide-react";
 
 import { DataTableColumnHeader } from "./table-column-header";
 
@@ -28,11 +19,19 @@ export type DispatchPlanSummary = {
   status: string;
 };
 
-const statusStyles: Record<string, string> = {
-  POSTED: "bg-amber-50 text-amber-600 border-amber-200",
-  COMPLETED: "bg-emerald-50 text-emerald-600 border-emerald-200",
-  CANCELLED: "bg-red-50 text-red-500 border-red-200",
-  DRAFT: "bg-muted text-muted-foreground border-border",
+const statusVariant: Record<
+  string,
+  "default" | "secondary" | "destructive" | "outline"
+> = {
+  "For Approval": "outline",
+  "For Dispatch": "default",
+  "For Inbound": "secondary",
+  "For Clearance": "destructive",
+  Posted: "secondary",
+  POSTED: "secondary",
+  COMPLETED: "default",
+  CANCELLED: "destructive",
+  DRAFT: "outline",
 };
 
 export const getDispatchPlanColumns = (
@@ -148,16 +147,7 @@ export const getDispatchPlanColumns = (
     cell: ({ row }) => {
       const status = row.original.status;
       return (
-        <Badge
-          variant="outline"
-          className={cn(
-            "text-[10px] font-medium uppercase tracking-wide px-2 py-0.5 rounded-md",
-            statusStyles[status] ??
-              "bg-muted text-muted-foreground border-border",
-          )}
-        >
-          {status}
-        </Badge>
+        <Badge variant={statusVariant[status] ?? "outline"}>{status}</Badge>
       );
     },
   },
@@ -165,25 +155,12 @@ export const getDispatchPlanColumns = (
     id: "actions",
     header: "",
     cell: ({ row }) => (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            className="flex size-8 text-muted-foreground data-[state=open]:bg-muted"
-            size="icon"
-          >
-            <EllipsisVertical />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent>
-          <DropdownMenuItem onClick={() => onEdit(row.original)}>
-            <Pencil className="w-4 h-4 mr-2" />
-            Edit
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive">Delete</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <Button
+        className="text-sm rounded-lg"
+        onClick={() => onEdit(row.original)}
+      >
+        Edit
+      </Button>
     ),
   },
 ];

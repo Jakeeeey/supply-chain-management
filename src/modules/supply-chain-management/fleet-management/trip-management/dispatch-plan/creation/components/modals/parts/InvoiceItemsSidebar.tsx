@@ -29,6 +29,7 @@ interface InvoiceItemsSidebarProps {
   planDetails: PlanDetailItem[];
   isLoadingDetails: boolean;
   onReorder: (newItems: PlanDetailItem[]) => void;
+  selectedAmount: number;
 }
 
 function DraggableInvoiceItem({ order }: { order: PlanDetailItem }) {
@@ -67,7 +68,7 @@ function DraggableInvoiceItem({ order }: { order: PlanDetailItem }) {
             <GripVertical className="w-3.5 h-3.5" />
           </button>
           <span className="font-semibold text-foreground">
-            {order.order_no}
+            {order.customer_name}
           </span>
         </div>
         <Badge
@@ -80,9 +81,7 @@ function DraggableInvoiceItem({ order }: { order: PlanDetailItem }) {
           {order.order_status}
         </Badge>
       </div>
-      <p className="text-muted-foreground truncate pl-6">
-        {order.customer_name}
-      </p>
+      <p className="text-muted-foreground truncate pl-6">{order.order_no}</p>
       <div className="flex items-center justify-between pl-6">
         <span className="text-muted-foreground flex items-center gap-1">
           <MapPin className="w-3 h-3" />
@@ -104,6 +103,7 @@ export function InvoiceItemsSidebar({
   planDetails,
   isLoadingDetails,
   onReorder,
+  selectedAmount,
 }: InvoiceItemsSidebarProps) {
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -173,6 +173,27 @@ export function InvoiceItemsSidebar({
           </DndContext>
         )}
       </div>
+
+      {selectedPlanIds.length > 0 && (
+        <div className="p-4 border-t border-border/50 bg-background/60 flex-shrink-0">
+          <p className="text-[10px] uppercase font-bold text-muted-foreground mb-1 tracking-wider">
+            Selected Route Value
+          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-xl font-bold text-foreground flex items-baseline tabular-nums">
+              <span className="text-sm mr-1">₱</span>
+              {(selectedAmount || 0).toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </p>
+            <Badge variant="secondary" className="text-[10px] h-5">
+              {selectedPlanIds.length} Plan
+              {selectedPlanIds.length !== 1 ? "s" : ""} selected
+            </Badge>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -8,21 +8,21 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Form } from "@/components/ui/form";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useDispatchCreation } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/creation/hooks/useDispatchCreation";
+import { dispatchCreationLifecycleService } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/creation/services/lifecycle";
 import {
   DispatchCreationFormSchema,
   DispatchCreationFormValues,
 } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/creation/types/dispatch.schema";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Truck } from "lucide-react";
-import { useEffect, useState } from "react";
-import { useFieldArray, useForm } from "react-hook-form";
+import { useEffect, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { dispatchCreationLifecycleService } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/creation/services/lifecycle";
+import { DispatchModalSkeleton } from "./DispatchSkeleton";
+import { InvoiceItemsSidebar } from "./parts/InvoiceItemsSidebar";
 import { PdpListSidebar } from "./parts/PdpListSidebar";
 import { TripConfigurationForm } from "./parts/TripConfigurationForm";
-import { InvoiceItemsSidebar } from "./parts/InvoiceItemsSidebar";
 import { PlanDetailItem } from "./parts/types";
 
 interface DispatchEditModalProps {
@@ -38,10 +38,12 @@ export function DispatchEditModal({
   planId,
   onSuccess,
 }: DispatchEditModalProps) {
-  const { masterData, refreshMasterData, isLoadingMasterData } = useDispatchCreation();
+  const { masterData, refreshMasterData, isLoadingMasterData } =
+    useDispatchCreation();
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  
+  const isInitialLoadRef = useRef(false);
+
   const [approvedPlans, setApprovedPlans] = useState<any[]>([]);
   const [isLoadingPlans, setIsLoadingPlans] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -73,24 +75,26 @@ export function DispatchEditModal({
   const selectedPlanIds = form.watch("pre_dispatch_plan_ids");
 
   useEffect(() => {
+    // Skip during initial load — the fetch effect handles the first call
+    if (isInitialLoadRef.current) return;
     if (selectedBranch && selectedBranch > 0) {
-      loadApprovedPlans(selectedBranch, selectedPlanIds?.[0]);
+      loadApprovedPlans(selectedBranch, selectedPlanIds);
     } else {
       setApprovedPlans([]);
     }
   }, [selectedBranch, selectedPlanIds]);
 
-  const loadApprovedPlans = async (branchId: number, currentPdpId?: number) => {
+  const loadApprovedPlans = async (branchId: number, currentPdpIds?: number[]) => {
     setIsLoadingPlans(true);
     try {
       const url = new URL(
         "/api/scm/fleet-management/trip-management/dispatch-plan/creation",
-        window.location.origin
+        window.location.origin,
       );
       url.searchParams.append("type", "approved_plans");
       url.searchParams.append("branch_id", String(branchId));
-      if (currentPdpId) {
-        url.searchParams.append("current_plan_id", String(currentPdpId));
+      if (currentPdpIds && currentPdpIds.length > 0) {
+        url.searchParams.append("current_plan_id", currentPdpIds.join(","));
       }
 
       const res = await fetch(url.toString(), { cache: "no-store" });
@@ -104,34 +108,38 @@ export function DispatchEditModal({
     }
   };
 
-  const handlePlanSelect = async (planIdStr: string) => {
-    const planId = Number(planIdStr);
-    const plan = approvedPlans.find((p) => p.dispatch_id === planId);
-    if (!plan) return;
+  const handlePlanSelect = async (pdpIdStr: string) => {
+    const selectedPdpId = Number(pdpIdStr);
+    const pdp = approvedPlans.find((p) => p.dispatch_id === selectedPdpId);
+    if (!pdp) return;
 
     const currentIds = form.getValues("pre_dispatch_plan_ids") || [];
-    const isSelected = currentIds.includes(planId);
-    
+    const isSelected = currentIds.includes(selectedPdpId);
+
     let newIds: number[];
     if (isSelected) {
-      newIds = currentIds.filter(id => id !== planId);
+      newIds = currentIds.filter((id) => id !== selectedPdpId);
     } else {
-      newIds = [...currentIds, planId];
+      newIds = [...currentIds, selectedPdpId];
     }
-    
+
     form.setValue("pre_dispatch_plan_ids", newIds, { shouldValidate: true });
 
     const totalAmount = approvedPlans
       .filter((p) => newIds.includes(p.dispatch_id))
       .reduce((sum, p) => sum + (p.total_amount || 0), 0);
-    form.setValue("amount", totalAmount);
+    // REMOVED manual form.setValue("amount") here to let useEffect handle it based on planDetails sum
+    // form.setValue("amount", totalAmount);
 
     if (newIds.length > 0) {
       const firstPlan = approvedPlans.find((p) => p.dispatch_id === newIds[0]);
       if (firstPlan && newIds.length === 1) {
-        if (firstPlan.driver_id) form.setValue("driver_id", Number(firstPlan.driver_id));
-        if (firstPlan.vehicle_id) form.setValue("vehicle_id", Number(firstPlan.vehicle_id));
-        if (firstPlan.branch_id) form.setValue("starting_point", Number(firstPlan.branch_id));
+        if (firstPlan.driver_id)
+          form.setValue("driver_id", Number(firstPlan.driver_id));
+        if (firstPlan.vehicle_id)
+          form.setValue("vehicle_id", Number(firstPlan.vehicle_id));
+        if (firstPlan.branch_id)
+          form.setValue("starting_point", Number(firstPlan.branch_id));
       }
     }
 
@@ -144,7 +152,7 @@ export function DispatchEditModal({
     setPlanDetails([]);
     try {
       const res = await fetch(
-        `/api/scm/fleet-management/trip-management/dispatch-plan/creation?type=plan_details&plan_ids=${newIds.join(",")}`,
+        `/api/scm/fleet-management/trip-management/dispatch-plan/creation?type=plan_details&plan_ids=${newIds.join(",")}${planId ? `&trip_id=${planId}` : ""}`,
         { cache: "no-store" },
       );
       const result = await res.json();
@@ -160,18 +168,21 @@ export function DispatchEditModal({
   useEffect(() => {
     if (open && planId) {
       const fetchDetails = async () => {
+        isInitialLoadRef.current = true;
         setIsLoading(true);
         try {
           const res = await fetch(
-            `/api/scm/fleet-management/trip-management/dispatch-plan/creation?type=post_plan_details&plan_id=${planId}`
+            `/api/scm/fleet-management/trip-management/dispatch-plan/creation?type=post_plan_details&plan_id=${planId}`,
           );
           if (!res.ok) throw new Error("Failed to load details");
           const result = await res.json();
           const p = result.data;
+          const loadedIds = p.dispatch_ids?.length ? p.dispatch_ids.map(Number) : (p.dispatch_id ? [Number(p.dispatch_id)] : []);
+          const branchId = p.starting_point || 0;
 
           form.reset({
-            pre_dispatch_plan_ids: p.dispatch_id ? [Number(p.dispatch_id)] : [],
-            starting_point: p.starting_point || 0,
+            pre_dispatch_plan_ids: loadedIds,
+            starting_point: branchId,
             vehicle_id: p.vehicle_id || 0,
             driver_id: p.driver_id || 0,
             estimated_time_of_dispatch: p.estimated_time_of_dispatch || "",
@@ -181,31 +192,58 @@ export function DispatchEditModal({
             helpers: p.helpers?.length ? p.helpers : [{ user_id: 0 }],
           });
 
-          if (p.dispatch_id) {
+          if (loadedIds.length > 0) {
+            // Fetch plan details (sales invoices) for the right sidebar
             setIsLoadingDetails(true);
+            const detailPlanIds = loadedIds.join(",");
             const detailsRes = await fetch(
-              `/api/scm/fleet-management/trip-management/dispatch-plan/creation?type=plan_details&plan_ids=${p.dispatch_id}&trip_id=${planId}`
+              `/api/scm/fleet-management/trip-management/dispatch-plan/creation?type=plan_details&plan_ids=${detailPlanIds}&trip_id=${planId}`,
             );
             const detailsResult = await detailsRes.json();
-            setPlanDetails(detailsResult.data || []);
+            const loadedDetails: PlanDetailItem[] = detailsResult.data || [];
+            setPlanDetails(loadedDetails);
             setIsLoadingDetails(false);
+
+            // Recalculate amount as SUM of sales invoice amounts
+            const totalAmount = loadedDetails.reduce(
+              (sum, d) => sum + (d.amount || 0),
+              0,
+            );
+            form.setValue("amount", totalAmount);
+
+            // Manually load approved plans (including the Dispatched ones)
+            // so the left sidebar highlights the linked PDPs
+            await loadApprovedPlans(branchId, loadedIds);
           }
         } catch (error: any) {
           toast.error(error.message || "Could not load plan details");
         } finally {
           setIsLoading(false);
+          // Allow the branch-change effect to work again after initial load
+          // Use a longer delay to ensure React has flushed all batched renders
+          setTimeout(() => {
+            isInitialLoadRef.current = false;
+          }, 500);
         }
       };
       fetchDetails();
     } else {
       form.reset();
       setPlanDetails([]);
+      setApprovedPlans([]);
     }
   }, [open, planId, form]);
 
+  /** Synch form amount with actual planDetails (invoices) sum */
+  useEffect(() => {
+    const total = planDetails.reduce((sum, d) => sum + (d.amount || 0), 0);
+    form.setValue("amount", total);
+  }, [planDetails, form]);
+
+
   const onSubmit = async (values: DispatchCreationFormValues) => {
     if (!planId) return;
-    
+
     const payload = {
       ...values,
       invoices: planDetails
@@ -251,14 +289,7 @@ export function DispatchEditModal({
         </DialogHeader>
 
         {isLoading || !isDataReady ? (
-          <div className="p-6 space-y-4 min-h-[400px]">
-            <Skeleton className="h-9 w-full rounded-md" />
-            <div className="grid grid-cols-2 gap-3">
-              <Skeleton className="h-9 w-full rounded-md" />
-              <Skeleton className="h-9 w-full rounded-md" />
-            </div>
-            <Skeleton className="h-40 w-full rounded-md" />
-          </div>
+          <DispatchModalSkeleton />
         ) : (
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)}>
@@ -271,7 +302,6 @@ export function DispatchEditModal({
                   selectedPlanIds={form.watch("pre_dispatch_plan_ids") || []}
                   onPlanSelect={handlePlanSelect}
                   selectedBranch={selectedBranch}
-                  selectedAmount={form.watch("amount")}
                 />
 
                 <TripConfigurationForm masterData={masterData} />
@@ -281,6 +311,7 @@ export function DispatchEditModal({
                   planDetails={planDetails}
                   isLoadingDetails={isLoadingDetails}
                   onReorder={setPlanDetails}
+                  selectedAmount={form.watch("amount") || 0}
                 />
               </div>
 
@@ -307,7 +338,7 @@ export function DispatchEditModal({
                     disabled={isSaving}
                     className="h-8 px-4 text-sm font-medium"
                   >
-                   {isSaving ? (
+                    {isSaving ? (
                       <>
                         <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
                         Updating...

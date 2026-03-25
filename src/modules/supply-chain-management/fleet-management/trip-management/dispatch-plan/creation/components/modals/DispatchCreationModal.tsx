@@ -25,6 +25,7 @@ import { PdpListSidebar } from "./parts/PdpListSidebar";
 import { TripConfigurationForm } from "./parts/TripConfigurationForm";
 import { InvoiceItemsSidebar } from "./parts/InvoiceItemsSidebar";
 import { PlanDetailItem } from "./parts/types";
+import { DispatchModalSkeleton } from "./DispatchSkeleton";
 
 
 interface DispatchCreationModalProps {
@@ -113,28 +114,28 @@ export function DispatchCreationModal({
     }
   };
 
-  const handlePlanSelect = async (planIdStr: string) => {
-    const planId = Number(planIdStr);
-    const plan = approvedPlans.find((p) => p.dispatch_id === planId);
-    if (!plan) return;
+  const handlePlanSelect = async (pdpIdStr: string) => {
+    const selectedPdpId = Number(pdpIdStr);
+    const pdp = approvedPlans.find((p) => p.dispatch_id === selectedPdpId);
+    if (!pdp) return;
 
     const currentIds = form.getValues("pre_dispatch_plan_ids") || [];
-    const isSelected = currentIds.includes(planId);
+    const isSelected = currentIds.includes(selectedPdpId);
     
     let newIds: number[];
     if (isSelected) {
-      newIds = currentIds.filter(id => id !== planId);
+      newIds = currentIds.filter(id => id !== selectedPdpId);
     } else {
-      newIds = [...currentIds, planId];
+      newIds = [...currentIds, selectedPdpId];
     }
     
     form.setValue("pre_dispatch_plan_ids", newIds, { shouldValidate: true });
 
-    // Recalculate amount
-    const totalAmount = approvedPlans
-      .filter((p) => newIds.includes(p.dispatch_id))
-      .reduce((sum, p) => sum + (p.total_amount || 0), 0);
-    form.setValue("amount", totalAmount);
+    // Recalculate amount - REMOVED manual setValue to let useEffect handle it
+    // const totalAmount = approvedPlans
+    //   .filter((p) => newIds.includes(p.dispatch_id))
+    //   .reduce((sum, p) => sum + (p.total_amount || 0), 0);
+    // form.setValue("amount", totalAmount);
 
     // Initial inheritance mapping (from the first selected plan, if any)
     if (newIds.length > 0) {
@@ -170,6 +171,12 @@ export function DispatchCreationModal({
     }
   };
 
+  /** Synch form amount with actual planDetails (invoices) sum */
+  useEffect(() => {
+    const total = planDetails.reduce((sum, d) => sum + (d.amount || 0), 0);
+    form.setValue("amount", total);
+  }, [planDetails, form]);
+
   const onSubmit = async (values: DispatchCreationFormValues) => {
     try {
       await createTrip(values);
@@ -204,14 +211,7 @@ export function DispatchCreationModal({
         </DialogHeader>
 
         {!isDataReady ? (
-          <div className="p-6 space-y-4">
-            <Skeleton className="h-9 w-full rounded-md" />
-            <div className="grid grid-cols-2 gap-3">
-              <Skeleton className="h-9 w-full rounded-md" />
-              <Skeleton className="h-9 w-full rounded-md" />
-            </div>
-            <Skeleton className="h-40 w-full rounded-md" />
-          </div>
+          <DispatchModalSkeleton />
         ) : (
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)}>
@@ -221,19 +221,19 @@ export function DispatchCreationModal({
                   isLoadingPlans={isLoadingPlans}
                   searchQuery={searchQuery}
                   onSearchChange={setSearchQuery}
-                  selectedPlanIds={form.watch("pre_dispatch_plan_ids")}
+                  selectedPlanIds={form.watch("pre_dispatch_plan_ids") || []}
                   onPlanSelect={handlePlanSelect}
                   selectedBranch={selectedBranch}
-                  selectedAmount={form.watch("amount")}
                 />
 
                 <TripConfigurationForm masterData={masterData} />
 
                 <InvoiceItemsSidebar
-                  selectedPlanIds={form.watch("pre_dispatch_plan_ids")}
+                  selectedPlanIds={form.watch("pre_dispatch_plan_ids") || []}
                   planDetails={planDetails}
                   isLoadingDetails={isLoadingDetails}
                   onReorder={setPlanDetails}
+                  selectedAmount={form.watch("amount") || 0}
                 />
               </div>
 
