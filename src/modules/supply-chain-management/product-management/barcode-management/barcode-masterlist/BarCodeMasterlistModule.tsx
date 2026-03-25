@@ -14,7 +14,6 @@ import {
   ChevronsRight,
   History,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -42,12 +41,11 @@ export default function BarcodeMasterlistModule() {
     setCurrentPage,
     totalPages,
     totalItems,
-    searchQuery,
-    setSearchQuery,
     recordTypeFilter,
     setRecordTypeFilter,
     error,
     refresh,
+    setSearchQuery,
   } = useBarcodeMasterlist();
 
   // Selection & Printing State
@@ -64,7 +62,7 @@ export default function BarcodeMasterlistModule() {
       setSearchQuery(searchInput);
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchInput]);
+  }, [searchInput, setSearchQuery]);
 
   // Print States
   const [showFormatModal, setShowFormatModal] = useState(false);

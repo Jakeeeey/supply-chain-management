@@ -9,20 +9,34 @@ import { BudgetAllocationModal } from "@/modules/supply-chain-management/fleet-m
 import { DispatchCreationModal } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/components/modals/DispatchCreationModal";
 import { DispatchEditModal } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/components/modals/DispatchEditModal";
 import { useDispatchCreation } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/hooks/useDispatchCreation";
+import { useCallback, useState } from "react";
 import { SortingState } from "@tanstack/react-table";
 import { Plus } from "lucide-react";
-import { useState } from "react";
 
 export default function DispatchCreationPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<DispatchPlanSummary | null>(null);
-  const [selectedEditPlanId, setSelectedEditPlanId] = useState<number | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<DispatchPlanSummary | null>(
+    null,
+  );
+  const [selectedEditPlanId, setSelectedEditPlanId] = useState<number | null>(
+    null,
+  );
   const [sorting, setSorting] = useState<SortingState>([]);
 
   const { dispatchSummary, isLoadingSummary, refreshSummary, masterData } =
     useDispatchCreation();
+
+  const handleEdit = useCallback((plan: DispatchPlanSummary) => {
+    setSelectedEditPlanId(Number(plan.id));
+    setIsEditModalOpen(true);
+  }, []);
+
+  const handleBudget = useCallback((plan: DispatchPlanSummary) => {
+    setSelectedPlan(plan);
+    setIsBudgetModalOpen(true);
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -38,7 +52,8 @@ export default function DispatchCreationPage() {
         </div>
         <Button
           onClick={() => setIsModalOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700  px-6"
+          variant="default"
+          className="px-6"
         >
           <Plus className="w-4 h-4" /> Create Dispatch Plan
         </Button>
@@ -50,14 +65,8 @@ export default function DispatchCreationPage() {
           isLoading={isLoadingSummary}
           sorting={sorting}
           onSortingChange={setSorting}
-          onEdit={(plan) => {
-            setSelectedEditPlanId(Number(plan.id));
-            setIsEditModalOpen(true);
-          }}
-          onBudget={(plan) => {
-            setSelectedPlan(plan);
-            setIsBudgetModalOpen(true);
-          }}
+          onEdit={handleEdit}
+          onBudget={handleBudget}
           emptyTitle="No Dispatch Plans Found"
           emptyDescription="Click 'Create Dispatch' to convert an approved Pre-Dispatch Plan into an active trip."
         />

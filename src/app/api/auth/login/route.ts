@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 const COOKIE_NAME = "vos_access_token";
 const COOKIE_MAX_AGE_CAP = 60 * 60 * 24 * 7; // 7 days cap
 
-function pickToken(payload: any): string | null {
+function pickToken(payload: Record<string, unknown> | null | string): string | null {
     if (!payload) return null;
     if (typeof payload === "string") return payload.trim() || null;
     const t = payload.token ?? payload.accessToken ?? payload.access_token ?? payload.jwt;
@@ -15,7 +15,7 @@ function pickToken(payload: any): string | null {
 }
 
 // Base64URL decode for JWT header/payload (no verification)
-function b64urlDecodeToJson(part: string): any | null {
+function b64urlDecodeToJson(part: string): Record<string, unknown> | null {
     try {
         let s = part.replace(/-/g, "+").replace(/_/g, "/");
         // pad to multiple of 4
@@ -88,11 +88,12 @@ export async function POST(req: NextRequest) {
             signal: controller.signal,
             cache: "no-store",
         });
-    } catch (err: any) {
+    } catch (err: unknown) {
+        const errorInfo = err as { cause?: { code?: string; message?: string }; code?: string; message?: string };
         // ✅ Log details server-side only
         console.error("[auth/login] Upstream fetch error:", {
-            code: err?.cause?.code || err?.code,
-            message: err?.cause?.message || err?.message,
+            code: errorInfo?.cause?.code || errorInfo?.code,
+            message: errorInfo?.cause?.message || errorInfo?.message,
         });
 
         // ✅ Return generic message to client (no internal URL/IP)
@@ -105,7 +106,7 @@ export async function POST(req: NextRequest) {
     }
 
     const raw = await springRes.text();
-    let data: any = null;
+    let data: unknown = null;
     try {
         data = raw ? JSON.parse(raw) : null;
     } catch {
@@ -123,7 +124,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: false, message: msg }, { status: springRes.status });
     }
 
-    const token = pickToken(data);
+    const token = pickToken(data as Record<string, unknown> | string | null);
     if (!token) {
         console.error("[auth/login] Login OK but no token returned by upstream.");
         return NextResponse.json(
@@ -142,7 +143,11 @@ export async function POST(req: NextRequest) {
         value: token,
         httpOnly: true,
         sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
+        // use this for production
+        // secure: process.env.NODE_ENV === "production",
+
+        // for development only to allow cookies to work on http
+        secure: false,
         path: "/",
         maxAge: cookieMaxAgeFromJwt(token),
     });

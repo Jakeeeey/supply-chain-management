@@ -167,6 +167,36 @@ function genReceiptNo() {
 
 const API_URL = "/api/scm/supplier-management/receiving-products";
 
+const playBeep = (type: "success" | "error" = "success") => {
+    try {
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioContext) return;
+        const ctx = new AudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        if (type === "success") {
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(800, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.1, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.1);
+        } else {
+            osc.type = "square";
+            osc.frequency.setValueAtTime(300, ctx.currentTime);
+            gain.gain.setValueAtTime(0.1, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.3);
+        }
+    } catch {
+        // Ignored if audio is blocked or unsupported
+    }
+};
+
 export function ReceivingProductsProvider({ children }: { children: React.ReactNode }) {
     const [list, setList] = React.useState<ReceivingListItem[]>([]);
     const [listLoading, setListLoading] = React.useState(false);
@@ -366,10 +396,16 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
         setLastMatched(null);
 
         const poId = selectedPO?.id;
-        if (!poId) return setScanError("Select a PO first.");
+        if (!poId) {
+            playBeep("error");
+            return setScanError("Select a PO first.");
+        }
 
         const value = (rfidOverride ?? rfid).trim();
-        if (!value) return setScanError("Scan RFID first.");
+        if (!value) {
+            playBeep("error");
+            return setScanError("Scan RFID first.");
+        }
 
         try {
             // ✅ Block duplicate: if same RFID already verified as "ok" in this session
@@ -377,6 +413,7 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
                 (a) => a.rfid === value && a.status === "ok"
             );
             if (alreadyVerifiedInSession) {
+                playBeep("error");
                 setScanError(
                     `Already scanned RFID (${value.slice(-6).toUpperCase()}) cannot be duplicated.`
                 );
@@ -393,6 +430,7 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
 
             const porId = String(data?.porId ?? "");
             if (!porId) {
+                playBeep("error");
                 setScanError("Invalid scan result (missing porId).");
                 setRfid("");
                 return;
@@ -412,6 +450,7 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
                     },
                     ...prev,
                 ]);
+                playBeep("error");
                 setScanError("This RFID is already received. It was not counted again.");
                 setRfid("");
                 return;
@@ -435,9 +474,11 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
                 ...prev,
             ]);
 
+            playBeep("success");
             setLastMatched(data);
             setRfid("");
         } catch (e: any) {
+            playBeep("error");
             setScanError(String(e?.message ?? e));
         }
     }, [selectedPO, rfid, activity]);

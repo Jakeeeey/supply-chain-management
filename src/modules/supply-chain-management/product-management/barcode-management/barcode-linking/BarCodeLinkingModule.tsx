@@ -57,7 +57,6 @@ export default function BarCodeScannerModule() {
     setCurrentPage,
     totalPages,
     totalItems,
-    searchQuery,
     setSearchQuery,
     productFilter,
     setProductFilter,
@@ -84,7 +83,7 @@ export default function BarCodeScannerModule() {
       setSearchQuery(searchInput);
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchInput]);
+  }, [searchInput, setSearchQuery]);
 
   useEffect(() => {
     setPageInput(String(currentPage));

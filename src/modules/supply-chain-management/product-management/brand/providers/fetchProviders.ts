@@ -51,7 +51,7 @@ export async function createBrand(
   payload: BrandFormValues,
 ): Promise<BrandApiRow> {
   const cleanPayload = { ...payload };
-  if ("brand_id" in cleanPayload) delete (cleanPayload as any).brand_id;
+  if ("brand_id" in cleanPayload) delete (cleanPayload as Record<string, unknown>).brand_id;
 
   const res = await fetch(API_BASE, {
     method: "POST",

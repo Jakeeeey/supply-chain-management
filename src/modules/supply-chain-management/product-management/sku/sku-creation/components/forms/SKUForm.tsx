@@ -32,7 +32,7 @@ import { Plus, Trash2, Box } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Combobox } from "@/components/ui/combobox";
+import { Combobox } from "../Combobox";
 
 interface FormFieldWrapperProps {
   control: any;
@@ -305,7 +305,7 @@ export function SKUForm({
                               label: b.name,
                             }))}
                             value={field.value?.toString() || ""}
-                            onValueChange={(v) =>
+                            onValueChange={(v: string) =>
                               field.onChange(v ? parseInt(v) : null)
                             }
                             placeholder="Select Brand"
@@ -334,7 +334,7 @@ export function SKUForm({
                               }),
                             )}
                             value={field.value?.toString() || ""}
-                            onValueChange={(v) =>
+                            onValueChange={(v: string) =>
                               field.onChange(v ? parseInt(v) : null)
                             }
                             placeholder="Select Category"
@@ -383,7 +383,7 @@ export function SKUForm({
                               label: s.name,
                             }))}
                             value={field.value?.toString() || ""}
-                            onValueChange={(v) =>
+                            onValueChange={(v: string) =>
                               field.onChange(v ? parseInt(v) : null)
                             }
                             placeholder="Select Supplier"

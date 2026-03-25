@@ -48,7 +48,7 @@ export async function listUnits(
 
 export async function createUnit(payload: UnitFormValues): Promise<UnitApiRow> {
   const cleanPayload = { ...payload };
-  if ("unit_id" in cleanPayload) delete (cleanPayload as any).unit_id;
+  if ("unit_id" in cleanPayload) delete (cleanPayload as Record<string, unknown>).unit_id;
 
   const res = await fetch(API_BASE, {
     method: "POST",

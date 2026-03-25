@@ -4,6 +4,12 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { type StockConversionProduct, type StockConversionPayload } from "../types";
 
+// --- IN-MEMORY CACHE FOR INSTANT NAVIGATION ---
+// This safely preserves data when moving between modules without refetching.
+let cachedData: StockConversionProduct[] | null = null;
+let cachedTotalCount: number = 0;
+// ----------------------------------------------
+
 export function useStockConversion(branchId?: number) {
   const [data, setData] = useState<StockConversionProduct[]>([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -18,21 +24,34 @@ export function useStockConversion(branchId?: number) {
   // Safeguard to prevent multiple concurrent requests for the same product
   const loadingProductsRef = useRef<Set<number>>(new Set());
 
-  // 1. Initial Load: Fetch paginated products
-  const refresh = useCallback(async () => {
+  // 1. Initial Load: Fetch paginated products (now fetches ALL, caches in memory)
+  const refresh = useCallback(async (forceRefresh = false) => {
+    // Return cache instantly if available!
+    if (!forceRefresh && cachedData !== null) {
+      console.log("[useStockConversion] Serving instantly from memory cache!");
+      setData(cachedData);
+      setTotalCount(cachedTotalCount);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
       const sp = new URLSearchParams();
-      sp.set("page", String(page));
-      sp.set("limit", String(pageSize));
+      // Ask API to return every single product so frontend can paginate
+      sp.set("limit", "-1");
 
       const res = await fetch(`/api/scm/transfers/stock-conversion?${sp.toString()}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to fetch stock conversion data");
       
       const products: StockConversionProduct[] = json.data || [];
-      const total = json.totalCount || 0;
+      const total = json.totalCount || products.length;
+      
+      // Save this page's results to cache
+      cachedData = products;
+      cachedTotalCount = total;
       
       setData(products);
       setTotalCount(total);
@@ -42,7 +61,7 @@ export function useStockConversion(branchId?: number) {
       setError(err?.message ?? "An error occurred");
       setIsLoading(false);
     }
-  }, [page, pageSize]);
+  }, []);
 
   // 2. Targeted Inventory Fetch: Triggered by UI/Filters
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -74,7 +93,8 @@ export function useStockConversion(branchId?: number) {
       if (!res.ok) throw new Error(invJson.error || "Inventory load failed");
 
       const invMap = invJson.data || {};
-      setData(prev => prev.map(p => {
+      setData(prev => {
+        const next = prev.map(p => {
           const qty = invMap[p.productId];
           if (qty !== undefined) {
             return {
@@ -84,10 +104,12 @@ export function useStockConversion(branchId?: number) {
                 inventoryLoaded: true
             };
           }
-          // If we were filtering by something else, we don't necessarily want to set everything to 0
-          // but if it was a broad fetch, we might. For now, only update if present in map.
           return p;
-      }));
+        });
+        
+        cachedData = next; // sync cache
+        return next;
+      });
     } catch (e: unknown) {
         const err = e as Error;
         console.error("Inventory fetch failed:", err);
@@ -136,7 +158,7 @@ export function useStockConversion(branchId?: number) {
 
       const invMap = invJson.data || {};
       setData(prev => {
-        return prev.map(p => {
+        const next = prev.map(p => {
           if (fetchableIds.includes(p.productId)) {
             const qty = invMap[p.productId];
             const finalQty = qty !== undefined ? qty : 0;
@@ -149,6 +171,9 @@ export function useStockConversion(branchId?: number) {
           }
           return p;
         });
+
+        cachedData = next; // sync cache
+        return next;
       });
     } catch (e: unknown) {
       const err = e as Error;
@@ -180,29 +205,33 @@ export function useStockConversion(branchId?: number) {
       if (!res.ok) throw new Error(data.error || "Failed to convert stock");
 
       toast.success("Stock conversion complete!");
-      
       // Perform local state update for immediate feedback instead of slow refetch
-      setData(prev => prev.map(p => {
-        // Source Product Update
-        if (p.productId === payload.productId) {
-          const newQty = Math.max(0, p.quantity - payload.quantityToConvert);
-          return {
-            ...p,
-            quantity: newQty,
-            totalAmount: Number((newQty * (p.pricePerUnit || 0)).toFixed(2))
-          };
-        }
-        // Target Product Update
-        if (p.productId === payload.targetProductId) {
-          const newQty = p.quantity + payload.convertedQuantity;
-          return {
-            ...p,
-            quantity: newQty,
-            totalAmount: Number((newQty * (p.pricePerUnit || 0)).toFixed(2))
-          };
-        }
-        return p;
-      }));
+      setData(prev => {
+        const next = prev.map(p => {
+          // Source Product Update
+          if (p.productId === payload.productId) {
+            const newQty = Math.max(0, p.quantity - payload.quantityToConvert);
+            return {
+              ...p,
+              quantity: newQty,
+              totalAmount: Number((newQty * (p.pricePerUnit || 0)).toFixed(2))
+            };
+          }
+          // Target Product Update
+          if (p.productId === payload.targetProductId) {
+            const newQty = p.quantity + payload.convertedQuantity;
+            return {
+              ...p,
+              quantity: newQty,
+              totalAmount: Number((newQty * (p.pricePerUnit || 0)).toFixed(2))
+            };
+          }
+          return p;
+        });
+        
+        cachedData = next; // sync cache
+        return next;
+      });
 
       return data;
     } catch (e: unknown) {

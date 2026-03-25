@@ -51,9 +51,10 @@ export function BarcodeHistoryModal({ open, onClose }: BarcodeHistoryModalProps)
                 if (!res.ok) throw new Error("Failed to fetch history");
                 const json = await res.json();
                 setEntries(json.data || []);
-            } catch (err: any) {
+            } catch (err: unknown) {
                 console.error("History fetch error:", err);
-                setError(err.message || "Failed to load history.");
+                const message = err instanceof Error ? err.message : "Failed to load history.";
+                setError(message);
             } finally {
                 setIsLoading(false);
             }

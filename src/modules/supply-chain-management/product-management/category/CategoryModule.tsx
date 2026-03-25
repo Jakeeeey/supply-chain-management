@@ -83,9 +83,10 @@ export default function CategoryModule() {
       setError(null);
       const res = await listCategories(1, -1); // Fetch all
       setData(res.data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to load categories", err);
-      setError(err.message || "Failed to load categories.");
+      const message = err instanceof Error ? err.message : "Failed to load categories.";
+      setError(message);
       toast.error("Failed to load categories");
     } finally {
       setLoading(false);
