@@ -417,39 +417,40 @@ export function PhysicalInventoryRFIDDialog(props: Props) {
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-h-[96vh] w-[94vw] overflow-hidden p-0 sm:max-w-2xl sm:w-full sm:rounded-2xl">
-                <DialogHeader className="px-6 pt-6">
-                    <DialogTitle>RFID Tag Review</DialogTitle>
-                    <DialogDescription className="text-xs sm:text-sm">
-                        Review saved RFID tags, manually add missing tags, or
-                        remove incorrect ones.
-                    </DialogDescription>
-                </DialogHeader>
+            <DialogContent className="max-h-[96vh] w-[94vw] p-0 sm:max-w-2xl sm:w-full sm:rounded-2xl flex flex-col overflow-hidden">
+                <div className="shrink-0 px-6 pt-6 pb-2">
+                    <DialogHeader>
+                        <DialogTitle>RFID Tag Review</DialogTitle>
+                        <DialogDescription className="text-xs sm:text-sm">
+                            Review saved RFID tags, manually add missing tags, or
+                            remove incorrect ones.
+                        </DialogDescription>
+                    </DialogHeader>
+                </div>
 
-                <div className="flex flex-col overflow-hidden px-6 pb-6">
-                    <div className="mb-4 space-y-4">
-                        <div className="rounded-xl border bg-muted/30 p-3 text-[11px] sm:p-4 sm:text-sm">
-                            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                                <p className="col-span-2 sm:col-span-1">
-                                    <span className="font-semibold text-muted-foreground mr-1">Product:</span>
-                                    <span className="font-medium text-foreground">{row?.product_name ?? "—"}</span>
-                                </p>
-                                <p>
-                                    <span className="font-semibold text-muted-foreground mr-1">UOM:</span>
-                                    <span className="font-medium text-foreground">{row?.unit_name ?? row?.unit_shortcut ?? "—"}</span>
-                                </p>
-                                <p className="hidden sm:block">
-                                    <span className="font-semibold text-muted-foreground mr-1">Product ID:</span>
-                                    <span className="font-medium text-foreground">{row?.product_id ?? "—"}</span>
-                                </p>
-                                <p>
-                                    <span className="font-semibold text-muted-foreground mr-1">Count:</span>
-                                    <span className="font-bold text-primary">{tags.length}</span>
-                                </p>
-                            </div>
+                <div className="flex flex-col flex-1 min-h-0 overflow-hidden px-6 pb-6 gap-4">
+                    <div className="rounded-xl border bg-muted/30 p-3 text-[11px] sm:p-4 sm:text-sm shrink-0">
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                            <p className="col-span-2 sm:col-span-1">
+                                <span className="font-semibold text-muted-foreground mr-1">Product:</span>
+                                <span className="font-medium text-foreground">{row?.product_name ?? "—"}</span>
+                            </p>
+                            <p>
+                                <span className="font-semibold text-muted-foreground mr-1">UOM:</span>
+                                <span className="font-medium text-foreground">{row?.unit_name ?? row?.unit_shortcut ?? "—"}</span>
+                            </p>
+                            <p className="hidden sm:block">
+                                <span className="font-semibold text-muted-foreground mr-1">Product ID:</span>
+                                <span className="font-medium text-foreground">{row?.product_id ?? "—"}</span>
+                            </p>
+                            <p>
+                                <span className="font-semibold text-muted-foreground mr-1">Count:</span>
+                                <span className="font-bold text-primary">{tags.length}</span>
+                            </p>
                         </div>
+                    </div>
 
-                    <div className="space-y-2">
+                    <div className="space-y-2 shrink-0">
                         <div className="flex flex-col gap-2 sm:flex-row">
                             <Input
                                 ref={inputRef}
@@ -511,66 +512,54 @@ export function PhysicalInventoryRFIDDialog(props: Props) {
                         </p>
                     </div>
 
-                    <div className="min-h-0 flex-1 rounded-xl border">
-                        <ScrollArea className="h-full min-h-[220px] max-h-[360px]">
-                            <div className="divide-y">
-                                {isLoading ? (
-                                    <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Loading RFID tags...
-                                    </div>
-                                ) : tags.length ? (
-                                    tags.map((tag) => (
-                                        <div
-                                            key={tag.id}
-                                            className="flex items-center justify-between gap-3 p-4"
-                                        >
-                                            <div className="min-w-0">
-                                                <p className="truncate font-medium">
-                                                    {tag.rfid_tag}
-                                                </p>
-                                                <p className="text-xs text-muted-foreground">
-                                                    Created at: {tag.created_at ?? "—"}
-                                                </p>
-                                            </div>
-
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="cursor-pointer"
-                                                onClick={() => void handleDeleteTag(tag.id)}
-                                                disabled={deletingId === tag.id}
-                                            >
-                                                {deletingId === tag.id ? (
-                                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                                ) : (
-                                                    <>
-                                                        <Trash2 className="mr-2 h-4 w-4" />
-                                                        Remove
-                                                    </>
-                                                )}
-                                            </Button>
+                    <div className="rounded-xl border flex-1 min-h-[200px] overflow-y-auto bg-background">
+                        <div className="divide-y p-1">
+                            {isLoading ? (
+                                <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Loading RFID tags...
+                                </div>
+                            ) : tags.length ? (
+                                tags.map((tag) => (
+                                    <div
+                                        key={tag.id}
+                                        className="flex items-center justify-between gap-3 p-4"
+                                    >
+                                        <div className="min-w-0">
+                                            <p className="truncate font-medium">
+                                                {tag.rfid_tag}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">
+                                                Created at: {tag.created_at ?? "—"}
+                                            </p>
                                         </div>
-                                    ))
-                                ) : (
-                                    <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
-                                        No RFID tags registered yet.
-                                    </div>
-                                )}
-                            </div>
-                        </ScrollArea>
-                    </div>
 
-                    <div className="mt-4 flex justify-end">
-                        <Button
-                            variant="outline"
-                            className="cursor-pointer"
-                            onClick={() => onOpenChange(false)}
-                        >
-                            Close
-                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="cursor-pointer shrink-0"
+                                            onClick={() => void handleDeleteTag(tag.id)}
+                                            disabled={deletingId === tag.id}
+                                        >
+                                            {deletingId === tag.id ? (
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                            ) : (
+                                                <>
+                                                    <Trash2 className="mr-2 h-4 w-4" />
+                                                    Remove
+                                                </>
+                                            )}
+                                        </Button>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
+                                    No RFID tags registered yet.
+                                </div>
+                            )}
                         </div>
                     </div>
+
                 </div>
             </DialogContent>
         </Dialog>

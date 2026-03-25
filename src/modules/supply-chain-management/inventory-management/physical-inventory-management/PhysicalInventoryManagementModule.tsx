@@ -84,6 +84,7 @@ import {
 type Props = {
     initialHeaderId?: number | null;
     onRecordChange?: (header: PhysicalInventoryHeaderRow) => void;
+    currentUser?: { id: number; name: string } | null;
 };
 
 type RebuildInput = {
@@ -99,8 +100,14 @@ type LocalRfidSavedPayload = {
     rfidCount: number;
 };
 
-function todayInputValue(): string {
-    return new Date().toISOString().slice(0, 10);
+function nowInputValue(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    const hours = String(now.getHours()).padStart(2, "0");
+    const minutes = String(now.getMinutes()).padStart(2, "0");
+    return `${year}-${month}-${day}T${hours}:${minutes}:00`;
 }
 
 function toNullableNumberInput(value: string): number {
@@ -197,7 +204,7 @@ function groupedRowHasUncounted(row: GroupedPhysicalInventoryRow): boolean {
 }
 
 export function PhysicalInventoryManagementModule(props: Props) {
-    const { initialHeaderId = null, onRecordChange } = props;
+    const { initialHeaderId = null, onRecordChange, currentUser } = props;
     const router = useRouter();
 
     const [isBootLoading, setIsBootLoading] = React.useState(true);
@@ -243,6 +250,25 @@ export function PhysicalInventoryManagementModule(props: Props) {
         "ALL" | "VARIANCE" | "RFID" | "UNCOUNTED"
     >("ALL");
     const [activeQuickCategory, setActiveQuickCategory] = React.useState<string>("ALL");
+
+    React.useEffect(() => {
+        if (filters.branch_id && currentUser) {
+            setHeader((prev) => {
+                if (!prev) return prev;
+                if (prev.id !== 0) return prev;
+                if (prev.date_encoded && prev.encoder_id) return prev;
+                return {
+                    ...prev,
+                    date_encoded: new Date().toISOString(),
+                    encoder_id: {
+                        user_id: currentUser.id,
+                        user_fname: currentUser.name,
+                        user_lname: "",
+                    } as any,
+                };
+            });
+        }
+    }, [filters.branch_id, currentUser]);
 
     const hasLoadedDetails = detailRows.length > 0;
 
@@ -499,7 +525,9 @@ export function PhysicalInventoryManagementModule(props: Props) {
             const nextDetails = detailRows.map((detail) => updatedMap.get(detail.id) ?? detail);
 
             setDetailRows(nextDetails);
-            dirtyDetailIdsRef.current.clear();
+            for (const id of dirtyIds) {
+                dirtyDetailIdsRef.current.delete(id);
+            }
 
             const nextHeader = await updatePhysicalInventoryHeader(header.id, {
                 total_amount: sumHeaderTotalAmount(nextDetails),
@@ -709,7 +737,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
                     id: 0,
                     ph_no: nextPhNo,
                     date_encoded: null,
-                    cutOff_date: todayInputValue(),
+                    cutOff_date: nowInputValue(),
                     starting_date: null,
                     price_type: null,
                     stock_type: "GOOD",
@@ -839,6 +867,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
         }
 
         rebuildGroupedRows();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
         filters.branch_id,
         filters.supplier_id,
@@ -846,7 +875,6 @@ export function PhysicalInventoryManagementModule(props: Props) {
         filters.price_type_id,
         isBootLoading,
         lookupBundle,
-        rebuildGroupedRows,
         rfidCountByDetailId,
         runningInventoryRows,
     ]);
@@ -1723,13 +1751,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
 
             <PhysicalInventoryTable
                 rows={visibleGroupedRows}
-                isLoading={
-                    isBootLoading ||
-                    isHydratingRecord ||
-                    isLoadingProducts ||
-                    isSavingDetailBatch ||
-                    isRebuildingGroups
-                }
+                isLoading={isBootLoading || isHydratingRecord || isLoadingProducts}
                 canEdit={canEdit}
                 onPhysicalCountChange={handlePhysicalCountChange}
                 onPhysicalCountBlur={handlePhysicalCountBlur}

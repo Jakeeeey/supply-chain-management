@@ -7,6 +7,7 @@ import type { OffsettingSelectableRow } from "../types";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
     Table,
@@ -16,6 +17,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import { Search } from "lucide-react";
 
 type Props = {
     title: string;
@@ -49,11 +51,46 @@ export function OffsettingSelectionTable({
                                              onToggleRow,
                                              onToggleAll,
                                          }: Props) {
+    const [searchQuery, setSearchQuery] = React.useState("");
+
+    const filteredRows = React.useMemo(() => {
+        const query = searchQuery.trim().toLowerCase();
+        if (!query) return rows;
+        return rows.filter(
+            (row) =>
+                row.product_label.toLowerCase().includes(query) ||
+                (row.product_code && row.product_code.toLowerCase().includes(query)) ||
+                (row.barcode && row.barcode.toLowerCase().includes(query)),
+        );
+    }, [rows, searchQuery]);
+
     const selectedSet = React.useMemo(() => new Set(selectedIds), [selectedIds]);
-    const allChecked = rows.length > 0 && rows.every((row) => selectedSet.has(row.row_id));
-    const someChecked = rows.some((row) => selectedSet.has(row.row_id));
+    const allChecked =
+        filteredRows.length > 0 && filteredRows.every((row) => selectedSet.has(row.row_id));
+    const someChecked = filteredRows.some((row) => selectedSet.has(row.row_id));
 
     const selectedCount = rows.filter((row) => selectedSet.has(row.row_id)).length;
+
+    const handleToggleAllVisible = React.useCallback(
+        (checked: boolean) => {
+            if (checked) {
+                // Toggle all currently visible rows ON
+                filteredRows.forEach((row) => {
+                    if (!selectedSet.has(row.row_id)) {
+                        onToggleRow(row.row_id, true);
+                    }
+                });
+            } else {
+                // Toggle all currently visible rows OFF
+                filteredRows.forEach((row) => {
+                    if (selectedSet.has(row.row_id)) {
+                        onToggleRow(row.row_id, false);
+                    }
+                });
+            }
+        },
+        [filteredRows, onToggleRow, selectedSet],
+    );
 
     return (
         <Card className="rounded-2xl">
@@ -77,44 +114,57 @@ export function OffsettingSelectionTable({
                         {direction}
                     </Badge>
                 </div>
+
+                <div className="mt-3 relative">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        placeholder={`Search ${direction.toLowerCase()} products...`}
+                        className="pl-9 h-9"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        disabled={disabled}
+                    />
+                </div>
             </CardHeader>
 
             <CardContent className="px-4 pb-4 pt-0">
                 <div className="overflow-hidden rounded-xl border">
-                    <ScrollArea className="h-[320px] w-full whitespace-nowrap">
+                    <div className="h-[320px] overflow-y-auto whitespace-nowrap">
                         <Table>
-                            <TableHeader className="sticky top-0 z-10 bg-background">
-                                <TableRow className="h-9">
-                                    <TableHead className="w-[40px] py-2">
+                            <TableHeader className="sticky top-0 z-10 bg-background shadow-[0_1px_0_rgba(0,0,0,0.05)]">
+                                <TableRow className="h-9 hover:bg-transparent border-b">
+                                    <TableHead className="w-[40px] py-2 bg-background">
                                         <Checkbox
                                             checked={allChecked || (someChecked ? "indeterminate" : false)}
-                                            disabled={disabled || rows.length === 0}
+                                            disabled={disabled || filteredRows.length === 0}
                                             onCheckedChange={(checked) => {
-                                                onToggleAll(Boolean(checked));
+                                                handleToggleAllVisible(Boolean(checked));
                                             }}
-                                            aria-label={`Select all ${direction.toLowerCase()} rows`}
+                                            aria-label={`Select visible ${direction.toLowerCase()} rows`}
                                         />
                                     </TableHead>
-                                    <TableHead className="py-2 text-xs">Product</TableHead>
-                                    <TableHead className="py-2 text-xs">UOM</TableHead>
-                                    <TableHead className="py-2 text-right text-xs">Variance</TableHead>
-                                    <TableHead className="py-2 text-right text-xs">Diff Cost</TableHead>
-                                    <TableHead className="py-2 text-right text-xs">Selection Total</TableHead>
+                                    <TableHead className="py-2 text-xs bg-background">Product</TableHead>
+                                    <TableHead className="py-2 text-xs bg-background">UOM</TableHead>
+                                    <TableHead className="py-2 text-right text-xs bg-background">Variance</TableHead>
+                                    <TableHead className="py-2 text-right text-xs bg-background">Diff Cost</TableHead>
+                                    <TableHead className="py-2 text-right text-xs bg-background">Selection Total</TableHead>
                                 </TableRow>
                             </TableHeader>
 
                             <TableBody>
-                                {rows.length === 0 ? (
+                                {filteredRows.length === 0 ? (
                                     <TableRow>
                                         <TableCell
-                                            colSpan={5}
+                                            colSpan={6}
                                             className="h-20 text-center text-xs text-muted-foreground"
                                         >
-                                            No open {direction.toLowerCase()} rows.
+                                            {searchQuery
+                                                ? `No products matching "${searchQuery}"`
+                                                : `No open ${direction.toLowerCase()} rows.`}
                                         </TableCell>
                                     </TableRow>
                                 ) : (
-                                    rows.map((row) => (
+                                    filteredRows.map((row) => (
                                         <TableRow key={row.row_id} className="h-11">
                                             <TableCell className="py-2">
                                                 <Checkbox
@@ -165,7 +215,7 @@ export function OffsettingSelectionTable({
                                 )}
                             </TableBody>
                         </Table>
-                    </ScrollArea>
+                    </div>
                 </div>
             </CardContent>
         </Card>

@@ -196,7 +196,7 @@ export function PhysicalInventoryTable(props: Props) {
                                     <TableHeader>
                                         <TableRow className="bg-background">
                                             <TableHead className="w-[100px]">UOM</TableHead>
-                                            <TableHead className="text-right">Factor</TableHead>
+                                            <TableHead className="text-right">UOM Count</TableHead>
                                             <TableHead className="text-right">System</TableHead>
                                             <TableHead className="text-right">Physical</TableHead>
                                             <TableHead className="text-right">Variance</TableHead>

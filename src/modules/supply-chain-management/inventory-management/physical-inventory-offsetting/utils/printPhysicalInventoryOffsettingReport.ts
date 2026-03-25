@@ -13,6 +13,7 @@ type PrintArgs = {
     unresolvedShortRows: OffsettingSelectableRow[];
     unresolvedOverRows: OffsettingSelectableRow[];
     offsetGroups: PhysicalInventoryOffsetGroup[];
+    preparedBy?: string;
 };
 
 function escapeHtml(value: string): string {
@@ -115,7 +116,7 @@ function renderOffsetGroups(groups: PhysicalInventoryOffsetGroup[]): string {
             const shortLabels = group.short_rows
                 .map(
                     (row) => `
-                        <div class="truncate" title="${escapeHtml(row.product_label)}">
+                        <div class="product-item wrap-text" title="${escapeHtml(row.product_label)}">
                             ${escapeHtml(row.product_label)}
                         </div>
                     `,
@@ -125,7 +126,7 @@ function renderOffsetGroups(groups: PhysicalInventoryOffsetGroup[]): string {
             const overLabels = group.over_rows
                 .map(
                     (row) => `
-                        <div class="truncate" title="${escapeHtml(row.product_label)}">
+                        <div class="product-item wrap-text" title="${escapeHtml(row.product_label)}">
                             ${escapeHtml(row.product_label)}
                         </div>
                     `,
@@ -158,6 +159,7 @@ export function printPhysicalInventoryOffsettingReport(args: PrintArgs): void {
         unresolvedShortRows,
         unresolvedOverRows,
         offsetGroups,
+        preparedBy,
     } = args;
 
     const totalShortAmount = sumRowAmounts(allShortRows);
@@ -405,6 +407,14 @@ export function printPhysicalInventoryOffsettingReport(args: PrintArgs): void {
             line-height: 1.35;
         }
 
+        .product-item {
+            padding: 4px 0;
+        }
+
+        .product-item + .product-item {
+            border-top: 1px solid #e5e7eb;
+        }
+
         .findings-product-cell {
             min-width: 320px;
         }
@@ -547,7 +557,7 @@ export function printPhysicalInventoryOffsettingReport(args: PrintArgs): void {
                 </div>
                 <div class="detail-line">
                     <div class="detail-label">Record ID</div>
-                    <div class="detail-value">${escapeHtml(String(header.id))}</div>
+                    <div class="detail-value">${escapeHtml(header.ph_no || String(header.id))}</div>
                 </div>
             </div>
         </div>
@@ -677,8 +687,8 @@ export function printPhysicalInventoryOffsettingReport(args: PrintArgs): void {
 
     <div class="signoff-grid">
         <div class="signoff-box">
-            <div class="signoff-line">Prepared By</div>
-            <div class="signoff-role">Inventory Personnel</div>
+            <div class="signoff-line">${escapeHtml(preparedBy || "Inventory Personnel")}</div>
+            <div class="signoff-role">Prepared By</div>
         </div>
         <div class="signoff-box">
             <div class="signoff-line">Reviewed By</div>

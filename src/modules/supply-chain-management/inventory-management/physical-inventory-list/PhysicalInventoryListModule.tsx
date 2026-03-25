@@ -57,6 +57,7 @@ export function PhysicalInventoryListModule(props: Props) {
         branch_id: null,
         supplier_id: null,
         status: "All",
+        stock_type: "All",
     });
 
     const loadRows = React.useCallback(async () => {
@@ -101,18 +102,22 @@ export function PhysicalInventoryListModule(props: Props) {
             const matchesStatus =
                 filters.status === "All" || row.status === filters.status;
 
+            const matchesStockType =
+                filters.stock_type === "All" || row.stock_type === filters.stock_type;
+
             return (
                 matchesSearch &&
                 matchesBranch &&
                 matchesSupplier &&
-                matchesStatus
+                matchesStatus &&
+                matchesStockType
             );
         });
     }, [filters, rows]);
 
     React.useEffect(() => {
         setPage(1);
-    }, [filters.search, filters.branch_id, filters.supplier_id, filters.status]);
+    }, [filters.search, filters.branch_id, filters.supplier_id, filters.status, filters.stock_type]);
 
     const totalCount = filteredRows.length;
     const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
@@ -271,6 +276,28 @@ export function PhysicalInventoryListModule(props: Props) {
                                     <SelectItem value="Pending">Pending</SelectItem>
                                     <SelectItem value="Committed">Committed</SelectItem>
                                     <SelectItem value="Cancelled">Cancelled</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Stock Type</Label>
+                            <Select
+                                value={filters.stock_type}
+                                onValueChange={(value) =>
+                                    setFilters((prev) => ({
+                                        ...prev,
+                                        stock_type: value as PhysicalInventoryListFilters["stock_type"],
+                                    }))
+                                }
+                            >
+                                <SelectTrigger className="cursor-pointer">
+                                    <SelectValue placeholder="All stock types" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="All">All stock types</SelectItem>
+                                    <SelectItem value="GOOD">Good Stock</SelectItem>
+                                    <SelectItem value="BAD">Bad Stock</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>

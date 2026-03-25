@@ -12,7 +12,7 @@ import {
     type PhysicalInventoryListRow,
 } from "@/modules/supply-chain-management/inventory-management/physical-inventory-list";
 
-export default function PhysicalInventoryWorkspaceClient() {
+export default function PhysicalInventoryWorkspaceClient({ currentUser }: { currentUser?: { id: number; name: string } | null }) {
     const [selectedHeaderId, setSelectedHeaderId] = React.useState<number | null>(null);
     const [activeKey, setActiveKey] = React.useState<string>("new-0");
     const [isListCollapsed, setIsListCollapsed] = React.useState(false);
@@ -113,6 +113,7 @@ export default function PhysicalInventoryWorkspaceClient() {
                         key={activeKey}
                         initialHeaderId={activeHeaderId}
                         onRecordChange={handleRecordChange}
+                        currentUser={currentUser}
                     />
                 </div>
             </div>

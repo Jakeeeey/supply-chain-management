@@ -890,13 +890,7 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
                             />
 
                             <div className="space-y-4 p-4 sm:p-5">
-                                <div className="grid grid-cols-2 gap-2 rounded-xl border bg-muted/30 p-3 text-xs sm:grid-cols-4">
-                                    <div>
-                                        <span className="font-medium">Branch:</span> {branchId ?? "—"}
-                                    </div>
-                                    <div>
-                                        <span className="font-medium">PI:</span> {phId ?? "—"}
-                                    </div>
+                                <div className="grid grid-cols-2 gap-2 rounded-xl border bg-muted/30 p-3 text-xs">
                                     <div>
                                         <span className="font-medium">RFID Rows:</span>{" "}
                                         {totalRfidEligibleRows}
@@ -1002,17 +996,6 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
                                 </div>
                             </div>
 
-                            <div className="flex justify-end border-t px-4 py-3 sm:px-5">
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="cursor-pointer"
-                                    onClick={() => onOpenChange(false)}
-                                >
-                                    Close
-                                </Button>
-                            </div>
                         </div>
                     </div>
                 </DialogPortal>

@@ -57,6 +57,22 @@ function StatusBadge({ status }: { status: PhysicalInventoryListRow["status"] })
     return <Badge variant="secondary">Draft</Badge>;
 }
 
+function StockTypeBadge({ stockType }: { stockType: string | null }) {
+    if (stockType === "BAD") {
+        return (
+            <Badge variant="outline" className="border-red-200 bg-red-50 text-red-700 hover:bg-red-50 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
+                BAD STOCK
+            </Badge>
+        );
+    }
+
+    return (
+        <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300">
+            GOOD STOCK
+        </Badge>
+    );
+}
+
 function LoadingState() {
     return (
         <div className="space-y-3">
@@ -171,6 +187,7 @@ export function PhysicalInventoryListTable(props: Props) {
                                             <h3 className="truncate text-base font-semibold tracking-tight">
                                                 {row.ph_no ?? "—"}
                                             </h3>
+                                            <StockTypeBadge stockType={row.stock_type} />
                                         </div>
 
                                         <p className="truncate text-sm text-muted-foreground">
@@ -182,7 +199,7 @@ export function PhysicalInventoryListTable(props: Props) {
                                         </p>
 
                                         <p className="truncate text-xs text-muted-foreground">
-                                            {row.category_name ?? "—"} • {row.price_type_name ?? "—"}
+                                            Category: {row.category_name ?? "—"}
                                         </p>
 
                                         <p className="truncate text-xs text-muted-foreground">
