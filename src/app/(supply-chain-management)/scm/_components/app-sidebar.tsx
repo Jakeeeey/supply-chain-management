@@ -166,6 +166,24 @@ const data = {
                 {
                     title: "Stock Transfer",
                     url: "/scm/warehouse-management/stock-transfer",
+                    items: [
+                        {
+                            title: "Request",
+                            url: "/scm/warehouse-management/stock-transfer/request"
+                        },
+                        {
+                            title: "Approval",
+                            url: "/scm/warehouse-management/stock-transfer/approval"
+                        },
+                        {
+                            title: "Dispatching",
+                            url: "/scm/warehouse-management/stock-transfer/dispatching"
+                        },
+                        {
+                            title: "Receive",
+                            url: "/scm/warehouse-management/stock-transfer/receive"
+                        }
+                    ]
                 },
                 {
                     title: "Consolidation",

@@ -19,6 +19,7 @@ import { useStockTransfer, getBranchLabel } from './hooks/useStockTransfer';
 import StockTransferTable from './components/StockTransferTable';
 import StockTransferPrintPreview from './components/StockTransferPrintPreview';
 import { BranchCombobox } from './components/BranchCombobox';
+import { ProductCombobox } from './components/ProductCombobox';
 
 export default function StockTransferModule() {
   const {
@@ -31,10 +32,8 @@ export default function StockTransferModule() {
     setTargetBranch,
     leadDate,
     setLeadDate,
-    rfidInput,
-    setRfidInput,
     scannedItems,
-    handleRfidScan,
+    handleAddProduct,
     updateQty,
     removeItem,
     reset,
@@ -55,19 +54,6 @@ export default function StockTransferModule() {
   const targetBranchLabel = branches.find((b) => b.id.toString() === targetBranch)
     ? getBranchLabel(branches.find((b) => b.id.toString() === targetBranch)!)
     : targetBranch || '—';
-
-  const onRfidKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key !== 'Enter') return;
-    const trimmed = rfidInput.trim();
-    if (trimmed.length === 0) return;
-    if (trimmed.length !== 24) {
-      toast.error('Invalid RFID', {
-        description: `RFID must be exactly 24 characters. Current length: ${trimmed.length}.`,
-      });
-      return;
-    }
-    handleRfidScan();
-  };
 
   /** Validate then open the confirmation dialog */
   const handleConfirmClick = () => {
@@ -116,10 +102,10 @@ export default function StockTransferModule() {
 
         {/* ── Header Card ── */}
         <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
 
             {/* Source Branch */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 min-w-0">
               <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                 Source Branch <span className="text-destructive">*</span>
               </label>
@@ -165,25 +151,14 @@ export default function StockTransferModule() {
               />
             </div>
 
-            {/* RFID Scan */}
-            <div className="space-y-1.5">
+
+
+            {/* Manual Product Selection */}
+            <div className="space-y-1.5 min-w-0">
               <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                Scan RFID Tag
+                Manual Select
               </label>
-              <div className="relative">
-                <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  type="text"
-                  placeholder="e.g. STB15088"
-                  value={rfidInput}
-                  onChange={(e) => setRfidInput(e.target.value)}
-                  onKeyDown={onRfidKeyDown}
-                  className="h-10 pl-9 text-sm bg-background border-border"
-                />
-              </div>
-              <p className="text-[10px] text-muted-foreground mt-0.5 ml-1">
-                Press <kbd className="font-mono">Enter</kbd> to scan
-              </p>
+              <ProductCombobox onSelect={handleAddProduct} />
             </div>
           </div>
         </div>

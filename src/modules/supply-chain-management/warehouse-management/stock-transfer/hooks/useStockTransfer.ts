@@ -14,10 +14,8 @@ interface UseStockTransferReturn {
   setTargetBranch: (v: string) => void;
   leadDate: string;
   setLeadDate: (v: string) => void;
-  rfidInput: string;
-  setRfidInput: (v: string) => void;
   scannedItems: ScannedItem[];
-  handleRfidScan: () => Promise<void>;
+  handleAddProduct: (product: any) => void;
   updateQty: (rfid: string, qty: number) => void;
   removeItem: (rfid: string) => void;
   reset: () => void;
@@ -47,7 +45,6 @@ export function useStockTransfer(): UseStockTransferReturn {
   const [sourceBranch, setSourceBranch] = useState('');
   const [targetBranch, setTargetBranch] = useState('');
   const [leadDate, setLeadDate] = useState('');
-  const [rfidInput, setRfidInput] = useState('');
   const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
   const [isTransferConfirmed, setIsTransferConfirmed] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -71,56 +68,36 @@ export function useStockTransfer(): UseStockTransferReturn {
     fetchData();
   }, []);
 
-  const handleRfidScan = useCallback(async () => {
-    const rfid = rfidInput.trim();
-    if (!rfid) return;
-
-    // Prevent duplicate scans
-    if (scannedItems.find((i) => i.rfid.toLowerCase() === rfid.toLowerCase())) {
-      setRfidInput('');
-      return;
-    }
-
-    setRfidInput(''); // Clear input immediately for better UX
+  const handleAddProduct = useCallback((product: any) => {
+    // Generate a pseudo-RFID for manually added items
+    const rfid = `MNL-${product.product_id || product.id || Date.now()}-${Date.now().toString().slice(-4)}`;
     
-    try {
-      const res = await fetch(`/api/scm/warehouse-management/stock-transfer?action=lookup_rfid&rfid=${rfid}`);
-      
-      if (!res.ok) {
-        // Unknown RFID (or server error) — still add as a placeholder row
-        const newItem: ScannedItem = {
-          rfid,
-          productId: 0,
-          productName: 'Unknown Product',
-          description: 'Not found in received records',
-          unit: '—',
-          qtyAvailable: 0,
-          unitQty: 0,
-          unitPrice: 0,
-          totalAmount: 0,
-        };
-        setScannedItems((prev) => [newItem, ...prev]);
-        return;
-      }
+    // Prevent duplicate manual adds if they share the exact pseudo-rfid
+    if (scannedItems.find((i) => i.rfid === rfid)) return;
 
-      const match = await res.json();
-
-      const newItem: ScannedItem = {
-        rfid,
-        productId: match.productId,
-        productName: match.productName,
-        description: match.barcode,
-        unit: 'box', // Default unit
-        qtyAvailable: 1, // RFID represents 1 specific item
-        unitQty: 1, // Default to 1 for convenience
-        unitPrice: match.unitPrice,
-        totalAmount: match.unitPrice,
-      };
-      setScannedItems((prev) => [newItem, ...prev]);
-    } catch (err) {
-      console.error('RFID Lookup failed:', err);
+    let extractedUnit = 'unit';
+    if (typeof product.unit_of_measurement === 'object' && product.unit_of_measurement !== null) {
+      extractedUnit = String(product.unit_of_measurement.unit_name || product.unit_of_measurement.name || 'unit');
+    } else if (product.unit_of_measurement) {
+      extractedUnit = String(product.unit_of_measurement);
     }
-  }, [rfidInput, scannedItems]);
+
+    const price = parseFloat(product.price_per_unit || product.cost_per_unit || product.estimated_unit_cost || 0);
+
+    const newItem: ScannedItem = {
+      rfid,
+      productId: product.product_id || product.id,
+      productName: product.product_name,
+      description: product.barcode || 'Manual Entry',
+      unit: extractedUnit,
+      qtyAvailable: 999, // Placeholder for manually added
+      unitQty: 1, 
+      unitPrice: price,
+      totalAmount: price,
+    };
+    
+    setScannedItems((prev) => [newItem, ...prev]);
+  }, [scannedItems]);
 
   const updateQty = useCallback((rfid: string, qty: number) => {
     setScannedItems((prev) =>
@@ -141,7 +118,6 @@ export function useStockTransfer(): UseStockTransferReturn {
     setSourceBranch('');
     setTargetBranch('');
     setLeadDate('');
-    setRfidInput('');
     setScannedItems([]);
     setIsTransferConfirmed(false);
     setTransferStatus('');
@@ -186,10 +162,8 @@ export function useStockTransfer(): UseStockTransferReturn {
     setTargetBranch,
     leadDate,
     setLeadDate,
-    rfidInput,
-    setRfidInput,
     scannedItems,
-    handleRfidScan,
+    handleAddProduct,
     updateQty,
     removeItem,
     reset,

@@ -1,4 +1,4 @@
-// src/app/(supply-chain-management)/scm/warehouse-management/stock-transfer/page.tsx
+// src/app/(supply-chain-management)/scm/warehouse-management/stock-transfer/approval/page.tsx
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -10,8 +10,8 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
-import { NavUser } from "../../_components/nav-user"
-import StockTransferModule from "@/modules/supply-chain-management/warehouse-management/stock-transfer/StockTransferModule"
+import { NavUser } from "../../../_components/nav-user"
+import StockTransferApprovalModule from "@/modules/supply-chain-management/warehouse-management/stock-transfer/approval/StockTransferApprovalModule"
 
 const headerUser = {
     name: "Jake Dave M. De Guzman",
@@ -22,7 +22,7 @@ const headerUser = {
 export default function Page() {
     return (
         <div className="flex h-full min-h-0 flex-col">
-            <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-2 bg-background">
+            <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-2 bg-background print:hidden">
                 <div className="flex items-center gap-2 px-4">
                     <SidebarTrigger className="-ml-1" />
                     <Separator
@@ -35,8 +35,12 @@ export default function Page() {
                                 <BreadcrumbLink href="#">Warehouse Management</BreadcrumbLink>
                             </BreadcrumbItem>
                             <BreadcrumbSeparator className="hidden md:block" />
+                            <BreadcrumbItem className="hidden md:block">
+                                <BreadcrumbLink href="#">Stock Transfer</BreadcrumbLink>
+                            </BreadcrumbItem>
+                            <BreadcrumbSeparator className="hidden md:block" />
                             <BreadcrumbItem>
-                                <BreadcrumbPage>Stock Transfer</BreadcrumbPage>
+                                <BreadcrumbPage>Approval</BreadcrumbPage>
                             </BreadcrumbItem>
                         </BreadcrumbList>
                     </Breadcrumb>
@@ -48,7 +52,7 @@ export default function Page() {
             </header>
 
             <ScrollArea className="min-h-0 flex-1">
-                <StockTransferModule />
+                <StockTransferApprovalModule />
             </ScrollArea>
         </div>
     )

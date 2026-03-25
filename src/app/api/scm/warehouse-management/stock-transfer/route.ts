@@ -63,10 +63,16 @@ export async function GET(request: Request) {
     }
   }
 
+  const statusFilter = searchParams.get('status');
+
   // Default: Fetch everything for the module
   try {
+    const stockUrl = statusFilter 
+      ? `${baseUrl}/items/stock_transfer?limit=-1&filter[status][_in]=${encodeURIComponent(statusFilter)},${encodeURIComponent(String(statusFilter).charAt(0).toUpperCase() + String(statusFilter).slice(1).toLowerCase())}`
+      : `${baseUrl}/items/stock_transfer?limit=-1`;
+
     const [stockRes, branchRes] = await Promise.all([
-      fetch(`${baseUrl}/items/stock_transfer?limit=-1`, {
+      fetch(stockUrl, {
         method: 'GET',
         headers: { Authorization: `Bearer ${staticToken}`, 'Content-Type': 'application/json' },
         cache: 'no-store',
@@ -174,6 +180,86 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, orderNo, data: results }, { status: 201 });
   } catch (error) {
     console.error('Stock Transfer POST Error:', error);
+    return NextResponse.json({ error: String(error) }, { status: 500 });
+  }
+}
+
+// ─── PATCH: Update stock transfer statuses (e.g. approved, dispatched, received) ────────
+export async function PATCH(request: Request) {
+  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+  const staticToken = process.env.DIRECTUS_STATIC_TOKEN;
+
+  if (!baseUrl) {
+    return NextResponse.json({ error: 'API Base URL is not defined' }, { status: 500 });
+  }
+
+  try {
+    const body = await request.json();
+    const { ids, status, rfids, scanType } = body; // rfids: Array<{ stock_transfer_id: number, rfid_tag: string }>
+
+    if (!Array.isArray(ids) || ids.length === 0 || !status) {
+      return NextResponse.json({ error: 'Missing required fields: ids array or status' }, { status: 400 });
+    }
+
+    // 1. Update the status of each selected stock transfer line item
+    const results = await Promise.all(
+      ids.map(async (id: number) => {
+        return fetch(`${baseUrl}/items/stock_transfer/${id}`, {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${staticToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            // Enum values are strict: e.g. "For Picking", "For Loading", "Received"
+            status: String(status)
+          }),
+        }).then(async (res) => {
+          if (!res.ok) {
+            const err = await res.text();
+            throw new Error(`Directus PATCH failed for ID ${id}: ${err}`);
+          }
+          return res.json();
+        });
+      })
+    );
+
+    // 2. If RFIDs are provided, insert them into the new tracking table
+    let rfidResults = null;
+    if (Array.isArray(rfids) && rfids.length > 0 && scanType) {
+      const rfidPayloads = rfids.map((r: any) => ({
+         stock_transfer_id: r.stock_transfer_id,
+         rfid_tag: String(r.rfid_tag).trim(),
+         scan_type: scanType
+      }));
+
+      const rfidRes = await fetch(`${baseUrl}/items/stock_transfer_rfid`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${staticToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(rfidPayloads),
+      });
+
+      if (!rfidRes.ok) {
+        const errText = await rfidRes.text();
+        console.error('Failed to insert tracking RFIDs:', errText);
+        // We do not throw here to avoid failing the entire transfer if only the RFID log fails, 
+        // though typically you'd want a transaction.
+      } else {
+        rfidResults = await rfidRes.json();
+      }
+    }
+
+    return NextResponse.json({ 
+      success: true, 
+      count: ids.length, 
+      data: results,
+      rfidTracking: rfidResults
+    }, { status: 200 });
+  } catch (error) {
+    console.error('Stock Transfer PATCH Error:', error);
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }
 }
