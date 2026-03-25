@@ -489,8 +489,12 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         const productId = Number(rawId);
         
         // Strict mapping for unit checking to prevent different UOMs from merging
+        const isRfidItem = !!item.rfidTags && item.rfidTags.length > 0;
         const existingIndex = updated.findIndex(
-          (i) => i.productId === productId && i.unit === item.unit
+          (i) => {
+            const existingIsRfid = !!i.rfidTags && i.rfidTags.length > 0;
+            return i.productId === productId && i.unit === item.unit && existingIsRfid === isRfidItem;
+          }
         );
         const qty = item.quantity || 1;
         
@@ -929,17 +933,16 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                         if (!isManual) return null;
                         return (
                           <tr key={idx} className="hover:bg-muted/20 transition-colors duration-200 border-b border-border">
-                            <td className="px-4 py-2 font-mono text-xs text-foreground font-bold">
+                            <td className="px-4 py-2 font-mono text-sm text-foreground font-bold">
                               {item.code}
                             </td>
                             <td className="px-4 py-2 text-foreground">
-                              <div className="text-xs text-foreground font-medium truncate max-w-[220px]" title={item.description}>
+                              <div className="text-sm text-foreground font-medium truncate max-w-[220px]" title={item.description}>
                                 {item.description}
                               </div>
-                              <span className="text-muted-foreground/60 italic font-sans font-medium text-[10px] block mt-0.5">Manual Entry</span>
                             </td>
                             <td className="px-4 py-2">
-                              <span className="bg-background text-foreground px-2 py-0.5 rounded text-xs border border-border">
+                              <span className="bg-background text-foreground px-2 py-0.5 rounded text-sm border border-border">
                                 {item.unit}
                               </span>
                             </td>
@@ -952,15 +955,15 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                                 onChange={(e) => handleItemChange(idx, "quantity", parseFloat(e.target.value) || 0)}
                               />
                             </td>
-                            <td className="px-4 py-2 text-right">
+                            <td className="px-4 py-2 text-right text-sm">
                               ₱{item.unitPrice.toLocaleString()}
                             </td>
-                            <td className="px-4 py-2 text-right text-muted-foreground font-mono">
+                            <td className="px-4 py-2 text-right text-muted-foreground font-mono text-sm">
                               ₱{(item.grossAmount || 0).toLocaleString()}
                             </td>
                             <td className="px-4 py-2">
                               <select
-                                className="w-full border border-border rounded h-8 text-xs px-1 bg-background focus:border-primary outline-none"
+                                className="w-full border border-border rounded h-8 text-sm px-1 bg-background focus:border-primary outline-none"
                                 value={item.discountType || ""}
                                 onChange={(e) => handleItemChange(idx, "discountType", e.target.value)}
                               >
@@ -981,14 +984,14 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                                 value={item.discountAmount === 0 ? "" : item.discountAmount}
                               />
                             </td>
-                            <td className="px-4 py-2 text-right font-bold text-foreground">
+                            <td className="px-4 py-2 text-right font-bold text-sm text-foreground">
                               ₱{item.totalAmount.toLocaleString()}
                             </td>
                             <td className="px-4 py-2">
                               <input
                                 type="text"
                                 placeholder="Enter reason"
-                                className="w-full border border-border rounded h-8 text-xs px-2 outline-none focus:border-primary"
+                                className="w-full border border-border rounded h-8 text-sm px-2 outline-none focus:border-primary"
                                 value={item.reason || ""}
                                 onChange={(e) => handleItemChange(idx, "reason", e.target.value)}
                               />
@@ -996,7 +999,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                             <td className="px-4 py-2">
                               <select
                                 required
-                                className="w-full border border-border rounded h-8 text-xs px-1 bg-background outline-none focus:border-primary"
+                                className="w-full border border-border rounded h-8 text-sm px-1 bg-background outline-none focus:border-primary"
                                 value={item.returnType || ""}
                                 onChange={(e) => handleItemChange(idx, "returnType", e.target.value)}
                               >
@@ -1059,8 +1062,8 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                       ).map((group: any) => (
                         <React.Fragment key={group.key}>
                           {/* Parent Summary Row */}
-                          <tr className="bg-muted/10 font-semibold border-b border-border shadow-sm">
-                            <td className="px-4 py-2 font-mono text-xs text-foreground">
+                          <tr className="bg-muted/10 font-semibold border-b border-border">
+                            <td className="px-4 py-2 font-mono text-sm text-foreground">
                               <div className="flex items-center gap-2">
                                 {group.children.length > 0 ? (
                                   <button
@@ -1077,12 +1080,12 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                               </div>
                             </td>
                             <td className="px-4 py-2 text-foreground">
-                              <div className="text-xs text-foreground font-medium truncate max-w-[220px]" title={group.description}>
+                              <div className="text-sm text-foreground font-medium truncate max-w-[220px]" title={group.description}>
                                 {group.description}
                               </div>
                             </td>
                             <td className="px-4 py-2">
-                              <span className="bg-background text-foreground px-2 py-0.5 rounded text-xs border border-border font-normal">
+                              <span className="bg-background text-foreground px-2 py-0.5 rounded text-sm border border-border font-normal">
                                 {group.unit}
                               </span>
                             </td>
@@ -1092,16 +1095,16 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                             <td className="px-4 py-2 text-right text-muted-foreground">
                               -
                             </td>
-                            <td className="px-4 py-2 text-right text-muted-foreground font-mono text-xs">
+                            <td className="px-4 py-2 text-right text-muted-foreground font-mono text-sm">
                               ₱{group.totalGross.toLocaleString()}
                             </td>
                             <td className="px-4 py-2 text-center text-muted-foreground">
                               -
                             </td>
-                            <td className="px-4 py-2 text-right text-muted-foreground font-mono text-xs">
+                            <td className="px-4 py-2 text-right text-muted-foreground font-mono text-sm">
                               ₱{group.totalDiscount.toLocaleString()}
                             </td>
-                            <td className="px-4 py-2 text-right font-bold text-primary">
+                            <td className="px-4 py-2 text-right font-bold text-primary text-sm">
                               ₱{group.totalNet.toLocaleString()}
                             </td>
                             <td className="px-4 py-2 text-center text-muted-foreground">
@@ -1122,29 +1125,27 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                           {/* Child Rows (Individual Scans/Additions) */}
                           {expandedGroups[group.key] && group.children.map(({ item, idx }: { item: SalesReturnItem, idx: number }) => (
                             <tr key={item.id || idx} className="hover:bg-muted/20 transition-colors duration-200 border-b border-border">
-                              <td className="px-4 py-2 font-mono text-xs text-foreground font-bold pl-10" colSpan={2}>
+                              <td className="px-4 py-2 font-mono text-sm text-foreground font-bold pl-10" colSpan={2}>
                                 {item.rfidTags && item.rfidTags.length > 0 ? (
-                                  <div className="flex items-center gap-1.5 bg-background border border-border pl-2.5 pr-2 py-1 rounded-md shadow-sm w-fit truncate max-w-[200px]" title={item.rfidTags[0]}>
+                                  <div className="flex items-center gap-1.5 bg-background border border-border pl-2.5 pr-2 py-1 rounded-md w-fit truncate max-w-[200px]" title={item.rfidTags[0]}>
                                     <span className="text-primary truncate">{item.rfidTags[0]}</span>
                                     <span className="text-[10px] text-muted-foreground font-sans uppercase">RFID</span>
                                   </div>
-                                ) : (
-                                  <span className="text-muted-foreground/60 italic font-sans font-medium text-[11px]">Manual Entry</span>
-                                )}
+                                ) : null}
                               </td>
                               <td className="px-4 py-2"></td>
                               <td className="px-4 py-2">
                                 <div className="text-center font-semibold text-sm">{item.quantity}</div>
                               </td>
-                              <td className="px-4 py-2 text-right">
+                              <td className="px-4 py-2 text-right text-sm">
                                 ₱{item.unitPrice.toLocaleString()}
                               </td>
-                              <td className="px-4 py-2 text-right text-muted-foreground font-mono text-xs">
+                              <td className="px-4 py-2 text-right text-muted-foreground font-mono text-sm">
                                 ₱{(item.grossAmount || 0).toLocaleString()}
                               </td>
                               <td className="px-4 py-2">
                                 <select
-                                  className="w-full border border-border rounded h-8 text-xs px-1 bg-background focus:border-primary outline-none"
+                                  className="w-full border border-border rounded h-8 text-sm px-1 bg-background focus:border-primary outline-none"
                                   value={item.discountType || ""}
                                   onChange={(e) => handleItemChange(idx, "discountType", e.target.value)}
                                 >
@@ -1165,14 +1166,14 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                                   value={item.discountAmount === 0 ? "" : item.discountAmount}
                                 />
                               </td>
-                              <td className="px-4 py-2 text-right font-bold text-foreground">
+                              <td className="px-4 py-2 text-right font-bold text-foreground text-sm">
                                 ₱{item.totalAmount.toLocaleString()}
                               </td>
                               <td className="px-4 py-2">
                                 <input
                                   type="text"
                                   placeholder="Enter reason..."
-                                  className="w-full border border-border rounded h-8 text-xs px-2 outline-none focus:border-primary"
+                                  className="w-full border border-border rounded h-8 text-sm px-2 outline-none focus:border-primary"
                                   value={item.reason || ""}
                                   onChange={(e) => handleItemChange(idx, "reason", e.target.value)}
                                 />
@@ -1180,7 +1181,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                               <td className="px-4 py-2">
                                 <select
                                   required
-                                  className="w-full border border-border rounded h-8 text-xs px-1 bg-background outline-none focus:border-primary"
+                                  className="w-full border border-border rounded h-8 text-sm px-1 bg-background outline-none focus:border-primary"
                                   value={item.returnType || ""}
                                   onChange={(e) => handleItemChange(idx, "returnType", e.target.value)}
                                 >

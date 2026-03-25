@@ -20,6 +20,7 @@ export interface SalesReturnItem {
   totalAmount: number;
   reason?: string;
   returnType?: string;
+  rfidTags?: string[];
 }
 
 export interface SalesReturn {

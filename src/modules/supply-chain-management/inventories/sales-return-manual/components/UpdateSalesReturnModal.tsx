@@ -14,6 +14,7 @@ import {
   Link as LinkIcon,
   FileText,
   Search,
+  Radio,
   ChevronDown,
 } from "lucide-react";
 import {
@@ -74,12 +75,12 @@ const ReadOnlyField = ({
   value: string | number | undefined;
   className?: string;
 }) => (
-  <div className={cn("space-y-1.5", className)}>
-    <Label className="text-xs uppercase tracking-wide font-bold text-muted-foreground">
+  <div className={cn("space-y-1", className)} title={String(value || "-")}>
+    <Label className="text-[10px] uppercase tracking-wide font-bold text-muted-foreground w-full truncate block">
       {label}
     </Label>
-    <div className="w-full px-3 py-2.5 bg-muted/30 border border-border rounded-md text-sm font-medium text-foreground shadow-sm">
-      {value || "-"}
+    <div className="w-full h-9 px-3 flex items-center bg-muted/20 border border-border rounded-md text-sm font-medium text-foreground shadow-sm truncate">
+      <span className="truncate">{value || "-"}</span>
     </div>
   </div>
 );
@@ -121,15 +122,17 @@ export function UpdateSalesReturnModal({
 
   const [invoiceOptions, setInvoiceOptions] = useState<InvoiceOption[]>([]);
   const [invoiceSearch, setInvoiceSearch] = useState("");
-  const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
-  const invoiceWrapperRef = useRef<HTMLDivElement>(null);
 
-  // ORDER NO DROPDOWN STATE
+  // Order/Invoice Dropdown State
+  const [isOrderDropdownOpen, setIsOrderDropdownOpen] = useState(false);
   const [orderSearch, setOrderSearch] = useState("");
-  const [isOrderOpen, setIsOrderOpen] = useState(false);
-  const orderWrapperRef = useRef<HTMLDivElement>(null);
+  const orderDropdownRef = useRef<HTMLDivElement>(null);
+  const [isInvoiceDropdownOpen, setIsInvoiceDropdownOpen] = useState(false);
+  const [invoiceDropdownSearch, setInvoiceDropdownSearch] = useState("");
+  const invoiceDropdownRef = useRef<HTMLDivElement>(null);
 
-  const [returnIdRef] = useState(returnId); // Reference to original ID for state tracking
+  // RFID State
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
   // 🟢 REVISED: Edit Permissions Logic
   const isPending = headerData.status === "Pending";
@@ -140,31 +143,6 @@ export function UpdateSalesReturnModal({
   const canEditAll = isPending;
   const canEditLimited = isPending || isReceived;
 
-  // --- CLICK OUTSIDE HANDLERS ---
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      const target = event.target as Node;
-
-      // Invoice
-      if (
-        invoiceWrapperRef.current &&
-        !invoiceWrapperRef.current.contains(target)
-      ) {
-        setIsInvoiceOpen(false);
-      }
-
-      // Order No
-      if (
-        orderWrapperRef.current &&
-        !orderWrapperRef.current.contains(target)
-      ) {
-        setIsOrderOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
   // --- INITIAL LOAD ---
   useEffect(() => {
     const loadFullDetails = async () => {
@@ -173,7 +151,6 @@ export function UpdateSalesReturnModal({
         const [
           items,
           statusData,
-          invoices,
           discounts,
           retTypes,
           salesmen,
@@ -181,10 +158,6 @@ export function UpdateSalesReturnModal({
         ] = await Promise.all([
           SalesReturnProvider.getProductsSummary(returnId, headerData.returnNo),
           SalesReturnProvider.getStatusCardData(returnId),
-          SalesReturnProvider.getInvoiceReturnList(
-            headerData.salesmanId?.toString(),
-            headerData.customerCode,
-          ),
           SalesReturnProvider.getLineDiscounts(),
           SalesReturnProvider.getSalesReturnTypes(),
           SalesReturnProvider.getSalesmenList(),
@@ -193,14 +166,21 @@ export function UpdateSalesReturnModal({
 
         setDetails(items);
         setStatusCardData(statusData);
-        setInvoiceOptions(invoices);
-        // Sync searches with existing data
-        setInvoiceSearch(headerData.invoiceNo || "");
-        setOrderSearch(headerData.orderNo || "");
         setDiscountOptions(discounts);
         setReturnTypeOptions(retTypes);
         setSalesmenOptions(salesmen);
         setCustomerOptions(customers);
+
+        // Fetch invoices filtered by salesman and customer
+        try {
+          const invoices = await SalesReturnProvider.getInvoiceReturnList(
+            headerData.salesmanId?.toString(),
+            headerData.customerCode,
+          );
+          setInvoiceOptions(invoices);
+        } catch {
+          setInvoiceOptions([]);
+        }
       } catch (err) {
         console.error("Failed to load details", err);
       } finally {
@@ -211,7 +191,22 @@ export function UpdateSalesReturnModal({
     if (returnId) {
       loadFullDetails();
     }
-  }, [returnId, headerData.returnNo, headerData.customerCode, headerData.salesmanId]);
+  }, [returnId, headerData.returnNo, headerData.customerCode]);
+
+  // Click outside handler for order/invoice dropdowns
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as Node;
+      if (orderDropdownRef.current && !orderDropdownRef.current.contains(target)) {
+        setIsOrderDropdownOpen(false);
+      }
+      if (invoiceDropdownRef.current && !invoiceDropdownRef.current.contains(target)) {
+        setIsInvoiceDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // --- HELPERS ---
   const getSalesmanName = (id: string | number) =>
@@ -273,30 +268,64 @@ export function UpdateSalesReturnModal({
   const handleAddProductsToEdit = (newItems: (Partial<SalesReturnItem> & { price?: number, product_name?: string })[]) => {
     if (!newItems || newItems.length === 0) return;
 
-    const formattedItems = newItems.map((item, index) => {
-      const price = Number(item.unitPrice) || Number(item.price) || 0;
-      const qty = Number(item.quantity) || 1;
-      const gross = price * qty;
-      const discAmt = Number(item.discountAmount) || 0;
+    setDetails((prev) => {
+      const updated = [...prev];
+      newItems.forEach((item, index) => {
+        const rawId = item.product_id || item.productId || item.id;
+        const productId = Number(rawId);
+        
+        const isRfidItem = !!item.rfidTags && item.rfidTags.length > 0;
+        const existingIndex = updated.findIndex(
+          (i) => {
+            const existingIsRfid = !!i.rfidTags && i.rfidTags.length > 0;
+            return i.productId === productId && i.unit === item.unit && existingIsRfid === isRfidItem;
+          }
+        );
+        const qty = Number(item.quantity) || 1;
+        
+        if (existingIndex >= 0) {
+          const existing = updated[existingIndex];
+          existing.quantity = Number(existing.quantity || 0) + qty;
+          existing.grossAmount = existing.quantity * existing.unitPrice;
+          
+          if (existing.discountType && existing.discountType !== "No Discount") {
+            const selectedDisc = discountOptions.find(
+              (d) => d.id.toString() === existing.discountType?.toString()
+            );
+            if (selectedDisc) {
+              const percentage = parseFloat(selectedDisc.percentage);
+              existing.discountAmount = existing.grossAmount * (percentage / 100);
+            }
+          }
+          
+          existing.totalAmount = existing.grossAmount - (Number(existing.discountAmount) || 0);
+          if (item.rfidTags) {
+            existing.rfidTags = [...(existing.rfidTags || []), ...item.rfidTags];
+          }
+        } else {
+          const price = Number(item.unitPrice) || Number(item.price) || 0;
+          const gross = price * qty;
+          const discAmt = Number(item.discountAmount) || 0;
 
-      return {
-        id: `added-${Date.now()}-${index}-${Math.floor(Math.random() * 10000)}`,
-        productId: Number(item.productId || item.product_id || item.id),
-        code: item.code || "N/A",
-        description: item.description || item.product_name || "Unknown Item",
-        unit: item.unit || "Pcs",
-        quantity: qty,
-        unitPrice: price,
-        grossAmount: gross,
-        discountType: item.discountType || null,
-        discountAmount: discAmt,
-        totalAmount: gross - discAmt,
-        reason: item.reason || "",
-        returnType: item.returnType || "",
-      };
+          updated.push({
+            id: `added-${Date.now()}-${index}-${Math.floor(Math.random() * 10000)}`,
+            productId: productId,
+            code: item.code || "N/A",
+            description: item.description || item.product_name || "Unknown Item",
+            unit: item.unit || "Pcs",
+            quantity: qty,
+            unitPrice: price,
+            grossAmount: gross,
+            discountType: item.discountType || null,
+            discountAmount: discAmt,
+            totalAmount: gross - discAmt,
+            reason: item.reason || "",
+            returnType: item.returnType || "",
+          });
+        }
+      });
+      return updated;
     });
-
-    setDetails((prev) => [...prev, ...formattedItems]);
     setIsProductLookupOpen(false);
   };
 
@@ -423,11 +452,14 @@ export function UpdateSalesReturnModal({
     0,
   );
   const filteredInvoices = invoiceOptions.filter((inv) =>
-    (inv.invoice_no || "").toLowerCase().includes(invoiceSearch.toLowerCase()),
+    inv.invoice_no.toLowerCase().includes(invoiceSearch.toLowerCase()),
   );
 
-  const filteredOrders = invoiceOptions.filter((inv) =>
-    (inv.order_id || "").toLowerCase().includes(orderSearch.toLowerCase()),
+  const filteredOrderDropdown = invoiceOptions.filter((inv) =>
+    inv.order_id.toLowerCase().includes(orderSearch.toLowerCase()),
+  );
+  const filteredInvoiceDropdown = invoiceOptions.filter((inv) =>
+    inv.invoice_no.toLowerCase().includes(invoiceDropdownSearch.toLowerCase()),
   );
 
   return (
@@ -475,61 +507,37 @@ export function UpdateSalesReturnModal({
         {/* SCROLLABLE BODY */}
         <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-muted/50">
           {/* METADATA */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-background p-6 rounded-xl border border-primary/20 shadow-sm">
-            <div className="space-y-4">
-              <ReadOnlyField
-                label="Salesman"
-                value={getSalesmanName(headerData.salesmanId)}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-4 bg-background p-5 rounded-xl border border-border shadow-sm relative">
+            <div className="absolute top-0 left-0 w-1 h-full bg-primary rounded-l-xl"></div>
+            
+            <ReadOnlyField label="Salesman" value={getSalesmanName(headerData.salesmanId)} />
+            <ReadOnlyField label="Customer" value={getCustomerName(headerData.customerCode)} />
+            <ReadOnlyField label="Return Date" value={headerData.returnDate} />
+            <ReadOnlyField label="Salesman Code" value={getSalesmanCode(headerData.salesmanId)} />
+            
+            <ReadOnlyField label="Customer Code" value={headerData.customerCode} />
+            <ReadOnlyField label="Received Date" value={headerData.createdAt} />
+            <ReadOnlyField label="Branch" value={getSalesmanBranch(headerData.salesmanId)} />
+            <ReadOnlyField label="Price Type" value={headerData.priceType} />
+            
+            <div className="flex items-center space-x-2 pt-2 col-span-2 lg:col-span-4">
+              <Checkbox
+                id="isThirdParty"
+                checked={headerData.isThirdParty || false}
+                disabled={!canEditAll}
+                onCheckedChange={(checked) =>
+                  setHeaderData({
+                    ...headerData,
+                    isThirdParty: checked as boolean,
+                  })
+                }
               />
-              <ReadOnlyField
-                label="Salesman Code"
-                value={getSalesmanCode(headerData.salesmanId)}
-              />
-              <ReadOnlyField
-                label="Branch"
-                value={getSalesmanBranch(headerData.salesmanId)}
-              />
-            </div>
-            <div className="space-y-4">
-              <ReadOnlyField
-                label="Customer"
-                value={getCustomerName(headerData.customerCode)}
-              />
-              <ReadOnlyField
-                label="Customer Code"
-                value={headerData.customerCode}
-              />
-              <ReadOnlyField label="Price Type" value={headerData.priceType} />
-            </div>
-            <div className="flex flex-col space-y-4 h-full">
-              <ReadOnlyField
-                label="Return Date"
-                value={headerData.returnDate}
-              />
-              <ReadOnlyField
-                label="Received Date"
-                value={headerData.createdAt}
-              />
-              <div className="flex items-center space-x-2 pt-2 mt-auto">
-                {/* 🟢 REVISED: Disabled if not Pending */}
-                <Checkbox
-                  id="isThirdParty"
-                  checked={headerData.isThirdParty || false}
-                  disabled={!canEditAll}
-                  onCheckedChange={(checked) =>
-                    setHeaderData({
-                      ...headerData,
-                      isThirdParty: checked as boolean,
-                    })
-                  }
-                />
-                <Label
-                  htmlFor="isThirdParty"
-                  className="text-sm font-medium text-foreground cursor-pointer"
-                >
-                  Third Party Transaction
-                </Label>
-              </div>
+              <Label
+                htmlFor="isThirdParty"
+                className="text-sm font-medium text-foreground cursor-pointer"
+              >
+                Third Party Transaction
+              </Label>
             </div>
           </div>
 
@@ -542,13 +550,20 @@ export function UpdateSalesReturnModal({
               </h3>
               {/* 🟢 REVISED: Add Button hidden if not Pending */}
               {canEditAll && (
-                <Button
-                  size="sm"
-                  className="bg-primary hover:bg-primary text-white gap-2 shadow-md shadow-primary/20"
-                  onClick={() => setIsProductLookupOpen(true)}
-                >
-                  <Plus className="h-4 w-4" /> Add Product
-                </Button>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground mr-1">
+                      {details.length} {details.length === 1 ? "item" : "items"} total
+                    </span>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="bg-primary hover:bg-primary text-white gap-2 shadow-md shadow-primary/20"
+                    onClick={() => setIsProductLookupOpen(true)}
+                  >
+                    <Plus className="h-4 w-4" /> Add Product
+                  </Button>
+                </div>
               )}
             </div>
 
@@ -613,198 +628,450 @@ export function UpdateSalesReturnModal({
                         </TableCell>
                       </TableRow>
                     ) : (
-                      details.map((item, i) => (
-                        <TableRow
-                          key={item.id || i}
-                          className="border-b border-border hover:bg-muted/30"
-                        >
+                      <>
+                        {/* 1. RENDER MANUAL ITEMS (No RFID) */}
+                        {details.map((item, idx) => {
+                          const isManual = !item.rfidTags || item.rfidTags.length === 0;
+                          if (!isManual) return null;
+                          return (
+                            <TableRow
+                              key={item.id || idx}
+                              className="border-b border-border hover:bg-muted/20 transition-colors duration-200"
+                            >
+                              <TableCell className="text-sm text-foreground font-bold align-middle font-mono">
+                                {item.code}
+                              </TableCell>
+                              <TableCell className="align-middle">
+                                <div
+                                  className="text-sm text-foreground font-medium truncate max-w-[220px]"
+                                  title={item.description}
+                                >
+                                  {item.description}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground align-middle">
+                                <Badge
+                                  variant="outline"
+                                  className="text-foreground bg-background border-border font-normal"
+                                >
+                                  {item.unit}
+                                </Badge>
+                              </TableCell>
+                              {/* Quantity */}
+                              <TableCell className="text-center align-middle p-2">
+                                {canEditAll ? (
+                                  <Input
+                                    type="number"
+                                    className="h-9 w-full text-center text-sm border-border px-2"
+                                    value={item.quantity}
+                                    onChange={(e) =>
+                                      handleDetailChange(idx, "quantity", e.target.value)
+                                    }
+                                  />
+                                ) : (
+                                  <span className="text-sm font-semibold text-foreground">
+                                    {item.quantity}
+                                  </span>
+                                )}
+                              </TableCell>
+                              {/* Price */}
+                              <TableCell className="text-right align-middle p-2">
+                                {canEditAll ? (
+                                  <Input
+                                    type="number"
+                                    className="h-9 w-full text-right text-sm border-border px-2"
+                                    value={item.unitPrice}
+                                    onChange={(e) =>
+                                      handleDetailChange(idx, "unitPrice", e.target.value)
+                                    }
+                                  />
+                                ) : (
+                                  <span className="text-sm text-foreground">
+                                    {Number(item.unitPrice).toLocaleString()}
+                                  </span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right text-sm text-muted-foreground align-middle font-mono">
+                                {(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}
+                              </TableCell>
+                              {/* Discount */}
+                              <TableCell className="align-middle p-2">
+                                {canEditAll ? (
+                                  <Select
+                                    value={item.discountType?.toString() || "No Discount"}
+                                    onValueChange={(val) => handleDetailChange(idx, "discountType", val)}
+                                  >
+                                    <SelectTrigger className="h-9 w-full text-xs border-border bg-background">
+                                      <SelectValue placeholder="None" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="No Discount">None</SelectItem>
+                                      {discountOptions.map((opt) => (
+                                        <SelectItem key={opt.id} value={opt.id.toString()}>
+                                          {opt.line_discount}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">
+                                    {discountOptions.find((d) => d.id.toString() == item.discountType)?.line_discount || "None"}
+                                  </span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right align-middle p-2">
+                                <Input type="number" readOnly className="h-9 w-full text-right text-sm bg-muted/30 text-muted-foreground cursor-not-allowed" value={item.discountAmount} />
+                              </TableCell>
+                              <TableCell className="text-right font-bold text-sm text-foreground align-middle">
+                                {(Number(item.totalAmount) || 0).toLocaleString()}
+                              </TableCell>
+                              {/* Reason */}
+                              <TableCell className="align-middle p-2">
+                                {canEditAll ? (
+                                  <Input
+                                    className="h-9 w-full text-sm border-border bg-background"
+                                    placeholder="Enter reason..."
+                                    value={item.reason}
+                                    onChange={(e) => handleDetailChange(idx, "reason", e.target.value)}
+                                  />
+                                ) : (
+                                  <span className="text-sm text-muted-foreground italic truncate block max-w-[120px]" title={item.reason || ""}>
+                                    {item.reason || "-"}
+                                  </span>
+                                )}
+                              </TableCell>
+                              {/* Return Type */}
+                              <TableCell className="align-middle p-2">
+                                {canEditAll ? (
+                                  <Select value={item.returnType as string} onValueChange={(val) => handleDetailChange(idx, "returnType", val)}>
+                                    <SelectTrigger className="h-9 w-full text-xs border-border bg-background">
+                                      <SelectValue placeholder="Select type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {returnTypeOptions.length > 0 ? (
+                                        returnTypeOptions.map((type) => (
+                                          <SelectItem key={type.type_id} value={type.type_name}>
+                                            {type.type_name}
+                                          </SelectItem>
+                                        ))
+                                      ) : (
+                                        <>
+                                          <SelectItem value="Good Order">Good Order</SelectItem>
+                                          <SelectItem value="Bad Order">Bad Order</SelectItem>
+                                        </>
+                                      )}
+                                    </SelectContent>
+                                  </Select>
+                                ) : (
+                                  <Badge variant="outline" className="font-normal">{item.returnType || "Unassigned"}</Badge>
+                                )}
+                              </TableCell>
+                              {canEditAll && (
+                                <TableCell className="align-middle p-2 text-center">
+                                  <button onClick={() => handleDeleteRow(idx)} className="text-destructive/70 hover:text-destructive transition-colors" title="Remove row">
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          );
+                        })}
+
+                        {/* 2. RENDER RFID ITEMS (Grouped) */}
+                        {Object.values(
+                          details.filter(i => i.rfidTags && i.rfidTags.length > 0).reduce((acc, item, originalIdx) => {
+                            // Find the true index in details
+                            const idx = details.findIndex(d => d === item);
+                            const rType = item.returnType || "Unassigned";
+                            const key = `${item.productId}-${item.unit}-${rType}`;
+                            if (!acc[key]) {
+                              acc[key] = {
+                                key,
+                                code: item.code,
+                                description: item.description,
+                                unit: item.unit,
+                                returnType: rType,
+                                unitPrice: item.unitPrice,
+                                totalQty: 0,
+                                totalGross: 0,
+                                totalDiscount: 0,
+                                totalNet: 0,
+                                children: [],
+                              };
+                            }
+                            acc[key].totalQty += Number(item.quantity) || 0;
+                            acc[key].totalGross += Number(item.grossAmount) || 0;
+                            acc[key].totalDiscount += Number(item.discountAmount) || 0;
+                            acc[key].totalNet += Number(item.totalAmount) || 0;
+                            acc[key].children.push({ item, idx });
+                            return acc;
+                          }, {} as Record<string, any>)
+                        ).map((group: any) => (
+                          <React.Fragment key={group.key}>
+                        {/* Parent Summary Row */}
+                        <TableRow className="bg-muted/10 font-semibold border-b border-border">
                           {/* 🟢 REVISED: All inputs disabled if not Pending (canEditAll) */}
-                          <TableCell className="text-xs text-foreground font-bold align-middle">
-                            {item.code}
+                          <TableCell className="text-sm text-foreground align-middle font-mono">
+                            <div className="flex items-center gap-2">
+                              {group.children.length > 0 ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedGroups(prev => ({ ...prev, [group.key]: !prev[group.key] }))}
+                                  className="p-1 hover:bg-muted rounded-md transition-colors text-foreground"
+                                >
+                                  <ChevronDown className={`h-4 w-4 transition-transform ${expandedGroups[group.key] ? 'rotate-180' : ''}`} />
+                                </button>
+                              ) : (
+                                <div className="w-6" /> // spacer
+                              )}
+                              <span>{group.code}</span>
+                            </div>
                           </TableCell>
                           <TableCell className="align-middle">
                             <div
-                              className="text-xs text-foreground font-medium truncate max-w-[220px]"
-                              title={item.description}
+                              className="text-sm text-foreground font-medium truncate max-w-[220px]"
+                              title={group.description}
                             >
-                              {item.description}
+                              {group.description}
                             </div>
                           </TableCell>
-                          <TableCell className="text-xs text-muted-foreground align-middle">
+                          <TableCell className="text-sm text-muted-foreground align-middle">
                             <Badge
                               variant="outline"
-                              className="text-muted-foreground border-border font-normal"
+                              className="text-foreground bg-background border-border font-normal"
                             >
-                              {item.unit}
+                              {group.unit}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-center align-middle p-2">
-                            {canEditAll ? (
-                              <Input
-                                type="number"
-                                className="h-9 w-full text-center text-sm border-border px-2"
-                                value={item.quantity}
-                                onChange={(e) =>
-                                  handleDetailChange(
-                                    i,
-                                    "quantity",
-                                    e.target.value,
-                                  )
-                                }
-                              />
-                            ) : (
-                              <span className="text-xs font-semibold text-foreground">
-                                {item.quantity}
-                              </span>
-                            )}
+                          <TableCell className="text-center align-middle p-2 text-primary text-sm font-bold">
+                            {group.totalQty}
                           </TableCell>
-                          <TableCell className="text-right align-middle p-2">
-                            {canEditAll ? (
-                              <Input
-                                type="number"
-                                className="h-9 w-full text-right text-sm border-border px-2"
-                                value={item.unitPrice}
-                                onChange={(e) =>
-                                  handleDetailChange(
-                                    i,
-                                    "unitPrice",
-                                    e.target.value,
-                                  )
-                                }
-                              />
-                            ) : (
-                              <span className="text-xs text-foreground">
-                                {Number(item.unitPrice).toLocaleString()}
-                              </span>
-                            )}
+                          <TableCell className="text-right align-middle p-2 text-muted-foreground">
+                            -
                           </TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground align-middle font-mono">
+                          <TableCell className="text-right text-sm text-muted-foreground align-middle font-mono">
                             {(
-                              Number(item.quantity) * Number(item.unitPrice)
+                              Number(group.totalGross)
                             ).toLocaleString()}
                           </TableCell>
-                          <TableCell className="align-middle p-2">
-                            {canEditAll ? (
-                              <Select
-                                value={
-                                  item.discountType?.toString() || "No Discount"
-                                }
-                                onValueChange={(val) =>
-                                  handleDetailChange(i, "discountType", val)
-                                }
-                              >
-                                <SelectTrigger className="h-9 w-full text-xs border-border">
-                                  <SelectValue placeholder="None" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="No Discount">
-                                    None
-                                  </SelectItem>
-                                  {discountOptions.map((opt) => (
-                                    <SelectItem
-                                      key={opt.id}
-                                      value={opt.id.toString()}
-                                    >
-                                      {opt.line_discount}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">
-                                {discountOptions.find(
-                                  (d) => d.id.toString() == item.discountType,
-                                )?.line_discount || "None"}
-                              </span>
-                            )}
+                          <TableCell className="align-middle p-2 text-center text-muted-foreground">
+                            -
                           </TableCell>
-                          <TableCell className="text-right align-middle p-2">
-                            <Input
-                              type="number"
-                              readOnly
-                              className="h-9 w-full text-right text-sm bg-muted/30 text-muted-foreground cursor-not-allowed"
-                              value={item.discountAmount}
-                            />
+                          <TableCell className="text-right align-middle p-2 text-muted-foreground font-mono">
+                            {group.totalDiscount.toLocaleString()}
                           </TableCell>
                           <TableCell className="text-right font-bold text-sm text-primary align-middle">
-                            {(Number(item.totalAmount) || 0).toLocaleString()}
+                            {group.totalNet.toLocaleString()}
+                          </TableCell>
+                          <TableCell className="align-middle p-2 text-center text-muted-foreground">
+                            -
                           </TableCell>
                           <TableCell className="align-middle p-2">
-                            {canEditAll ? (
-                              <Input
-                                className="h-9 w-full text-sm border-border"
-                                placeholder="Enter reason..."
-                                value={item.reason}
-                                onChange={(e) =>
-                                  handleDetailChange(
-                                    i,
-                                    "reason",
-                                    e.target.value,
-                                  )
-                                }
-                              />
-                            ) : (
-                              <span className="text-xs text-muted-foreground italic">
-                                {item.reason || "-"}
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell className="align-middle p-2">
-                            {canEditAll ? (
-                              <Select
-                                value={item.returnType as string}
-                                onValueChange={(val) =>
-                                  handleDetailChange(i, "returnType", val)
-                                }
-                              >
-                                <SelectTrigger className="h-9 w-full text-xs border-border">
-                                  <SelectValue placeholder="Select type" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {returnTypeOptions.length > 0 ? (
-                                    returnTypeOptions.map((type) => (
-                                      <SelectItem
-                                        key={type.type_id}
-                                        value={type.type_name}
-                                      >
-                                        {type.type_name}
-                                      </SelectItem>
-                                    ))
-                                  ) : (
-                                    <>
-                                      <SelectItem value="Good Order">
-                                        Good Order
-                                      </SelectItem>
-                                      <SelectItem value="Bad Order">
-                                        Bad Order
-                                      </SelectItem>
-                                    </>
-                                  )}
-                                </SelectContent>
-                              </Select>
-                            ) : (
+                            {group.returnType !== "Unassigned" ? (
                               <Badge
                                 variant="secondary"
-                                className="text-[10px] font-normal"
+                                className="bg-primary/20 text-primary hover:bg-primary/20 hover:text-primary font-medium"
                               >
-                                {item.returnType as React.ReactNode}
+                                {group.returnType}
                               </Badge>
+                            ) : (
+                              <span className="text-muted-foreground/60 italic text-xs">Unassigned</span>
                             )}
                           </TableCell>
-                          {canEditAll && (
-                            <TableCell className="text-center align-middle">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-destructive hover:text-white hover:bg-destructive"
-                                onClick={() => handleDeleteRow(i)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </TableCell>
-                          )}
+                          <TableCell />
                         </TableRow>
-                      ))
+
+                        {/* Child Rows (Individual Scans/Additions) */}
+                        {expandedGroups[group.key] && group.children.map(({ item, idx }: { item: SalesReturnItem, idx: number }) => (
+                          <TableRow
+                            key={item.id || idx}
+                            className="border-b border-border hover:bg-muted/20 transition-colors duration-200"
+                          >
+                            {/* 🟢 REVISED: All inputs disabled if not Pending (canEditAll) */}
+                            <TableCell colSpan={2} className="text-sm text-foreground font-bold align-middle pl-10 font-mono">
+                              {item.rfidTags && item.rfidTags.length > 0 ? (
+                                <div className="flex items-center gap-1.5 bg-background border border-border pl-2.5 pr-2 py-1 rounded-md w-fit truncate max-w-[200px]" title={item.rfidTags[0]}>
+                                  <span className="text-primary truncate">{item.rfidTags[0]}</span>
+                                  <span className="text-[10px] text-muted-foreground font-sans uppercase">RFID</span>
+                                </div>
+                              ) : null}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground align-middle">
+                            </TableCell>
+                            <TableCell className="text-center align-middle p-2">
+                              {canEditAll ? (
+                                item.rfidTags && item.rfidTags.length > 0 ? (
+                                  <div className="text-center font-semibold text-sm">{item.quantity}</div>
+                                ) : (
+                                  <Input
+                                    type="number"
+                                    className="h-9 w-full text-center text-sm border-border px-2"
+                                    value={item.quantity}
+                                    onChange={(e) =>
+                                      handleDetailChange(
+                                        idx,
+                                        "quantity",
+                                        e.target.value,
+                                      )
+                                    }
+                                  />
+                                )
+                              ) : (
+                                <span className="text-sm font-semibold text-foreground">
+                                  {item.quantity}
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right align-middle p-2">
+                              {canEditAll ? (
+                                <Input
+                                  type="number"
+                                  className="h-9 w-full text-right text-sm border-border px-2"
+                                  value={item.unitPrice}
+                                  onChange={(e) =>
+                                    handleDetailChange(
+                                      idx,
+                                      "unitPrice",
+                                      e.target.value,
+                                    )
+                                  }
+                                />
+                              ) : (
+                                <span className="text-sm text-foreground">
+                                  {Number(item.unitPrice).toLocaleString()}
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right text-sm text-muted-foreground align-middle font-mono">
+                              {(
+                                Number(item.quantity) * Number(item.unitPrice)
+                              ).toLocaleString()}
+                            </TableCell>
+                            <TableCell className="align-middle p-2">
+                              {canEditAll ? (
+                                <Select
+                                  value={
+                                    item.discountType?.toString() || "No Discount"
+                                  }
+                                  onValueChange={(val) =>
+                                    handleDetailChange(idx, "discountType", val)
+                                  }
+                                >
+                                  <SelectTrigger className="h-9 w-full text-sm border-border bg-background">
+                                    <SelectValue placeholder="None" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="No Discount">
+                                      None
+                                    </SelectItem>
+                                    {discountOptions.map((opt) => (
+                                      <SelectItem
+                                        key={opt.id}
+                                        value={opt.id.toString()}
+                                      >
+                                        {opt.line_discount}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <span className="text-sm text-muted-foreground">
+                                  {discountOptions.find(
+                                    (d) => d.id.toString() == item.discountType,
+                                  )?.line_discount || "None"}
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right align-middle p-2">
+                              <Input
+                                type="number"
+                                readOnly
+                                className="h-9 w-full text-right text-sm bg-muted/30 text-muted-foreground cursor-not-allowed"
+                                value={item.discountAmount}
+                              />
+                            </TableCell>
+                            <TableCell className="text-right font-bold text-sm text-foreground align-middle">
+                              {(Number(item.totalAmount) || 0).toLocaleString()}
+                            </TableCell>
+                            <TableCell className="align-middle p-2">
+                              {canEditAll ? (
+                                <Input
+                                  className="h-9 w-full text-sm border-border bg-background"
+                                  placeholder="Enter reason..."
+                                  value={item.reason}
+                                  onChange={(e) =>
+                                    handleDetailChange(
+                                      idx,
+                                      "reason",
+                                      e.target.value,
+                                    )
+                                  }
+                                />
+                              ) : (
+                                <span className="text-sm text-muted-foreground italic">
+                                  {item.reason || "-"}
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell className="align-middle p-2">
+                              {canEditAll ? (
+                                <Select
+                                  value={item.returnType as string}
+                                  onValueChange={(val) =>
+                                    handleDetailChange(idx, "returnType", val)
+                                  }
+                                >
+                                  <SelectTrigger className="h-9 w-full text-sm border-border bg-background">
+                                    <SelectValue placeholder="Select type" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {returnTypeOptions.length > 0 ? (
+                                      returnTypeOptions.map((type) => (
+                                        <SelectItem
+                                          key={type.type_id}
+                                          value={type.type_name}
+                                        >
+                                          {type.type_name}
+                                        </SelectItem>
+                                      ))
+                                    ) : (
+                                      <>
+                                        <SelectItem value="Good Order">
+                                          Good Order
+                                        </SelectItem>
+                                        <SelectItem value="Bad Order">
+                                          Bad Order
+                                        </SelectItem>
+                                      </>
+                                    )}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <Badge
+                                  variant="secondary"
+                                  className="text-[10px] font-normal"
+                                >
+                                  {item.returnType as React.ReactNode}
+                                </Badge>
+                              )}
+                            </TableCell>
+                            {canEditAll && (
+                              <TableCell className="text-center align-middle">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-destructive hover:text-white hover:bg-destructive"
+                                  onClick={() => handleDeleteRow(idx)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            )}
+                          </TableRow>
+                        ))}
+                        </React.Fragment>
+                        ))}
+                      </>
                     )}
                   </TableBody>
                 </Table>
@@ -816,36 +1083,32 @@ export function UpdateSalesReturnModal({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-4">
             <div className="md:col-span-2 space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                {/* ORDER NO DROPDOWN */}
-                <div className="space-y-1.5" ref={orderWrapperRef}>
+                <div className="space-y-1.5" ref={orderDropdownRef}>
                   <Label className="text-xs uppercase font-bold text-muted-foreground">
                     Order No.
                   </Label>
-                  {/* 🟢 REVISED: Disabled if not Pending */}
+                  {/* Order No Dropdown */}
                   {canEditAll ? (
                     <div className="relative group">
                       <input
                         type="text"
-                        className="w-full h-9 border border-border rounded-md text-sm px-3 bg-background outline-none focus:ring-2 focus:border-primary"
+                        className="w-full h-9 border border-border rounded-md text-sm px-3 pr-8 bg-background outline-none focus:ring-2 focus:border-primary"
                         placeholder="Search Order No..."
-                        value={orderSearch}
+                        value={orderSearch || headerData.orderNo || ""}
                         onChange={(e) => {
                           setOrderSearch(e.target.value);
-                          setHeaderData({ ...headerData, orderNo: "" }); // Clear on type
-                          setIsOrderOpen(true);
+                          setHeaderData({ ...headerData, orderNo: e.target.value });
+                          setIsOrderDropdownOpen(true);
                         }}
-                        onFocus={() => {
-                          setIsOrderOpen(true);
-                          setOrderSearch("");
-                        }}
+                        onFocus={() => setIsOrderDropdownOpen(true)}
                       />
                       <ChevronDown className="h-3 w-3 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                      {isOrderOpen && (
-                        <div className="absolute top-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto translate-y-0">
-                          {filteredOrders.length > 0 ? (
-                            filteredOrders.map((inv) => (
+                      {isOrderDropdownOpen && (
+                        <div className="absolute bottom-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto">
+                          {filteredOrderDropdown.length > 0 ? (
+                            filteredOrderDropdown.map((inv) => (
                               <div
-                                key={`${inv.order_id}-${inv.invoice_no}`}
+                                key={`order-${inv.id}`}
                                 className="px-3 py-2 text-sm cursor-pointer hover:bg-primary/10 text-foreground"
                                 onClick={() => {
                                   setHeaderData({
@@ -854,16 +1117,19 @@ export function UpdateSalesReturnModal({
                                     invoiceNo: inv.invoice_no,
                                   });
                                   setOrderSearch(inv.order_id);
-                                  setInvoiceSearch(inv.invoice_no);
-                                  setIsOrderOpen(false);
+                                  setInvoiceDropdownSearch(inv.invoice_no);
+                                  setIsOrderDropdownOpen(false);
                                 }}
                               >
-                                {inv.order_id}
+                                <div className="flex flex-col">
+                                  <span className="font-medium">{inv.order_id}</span>
+                                  <span className="text-[10px] text-muted-foreground">Invoice: {inv.invoice_no}</span>
+                                </div>
                               </div>
                             ))
                           ) : (
                             <div className="px-3 py-2 text-xs text-muted-foreground text-center">
-                              No related orders found
+                              No orders found
                             </div>
                           )}
                         </div>
@@ -875,37 +1141,32 @@ export function UpdateSalesReturnModal({
                     </div>
                   )}
                 </div>
-
-                {/* INVOICE NO DROPDOWN */}
-                <div className="space-y-1.5" ref={invoiceWrapperRef}>
+                <div className="space-y-1.5" ref={invoiceDropdownRef}>
                   <Label className="text-xs uppercase font-bold text-muted-foreground">
                     Invoice No.
                   </Label>
-                  {/* 🟢 REVISED: Disabled if not Pending */}
+                  {/* Invoice No Dropdown */}
                   {canEditAll ? (
                     <div className="relative group">
                       <input
                         type="text"
-                        className="w-full h-9 border border-border rounded-md text-sm px-3 bg-background outline-none focus:ring-2 focus:border-primary"
+                        className="w-full h-9 border border-border rounded-md text-sm px-3 pr-8 bg-background outline-none focus:ring-2 focus:border-primary"
                         placeholder="Search Invoice No..."
-                        value={invoiceSearch}
+                        value={invoiceDropdownSearch || headerData.invoiceNo || ""}
                         onChange={(e) => {
-                          setInvoiceSearch(e.target.value);
-                          setHeaderData({ ...headerData, invoiceNo: "" }); // Clear on type
-                          setIsInvoiceOpen(true);
+                          setInvoiceDropdownSearch(e.target.value);
+                          setHeaderData({ ...headerData, invoiceNo: e.target.value });
+                          setIsInvoiceDropdownOpen(true);
                         }}
-                        onFocus={() => {
-                          setIsInvoiceOpen(true);
-                          setInvoiceSearch("");
-                        }}
+                        onFocus={() => setIsInvoiceDropdownOpen(true)}
                       />
                       <ChevronDown className="h-3 w-3 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                      {isInvoiceOpen && (
-                        <div className="absolute top-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto translate-y-0">
-                          {filteredInvoices.length > 0 ? (
-                            filteredInvoices.map((inv) => (
+                      {isInvoiceDropdownOpen && (
+                        <div className="absolute bottom-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto">
+                          {filteredInvoiceDropdown.length > 0 ? (
+                            filteredInvoiceDropdown.map((inv) => (
                               <div
-                                key={`${inv.order_id}-${inv.invoice_no}`}
+                                key={`inv-${inv.id}`}
                                 className="px-3 py-2 text-sm cursor-pointer hover:bg-primary/10 text-foreground"
                                 onClick={() => {
                                   setHeaderData({
@@ -913,17 +1174,20 @@ export function UpdateSalesReturnModal({
                                     invoiceNo: inv.invoice_no,
                                     orderNo: inv.order_id,
                                   });
-                                  setInvoiceSearch(inv.invoice_no);
+                                  setInvoiceDropdownSearch(inv.invoice_no);
                                   setOrderSearch(inv.order_id);
-                                  setIsInvoiceOpen(false);
+                                  setIsInvoiceDropdownOpen(false);
                                 }}
                               >
-                                {inv.invoice_no}
+                                <div className="flex flex-col">
+                                  <span className="font-medium">{inv.invoice_no}</span>
+                                  <span className="text-[10px] text-muted-foreground">Order: {inv.order_id}</span>
+                                </div>
                               </div>
                             ))
                           ) : (
                             <div className="px-3 py-2 text-xs text-muted-foreground text-center">
-                              No related invoices found
+                              No invoices found
                             </div>
                           )}
                         </div>

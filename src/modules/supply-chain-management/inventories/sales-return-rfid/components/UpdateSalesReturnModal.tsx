@@ -383,8 +383,12 @@ export function UpdateSalesReturnModal({
         const rawId = item.product_id || item.productId || item.id;
         const productId = Number(rawId);
         
+        const isRfidItem = !!item.rfidTags && item.rfidTags.length > 0;
         const existingIndex = updated.findIndex(
-          (i) => i.productId === productId && i.unit === item.unit
+          (i) => {
+            const existingIsRfid = !!i.rfidTags && i.rfidTags.length > 0;
+            return i.productId === productId && i.unit === item.unit && existingIsRfid === isRfidItem;
+          }
         );
         const qty = Number(item.quantity) || 1;
         
@@ -774,19 +778,18 @@ export function UpdateSalesReturnModal({
                               key={item.id || idx}
                               className="border-b border-border hover:bg-muted/20 transition-colors duration-200"
                             >
-                              <TableCell className="text-xs text-foreground font-bold align-middle font-mono">
+                              <TableCell className="text-sm text-foreground font-bold align-middle font-mono">
                                 {item.code}
                               </TableCell>
                               <TableCell className="align-middle">
                                 <div
-                                  className="text-xs text-foreground font-medium truncate max-w-[220px]"
+                                  className="text-sm text-foreground font-medium truncate max-w-[220px]"
                                   title={item.description}
                                 >
                                   {item.description}
                                 </div>
-                                <span className="text-muted-foreground/60 italic font-sans font-medium text-[10px] block mt-0.5">Manual Entry</span>
                               </TableCell>
-                              <TableCell className="text-xs text-muted-foreground align-middle">
+                              <TableCell className="text-sm text-muted-foreground align-middle">
                                 <Badge
                                   variant="outline"
                                   className="text-foreground bg-background border-border font-normal"
@@ -806,7 +809,7 @@ export function UpdateSalesReturnModal({
                                     }
                                   />
                                 ) : (
-                                  <span className="text-xs font-semibold text-foreground">
+                                  <span className="text-sm font-semibold text-foreground">
                                     {item.quantity}
                                   </span>
                                 )}
@@ -823,12 +826,12 @@ export function UpdateSalesReturnModal({
                                     }
                                   />
                                 ) : (
-                                  <span className="text-xs text-foreground">
+                                  <span className="text-sm text-foreground">
                                     {Number(item.unitPrice).toLocaleString()}
                                   </span>
                                 )}
                               </TableCell>
-                              <TableCell className="text-right text-xs text-muted-foreground align-middle font-mono">
+                              <TableCell className="text-right text-sm text-muted-foreground align-middle font-mono">
                                 {(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}
                               </TableCell>
                               {/* Discount */}
@@ -872,7 +875,7 @@ export function UpdateSalesReturnModal({
                                     onChange={(e) => handleDetailChange(idx, "reason", e.target.value)}
                                   />
                                 ) : (
-                                  <span className="text-xs text-muted-foreground italic truncate block max-w-[120px]" title={item.reason || ""}>
+                                  <span className="text-sm text-muted-foreground italic truncate block max-w-[120px]" title={item.reason || ""}>
                                     {item.reason || "-"}
                                   </span>
                                 )}
@@ -946,9 +949,9 @@ export function UpdateSalesReturnModal({
                         ).map((group: any) => (
                           <React.Fragment key={group.key}>
                         {/* Parent Summary Row */}
-                        <TableRow className="bg-muted/10 font-semibold border-b border-border shadow-sm">
+                        <TableRow className="bg-muted/10 font-semibold border-b border-border">
                           {/* 🟢 REVISED: All inputs disabled if not Pending (canEditAll) */}
-                          <TableCell className="text-xs text-foreground align-middle font-mono">
+                          <TableCell className="text-sm text-foreground align-middle font-mono">
                             <div className="flex items-center gap-2">
                               {group.children.length > 0 ? (
                                 <button
@@ -966,13 +969,13 @@ export function UpdateSalesReturnModal({
                           </TableCell>
                           <TableCell className="align-middle">
                             <div
-                              className="text-xs text-foreground font-medium truncate max-w-[220px]"
+                              className="text-sm text-foreground font-medium truncate max-w-[220px]"
                               title={group.description}
                             >
                               {group.description}
                             </div>
                           </TableCell>
-                          <TableCell className="text-xs text-muted-foreground align-middle">
+                          <TableCell className="text-sm text-muted-foreground align-middle">
                             <Badge
                               variant="outline"
                               className="text-foreground bg-background border-border font-normal"
@@ -986,7 +989,7 @@ export function UpdateSalesReturnModal({
                           <TableCell className="text-right align-middle p-2 text-muted-foreground">
                             -
                           </TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground align-middle font-mono">
+                          <TableCell className="text-right text-sm text-muted-foreground align-middle font-mono">
                             {(
                               Number(group.totalGross)
                             ).toLocaleString()}
@@ -1025,17 +1028,15 @@ export function UpdateSalesReturnModal({
                             className="border-b border-border hover:bg-muted/20 transition-colors duration-200"
                           >
                             {/* 🟢 REVISED: All inputs disabled if not Pending (canEditAll) */}
-                            <TableCell colSpan={2} className="text-xs text-foreground font-bold align-middle pl-10 font-mono">
+                            <TableCell colSpan={2} className="text-sm text-foreground font-bold align-middle pl-10 font-mono">
                               {item.rfidTags && item.rfidTags.length > 0 ? (
-                                <div className="flex items-center gap-1.5 bg-background border border-border pl-2.5 pr-2 py-1 rounded-md shadow-sm w-fit truncate max-w-[200px]" title={item.rfidTags[0]}>
+                                <div className="flex items-center gap-1.5 bg-background border border-border pl-2.5 pr-2 py-1 rounded-md w-fit truncate max-w-[200px]" title={item.rfidTags[0]}>
                                   <span className="text-primary truncate">{item.rfidTags[0]}</span>
                                   <span className="text-[10px] text-muted-foreground font-sans uppercase">RFID</span>
                                 </div>
-                              ) : (
-                                <span className="text-muted-foreground/60 italic font-sans font-medium text-[11px]">Manual Entry</span>
-                              )}
+                              ) : null}
                             </TableCell>
-                            <TableCell className="text-xs text-muted-foreground align-middle">
+                            <TableCell className="text-sm text-muted-foreground align-middle">
                             </TableCell>
                             <TableCell className="text-center align-middle p-2">
                               {canEditAll ? (
@@ -1056,7 +1057,7 @@ export function UpdateSalesReturnModal({
                                   />
                                 )
                               ) : (
-                                <span className="text-xs font-semibold text-foreground">
+                                <span className="text-sm font-semibold text-foreground">
                                   {item.quantity}
                                 </span>
                               )}
@@ -1076,12 +1077,12 @@ export function UpdateSalesReturnModal({
                                   }
                                 />
                               ) : (
-                                <span className="text-xs text-foreground">
+                                <span className="text-sm text-foreground">
                                   {Number(item.unitPrice).toLocaleString()}
                                 </span>
                               )}
                             </TableCell>
-                            <TableCell className="text-right text-xs text-muted-foreground align-middle font-mono">
+                            <TableCell className="text-right text-sm text-muted-foreground align-middle font-mono">
                               {(
                                 Number(item.quantity) * Number(item.unitPrice)
                               ).toLocaleString()}
@@ -1096,7 +1097,7 @@ export function UpdateSalesReturnModal({
                                     handleDetailChange(idx, "discountType", val)
                                   }
                                 >
-                                  <SelectTrigger className="h-9 w-full text-xs border-border bg-background">
+                                  <SelectTrigger className="h-9 w-full text-sm border-border bg-background">
                                     <SelectValue placeholder="None" />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -1114,7 +1115,7 @@ export function UpdateSalesReturnModal({
                                   </SelectContent>
                                 </Select>
                               ) : (
-                                <span className="text-xs text-muted-foreground">
+                                <span className="text-sm text-muted-foreground">
                                   {discountOptions.find(
                                     (d) => d.id.toString() == item.discountType,
                                   )?.line_discount || "None"}
@@ -1147,7 +1148,7 @@ export function UpdateSalesReturnModal({
                                   }
                                 />
                               ) : (
-                                <span className="text-xs text-muted-foreground italic">
+                                <span className="text-sm text-muted-foreground italic">
                                   {item.reason || "-"}
                                 </span>
                               )}
@@ -1160,7 +1161,7 @@ export function UpdateSalesReturnModal({
                                     handleDetailChange(idx, "returnType", val)
                                   }
                                 >
-                                  <SelectTrigger className="h-9 w-full text-xs border-border bg-background">
+                                  <SelectTrigger className="h-9 w-full text-sm border-border bg-background">
                                     <SelectValue placeholder="Select type" />
                                   </SelectTrigger>
                                   <SelectContent>
