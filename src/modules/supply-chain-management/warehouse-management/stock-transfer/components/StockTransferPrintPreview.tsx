@@ -36,12 +36,10 @@ export default function StockTransferPrintPreview({
 }: StockTransferPrintPreviewProps) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [generating, setGenerating] = useState(open);
-  const [prevOpen, setPrevOpen] = useState(open);
 
-  if (open !== prevOpen) {
-    setPrevOpen(open);
+  useEffect(() => {
     setGenerating(open);
-  }
+  }, [open]);
 
   /** Re-generate PDF blob URL whenever props change and dialog is open */
   useEffect(() => {

@@ -8,11 +8,36 @@ export interface OrderGroup {
   targetBranch: number | null;
   leadDate: string | null;
   dateRequested: string;
+  dateEncoded: string;
   items: StockTransfer[];
   totalAmount: number;
 }
 
 export function useStockTransferApproval() {
+  const playErrorSound = () => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+
+      oscillator.type = 'sawtooth'; // Harsh error sound
+      oscillator.frequency.setValueAtTime(150, audioCtx.currentTime); // Low buzz
+      gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + 0.05);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.4);
+
+      oscillator.start();
+      oscillator.stop(audioCtx.currentTime + 0.4);
+    } catch (e) {
+      console.warn('Error audio failed:', e);
+    }
+  };
+
   const [stockTransfers, setStockTransfers] = useState<StockTransfer[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,14 +48,20 @@ export function useStockTransferApproval() {
   const fetchTransfers = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/scm/warehouse-management/stock-transfer?status=requested');
+      const res = await fetch(`/api/scm/warehouse-management/stock-transfer?status=Requested&t=${Date.now()}`, {
+        next: { revalidate: 0 },
+        cache: 'no-store'
+      });
       if (!res.ok) throw new Error('Failed to fetch requested transfers');
       const json = await res.json();
       setStockTransfers(json.stockTransfers ?? []);
       setBranches(json.branches ?? []);
     } catch (err) {
       console.error('Failed to fetch transfers for approval:', err);
-      toast.error('Failed to fetch requested stock transfers');
+      playErrorSound();
+      toast.error('Network Error', {
+        description: 'Server is unreachable. Please check your connection.'
+      });
     } finally {
       setLoading(false);
     }
@@ -51,6 +82,7 @@ export function useStockTransferApproval() {
           targetBranch: st.target_branch,
           leadDate: st.lead_date,
           dateRequested: st.date_requested,
+          dateEncoded: st.date_encoded || '',
           items: [],
           totalAmount: 0,
         };
@@ -58,9 +90,9 @@ export function useStockTransferApproval() {
       groups[st.order_no].items.push(st);
       groups[st.order_no].totalAmount += Number(st.amount || 0);
     });
-    // Convert to array and sort by date requested descending
+    // Convert to array and sort by date encoded descending (absolute newest first)
     return Object.values(groups).sort(
-      (a, b) => new Date(b.dateRequested).getTime() - new Date(a.dateRequested).getTime()
+      (a, b) => new Date(b.dateEncoded).getTime() - new Date(a.dateEncoded).getTime()
     );
   }, [stockTransfers]);
 
@@ -97,9 +129,10 @@ export function useStockTransferApproval() {
       toast.success(`Order ${orderNo} successfully ${status}.`);
       setSelectedOrderNo(null);
       await fetchTransfers(); // Refresh list
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Status update failed:', err);
-      toast.error(err.message || 'Something went wrong while updating status.');
+      playErrorSound();
+      toast.error(err instanceof Error && err.name === 'TypeError' ? 'Network Error: Server Unreachable' : (err instanceof Error ? err.message : 'Something went wrong while updating status.'));
     } finally {
       setProcessing(false);
     }
@@ -123,6 +156,7 @@ export function useStockTransferApproval() {
     processing,
     updateStatus,
     getBranchName,
+    stockTransfers,
     refresh: fetchTransfers,
   };
 }

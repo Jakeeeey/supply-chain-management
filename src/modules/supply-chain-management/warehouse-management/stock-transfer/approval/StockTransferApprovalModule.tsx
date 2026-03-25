@@ -2,15 +2,9 @@
 
 import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ClipboardCheck, Loader2 } from 'lucide-react';
+import { ClipboardCheck, Loader2, RefreshCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useStockTransferApproval } from './hooks/useStockTransferApproval';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { OrderSelectionModal } from '../components/OrderSelectionModal';
 import {
   Table,
   TableBody,
@@ -18,7 +12,15 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableFooter,
 } from '@/components/ui/table';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 
 export default function StockTransferApprovalModule() {
@@ -31,20 +33,52 @@ export default function StockTransferApprovalModule() {
     processing,
     updateStatus,
     getBranchName,
+    stockTransfers,
+    refresh,
   } = useStockTransferApproval();
+
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [itemsPerPage, setItemsPerPage] = React.useState(10);
+
+  // Reset page when group changes
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedOrderNo]);
+
+  const totalItems = selectedGroup?.items.length || 0;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const paginatedItems = selectedGroup?.items.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  ) || [];
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-center justify-between space-y-2">
         <h2 className="text-3xl font-bold tracking-tight">Stock Transfer Approval</h2>
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => refresh()} 
+            disabled={loading}
+            className="gap-2"
+          >
+            <RefreshCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh List
+          </Button>
+        </div>
       </div>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <div className="space-y-1">
-            <CardTitle className="text-2xl">Pending Approvals</CardTitle>
-            <CardDescription>
-              Review and approve stock transfer requests from other branches.
+            <CardTitle className="text-2xl">For Approval</CardTitle>
+            <CardDescription className="flex items-center justify-between">
+              <span>Review and approve stock transfer requests from other branches.</span>
+              <span className="text-[10px] font-mono bg-muted px-2 py-0.5 rounded-full">
+                {stockTransfers.length} items in {orderGroups.length} groups
+              </span>
             </CardDescription>
           </div>
           <ClipboardCheck className="h-8 w-8 text-muted-foreground" />
@@ -59,22 +93,15 @@ export default function StockTransferApprovalModule() {
             {loading ? (
               <div className="h-10 rounded-md bg-muted/30 animate-pulse" />
             ) : (
-              <Select
-                value={selectedOrderNo || ''}
-                onValueChange={setSelectedOrderNo}
-                disabled={orderGroups.length === 0}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={orderGroups.length === 0 ? "No pending requests" : "Select an order..."} />
-                </SelectTrigger>
-                <SelectContent>
-                  {orderGroups.map((group) => (
-                    <SelectItem key={group.orderNo} value={group.orderNo}>
-                      {group.orderNo} ({group.items.length} items)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <OrderSelectionModal 
+                orderGroups={orderGroups}
+                selectedOrderNo={selectedOrderNo}
+                onSelect={setSelectedOrderNo}
+                getBranchName={getBranchName}
+                title="Select Pending Approval"
+                description="Choose a stock transfer request to review and approve/reject."
+                placeholder="Select Request Number..."
+              />
             )}
           </div>
 
@@ -106,21 +133,118 @@ export default function StockTransferApprovalModule() {
                 <Table>
                   <TableHeader className="bg-muted/50">
                     <TableRow className="border-b">
-                      <TableHead className="text-xs uppercase font-bold">Product ID</TableHead>
-                      <TableHead className="text-xs uppercase font-bold">Order Qty</TableHead>
-                      <TableHead className="text-xs uppercase font-bold text-right">Amount</TableHead>
+                      <TableHead className="text-xs uppercase font-bold">Product Name</TableHead>
+                      <TableHead className="text-xs uppercase font-bold">Description</TableHead>
+                      <TableHead className="text-xs uppercase font-bold">Brand</TableHead>
+                      <TableHead className="text-xs uppercase font-bold">Unit</TableHead>
+                      <TableHead className="text-xs uppercase font-bold text-center">Order Qty</TableHead>
+                      <TableHead className="text-xs uppercase font-bold text-right">Total Amount</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {selectedGroup.items.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell className="font-medium text-sm">PRD-{item.product_id}</TableCell>
-                        <TableCell className="text-sm">{item.ordered_quantity}</TableCell>
-                        <TableCell className="text-right text-sm">₱{Number(item.amount).toLocaleString('en-PH', {minimumFractionDigits: 2})}</TableCell>
-                      </TableRow>
-                    ))}
+                    {paginatedItems.map((item) => {
+                      const product = typeof item.product_id === 'object' && item.product_id !== null ? item.product_id : null;
+                      const productName = product?.product_name || `PRD-${item.product_id}`;
+                      const description = product?.description || product?.barcode || 'N/A';
+                      const brandName = product?.product_brand?.brand_name || 'N/A';
+                      const unitName = product?.unit_of_measurement?.unit_name || 'unit';
+
+                      const originalId = product ? (product.product_id || product.id) : item.product_id;
+
+                      return (
+                        <TableRow key={item.id} className="hover:bg-muted/5">
+                          <TableCell className="py-3">
+                            <div className="flex flex-col">
+                              <span className="font-semibold text-sm">{productName}</span>
+                              <span className="text-[10px] text-muted-foreground uppercase tracking-tight font-medium">ID: {String(originalId || 'N/A')}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate" title={description}>{description}</TableCell>
+                          <TableCell className="text-xs font-medium text-primary uppercase">{brandName}</TableCell>
+                          <TableCell className="text-xs font-medium uppercase text-muted-foreground">{unitName}</TableCell>
+                          <TableCell className="text-sm text-center font-medium">{item.ordered_quantity}</TableCell>
+                          <TableCell className="text-right text-sm font-bold">₱{Number(item.amount).toLocaleString('en-PH', {minimumFractionDigits: 2})}</TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
+                  <TableFooter className="bg-muted/30">
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-right font-bold text-xs uppercase tracking-wider text-muted-foreground py-4">Grand Total</TableCell>
+                      <TableCell className="text-right text-base font-bold text-emerald-600 py-4">
+                        ₱{selectedGroup.items.reduce((sum, item) => sum + Number(item.amount || 0), 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}
+                      </TableCell>
+                    </TableRow>
+                  </TableFooter>
                 </Table>
+
+                {/* Pagination Controls */}
+                <div className="mt-4 flex flex-col md:flex-row items-center justify-between gap-4 px-2 py-4 border-t border-muted/20">
+                  <div className="flex items-center gap-4">
+                    <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest whitespace-nowrap">
+                      Rows per page
+                    </div>
+                    <Select
+                      value={String(itemsPerPage)}
+                      onValueChange={(v) => {
+                        setItemsPerPage(Number(v));
+                        setCurrentPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="h-8 w-[70px] text-xs font-medium border-muted-foreground/20">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[10, 20, 30, 50, 100].map((v) => (
+                          <SelectItem key={v} value={String(v)} className="text-xs">
+                            {v}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <div className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                      Showing {totalItems === 0 ? 0 : Math.min(itemsPerPage * (currentPage - 1) + 1, totalItems)} to {Math.min(itemsPerPage * currentPage, totalItems)} of {totalItems} Products
+                    </div>
+                  </div>
+
+                  {totalPages > 1 && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={currentPage === 1}
+                        onClick={() => setCurrentPage(p => p - 1)}
+                        className="h-8 px-3"
+                      >
+                        <ChevronLeft className="w-4 h-4 mr-1" />
+                        Previous
+                      </Button>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                          <Button
+                            key={page}
+                            variant={currentPage === page ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setCurrentPage(page)}
+                            className={`h-8 w-8 p-0 ${currentPage === page ? 'shadow-sm border-primary/30' : ''}`}
+                          >
+                            {page}
+                          </Button>
+                        ))}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={currentPage === totalPages}
+                        onClick={() => setCurrentPage(p => p + 1)}
+                        className="h-8 px-3"
+                      >
+                        Next
+                        <ChevronRight className="w-4 h-4 ml-1" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
 
                 <div className="mt-6 flex items-center justify-end gap-3">
                   <Button 

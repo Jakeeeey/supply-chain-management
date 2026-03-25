@@ -58,7 +58,6 @@ export function PDPViewModal({
         })
         .catch(console.error)
         .finally(() => {
-          clearTimeout(timer);
           setIsLoading(false);
         });
     } else {

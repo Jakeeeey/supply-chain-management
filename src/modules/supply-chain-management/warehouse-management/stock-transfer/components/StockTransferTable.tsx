@@ -10,6 +10,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableFooter,
 } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import {
@@ -42,12 +43,9 @@ export default function StockTransferTable({ items, onQtyChange, onDelete }: Sto
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  const [prevItemsLength, setPrevItemsLength] = useState(items.length);
-
-  if (items.length !== prevItemsLength) {
-    setPrevItemsLength(items.length);
+  React.useEffect(() => {
     setPage(1);
-  }
+  }, [items.length]);
 
   const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
   const start = (page - 1) * pageSize;
@@ -86,6 +84,9 @@ export default function StockTransferTable({ items, onQtyChange, onDelete }: Sto
               Description
             </TableHead>
             <TableHead className="font-bold text-foreground text-[11px] uppercase tracking-wider">
+              Brand
+            </TableHead>
+            <TableHead className="font-bold text-foreground text-[11px] uppercase tracking-wider">
               Unit
             </TableHead>
             <TableHead className="font-bold text-foreground text-[11px] uppercase tracking-wider text-right w-28">
@@ -118,6 +119,9 @@ export default function StockTransferTable({ items, onQtyChange, onDelete }: Sto
                 </TableCell>
                 <TableCell className="text-xs text-muted-foreground italic py-3">
                   {item.description}
+                </TableCell>
+                <TableCell className="text-xs font-medium text-primary py-3">
+                  {item.brandName || 'N/A'}
                 </TableCell>
                 <TableCell className="text-xs text-muted-foreground py-3">
                   {item.unit}
@@ -157,7 +161,7 @@ export default function StockTransferTable({ items, onQtyChange, onDelete }: Sto
           ) : (
             <TableRow>
               <TableCell
-                colSpan={9}
+                colSpan={10}
                 className="h-32 text-center text-muted-foreground text-sm italic"
               >
                 No products added. Scan RFID to add products to transfer.
@@ -165,6 +169,17 @@ export default function StockTransferTable({ items, onQtyChange, onDelete }: Sto
             </TableRow>
           )}
         </TableBody>
+        {items.length > 0 && (
+          <TableFooter>
+            <TableRow>
+              <TableCell colSpan={8} className="font-bold text-right text-xs uppercase tracking-wider text-muted-foreground">Total Amount</TableCell>
+              <TableCell className="font-bold text-right text-xs text-primary">
+                ₱{items.reduce((sum, item) => sum + (item.totalAmount || 0), 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+              </TableCell>
+              <TableCell />
+            </TableRow>
+          </TableFooter>
+        )}
       </Table>
 
       {/* ── Pagination Footer ── */}

@@ -8,7 +8,92 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+export type ComboboxOption = {
+    value: string;
+    label: string;
+};
+
+interface LocalComboboxProps {
+    options: ComboboxOption[];
+    value: string;
+    onValueChange: (value: string) => void;
+    placeholder?: string;
+    emptyMessage?: string;
+    className?: string;
+}
+
+function LocalCombobox({
+    options,
+    value,
+    onValueChange,
+    placeholder = "Search...",
+    emptyMessage = "No results found.",
+    className,
+}: LocalComboboxProps) {
+    const [open, setOpen] = React.useState(false);
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={open}
+                    className={cn("w-full justify-between font-normal text-muted-foreground", className, value && "text-foreground")}
+                >
+                    {value
+                        ? options.find((opt) => opt.value === value)?.label || placeholder
+                        : placeholder}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-full p-0" align="start">
+                <Command>
+                    <CommandInput placeholder={placeholder} />
+                    <CommandList>
+                        <CommandEmpty>{emptyMessage}</CommandEmpty>
+                        <CommandGroup>
+                            {options.map((option) => (
+                                <CommandItem
+                                    key={option.value}
+                                    value={option.label}
+                                    onSelect={() => {
+                                        onValueChange(option.value === value ? "" : option.value);
+                                        setOpen(false);
+                                    }}
+                                >
+                                    <Check
+                                        className={cn(
+                                            "mr-2 h-4 w-4",
+                                            value === option.value ? "opacity-100" : "opacity-0"
+                                        )}
+                                    />
+                                    {option.label}
+                                </CommandItem>
+                            ))}
+                        </CommandGroup>
+                    </CommandList>
+                </Command>
+            </PopoverContent>
+        </Popover>
+    );
+}
+
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -145,7 +230,7 @@ export function DriverModal({
                         <label className="text-sm font-bold uppercase tracking-wider text-foreground/80">
                             Select Driver*
                         </label>
-                        <Combobox
+                        <LocalCombobox
                             options={userOptions}
                             value={selectedUserId}
                             onValueChange={setSelectedUserId}
@@ -161,7 +246,7 @@ export function DriverModal({
                         <label className="text-sm font-bold uppercase tracking-wider text-foreground/80">
                             Good Branch*
                         </label>
-                        <Combobox
+                        <LocalCombobox
                             options={goodBranchOptions}
                             value={selectedGoodBranchId}
                             onValueChange={setSelectedGoodBranchId}
@@ -179,7 +264,7 @@ export function DriverModal({
                         <label className="text-sm font-bold uppercase tracking-wider text-foreground/80">
                             Bad Branch
                         </label>
-                        <Combobox
+                        <LocalCombobox
                             options={badBranchOptions}
                             value={selectedBadBranchId}
                             onValueChange={setSelectedBadBranchId}

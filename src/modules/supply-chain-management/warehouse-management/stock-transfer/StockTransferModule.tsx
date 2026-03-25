@@ -1,6 +1,6 @@
 'use client';
 
-import React, { KeyboardEvent, useState } from 'react';
+import React, { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,13 +13,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Loader2, RefreshCcw, CheckCircle2, Printer, ScanLine } from 'lucide-react';
+import { Loader2, RefreshCcw, CheckCircle2, Printer, ShoppingBag } from 'lucide-react';
 import { toast } from 'sonner';
 import { useStockTransfer, getBranchLabel } from './hooks/useStockTransfer';
 import StockTransferTable from './components/StockTransferTable';
 import StockTransferPrintPreview from './components/StockTransferPrintPreview';
 import { BranchCombobox } from './components/BranchCombobox';
-import { ProductCombobox } from './components/ProductCombobox';
+import { ProductSelectionModal } from './components/ProductSelectionModal';
 
 export default function StockTransferModule() {
   const {
@@ -45,6 +45,7 @@ export default function StockTransferModule() {
 
   const [showPreview, setShowPreview] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showProductModal, setShowProductModal] = useState(false);
 
   /* ── Helpers ─────────────────────────────────────────── */
   const sourceBranchLabel = branches.find((b) => b.id.toString() === sourceBranch)
@@ -156,9 +157,16 @@ export default function StockTransferModule() {
             {/* Manual Product Selection */}
             <div className="space-y-1.5 min-w-0">
               <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                Manual Select
+                Manual Selection
               </label>
-              <ProductCombobox onSelect={handleAddProduct} />
+              <Button 
+                variant="outline" 
+                className="w-full h-10 gap-2 border-dashed border-primary/40 hover:border-primary hover:bg-primary/5 text-xs font-bold transition-all duration-300"
+                onClick={() => setShowProductModal(true)}
+              >
+                <ShoppingBag className="w-4 h-4 text-primary" />
+                Browse Products
+              </Button>
             </div>
           </div>
         </div>
@@ -240,6 +248,17 @@ export default function StockTransferModule() {
         targetBranchLabel={targetBranchLabel}
         leadDate={leadDate}
         scannedItems={scannedItems}
+      />
+      {/* ── Product Selection Modal ── */}
+      <ProductSelectionModal 
+        open={showProductModal} 
+        onOpenChange={setShowProductModal} 
+        onSelect={(p) => {
+          handleAddProduct(p);
+          // Optional: don't close modal so user can add more?
+          // For now, let's keep it open as requested ("shopping")
+          toast.success(`Added ${p.product_name} to transfer list.`);
+        }} 
       />
     </>
   );

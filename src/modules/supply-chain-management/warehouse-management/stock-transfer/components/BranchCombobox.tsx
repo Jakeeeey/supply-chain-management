@@ -1,23 +1,14 @@
 'use client';
 
 import * as React from 'react';
-import { Check, ChevronsUpDown } from 'lucide-react';
-
-import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
 import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+  Combobox,
+  ComboboxInput,
+  ComboboxContent,
+  ComboboxList,
+  ComboboxItem,
+  ComboboxEmpty,
+} from '@/components/ui/combobox';
 
 import type { Branch } from '../types';
 import { getBranchLabel } from '../hooks/useStockTransfer';
@@ -37,64 +28,62 @@ export function BranchCombobox({
   placeholder = 'Select branch…',
   disabled = false,
 }: BranchComboboxProps) {
-  const [open, setOpen] = React.useState(false);
+  // Find the current selected branch object
+  const selectedBranch = branches.find(b => b.id.toString() === value) || null;
+  const initialLabel = selectedBranch ? getBranchLabel(selectedBranch) : '';
+  const [search, setSearch] = React.useState(initialLabel);
 
-  const selected = branches.find((b) => b.id.toString() === value);
-  const displayLabel = selected ? getBranchLabel(selected) : '';
+  // Keep search in sync with value when not interacting
+  React.useEffect(() => {
+    if (selectedBranch) {
+      setSearch(getBranchLabel(selectedBranch));
+    } else {
+      setSearch('');
+    }
+  }, [value, branches]);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          disabled={disabled}
-          className="h-10 w-full justify-between text-sm bg-background border-border font-normal"
-        >
-          <span className={cn('truncate', !displayLabel && 'text-muted-foreground')}>
-            {displayLabel || placeholder}
-          </span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-
-      <PopoverContent
-        className="w-[var(--radix-popover-trigger-width)] p-0"
-        align="start"
-        sideOffset={4}
-      >
-        <Command>
-          <CommandInput placeholder="Search branch…" className="h-9" />
-          <CommandList>
-            <CommandEmpty>No branch found.</CommandEmpty>
-            <CommandGroup>
-              {branches.map((b) => {
-                const label = getBranchLabel(b);
-                const id = b.id.toString();
-                return (
-                  <CommandItem
-                    key={id}
-                    value={label}          /* searched by label text */
-                    onSelect={() => {
-                      onChange(id === value ? '' : id);
-                      setOpen(false);
-                    }}
-                  >
-                    <Check
-                      className={cn(
-                        'mr-2 h-4 w-4',
-                        value === id ? 'opacity-100' : 'opacity-0'
-                      )}
-                    />
-                    {label}
-                  </CommandItem>
-                );
-              })}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+    <Combobox
+      value={selectedBranch}
+      onValueChange={(val: Branch | null) => {
+        const newId = val ? val.id.toString() : '';
+        onChange(newId);
+        if (val) setSearch(getBranchLabel(val));
+      }}
+    >
+      <ComboboxInput
+        placeholder={placeholder}
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        onFocus={(e) => {
+          (e.target as HTMLInputElement).select();
+        }}
+        disabled={disabled}
+        showTrigger
+      />
+      <ComboboxContent>
+        <ComboboxList>
+          {branches.length === 0 && <ComboboxEmpty>No branches available.</ComboboxEmpty>}
+          {branches
+            .filter(b => {
+              const label = getBranchLabel(b);
+              // If search matches the current selection exactly, show all (to avoid being stuck with 1 result on click)
+              if (selectedBranch && search.toLowerCase() === getBranchLabel(selectedBranch).toLowerCase()) {
+                return true;
+              }
+              return label.toLowerCase().includes(search.toLowerCase());
+            })
+            .map((b) => (
+              <ComboboxItem key={b.id} value={b}>
+                {getBranchLabel(b)}
+              </ComboboxItem>
+            ))}
+          {branches.length > 0 && branches.filter(b => getBranchLabel(b).toLowerCase().includes(search.toLowerCase())).length === 0 && (
+            <ComboboxEmpty>No matches found.</ComboboxEmpty>
+          )}
+        </ComboboxList>
+      </ComboboxContent>
+    </Combobox>
   );
 }
+

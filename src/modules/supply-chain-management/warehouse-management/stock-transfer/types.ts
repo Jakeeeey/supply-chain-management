@@ -1,10 +1,10 @@
 export type StockTransfer = {
   id: number;
   order_no: string;
-  product_id: number;
-  source_branch: number;
-  target_branch: number;
-  lead_date: string;
+  product_id: number | any;
+  source_branch: number | null;
+  target_branch: number | null;
+  lead_date: string | null;
   ordered_quantity: number;
   received_quantity: number;
   amount: number;
@@ -29,9 +29,21 @@ export type ScannedItem = {
   productId: number;
   productName: string;
   description: string;
+  brandName: string;
   unit: string;
   qtyAvailable: number;
   unitQty: number;
   unitPrice: number;
   totalAmount: number;
 };
+
+export interface OrderGroup {
+  orderNo: string;
+  sourceBranch: number | null;
+  targetBranch: number | null;
+  leadDate: string | null;
+  dateRequested: string;
+  dateEncoded: string;
+  items: any[]; // Generic for now, as items differ slightly (scannedQty vs receivedQty)
+  totalAmount: number;
+}

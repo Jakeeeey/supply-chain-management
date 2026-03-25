@@ -2,15 +2,10 @@
 
 import React, { KeyboardEvent, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PackageOpen, ScanLine, Loader2, CheckCircle2 } from 'lucide-react';
+import { PackageOpen, ScanLine, Loader2, CheckCircle2, Radar, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useStockTransferReceive } from './hooks/useStockTransferReceive';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { cn } from '@/lib/utils';
+import { OrderSelectionModal } from '../components/OrderSelectionModal';
 import {
   Table,
   TableBody,
@@ -18,7 +13,15 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableFooter,
 } from '@/components/ui/table';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -35,15 +38,52 @@ export default function StockTransferReceiveModule() {
     getBranchName,
   } = useStockTransferReceive();
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  // Reset page when group changes
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedOrderNo]);
+
+  const totalItems = selectedGroup?.items.length || 0;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const paginatedItems = selectedGroup?.items.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  ) || [];
+
   const [rfidInput, setRfidInput] = useState('');
+  const scannerRef = React.useRef<HTMLInputElement>(null);
+
+  // Auto-focus the hidden scanner input
+  React.useEffect(() => {
+    if (selectedOrderNo && scannerRef.current) {
+      const focusScanner = () => scannerRef.current?.focus();
+      focusScanner();
+      
+      // Re-focus if user clicks away
+      const interval = setInterval(focusScanner, 2000);
+      return () => clearInterval(interval);
+    }
+  }, [selectedOrderNo]);
+
+  const [isScanning, setIsScanning] = useState(false);
 
   const onRfidKeyDown = async (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Enter') return;
-    const trimmed = rfidInput.trim();
-    if (trimmed.length === 0) return;
+    e.preventDefault();
     
-    setRfidInput(''); // Clear immediately
-    await handleScanRFID(trimmed);
+    const val = e.currentTarget.value.trim();
+    if (!val || isScanning) return;
+    
+    setRfidInput(''); // Clear immediately for next scan
+    setIsScanning(true);
+    try {
+      await handleScanRFID(val);
+    } finally {
+      setIsScanning(false);
+    }
   };
 
   const isAllReceived = selectedGroup?.items.every(i => i.receivedQty >= i.ordered_quantity);
@@ -76,40 +116,57 @@ export default function StockTransferReceiveModule() {
               {loading ? (
                 <div className="h-10 rounded-md bg-muted/30 animate-pulse" />
               ) : (
-                <Select
-                  value={selectedOrderNo || ''}
-                  onValueChange={setSelectedOrderNo}
-                  disabled={orderGroups.length === 0}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={orderGroups.length === 0 ? "No incoming requests" : "Select an order..."} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {orderGroups.map((group) => (
-                      <SelectItem key={group.orderNo} value={group.orderNo}>
-                        {group.orderNo} ({group.items.length} items)
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <OrderSelectionModal 
+                  orderGroups={orderGroups}
+                  selectedOrderNo={selectedOrderNo}
+                  onSelect={setSelectedOrderNo}
+                  getBranchName={getBranchName}
+                  title="Select Incoming Transfer"
+                  description="Choose a dispatched (For Loading) stock transfer to verify and receive."
+                  placeholder="Select For Loading Transfer..."
+                />
               )}
             </div>
 
-            {/* RFID Scanner */}
+            {/* Automated Scanner UI */}
             <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Scan RFID to Receive Items
+              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground group flex items-center gap-2">
+                Scanner Status
+                {selectedGroup && (
+                  <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                )}
               </label>
-              <div className="relative">
-                <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
+              <div 
+                className={`relative flex items-center justify-center h-10 border-2 border-dashed rounded-lg transition-all duration-500 ${
+                  selectedGroup 
+                    ? 'border-emerald-500/50 bg-emerald-500/5 cursor-default' 
+                    : 'border-muted bg-muted/20 grayscale'
+                }`}
+                onClick={() => scannerRef.current?.focus()}
+              >
+                {selectedGroup ? (
+                  <div className="flex items-center gap-3">
+                    <Radar className={cn("w-5 h-5 text-emerald-500", !isScanning && "animate-spin-slow", isScanning && "animate-pulse")} />
+                    <span className="text-sm font-medium text-emerald-600 animate-pulse">
+                      {isScanning ? 'PROCESSING SCAN...' : 'READY TO RECEIVE RFID'}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-muted-foreground/60">
+                    <ScanLine className="w-4 h-4" />
+                    <span className="text-xs uppercase font-bold tracking-widest">Select order to pulse scanner</span>
+                  </div>
+                )}
+                
+                {/* Hidden input to catch reader output */}
+                <input
+                  ref={scannerRef}
                   type="text"
-                  placeholder="Scan or type RFID..."
                   value={rfidInput}
                   onChange={(e) => setRfidInput(e.target.value)}
                   onKeyDown={onRfidKeyDown}
-                  disabled={!selectedGroup}
-                  className="h-10 pl-9 text-sm bg-background border-border"
+                  className="opacity-0 absolute inset-0 w-full h-full cursor-default"
+                  autoComplete="off"
                 />
               </div>
             </div>
@@ -143,23 +200,36 @@ export default function StockTransferReceiveModule() {
                 <Table>
                   <TableHeader className="bg-muted/50">
                     <TableRow className="border-b">
-                      <TableHead className="text-xs uppercase font-bold">Product ID</TableHead>
+                      <TableHead className="text-xs uppercase font-bold">Product Name</TableHead>
                       <TableHead className="text-xs uppercase font-bold">For Loading Qty</TableHead>
                       <TableHead className="text-xs uppercase font-bold">Received Qty</TableHead>
+                      <TableHead className="text-xs uppercase font-bold text-right">Amount</TableHead>
                       <TableHead className="text-xs uppercase font-bold text-right">Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {selectedGroup.items.map((item) => {
+                    {paginatedItems.map((item) => {
                       const complete = item.receivedQty >= item.ordered_quantity;
+                      const product = typeof item.product_id === 'object' && item.product_id !== null ? item.product_id : null;
+                      const originalId = product ? (product.product_id || product.id) : item.product_id;
+                      const productName = product?.product_name || `PRD-${originalId}`;
+
                       return (
                         <TableRow key={item.id}>
-                          <TableCell className="font-medium text-sm">PRD-{item.product_id}</TableCell>
+                          <TableCell className="py-2">
+                            <div className="flex flex-col">
+                              <span className="font-semibold text-sm">{productName}</span>
+                              <span className="text-[10px] text-muted-foreground uppercase tracking-tight">ID: {String(originalId || 'N/A')}</span>
+                            </div>
+                          </TableCell>
                           <TableCell className="text-sm">{item.ordered_quantity}</TableCell>
                           <TableCell className="text-sm font-bold">
                             <span className={complete ? 'text-blue-600' : 'text-amber-600'}>
                               {item.receivedQty}
                             </span>
+                          </TableCell>
+                          <TableCell className="text-right text-sm font-semibold text-primary">
+                            ₱{Number(item.amount || 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}
                           </TableCell>
                           <TableCell className="text-right text-sm">
                             {complete ? (
@@ -177,7 +247,84 @@ export default function StockTransferReceiveModule() {
                       );
                     })}
                   </TableBody>
+                  <TableFooter>
+                    <TableRow className="bg-muted/30 print:border-b print:border-black">
+                      <TableCell colSpan={3} className="text-right font-bold text-xs uppercase tracking-wider text-muted-foreground">Total Amount</TableCell>
+                      <TableCell className="text-right text-sm font-bold text-primary">
+                        ₱{selectedGroup.items.reduce((sum, item) => sum + Number(item.amount || 0), 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}
+                      </TableCell>
+                      <TableCell />
+                    </TableRow>
+                  </TableFooter>
                 </Table>
+
+                {/* Pagination Controls */}
+                <div className="mt-4 flex flex-col md:flex-row items-center justify-between gap-4 px-2 py-4 border-t border-muted/20">
+                  <div className="flex items-center gap-4">
+                    <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest whitespace-nowrap">
+                      Rows per page
+                    </div>
+                    <Select
+                      value={String(itemsPerPage)}
+                      onValueChange={(v) => {
+                        setItemsPerPage(Number(v));
+                        setCurrentPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="h-8 w-[70px] text-xs font-medium border-muted-foreground/20">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[10, 20, 30, 50, 100].map((v) => (
+                          <SelectItem key={v} value={String(v)} className="text-xs">
+                            {v}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <div className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                      Showing {totalItems === 0 ? 0 : Math.min(itemsPerPage * (currentPage - 1) + 1, totalItems)} to {Math.min(itemsPerPage * currentPage, totalItems)} of {totalItems} Products
+                    </div>
+                  </div>
+
+                  {totalPages > 1 && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={currentPage === 1}
+                        onClick={() => setCurrentPage(p => p - 1)}
+                        className="h-8 px-3"
+                      >
+                        <ChevronLeft className="w-4 h-4 mr-1" />
+                        Previous
+                      </Button>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                          <Button
+                            key={page}
+                            variant={currentPage === page ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setCurrentPage(page)}
+                            className={`h-8 w-8 p-0 ${currentPage === page ? 'shadow-sm border-primary/30' : ''}`}
+                          >
+                            {page}
+                          </Button>
+                        ))}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={currentPage === totalPages}
+                        onClick={() => setCurrentPage(p => p + 1)}
+                        className="h-8 px-3"
+                      >
+                        Next
+                        <ChevronRight className="w-4 h-4 ml-1" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
 
                 <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="text-xs text-muted-foreground">
