@@ -13,7 +13,10 @@ import {
   DispatchPlan,
   DispatchPlanDetail,
 } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/types/dispatch-plan.schema";
-import { formatNumber, formatPeso } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/utils/format";
+import {
+  formatNumber,
+  formatPeso,
+} from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/utils/format";
 import {
   Calendar,
   Clock,
@@ -58,7 +61,6 @@ export function PDPViewModal({
         })
         .catch(console.error)
         .finally(() => {
-          clearTimeout(timer);
           setIsLoading(false);
         });
     } else {
@@ -191,8 +193,8 @@ export function PDPViewModal({
                     {details.length} order(s)
                   </p>
                   <p className="text-[10px] text-muted-foreground font-medium">
-                  {formatNumber(displayPlan.total_weight || 0)} kg
-                </p>
+                    {formatNumber(displayPlan.total_weight || 0)} kg
+                  </p>
                 </div>
               </div>
 

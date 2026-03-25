@@ -103,6 +103,33 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }
     const [barangays, setBarangays] = React.useState<Barangay[]>([]);
     const [isSubmitting, setIsSubmitting] = React.useState(false);
 
+    const [branchHeadQuery, setBranchHeadQuery] = React.useState("");
+    const [provinceQuery, setProvinceQuery] = React.useState("");
+    const [cityQuery, setCityQuery] = React.useState("");
+    const [barangayQuery, setBarangayQuery] = React.useState("");
+
+    const filteredUsers = React.useMemo(() => {
+        if (!branchHeadQuery) return users;
+        return users.filter(u => 
+            `${u.user_fname} ${u.user_lname}`.toLowerCase().includes(branchHeadQuery.toLowerCase())
+        );
+    }, [users, branchHeadQuery]);
+
+    const filteredProvinces = React.useMemo(() => {
+        if (!provinceQuery) return provinces;
+        return provinces.filter(p => p.name.toLowerCase().includes(provinceQuery.toLowerCase()));
+    }, [provinces, provinceQuery]);
+
+    const filteredCities = React.useMemo(() => {
+        if (!cityQuery) return cities;
+        return cities.filter(c => c.name.toLowerCase().includes(cityQuery.toLowerCase()));
+    }, [cities, cityQuery]);
+
+    const filteredBarangays = React.useMemo(() => {
+        if (!barangayQuery) return barangays;
+        return barangays.filter(b => b.name.toLowerCase().includes(barangayQuery.toLowerCase()));
+    }, [barangays, barangayQuery]);
+
     const form = useForm<FormValues>({
         resolver: zodResolver(formSchema),
         defaultValues: {
@@ -352,6 +379,7 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }
                                                             <Combobox
                                                                 value={displayValue}
                                                                 onValueChange={field.onChange}
+                                                                onInputValueChange={(val) => setBranchHeadQuery(val)}
                                                             >
                                                                 <ComboboxInput 
                                                                     placeholder="Assign a manager" 
@@ -366,14 +394,20 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }
                                                                         onWheel={(e) => e.stopPropagation()}
                                                                         onPointerDown={(e) => e.stopPropagation()}
                                                                     >
-                                                                        {users.map((user) => (
-                                                                            <ComboboxItem 
-                                                                                key={user.user_id} 
-                                                                                value={`${user.user_fname} ${user.user_lname}`}
-                                                                            >
-                                                                                {user.user_fname} {user.user_lname}
-                                                                            </ComboboxItem>
-                                                                        ))}
+                                                                        {filteredUsers.length === 0 ? (
+                                                                            <div className="py-6 text-center text-sm text-muted-foreground">
+                                                                                No managers found.
+                                                                            </div>
+                                                                        ) : (
+                                                                            filteredUsers.map((user) => (
+                                                                                <ComboboxItem 
+                                                                                    key={user.user_id} 
+                                                                                    value={`${user.user_fname} ${user.user_lname}`}
+                                                                                >
+                                                                                    {user.user_fname} {user.user_lname}
+                                                                                </ComboboxItem>
+                                                                            ))
+                                                                        )}
                                                                     </ComboboxList>
                                                                 </ComboboxContent>
                                                             </Combobox>
@@ -453,6 +487,7 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }
                                                             const code = provinces.find(p => p.name === val)?.code;
                                                             onProvinceChange(code || null);
                                                         }}
+                                                        onInputValueChange={(val) => setProvinceQuery(val)}
                                                     >
                                                         <ComboboxInput 
                                                             placeholder="Select Province" 
@@ -467,11 +502,17 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }
                                                                 onWheel={(e) => e.stopPropagation()}
                                                                 onPointerDown={(e) => e.stopPropagation()}
                                                             >
-                                                                {provinces.map((p) => (
-                                                                    <ComboboxItem key={p.code} value={p.name}>
-                                                                        {p.name}
-                                                                    </ComboboxItem>
-                                                                ))}
+                                                                {filteredProvinces.length === 0 ? (
+                                                                    <div className="py-6 text-center text-sm text-muted-foreground">
+                                                                        No provinces found.
+                                                                    </div>
+                                                                ) : (
+                                                                    filteredProvinces.map((p) => (
+                                                                        <ComboboxItem key={p.code} value={p.name}>
+                                                                            {p.name}
+                                                                        </ComboboxItem>
+                                                                    ))
+                                                                )}
                                                             </ComboboxList>
                                                         </ComboboxContent>
                                                     </Combobox>
@@ -496,6 +537,7 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }
                                                             const code = cities.find(c => c.name === val)?.code;
                                                             onCityChange(code || null);
                                                         }}
+                                                        onInputValueChange={(val) => setCityQuery(val)}
                                                     >
                                                         <ComboboxInput 
                                                             placeholder="Select City" 
@@ -511,11 +553,17 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }
                                                                 onWheel={(e) => e.stopPropagation()}
                                                                 onPointerDown={(e) => e.stopPropagation()}
                                                             >
-                                                                {cities.map((c) => (
-                                                                    <ComboboxItem key={c.code} value={c.name}>
-                                                                        {c.name}
-                                                                    </ComboboxItem>
-                                                                ))}
+                                                                {filteredCities.length === 0 ? (
+                                                                    <div className="py-6 text-center text-sm text-muted-foreground">
+                                                                        No cities found.
+                                                                    </div>
+                                                                ) : (
+                                                                    filteredCities.map((c) => (
+                                                                        <ComboboxItem key={c.code} value={c.name}>
+                                                                            {c.name}
+                                                                        </ComboboxItem>
+                                                                    ))
+                                                                )}
                                                             </ComboboxList>
                                                         </ComboboxContent>
                                                     </Combobox>
@@ -540,6 +588,7 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }
                                                             const code = barangays.find(b => b.name === val)?.code;
                                                             onBarangayChange(code || null);
                                                         }}
+                                                        onInputValueChange={(val) => setBarangayQuery(val)}
                                                     >
                                                         <ComboboxInput 
                                                             placeholder="Select Barangay" 
@@ -555,11 +604,17 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }
                                                                 onWheel={(e) => e.stopPropagation()}
                                                                 onPointerDown={(e) => e.stopPropagation()}
                                                             >
-                                                                {barangays.map((b) => (
-                                                                    <ComboboxItem key={b.code} value={b.name}>
-                                                                        {b.name}
-                                                                    </ComboboxItem>
-                                                                ))}
+                                                                {filteredBarangays.length === 0 ? (
+                                                                    <div className="py-6 text-center text-sm text-muted-foreground">
+                                                                        No barangays found.
+                                                                    </div>
+                                                                ) : (
+                                                                    filteredBarangays.map((b) => (
+                                                                        <ComboboxItem key={b.code} value={b.name}>
+                                                                            {b.name}
+                                                                        </ComboboxItem>
+                                                                    ))
+                                                                )}
                                                             </ComboboxList>
                                                         </ComboboxContent>
                                                     </Combobox>
