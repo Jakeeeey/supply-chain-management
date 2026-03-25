@@ -17,8 +17,8 @@ import Link from "next/link";
 import * as React from "react";
 import {useState, useMemo} from "react";
 
-import { Separator } from "@/components/ui/separator";
-import { Input } from "@/components/ui/input"; // Make sure you have the shadcn Input component installed!
+import {Separator} from "@/components/ui/separator";
+import {Input} from "@/components/ui/input"; // Make sure you have the shadcn Input component installed!
 import {
     Sidebar,
     SidebarContent,
@@ -125,31 +125,35 @@ const data = {
             icon: Building2,
             items: [
                 {
-                    title: "Create Purchase Order",
-                    url: "/scm/supplier-management/create-of-purchase-order",
-                },
-                {
-                    title: "Approval of PO",
-                    url: "/scm/supplier-management/approval-of-purchase-order",
-                },
-                {
-                    title: "Tagging of PO",
-                    url: "/scm/supplier-management/tagging-of-po",
-                },
-                {
-                    title: "Receiving Products",
-                    url: "/scm/supplier-management/receiving-products",
-                },
-                {
-                    title: "Posting Of PO",
-                    url: "/scm/supplier-management/posting-of-purchase-order",
-                },
-                {
-                    title: "PurchaseOrderSummary",
+                    title: "Purchase Order",
                     url: "/scm/supplier-management/purchase-order-summary",
+                    items: [{
+                        title: "Summary",
+                        url: "/scm/supplier-management/purchase-order-summary",
+                    },
+                        {
+                            title: "Creation",
+                            url: "/scm/supplier-management/create-of-purchase-order",
+                        },
+                        {
+                            title: "Approval",
+                            url: "/scm/supplier-management/approval-of-purchase-order",
+                        },
+                        {
+                            title: "Tagging",
+                            url: "/scm/supplier-management/tagging-of-po",
+                        },
+                        {
+                            title: "Receiving",
+                            url: "/scm/supplier-management/receiving-products",
+                        },
+                        {
+                            title: "Posting",
+                            url: "/scm/supplier-management/posting-of-purchase-order",
+                        },]
                 },
                 {
-                    title: "Inbound/Outbound Kiosk",
+                    title: "Logistics Kiosk",
                     url: "/scm/inbound-outbound-kiosk",
                 },
             ],
@@ -491,7 +495,7 @@ export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
                     Platform
                 </div>
                 {/* 👇 Pass the filtered data instead of the raw data 👇 */}
-                <NavMain items={filteredNavMain} />
+                <NavMain items={filteredNavMain}/>
             </SidebarContent>
 
             <SidebarFooter className="p-0">

@@ -1,10 +1,10 @@
 "use client"
 
-import { useState, useMemo } from "react"
-import { Button } from "@/components/ui/button"
-import { Calculator, Boxes, TrendingUp, History } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { PurchaseRequestSuccessModal } from "./purchase-request-success-modal"
+import {useState, useMemo} from "react"
+import {Button} from "@/components/ui/button"
+import {Calculator, Boxes, TrendingUp, History} from "lucide-react"
+import {cn} from "@/lib/utils"
+import {PurchaseRequestSuccessModal} from "./purchase-request-success-modal"
 
 interface PlanningFooterProps {
     data: any[]
@@ -56,7 +56,8 @@ export function PlanningFooter({
     }, [data])
 
     return (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] w-[95%] max-w-[1600px] animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] w-[95%] max-w-[1600px] animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className={cn(
                 "px-6 sm:px-10 py-5 rounded-[2.5rem] border shadow-2xl transition-all backdrop-blur-xl",
                 "bg-white/90 dark:bg-slate-950/90 border-slate-200 dark:border-slate-800",
@@ -78,36 +79,40 @@ export function PlanningFooter({
                                     "p-2 rounded-xl",
                                     isForecast ? "bg-emerald-50 text-emerald-600" : "bg-blue-50 text-blue-600"
                                 )}>
-                                    {isForecast ? <TrendingUp className="w-4 h-4" /> : <History className="w-4 h-4" />}
+                                    {isForecast ? <TrendingUp className="w-4 h-4"/> : <History className="w-4 h-4"/>}
                                 </div>
                                 <div className="flex items-baseline gap-1">
                                     <span className="text-3xl font-black text-slate-900 dark:text-white tabular-nums">
                                         {stats.totalSkus}
                                     </span>
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">SKUs</span>
+                                    <span
+                                        className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">SKUs</span>
                                 </div>
                             </div>
                         </div>
 
                         {/* MIDDLE: Financial Insights (Desktop Only) */}
-                        <div className="hidden lg:flex items-center gap-10 border-l border-slate-200 dark:border-slate-800 pl-10">
+                        <div
+                            className="hidden lg:flex items-center gap-10 border-l border-slate-200 dark:border-slate-800 pl-10">
                             {/* 👈 RESTORED: Inventory Value Block */}
                             <div className="space-y-1">
-                                <p className="text-[9px] font-black text-amber-500 uppercase tracking-widest">Inventory Value</p>
+                                <p className="text-[9px] font-black text-amber-500 uppercase tracking-widest">Inventory
+                                    Value</p>
                                 <p className="text-sm font-black text-slate-900 dark:text-slate-200">
-                                    ₱{stats.totalInventoryValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    ₱{stats.totalInventoryValue.toLocaleString(undefined, {minimumFractionDigits: 2})}
                                 </p>
                             </div>
                             <div className="space-y-1">
                                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Suggested</p>
                                 <p className="text-sm font-black text-slate-900 dark:text-slate-200">
-                                    ₱{stats.totalSuggestedValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    ₱{stats.totalSuggestedValue.toLocaleString(undefined, {minimumFractionDigits: 2})}
                                 </p>
                             </div>
                             <div className="space-y-1">
-                                <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest text-center">MAV Value</p>
+                                <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest text-center">MAV
+                                    Value</p>
                                 <p className="text-sm font-black text-slate-900 dark:text-slate-200">
-                                    ₱{stats.totalMavValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    ₱{stats.totalMavValue.toLocaleString(undefined, {minimumFractionDigits: 2})}
                                 </p>
                             </div>
                         </div>
@@ -117,8 +122,9 @@ export function PlanningFooter({
                     <div className="flex items-center justify-between md:justify-end gap-6 sm:gap-12">
                         <div className="flex flex-col items-end">
                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Grand Total Order</span>
-                            <span className="text-3xl sm:text-4xl font-black tabular-nums text-slate-900 dark:text-white">
-                                ₱{stats.grandTotalOrderValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            <span
+                                className="text-3xl sm:text-4xl font-black tabular-nums text-slate-900 dark:text-white">
+                                ₱{stats.grandTotalOrderValue.toLocaleString(undefined, {minimumFractionDigits: 2})}
                             </span>
                         </div>
 
@@ -133,7 +139,7 @@ export function PlanningFooter({
                                 "disabled:opacity-20 disabled:grayscale"
                             )}
                         >
-                            <Calculator className="w-6 h-6" />
+                            <Calculator className="w-6 h-6"/>
                             <div className="text-left hidden sm:block">
                                 <p className="text-[10px] font-black uppercase leading-none opacity-60 mb-0.5">Finalize</p>
                                 <p className="text-sm font-black uppercase tracking-tight">Generate PR</p>
