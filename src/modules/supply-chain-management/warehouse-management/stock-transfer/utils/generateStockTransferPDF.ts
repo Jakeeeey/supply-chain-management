@@ -164,6 +164,19 @@ export function generateStockTransferPDF(data: StockTransferPDFData): jsPDF {
       8: { cellWidth: 20, halign: 'right', fontStyle: 'bold' },
     },
     alternateRowStyles: { fillColor: [250, 250, 252] },
+    didParseCell: (data) => {
+      // Column 5 is 'Unit'
+      if (data.section === 'body' && data.column.index === 5) {
+        const item = scannedItems[data.row.index];
+        if (item && item.unitId) {
+          const uid = Number(item.unitId);
+          if (uid === 1) data.cell.styles.fontStyle = 'bold';
+          else if (uid === 2) data.cell.styles.fontStyle = 'italic';
+          else if (uid === 3) data.cell.styles.fontStyle = 'bolditalic';
+          else if (uid === 0) data.cell.styles.fontStyle = 'normal';
+        }
+      }
+    },
     didDrawPage: () => {},
   });
 

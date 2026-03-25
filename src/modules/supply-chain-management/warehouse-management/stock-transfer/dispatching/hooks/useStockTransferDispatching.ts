@@ -278,7 +278,10 @@ export function useStockTransferDispatching() {
       });
       
       playSuccessSound();
-      toast.success(`Scanned: ${match.productName}`);
+      const finalName = (typeof itemInOrder.product_id === 'object' && itemInOrder.product_id?.product_name) 
+        || match.productName 
+        || "Product";
+      toast.success(`Scanned: ${finalName}`);
       
     } catch (error) {
       console.error('Scanner lookup error:', error);

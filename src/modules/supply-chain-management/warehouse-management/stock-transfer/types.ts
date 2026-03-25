@@ -31,6 +31,7 @@ export type ScannedItem = {
   description: string;
   brandName: string;
   unit: string;
+  unitId?: number;
   qtyAvailable: number;
   unitQty: number;
   unitPrice: number;

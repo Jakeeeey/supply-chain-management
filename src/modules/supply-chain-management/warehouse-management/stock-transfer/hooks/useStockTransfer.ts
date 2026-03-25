@@ -95,10 +95,13 @@ export function useStockTransfer(): UseStockTransferReturn {
     const rfid = `MNL-${productId}-${Date.now().toString().slice(-4)}`;
     
     let extractedUnit = 'unit';
+    let unitId = 0;
     if (typeof product.unit_of_measurement === 'object' && product.unit_of_measurement !== null) {
       extractedUnit = String(product.unit_of_measurement.unit_name || product.unit_of_measurement.name || 'unit');
+      unitId = Number(product.unit_of_measurement.unit_id || product.unit_of_measurement.id || 0);
     } else if (product.unit_of_measurement) {
       extractedUnit = String(product.unit_of_measurement);
+      unitId = Number(product.unit_of_measurement);
     }
 
     const price = parseFloat(product.cost_per_unit || product.price_per_unit || product.estimated_unit_cost || 0);
@@ -117,6 +120,7 @@ export function useStockTransfer(): UseStockTransferReturn {
       description: product.barcode || 'Manual Entry',
       brandName: extractedBrand,
       unit: extractedUnit,
+      unitId,
       qtyAvailable: 999, // Placeholder for manually added
       unitQty: 1, 
       unitPrice: price,
