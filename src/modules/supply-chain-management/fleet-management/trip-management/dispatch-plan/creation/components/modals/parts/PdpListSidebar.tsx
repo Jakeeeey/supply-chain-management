@@ -11,7 +11,7 @@ interface PdpListSidebarProps {
   isLoadingPlans: boolean;
   searchQuery: string;
   onSearchChange: (val: string) => void;
-  selectedPlanId: number;
+  selectedPlanIds: number[];
   onPlanSelect: (planId: string) => void;
   selectedBranch: number;
   selectedAmount?: number;
@@ -22,7 +22,7 @@ export function PdpListSidebar({
   isLoadingPlans,
   searchQuery,
   onSearchChange,
-  selectedPlanId,
+  selectedPlanIds,
   onPlanSelect,
   selectedBranch,
   selectedAmount,
@@ -70,7 +70,7 @@ export function PdpListSidebar({
         ) : (
           filteredPlans.map((p) => {
             const pId = Number(p.dispatch_id || p.id);
-            const isSelected = selectedPlanId === pId;
+            const isSelected = selectedPlanIds.includes(pId);
             return (
               <button
                 type="button"
@@ -131,7 +131,7 @@ export function PdpListSidebar({
         <p
           className={cn(
             "text-xl font-bold tracking-tight transition-colors",
-            selectedPlanId
+            selectedPlanIds.length > 0
               ? "text-foreground"
               : "text-muted-foreground/40",
           )}
@@ -142,9 +142,9 @@ export function PdpListSidebar({
             maximumFractionDigits: 2,
           })}
         </p>
-        {selectedPlanId > 0 && (
+        {selectedPlanIds.length > 0 && (
           <Badge variant="secondary" className="mt-1.5 text-[10px] h-5">
-            Plan selected
+            {selectedPlanIds.length} Plan{selectedPlanIds.length !== 1 ? 's' : ''} selected
           </Badge>
         )}
       </div>

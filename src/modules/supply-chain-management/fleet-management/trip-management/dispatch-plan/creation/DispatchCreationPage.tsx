@@ -4,22 +4,17 @@ import { Button } from "@/components/ui/button";
 import {
   DispatchPlanSummary,
   DispatchPlanTable,
-} from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/components/data-table";
-import { BudgetAllocationModal } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/components/modals/BudgetAllocationModal";
-import { DispatchCreationModal } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/components/modals/DispatchCreationModal";
-import { DispatchEditModal } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/components/modals/DispatchEditModal";
-import { useDispatchCreation } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/hooks/useDispatchCreation";
-import { useCallback, useState } from "react";
+} from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/creation/components/data-table";
+import { DispatchCreationModal } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/creation/components/modals/DispatchCreationModal";
+import { DispatchEditModal } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/creation/components/modals/DispatchEditModal";
+import { useDispatchCreation } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/creation/hooks/useDispatchCreation";
 import { SortingState } from "@tanstack/react-table";
 import { Plus } from "lucide-react";
+import { useCallback, useState } from "react";
 
 export default function DispatchCreationPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<DispatchPlanSummary | null>(
-    null,
-  );
   const [selectedEditPlanId, setSelectedEditPlanId] = useState<number | null>(
     null,
   );
@@ -33,23 +28,9 @@ export default function DispatchCreationPage() {
     setIsEditModalOpen(true);
   }, []);
 
-  const handleBudget = useCallback((plan: DispatchPlanSummary) => {
-    setSelectedPlan(plan);
-    setIsBudgetModalOpen(true);
-  }, []);
-
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            Dispatch Plan Masterlist
-          </h1>
-          <p className="text-muted-foreground">
-            Manage and create Post-Dispatch Trips, assign crews, and allocate
-            budgets.
-          </p>
-        </div>
+    <div className="space-y-4">
+      <div className="flex items-center">
         <Button
           onClick={() => setIsModalOpen(true)}
           variant="default"
@@ -66,7 +47,6 @@ export default function DispatchCreationPage() {
           sorting={sorting}
           onSortingChange={setSorting}
           onEdit={handleEdit}
-          onBudget={handleBudget}
           emptyTitle="No Dispatch Plans Found"
           emptyDescription="Click 'Create Dispatch' to convert an approved Pre-Dispatch Plan into an active trip."
         />
@@ -85,16 +65,6 @@ export default function DispatchCreationPage() {
         open={isEditModalOpen}
         onOpenChange={setIsEditModalOpen}
         planId={selectedEditPlanId}
-        onSuccess={() => {
-          refreshSummary();
-        }}
-      />
-
-      <BudgetAllocationModal
-        open={isBudgetModalOpen}
-        onOpenChange={setIsBudgetModalOpen}
-        plan={selectedPlan}
-        coaOptions={masterData?.coa || []}
         onSuccess={() => {
           refreshSummary();
         }}

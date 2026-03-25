@@ -25,7 +25,7 @@ import { GripVertical, MapPin, ShoppingCart } from "lucide-react";
 import { getStatusColor, PlanDetailItem } from "./types";
 
 interface InvoiceItemsSidebarProps {
-  selectedPlanId: number;
+  selectedPlanIds: number[];
   planDetails: PlanDetailItem[];
   isLoadingDetails: boolean;
   onReorder: (newItems: PlanDetailItem[]) => void;
@@ -100,7 +100,7 @@ function DraggableInvoiceItem({ order }: { order: PlanDetailItem }) {
 }
 
 export function InvoiceItemsSidebar({
-  selectedPlanId,
+  selectedPlanIds,
   planDetails,
   isLoadingDetails,
   onReorder,
@@ -129,14 +129,14 @@ export function InvoiceItemsSidebar({
           Sales Transactions
         </p>
         <p className="text-[11px] text-muted-foreground mt-1">
-          {selectedPlanId > 0
+          {selectedPlanIds.length > 0
             ? `${planDetails.length} invoice${planDetails.length !== 1 ? "s" : ""} linked`
             : "Select a PDP to view invoices"}
         </p>
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
-        {!selectedPlanId || selectedPlanId === 0 ? (
+        {selectedPlanIds.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground/30">
             <ShoppingCart className="w-8 h-8 mb-2" />
             <p className="text-xs text-center px-4">

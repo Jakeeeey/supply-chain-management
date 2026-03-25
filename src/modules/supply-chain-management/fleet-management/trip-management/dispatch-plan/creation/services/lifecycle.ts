@@ -1,4 +1,4 @@
-import { DispatchCreationFormValues } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/types/dispatch.schema";
+import { DispatchCreationFormValues } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/creation/types/dispatch.schema";
 
 export const dispatchCreationLifecycleService = {
   /**
@@ -7,7 +7,7 @@ export const dispatchCreationLifecycleService = {
    */
   async createTrip(payload: DispatchCreationFormValues) {
     const response = await fetch(
-      "/api/scm/fleet-management/trip-management/dispatch-creation",
+      "/api/scm/fleet-management/trip-management/dispatch-plan/creation",
       {
         method: "POST",
         headers: {
@@ -33,7 +33,7 @@ export const dispatchCreationLifecycleService = {
    */
   async updateTrip(planId: number, payload: DispatchCreationFormValues) {
     const response = await fetch(
-      `/api/scm/fleet-management/trip-management/dispatch-creation?plan_id=${planId}&action=update_trip`,
+      `/api/scm/fleet-management/trip-management/dispatch-plan/creation?plan_id=${planId}&action=update_trip`,
       {
         method: "PATCH",
         headers: {
@@ -58,7 +58,7 @@ export const dispatchCreationLifecycleService = {
    */
   async updateBudget(planId: number, budgets: any[]) {
     const response = await fetch(
-      `/api/scm/fleet-management/trip-management/dispatch-creation?plan_id=${planId}`,
+      `/api/scm/fleet-management/trip-management/dispatch-plan/creation?plan_id=${planId}`,
       {
         method: "PATCH",
         headers: {

@@ -25,12 +25,6 @@ export const CrewHelperSchema = z.object({
   user_id: z.number().min(1, "Helper selection is required"),
 });
 
-/** A single budget line entry. */
-export const BudgetLineSchema = z.object({
-  coa_id: z.number().min(1, "Chart of Account is required"),
-  amount: z.number().min(0.01, "Amount must be greater than 0"),
-  remarks: z.string().optional(),
-});
 
 /** A single invoice reference entry. */
 export const InvoiceRefSchema = z.object({
@@ -43,7 +37,7 @@ export const InvoiceRefSchema = z.object({
 /** Schema for creating a new dispatch plan (POST body). */
 export const DispatchCreationFormSchema = z.object({
   // Context from Pre-Dispatch
-  pre_dispatch_plan_id: z.number().min(1, "Pre-Dispatch Plan ID is required"),
+  pre_dispatch_plan_ids: z.array(z.number()).min(1, "At least one Pre-Dispatch Plan is required"),
 
   // Header Details (post_dispatch_plan)
   starting_point: z.number().min(1, "Origin Warehouse is required"),
@@ -57,8 +51,6 @@ export const DispatchCreationFormSchema = z.object({
   driver_id: z.number().min(1, "Driver is required"),
   helpers: z.array(CrewHelperSchema).min(1, "At least one helper is required"),
 
-  // Budgeting (post_dispatch_budgeting)
-  budgets: z.array(BudgetLineSchema).optional(),
 
   // Invoices (post_dispatch_invoices) - needed for reordering/persistence
   invoices: z.array(InvoiceRefSchema).optional(),
@@ -75,7 +67,7 @@ export type DispatchCreationFormValues = z.infer<
 
 /** Schema for updating an existing trip (PATCH ?action=update_trip). */
 export const UpdateTripSchema = z.object({
-  pre_dispatch_plan_id: z.number().optional(),
+  pre_dispatch_plan_ids: z.array(z.number()).optional(),
   driver_id: z.number().min(1, "Driver is required"),
   vehicle_id: z.number().min(1, "Vehicle is required"),
   starting_point: z.number().min(1, "Origin Warehouse is required"),
@@ -90,11 +82,3 @@ export const UpdateTripSchema = z.object({
 
 export type UpdateTripValues = z.infer<typeof UpdateTripSchema>;
 
-// ─── PATCH — Update Budgets ─────────────────────────────────
-
-/** Schema for a budget-only update (PATCH default action). */
-export const UpdateBudgetSchema = z.object({
-  budgets: z.array(BudgetLineSchema).optional(),
-});
-
-export type UpdateBudgetValues = z.infer<typeof UpdateBudgetSchema>;

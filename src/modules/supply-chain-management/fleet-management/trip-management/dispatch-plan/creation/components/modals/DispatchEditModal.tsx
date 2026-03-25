@@ -9,17 +9,17 @@ import {
 } from "@/components/ui/dialog";
 import { Form } from "@/components/ui/form";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useDispatchCreation } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/hooks/useDispatchCreation";
+import { useDispatchCreation } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/creation/hooks/useDispatchCreation";
 import {
   DispatchCreationFormSchema,
   DispatchCreationFormValues,
-} from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/types/dispatch.schema";
+} from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/creation/types/dispatch.schema";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Truck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { dispatchCreationLifecycleService } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/services/lifecycle";
+import { dispatchCreationLifecycleService } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/creation/services/lifecycle";
 import { PdpListSidebar } from "./parts/PdpListSidebar";
 import { TripConfigurationForm } from "./parts/TripConfigurationForm";
 import { InvoiceItemsSidebar } from "./parts/InvoiceItemsSidebar";
@@ -57,7 +57,7 @@ export function DispatchEditModal({
   const form = useForm<DispatchCreationFormValues>({
     resolver: zodResolver(DispatchCreationFormSchema),
     defaultValues: {
-      pre_dispatch_plan_id: 0,
+      pre_dispatch_plan_ids: [],
       starting_point: 0,
       vehicle_id: 0,
       driver_id: 0,
@@ -66,27 +66,25 @@ export function DispatchEditModal({
       remarks: "",
       amount: 0,
       helpers: [{ user_id: 0 }],
-      budgets: [],
     },
   });
 
   const selectedBranch = form.watch("starting_point");
-  const selectedPlanId = form.watch("pre_dispatch_plan_id");
+  const selectedPlanIds = form.watch("pre_dispatch_plan_ids");
 
-  // Load plans when branch changes
   useEffect(() => {
     if (selectedBranch && selectedBranch > 0) {
-      loadApprovedPlans(selectedBranch, selectedPlanId);
+      loadApprovedPlans(selectedBranch, selectedPlanIds?.[0]);
     } else {
       setApprovedPlans([]);
     }
-  }, [selectedBranch, selectedPlanId]);
+  }, [selectedBranch, selectedPlanIds]);
 
   const loadApprovedPlans = async (branchId: number, currentPdpId?: number) => {
     setIsLoadingPlans(true);
     try {
       const url = new URL(
-        "/api/scm/fleet-management/trip-management/dispatch-creation",
+        "/api/scm/fleet-management/trip-management/dispatch-plan/creation",
         window.location.origin
       );
       url.searchParams.append("type", "approved_plans");
@@ -111,17 +109,42 @@ export function DispatchEditModal({
     const plan = approvedPlans.find((p) => p.dispatch_id === planId);
     if (!plan) return;
 
-    form.setValue("pre_dispatch_plan_id", planId);
-    form.setValue("amount", plan.total_amount || 0);
-    if (plan.driver_id) form.setValue("driver_id", Number(plan.driver_id));
-    if (plan.vehicle_id) form.setValue("vehicle_id", Number(plan.vehicle_id));
-    if (plan.branch_id) form.setValue("starting_point", Number(plan.branch_id));
+    const currentIds = form.getValues("pre_dispatch_plan_ids") || [];
+    const isSelected = currentIds.includes(planId);
+    
+    let newIds: number[];
+    if (isSelected) {
+      newIds = currentIds.filter(id => id !== planId);
+    } else {
+      newIds = [...currentIds, planId];
+    }
+    
+    form.setValue("pre_dispatch_plan_ids", newIds, { shouldValidate: true });
+
+    const totalAmount = approvedPlans
+      .filter((p) => newIds.includes(p.dispatch_id))
+      .reduce((sum, p) => sum + (p.total_amount || 0), 0);
+    form.setValue("amount", totalAmount);
+
+    if (newIds.length > 0) {
+      const firstPlan = approvedPlans.find((p) => p.dispatch_id === newIds[0]);
+      if (firstPlan && newIds.length === 1) {
+        if (firstPlan.driver_id) form.setValue("driver_id", Number(firstPlan.driver_id));
+        if (firstPlan.vehicle_id) form.setValue("vehicle_id", Number(firstPlan.vehicle_id));
+        if (firstPlan.branch_id) form.setValue("starting_point", Number(firstPlan.branch_id));
+      }
+    }
+
+    if (newIds.length === 0) {
+      setPlanDetails([]);
+      return;
+    }
 
     setIsLoadingDetails(true);
     setPlanDetails([]);
     try {
       const res = await fetch(
-        `/api/scm/fleet-management/trip-management/dispatch-creation?type=plan_details&plan_id=${planId}`,
+        `/api/scm/fleet-management/trip-management/dispatch-plan/creation?type=plan_details&plan_ids=${newIds.join(",")}`,
         { cache: "no-store" },
       );
       const result = await res.json();
@@ -140,14 +163,14 @@ export function DispatchEditModal({
         setIsLoading(true);
         try {
           const res = await fetch(
-            `/api/scm/fleet-management/trip-management/dispatch-creation?type=post_plan_details&plan_id=${planId}`
+            `/api/scm/fleet-management/trip-management/dispatch-plan/creation?type=post_plan_details&plan_id=${planId}`
           );
           if (!res.ok) throw new Error("Failed to load details");
           const result = await res.json();
           const p = result.data;
 
           form.reset({
-            pre_dispatch_plan_id: Number(p.dispatch_id || 0),
+            pre_dispatch_plan_ids: p.dispatch_id ? [Number(p.dispatch_id)] : [],
             starting_point: p.starting_point || 0,
             vehicle_id: p.vehicle_id || 0,
             driver_id: p.driver_id || 0,
@@ -156,13 +179,12 @@ export function DispatchEditModal({
             remarks: p.remarks || "",
             amount: p.amount || 0,
             helpers: p.helpers?.length ? p.helpers : [{ user_id: 0 }],
-            budgets: [],
           });
 
           if (p.dispatch_id) {
             setIsLoadingDetails(true);
             const detailsRes = await fetch(
-              `/api/scm/fleet-management/trip-management/dispatch-creation?type=plan_details&plan_id=${p.dispatch_id}&trip_id=${planId}`
+              `/api/scm/fleet-management/trip-management/dispatch-plan/creation?type=plan_details&plan_ids=${p.dispatch_id}&trip_id=${planId}`
             );
             const detailsResult = await detailsRes.json();
             setPlanDetails(detailsResult.data || []);
@@ -246,7 +268,7 @@ export function DispatchEditModal({
                   isLoadingPlans={isLoadingPlans}
                   searchQuery={searchQuery}
                   onSearchChange={setSearchQuery}
-                  selectedPlanId={form.watch("pre_dispatch_plan_id")}
+                  selectedPlanIds={form.watch("pre_dispatch_plan_ids") || []}
                   onPlanSelect={handlePlanSelect}
                   selectedBranch={selectedBranch}
                   selectedAmount={form.watch("amount")}
@@ -255,7 +277,7 @@ export function DispatchEditModal({
                 <TripConfigurationForm masterData={masterData} />
 
                 <InvoiceItemsSidebar
-                  selectedPlanId={form.watch("pre_dispatch_plan_id")}
+                  selectedPlanIds={form.watch("pre_dispatch_plan_ids") || []}
                   planDetails={planDetails}
                   isLoadingDetails={isLoadingDetails}
                   onReorder={setPlanDetails}
@@ -264,7 +286,7 @@ export function DispatchEditModal({
 
               <div className="flex items-center justify-between px-6 py-4 border-t border-border/50 bg-muted/10">
                 <p className="text-xs text-muted-foreground">
-                  {form.watch("pre_dispatch_plan_id") > 0
+                  {form.watch("pre_dispatch_plan_ids")?.length > 0
                     ? "Adjust details and reorder invoices if needed before saving."
                     : "Review and update dispatch trip details."}
                 </p>

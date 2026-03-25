@@ -155,18 +155,15 @@ export async function updateDispatchPlanStatus(
 
 // ─── Junction Table ─────────────────────────────────────────
 
-/**
- * Fetches the junction record linking a post-dispatch plan to its source PDP.
- */
-export async function fetchJunctionByPlanId(
+export async function fetchJunctionsByPlanId(
   planId: number,
-): Promise<PostDispatchJunctionRow | null> {
+): Promise<PostDispatchJunctionRow[]> {
   const res = await fetch(
     `${getDirectusBaseUrl()}/items/post_dispatch_dispatch_plans?filter[post_dispatch_plan_id][_eq]=${planId}`,
     { headers: directusHeaders() },
   );
   const data = await res.json();
-  return (data.data?.[0] as PostDispatchJunctionRow) ?? null;
+  return (data.data as PostDispatchJunctionRow[]) || [];
 }
 
 /**
@@ -412,7 +409,7 @@ export async function fetchApprovedPreDispatchPlans(
  * Returns customer name, order status, city, and amount for each linked order.
  */
 export async function fetchPlanDetails(
-  planId: number,
+  planIds: number[],
   tripId?: number,
 ): Promise<DirectusResponse<EnrichedPlanDetail>> {
   let details: {
@@ -477,7 +474,7 @@ export async function fetchPlanDetails(
     const detailsRes = await fetchItems<DispatchPlanDetailRow>(
       "/items/dispatch_plan_details",
       {
-        "filter[dispatch_id][_eq]": planId,
+        "filter[dispatch_id][_in]": planIds.join(","),
         fields: "detail_id,dispatch_id,sales_order_id",
         limit: -1,
       },
@@ -609,11 +606,11 @@ export async function fetchPlanBudgets(
  * Fetches only the invoice IDs (PK) associated with a PDP.
  * Useful for persisting links in post_dispatch_invoices.
  */
-export async function fetchPdpInvoiceIds(pdpId: number): Promise<number[]> {
+export async function fetchPdpInvoiceIds(pdpIds: number[]): Promise<number[]> {
   const detailsRes = await fetchItems<{ sales_order_id: number }>(
     "/items/dispatch_plan_details",
     {
-      "filter[dispatch_id][_eq]": pdpId,
+      "filter[dispatch_id][_in]": pdpIds.join(","),
       fields: "sales_order_id",
       limit: -1,
     },

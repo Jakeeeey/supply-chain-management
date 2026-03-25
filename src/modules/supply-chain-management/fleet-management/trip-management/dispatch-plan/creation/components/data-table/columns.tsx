@@ -12,7 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 import { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
-import { EllipsisVertical, Pencil, Wallet } from "lucide-react";
+import { EllipsisVertical, Pencil } from "lucide-react";
 
 import { DataTableColumnHeader } from "./table-column-header";
 
@@ -37,7 +37,6 @@ const statusStyles: Record<string, string> = {
 
 export const getDispatchPlanColumns = (
   onEdit: (plan: DispatchPlanSummary) => void,
-  onBudget: (plan: DispatchPlanSummary) => void,
 ): ColumnDef<DispatchPlanSummary>[] => [
   {
     accessorKey: "dpNumber",
@@ -180,10 +179,6 @@ export const getDispatchPlanColumns = (
           <DropdownMenuItem onClick={() => onEdit(row.original)}>
             <Pencil className="w-4 h-4 mr-2" />
             Edit
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onBudget(row.original)}>
-            <Wallet className="w-4 h-4 mr-2" />
-            Budget
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive">Delete</DropdownMenuItem>

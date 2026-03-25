@@ -11,7 +11,6 @@ interface DispatchPlanTableProps {
   data: DispatchPlanSummary[];
   isLoading: boolean;
   onEdit: (plan: DispatchPlanSummary) => void;
-  onBudget: (plan: DispatchPlanSummary) => void;
   onSearch?: (v: string) => void;
   sorting?: SortingState;
   onSortingChange?: (sorting: SortingState) => void;
@@ -23,7 +22,6 @@ export const DispatchPlanTable = React.memo(function DispatchPlanTable({
   data,
   isLoading,
   onEdit,
-  onBudget,
   onSearch,
   sorting,
   onSortingChange,
@@ -31,8 +29,8 @@ export const DispatchPlanTable = React.memo(function DispatchPlanTable({
   emptyDescription,
 }: DispatchPlanTableProps) {
   const columns = React.useMemo(
-    () => getDispatchPlanColumns(onEdit, onBudget),
-    [onEdit, onBudget],
+    () => getDispatchPlanColumns(onEdit),
+    [onEdit],
   );
 
   return (

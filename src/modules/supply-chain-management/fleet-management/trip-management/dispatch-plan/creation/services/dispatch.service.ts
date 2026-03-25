@@ -1,7 +1,3 @@
-// ─── Dispatch Creation Module — Service Layer ───────────────
-// Business logic and orchestration ONLY.
-// Calls repo methods — never calls fetch() directly.
-
 import {
   generateDispatchNo,
   prepareStaffPayload,
@@ -21,8 +17,6 @@ import type {
   DispatchCreationFormValues,
   UpdateTripValues,
 } from "../types/dispatch.schema";
-
-// ─── GET Operations ─────────────────────────────────────────
 
 /**
  * Returns all master-data lookups (drivers, helpers, vehicles, branches, COA).
@@ -47,10 +41,10 @@ export async function getApprovedPlans(
  * When `tripId` is provided, fetches from post_dispatch_invoices instead.
  */
 export async function getPlanDetails(
-  planId: number,
+  planIds: number[],
   tripId?: number,
 ): Promise<DirectusResponse<EnrichedPlanDetail>> {
-  return repo.fetchPlanDetails(planId, tripId);
+  return repo.fetchPlanDetails(planIds, tripId);
 }
 
 /**
@@ -78,8 +72,6 @@ export async function getPostPlanDetails(
   return repo.fetchPostDispatchPlanDetails(planId);
 }
 
-// ─── POST — Create Dispatch Plan ────────────────────────────
-
 /**
  * Creates a complete dispatch plan: header + staff + junction + budgets + invoices.
  * Also marks the source Pre-Dispatch Plan as "Dispatched".
@@ -92,7 +84,7 @@ export async function createDispatchPlan(
   // 1. Insert plan header
   const planPayload: PlanHeaderPayload = {
     doc_no: generateDispatchNo(),
-    dispatch_id: data.pre_dispatch_plan_id,
+    dispatch_id: data.pre_dispatch_plan_ids[0],
     driver_id: data.driver_id,
     vehicle_id: data.vehicle_id,
     starting_point: data.starting_point,
@@ -120,22 +112,15 @@ export async function createDispatchPlan(
     data.helpers ?? [],
   );
 
-  const junctionPayload = {
+  const junctionPayloads = data.pre_dispatch_plan_ids.map(pdpId => ({
     post_dispatch_plan_id: newPlanId,
-    dispatch_plan_id: data.pre_dispatch_plan_id,
+    dispatch_plan_id: pdpId,
     linked_at: new Date().toISOString(),
     linked_by: data.driver_id,
-  };
-
-  const budgetPayloads = (data.budgets ?? []).map((b) => ({
-    post_dispatch_plan_id: newPlanId,
-    coa_id: b.coa_id,
-    amount: b.amount,
-    remarks: b.remarks,
   }));
 
   const invoiceIds = await repo.fetchPdpInvoiceIds(
-    data.pre_dispatch_plan_id,
+    data.pre_dispatch_plan_ids,
   );
   const invoicePayloads: Omit<PostDispatchInvoiceRow, "id">[] = invoiceIds.map(
     (id, index) => ({
@@ -147,19 +132,15 @@ export async function createDispatchPlan(
   );
 
   // 3. Batch inserts + status update
-  // ⚠️ Not atomic — if one fails, previously resolved inserts are not rolled back
   await Promise.all([
     repo.batchCreate("post_dispatch_plan_staff", staffPayloads),
-    repo.batchCreate("post_dispatch_dispatch_plans", [junctionPayload]),
-    repo.batchCreate("post_dispatch_budgeting", budgetPayloads),
+    repo.batchCreate("post_dispatch_dispatch_plans", junctionPayloads),
     repo.batchCreate("post_dispatch_invoices", invoicePayloads),
-    repo.updateDispatchPlanStatus(data.pre_dispatch_plan_id, "Dispatched"),
+    ...data.pre_dispatch_plan_ids.map(pdpId => repo.updateDispatchPlanStatus(pdpId, "Dispatched")),
   ]);
 
   return { success: true, id: newPlanId };
 }
-
-// ─── PATCH — Update Trip ────────────────────────────────────
 
 /**
  * Updates an existing dispatch plan's trip configuration:
@@ -169,32 +150,36 @@ export async function updateTrip(
   planId: number,
   data: UpdateTripValues,
 ): Promise<{ success: true }> {
-  const newPdpId = data.pre_dispatch_plan_id;
+  const newPdpIds = data.pre_dispatch_plan_ids;
 
   // 1. Resolve PDP Swapping
-  const junctionRecord = await repo.fetchJunctionByPlanId(planId);
-  const oldPdpId = junctionRecord?.dispatch_plan_id;
+  const junctionRecords = await repo.fetchJunctionsByPlanId(planId);
+  const oldPdpIds = junctionRecords.map(j => j.dispatch_plan_id).filter(Boolean) as number[];
 
   const pdpSwapTasks: Promise<void>[] = [];
-  if (newPdpId && oldPdpId && newPdpId !== oldPdpId) {
-    pdpSwapTasks.push(
-      repo.updateDispatchPlanStatus(oldPdpId, "Picked"),
-      repo.updateDispatchPlanStatus(newPdpId, "Dispatched"),
-      repo.updateJunction(junctionRecord!.id!, {
-        dispatch_plan_id: newPdpId,
-        linked_by: data.driver_id,
-      }),
-    );
-  } else if (newPdpId && !oldPdpId) {
-    pdpSwapTasks.push(
-      repo.updateDispatchPlanStatus(newPdpId, "Dispatched"),
-      repo.createJunction({
+  if (newPdpIds) {
+    const removedPdpIds = oldPdpIds.filter(id => !newPdpIds.includes(id));
+    for (const id of removedPdpIds) {
+      pdpSwapTasks.push(repo.updateDispatchPlanStatus(id, "Picked"));
+    }
+    
+    const addedPdpIds = newPdpIds.filter(id => !oldPdpIds.includes(id));
+    for (const id of addedPdpIds) {
+      pdpSwapTasks.push(repo.updateDispatchPlanStatus(id, "Dispatched"));
+    }
+
+    pdpSwapTasks.push((async () => {
+      const oldJunctionIds = junctionRecords.map(j => j.id!);
+      await repo.deleteByIds("post_dispatch_dispatch_plans", oldJunctionIds);
+      
+      const newJunctionPayloads = newPdpIds.map(id => ({
         post_dispatch_plan_id: planId,
-        dispatch_plan_id: newPdpId,
+        dispatch_plan_id: id,
         linked_at: new Date().toISOString(),
         linked_by: data.driver_id,
-      }),
-    );
+      }));
+      await repo.batchCreate("post_dispatch_dispatch_plans", newJunctionPayloads);
+    })());
   }
 
   // 2. Sync Invoices
@@ -206,8 +191,8 @@ export async function updateTrip(
       sequence: inv.sequence || idx + 1,
       status: "Not Fulfilled",
     }));
-  } else if (newPdpId && oldPdpId && newPdpId !== oldPdpId) {
-    const invIds = await repo.fetchPdpInvoiceIds(newPdpId);
+  } else if (newPdpIds && newPdpIds.length > 0) {
+    const invIds = await repo.fetchPdpInvoiceIds(newPdpIds);
     newInvoicePayloads = invIds.map((id, idx) => ({
       post_dispatch_plan_id: planId,
       invoice_id: id,
@@ -227,8 +212,7 @@ export async function updateTrip(
   }
 
   // 3. Update Header & Staff
-  const headerPayload = {
-    dispatch_id: newPdpId,
+  const headerPayload: any = {
     driver_id: data.driver_id,
     vehicle_id: data.vehicle_id,
     starting_point: data.starting_point,
@@ -244,17 +228,19 @@ export async function updateTrip(
     encoder_id: data.encoder_id ?? data.driver_id,
   };
 
+  if (newPdpIds && newPdpIds.length > 0) {
+    headerPayload.dispatch_id = newPdpIds[0];
+  }
+
   const staffPayloads = prepareStaffPayload(
     planId,
     data.driver_id,
     data.helpers ?? [],
   );
 
-  // ⚠️ Not atomic — if one fails, previously resolved inserts are not rolled back
   await Promise.all([
     repo.updatePlanHeader(planId, headerPayload),
     ...pdpSwapTasks,
-    // Staff replacement (Clear then Add)
     (async () => {
       const staffIds = await repo.fetchIdsByFilter(
         "post_dispatch_plan_staff",
@@ -269,32 +255,3 @@ export async function updateTrip(
   return { success: true };
 }
 
-// ─── PATCH — Update Budgets ─────────────────────────────────
-
-/**
- * Replaces all budget lines for a plan (delete-then-reinsert pattern).
- */
-export async function updateBudgets(
-  planId: number,
-  budgets?: { coa_id: number; amount: number; remarks?: string }[],
-): Promise<{ success: true }> {
-  const existingIds = await repo.fetchIdsByFilter(
-    "post_dispatch_budgeting",
-    "post_dispatch_plan_id",
-    planId,
-  );
-
-  await repo.deleteByIds("post_dispatch_budgeting", existingIds);
-
-  if (budgets && budgets.length > 0) {
-    const budgetPayloads = budgets.map((b) => ({
-      post_dispatch_plan_id: planId,
-      coa_id: b.coa_id,
-      amount: b.amount,
-      remarks: b.remarks,
-    }));
-    await repo.batchCreate("post_dispatch_budgeting", budgetPayloads);
-  }
-
-  return { success: true };
-}

@@ -3,12 +3,11 @@
 // Zero fetch() calls — all I/O is delegated to the service layer.
 
 import { handleApiError } from "@/lib/error-handler";
-import * as dispatchService from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/services/dispatch.service";
+import * as dispatchService from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/creation/services/dispatch.service";
 import {
   DispatchCreationFormSchema,
   UpdateTripSchema,
-  UpdateBudgetSchema,
-} from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/types/dispatch.schema";
+} from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/creation/types/dispatch.schema";
 import { NextRequest, NextResponse } from "next/server";
 
 // ─── GET ────────────────────────────────────────────────────
@@ -37,16 +36,18 @@ export async function GET(req: NextRequest) {
     }
 
     if (type === "plan_details") {
-      const planId = searchParams.get("plan_id");
+      const planIdsRaw = searchParams.get("plan_ids");
       const tripId = searchParams.get("trip_id");
-      if (!planId) {
+      if (!planIdsRaw) {
         return NextResponse.json(
-          { error: "plan_id is required" },
+          { error: "plan_ids is required" },
           { status: 400 },
         );
       }
+      
+      const planIds = planIdsRaw.split(",").map(id => Number(id.trim())).filter(id => !isNaN(id));
       const result = await dispatchService.getPlanDetails(
-        Number(planId),
+        planIds,
         tripId ? Number(tripId) : undefined,
       );
       return NextResponse.json(result);
@@ -153,23 +154,10 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json(result);
     }
 
-    // Default: Budget Update
-    const parsed = UpdateBudgetSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json(
-        {
-          error:
-            parsed.error.issues[0]?.message || "Budget validation failed",
-        },
-        { status: 400 },
-      );
-    }
-
-    const result = await dispatchService.updateBudgets(
-      Number(planId),
-      parsed.data.budgets,
+    return NextResponse.json(
+      { error: "Invalid action. Use '?action=update_trip'." },
+      { status: 400 },
     );
-    return NextResponse.json(result);
   } catch (error) {
     console.error("[Dispatch PATCH Error]:", error);
     return handleApiError(error);

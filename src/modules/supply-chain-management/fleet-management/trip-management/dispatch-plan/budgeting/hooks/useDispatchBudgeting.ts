@@ -1,40 +1,29 @@
-import { dispatchCreationLifecycleService } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/services";
-import {
-  DispatchCreationFormValues,
-} from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/types/dispatch.schema";
-import {
-  DispatchCreationMasterData,
-} from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-creation/types/dispatch.types";
 import { useCallback, useEffect, useState } from "react";
+import { DispatchPlanSummary } from "../../creation/components/data-table/index";
 
-export function useDispatchCreation() {
-  const [masterData, setMasterData] =
-    useState<DispatchCreationMasterData | null>(null);
+export function useDispatchBudgeting() {
+  const [masterData, setMasterData] = useState<any>(null);
   const [isLoadingMasterData, setIsLoadingMasterData] = useState(true);
-  const [errorMasterData, setErrorMasterData] = useState<string | null>(null);
 
+  const [dispatchSummary, setDispatchSummary] = useState<DispatchPlanSummary[]>([]);
+  const [isLoadingSummary, setIsLoadingSummary] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const fetchMasterData = useCallback(async () => {
     setIsLoadingMasterData(true);
-    setErrorMasterData(null);
     try {
       const res = await fetch(
-        "/api/scm/fleet-management/trip-management/dispatch-creation?type=master",
+        "/api/scm/fleet-management/trip-management/dispatch-plan/creation?type=master",
       );
       const result = await res.json();
       if (result.error) throw new Error(result.error);
       setMasterData(result.data);
     } catch (err: any) {
-      setErrorMasterData(err.message || "Failed to load master data");
+      console.error("Failed to load master data:", err.message);
     } finally {
       setIsLoadingMasterData(false);
     }
   }, []);
-
-  const [dispatchSummary, setDispatchSummary] = useState<any[]>([]);
-  const [isLoadingSummary, setIsLoadingSummary] = useState(false);
 
   const fetchSummary = useCallback(async () => {
     setIsLoadingSummary(true);
@@ -48,10 +37,9 @@ export function useDispatchCreation() {
 
       const rawData = result.data || [];
 
-      // Fetch budgeting data for enrichment (Use internal API proxy)
       try {
         const budgetRes = await fetch(
-          "/api/scm/fleet-management/trip-management/dispatch-creation?type=budget_summary",
+          "/api/scm/fleet-management/trip-management/dispatch-plan/creation?type=budget_summary",
         );
         const budgetResult = await budgetRes.json();
         const budgets = budgetResult.data || [];
@@ -76,8 +64,7 @@ export function useDispatchCreation() {
 
         setDispatchSummary(enriched);
       } catch (budgetErr) {
-        console.error("Failed to enrich budget data:", budgetErr);
-        setDispatchSummary(rawData); // Fallback to raw data
+        setDispatchSummary(rawData);
       }
     } catch (err: any) {
       console.error("Failed to load dispatch summary:", err.message);
@@ -91,37 +78,47 @@ export function useDispatchCreation() {
     fetchSummary();
   }, [fetchMasterData, fetchSummary]);
 
-  const createTrip = async (values: DispatchCreationFormValues) => {
+  const updateBudget = async (
+    planId: number,
+    budgets: { coa_id: number; amount: number; remarks?: string }[],
+  ) => {
     setIsSubmitting(true);
-    setSubmitError(null);
     try {
-      const response =
-        await dispatchCreationLifecycleService.createTrip(values);
-      fetchSummary(); // Refresh summary after creation
-      return response;
-    } catch (err: any) {
-      setSubmitError(
-        err.message || "An unexpected error occurred during trip creation.",
+      const res = await fetch(
+        `/api/scm/fleet-management/trip-management/dispatch-plan/budgeting?plan_id=${planId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ budgets }),
+        },
       );
-      throw err;
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Failed to update budget");
+
+      await fetchSummary();
+      return result;
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const fetchPlanBudgets = async (planId: number) => {
+    const res = await fetch(
+      `/api/scm/fleet-management/trip-management/dispatch-plan/creation?type=plan_budgets&plan_id=${planId}`
+    );
+    const result = await res.json();
+    if (result.error) throw new Error(result.error);
+    return result.data || [];
+  };
+
   return {
     masterData,
     isLoadingMasterData,
-    errorMasterData,
-
     dispatchSummary,
     isLoadingSummary,
     refreshSummary: fetchSummary,
-
-    createTrip,
+    updateBudget,
     isSubmitting,
-    submitError,
-
-    refreshMasterData: fetchMasterData,
+    fetchPlanBudgets,
   };
 }

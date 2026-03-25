@@ -231,16 +231,16 @@ const data = {
                             url: "/scm/fleet-management/trip-management/dispatch-summary",
                         },
                         {
-                            title: "Dispatch Creation",
-                            url: "/scm/fleet-management/trip-management/dispatch-creation",
-                        },
-                        {
                             title: "Dispatch Plan",
                             url: "#",
                             items: [
                                 {
                                     title: "Creation",
-                                    url: "/scm/fleet-management/trip-management/dispatch-plan/dispatch-creation"
+                                    url: "/scm/fleet-management/trip-management/dispatch-plan/creation"
+                                },
+                                {
+                                    title: "Budgeting",
+                                    url: "/scm/fleet-management/trip-management/dispatch-plan/budgeting"
                                 },
                                 {
                                     title: "Approval",
