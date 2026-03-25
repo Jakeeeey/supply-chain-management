@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -95,7 +94,7 @@ export function ScannerModal({
           setDimensions((prev) => ({ ...prev, unit: String(defaultUnit.id) }));
       }
     }
-  }, [open, barcodeTypes, weightUnits, cbmUnits]);
+  }, [open, barcodeTypes, weightUnits, cbmUnits, selectedBarcodeTypeId, dimensions.weightUnit, dimensions.unit]);
 
   // --- RESET STATE ON OPEN ---
   useEffect(() => {
@@ -149,7 +148,7 @@ export function ScannerModal({
     try {
       await onSave(payload);
       onClose();
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("Save failed", e);
     } finally {
       setLoading(false);
@@ -185,7 +184,6 @@ export function ScannerModal({
               scanSuccess={scanSuccess}
               setScanSuccess={setScanSuccess}
               cameraError={cameraError}
-              setCameraError={setCameraError}
               selectedBarcodeTypeId={selectedBarcodeTypeId}
               setSelectedBarcodeTypeId={setSelectedBarcodeTypeId}
               recordDimensions={recordDimensions}

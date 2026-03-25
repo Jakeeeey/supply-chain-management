@@ -17,8 +17,8 @@ import Link from "next/link";
 import * as React from "react";
 import {useState, useMemo} from "react";
 
-import {Separator} from "@/components/ui/separator";
-import {Input} from "@/components/ui/input"; // Make sure you have the shadcn Input component installed!
+import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
 import {
     Sidebar,
     SidebarContent,
@@ -290,6 +290,8 @@ const data = {
                             title: "Pending Invoices",
                             url: "/scm/fleet-management/logistics-deliveries/pending-invoices",
                         },
+                        { title: "PDP Summary", url: "/scm/fleet-management/logistics-deliveries/pre-dispatch-summary" },
+                        { title: "Pending Invoices", url: "/scm/fleet-management/logistics-deliveries/pending-invoices" },
                     ],
                 },
                 {
@@ -355,6 +357,16 @@ const data = {
                             title: "For Consolidation Queue",
                             url: "/scm/monitoring/for-consolidation",
                         }
+                    ]
+                },
+                {
+                    title: "File Maintenance",
+                    url: "/scm/logistics/file-maintenance/cluster-management",
+                    items: [
+                        {
+                            title: "Cluster Management",
+                            url: "/scm/logistics/file-maintenance/cluster-management",
+                        },
                     ]
                 },
                 {
@@ -494,8 +506,12 @@ export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
                 <div className="px-4 pt-3 pb-2 text-xs font-medium text-muted-foreground">
                     Platform
                 </div>
-                {/* 👇 Pass the filtered data instead of the raw data 👇 */}
-                <NavMain items={filteredNavMain}/>
+                <NavMain items={filteredNavMain} />
+                {filteredNavMain.length === 0 && (
+                    <div className="px-6 py-4 text-xs text-muted-foreground italic">
+                        No modules found matching &quot;{searchQuery}&quot;
+                    </div>
+                )}
             </SidebarContent>
 
             <SidebarFooter className="p-0">

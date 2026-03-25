@@ -173,15 +173,18 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                         This customer has a return flag. How do you want to process this transaction?
                     </p>
 
-                    <div className="p-4 rounded-xl border-2 border-primary/10 bg-primary/5 flex items-center justify-between group cursor-pointer hover:border-primary/30 transition-all">
+                    <div 
+                        className="p-4 rounded-xl border-2 border-primary/10 bg-primary/5 flex items-center justify-between group cursor-pointer hover:border-primary/30 transition-all"
+                        onClick={() => window.open('/scm/inventories/sales-return-rfid', '_blank')}
+                    >
                         <div className="flex items-center gap-4">
                             <div className="w-5 h-5 rounded-full border-2 border-primary/40 flex items-center justify-center">
                                 <div className="w-2.5 h-2.5 rounded-full bg-primary"></div>
                             </div>
                             <div className="space-y-1">
-                                <p className="font-bold text-foreground">Link to Existing Sales Return</p>
+                                <p className="font-bold text-foreground">Open Sales Return</p>
                                 <div className="flex items-center gap-1 text-muted-foreground text-xs font-medium">
-                                    -- Select Pending SR -- <ChevronDown className="w-3 h-3" />
+                                    -- This will open a new tab to create a Sales Return -- <ChevronDown className="w-3 h-3" />
                                 </div>
                             </div>
                         </div>

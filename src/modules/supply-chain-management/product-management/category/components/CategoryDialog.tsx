@@ -71,11 +71,12 @@ export function CategoryDialog({
       }
       onSuccess();
       onOpenChange(false);
-    } catch (error: any) {
-      if (error.message.includes("unique")) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Operation failed";
+      if (message.includes("unique")) {
         toast.error("This Category Name already exists.");
       } else {
-        toast.error(error.message || "Operation failed");
+        toast.error(message);
       }
     }
   };

@@ -97,6 +97,8 @@ export default function ProductTaggingPanel(props: {
 
             props.onChange(updated);
 
+            toast.success("Successfully tagged!");
+
             // ✅ Check if this SKU is now fully tagged
             const updatedItem = updated.items.find((x) => x.sku.toLowerCase() === sku.trim().toLowerCase());
             const isCompleted = updatedItem && updatedItem.taggedQty >= updatedItem.expectedQty;
@@ -462,11 +464,11 @@ export default function ProductTaggingPanel(props: {
                             </div>
                         </div>
 
-                        {/* VALID SKUS CHEATSHEET */}
+                        {/* VALID PRODUCTS CHEATSHEET */}
                         <div className="rounded-2xl border border-border bg-background shadow-sm overflow-hidden">
                             <div className="px-5 py-4 border-b border-border bg-muted/30">
                                 <div className="text-sm font-black uppercase tracking-wide text-foreground">
-                                    Valid SKUs (Cheatsheet)
+                                    Valid Products (Cheatsheet)
                                 </div>
                             </div>
 
@@ -474,10 +476,9 @@ export default function ProductTaggingPanel(props: {
                                 {po.items.map((it) => (
                                     <div
                                         key={it.id}
-                                        className="rounded-xl border border-border bg-background px-3 py-2 flex items-center justify-between gap-3"
+                                        className="rounded-xl border border-border bg-background px-3 py-2 flex items-center justify-start gap-3"
                                     >
-                                        <div className="font-mono text-xs font-bold text-foreground">{it.sku}</div>
-                                        <div className="text-xs text-muted-foreground truncate text-right">{it.name}</div>
+                                        <div className="text-xs font-bold text-foreground truncate">{it.name}</div>
                                     </div>
                                 ))}
                             </div>

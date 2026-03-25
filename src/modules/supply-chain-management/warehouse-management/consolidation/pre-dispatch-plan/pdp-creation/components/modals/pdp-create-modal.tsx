@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Combobox } from "@/components/ui/combobox";
+import { Combobox } from "../Combobox";
 import { formatNumber, formatPeso } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/utils/format";
 import {
   Dialog,
@@ -328,7 +328,7 @@ export function PDPCreateModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+    <Dialog open={open} onOpenChange={(v: boolean) => !v && onClose()}>
       <DialogContent className="w-full sm:max-w-8xl h-[95vh] max-h-[95vh] flex flex-col p-0 gap-0 overflow-hidden min-h-0 pointer-events-auto">
         <DialogHeader className="px-6 py-4 border-b shrink-0">
           <DialogTitle className="text-xl font-semibold">
@@ -352,7 +352,7 @@ export function PDPCreateModal({
                   })) || []
                 }
                 value={driverId ? String(driverId) : ""}
-                onValueChange={(v) => setDriverId(v ? Number(v) : null)}
+                onValueChange={(v: string) => setDriverId(v ? Number(v) : null)}
                 placeholder="Select driver"
               />
             </div>
@@ -370,7 +370,7 @@ export function PDPCreateModal({
                   })) || []
                 }
                 value={vehicleId ? String(vehicleId) : ""}
-                onValueChange={(v) => setVehicleId(v ? Number(v) : null)}
+                onValueChange={(v: string) => setVehicleId(v ? Number(v) : null)}
                 placeholder="Select vehicle"
               />
               {selectedVehicle && (
