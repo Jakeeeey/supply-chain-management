@@ -83,9 +83,10 @@ export default function BrandModule() {
       setError(null);
       const res = await listBrands(1, -1); // Fetch all
       setData(res.data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to load brands", err);
-      setError(err.message || "Failed to load brands.");
+      const message = err instanceof Error ? err.message : "Failed to load brands.";
+      setError(message);
       toast.error("Failed to load brands");
     } finally {
       setLoading(false);

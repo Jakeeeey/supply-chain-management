@@ -15,11 +15,7 @@ export const unitSchema = z.object({
   unit_shortcut: z.string().min(1, "Shortcut is required"),
   sku_code: z.string().optional(), // ✅ Added field
   // ✅ FIX: Strict coercion handling to prevent type conflicts
-  order: z.preprocess(
-    (val) =>
-      val === "" || val === null || val === undefined ? 0 : Number(val),
-    z.number().default(0),
-  ),
+  order: z.coerce.number().default(0),
 });
 
 export type UnitFormValues = z.infer<typeof unitSchema>;

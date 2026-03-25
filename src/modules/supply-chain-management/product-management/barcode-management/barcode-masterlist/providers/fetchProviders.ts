@@ -33,7 +33,7 @@ export async function getSuppliers(): Promise<Supplier[]> {
   return (json.data ?? []) as Supplier[];
 }
 
-export async function getMasterlistBundles(): Promise<any[]> {
+export async function getMasterlistBundles(): Promise<unknown[]> {
   const res = await fetch(`${BASE_URL}?scope=bundles`, {
     method: "GET",
     headers: { "Content-Type": "application/json" },
@@ -56,7 +56,11 @@ export async function getBundleItems(bundleId: string): Promise<BundleItem[]> {
 
   const json = await res.json();
   // Normalize product_id relation to flat fields
-  return (json.data ?? []).map((item: any) => ({
+  return (json.data ?? []).map((item: {
+    id: number;
+    product_id?: { product_code: string; product_name: string };
+    quantity: number | string;
+  }) => ({
     id: item.id,
     product_code: item.product_id?.product_code || "-",
     product_name: item.product_id?.product_name || "Unknown",
