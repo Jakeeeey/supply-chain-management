@@ -134,28 +134,38 @@ export async function POST(req: NextRequest) {
 
     const newClusterId = cluster.data.id;
 
-    // 2. Create each area linked to this cluster
-    const createdAreas = [];
-    for (const area of areas ?? []) {
-      if (!area.province) continue;
-      const areaRes = await directusFetch(
-        `${DIRECTUS_URL}${AREA_ENDPOINT}`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            cluster_id: newClusterId,
-            province: area.province || null,
-            city: area.city || null,
-            baranggay: area.baranggay || null,
-          }),
-        },
-      );
-      createdAreas.push(areaRes.data);
-    }
+    try {
+      // 2. Create each area linked to this cluster
+      const createdAreas = [];
+      for (const area of areas ?? []) {
+        if (!area.province) continue;
+        const areaRes = await directusFetch(
+          `${DIRECTUS_URL}${AREA_ENDPOINT}`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              cluster_id: newClusterId,
+              province: area.province || null,
+              city: area.city || null,
+              baranggay: area.baranggay || null,
+            }),
+          },
+        );
+        createdAreas.push(areaRes.data);
+      }
 
-    return json({
-      data: { ...cluster.data, areas: createdAreas },
-    });
+      return json({
+        data: { ...cluster.data, areas: createdAreas },
+      });
+    } catch (areaErr: unknown) {
+      // ROLLBACK: If areas fail to create, delete the cluster so we don't have a partial "ghost" record.
+      await directusFetch(`${DIRECTUS_URL}${CLUSTER_ENDPOINT}/${newClusterId}`, {
+        method: "DELETE",
+      }).catch(() => {
+        /* ignore rollback failure, primary error is more important */
+      });
+      throw areaErr;
+    }
   } catch (err: unknown) {
     const errorData = err as { data?: { error?: string }; status?: number; message?: string };
     return json(errorData.data ?? { error: errorData.message }, errorData.status ?? 500);

@@ -280,6 +280,17 @@ export async function getRfidTagsByDetailId(detailId: number) {
 }
 
 /**
+ * Fetches RFID tags for multiple sales return details.
+ */
+export async function getRawRfidsByDetailIds(detailIds: number[]) {
+  if (detailIds.length === 0) return { data: [] };
+  const filterIds = detailIds.join(',');
+  return directusGet<{ data: Record<string, unknown>[] }>(
+    `/items/sales_return_rfid?filter[sales_return_detail_id][_in]=${filterIds}&limit=-1`,
+  );
+}
+
+/**
  * Deletes an RFID tag record.
  */
 export async function deleteRfidTag(id: number) {

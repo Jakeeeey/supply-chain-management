@@ -108,6 +108,29 @@ export async function fetchReturnDetails(
   const lineDiscounts = (lineDiscountsRes.data || []) as unknown as API_LineDiscount[];
   const returnTypes = (returnTypesRes.data || []) as unknown as API_SalesReturnType[];
 
+  // Fetch all RFIDs associated with these detail lines
+  const detailIds = rawItems.map((item: any) => item.detail_id || item.id);
+  const rfidMap = new Map<number, string[]>();
+  
+  if (detailIds.length > 0) {
+    try {
+      // Create a batched query to get all RFIDs for the relevant detail items
+      const rfidRes = await repo.getRawRfidsByDetailIds(detailIds);
+      
+      const rfidData = rfidRes.data || [];
+      for (const row of rfidData) {
+        const dId = Number(row.sales_return_detail_id);
+        const tag = String(row.rfid_tag);
+        if (!rfidMap.has(dId)) {
+          rfidMap.set(dId, []);
+        }
+        rfidMap.get(dId)!.push(tag);
+      }
+    } catch (err) {
+      console.error("Failed to fetch rfids for details:", err);
+    }
+  }
+
   return rawItems.map((detail: any) => {
     const product =
       typeof detail.product_id === "object" && detail.product_id !== null
@@ -168,6 +191,7 @@ export async function fetchReturnDetails(
         ? Number(detail.sales_return_type_id)
         : "",
       returnType: returnTypeObj ? returnTypeObj.type_name : "Good Order",
+      rfidTags: rfidMap.get(detail.detail_id || detail.id) || [],
     } as SalesReturnItem;
   });
 }
@@ -580,11 +604,25 @@ export async function updateReturn(payload: {
     };
 
     if (typeof item.id === "string" && item.id.startsWith("added-")) {
-      await repo.createReturnDetail({
+      const detailResult = await repo.createReturnDetail({
         ...detailPayload,
         return_no: payload.returnNo,
         product_id: Number(item.productId || item.product_id),
       });
+
+      // Save RFID tags for newly added items
+      if (item.rfidTags && Array.isArray(item.rfidTags) && item.rfidTags.length > 0) {
+        const detailId = (detailResult.data as any)?.detail_id;
+        if (detailId) {
+          for (const tag of item.rfidTags) {
+            await repo.createRfidTag({
+              sales_return_detail_id: detailId,
+              rfid_tag: tag,
+              created_by: 205,
+            });
+          }
+        }
+      }
     } else {
       await repo.updateReturnDetail(item.id, detailPayload);
     }

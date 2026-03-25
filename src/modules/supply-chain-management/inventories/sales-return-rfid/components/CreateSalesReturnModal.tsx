@@ -99,9 +99,11 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const [isOrderOpen, setIsOrderOpen] = useState(false);
   const orderWrapperRef = useRef<HTMLDivElement>(null);
 
-  // --- RFID STATE ---
+  // --- RFID State ---
   const [rfidScanning, setRfidScanning] = useState(false);
   const [lastScannedRfid, setLastScannedRfid] = useState("");
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({});
 
   // --- 3. CART STATE ---
   const [items, setItems] = useState<SalesReturnItem[]>([]);
@@ -169,6 +171,11 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         setValidationError(
           `No product found for RFID "${tag}" at this branch.`,
         );
+        return;
+      }
+
+      if (items.some((i) => i.rfidTags?.includes(tag))) {
+        setValidationError(`RFID tag "${tag}" is already in the list.`);
         return;
       }
 
@@ -475,27 +482,58 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
   // --- 9. ITEM LOGIC ---
   const handleAddProducts = (newItems: Partial<SalesReturnItem>[]) => {
-    const preparedItems = newItems.map((item) => {
-      const rawId = item.product_id || item.productId || item.id;
-      return {
-        ...item,
-        productId: Number(rawId),
-        product_id: Number(rawId),
-        code: item.code || "N/A",
-        description: item.description || "Unknown Item",
-        unit: item.unit || "Pcs",
-        quantity: item.quantity || 1,
-        unitPrice: item.unitPrice || 0,
-        grossAmount: (item.unitPrice || 0) * (item.quantity || 0),
-        discountType: "",
-        discountAmount: 0,
-        totalAmount: (item.unitPrice || 0) * (item.quantity || 0),
-        reason: "",
-        returnType: "",
-      };
+    setItems((prev) => {
+      const updated = [...prev];
+      newItems.forEach((item) => {
+        const rawId = item.product_id || item.productId || item.id;
+        const productId = Number(rawId);
+        
+        // Strict mapping for unit checking to prevent different UOMs from merging
+        const existingIndex = updated.findIndex(
+          (i) => i.productId === productId && i.unit === item.unit
+        );
+        const qty = item.quantity || 1;
+        
+        if (existingIndex >= 0) {
+          const existing = updated[existingIndex];
+          existing.quantity += qty;
+          existing.grossAmount = existing.quantity * existing.unitPrice;
+          
+          if (existing.discountType) {
+            const selectedOption = lineDiscountOptions.find(
+              (d) => d.id.toString() === existing.discountType?.toString(),
+            );
+            if (selectedOption) {
+              const percentage = parseFloat(selectedOption.percentage) || 0;
+              existing.discountAmount = (existing.grossAmount || 0) * (percentage / 100);
+            }
+          }
+          
+          existing.totalAmount = (existing.grossAmount || 0) - (existing.discountAmount || 0);
+          if (item.rfidTags) {
+            existing.rfidTags = [...(existing.rfidTags || []), ...item.rfidTags];
+          }
+        } else {
+          updated.push({
+            ...item,
+            productId,
+            product_id: productId,
+            code: item.code || "N/A",
+            description: item.description || "Unknown Item",
+            unit: item.unit || "Pcs",
+            quantity: qty,
+            unitPrice: item.unitPrice || 0,
+            grossAmount: (item.unitPrice || 0) * qty,
+            discountType: "",
+            discountAmount: 0,
+            totalAmount: (item.unitPrice || 0) * qty,
+            reason: "",
+            returnType: "",
+          } as SalesReturnItem);
+        }
+      });
+      return updated;
     });
-
-    setItems((prev) => [...prev, ...preparedItems]);
   };
 
   const handleRemoveItem = (index: number) => {
@@ -607,174 +645,172 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
           {/* COL 1: Salesman, COL 2: Customer, COL 3: Date & Price */}
           <div className="bg-background p-5 rounded-lg border border-border shadow-sm relative">
             <div className="absolute top-0 left-0 w-1 h-full bg-primary rounded-l-lg"></div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-4">
+              
               {/* Salesman */}
-              <div className="space-y-4">
-                <div className="space-y-1.5 relative" ref={salesmanWrapperRef}>
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
-                    Salesman <span className="text-destructive">*</span>
-                  </label>
-                  <div className="relative group">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary" />
-                    <input
-                      type="text"
-                      className="w-full h-10 border border-border rounded-md text-sm pl-9 pr-8 bg-background outline-none focus:ring-2 focus:border-primary"
-                      placeholder="Search Salesman..."
-                      value={salesmanSearch}
-                      onChange={(e) => {
-                        setSalesmanSearch(e.target.value);
-                        setIsSalesmanOpen(true);
-                        setSelectedSalesmanId("");
-                        setSalesmanCode("");
-                        setBranchName("");
-                      }}
-                      onFocus={() => {
-                        setIsSalesmanOpen(true);
-                        setSalesmanSearch("");
-                      }}
-                    />
-                    <ChevronDown className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  </div>
-                  {isSalesmanOpen && (
-                    <div className="absolute top-[calc(100%+4px)] left-0 w-full z-20 bg-background border border-border rounded-md shadow-xl max-h-60 overflow-y-auto">
-                      {filteredSalesmen.map((s) => (
-                        <div
-                          key={s.id}
-                          className="px-4 py-2.5 text-sm cursor-pointer hover:bg-primary/10 text-foreground"
-                          onClick={() => handleSelectSalesman(s)}
-                        >
-                          {s.name}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
-                    Salesman Code
-                  </label>
-                  <Input
-                    value={salesmanCode}
-                    readOnly
-                    className="h-10 bg-muted/30 border-border text-muted-foreground font-mono text-xs"
+              <div className="space-y-1.5 relative" ref={salesmanWrapperRef}>
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
+                  Salesman <span className="text-destructive">*</span>
+                </label>
+                <div className="relative group">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary" />
+                  <input
+                    type="text"
+                    className="w-full h-9 border border-border rounded-md text-sm pl-9 pr-8 bg-background outline-none focus:ring-2 focus:border-primary shadow-sm"
+                    placeholder="Search Salesman..."
+                    value={salesmanSearch}
+                    onChange={(e) => {
+                      setSalesmanSearch(e.target.value);
+                      setIsSalesmanOpen(true);
+                      setSelectedSalesmanId("");
+                      setSalesmanCode("");
+                      setBranchName("");
+                    }}
+                    onFocus={() => {
+                      setIsSalesmanOpen(true);
+                      setSalesmanSearch("");
+                    }}
                   />
+                  <ChevronDown className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
+                {isSalesmanOpen && (
+                  <div className="absolute top-[calc(100%+4px)] left-0 w-full z-20 bg-background border border-border rounded-md shadow-xl max-h-60 overflow-y-auto">
+                    {filteredSalesmen.map((s) => (
+                      <div
+                        key={s.id}
+                        className="px-4 py-2.5 text-sm cursor-pointer hover:bg-primary/10 text-foreground"
+                        onClick={() => handleSelectSalesman(s)}
+                      >
+                        {s.name}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Customer */}
-              <div className="space-y-4">
-                <div className="space-y-1.5 relative" ref={customerWrapperRef}>
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
-                    Customer <span className="text-destructive">*</span>
-                  </label>
-                  <div className="relative group">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary" />
-                    <input
-                      type="text"
-                      className="w-full h-10 border border-border rounded-md text-sm pl-9 pr-8 bg-background outline-none focus:ring-2 focus:border-primary"
-                      placeholder="Search Customer..."
-                      value={customerSearch}
-                      onChange={(e) => {
-                        setCustomerSearch(e.target.value);
-                        setIsCustomerOpen(true);
-                      }}
-                      onFocus={() => {
-                        setIsCustomerOpen(true);
-                        setCustomerSearch("");
-                      }}
-                    />
-                    <ChevronDown className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  </div>
-                  {isCustomerOpen && (
-                    <div className="absolute top-[calc(100%+4px)] left-0 w-full z-20 bg-background border border-border rounded-md shadow-xl max-h-60 overflow-y-auto">
-                      {filteredCustomers.map((c) => (
-                        <div
-                          key={c.id}
-                          className="px-4 py-2.5 text-sm cursor-pointer hover:bg-primary/10 text-foreground"
-                          onClick={() => handleSelectCustomer(c)}
-                        >
-                          <div className="flex flex-col">
-                            <span>{c.name}</span>
-                            <span className="text-[10px] text-muted-foreground font-mono">
-                              {c.code}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
-                    Customer Code
-                  </label>
-                  <Input
-                    value={customerCode}
-                    readOnly
-                    className="h-10 bg-muted/30 border-border text-muted-foreground font-mono text-xs"
+              <div className="space-y-1.5 relative" ref={customerWrapperRef}>
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
+                  Customer <span className="text-destructive">*</span>
+                </label>
+                <div className="relative group">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary" />
+                  <input
+                    type="text"
+                    className="w-full h-9 border border-border rounded-md text-sm pl-9 pr-8 bg-background outline-none focus:ring-2 focus:border-primary shadow-sm"
+                    placeholder="Search Customer..."
+                    value={customerSearch}
+                    onChange={(e) => {
+                      setCustomerSearch(e.target.value);
+                      setIsCustomerOpen(true);
+                    }}
+                    onFocus={() => {
+                      setIsCustomerOpen(true);
+                      setCustomerSearch("");
+                    }}
                   />
+                  <ChevronDown className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+                {isCustomerOpen && (
+                  <div className="absolute top-[calc(100%+4px)] left-0 w-full z-20 bg-background border border-border rounded-md shadow-xl max-h-60 overflow-y-auto">
+                    {filteredCustomers.map((c) => (
+                      <div
+                        key={c.id}
+                        className="px-4 py-2.5 text-sm cursor-pointer hover:bg-primary/10 text-foreground"
+                        onClick={() => handleSelectCustomer(c)}
+                      >
+                        <div className="flex flex-col">
+                          <span>{c.name}</span>
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            {c.code}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Date */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
+                  Return Date <span className="text-destructive">*</span>
+                </label>
+                <Input
+                  type="date"
+                  value={returnDate}
+                  onChange={(e) => setReturnDate(e.target.value)}
+                  className="h-9 w-full bg-background border-border shadow-sm text-sm"
+                />
+              </div>
+
+              {/* Salesman Code */}
+              <div className="space-y-1.5" title={salesmanCode || "-"}>
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
+                  Salesman Code
+                </label>
+                <div className="w-full h-9 px-3 flex items-center bg-muted/20 border border-border rounded-md text-sm font-medium text-foreground shadow-sm truncate">
+                  <span className="truncate">{salesmanCode || "-"}</span>
                 </div>
               </div>
 
-              {/* Date & Price */}
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
-                    Return Date <span className="text-destructive">*</span>
-                  </label>
-                  <Input
-                    type="date"
-                    value={returnDate}
-                    onChange={(e) => setReturnDate(e.target.value)}
-                    className="h-10 w-full bg-background border-border"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
-                      Branch
-                    </label>
-                    <Input
-                      value={branchName}
-                      readOnly
-                      className="h-10 bg-muted/30 border-border text-muted-foreground text-xs"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
-                      Price Type
-                    </label>
-                    <div className="relative">
-                      <select
-                        className="w-full h-10 border border-border rounded-md text-sm px-3 bg-background outline-none focus:ring-2 focus:border-primary appearance-none"
-                        value={priceType}
-                        onChange={(e) => setPriceType(e.target.value)}
-                      >
-                        <option value="A">Type A</option>
-                        <option value="B">Type B</option>
-                        <option value="C">Type C</option>
-                        <option value="D">Type D</option>
-                        <option value="E">Type E</option>
-                      </select>
-                      <ChevronDown className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center pt-2">
-                  <Checkbox
-                    id="thirdParty"
-                    checked={isThirdParty}
-                    onCheckedChange={(c) => setIsThirdParty(c as boolean)}
-                    className="data-[state=checked]:bg-primary border-border"
-                  />
-                  <label
-                    htmlFor="thirdParty"
-                    className="ml-2 text-sm font-medium text-muted-foreground cursor-pointer select-none"
-                  >
-                    Third Party Transaction
-                  </label>
+              {/* Customer Code */}
+              <div className="space-y-1.5" title={customerCode || "-"}>
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
+                  Customer Code
+                </label>
+                <div className="w-full h-9 px-3 flex items-center bg-muted/20 border border-border rounded-md text-sm font-medium text-foreground shadow-sm truncate">
+                  <span className="truncate">{customerCode || "-"}</span>
                 </div>
               </div>
+
+              {/* Branch */}
+              <div className="space-y-1.5" title={branchName || "-"}>
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
+                  Branch
+                </label>
+                <div className="w-full h-9 px-3 flex items-center bg-muted/20 border border-border rounded-md text-sm font-medium text-foreground shadow-sm truncate">
+                  <span className="truncate">{branchName || "-"}</span>
+                </div>
+              </div>
+
+              {/* Price Type */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
+                  Price Type
+                </label>
+                <div className="relative">
+                  <select
+                    className="w-full h-9 border border-border rounded-md text-sm px-3 bg-background outline-none focus:ring-2 focus:border-primary appearance-none shadow-sm cursor-pointer"
+                    value={priceType}
+                    onChange={(e) => setPriceType(e.target.value)}
+                  >
+                    <option value="A">Type A</option>
+                    <option value="B">Type B</option>
+                    <option value="C">Type C</option>
+                    <option value="D">Type D</option>
+                    <option value="E">Type E</option>
+                  </select>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+              </div>
+
+              {/* Third Party Checkbox */}
+              <div className="flex items-center space-x-2 pt-2 col-span-2 lg:col-span-4">
+                <Checkbox
+                  id="thirdParty"
+                  checked={isThirdParty}
+                  onCheckedChange={(c) => setIsThirdParty(c as boolean)}
+                  className="data-[state=checked]:bg-primary border-border"
+                />
+                <label
+                  htmlFor="thirdParty"
+                  className="text-sm font-medium text-foreground cursor-pointer select-none"
+                >
+                  Third Party Transaction
+                </label>
+              </div>
+
             </div>
           </div>
 
@@ -875,10 +911,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                 <tbody className="divide-y divide-gray-100">
                   {items.length === 0 ? (
                     <tr>
-                      <td
-                        colSpan={12}
-                        className="px-6 py-16 text-center text-muted-foreground bg-muted/30"
-                      >
+                      <td colSpan={12} className="px-6 py-16 text-center text-muted-foreground bg-muted/30">
                         <div className="flex flex-col items-center gap-2">
                           <FileText className="h-8 w-8 text-muted-foreground mb-1" />
                           <p>No items added yet.</p>
@@ -889,134 +922,297 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                       </td>
                     </tr>
                   ) : (
-                    items.map((item, idx) => (
-                      <tr
-                        key={idx}
-                        className="hover:bg-primary/5 group transition-colors duration-200"
-                      >
-                        <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
-                          {item.code}
-                        </td>
-                        <td className="px-4 py-2 font-medium text-foreground">
-                          {item.description}
-                        </td>
-                        <td className="px-4 py-2">
-                          <span className="bg-muted text-muted-foreground px-2 py-0.5 rounded text-xs border border-border">
-                            {item.unit}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2">
-                          <input
-                            type="number"
-                            min="1"
-                            className="w-full text-center border border-border rounded h-8 text-sm focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none"
-                            value={item.quantity}
-                            onChange={(e) =>
-                              handleItemChange(
-                                idx,
-                                "quantity",
-                                parseFloat(e.target.value) || 0,
-                              )
-                            }
-                          />
-                        </td>
-                        <td className="px-4 py-2 text-right">
-                          ₱{item.unitPrice.toLocaleString()}
-                        </td>
-                        <td className="px-4 py-2 text-right text-muted-foreground">
-                          ₱{(item.grossAmount || 0).toLocaleString()}
-                        </td>
-                        <td className="px-4 py-2">
-                          <select
-                            className="w-full border border-border rounded h-8 text-xs px-1 bg-background focus:border-primary outline-none"
-                            value={item.discountType || ""}
-                            onChange={(e) =>
-                              handleItemChange(
-                                idx,
-                                "discountType",
-                                e.target.value,
-                              )
-                            }
-                          >
-                            <option value="">None</option>
-                            {lineDiscountOptions.map((opt) => (
-                              <option key={opt.id} value={opt.id}>
-                                {opt.line_discount}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="px-4 py-2">
-                          <input
-                            type="number"
-                            readOnly
-                            disabled
-                            className="w-full text-right border border-border bg-muted text-muted-foreground rounded h-8 text-sm outline-none cursor-not-allowed"
-                            value={
-                              item.discountAmount === 0
-                                ? ""
-                                : item.discountAmount
-                            }
-                          />
-                        </td>
-                        <td className="px-4 py-2 text-right font-bold text-primary">
-                          ₱{item.totalAmount.toLocaleString()}
-                        </td>
-                        <td className="px-4 py-2">
-                          <input
-                            type="text"
-                            placeholder="Enter reason"
-                            className="w-full border border-border rounded h-8 text-xs px-2 outline-none focus:border-primary"
-                            value={item.reason || ""}
-                            onChange={(e) =>
-                              handleItemChange(idx, "reason", e.target.value)
-                            }
-                          />
-                        </td>
-                        <td className="px-4 py-2">
-                          <select
-                            required
-                            className="w-full border border-border rounded h-8 text-xs px-1 bg-background outline-none focus:border-primary"
-                            value={item.returnType || ""}
-                            onChange={(e) =>
-                              handleItemChange(
-                                idx,
-                                "returnType",
-                                e.target.value,
-                              )
-                            }
-                          >
-                            <option value="" disabled>
-                              Select an option
-                            </option>
-                            {returnTypeOptions.length > 0 ? (
-                              returnTypeOptions.map((type) => (
-                                <option
-                                  key={type.type_id}
-                                  value={type.type_name}
+                    <>
+                      {/* 1. RENDER MANUAL ITEMS (No RFID) */}
+                      {items.map((item, idx) => {
+                        const isManual = !item.rfidTags || item.rfidTags.length === 0;
+                        if (!isManual) return null;
+                        return (
+                          <tr key={idx} className="hover:bg-muted/20 transition-colors duration-200 border-b border-border">
+                            <td className="px-4 py-2 font-mono text-xs text-foreground font-bold">
+                              {item.code}
+                            </td>
+                            <td className="px-4 py-2 text-foreground">
+                              <div className="text-xs text-foreground font-medium truncate max-w-[220px]" title={item.description}>
+                                {item.description}
+                              </div>
+                              <span className="text-muted-foreground/60 italic font-sans font-medium text-[10px] block mt-0.5">Manual Entry</span>
+                            </td>
+                            <td className="px-4 py-2">
+                              <span className="bg-background text-foreground px-2 py-0.5 rounded text-xs border border-border">
+                                {item.unit}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2 text-center">
+                              <input
+                                type="number"
+                                min="1"
+                                className="w-full text-center border border-border rounded h-8 text-sm focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none"
+                                value={item.quantity}
+                                onChange={(e) => handleItemChange(idx, "quantity", parseFloat(e.target.value) || 0)}
+                              />
+                            </td>
+                            <td className="px-4 py-2 text-right">
+                              ₱{item.unitPrice.toLocaleString()}
+                            </td>
+                            <td className="px-4 py-2 text-right text-muted-foreground font-mono">
+                              ₱{(item.grossAmount || 0).toLocaleString()}
+                            </td>
+                            <td className="px-4 py-2">
+                              <select
+                                className="w-full border border-border rounded h-8 text-xs px-1 bg-background focus:border-primary outline-none"
+                                value={item.discountType || ""}
+                                onChange={(e) => handleItemChange(idx, "discountType", e.target.value)}
+                              >
+                                <option value="">None</option>
+                                {lineDiscountOptions.map((opt) => (
+                                  <option key={opt.id} value={opt.id}>
+                                    {opt.line_discount}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="px-4 py-2">
+                              <input
+                                type="number"
+                                readOnly
+                                disabled
+                                className="w-full text-right border border-border bg-muted/30 text-muted-foreground rounded h-8 text-sm outline-none cursor-not-allowed"
+                                value={item.discountAmount === 0 ? "" : item.discountAmount}
+                              />
+                            </td>
+                            <td className="px-4 py-2 text-right font-bold text-foreground">
+                              ₱{item.totalAmount.toLocaleString()}
+                            </td>
+                            <td className="px-4 py-2">
+                              <input
+                                type="text"
+                                placeholder="Enter reason"
+                                className="w-full border border-border rounded h-8 text-xs px-2 outline-none focus:border-primary"
+                                value={item.reason || ""}
+                                onChange={(e) => handleItemChange(idx, "reason", e.target.value)}
+                              />
+                            </td>
+                            <td className="px-4 py-2">
+                              <select
+                                required
+                                className="w-full border border-border rounded h-8 text-xs px-1 bg-background outline-none focus:border-primary"
+                                value={item.returnType || ""}
+                                onChange={(e) => handleItemChange(idx, "returnType", e.target.value)}
+                              >
+                                <option value="" disabled>Select an option</option>
+                                {returnTypeOptions.length > 0 ? (
+                                  returnTypeOptions.map((type) => (
+                                    <option key={type.type_id} value={type.type_name}>
+                                      {type.type_name}
+                                    </option>
+                                  ))
+                                ) : (
+                                  <>
+                                    <option value="Good Order">Good Order</option>
+                                    <option value="Bad Order">Bad Order</option>
+                                  </>
+                                )}
+                              </select>
+                            </td>
+                            <td className="sticky right-0 z-10 px-2 py-2 text-center bg-background border-l border-transparent group-hover:border-primary/20">
+                              <button
+                                onClick={() => handleRemoveItem(idx)}
+                                className="text-destructive/70 hover:text-destructive h-7 w-7 rounded-md flex items-center justify-center transition-colors"
+                                title="Remove Item"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+
+                      {/* 2. RENDER RFID ITEMS (Grouped) */}
+                      {Object.values(
+                        items.filter(i => i.rfidTags && i.rfidTags.length > 0).reduce((acc, item, originalIdx) => {
+                          const idx = items.findIndex(d => d === item);
+                          const rType = item.returnType || "Unassigned";
+                          const key = `${item.productId}-${item.unit}-${rType}`;
+                          if (!acc[key]) {
+                            acc[key] = {
+                              key,
+                              code: item.code,
+                              description: item.description,
+                              unit: item.unit,
+                              returnType: rType,
+                              unitPrice: item.unitPrice,
+                              totalQty: 0,
+                              totalGross: 0,
+                              totalDiscount: 0,
+                              totalNet: 0,
+                              children: [],
+                            };
+                          }
+                          acc[key].totalQty += Number(item.quantity) || 0;
+                          acc[key].totalGross += Number(item.grossAmount) || 0;
+                          acc[key].totalDiscount += Number(item.discountAmount) || 0;
+                          acc[key].totalNet += Number(item.totalAmount) || 0;
+                          acc[key].children.push({ item, idx });
+                          return acc;
+                        }, {} as Record<string, any>)
+                      ).map((group: any) => (
+                        <React.Fragment key={group.key}>
+                          {/* Parent Summary Row */}
+                          <tr className="bg-muted/10 font-semibold border-b border-border shadow-sm">
+                            <td className="px-4 py-2 font-mono text-xs text-foreground">
+                              <div className="flex items-center gap-2">
+                                {group.children.length > 0 ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setExpandedGroups(prev => ({ ...prev, [group.key]: !prev[group.key] }))}
+                                    className="p-1 hover:bg-muted rounded-md transition-colors text-foreground"
+                                  >
+                                    <ChevronDown className={`h-4 w-4 transition-transform ${expandedGroups[group.key] ? 'rotate-180' : ''}`} />
+                                  </button>
+                                ) : (
+                                  <div className="w-6" /> // spacer
+                                )}
+                                <span>{group.code}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-2 text-foreground">
+                              <div className="text-xs text-foreground font-medium truncate max-w-[220px]" title={group.description}>
+                                {group.description}
+                              </div>
+                            </td>
+                            <td className="px-4 py-2">
+                              <span className="bg-background text-foreground px-2 py-0.5 rounded text-xs border border-border font-normal">
+                                {group.unit}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2 text-center text-primary text-sm font-bold">
+                              {group.totalQty}
+                            </td>
+                            <td className="px-4 py-2 text-right text-muted-foreground">
+                              -
+                            </td>
+                            <td className="px-4 py-2 text-right text-muted-foreground font-mono text-xs">
+                              ₱{group.totalGross.toLocaleString()}
+                            </td>
+                            <td className="px-4 py-2 text-center text-muted-foreground">
+                              -
+                            </td>
+                            <td className="px-4 py-2 text-right text-muted-foreground font-mono text-xs">
+                              ₱{group.totalDiscount.toLocaleString()}
+                            </td>
+                            <td className="px-4 py-2 text-right font-bold text-primary">
+                              ₱{group.totalNet.toLocaleString()}
+                            </td>
+                            <td className="px-4 py-2 text-center text-muted-foreground">
+                              -
+                            </td>
+                            <td className="px-4 py-2">
+                              {group.returnType !== "Unassigned" ? (
+                                <span className="bg-primary/20 text-primary px-2 py-0.5 rounded text-xs font-medium">
+                                  {group.returnType}
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground/60 italic text-xs">Unassigned</span>
+                              )}
+                            </td>
+                            <td></td>
+                          </tr>
+
+                          {/* Child Rows (Individual Scans/Additions) */}
+                          {expandedGroups[group.key] && group.children.map(({ item, idx }: { item: SalesReturnItem, idx: number }) => (
+                            <tr key={item.id || idx} className="hover:bg-muted/20 transition-colors duration-200 border-b border-border">
+                              <td className="px-4 py-2 font-mono text-xs text-foreground font-bold pl-10" colSpan={2}>
+                                {item.rfidTags && item.rfidTags.length > 0 ? (
+                                  <div className="flex items-center gap-1.5 bg-background border border-border pl-2.5 pr-2 py-1 rounded-md shadow-sm w-fit truncate max-w-[200px]" title={item.rfidTags[0]}>
+                                    <span className="text-primary truncate">{item.rfidTags[0]}</span>
+                                    <span className="text-[10px] text-muted-foreground font-sans uppercase">RFID</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-muted-foreground/60 italic font-sans font-medium text-[11px]">Manual Entry</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-2"></td>
+                              <td className="px-4 py-2">
+                                <div className="text-center font-semibold text-sm">{item.quantity}</div>
+                              </td>
+                              <td className="px-4 py-2 text-right">
+                                ₱{item.unitPrice.toLocaleString()}
+                              </td>
+                              <td className="px-4 py-2 text-right text-muted-foreground font-mono text-xs">
+                                ₱{(item.grossAmount || 0).toLocaleString()}
+                              </td>
+                              <td className="px-4 py-2">
+                                <select
+                                  className="w-full border border-border rounded h-8 text-xs px-1 bg-background focus:border-primary outline-none"
+                                  value={item.discountType || ""}
+                                  onChange={(e) => handleItemChange(idx, "discountType", e.target.value)}
                                 >
-                                  {type.type_name}
-                                </option>
-                              ))
-                            ) : (
-                              <>
-                                <option value="Good Order">Good Order</option>
-                                <option value="Bad Order">Bad Order</option>
-                              </>
-                            )}
-                          </select>
-                        </td>
-                        <td className="sticky right-0 z-10 px-2 py-2 text-center bg-background border-l border-transparent group-hover:border-primary/20">
-                          <button
-                            onClick={() => handleRemoveItem(idx)}
-                            className="bg-destructive hover:bg-destructive text-white h-7 w-7 rounded-md flex items-center justify-center shadow-sm"
-                            title="Remove Item"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))
+                                  <option value="">None</option>
+                                  {lineDiscountOptions.map((opt) => (
+                                    <option key={opt.id} value={opt.id}>
+                                      {opt.line_discount}
+                                    </option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td className="px-4 py-2">
+                                <input
+                                  type="number"
+                                  readOnly
+                                  disabled
+                                  className="w-full text-right border border-border bg-muted/30 text-muted-foreground rounded h-8 text-sm outline-none cursor-not-allowed"
+                                  value={item.discountAmount === 0 ? "" : item.discountAmount}
+                                />
+                              </td>
+                              <td className="px-4 py-2 text-right font-bold text-foreground">
+                                ₱{item.totalAmount.toLocaleString()}
+                              </td>
+                              <td className="px-4 py-2">
+                                <input
+                                  type="text"
+                                  placeholder="Enter reason..."
+                                  className="w-full border border-border rounded h-8 text-xs px-2 outline-none focus:border-primary"
+                                  value={item.reason || ""}
+                                  onChange={(e) => handleItemChange(idx, "reason", e.target.value)}
+                                />
+                              </td>
+                              <td className="px-4 py-2">
+                                <select
+                                  required
+                                  className="w-full border border-border rounded h-8 text-xs px-1 bg-background outline-none focus:border-primary"
+                                  value={item.returnType || ""}
+                                  onChange={(e) => handleItemChange(idx, "returnType", e.target.value)}
+                                >
+                                  <option value="" disabled>Select an option</option>
+                                  {returnTypeOptions.length > 0 ? (
+                                    returnTypeOptions.map((type) => (
+                                      <option key={type.type_id} value={type.type_name}>
+                                        {type.type_name}
+                                      </option>
+                                    ))
+                                  ) : (
+                                    <>
+                                      <option value="Good Order">Good Order</option>
+                                      <option value="Bad Order">Bad Order</option>
+                                    </>
+                                  )}
+                                </select>
+                              </td>
+                              <td className="sticky right-0 z-10 px-2 py-2 text-center bg-background border-l border-transparent group-hover:border-primary/20">
+                                <button
+                                  onClick={() => handleRemoveItem(idx)}
+                                  className="text-destructive/70 hover:text-destructive h-7 w-7 rounded-md flex items-center justify-center transition-colors"
+                                  title="Remove Item"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </React.Fragment>
+                      ))}
+                    </>
                   )}
                 </tbody>
               </table>
