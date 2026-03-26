@@ -17,14 +17,7 @@ import {
   formatNumber,
   formatPeso,
 } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/utils/format";
-import {
-  Calendar,
-  Clock,
-  MapPin,
-  MessageSquare,
-  Package,
-  Truck,
-} from "lucide-react";
+import { Calendar, MapPin, MessageSquare, Package, Truck } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface PDPViewModalProps {
@@ -131,12 +124,12 @@ export function PDPViewModal({
         <ScrollArea className="flex-1 bg-muted/5">
           <div className="px-6 space-y-6">
             {/* Trip Information Cards - Responsive Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <div className="bg-background border rounded-lg p-3">
                 <div className="flex items-center gap-2 text-muted-foreground mb-1.5">
                   <Calendar className="h-3.5 w-3.5" />
                   <span className="text-[10px] font-semibold uppercase tracking-wider">
-                    Date
+                    Dispatch Date
                   </span>
                 </div>
                 <p className="text-sm font-medium text-foreground truncate">
@@ -198,11 +191,11 @@ export function PDPViewModal({
                 </div>
               </div>
 
-              <div className="bg-background border rounded-lg p-3">
+              {/* <div className="bg-background border rounded-lg p-3">
                 <div className="flex items-center gap-2 text-muted-foreground mb-1.5">
                   <Clock className="h-3.5 w-3.5" />
                   <span className="text-[10px] font-semibold uppercase tracking-wider">
-                    Created
+                    Dispatch Date
                   </span>
                 </div>
                 <div className="flex flex-col">
@@ -213,7 +206,7 @@ export function PDPViewModal({
                     {createdTime}
                   </p>
                 </div>
-              </div>
+              </div> */}
             </div>
 
             {displayPlan.remarks && (
@@ -240,8 +233,8 @@ export function PDPViewModal({
                     Vehicle Capacity
                   </span>
                   <span className="text-[xs] font-bold text-foreground">
-                    {displayPlan.total_weight?.toLocaleString() || 0} /{" "}
-                    {(displayPlan.maximum_weight || 0).toLocaleString()} kg
+                    {formatNumber(displayPlan.total_weight || 0)} /{" "}
+                    {formatNumber(displayPlan.maximum_weight || 0)} kg
                   </span>
                 </div>
               </div>
@@ -270,7 +263,7 @@ export function PDPViewModal({
                     Current Load
                   </span>
                   <span className="text-lg font-semibold text-foreground">
-                    {displayPlan.total_weight?.toLocaleString() || 0} kg
+                    {formatNumber(displayPlan.total_weight || 0)} kg
                   </span>
                 </div>
 
@@ -279,10 +272,10 @@ export function PDPViewModal({
                     Capacity Remaining
                   </span>
                   <span className="text-lg font-semibold text-foreground">
-                    {(
+                    {formatNumber(
                       (displayPlan.maximum_weight || 0) -
                       (displayPlan.total_weight || 0)
-                    ).toLocaleString()}{" "}
+                    )}{" "}
                     kg
                   </span>
                 </div>

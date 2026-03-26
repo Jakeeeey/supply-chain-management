@@ -47,6 +47,8 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get("status") || undefined;
     const search = searchParams.get("search") || undefined;
     const clusterId = searchParams.get("cluster_id") || undefined;
+    const branchId = searchParams.get("branch_id") || undefined;
+    const dispatchDate = searchParams.get("dispatch_date") || undefined;
 
     const result = await dispatchPlanService.fetchPlans(
       limit,
@@ -54,6 +56,8 @@ export async function GET(req: NextRequest) {
       status,
       search,
       clusterId ? Number(clusterId) : undefined,
+      branchId ? Number(branchId) : undefined,
+      dispatchDate,
     );
 
     return NextResponse.json(result);

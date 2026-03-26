@@ -22,6 +22,8 @@ export const dispatchPlanQueryService = {
     status?: string,
     search?: string,
     clusterId?: number,
+    branchId?: number,
+    dispatchDate?: string,
   ): Promise<PaginatedDispatchPlans> {
     const params: Record<string, any> = {
       fields: "*",
@@ -41,6 +43,14 @@ export const dispatchPlanQueryService = {
 
     if (clusterId) {
       params["filter[cluster_id][_eq]"] = clusterId;
+    }
+
+    if (branchId) {
+      params["filter[branch_id][_eq]"] = branchId;
+    }
+
+    if (dispatchDate) {
+      params["filter[dispatch_date][_eq]"] = dispatchDate;
     }
 
     const result = await fetchItems<DispatchPlan>(
