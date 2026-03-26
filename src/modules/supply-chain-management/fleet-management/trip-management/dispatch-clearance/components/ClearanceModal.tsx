@@ -78,7 +78,15 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
     useEffect(() => {
         if (isOpen && dispatch.invoices) {
             setInvoices(dispatch.invoices);
-            setSelectedIds(new Set());
+            
+            // Auto-select rows that were previously cleared/pre-saved
+            const initialSelected = new Set<number>();
+            dispatch.invoices.forEach(inv => {
+                if (inv.isCleared && isRowCheckable(inv)) {
+                    initialSelected.add(inv.id);
+                }
+            });
+            setSelectedIds(initialSelected);
         }
     }, [isOpen, dispatch.invoices]);
 
@@ -147,19 +155,35 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
         });
     };
 
-    const handleConfirmClearance = async () => {
-        const selectedInvoices = invoices.filter(inv => selectedIds.has(inv.id));
-        if (selectedInvoices.length === 0) return;
+    const handleConfirmClearance = async (isPreSave: boolean = false) => {
+        const selectedInvoices = isPreSave 
+            ? invoices.filter(inv => inv.status)
+            : invoices.filter(inv => selectedIds.has(inv.id));
+
+        if (selectedInvoices.length === 0) {
+            if (!isPreSave) toast.error("Please select at least one invoice to confirm.");
+            return;
+        }
 
         setIsSubmitting(true);
         try {
-            await submitClearance(dispatch.id, selectedInvoices);
-            toast.success(`Clearance confirmed for Dispatch ${dispatch.dispatchNo}`);
-            onSuccess?.();
-            onClose();
+            await submitClearance(dispatch.id, selectedInvoices, isPreSave);
+            toast.success(isPreSave 
+                ? `Progress saved for Dispatch ${dispatch.dispatchNo}` 
+                : `Clearance confirmed for Dispatch ${dispatch.dispatchNo}`);
+            
+            if (!isPreSave) {
+                onSuccess?.();
+                onClose();
+            } else {
+                // For pre-save, we might want to refresh the list or just stay open.
+                // The user said "para pwede pang mabalikan", implying they might close it manually or it can stay open.
+                // Closing it after pre-save is also common. Let's keep it open so they can continue, but they can click Cancel/X to exit.
+                // Actually, if we don't close, we should ensure the state is synced if needed.
+            }
         } catch (error: any) {
             console.error('Clearance Error:', error);
-            toast.error(error.message || 'Failed to confirm clearance');
+            toast.error(error.message || `Failed to ${isPreSave ? 'save progress' : 'confirm clearance'}`);
         } finally {
             setIsSubmitting(false);
         }
@@ -221,8 +245,17 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                     <div className="flex w-full md:w-auto gap-2 justify-end">
                         <Button variant="outline" onClick={onClose} className="rounded-lg h-9 md:h-10 text-sm border-border" disabled={isSubmitting}>Cancel</Button>
                         <Button
+                            variant="outline"
+                            className="border-primary text-primary hover:bg-primary/5 font-semibold px-4 md:px-6 rounded-lg transition-all active:scale-95 flex items-center gap-2 h-9 md:h-10 text-sm"
+                            onClick={() => handleConfirmClearance(true)}
+                            disabled={isSubmitting || invoices.filter(inv => inv.status).length === 0}
+                        >
+                            {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                            Pre-Save
+                        </Button>
+                        <Button
                             className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg font-semibold px-4 md:px-6 rounded-lg transition-all active:scale-95 flex items-center gap-2 h-9 md:h-10 text-sm"
-                            onClick={handleConfirmClearance}
+                            onClick={() => handleConfirmClearance(false)}
                             disabled={isSubmitting || selectedIds.size === 0}
                         >
                             {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}

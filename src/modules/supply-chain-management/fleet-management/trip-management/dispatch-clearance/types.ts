@@ -97,6 +97,7 @@ export interface ReconciliationRow {
   customerName: string;
   amount: number;
   remarks?: string;
+  isCleared?: boolean;
   missingQtys?: Record<string | number, number>;
   scannedQtys?: Record<string | number, number>;
   scannedRFIDs?: Record<string | number, string[]>;
