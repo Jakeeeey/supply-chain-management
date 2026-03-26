@@ -121,6 +121,8 @@ export function UpdateSalesReturnModal({
   const [isReceiving, setIsReceiving] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [returnTypeError, setReturnTypeError] = useState(false);
+  const [orderError, setOrderError] = useState(false);
+  const [invoiceError, setInvoiceError] = useState(false);
 
   const [invoiceOptions, setInvoiceOptions] = useState<InvoiceOption[]>([]);
   const [invoiceSearch, setInvoiceSearch] = useState("");
@@ -335,9 +337,18 @@ export function UpdateSalesReturnModal({
   const handleUpdateClick = () => {
     setValidationError(null);
     setReturnTypeError(false);
+    setOrderError(false);
+    setInvoiceError(false);
+    
     if (!headerData.orderNo || !headerData.orderNo.toString().trim()) {
       toast.error("Order No. is required.");
-      setValidationError("Order No. is required.");
+      setOrderError(true);
+      return;
+    }
+
+    if (!headerData.invoiceNo || !headerData.invoiceNo.toString().trim()) {
+      toast.error("Invoice No. is required.");
+      setInvoiceError(true);
       return;
     }
 
@@ -346,11 +357,39 @@ export function UpdateSalesReturnModal({
     );
     if (hasIncompleteItems) {
       toast.error("Please select a 'Return Type' for all items.");
-      setValidationError("Please select a 'Return Type' for all items.");
       setReturnTypeError(true);
       return;
     }
     setIsUpdateConfirmOpen(true);
+  };
+
+  const handleReceiveClick = () => {
+    setValidationError(null);
+    setReturnTypeError(false);
+    setOrderError(false);
+    setInvoiceError(false);
+    
+    if (!headerData.orderNo || !headerData.orderNo.toString().trim()) {
+      toast.error("Order No. is required.");
+      setOrderError(true);
+      return;
+    }
+
+    if (!headerData.invoiceNo || !headerData.invoiceNo.toString().trim()) {
+      toast.error("Invoice No. is required.");
+      setInvoiceError(true);
+      return;
+    }
+
+    const hasIncompleteItems = details.some(
+      (item) => !item.returnType || item.returnType === "",
+    );
+    if (hasIncompleteItems) {
+      toast.error("Please select a 'Return Type' for all items.");
+      setReturnTypeError(true);
+      return;
+    }
+    setIsReceiveConfirmOpen(true);
   };
 
   const handleConfirmUpdate = async () => {
@@ -507,21 +546,6 @@ export function UpdateSalesReturnModal({
             <X className="h-5 w-5" />
           </button>
         </div>
-
-        {validationError && (
-          <div className="mx-8 mt-6 mb-0 p-4 bg-destructive/10 border-l-4 border-destructive text-destructive flex items-center justify-between rounded-r shadow-sm">
-            <div className="flex items-center gap-3">
-              <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0" />
-              <span className="text-sm font-medium">{validationError}</span>
-            </div>
-            <button
-              onClick={() => setValidationError(null)}
-              className="bg-destructive hover:bg-destructive text-white h-7 w-7 rounded-md flex items-center justify-center shadow-sm"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        )}
 
         {/* SCROLLABLE BODY */}
         <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-muted/50">
@@ -1104,14 +1128,18 @@ export function UpdateSalesReturnModal({
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5" ref={orderDropdownRef}>
                   <Label className="text-xs uppercase font-bold text-muted-foreground">
-                    Order No.
+                    Order No. <span className="text-destructive">*</span>
                   </Label>
                   {/* Order No Dropdown */}
                   {canEditAll ? (
                     <div className="relative group">
                       <input
                         type="text"
-                        className="w-full h-9 border border-border rounded-md text-sm px-3 pr-8 bg-background outline-none focus:ring-2 focus:border-primary"
+                        className={`w-full h-9 border rounded-md text-sm px-3 pr-8 bg-background outline-none transition-all shadow-sm ${
+                          orderError
+                            ? "border-destructive bg-destructive/5 ring-1 ring-destructive"
+                            : "border-border focus:ring-2 focus:border-primary"
+                        }`}
                         placeholder="Search Order No..."
                         value={orderSearch || headerData.orderNo || ""}
                         onChange={(e) => {
@@ -1162,14 +1190,18 @@ export function UpdateSalesReturnModal({
                 </div>
                 <div className="space-y-1.5" ref={invoiceDropdownRef}>
                   <Label className="text-xs uppercase font-bold text-muted-foreground">
-                    Invoice No.
+                    Invoice No. <span className="text-destructive">*</span>
                   </Label>
                   {/* Invoice No Dropdown */}
                   {canEditAll ? (
                     <div className="relative group">
                       <input
                         type="text"
-                        className="w-full h-9 border border-border rounded-md text-sm px-3 pr-8 bg-background outline-none focus:ring-2 focus:border-primary"
+                        className={`w-full h-9 border rounded-md text-sm px-3 pr-8 bg-background outline-none transition-all shadow-sm ${
+                          invoiceError
+                            ? "border-destructive bg-destructive/5 ring-1 ring-destructive"
+                            : "border-border focus:ring-2 focus:border-primary"
+                        }`}
                         placeholder="Search Invoice No..."
                         value={invoiceDropdownSearch || headerData.invoiceNo || ""}
                         onChange={(e) => {
@@ -1318,7 +1350,7 @@ export function UpdateSalesReturnModal({
           </Button>
           <Button
             className="min-w-[100px]"
-            onClick={() => setIsReceiveConfirmOpen(true)}
+            onClick={handleReceiveClick}
             disabled={!isPending}
           >
             Receive

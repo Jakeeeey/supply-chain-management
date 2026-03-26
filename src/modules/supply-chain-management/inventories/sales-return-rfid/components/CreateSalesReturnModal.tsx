@@ -70,6 +70,8 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   // UI State for Validation
   const [validationError, setValidationError] = useState<string | null>(null);
   const [returnTypeError, setReturnTypeError] = useState(false);
+  const [orderError, setOrderError] = useState(false);
+  const [invoiceError, setInvoiceError] = useState(false);
 
   // Bottom Form Fields
   const [orderNo, setOrderNo] = useState("");
@@ -424,6 +426,9 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const handleCreateReturn = async () => {
     setValidationError(null);
     setReturnTypeError(false);
+    setOrderError(false);
+    setInvoiceError(false);
+    
     if (!returnDate) {
       toast.error("Return Date is required.");
       setValidationError("Return Date is required.");
@@ -437,7 +442,13 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     // 🟢 REVISION: Added Validation for Order No.
     if (!orderNo.trim()) {
       toast.error("Order No. is required.");
-      setValidationError("Order No. is required.");
+      setOrderError(true);
+      return;
+    }
+
+    if (!invoiceNo.trim()) {
+      toast.error("Invoice No. is required.");
+      setInvoiceError(true);
       return;
     }
 
@@ -447,7 +458,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
     if (invalidItems) {
       toast.error("Please select a Return Type for all items.");
-      setValidationError("Please select a Return Type for all items.");
       setReturnTypeError(true);
       return;
     }
@@ -640,21 +650,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
         {/* BODY */}
         <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
-          {validationError && (
-            <div className="p-4 bg-destructive/10 border-l-4 border-destructive text-destructive flex items-center justify-between rounded-r shadow-sm">
-              <div className="flex items-center gap-3">
-                <AlertCircle className="h-5 w-5 text-destructive shrink-0" />
-                <span className="text-sm font-medium">{validationError}</span>
-              </div>
-              <button
-                onClick={() => setValidationError(null)}
-                className="bg-destructive hover:bg-destructive text-white h-7 w-7 rounded-md flex items-center justify-center shadow-sm"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          )}
-
           {/* 1. PRIMARY DETAILS */}
           {/* ... (Same UI Code as before) ... */}
           {/* COL 1: Salesman, COL 2: Customer, COL 3: Date & Price */}
@@ -1253,7 +1248,11 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                   <div className="relative group">
                     <input
                       type="text"
-                      className="w-full h-9 border border-border rounded-md text-sm px-3 pr-8 bg-background outline-none focus:ring-2 focus:border-primary"
+                      className={`w-full h-9 border rounded-md text-sm px-3 pr-8 bg-background outline-none transition-all shadow-sm ${
+                        orderError
+                          ? "border-destructive bg-destructive/5 ring-1 ring-destructive"
+                          : "border-border focus:ring-2 focus:border-primary"
+                      }`}
                       placeholder="Search Order No..."
                       value={orderSearch || orderNo}
                       onChange={(e) => {
@@ -1299,12 +1298,16 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                 {/* INVOICE NO DROPDOWN */}
                 <div className="space-y-1.5" ref={invoiceWrapperRef}>
                   <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
-                    Invoice No. (Optional)
+                    Invoice No. <span className="text-destructive">*</span>
                   </label>
                   <div className="relative group">
                     <input
                       type="text"
-                      className="w-full h-9 border border-border rounded-md text-sm px-3 pr-8 bg-background outline-none focus:ring-2 focus:border-primary"
+                      className={`w-full h-9 border rounded-md text-sm px-3 pr-8 bg-background outline-none transition-all shadow-sm ${
+                        invoiceError
+                          ? "border-destructive bg-destructive/5 ring-1 ring-destructive"
+                          : "border-border focus:ring-2 focus:border-primary"
+                      }`}
                       placeholder="Search Invoice No..."
                       value={invoiceSearch || invoiceNo}
                       onChange={(e) => {

@@ -214,9 +214,8 @@ export function ProductLookupModal({ isOpen, onClose, onConfirm }: Props) {
     selectedPrice: number,
   ) => {
     setSelectedItems((prevItems) => {
-      const uniqueCode = `${product.product_code}-${unitLabel}`;
       const existingItemIndex = prevItems.findIndex(
-        (item) => item.code === uniqueCode,
+        (item) => item.productId === product.product_id && item.unit === unitLabel,
       );
 
       if (existingItemIndex !== -1) {
@@ -240,7 +239,7 @@ export function ProductLookupModal({ isOpen, onClose, onConfirm }: Props) {
           tempId: `added-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
           productId: product.product_id,
           product_id: product.product_id,
-          code: uniqueCode,
+          code: product.product_code || product.barcode || "N/A",
           description: product.product_name,
           unit: unitLabel,
           quantity: 1,
