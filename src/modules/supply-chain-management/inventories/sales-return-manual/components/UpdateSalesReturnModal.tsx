@@ -17,6 +17,7 @@ import {
   Radio,
   ChevronDown,
 } from "lucide-react";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -119,6 +120,7 @@ export function UpdateSalesReturnModal({
   const [isUpdating, setIsUpdating] = useState(false);
   const [isReceiving, setIsReceiving] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [returnTypeError, setReturnTypeError] = useState(false);
 
   const [invoiceOptions, setInvoiceOptions] = useState<InvoiceOption[]>([]);
   const [invoiceSearch, setInvoiceSearch] = useState("");
@@ -332,7 +334,9 @@ export function UpdateSalesReturnModal({
   // --- HANDLERS: UPDATE ---
   const handleUpdateClick = () => {
     setValidationError(null);
+    setReturnTypeError(false);
     if (!headerData.orderNo || !headerData.orderNo.toString().trim()) {
+      toast.error("Order No. is required.");
       setValidationError("Order No. is required.");
       return;
     }
@@ -341,7 +345,9 @@ export function UpdateSalesReturnModal({
       (item) => !item.returnType || item.returnType === "",
     );
     if (hasIncompleteItems) {
+      toast.error("Please select a 'Return Type' for all items.");
       setValidationError("Please select a 'Return Type' for all items.");
+      setReturnTypeError(true);
       return;
     }
     setIsUpdateConfirmOpen(true);
@@ -375,6 +381,19 @@ export function UpdateSalesReturnModal({
   const handleConfirmReceive = async () => {
     try {
       setIsReceiving(true);
+      // Auto-save changes before marking as Received
+      const savePayload = {
+        returnId: headerData.id,
+        returnNo: headerData.returnNo,
+        items: details,
+        remarks: headerData.remarks || "",
+        invoiceNo: headerData.invoiceNo,
+        orderNo: headerData.orderNo,
+        appliedInvoiceId: appliedInvoiceId ?? undefined,
+        isThirdParty: headerData.isThirdParty,
+      };
+      await SalesReturnProvider.updateReturn(savePayload);
+      // Then update status
       await SalesReturnProvider.updateStatus(headerData.id, "Received");
       setHeaderData({ ...headerData, status: "Received" });
       setStatusCardData((prev) =>
@@ -386,7 +405,7 @@ export function UpdateSalesReturnModal({
       setIsUpdateSuccessOpen(true);
     } catch (error) {
       console.error("Receive failed", error);
-      alert("Failed to receive sales return.");
+      toast.error("Failed to receive sales return.");
     } finally {
       setIsReceiving(false);
     }
@@ -568,41 +587,41 @@ export function UpdateSalesReturnModal({
             </div>
 
             <div className="border border-border rounded-xl overflow-hidden bg-background shadow-sm">
-              <div className="overflow-x-auto">
-                <Table>
+              <div className="overflow-x-auto pb-4">
+                <Table className="min-w-[1500px]">
                   <TableHeader>
                     <TableRow className="bg-primary hover:bg-primary! border-none">
                       <TableHead className="text-white font-semibold h-11 w-[120px] uppercase text-xs">
                         Code
                       </TableHead>
-                      <TableHead className="text-white font-semibold h-11 min-w-[200px] uppercase text-xs">
+                      <TableHead className="text-white font-semibold h-11 min-w-[180px] uppercase text-xs">
                         Description
                       </TableHead>
                       <TableHead className="text-white font-semibold h-11 w-[80px] uppercase text-xs">
                         Unit
                       </TableHead>
-                      <TableHead className="text-white font-semibold h-11 text-center min-w-[100px] uppercase text-xs">
+                      <TableHead className="text-white font-semibold h-11 text-center w-[120px] uppercase text-xs">
                         Qty
                       </TableHead>
-                      <TableHead className="text-white font-semibold h-11 text-right min-w-[120px] uppercase text-xs">
+                      <TableHead className="text-white font-semibold h-11 text-right min-w-[130px] uppercase text-xs">
                         Price
                       </TableHead>
-                      <TableHead className="text-white font-semibold h-11 text-right w-[100px] uppercase text-xs">
+                      <TableHead className="text-white font-semibold h-11 text-right min-w-[130px] uppercase text-xs">
                         Gross
                       </TableHead>
-                      <TableHead className="text-white font-semibold h-11 w-[130px] uppercase text-xs">
+                      <TableHead className="text-white font-semibold h-11 w-[160px] uppercase text-xs">
                         Disc. Type
                       </TableHead>
-                      <TableHead className="text-white font-semibold h-11 text-right w-[100px] uppercase text-xs">
+                      <TableHead className="text-white font-semibold h-11 text-right min-w-[140px] uppercase text-xs">
                         Disc. Amt
                       </TableHead>
-                      <TableHead className="text-white font-semibold h-11 text-right w-[100px] uppercase text-xs">
+                      <TableHead className="text-white font-semibold h-11 text-right min-w-[150px] uppercase text-xs">
                         Total
                       </TableHead>
-                      <TableHead className="text-white font-semibold h-11 min-w-[150px] uppercase text-xs">
+                      <TableHead className="text-white font-semibold h-11 min-w-[180px] uppercase text-xs">
                         Reason
                       </TableHead>
-                      <TableHead className="text-white font-semibold h-11 w-[160px] uppercase text-xs">
+                      <TableHead className="text-white font-semibold h-11 w-[200px] uppercase text-xs">
                         Return Type
                       </TableHead>
                       {/* 🟢 REVISED: Delete Column hidden if not Pending */}
@@ -691,8 +710,8 @@ export function UpdateSalesReturnModal({
                                   </span>
                                 )}
                               </TableCell>
-                              <TableCell className="text-right text-sm text-muted-foreground align-middle font-mono">
-                                {(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}
+                              <TableCell className="text-right text-sm text-muted-foreground align-middle font-mono whitespace-nowrap">
+                                {(Number(item.quantity) * Number(item.unitPrice)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                               </TableCell>
                               {/* Discount */}
                               <TableCell className="align-middle p-2">
@@ -720,10 +739,10 @@ export function UpdateSalesReturnModal({
                                 )}
                               </TableCell>
                               <TableCell className="text-right align-middle p-2">
-                                <Input type="number" readOnly className="h-9 w-full text-right text-sm bg-muted/30 text-muted-foreground cursor-not-allowed" value={item.discountAmount} />
+                                <Input type="number" readOnly className="h-9 w-full text-right text-sm bg-muted/30 text-muted-foreground cursor-not-allowed" value={item.discountAmount ? Number(item.discountAmount).toFixed(2) : ""} />
                               </TableCell>
-                              <TableCell className="text-right font-bold text-sm text-foreground align-middle">
-                                {(Number(item.totalAmount) || 0).toLocaleString()}
+                              <TableCell className="text-right font-bold text-sm text-foreground align-middle whitespace-nowrap">
+                                ₱{(Number(item.totalAmount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                               </TableCell>
                               {/* Reason */}
                               <TableCell className="align-middle p-2">
@@ -743,8 +762,8 @@ export function UpdateSalesReturnModal({
                               {/* Return Type */}
                               <TableCell className="align-middle p-2">
                                 {canEditAll ? (
-                                  <Select value={item.returnType as string} onValueChange={(val) => handleDetailChange(idx, "returnType", val)}>
-                                    <SelectTrigger className="h-9 w-full text-xs border-border bg-background">
+                                  <Select value={item.returnType as string} onValueChange={(val) => { handleDetailChange(idx, "returnType", val); setReturnTypeError(false); }}>
+                                    <SelectTrigger className={`h-9 w-full text-xs bg-background ${returnTypeError && (!item.returnType || item.returnType === "") ? "border-destructive ring-1 ring-destructive/30 bg-destructive/5" : "border-border"}`}>
                                       <SelectValue placeholder="Select type" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -987,7 +1006,7 @@ export function UpdateSalesReturnModal({
                                 type="number"
                                 readOnly
                                 className="h-9 w-full text-right text-sm bg-muted/30 text-muted-foreground cursor-not-allowed"
-                                value={item.discountAmount}
+                                value={item.discountAmount ? Number(item.discountAmount).toFixed(2) : ""}
                               />
                             </TableCell>
                             <TableCell className="text-right font-bold text-sm text-foreground align-middle">

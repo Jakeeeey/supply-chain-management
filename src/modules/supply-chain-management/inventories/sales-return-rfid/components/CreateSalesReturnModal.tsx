@@ -16,6 +16,7 @@ import {
   Radio,
   ScanLine,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -68,6 +69,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
   // UI State for Validation
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [returnTypeError, setReturnTypeError] = useState(false);
 
   // Bottom Form Fields
   const [orderNo, setOrderNo] = useState("");
@@ -402,14 +404,17 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const handleOpenProductLookup = () => {
     setValidationError(null);
     if (!returnDate) {
+      toast.error("Please select a Return Date before adding products.");
       setValidationError("Please select a Return Date before adding products.");
       return;
     }
     if (!selectedSalesmanId) {
+      toast.error("Please select a Salesman before adding products.");
       setValidationError("Please select a Salesman before adding products.");
       return;
     }
     if (!selectedCustomerId) {
+      toast.error("Please select a Customer before adding products.");
       setValidationError("Please select a Customer before adding products.");
       return;
     }
@@ -418,16 +423,20 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
   const handleCreateReturn = async () => {
     setValidationError(null);
+    setReturnTypeError(false);
     if (!returnDate) {
+      toast.error("Return Date is required.");
       setValidationError("Return Date is required.");
       return;
     }
     if (items.length === 0) {
+      toast.error("Please add at least one product.");
       setValidationError("Please add at least one product.");
       return;
     }
     // 🟢 REVISION: Added Validation for Order No.
     if (!orderNo.trim()) {
+      toast.error("Order No. is required.");
       setValidationError("Order No. is required.");
       return;
     }
@@ -437,7 +446,9 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     );
 
     if (invalidItems) {
+      toast.error("Please select a Return Type for all items.");
       setValidationError("Please select a Return Type for all items.");
+      setReturnTypeError(true);
       return;
     }
 
@@ -880,41 +891,41 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
               </div>
             </div>
 
-            <div className="overflow-x-auto relative">
-              <table className="w-full text-sm text-left min-w-[1100px]">
+            <div className="overflow-x-auto relative pb-4">
+              <table className="w-full text-sm text-left min-w-[1500px]">
                 <thead>
                   <tr className="bg-primary text-white">
-                    <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider w-28">
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-28">
                       Code
                     </th>
-                    <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider">
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider">
                       Description
                     </th>
-                    <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider w-20">
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-20">
                       Unit
                     </th>
-                    <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider w-24 text-center">
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-28 text-center">
                       Qty
                     </th>
-                    <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider w-28 text-right">
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-32 text-right">
                       Price
                     </th>
-                    <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider w-28 text-right">
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-32 text-right">
                       Gross
                     </th>
-                    <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider w-36">
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-40">
                       Disc. Type
                     </th>
-                    <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider w-28 text-right">
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-36 text-right">
                       Disc. Amt
                     </th>
-                    <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider w-32 text-right">
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-40 text-right">
                       Total
                     </th>
-                    <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider w-40">
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-48">
                       Reason
                     </th>
-                    <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider w-40">
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-48">
                       Return Type
                     </th>
                     <th className="sticky right-0 z-10 px-2 py-3 w-12 bg-primary"></th>
@@ -963,11 +974,11 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                                 onChange={(e) => handleItemChange(idx, "quantity", parseFloat(e.target.value) || 0)}
                               />
                             </td>
-                            <td className="px-4 py-2 text-right text-sm">
-                              ₱{item.unitPrice.toLocaleString()}
+                            <td className="px-3 py-2 text-right text-sm whitespace-nowrap">
+                              ₱{item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </td>
-                            <td className="px-4 py-2 text-right text-muted-foreground font-mono text-sm">
-                              ₱{(item.grossAmount || 0).toLocaleString()}
+                            <td className="px-3 py-2 text-right text-muted-foreground font-mono text-sm whitespace-nowrap">
+                              ₱{(item.grossAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </td>
                             <td className="px-4 py-2">
                               <select
@@ -989,11 +1000,11 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                                 readOnly
                                 disabled
                                 className="w-full text-right border border-border bg-muted/30 text-muted-foreground rounded h-8 text-sm outline-none cursor-not-allowed"
-                                value={item.discountAmount === 0 ? "" : item.discountAmount}
+                                value={item.discountAmount ? Number(item.discountAmount).toFixed(2) : ""}
                               />
                             </td>
-                            <td className="px-4 py-2 text-right font-bold text-sm text-foreground">
-                              ₱{item.totalAmount.toLocaleString()}
+                            <td className="px-3 py-2 text-right font-bold text-sm text-foreground whitespace-nowrap">
+                              ₱{item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </td>
                             <td className="px-4 py-2">
                               <input
@@ -1004,12 +1015,12 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                                 onChange={(e) => handleItemChange(idx, "reason", e.target.value)}
                               />
                             </td>
-                            <td className="px-4 py-2">
+                            <td className="px-3 py-2">
                               <select
                                 required
-                                className="w-full border border-border rounded h-8 text-sm px-1 bg-background outline-none focus:border-primary"
+                                className={`w-full border rounded h-8 text-sm px-1 bg-background outline-none focus:border-primary transition-colors ${returnTypeError && (!item.returnType || item.returnType === "") ? "border-destructive ring-1 ring-destructive/30 bg-destructive/5" : "border-border"}`}
                                 value={item.returnType || ""}
-                                onChange={(e) => handleItemChange(idx, "returnType", e.target.value)}
+                                onChange={(e) => { handleItemChange(idx, "returnType", e.target.value); setReturnTypeError(false); }}
                               >
                                 <option value="" disabled>Select an option</option>
                                 {returnTypeOptions.length > 0 ? (
@@ -1171,7 +1182,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                                   readOnly
                                   disabled
                                   className="w-full text-right border border-border bg-muted/30 text-muted-foreground rounded h-8 text-sm outline-none cursor-not-allowed"
-                                  value={item.discountAmount === 0 ? "" : item.discountAmount}
+                                  value={item.discountAmount ? Number(item.discountAmount).toFixed(2) : ""}
                                 />
                               </td>
                               <td className="px-4 py-2 text-right font-bold text-foreground text-sm">

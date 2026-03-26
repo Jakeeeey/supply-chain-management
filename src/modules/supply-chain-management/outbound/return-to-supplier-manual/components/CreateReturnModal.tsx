@@ -249,7 +249,7 @@ export function CreateReturnModal({
         ...prev,
         {
           ...p,
-          cartId: crypto.randomUUID(),
+          cartId: Math.random().toString(36).substring(2, 15),
           quantity: qty,
           onHand: p.stock ?? 0,
           discount: (p.supplierDiscount || 0),
@@ -303,7 +303,7 @@ export function CreateReturnModal({
       // Add to cart
       addToCart({
         id: String(invRecord!.product_id), // Standard Identity
-        cartId: crypto.randomUUID(),
+        cartId: Math.random().toString(36).substring(2, 15),
         code: invRecord!.product_code,
         name: invRecord!.product_name,
         unit: invRecord!.unit_name,

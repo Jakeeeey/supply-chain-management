@@ -95,7 +95,7 @@ export function ReturnDetailsModal({
           const cartItems: CartItem[] = fetched.map((i) => {
             const validUnitCount = i.unitCount > 0 ? i.unitCount : 1;
             return {
-              cartId: crypto.randomUUID(),
+              cartId: Math.random().toString(36).substring(2, 15),
               id: String(i.productId), // Simple ID for matching logic
               product_id: i.productId, // actual DB item reference
               code: i.code,
@@ -283,7 +283,7 @@ export function ReturnDetailsModal({
         ...prev,
         {
           ...p,
-          cartId: crypto.randomUUID(),
+          cartId: Math.random().toString(36).substring(2, 15),
           quantity: qty,
           onHand: p.stock || 0,
           discount: p.supplierDiscount || 0,
@@ -313,7 +313,7 @@ export function ReturnDetailsModal({
 
     addToCartInternal({
       id: String(inv.product_id), // Standard Identity
-      cartId: crypto.randomUUID(),
+      cartId: Math.random().toString(36).substring(2, 15),
       product_id: inv.product_id,
       code: inv.product_code,
       name: inv.product_name,
