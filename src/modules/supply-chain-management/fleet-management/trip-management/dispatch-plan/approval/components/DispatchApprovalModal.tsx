@@ -304,7 +304,6 @@ export function DispatchApprovalModal({isOpen, isLoading, plan, isProcessing, on
                             </div>
                         </div>
 
-                        {/* 📌 MODERN FOOTER: Sticky with backdrop blur */}
                         <div
                             className="bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:bg-slate-900/90 border-t border-slate-200 dark:border-slate-800 p-4 sm:px-6 flex flex-wrap items-center justify-between gap-3 shrink-0 z-20">
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden sm:block">

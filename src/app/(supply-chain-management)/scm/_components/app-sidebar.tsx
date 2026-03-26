@@ -289,9 +289,7 @@ const data = {
                         {
                             title: "Pending Invoices",
                             url: "/scm/fleet-management/logistics-deliveries/pending-invoices",
-                        },
-                        { title: "PDP Summary", url: "/scm/fleet-management/logistics-deliveries/pre-dispatch-summary" },
-                        { title: "Pending Invoices", url: "/scm/fleet-management/logistics-deliveries/pending-invoices" },
+                        }
                     ],
                 },
                 {

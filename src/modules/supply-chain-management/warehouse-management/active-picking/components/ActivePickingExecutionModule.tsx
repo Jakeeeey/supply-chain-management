@@ -1,14 +1,17 @@
 "use client";
 
 import React from "react";
-import {ConsolidatorDto} from "../types";
-import {useActivePicking} from "../hooks/useActivePicking";
+import { ConsolidatorDto } from "../types";
+import { useActivePicking } from "../hooks/useActivePicking";
+import { Keyboard } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { motion, AnimatePresence } from "framer-motion";
 
 // Sub-components
-import {ActivePickingHeader} from "./ActivePickingHeader";
-import {ActivePickingGroupedList} from "./ActivePickingGroupedList";
-import {ActivePickingLiveFeed} from "./ActivePickingLiveFeed";
-import {ManualOverrideModal} from "./ManualOverrideModal";
+import { ActivePickingHeader } from "./ActivePickingHeader";
+import { ActivePickingGroupedList } from "./ActivePickingGroupedList";
+import { ActivePickingLiveFeed } from "./ActivePickingLiveFeed";
+import { ManualOverrideModal } from "./ManualOverrideModal";
 
 interface ActivePickingExecutionProps {
     batch: ConsolidatorDto;
@@ -25,11 +28,10 @@ export default function ActivePickingExecution({
                                                }: ActivePickingExecutionProps) {
 
     // 🚀 ALL logic is now isolated in this single, clean hook
-    const pickingState = useActivePicking({batch, currentUserId});
+    const pickingState = useActivePicking({ batch, currentUserId });
 
     return (
-        <div
-            className="fixed inset-0 z-50 bg-background flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
+        <div className="fixed inset-0 z-50 bg-background flex flex-col overflow-hidden animate-in zoom-in-95 duration-300 relative">
             <ActivePickingHeader
                 batchNo={batch.consolidatorNo}
                 branchName={batch.branchName}
@@ -44,7 +46,7 @@ export default function ActivePickingExecution({
 
             <div className="flex-1 min-h-0 flex overflow-hidden">
                 <ActivePickingGroupedList
-                    cldtoNo={batch.consolidatorNo} // 👈 Add this line
+                    cldtoNo={batch.consolidatorNo}
                     groupedDetails={pickingState.groupedDetails}
                     activeDetailId={pickingState.activeDetailId}
                     setActiveDetailId={pickingState.setActiveDetailId}
@@ -57,6 +59,31 @@ export default function ActivePickingExecution({
                     isBatchComplete={pickingState.isBatchComplete}
                 />
             </div>
+
+            {/* 🚀 MASSIVE FLOATING ACTION BUTTON FOR MANUAL ENTRY */}
+            <AnimatePresence>
+                {pickingState.activeDetailId && !pickingState.isBatchComplete && (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.5, y: 40 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.5, y: 40 }}
+                        transition={{ type: "spring", bounce: 0.5, duration: 0.4 }}
+                        // Positioned bottom-right. Adjust 'bottom-24' if it overlaps your global progress footer!
+                        className="fixed bottom-24 right-4 md:bottom-8 md:right-8 z-[60]"
+                    >
+                        <Button
+                            size="lg"
+                            onClick={() => pickingState.setIsManualModalOpen(true)}
+                            className="h-16 w-16 md:h-16 md:w-auto md:px-8 rounded-full shadow-[0_10px_40px_-10px_rgba(59,130,246,0.7)] bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-3 active:scale-90 transition-transform"
+                        >
+                            <Keyboard className="h-7 w-7 md:h-6 md:w-6" />
+                            <span className="hidden md:inline font-black uppercase tracking-widest text-sm">
+                                Manual Entry
+                            </span>
+                        </Button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             <ManualOverrideModal
                 isOpen={pickingState.isManualModalOpen}

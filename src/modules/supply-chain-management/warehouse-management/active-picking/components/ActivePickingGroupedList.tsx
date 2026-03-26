@@ -3,7 +3,7 @@
 import React, {useState, useMemo, useEffect} from "react";
 import {
     CheckCircle2, ChevronRight, ChevronDown, Factory, Keyboard, ListTodo, ScanLine, Barcode,
-    Send, Search, PackageX, AlertOctagon, Zap, FilterX
+    Send, Search, PackageX, AlertOctagon, Zap, FilterX, GripVertical
 } from "lucide-react";
 import {Badge} from "@/components/ui/badge";
 import {Button} from "@/components/ui/button";
@@ -39,10 +39,8 @@ export function ActivePickingGroupedList({
     const [cldtoInput, setCldtoInput] = useState("");
     const [hasError, setHasError] = useState(false);
 
-    // 🚀 NEW: State to track which sections are collapsed
     const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
 
-    // ✅ CORRECT PLACEMENT: Evaluates on every render based on current state
     const isSearching = searchQuery.trim() !== "" || showRfidOnly;
 
     // Auto-scroll to active item
@@ -163,13 +161,11 @@ export function ActivePickingGroupedList({
                     ) : (
                         Object.entries(filteredGroupedDetails).map(([supplier, brands]) => {
                             const supplierId = `sup-${supplier}`;
-                            // Force expand if searching, otherwise respect collapse state
                             const isSupplierCollapsed = !isSearching && collapsedSections.has(supplierId);
 
                             return (
                                 <div key={supplier}
                                      className="border border-border/50 rounded-xl shadow-sm bg-card relative overflow-hidden transition-all duration-300">
-                                    {/* 🚀 SUPPLIER HEADER (COLLAPSIBLE) */}
                                     <div
                                         className="sticky top-0 z-10 bg-card/95 backdrop-blur-md px-4 py-3 border-b border-border/50 flex items-center justify-between shadow-sm cursor-pointer hover:bg-muted/40 transition-colors"
                                         onClick={() => toggleCollapse(supplierId)}
@@ -188,12 +184,10 @@ export function ActivePickingGroupedList({
                                                 <React.Fragment key={brand}>
                                                     {Object.entries(categories).map(([category, items]) => {
                                                         const catId = `cat-${supplier}-${brand}-${category}`;
-                                                        // Force expand if searching, otherwise respect collapse state
                                                         const isCatCollapsed = !isSearching && collapsedSections.has(catId);
 
                                                         return (
                                                             <div key={category} className="space-y-3">
-                                                                {/* 🚀 CATEGORY HEADER (COLLAPSIBLE) */}
                                                                 <div
                                                                     className="flex items-center justify-between text-muted-foreground/80 bg-muted/40 px-3 py-2 rounded-md border border-border/40 cursor-pointer hover:bg-muted/60 transition-colors"
                                                                     onClick={() => toggleCollapse(catId)}
@@ -322,22 +316,33 @@ export function ActivePickingGroupedList({
                 </div>
             </ScrollArea>
 
-            {/* Global Progress Bar */}
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-[95%] md:w-[70%] z-50 pointer-events-none">
-                <motion.div initial={{y: 50, opacity: 0}} animate={{y: 0, opacity: 1}}
-                            className="bg-card/95 border border-primary/20 rounded-2xl p-3 shadow-lg backdrop-blur-xl flex items-center justify-between gap-4 pointer-events-auto">
-                    <div className="pl-1 shrink-0">
+            {/* 🚀 NEW DRAGGABLE FLOATING PROGRESS BAR */}
+            <div className="absolute bottom-4 left-0 w-full flex justify-center z-50 pointer-events-none px-4">
+                <motion.div
+                    drag
+                    dragConstraints={{ top: -600, bottom: 0, left: -200, right: 200 }}
+                    dragElastic={0.2}
+                    whileDrag={{ scale: 1.05, cursor: "grabbing" }}
+                    initial={{y: 50, opacity: 0}}
+                    animate={{y: 0, opacity: 1}}
+                    className="w-full md:w-[70%] bg-card/95 border border-primary/20 rounded-2xl p-3 shadow-2xl backdrop-blur-xl flex items-center justify-between gap-4 pointer-events-auto cursor-grab active:cursor-grabbing touch-none ring-1 ring-border/50"
+                >
+                    <div className="flex items-center gap-3 pl-1 shrink-0">
+                        {/* 👆 Visual indicator that this is draggable */}
+                        <GripVertical className="h-5 w-5 text-muted-foreground/30 hover:text-muted-foreground/60 transition-colors hidden sm:block" />
                         <div className="flex items-baseline gap-1">
                             <span className="text-xl font-black italic">{totalPicked}</span>
                             <span className="text-xs font-bold text-muted-foreground">/ {totalOrdered}</span>
                         </div>
                     </div>
+
                     <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden hidden sm:block">
                         <motion.div className={`h-full ${isFullyDone ? 'bg-emerald-500' : 'bg-primary'}`}
                                     initial={{width: 0}}
                                     animate={{width: `${totalOrdered > 0 ? (totalPicked / totalOrdered) * 100 : 0}%`}}
                                     transition={{ease: "circOut", duration: 0.8}}/>
                     </div>
+
                     <Button onClick={handleEndSessionClick} size="sm"
                             className={`h-10 px-6 rounded-xl font-black uppercase tracking-tighter shadow-sm shrink-0 ${isFullyDone ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-destructive hover:bg-destructive/90'}`}>
                         {isFullyDone ? 'Finish' : 'End'} <Send className="ml-2 h-4 w-4"/>

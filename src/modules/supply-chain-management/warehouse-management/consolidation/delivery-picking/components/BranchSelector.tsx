@@ -60,7 +60,7 @@ export function BranchSelector({
                             </div>
                             <div className="flex flex-col items-start truncate">
                                 <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 leading-none mb-1">
-                                    Active Terminal
+                                    Branch Selection
                                 </span>
                                 <span className="font-bold text-sm truncate">
                                     {selectedBranch ? selectedBranch.branchName : "Select Branch..."}
@@ -125,15 +125,6 @@ export function BranchSelector({
                 </PopoverContent>
             </Popover>
 
-            {/* Status Indicator */}
-            {selectedBranchId && (
-                <div className="hidden md:flex items-center gap-1.5 px-3 h-11 rounded-xl border border-emerald-500/20 bg-emerald-500/5 text-emerald-500 transition-all animate-in zoom-in-95">
-                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"/>
-                    <span className="text-[9px] font-black uppercase tracking-widest italic">
-                        Live Stream
-                    </span>
-                </div>
-            )}
         </div>
     );
 }
