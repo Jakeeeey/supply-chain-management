@@ -30,7 +30,6 @@ import {
   Plus,
   Trash2,
   Truck,
-  User,
   Users,
   Wallet,
   X,
@@ -228,22 +227,6 @@ export function BudgetAllocationPanel({
             </div>
           </div>
 
-          <Separator orientation="vertical" className="h-8 self-center" />
-
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-7 h-7 rounded-md bg-muted flex items-center justify-center shrink-0">
-              <User className="w-3.5 h-3.5 text-muted-foreground" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
-                Driver
-              </p>
-              <p className="text-sm font-semibold text-foreground truncate">
-                {plan.driverName}
-              </p>
-            </div>
-          </div>
-
           <div className="ml-auto">
             <Badge variant="outline" className="text-[10px] font-semibold">
               {fields.length}/5 lines
@@ -288,7 +271,7 @@ export function BudgetAllocationPanel({
                 {fields.map((field, index) => (
                   <div
                     key={field.id}
-                    className="grid grid-cols-[1fr_140px_1fr_36px] gap-3 items-start p-4 rounded-lg border border-border/50 bg-muted/5 hover:bg-muted/10 transition-colors"
+                    className="grid grid-cols-[1fr_1fr_140px_36px] gap-3 items-start p-4 rounded-lg border border-border/50 bg-muted/5 hover:bg-muted/10 transition-colors"
                   >
                     <FormField
                       control={form.control}
@@ -323,7 +306,7 @@ export function BudgetAllocationPanel({
                               placeholder="0.00"
                               min="0"
                               step="0.01"
-                              className="font-medium tabular-nums text-right h-9"
+                              className="font-medium tabular-nums h-9"
                               value={field.value || ""}
                               onChange={(e) => {
                                 const val = parseFloat(e.target.value);
@@ -435,28 +418,38 @@ export function BudgetAllocationPanel({
                     <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                     <div className="min-w-0">
                       <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">
-                        Starting Point
+                        Driver
                       </p>
                       <p className="text-xs font-medium text-foreground truncate">
-                        {plan.startingPoint || "—"}
+                        {plan.driverName || "No driver assigned"}
                       </p>
                     </div>
                   </div>
                 </div>
 
-                {/* Row: Salesman + Status */}
+                {/* Row: Helpers (full width, conditional) */}
                 <div className="grid grid-cols-2 divide-x divide-border/40">
-                  <div className="px-3 py-2.5 flex items-center gap-2 min-w-0">
-                    <User className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">
-                        Salesman
-                      </p>
-                      <p className="text-xs font-medium text-foreground truncate">
-                        {plan.salesmanName || "—"}
-                      </p>
+                  {plan.helpers && plan.helpers.length > 0 && (
+                    <div className="px-3 py-2.5 flex items-start gap-2">
+                      <Users className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider mb-1.5">
+                          Helpers
+                        </p>
+                        <div className="flex flex-wrap gap-1">
+                          {plan.helpers.map((helper, i) => (
+                            <Badge
+                              key={i}
+                              variant="secondary"
+                              className="text-[10px] h-5"
+                            >
+                              {helper}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  )}
                   <div className="px-3 py-2.5 flex items-center gap-2 min-w-0">
                     <AlertCircle className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                     <div className="min-w-0">
@@ -508,29 +501,6 @@ export function BudgetAllocationPanel({
                     </div>
                   </div>
                 </div>
-
-                {/* Row: Helpers (full width, conditional) */}
-                {plan.helpers && plan.helpers.length > 0 && (
-                  <div className="px-3 py-2.5 flex items-start gap-2">
-                    <Users className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider mb-1.5">
-                        Helpers
-                      </p>
-                      <div className="flex flex-wrap gap-1">
-                        {plan.helpers.map((helper, i) => (
-                          <Badge
-                            key={i}
-                            variant="secondary"
-                            className="text-[10px] h-5"
-                          >
-                            {helper}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Customer transactions table */}

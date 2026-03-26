@@ -225,7 +225,8 @@ export async function fetchMasterData(): Promise<DispatchCreationMasterData> {
     }),
     // Fetch Chart of Accounts for Budgeting
     fetchItems<COAOption>("/items/chart_of_accounts", {
-      fields: "coa_id,account_title,gl_code",
+      fields: "coa_id,account_title,gl_code,account_type,is_payment",
+      "filter[_and][0][account_type][_in]": "8,9",
       limit: -1,
     }),
   ]);
