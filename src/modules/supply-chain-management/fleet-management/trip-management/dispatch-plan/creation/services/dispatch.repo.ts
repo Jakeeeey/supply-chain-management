@@ -705,8 +705,9 @@ export async function fetchPlanDetails(
  */
 export async function fetchPurchaseOrders(query?: string): Promise<any[]> {
   const params: any = {
-    fields: "purchase_order_id,purchase_order_no",
+    fields: "purchase_order_id,purchase_order_no,date,supplier_name,total_amount,inventory_status",
     limit: -1,
+    sort: "-date",
   };
   if (query) {
     params["filter[purchase_order_no][_contains]"] = query;

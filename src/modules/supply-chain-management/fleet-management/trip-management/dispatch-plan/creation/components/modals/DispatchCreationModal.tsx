@@ -79,6 +79,7 @@ export function DispatchCreationModal({
       setSearchQuery("");
       setIsConfirming(false);
       setPendingPayload(null);
+      setPlanDetails([]);
     }
   }, [open, form]);
 

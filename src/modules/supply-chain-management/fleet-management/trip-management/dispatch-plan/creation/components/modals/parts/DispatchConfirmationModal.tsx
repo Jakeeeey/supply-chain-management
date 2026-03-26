@@ -42,9 +42,7 @@ export function DispatchConfirmationModal({
   );
   const startingPointName = startingPointNode?.branch_name || "Unknown";
 
-  const totalTransactions = planDetails.filter(
-    (d) => !d.isManualStop && !d.isPoStop
-  ).length;
+  const totalTransactions = planDetails.length;
 
   const totalStops = planDetails.length;
 

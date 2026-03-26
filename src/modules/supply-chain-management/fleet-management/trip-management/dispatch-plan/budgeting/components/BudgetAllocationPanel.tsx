@@ -191,6 +191,8 @@ export function BudgetAllocationPanel({
       .watch("budgets")
       ?.reduce((sum, b) => sum + (Number(b.amount) || 0), 0) || 0;
 
+  const isEditable = plan.status === "For Approval" || plan.status === "DRAFT";
+
   return (
     <div className="flex-1 flex flex-col h-full bg-background overflow-hidden relative">
       {/* Close */}
@@ -267,8 +269,28 @@ export function BudgetAllocationPanel({
               onSubmit={form.handleSubmit(onSubmit)}
               className="space-y-3"
             >
+              {!isEditable && (
+                <div className="flex items-start gap-3 px-4 py-3 rounded-lg border border-amber-500/30 bg-amber-500/5 text-amber-600 dark:text-amber-400">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-semibold">
+                      Read-Only — Plan is &ldquo;{plan.status}&rdquo;
+                    </p>
+                    <p className="text-[11px] text-amber-600/80 dark:text-amber-400/80">
+                      Budget can only be edited when the plan is in &ldquo;For
+                      Approval&rdquo; status.
+                    </p>
+                  </div>
+                </div>
+              )}
               <div className="space-y-2">
-                {fields.map((field, index) => (
+                {fields.map((field, index) => {
+                  const selectedCoaIds = new Set(
+                    (form.getValues("budgets") || [])
+                      .map((b, i) => (i !== index ? b.coa_id : null))
+                      .filter(Boolean) as number[]
+                  );
+                  return (
                   <div
                     key={field.id}
                     className="grid grid-cols-[1fr_1fr_140px_36px] gap-3 items-start p-4 rounded-lg border border-border/50 bg-muted/5 hover:bg-muted/10 transition-colors"
@@ -283,12 +305,14 @@ export function BudgetAllocationPanel({
                               options={coaOptions.map((c) => ({
                                 value: String(c.coa_id),
                                 label: c.account_title,
+                                disabled: selectedCoaIds.has(c.coa_id),
                               }))}
                               value={String(field.value)}
                               onValueChange={(val) =>
                                 field.onChange(Number(val))
                               }
                               placeholder="Select account"
+                              disabled={!isEditable}
                             />
                           </FormControl>
                           <FormMessage className="text-[10px]" />
@@ -308,6 +332,7 @@ export function BudgetAllocationPanel({
                               step="0.01"
                               className="font-medium tabular-nums h-9"
                               value={field.value || ""}
+                              disabled={!isEditable}
                               onChange={(e) => {
                                 const val = parseFloat(e.target.value);
                                 field.onChange(val < 0 ? 0 : val);
@@ -329,6 +354,7 @@ export function BudgetAllocationPanel({
                               className="h-9"
                               {...field}
                               value={field.value || ""}
+                              disabled={!isEditable}
                             />
                           </FormControl>
                           <FormMessage className="text-[10px]" />
@@ -340,12 +366,14 @@ export function BudgetAllocationPanel({
                       variant="ghost"
                       size="icon"
                       onClick={() => remove(index)}
+                      disabled={!isEditable}
                       className="h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
                   </div>
-                ))}
+                  );
+                })}
               </div>
 
               <Button
@@ -353,7 +381,7 @@ export function BudgetAllocationPanel({
                 onClick={() => append({ coa_id: 0, amount: 0, remarks: "" })}
                 variant="outline"
                 className="w-full border-dashed h-10 text-muted-foreground hover:text-foreground hover:border-border"
-                disabled={fields.length >= 5}
+                disabled={fields.length >= 5 || !isEditable}
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Add Budget Line
@@ -503,13 +531,13 @@ export function BudgetAllocationPanel({
                 </div>
               </div>
 
-              {/* Customer transactions table */}
+              {/* Route Stops table */}
               {plan.customerTransactions &&
               plan.customerTransactions.length > 0 ? (
                 <div className="rounded-lg border border-border/50 overflow-hidden">
                   <div className="px-3 py-2 bg-muted/10 border-b border-border/50 flex items-center justify-between">
                     <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
-                      Customer Transactions
+                      Route Stops
                     </p>
                     <Badge
                       variant="secondary"
@@ -522,10 +550,10 @@ export function BudgetAllocationPanel({
                     <thead>
                       <tr className="border-b border-border/40 bg-muted/5">
                         <th className="px-3 py-2 text-[10px] font-bold uppercase text-muted-foreground tracking-wider">
-                          Customer
+                          Stop Name
                         </th>
                         <th className="px-3 py-2 text-[10px] font-bold uppercase text-muted-foreground tracking-wider hidden sm:table-cell">
-                          Address
+                          Details / Address
                         </th>
                         <th className="px-3 py-2 text-[10px] font-bold uppercase text-muted-foreground tracking-wider text-right">
                           Amount
@@ -615,7 +643,8 @@ export function BudgetAllocationPanel({
         <Button
           type="submit"
           form="budget-form"
-          disabled={isSubmitting || isLoading}
+          disabled={isSubmitting || isLoading || !isEditable}
+          variant={isEditable ? "default" : "outline"}
           className="px-6 h-9 font-medium"
         >
           {isSubmitting ? (
@@ -623,8 +652,10 @@ export function BudgetAllocationPanel({
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               Saving...
             </>
-          ) : (
+          ) : isEditable ? (
             "Save Budget"
+          ) : (
+            "Read Only"
           )}
         </Button>
       </div>

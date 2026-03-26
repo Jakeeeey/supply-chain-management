@@ -29,7 +29,7 @@ export function useDispatchBudgeting() {
     setIsLoadingSummary(true);
     try {
       const res = await fetch(
-        "/api/scm/fleet-management/trip-management/dispatch-summary",
+        "/api/scm/fleet-management/trip-management/dispatch-plan/budgeting/summary",
         { cache: "no-store" },
       );
       const result = await res.json();
