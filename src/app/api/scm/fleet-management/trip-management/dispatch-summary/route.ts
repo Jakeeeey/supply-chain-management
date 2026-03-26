@@ -156,11 +156,17 @@ export async function GET(req: NextRequest) {
       invoicesByPlan.get(pId)!.push(inv);
     });
 
-    // Driver per plan (from staff table)
+    // Driver & Helpers per plan (from staff table)
     const driverByPlan = new Map<string, string>();
+    const helpersByPlan = new Map<string, string[]>();
     staff.forEach((s: any) => {
+      const pId = String(s.post_dispatch_plan_id);
       if (String(s.role).toLowerCase() === "driver") {
-        driverByPlan.set(String(s.post_dispatch_plan_id), String(s.user_id));
+        driverByPlan.set(pId, String(s.user_id));
+      } else if (String(s.role).toLowerCase() === "helper") {
+        if (!helpersByPlan.has(pId)) helpersByPlan.set(pId, []);
+        const name = userMap.get(String(s.user_id)) || "Unknown Helper";
+        helpersByPlan.get(pId)!.push(name);
       }
     });
 
@@ -241,6 +247,7 @@ export async function GET(req: NextRequest) {
         estimatedDispatch: String(plan.estimated_time_of_dispatch ?? ""),
         estimatedArrival: String(plan.estimated_time_of_arrival ?? ""),
         customerTransactions,
+        helpers: helpersByPlan.get(planIdStr) || [],
         status: String(plan.status ?? ""),
         createdAt: String(plan.date_encoded ?? ""),
         updatedAt: String(plan.date_encoded ?? ""),
