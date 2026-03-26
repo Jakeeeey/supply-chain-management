@@ -32,7 +32,7 @@ export function useStockTransferReceive() {
   const fetchTransfers = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/scm/warehouse-management/stock-transfer?status=For Loading');
+      const res = await fetch(`/api/scm/warehouse-management/stock-transfer?status=${encodeURIComponent('For Loading')}`);
       if (!res.ok) throw new Error('Failed to fetch For Loading transfers');
       const json = await res.json();
       setStockTransfers(json.stockTransfers ?? []);

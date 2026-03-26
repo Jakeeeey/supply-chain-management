@@ -122,9 +122,17 @@ export function ProductSelectionModal({ open, onOpenChange, onSelect }: ProductS
                       <h3 className="font-semibold text-sm line-clamp-2 leading-tight group-hover:text-primary transition-colors">
                         {product.product_name}
                       </h3>
-                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                        <Tag className="w-3 h-3" />
-                        <span className="font-mono">{product.barcode || (product as any).product_code || 'NO-BARCODE'}</span>
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                          <Tag className="w-3 h-3 shrink-0" />
+                          <span className="font-mono truncate">{product.barcode || (product as any).product_code || 'NO-BARCODE'}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                          <Package className="w-3 h-3 shrink-0 text-primary/60" />
+                          <span className="font-bold text-primary/80">
+                            {product.unit_of_measurement_count || 1} {typeof product.unit_of_measurement === 'object' && product.unit_of_measurement !== null ? (product.unit_of_measurement as any).unit_name : 'Pieces'}
+                          </span>
+                        </div>
                       </div>
                     </div>
 

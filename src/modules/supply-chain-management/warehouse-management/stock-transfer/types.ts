@@ -47,4 +47,5 @@ export interface OrderGroup {
   dateEncoded: string;
   items: any[]; // Generic for now, as items differ slightly (scannedQty vs receivedQty)
   totalAmount: number;
+  status: string;
 }

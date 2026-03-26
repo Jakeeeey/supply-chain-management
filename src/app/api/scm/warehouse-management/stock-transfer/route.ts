@@ -205,7 +205,7 @@ export async function GET(request: NextRequest) {
   } else if (action === 'products') {
     try {
       const search = searchParams.get('search') || '';
-      let prodUrl = `${baseUrl}/items/products?limit=-1&fields=product_id,product_name,barcode,product_code,cost_per_unit,price_per_unit,unit_of_measurement,product_brand`;
+      let prodUrl = `${baseUrl}/items/products?limit=-1&fields=product_id,product_name,barcode,product_code,cost_per_unit,price_per_unit,unit_of_measurement,unit_of_measurement_count,product_brand`;
       if (search) {
         prodUrl += `&filter[product_name][_icontains]=${encodeURIComponent(search)}`;
       }
@@ -260,8 +260,14 @@ export async function GET(request: NextRequest) {
   // Default: Fetch everything for the module
   try {
     const relationalFields = 'fields=*,product_id.product_id,product_id.product_name,product_id.description,product_id.barcode,product_id.product_brand.brand_name,product_id.unit_of_measurement.unit_id,product_id.unit_of_measurement.unit_name';
+    
+    // Correctly encode each status in the comma-separated list
+    const encodedStatusFilter = statusFilter 
+      ? statusFilter.split(',').map(s => encodeURIComponent(s.trim())).join(',')
+      : '';
+      
     const stockUrl = statusFilter 
-      ? `${baseUrl}/items/stock_transfer?limit=-1&filter[status][_in]=${encodeURIComponent(statusFilter)},For%20Approval,Requested&${relationalFields}`
+      ? `${baseUrl}/items/stock_transfer?limit=-1&filter[status][_in]=${encodedStatusFilter},For%20Approval,Requested&${relationalFields}`
       : `${baseUrl}/items/stock_transfer?limit=-1&${relationalFields}`;
 
     console.log(`[API] Fetching from Directus: ${stockUrl}`);

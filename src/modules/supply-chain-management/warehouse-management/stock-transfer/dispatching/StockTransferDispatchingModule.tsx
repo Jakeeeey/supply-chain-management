@@ -136,12 +136,24 @@ export default function StockTransferDispatchingModule() {
       <Card className="print:border-none print:shadow-none card-print-root">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 print:hidden">
           <div className="space-y-1">
-            <CardTitle className="text-2xl">Ready for Withdrawal</CardTitle>
+            <CardTitle className="text-2xl">Withdrawal Execution</CardTitle>
             <CardDescription>
-              Scan RFIDs to fulfill approved stock transfers.
+              Fulfill approved stock transfers through granular picking and dispatching.
             </CardDescription>
           </div>
-          <Truck className="h-8 w-8 text-muted-foreground" />
+          <div className="flex flex-col items-end gap-2">
+            <Truck className="h-8 w-8 text-muted-foreground" />
+            {selectedGroup && (
+              <div className={cn(
+                "px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider",
+                selectedGroup.status === 'For Picking' && "bg-amber-100 text-amber-700 border border-amber-200",
+                selectedGroup.status === 'Picking' && "bg-blue-100 text-blue-700 border border-blue-200 animate-pulse",
+                selectedGroup.status === 'Picked' && "bg-emerald-100 text-emerald-700 border border-emerald-200"
+              )}>
+                Status: {selectedGroup.status}
+              </div>
+            )}
+          </div>
         </CardHeader>
 
         <CardContent className="mt-4 space-y-6 print:p-0">
@@ -385,12 +397,15 @@ export default function StockTransferDispatchingModule() {
                   </div>
                   
                   <Button 
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:w-auto"
-                    disabled={processing || !isAllScanned}
+                    className={cn(
+                      "w-full sm:w-auto",
+                      selectedGroup.status === 'Picked' ? "bg-emerald-600 hover:bg-emerald-700" : "bg-primary"
+                    )}
+                    disabled={processing || selectedGroup.status !== 'Picked'}
                     onClick={() => dispatchOrder(selectedGroup.orderNo)}
                   >
                     {processing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Confirm Withdrawal (For Loading)
+                    {selectedGroup.status === 'Picked' ? 'Confirm Dispatch (For Loading)' : 'Picking in Progress...'}
                   </Button>
                 </div>
               </div>

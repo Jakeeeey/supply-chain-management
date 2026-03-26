@@ -115,6 +115,7 @@ export function OrderSelectionModal({
                 <TableHead className="font-bold uppercase text-[10px] tracking-widest text-center">Direction</TableHead>
                 <TableHead className="font-bold uppercase text-[10px] tracking-widest">Target Branch</TableHead>
                 <TableHead className="font-bold uppercase text-[10px] tracking-widest text-center">Items</TableHead>
+                <TableHead className="font-bold uppercase text-[10px] tracking-widest text-center">Status</TableHead>
                 <TableHead className="font-bold uppercase text-[10px] tracking-widest text-center">Date Requested</TableHead>
                 <TableHead className="w-[100px]"></TableHead>
               </TableRow>
@@ -155,6 +156,17 @@ export function OrderSelectionModal({
                       <span className="inline-flex items-center px-2 py-1 rounded-full bg-muted text-xs font-bold transition-colors group-hover:bg-primary/10 group-hover:text-primary">
                         {group.items.length} Items
                       </span>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className="flex justify-center">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider
+                          ${group.status === 'For Picking' ? 'bg-amber-100 text-amber-700 border border-amber-200' : ''}
+                          ${group.status === 'Picking' ? 'bg-blue-100 text-blue-700 border border-blue-200' : ''}
+                          ${group.status === 'Picked' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : ''}
+                        `}>
+                          {group.status}
+                        </span>
+                      </div>
                     </TableCell>
                     <TableCell className="text-center text-xs text-muted-foreground">
                       {new Date(group.dateRequested).toLocaleDateString(undefined, {

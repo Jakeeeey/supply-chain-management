@@ -16,6 +16,7 @@ export interface DispatchGroup {
   dateEncoded: string;
   items: DispatchItem[];
   totalAmount: number;
+  status: string;
 }
 
 export function useStockTransferDispatching() {
@@ -32,8 +33,9 @@ export function useStockTransferDispatching() {
   const fetchTransfers = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/scm/warehouse-management/stock-transfer?status=For Picking');
-      if (!res.ok) throw new Error('Failed to fetch For Picking transfers');
+      const statuses = 'For Picking,Picking,Picked';
+      const res = await fetch(`/api/scm/warehouse-management/stock-transfer?status=${encodeURIComponent(statuses)}`);
+      if (!res.ok) throw new Error('Failed to fetch transfers');
       const json = await res.json();
       setStockTransfers(json.stockTransfers ?? []);
       setBranches(json.branches ?? []);
@@ -66,6 +68,7 @@ export function useStockTransferDispatching() {
           dateEncoded: st.date_encoded || '',
           items: [],
           totalAmount: 0,
+          status: st.status
         };
       }
       
@@ -90,6 +93,31 @@ export function useStockTransferDispatching() {
     if (!selectedOrderNo) return null;
     return orderGroups.find((g) => g.orderNo === selectedOrderNo) || null;
   }, [selectedOrderNo, orderGroups]);
+
+  const updateOrderStatus = async (orderNo: string, status: string) => {
+    const group = orderGroups.find((g) => g.orderNo === orderNo);
+    if (!group) return;
+
+    try {
+      const ids = group.items.map((item) => item.id);
+      const res = await fetch('/api/scm/warehouse-management/stock-transfer', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, status }),
+      });
+
+      if (!res.ok) throw new Error(`Failed to update to ${status}`);
+      
+      // Update local state status to avoid redundant triggers
+      setStockTransfers(prev => prev.map(st => 
+        st.order_no === orderNo ? { ...st, status } : st
+      ));
+      
+      console.log(`[Status Update] Order ${orderNo} -> ${status}`);
+    } catch (err) {
+      console.error(`Failed to update status for ${orderNo}:`, err);
+    }
+  };
 
   const dispatchOrder = async (orderNo: string) => {
     const group = orderGroups.find((g) => g.orderNo === orderNo);
@@ -282,6 +310,28 @@ export function useStockTransferDispatching() {
         || match.productName 
         || "Product";
       toast.success(`Scanned: ${finalName}`);
+
+      // ── STATUS TRANSITION: Picking ──
+      if (selectedGroup.status === 'For Picking') {
+        await updateOrderStatus(selectedOrderNo, 'Picking');
+      }
+
+      // ── STATUS TRANSITION: Picked ──
+      const allItems = selectedGroup.items;
+      const isComplete = allItems.every(item => {
+        const product = typeof item.product_id === 'object' && item.product_id !== null ? item.product_id : null;
+        const pid = product ? (product.product_id || product.id) : item.product_id;
+        
+        const scanCount = (pid === effectiveProductId) 
+          ? (scannedItemsState[selectedOrderNo]?.[effectiveProductId]?.length || 0) + 1
+          : (scannedItemsState[selectedOrderNo]?.[pid]?.length || 0);
+          
+        return scanCount >= item.ordered_quantity;
+      });
+
+      if (isComplete && selectedGroup.status !== 'Picked') {
+        await updateOrderStatus(selectedOrderNo, 'Picked');
+      }
       
     } catch (error) {
       console.error('Scanner lookup error:', error);
