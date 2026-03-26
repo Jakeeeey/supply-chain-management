@@ -8,7 +8,13 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -62,8 +68,8 @@ export function DriverModal({
         return branches.filter((b) => b.isReturn === 1 || b.isReturn === true);
     }, [branches]);
 
-    // Memoize user options for combobox - exclude already assigned users unless editing
-    const userOptions = React.useMemo((): ComboboxOption[] => {
+    // Memoize user options - exclude already assigned users unless editing
+    const userOptions = React.useMemo((): { value: string; label: string }[] => {
         const assignedUserIds = new Set(drivers.map((d) => d.user_id));
         return users
             .filter((user) => !assignedUserIds.has(user.user_id) || (editingDriver?.user_id === user.user_id))
@@ -73,16 +79,16 @@ export function DriverModal({
             }));
     }, [users, drivers, editingDriver?.user_id]);
 
-    // Memoize good branch options for combobox
-    const goodBranchOptions = React.useMemo((): ComboboxOption[] => {
+    // Memoize good branch options
+    const goodBranchOptions = React.useMemo((): { value: string; label: string }[] => {
         return goodBranches.map((branch) => ({
             value: branch.id.toString(),
             label: branch.branch_name,
         }));
     }, [goodBranches]);
 
-    // Memoize bad branch options for combobox
-    const badBranchOptions = React.useMemo((): ComboboxOption[] => {
+    // Memoize bad branch options
+    const badBranchOptions = React.useMemo((): { value: string; label: string }[] => {
         return [
             { value: "none", label: "None (Optional)" },
             ...badBranches.map((branch) => ({
@@ -145,14 +151,18 @@ export function DriverModal({
                         <label className="text-sm font-bold uppercase tracking-wider text-foreground/80">
                             Select Driver*
                         </label>
-                        <Combobox
-                            options={userOptions}
-                            value={selectedUserId}
-                            onValueChange={setSelectedUserId}
-                            placeholder="Search drivers..."
-                            emptyMessage="No drivers found."
-                            className="w-full h-10 rounded-lg border-input bg-background text-foreground font-medium focus:ring-2 focus:ring-ring transition-all"
-                        />
+                        <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                            <SelectTrigger className="w-full h-10 rounded-lg border-input bg-background text-foreground font-medium focus:ring-2 focus:ring-ring transition-all">
+                                <SelectValue placeholder="Select a driver..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {userOptions.map((opt) => (
+                                    <SelectItem key={opt.value} value={opt.value}>
+                                        {opt.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                         <p className="text-xs text-muted-foreground/60 font-medium">Select the user to assign as driver</p>
                     </div>
 
@@ -161,14 +171,18 @@ export function DriverModal({
                         <label className="text-sm font-bold uppercase tracking-wider text-foreground/80">
                             Good Branch*
                         </label>
-                        <Combobox
-                            options={goodBranchOptions}
-                            value={selectedGoodBranchId}
-                            onValueChange={setSelectedGoodBranchId}
-                            placeholder="Search branches..."
-                            emptyMessage="No branches found."
-                            className="w-full h-10 rounded-lg border-input bg-background text-foreground font-medium focus:ring-2 focus:ring-ring transition-all"
-                        />
+                        <Select value={selectedGoodBranchId} onValueChange={setSelectedGoodBranchId}>
+                            <SelectTrigger className="w-full h-10 rounded-lg border-input bg-background text-foreground font-medium focus:ring-2 focus:ring-ring transition-all">
+                                <SelectValue placeholder="Select a branch..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {goodBranchOptions.map((opt) => (
+                                    <SelectItem key={opt.value} value={opt.value}>
+                                        {opt.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                         <p className="text-xs text-muted-foreground/60 font-medium">
                             {goodBranches.length} good branch(es) available
                         </p>
@@ -179,14 +193,18 @@ export function DriverModal({
                         <label className="text-sm font-bold uppercase tracking-wider text-foreground/80">
                             Bad Branch
                         </label>
-                        <Combobox
-                            options={badBranchOptions}
-                            value={selectedBadBranchId}
-                            onValueChange={setSelectedBadBranchId}
-                            placeholder="Search branches..."
-                            emptyMessage="No branches found."
-                            className="w-full h-10 rounded-lg border-input bg-background text-foreground font-medium focus:ring-2 focus:ring-ring transition-all"
-                        />
+                        <Select value={selectedBadBranchId} onValueChange={setSelectedBadBranchId}>
+                            <SelectTrigger className="w-full h-10 rounded-lg border-input bg-background text-foreground font-medium focus:ring-2 focus:ring-ring transition-all">
+                                <SelectValue placeholder="Select a branch..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {badBranchOptions.map((opt) => (
+                                    <SelectItem key={opt.value} value={opt.value}>
+                                        {opt.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                         <p className="text-xs text-muted-foreground/60 font-medium">
                             {badBranches.length} bad branch(es) available (Optional)
                         </p>

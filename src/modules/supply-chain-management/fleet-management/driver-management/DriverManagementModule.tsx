@@ -8,9 +8,17 @@ import { Button } from "@/components/ui/button";
 import { useDriverManagement } from "./hooks/useDriverManagement";
 import { DriverTable } from "./components/DriverTable";
 import { DriverModal } from "./components/DriverModal";
-import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import type { DriverWithDetails } from "./types";
+
+type ComboboxOption = { value: string; label: string };
 
 export default function DriverManagementModule() {
     const {
@@ -119,23 +127,31 @@ export default function DriverManagementModule() {
                 </div>
 
                 <div className="flex items-center gap-3 w-full md:w-auto">
-                    <Combobox
-                        options={goodBranchOptions}
-                        value={filterGoodBranch}
-                        onValueChange={setFilterGoodBranch}
-                        placeholder="Search good branches..."
-                        emptyMessage="No branches found."
-                        className="w-[220px] h-12 bg-background border border-input rounded-xl font-medium focus:ring-2 focus:ring-ring/40 focus:border-ring transition-all outline-none shadow-sm hover:border-primary/50"
-                    />
+                    <Select value={filterGoodBranch} onValueChange={setFilterGoodBranch}>
+                        <SelectTrigger className="w-[220px] h-12 bg-background border border-input rounded-xl font-medium focus:ring-2 focus:ring-ring/40 focus:border-ring transition-all outline-none shadow-sm hover:border-primary/50">
+                            <SelectValue placeholder="All Good Branches" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {goodBranchOptions.map((opt) => (
+                                <SelectItem key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
 
-                    <Combobox
-                        options={badBranchOptions}
-                        value={filterBadBranch}
-                        onValueChange={setFilterBadBranch}
-                        placeholder="Search bad branches..."
-                        emptyMessage="No branches found."
-                        className="w-[220px] h-12 bg-background border border-input rounded-xl font-medium focus:ring-2 focus:ring-ring/40 focus:border-ring transition-all outline-none shadow-sm hover:border-primary/50"
-                    />
+                    <Select value={filterBadBranch} onValueChange={setFilterBadBranch}>
+                        <SelectTrigger className="w-[220px] h-12 bg-background border border-input rounded-xl font-medium focus:ring-2 focus:ring-ring/40 focus:border-ring transition-all outline-none shadow-sm hover:border-primary/50">
+                            <SelectValue placeholder="All Bad Branches" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {badBranchOptions.map((opt) => (
+                                <SelectItem key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 </div>
             </div>
 
