@@ -131,14 +131,17 @@ export function CreateReturnModal({
 
         let discountLabel: string | undefined;
         let computedDiscount = 0;
+        let currentDiscountId: number | undefined;
 
         if (connection?.discount_type) {
           const discountObj = discountMap.get(String(connection.discount_type));
           if (discountObj) {
             computedDiscount = parseFloat(discountObj.percentage) / 100;
             discountLabel = discountObj.line_discount;
+            currentDiscountId = discountObj.id;
           } else {
             discountLabel = String(connection.discount_type);
+            currentDiscountId = connection.discount_type;
           }
         }
 
@@ -148,6 +151,7 @@ export function CreateReturnModal({
 
         return {
           id: String(item.product_id),
+          productId: item.product_id,
           masterId: String(item.familyId),
           code: item.product_code || "N/A",
           name: item.product_name,
@@ -158,6 +162,7 @@ export function CreateReturnModal({
           uom_id: matchedUnit?.unit_id || 0,
           discountType: discountLabel,
           supplierDiscount: computedDiscount,
+          discountId: currentDiscountId,
         };
       })
       // Filter: only stock > 0 AND unit order 1 or 2 (small units only)
@@ -178,6 +183,8 @@ export function CreateReturnModal({
       uom_id: number;
       discountType?: string;
       supplierDiscount: number;
+      discountId?: number;
+      productId: number;
     }
 
     // Group by familyId
@@ -213,6 +220,7 @@ export function CreateReturnModal({
           supplierDiscount:
             v.supplierDiscount || parentDiscount.supplierDiscount,
           discountType: v.discountType || parentDiscount.discountType,
+          discountId: v.discountId || parentDiscount.discountId,
         }));
       }
 
@@ -254,6 +262,7 @@ export function CreateReturnModal({
             quantity: 1,
             onHand: p.stock ?? 0,
             discount: p.supplierDiscount ?? 0,
+            discountId: p.discountId,
             customPrice: p.price,
             rfid_tag: r_tag,
           } as CartItem,
@@ -275,6 +284,7 @@ export function CreateReturnModal({
           quantity: qty,
           onHand: p.stock ?? 0,
           discount: p.supplierDiscount ?? 0,
+          discountId: p.discountId,
           customPrice: p.price,
         } as CartItem,
       ];
@@ -374,6 +384,7 @@ export function CreateReturnModal({
           );
           if (discountObj) {
             product.supplierDiscount = parseFloat(discountObj.percentage) / 100;
+            (product as any).discountId = discountObj.id;
           }
         }
 

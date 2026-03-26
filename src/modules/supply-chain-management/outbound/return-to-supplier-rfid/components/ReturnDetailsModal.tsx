@@ -87,9 +87,7 @@ export function ReturnDetailsModal({
           const cartItems: CartItem[] = fetched.map((i) => {
               const validUnitCount = i.unitCount > 0 ? i.unitCount : 1;
             return {
-              id: i.rfid_tag
-                ? `${i.productId}-rfid-${i.rfid_tag}`
-                : String(i.productId),
+              id: String(i.id), // Use the unique Database Line ID to prevent duplicate React keys
               productId: i.productId,
               code: i.code,
               name: i.name,
@@ -191,14 +189,17 @@ export function ReturnDetailsModal({
 
         let discountLabel: string | undefined;
         let computedDiscount = 0;
+        let currentDiscountId: number | undefined;
 
         if (connection?.discount_type) {
           const discountObj = discountMap.get(String(connection.discount_type));
           if (discountObj) {
             computedDiscount = parseFloat(discountObj.percentage);
             discountLabel = discountObj.line_discount;
-          } else if (typeof connection.discount_type === "string") {
-            discountLabel = connection.discount_type;
+            currentDiscountId = discountObj.id;
+          } else {
+            discountLabel = String(connection.discount_type);
+            currentDiscountId = connection.discount_type;
           }
         }
 
@@ -219,6 +220,7 @@ export function ReturnDetailsModal({
           uom_id: matchedUnit?.unit_id || 0,
           discountType: discountLabel,
           supplierDiscount: computedDiscount,
+          discountId: currentDiscountId,
           parentId: item.familyId || null,
         };
       })
@@ -241,6 +243,8 @@ export function ReturnDetailsModal({
       uom_id: number;
       supplierDiscount: number;
       discountType?: string;
+      discountId?: number;
+      productId: number;
     }
 
     const groups: Record<string, {
@@ -294,6 +298,7 @@ export function ReturnDetailsModal({
             quantity: 1,
             onHand: p.stock || 0,
             discount: (p.supplierDiscount || 0) / 100,
+            discountId: p.discountId,
             customPrice: p.price,
             rfid_tag: p.rfid_tag,
           } as CartItem,
@@ -315,6 +320,7 @@ export function ReturnDetailsModal({
           quantity: qty,
           onHand: p.stock || 0,
           discount: (p.supplierDiscount || 0) / 100,
+          discountId: p.discountId,
           customPrice: p.price,
         },
       ];
@@ -385,7 +391,10 @@ export function ReturnDetailsModal({
         );
         if (connection?.discount_type) {
           const disc = refs.lineDiscounts.find((d) => String(d.id) === String(connection.discount_type));
-          if (disc) product.supplierDiscount = parseFloat(disc.percentage);
+          if (disc) {
+            product.supplierDiscount = parseFloat(disc.percentage);
+            (product as any).discountId = disc.id;
+          }
         }
 
         addToCartInternal(product, 1);

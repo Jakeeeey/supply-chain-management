@@ -42,6 +42,7 @@ interface VariantItem {
   uom_id: number;
   discountType?: string;
   supplierDiscount: number;
+  discountId?: number;
 }
 
 export function ReturnDetailsModal({
@@ -188,12 +189,17 @@ export function ReturnDetailsModal({
 
         let discountLabel: string | undefined;
         let computedDiscount = 0;
+        let currentDiscountId: number | undefined;
 
         if (connection?.discount_type) {
           const discountObj = discountMap.get(String(connection.discount_type));
           if (discountObj) {
             computedDiscount = parseFloat(discountObj.percentage) / 100;
             discountLabel = discountObj.line_discount;
+            currentDiscountId = discountObj.id;
+          } else {
+            discountLabel = String(connection.discount_type);
+            currentDiscountId = connection.discount_type;
           }
         }
 
@@ -214,6 +220,7 @@ export function ReturnDetailsModal({
           uom_id: matchedUnit?.unit_id || 0,
           discountType: discountLabel,
           supplierDiscount: computedDiscount,
+          discountId: currentDiscountId,
         } as VariantItem;
       })
       .filter((p) => {
@@ -280,6 +287,7 @@ export function ReturnDetailsModal({
           quantity: qty,
           onHand: p.stock || 0,
           discount: p.supplierDiscount || 0,
+          discountId: p.discountId,
           customPrice: p.price,
         } as CartItem,
       ];
@@ -450,7 +458,7 @@ export function ReturnDetailsModal({
       quantity: i.quantity,
       price: i.customPrice || i.price,
       discount: i.discount,
-      total: (i.customPrice || i.price) * i.quantity,
+      total: (i.customPrice || i.price) * i.quantity * (1 - i.discount),
       returnType: returnTypeName,
     };
   });

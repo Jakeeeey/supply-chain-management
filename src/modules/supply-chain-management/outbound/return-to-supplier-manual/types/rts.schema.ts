@@ -113,6 +113,7 @@ export interface Product {
   rawStock?: number;
   discountType?: string;
   supplierDiscount?: number;
+  discountId?: number;
 }
 /** A unit-of-measurement reference record (from Directus `units` table). */
 export interface Unit {

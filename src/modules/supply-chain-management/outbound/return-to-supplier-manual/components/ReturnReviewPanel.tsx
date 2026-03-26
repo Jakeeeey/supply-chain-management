@@ -67,13 +67,23 @@ export function ReturnReviewPanel({
       { totalAmount: 0, totalQuantity: 0, totalDiscountAmount: 0, grossAmount: 0 },
     );
 
-  // Helper to find discount name by percentage
-  const getDiscountName = (percentage: number) => {
+  // Helper to find discount name by ID or fallback
+  const getDiscountName = (item: CartItem) => {
+    if (item.discountId) {
+      const match = lineDiscounts.find((d) => d.id === item.discountId);
+      if (match) return match.line_discount;
+    }
+    // Tolerance fallback if no ID but value is close to a known discount
+    const percentage = item.discount;
     if (percentage === 0) return "0%";
-    const match = lineDiscounts.find(
-      (d) => (parseFloat(d.percentage) / 100) === percentage,
+
+    const matchByValue = lineDiscounts.find(
+      (d) => Math.abs(Number(d.percentage) / 100 - percentage) < 0.0001
     );
-    return match ? match.line_discount : `${(percentage * 100).toFixed(0)}%`; // Fallback to % if custom
+    if (matchByValue) return matchByValue.line_discount;
+
+    // Show actual decimal representation to prevent "Ghost" zeros
+    return `${(percentage * 100).toFixed(4).replace(/\.?0+$/, "")}%`;
   };
 
   return (
@@ -184,17 +194,15 @@ export function ReturnReviewPanel({
                     <TableCell>
                       {readOnly ? (
                         <div className="text-center text-sm font-medium">
-                          {getDiscountName(item.discount)}
+                          {getDiscountName(item)}
                         </div>
                       ) : (
                         <div className="flex justify-center">
                           <Select
                             value={
-                              lineDiscounts
-                                .find(
-                                  (d) => (Number(d.percentage) / 100) === item.discount,
-                                )
-                                ?.id.toString() || "custom"
+                              item.discountId
+                                ? item.discountId.toString()
+                                : lineDiscounts.find((d) => Math.abs(Number(d.percentage) / 100 - item.discount) < 0.0001)?.id.toString() || "custom"
                             }
                             onValueChange={(val) => {
                               if (val === "custom") {
@@ -203,12 +211,18 @@ export function ReturnReviewPanel({
                                 const selected = lineDiscounts.find(
                                   (d) => d.id.toString() === val,
                                 );
-                                if (selected)
+                                if (selected) {
                                   onUpdateItem(
                                     item.cartId,
                                     "discount",
                                     Number(selected.percentage) / 100,
                                   );
+                                  onUpdateItem(
+                                    item.cartId,
+                                    "discountId",
+                                    selected.id,
+                                  );
+                                }
                               }
                             }}
                           >
