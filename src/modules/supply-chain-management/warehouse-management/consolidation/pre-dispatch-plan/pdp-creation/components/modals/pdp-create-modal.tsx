@@ -324,7 +324,7 @@ export function PDPCreateModal({
           o.order_no?.toLowerCase().includes(q) ||
           o.customer_name?.toLowerCase().includes(q) ||
           o.store_name?.toLowerCase().includes(q) ||
-          o.po_number?.toLowerCase().includes(q),
+          o.po_no?.toLowerCase().includes(q),
       );
     }
     return orders;
