@@ -346,6 +346,69 @@ export const dispatchPlanQueryService = {
         );
       }
 
+      // Compute weight for each Sales Order
+      const soDetailsRes = await fetchItems<any>("/items/sales_order_details", {
+        "filter[order_id][_in]": soIds.join(","),
+        fields: "order_id,ordered_quantity,allocated_quantity,product_id",
+        limit: -1,
+      });
+      const soDetails = soDetailsRes.data || [];
+
+      const normalizeId = (val: any) => {
+        if (!val) return "";
+        if (typeof val === "object")
+          return String(val.product_id || val.id || "");
+        return String(val);
+      };
+
+      const productIds = [
+        ...new Set(
+          soDetails
+            .map((sod: any) => normalizeId(sod.product_id))
+            .filter(Boolean),
+        ),
+      ];
+
+      let prodWeightMap = new Map<string, number>();
+      if (productIds.length) {
+        const prodRes = await fetchItems<{
+          product_id: number;
+          weight: number | string | null;
+        }>("/items/products", {
+          "filter[product_id][_in]": productIds.join(","),
+          fields: "product_id,weight",
+          limit: -1,
+        });
+
+        prodWeightMap = new Map(
+          (prodRes.data || []).map((p) => [
+            String(p.product_id),
+            typeof p.weight === "number"
+              ? p.weight
+              : parseFloat(String(p.weight)) || 0,
+          ]),
+        );
+      }
+
+      const soWeightMap = new Map<number, number>();
+      for (const sod of soDetails) {
+        const orderId =
+          typeof sod.order_id === "object"
+            ? sod.order_id?.order_id
+            : sod.order_id;
+        const productId = normalizeId(sod.product_id);
+        const qty = Number(sod.allocated_quantity || sod.ordered_quantity || 0);
+        const weight = prodWeightMap.get(productId) || 0;
+
+        const totalWeight = qty * weight;
+        if (orderId) {
+          soWeightMap.set(
+            orderId,
+            (soWeightMap.get(orderId) || 0) + totalWeight,
+          );
+        }
+      }
+
       for (const detail of rawDetails) {
         const order = orderMap.get(detail.sales_order_id);
         const customer = order
@@ -363,6 +426,7 @@ export const dispatchPlanQueryService = {
           province: customer?.province ?? undefined,
           amount: order?.allocated_amount ?? order?.net_amount ?? order?.total_amount ?? 0,
           po_no: order?.po_no ?? undefined,
+          weight: soWeightMap.get(detail.sales_order_id) || 0,
         } as any);
       }
     }
