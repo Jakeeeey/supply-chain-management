@@ -249,10 +249,10 @@ export default function StockTransferModule() {
         leadDate={leadDate}
         scannedItems={scannedItems}
       />
-      {/* ── Product Selection Modal ── */}
       <ProductSelectionModal 
         open={showProductModal} 
         onOpenChange={setShowProductModal} 
+        sourceBranch={sourceBranch}
         onSelect={(p) => {
           handleAddProduct(p);
           // Optional: don't close modal so user can add more?

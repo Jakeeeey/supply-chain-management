@@ -256,6 +256,7 @@ export default function StockTransferDispatchingModule() {
                       <TableHead className="text-xs uppercase font-bold print:text-black">Product Name</TableHead>
                       <TableHead className="text-xs uppercase font-bold print:text-black">Unit</TableHead>
                       <TableHead className="text-xs uppercase font-bold print:text-black">Order Qty</TableHead>
+                      <TableHead className="text-xs uppercase font-bold print:text-black">Available</TableHead>
                       <TableHead className="text-xs uppercase font-bold print:text-black">Scanned / Packed</TableHead>
                       <TableHead className="text-xs uppercase font-bold text-right print:text-black">Amount</TableHead>
                       <TableHead className="text-xs uppercase font-bold text-right print:hidden">Status</TableHead>
@@ -286,6 +287,9 @@ export default function StockTransferDispatchingModule() {
                             </span>
                           </TableCell>
                           <TableCell className="text-sm">{item.ordered_quantity}</TableCell>
+                          <TableCell className="text-sm font-medium text-muted-foreground italic">
+                            {item.qtyAvailable ?? '—'}
+                          </TableCell>
                           <TableCell className="text-sm font-bold">
                             <span className={complete ? 'text-emerald-600' : 'text-amber-600'}>
                               {item.scannedQty}

@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
   // Handle RFID lookup via Spring Boot v_rfid_onhand view
   if (action === 'lookup_rfid' && rfid) {
     const branchId = searchParams.get('branch_id') || '';
+    const token = request.cookies.get('vos_access_token')?.value;
     const cacheKey = `rfid:${rfid}:${branchId}`;
 
     // ── 0. Check In-Memory Cache ──
@@ -78,7 +79,9 @@ export async function GET(request: NextRequest) {
       'E280F302000000010AC68435'
     ];
     
-    // If it's a known test tag, return sanitizer (22345) to allow UI flow testing
+    /* 
+    // REMOVED: Overly aggressive UAT mock that was mapping many tags to a single sanitizer product ID.
+    // This was causing confusion during real testing where "Box" RFIDs were being scanned as "Pieces".
     if (userRFIDs.includes(rfid)) {
       const mockResult = {
         rfid,
@@ -91,15 +94,13 @@ export async function GET(request: NextRequest) {
       setCachedRfid(cacheKey, mockResult);
       return NextResponse.json(mockResult);
     }
+    */
 
     const springApiUrl = process.env.SPRING_API_BASE_URL?.replace(/\/$/, '');
 
     // ── 2. SPRING BOOT API (Source of Truth for v_rfid_onhand) ──
     if (springApiUrl) {
       try {
-        const cookieStore = await cookies();
-        const token = cookieStore.get('vos_access_token')?.value;
-
         const targetUrl = new URL(`${springApiUrl}/api/view-rfid-onhand`);
         targetUrl.searchParams.set('rfid', rfid);
         if (branchId) targetUrl.searchParams.set('branchId', branchId);
@@ -132,6 +133,7 @@ export async function GET(request: NextRequest) {
             if (prodRes.ok) {
               const prodData = await prodRes.json();
               const product = prodData.data;
+              const inventory = await getBranchInventory(match.branchId, token);
               const result = {
                 rfid,
                 productId: product.product_id,
@@ -139,6 +141,7 @@ export async function GET(request: NextRequest) {
                 barcode: product.barcode || product.product_code || String(product.product_id),
                 unitPrice: product.price_per_unit || product.cost_per_unit || 0,
                 branchId: match.branchId,
+                qtyAvailable: inventory ? (inventory[product.product_id] || 0) : 0
               };
               setCachedRfid(cacheKey, result);
               return NextResponse.json(result);
@@ -181,12 +184,14 @@ export async function GET(request: NextRequest) {
           if (prodRes.ok) {
             const prodData = await prodRes.json();
             const product = prodData.data;
+            const inventory = await getBranchInventory(branchId, token);
             const result = {
               rfid,
               productId: product.product_id,
               productName: product.product_name,
               barcode: product.barcode || product.product_code || String(product.product_id),
               unitPrice: product.price_per_unit || product.cost_per_unit || 0,
+              qtyAvailable: inventory ? (inventory[product.product_id] || 0) : 0
             };
             setCachedRfid(cacheKey, result);
             return NextResponse.json(result);
@@ -202,30 +207,101 @@ export async function GET(request: NextRequest) {
       error: 'RFID not found', 
       details: 'Not found in on-hand view (401/404) or receiving history.' 
     }, { status: 404 });
-  } else if (action === 'products') {
+  } 
+  
+  // ─── NEW: Helper for Aggregate Inventory ───
+  async function getBranchInventory(branchId: string, token?: string) {
+    if (!branchId || !process.env.SPRING_API_BASE_URL) return null;
+    const springBase = process.env.SPRING_API_BASE_URL.replace(/\/$/, '');
+    
+    async function tryFetch(url: string) {
+      try {
+        const res = await fetch(url, {
+          headers: token ? { Authorization: `Bearer ${token}`, Accept: 'application/json' } : { Accept: 'application/json' },
+          cache: 'no-store'
+        });
+        if (res.ok) return await res.json();
+      } catch (e) { console.warn(`[getBranchInventory] Fetch failed for ${url}`); }
+      return null;
+    }
+
+    // Attempt 1: Standard endpoint
+    const url1 = `${springBase}/api/view-rfid-onhand?branchId=${branchId}`;
+    console.log(`[DEBUG] Fetching inventory: ${url1}`);
+    let payload = await tryFetch(url1);
+    
+    // Attempt 2: Fallback to /all endpoint if first failed or returned empty/error
+    if (!payload || (payload.error && payload.status === 404) || (Array.isArray(payload) && payload.length === 0)) {
+      const url2 = `${springBase}/api/view-rfid-onhand/all?branchId=${branchId}`;
+      console.log(`[DEBUG] Attempting fallback: ${url2}`);
+      payload = await tryFetch(url2);
+    }
+
+    if (payload) {
+      // Handle potential { data: [...] } wrapper or raw array
+      const rows = Array.isArray(payload) ? payload : (payload.data && Array.isArray(payload.data) ? payload.data : null);
+      console.log(`[DEBUG] Inventory rows found: ${rows?.length || 0}`);
+      if (rows && rows.length > 0) {
+        console.log(`[DEBUG] Sample Row:`, JSON.stringify(rows[0]));
+      }
+      if (!rows) return null;
+
+      const counts: Record<any, number> = {};
+      rows.forEach((row: any) => {
+        const pid = row.productId || row.product_id || row.id;
+        if (pid) {
+          counts[pid] = (counts[pid] || 0) + 1;
+        }
+      });
+      console.log(`[DEBUG] counts keys count: ${Object.keys(counts).length}`);
+      return counts;
+    }
+    console.warn(`[DEBUG] No inventory found for branch ${branchId}`);
+    return null;
+  }
+
+  if (action === 'debug_inventory') {
+    const branchId = searchParams.get('branch_id') || '';
+    const springBase = process.env.SPRING_API_BASE_URL;
+    const token = request.cookies.get('vos_access_token')?.value;
+    
+    // Test fetch directly to capture error
+    let debugInfo: any = { attempts: [] };
+    if (springBase && token) {
+       const url = `${springBase.replace(/\/$/, '')}/api/view-rfid-onhand?branchId=${branchId}`;
+       try {
+         const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+         debugInfo.attempts.push({ url, status: res.status, ok: res.ok });
+         if (!res.ok) debugInfo.errorText = await res.text();
+       } catch (e: any) { debugInfo.attempts.push({ url, error: e.message }); }
+    }
+
+    const inventory = await getBranchInventory(branchId, token);
+    return NextResponse.json({ 
+      branchId, 
+      springBase: springBase || 'NOT_SET', 
+      hasToken: !!token, 
+      debugInfo,
+      inventory 
+    });
+  }
+
+  if (action === 'products') {
     try {
       const search = searchParams.get('search') || '';
+      const branchId = searchParams.get('branch_id') || '';
       let prodUrl = `${baseUrl}/items/products?limit=-1&fields=product_id,product_name,barcode,product_code,cost_per_unit,price_per_unit,unit_of_measurement,unit_of_measurement_count,product_brand`;
       if (search) {
         prodUrl += `&filter[product_name][_icontains]=${encodeURIComponent(search)}`;
       }
 
-      const [prodRes, unitRes, brandRes] = await Promise.all([
-        fetch(prodUrl, {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${staticToken}` },
-          cache: 'no-store',
-        }),
-        fetch(`${baseUrl}/items/units?limit=-1&fields=unit_id,unit_name,unit_shortcut`, {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${staticToken}` },
-          cache: 'no-store',
-        }),
-        fetch(`${baseUrl}/items/brand?limit=-1&fields=brand_id,brand_name`, {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${staticToken}` },
-          cache: 'no-store',
-        })
+      const token = request.cookies.get('vos_access_token')?.value;
+
+      const [prodRes, unitRes, brandRes, inventory] = await Promise.all([
+        fetch(prodUrl, { method: 'GET', headers: { Authorization: `Bearer ${staticToken}` }, cache: 'no-store' }),
+        fetch(`${baseUrl}/items/units?limit=-1&fields=unit_id,unit_name,unit_shortcut`, { method: 'GET', headers: { Authorization: `Bearer ${staticToken}` }, cache: 'no-store' }),
+        fetch(`${baseUrl}/items/brand?limit=-1&fields=brand_id,brand_name`, { method: 'GET', headers: { Authorization: `Bearer ${staticToken}` }, cache: 'no-store' }),
+        branchId ? getBranchInventory(branchId, token) : Promise.resolve(null)
       ]);
 
       if (!prodRes.ok) throw new Error('Failed to fetch products');
@@ -237,16 +313,18 @@ export async function GET(request: NextRequest) {
       const unitsMap = new Map(unitData.data?.map((u: any) => [u.unit_id, Object.assign({}, u)]));
       const brandsMap = new Map(brandData.data?.map((b: any) => [b.brand_id, Object.assign({}, b)]));
 
-      const enrichedProducts = (prodData.data || []).map((p: any) => ({
-        ...p,
-        // Override the plain integer with a resolved object if found
-        unit_of_measurement: typeof p.unit_of_measurement === 'number' 
-          ? unitsMap.get(p.unit_of_measurement) 
-          : p.unit_of_measurement,
-        product_brand: typeof p.product_brand === 'number'
-          ? brandsMap.get(p.product_brand)
-          : p.product_brand
-      }));
+      const enrichedProducts = (prodData.data || []).map((p: any) => {
+        const qty = inventory ? (inventory[p.product_id] || 0) : 0;
+        if (p.product_name && p.product_name.includes('Pink Lava')) {
+          console.log(`[DEBUG] Pink Lava Mapping: ID=${p.product_id}, Name=${p.product_name}, Qty=${qty}`);
+        }
+        return {
+          ...p,
+          unit_of_measurement: typeof p.unit_of_measurement === 'number' ? unitsMap.get(p.unit_of_measurement) : p.unit_of_measurement,
+          product_brand: typeof p.product_brand === 'number' ? brandsMap.get(p.product_brand) : p.product_brand,
+          qtyAvailable: qty
+        };
+      });
 
       return NextResponse.json({ data: enrichedProducts });
     } catch (error) {
@@ -291,8 +369,39 @@ export async function GET(request: NextRequest) {
     }
 
     const stockData = await stockRes.json();
-    console.log(`[API] Stock Transfer GET found ${stockData.data?.length || 0} items for status: ${statusFilter || 'all'}`);
-    console.log(`[API] Stock Transfer GET found ${stockData.data?.length || 0} items for status: ${statusFilter || 'all'}`);
+    const stockTransfers = stockData.data ?? [];
+    console.log(`[API] Stock Transfer GET found ${stockTransfers.length} items for status: ${statusFilter || 'all'}`);
+
+    // If we have transfers, fetch their associated DISPATCH RFIDs for validation in downstream modules (like Receive)
+    if (stockTransfers.length > 0) {
+      const ids = stockTransfers.map((st: any) => st.id);
+      const rfidUrl = `${baseUrl}/items/stock_transfer_rfid?filter[stock_transfer_id][_in]=${ids.join(',')}&filter[scan_type][_eq]=DISPATCH&limit=-1`;
+      
+      try {
+        const rfidRes = await fetch(rfidUrl, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${staticToken}` },
+          cache: 'no-store'
+        });
+        
+        if (rfidRes.ok) {
+          const rfidData = await rfidRes.json();
+          const rfidMap: Record<number, string[]> = {};
+          
+          (rfidData.data || []).forEach((r: any) => {
+            if (!rfidMap[r.stock_transfer_id]) rfidMap[r.stock_transfer_id] = [];
+            rfidMap[r.stock_transfer_id].push(r.rfid_tag);
+          });
+          
+          // Attach the dispatched RFIDs to each item
+          stockTransfers.forEach((st: any) => {
+            st.dispatched_rfids = rfidMap[st.id] || [];
+          });
+        }
+      } catch (err) {
+        console.error('[API] Failed to fetch dispatched RFIDs:', err);
+      }
+    }
 
     let branchData = { data: [] };
     if (branchRes.ok) {
@@ -300,7 +409,7 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({
-      stockTransfers: stockData.data ?? [],
+      stockTransfers: stockTransfers,
       branches: branchData.data ?? [],
     });
   } catch (error) {

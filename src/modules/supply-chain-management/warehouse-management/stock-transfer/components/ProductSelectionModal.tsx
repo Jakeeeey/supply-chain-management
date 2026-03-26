@@ -19,9 +19,10 @@ interface ProductSelectionModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelect: (product: SKU) => void;
+  sourceBranch?: string;
 }
 
-export function ProductSelectionModal({ open, onOpenChange, onSelect }: ProductSelectionModalProps) {
+export function ProductSelectionModal({ open, onOpenChange, onSelect, sourceBranch }: ProductSelectionModalProps) {
   const [products, setProducts] = useState<SKU[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
@@ -35,7 +36,8 @@ export function ProductSelectionModal({ open, onOpenChange, onSelect }: ProductS
       setLoading(true);
       try {
         const query = search ? `&search=${encodeURIComponent(search)}` : '';
-        const res = await fetch(`/api/scm/warehouse-management/stock-transfer?action=products${query}`);
+        const branchQuery = sourceBranch ? `&branch_id=${sourceBranch}` : '';
+        const res = await fetch(`/api/scm/warehouse-management/stock-transfer?action=products${query}${branchQuery}`);
         if (!res.ok) throw new Error('Failed to fetch products');
         const json = await res.json();
         if (active) {
@@ -130,7 +132,7 @@ export function ProductSelectionModal({ open, onOpenChange, onSelect }: ProductS
                         <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                           <Package className="w-3 h-3 shrink-0 text-primary/60" />
                           <span className="font-bold text-primary/80">
-                            {product.unit_of_measurement_count || 1} {typeof product.unit_of_measurement === 'object' && product.unit_of_measurement !== null ? (product.unit_of_measurement as any).unit_name : 'Pieces'}
+                            Available: { (product as any).qtyAvailable || 0 } {typeof product.unit_of_measurement === 'object' && product.unit_of_measurement !== null ? (product.unit_of_measurement as any).unit_name : 'Pieces'}
                           </span>
                         </div>
                       </div>

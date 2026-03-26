@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 export interface DispatchItem extends StockTransfer {
   scannedQty: number;
   scannedRfids: string[];
+  qtyAvailable?: number;
 }
 
 export interface DispatchGroup {
@@ -24,6 +25,7 @@ export function useStockTransferDispatching() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [scannedInventory, setScannedInventory] = useState<Record<number, number>>({});
 
   const [selectedOrderNo, setSelectedOrderNo] = useState<string | null>(null);
   
@@ -80,14 +82,15 @@ export function useStockTransferDispatching() {
       groups[st.order_no].items.push({
         ...st,
         scannedQty: rfids.length,
-        scannedRfids: rfids
+        scannedRfids: rfids,
+        qtyAvailable: scannedInventory[pid] ?? (st as any).qtyAvailable ?? 0
       });
       groups[st.order_no].totalAmount += Number(st.amount || 0);
     });
     return Object.values(groups).sort(
       (a, b) => new Date(b.dateEncoded).getTime() - new Date(a.dateEncoded).getTime()
     );
-  }, [stockTransfers, scannedItemsState]);
+  }, [stockTransfers, scannedItemsState, scannedInventory]);
 
   const selectedGroup = useMemo(() => {
     if (!selectedOrderNo) return null;
@@ -244,10 +247,11 @@ export function useStockTransferDispatching() {
         return itemPid === productId;
       });
       
-      // ── UAT FALLBACK ──
+      let effectiveProductId = productId;
+      /* 
+      // REMOVED: UAT FALLBACK
       // If the match is our specific mock product and it's NOT in the order, 
       // map it to the first item that still needs scanning so the user can see the flow work.
-      let effectiveProductId = productId;
       if (!itemInOrder && productId === 22345) {
         itemInOrder = selectedGroup.items.find(i => i.scannedQty < i.ordered_quantity);
         if (itemInOrder) {
@@ -256,6 +260,7 @@ export function useStockTransferDispatching() {
           console.log(`[UAT Mock] Mapping product 22345 to order item ${effectiveProductId}`);
         }
       }
+      */
 
       if (!itemInOrder) {
         playErrorSound();
@@ -304,6 +309,14 @@ export function useStockTransferDispatching() {
           }
         };
       });
+      
+      // Update local inventory count for display
+      if (match.qtyAvailable !== undefined) {
+        setScannedInventory(prev => ({
+          ...prev,
+          [effectiveProductId]: match.qtyAvailable
+        }));
+      }
       
       playSuccessSound();
       const finalName = (typeof itemInOrder.product_id === 'object' && itemInOrder.product_id?.product_name) 

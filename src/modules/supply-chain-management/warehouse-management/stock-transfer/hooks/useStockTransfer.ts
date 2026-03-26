@@ -121,7 +121,7 @@ export function useStockTransfer(): UseStockTransferReturn {
       brandName: extractedBrand,
       unit: extractedUnit,
       unitId,
-      qtyAvailable: 999, // Placeholder for manually added
+      qtyAvailable: Number(product.qtyAvailable || 0), 
       unitQty: 1, 
       unitPrice: price,
       totalAmount: price,

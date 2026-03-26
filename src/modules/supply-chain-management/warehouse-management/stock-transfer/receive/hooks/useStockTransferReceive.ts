@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 export interface ReceiveItem extends StockTransfer {
   receivedQty: number;
   receivedRfids: string[];
+  dispatched_rfids?: string[];
 }
 
 export interface ReceiveGroup {
@@ -77,7 +78,8 @@ export function useStockTransferReceive() {
       groups[st.order_no].items.push({
         ...st,
         receivedQty: rfids.length,
-        receivedRfids: rfids
+        receivedRfids: rfids,
+        dispatched_rfids: (st as any).dispatched_rfids || []
       });
       groups[st.order_no].totalAmount += Number(st.amount || 0);
     });
@@ -209,10 +211,11 @@ export function useStockTransferReceive() {
         return itemPid === productId;
       });
       
-      // ── UAT FALLBACK ──
+      let effectiveProductId = productId;
+      /*
+      // REMOVED: UAT FALLBACK
       // If the match is our specific mock product and it's NOT in the order, 
       // map it to the first item that still needs receiving so the user can see the flow work.
-      let effectiveProductId = productId;
       if (!itemInOrder && productId === 22345) {
         itemInOrder = selectedGroup.items.find(i => i.receivedQty < i.ordered_quantity);
         if (itemInOrder) {
@@ -221,11 +224,22 @@ export function useStockTransferReceive() {
           console.log(`[UAT Mock Receive] Mapping product 22345 to order item ${effectiveProductId}`);
         }
       }
+      */
 
       if (!itemInOrder) {
         playErrorSound();
         toast.error(`Invalid Scan`, {
           description: `Product (ID: ${productId}) is not part of this dispatched order!`
+        });
+        return;
+      }
+
+      // ── NEW: DISPATCHED RFID VALIDATION ──
+      const dispatchedTags = itemInOrder.dispatched_rfids || [];
+      if (dispatchedTags.length > 0 && !dispatchedTags.map(t => String(t).trim()).includes(String(rfid).trim())) {
+        playErrorSound();
+        toast.error("Invalid RFID Tag", {
+          description: "This tag was not part of the original dispatch for this product. Please scan only the units that were sent."
         });
         return;
       }
