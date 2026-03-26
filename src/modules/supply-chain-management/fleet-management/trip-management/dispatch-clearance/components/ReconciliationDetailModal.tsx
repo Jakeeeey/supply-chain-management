@@ -45,6 +45,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { InvoiceDetail, InvoiceLine, ReconciliationRow, RFIDMapping } from '../types';
 import { fetchInvoiceDetails } from '../providers/fetchProviders';
 import ScanningModal from './ScanningModal';
@@ -73,6 +74,7 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
     const [scannedRFIDs, setScannedRFIDs] = useState<Record<string | number, string[]>>({});
     const [isScanningOpen, setIsScanningOpen] = useState(false);
     const [isManualInputOpen, setIsManualInputOpen] = useState(false);
+    const [selectedLineIds, setSelectedLineIds] = useState<Set<string | number>>(new Set());
 
     useEffect(() => {
         if (isOpen && reconciliation?.invoiceId) {
@@ -84,6 +86,18 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                     setScannedQtys(reconciliation.scannedQtys || {});
                     setScannedRFIDs(reconciliation.scannedRFIDs || {});
                     setRemarks(reconciliation.remarks || '');
+                    
+                    // Initialize selected lines if they exist in the previous data
+                    const initialSelected = new Set<string | number>();
+                    const currentScanned = reconciliation.scannedQtys || {};
+                    const currentMissing = reconciliation.missingQtys || {};
+                    
+                    data.lines.forEach(line => {
+                        if (currentScanned[line.id] !== undefined || currentMissing[line.id] !== undefined) {
+                            initialSelected.add(line.id);
+                        }
+                    });
+                    setSelectedLineIds(initialSelected);
                 })
                 .catch(err => console.error("Failed to fetch invoice details:", err))
                 .finally(() => setIsLoading(false));
@@ -92,13 +106,25 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
             setRemarks('');
             setMissingQtys({});
             setScannedQtys({});
+            setSelectedLineIds(new Set());
         }
     }, [isOpen, reconciliation]);
 
     if (!reconciliation) return null;
 
     const handleSave = () => {
-        onSave(reconciliation.id, reconciliation.status, remarks, missingQtys, scannedQtys, scannedRFIDs);
+        // Only include data for selected lines
+        const finalMissingQtys: Record<string | number, number> = {};
+        const finalScannedQtys: Record<string | number, number> = {};
+        const finalScannedRFIDs: Record<string | number, string[]> = {};
+
+        selectedLineIds.forEach(id => {
+            if (missingQtys[id] !== undefined) finalMissingQtys[id] = missingQtys[id];
+            if (scannedQtys[id] !== undefined) finalScannedQtys[id] = scannedQtys[id];
+            if (scannedRFIDs[id] !== undefined) finalScannedRFIDs[id] = scannedRFIDs[id];
+        });
+
+        onSave(reconciliation.id, reconciliation.status, remarks, finalMissingQtys, finalScannedQtys, finalScannedRFIDs);
         onClose();
     };
 
@@ -111,14 +137,15 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
         setScannedQtys(scanned);
         setScannedRFIDs(returnedRFIDs);
 
-        // Auto-calculate missing quantities based on the scan/input
+        // Auto-calculate missing quantities based on the scan/input ONLY for selected lines
         const newQtys: Record<string | number, number> = {};
         detail?.lines.forEach(line => {
-            const scanCount = scanned[line.id] || 0;
-            const diff = Math.max(0, line.qty - scanCount);
-            if (diff > 0 || (reconciliation.status !== 'Fulfilled' && scanCount > 0)) {
-                // We track it if there is a difference or if it's an unfulfilled mode with scans
-                newQtys[line.id] = diff;
+            if (selectedLineIds.has(line.id)) {
+                const scanCount = scanned[line.id] || 0;
+                const diff = Math.max(0, line.qty - scanCount);
+                if (diff > 0 || (reconciliation.status !== 'Fulfilled' && scanCount > 0)) {
+                    newQtys[line.id] = diff;
+                }
             }
         });
         setMissingQtys(newQtys);
@@ -127,6 +154,32 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
     // Use the exact same calculation logic for manual input
     const handleManualInputConfirm = (inputs: Record<string | number, number>) => {
         handleScanningConfirm(inputs);
+    };
+
+    const toggleLineSelection = (lineId: string | number) => {
+        setSelectedLineIds(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(lineId)) {
+                newSet.delete(lineId);
+                // Also clear its data when unselected to be safe
+                setScannedQtys(s => { const n = { ...s }; delete n[lineId]; return n; });
+                setMissingQtys(m => { const n = { ...m }; delete n[lineId]; return n; });
+            } else {
+                newSet.add(lineId);
+            }
+            return newSet;
+        });
+    };
+
+    const toggleSelectAll = () => {
+        if (!detail) return;
+        if (selectedLineIds.size === detail.lines.length) {
+            setSelectedLineIds(new Set());
+            setScannedQtys({});
+            setMissingQtys({});
+        } else {
+            setSelectedLineIds(new Set(detail.lines.map(l => l.id)));
+        }
     };
 
     if (!isOpen) return null;
@@ -228,6 +281,15 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                         <Table className="min-w-[600px] md:min-w-full">
                             <TableHeader>
                                 <TableRow className="bg-muted/50 hover:bg-muted/50 border-border">
+                                    {(reconciliation.status === 'Fulfilled with Concerns' || reconciliation.status === 'Unfulfilled') && (
+                                        <TableHead className="w-12 text-center">
+                                            <Checkbox 
+                                                checked={detail.lines.length > 0 && selectedLineIds.size === detail.lines.length}
+                                                onCheckedChange={toggleSelectAll}
+                                                className="translate-y-0.5"
+                                            />
+                                        </TableHead>
+                                    )}
                                     <TableHead className="text-xs font-bold text-muted-foreground">Product / Unit of Measure</TableHead>
                                     <TableHead className="text-xs font-bold text-muted-foreground text-center">
                                         {reconciliation.status === 'Fulfilled' ? 'Qty' : 'Orig Qty'}
@@ -255,13 +317,28 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                             </TableHeader>
                             <TableBody>
                                 {detail.lines.map((line) => (
-                                    <TableRow key={line.id} className="hover:bg-muted/30 transition-colors border-border">
+                                    <TableRow 
+                                        key={line.id} 
+                                        className={`hover:bg-muted/30 transition-colors border-border ${
+                                            (reconciliation.status === 'Fulfilled with Concerns' || reconciliation.status === 'Unfulfilled') && !selectedLineIds.has(line.id) 
+                                            ? 'opacity-40 grayscale-[0.5]' 
+                                            : ''
+                                        }`}
+                                    >
+                                        {(reconciliation.status === 'Fulfilled with Concerns' || reconciliation.status === 'Unfulfilled') && (
+                                            <TableCell className="text-center">
+                                                <Checkbox 
+                                                    checked={selectedLineIds.has(line.id)}
+                                                    onCheckedChange={() => toggleLineSelection(line.id)}
+                                                />
+                                            </TableCell>
+                                        )}
                                         <TableCell>
                                             <div className="space-y-0.5">
                                                 <div className="flex items-center gap-2">
-                                                    <p className="text-sm font-bold text-foreground">{line.product_name}</p>
-                                                    {(reconciliation.status === 'Unfulfilled' || reconciliation.status === 'Fulfilled with Concerns') && (
-                                                        <Badge variant="outline" className="text-[10px] h-4 bg-emerald-500/5 text-emerald-500 border-emerald-500/10 gap-1 px-1.5 font-medium">
+                                                     <p className="text-sm font-bold text-foreground">{line.product_name}</p>
+                                                     {(reconciliation.status === 'Unfulfilled' || reconciliation.status === 'Fulfilled with Concerns') && selectedLineIds.has(line.id) && (
+                                                         <Badge variant="outline" className="text-[10px] h-4 bg-emerald-500/5 text-emerald-500 border-emerald-500/10 gap-1 px-1.5 font-medium">
                                                             <Scan className="w-2.5 h-2.5" /> {(scannedQtys[line.id] !== undefined ? scannedQtys[line.id] : "-")} Scanned
                                                         </Badge>
                                                     )}
@@ -272,31 +349,31 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                                         <TableCell className="text-sm font-bold text-foreground text-center tabular-nums">{line.qty}</TableCell>
                                         {reconciliation.status !== 'Fulfilled' && (
                                             <>
-                                                <TableCell className="text-center w-24">
-                                                    <div className="flex items-center justify-center">
-                                                        <div className="h-9 w-16 flex items-center justify-center font-bold rounded-lg border border-border transition-colors bg-muted/50 text-muted-foreground tabular-nums">
-                                                            {scannedQtys[line.id] !== undefined ? scannedQtys[line.id] : "-"}
-                                                        </div>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="text-right text-sm font-bold text-muted-foreground tabular-nums border-r border-border/50">
-                                                    ₱{(((line.net_total || 0) / (line.qty || 1)) * (scannedQtys[line.id] || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                </TableCell>
-
-                                                <TableCell className="text-center w-24">
-                                                    <div className="flex items-center justify-center">
-                                                        <div className={`h-9 w-16 flex items-center justify-center font-bold rounded-lg border transition-colors tabular-nums ${
-                                                            (missingQtys[line.id] || 0) > 0 
-                                                            ? 'bg-rose-500/10 text-rose-500 border-rose-500/20' 
-                                                            : 'bg-muted/50 text-muted-foreground border-border'
-                                                        }`}>
-                                                            {missingQtys[line.id] || 0}
-                                                        </div>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="text-right text-sm font-bold text-rose-500 tabular-nums">
-                                                    ₱{(((line.net_total || 0) / (line.qty || 1)) * (missingQtys[line.id] || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                </TableCell>
+                                                 <TableCell className="text-center w-24">
+                                                     <div className="flex items-center justify-center">
+                                                         <div className="h-9 w-16 flex items-center justify-center font-bold rounded-lg border border-border transition-colors bg-muted/50 text-muted-foreground tabular-nums">
+                                                             {selectedLineIds.has(line.id) ? (scannedQtys[line.id] !== undefined ? scannedQtys[line.id] : "-") : "-"}
+                                                         </div>
+                                                     </div>
+                                                 </TableCell>
+                                                 <TableCell className="text-right text-sm font-bold text-muted-foreground tabular-nums border-r border-border/50">
+                                                     ₱{selectedLineIds.has(line.id) ? (((line.net_total || 0) / (line.qty || 1)) * (scannedQtys[line.id] || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}
+                                                 </TableCell>
+ 
+                                                 <TableCell className="text-center w-24">
+                                                     <div className="flex items-center justify-center">
+                                                         <div className={`h-9 w-16 flex items-center justify-center font-bold rounded-lg border transition-colors tabular-nums ${
+                                                             selectedLineIds.has(line.id) && (missingQtys[line.id] || 0) > 0 
+                                                             ? 'bg-rose-500/10 text-rose-500 border-rose-500/20' 
+                                                             : 'bg-muted/50 text-muted-foreground border-border'
+                                                         }`}>
+                                                             {selectedLineIds.has(line.id) ? (missingQtys[line.id] || 0) : "-"}
+                                                         </div>
+                                                     </div>
+                                                 </TableCell>
+                                                 <TableCell className="text-right text-sm font-bold text-rose-500 tabular-nums">
+                                                     ₱{selectedLineIds.has(line.id) ? (((line.net_total || 0) / (line.qty || 1)) * (missingQtys[line.id] || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}
+                                                 </TableCell>
                                             </>
                                         )}
                                         <TableCell className="text-right text-sm font-bold text-foreground pr-6 tabular-nums">
@@ -353,7 +430,14 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                         <Button variant="outline" onClick={onClose} className="flex-1 md:flex-none rounded-xl px-6 font-semibold border-border h-10">Cancel</Button>
                         <Button
                             onClick={handleSave}
-                            disabled={reconciliation.status !== 'Fulfilled' && (!remarks.trim() || !detail || detail.lines.some(line => scannedQtys[line.id] === undefined))}
+                            disabled={
+                                reconciliation.status !== 'Fulfilled' && (
+                                    !remarks.trim() || 
+                                    !detail || 
+                                    selectedLineIds.size === 0 || // No products selected
+                                    Array.from(selectedLineIds).some(id => scannedQtys[id] === undefined) // Some selected products not scanned
+                                )
+                            }
                             className={`flex-1 md:flex-none rounded-xl px-8 font-bold text-primary-foreground shadow-lg transition-all active:scale-95 h-10 ${
                                 reconciliation.status === 'Fulfilled' 
                                 ? 'bg-emerald-600 hover:bg-emerald-700' 
@@ -369,7 +453,7 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                     isOpen={isScanningOpen}
                     onClose={() => setIsScanningOpen(false)}
                     onConfirm={handleScanningConfirm}
-                    items={detail.lines}
+                    items={detail.lines.filter(l => selectedLineIds.has(l.id))}
                     initialScanned={scannedQtys}
                     initialScannedRFIDs={scannedRFIDs}
                     rfidTags={rfidTags}
@@ -379,7 +463,7 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                     isOpen={isManualInputOpen}
                     onClose={() => setIsManualInputOpen(false)}
                     onConfirm={handleManualInputConfirm}
-                    items={detail.lines}
+                    items={detail.lines.filter(l => selectedLineIds.has(l.id))}
                     initialValues={scannedQtys}
                 />
             </div>

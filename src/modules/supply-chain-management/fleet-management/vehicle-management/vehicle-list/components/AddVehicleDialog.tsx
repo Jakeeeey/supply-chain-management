@@ -67,6 +67,7 @@ export function AddVehicleDialog({
     purchasedDate: "",
     cbmLength: "",
     cbmWidth: "",
+    cbmHeight: "",
     imageFile: null,
   });
 
@@ -107,7 +108,8 @@ export function AddVehicleDialog({
     requiredOk(form.maxLiters || "") &&
     requiredOk(form.purchasedDate || "") &&
     requiredOk(form.cbmLength || "") &&
-    requiredOk(form.cbmWidth || "");
+    requiredOk(form.cbmWidth || "") &&
+    requiredOk(form.cbmHeight || "");
 
   function set<K extends keyof CreateVehicleForm>(k: K, v: CreateVehicleForm[K]) {
     setForm((p) => ({ ...p, [k]: v }));
@@ -128,6 +130,7 @@ export function AddVehicleDialog({
     if (!requiredOk(form.purchasedDate || "")) missing.push("Purchased Date");
     if (!requiredOk(form.cbmLength || "")) missing.push("CBM Length");
     if (!requiredOk(form.cbmWidth || "")) missing.push("CBM Width");
+    if (!requiredOk(form.cbmHeight || "")) missing.push("CBM Height");
     return missing;
   }
 
@@ -210,6 +213,7 @@ export function AddVehicleDialog({
     payload.purchased_date = form.purchasedDate;
     payload.cbm_length = form.cbmLength;
     payload.cbm_width = form.cbmWidth;
+    payload.cbm_height = form.cbmHeight;
 
     // ✅ reuse vehicles.image
     if (imageId) payload.image = imageId;
@@ -238,6 +242,7 @@ export function AddVehicleDialog({
         purchasedDate: "",
         cbmLength: "",
         cbmWidth: "",
+        cbmHeight: "",
         imageFile: null,
       });
 
@@ -440,7 +445,7 @@ export function AddVehicleDialog({
 
               <div className="grid gap-2">
                 <Label>
-                  Maximum Weight <span className="text-destructive">*</span>
+                  Maximum Weight (kg)<span className="text-destructive">*</span>
                 </Label>
                 <Input
                   value={form.maximumWeight || ""}
@@ -452,7 +457,7 @@ export function AddVehicleDialog({
 
               <div className="grid gap-2">
                 <Label>
-                  Maximum Load <span className="text-destructive">*</span>
+                  Minimum Load (₱ value)<span className="text-destructive">*</span>
                 </Label>
                 <Input
                   value={form.minimumLoad || ""}
@@ -506,6 +511,18 @@ export function AddVehicleDialog({
                   value={form.cbmWidth || ""}
                   onChange={(e) => set("cbmWidth", e.target.value)}
                   className={touched && !requiredOk(form.cbmWidth || "") ? "ring-1 ring-destructive" : ""}
+                  placeholder="0.00"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label>
+                  CBM Height <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  value={form.cbmHeight || ""}
+                  onChange={(e) => set("cbmHeight", e.target.value)}
+                  className={touched && !requiredOk(form.cbmHeight || "") ? "ring-1 ring-destructive" : ""}
                   placeholder="0.00"
                 />
               </div>
