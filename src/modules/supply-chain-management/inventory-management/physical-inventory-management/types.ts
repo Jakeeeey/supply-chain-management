@@ -69,6 +69,7 @@ export type ProductRow = {
     unit_of_measurement_count: number | null;
 
     isActive: number;
+    cost_per_unit: number | null;
 };
 
 export type ProductPerSupplierRow = {
@@ -236,6 +237,7 @@ export type EligibleVariantRow = {
     unit_count: number;
 
     unit_price: number | null;
+    cost_per_unit: number | null;
 };
 
 export type GroupedPhysicalInventoryChildRow = {
@@ -257,6 +259,7 @@ export type GroupedPhysicalInventoryChildRow = {
     unit_count: number;
 
     unit_price: number | null;
+    cost_per_unit: number | null;
 
     detail_id: number | null;
     ph_id: number | null;

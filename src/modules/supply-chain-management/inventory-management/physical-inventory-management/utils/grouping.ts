@@ -149,6 +149,7 @@ export function buildGroupedPhysicalInventoryRows(
                 unit_count: unitCount,
 
                 unit_price: variant.unit_price,
+                cost_per_unit: variant.cost_per_unit,
 
                 detail_id: detailId,
                 ph_id: detail?.ph_id ?? ph_id,

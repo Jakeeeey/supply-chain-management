@@ -338,7 +338,7 @@ export async function fetchUnits(): Promise<UnitRow[]> {
 export async function fetchProducts(): Promise<ProductRow[]> {
     return directusGetItems<ProductRow>(TABLES.products, {
         fields:
-            "product_id,parent_id,product_code,product_name,barcode,product_category,product_brand,unit_of_measurement,unit_of_measurement_count,isActive",
+            "product_id,parent_id,product_code,product_name,barcode,product_category,product_brand,unit_of_measurement,unit_of_measurement_count,isActive,cost_per_unit",
         sort: "product_name",
         limit: "-1",
     });
@@ -453,6 +453,7 @@ export function buildEligibleVariants(input: {
                 unit_order: unit?.order ?? null,
                 unit_count: normalizeUnitCount(product.unit_of_measurement_count),
                 unit_price: priceRow?.price ?? null,
+                cost_per_unit: product.cost_per_unit,
             };
         })
         .sort((a, b) => {
@@ -817,6 +818,7 @@ export function buildVariantsFromSavedDetails(input: {
                 unit_order: unit?.order ?? null,
                 unit_count: normalizeUnitCount(product.unit_of_measurement_count),
                 unit_price: detail?.unit_price ?? priceRow?.price ?? null,
+                cost_per_unit: product.cost_per_unit,
             };
         })
         .sort((a, b) => {
