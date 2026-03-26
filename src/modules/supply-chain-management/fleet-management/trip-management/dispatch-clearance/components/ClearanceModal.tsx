@@ -256,7 +256,7 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                         <Button
                             className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg font-semibold px-4 md:px-6 rounded-lg transition-all active:scale-95 flex items-center gap-2 h-9 md:h-10 text-sm"
                             onClick={() => handleConfirmClearance(false)}
-                            disabled={isSubmitting || selectedIds.size === 0}
+                            disabled={isSubmitting || invoices.length === 0 || !invoices.every(inv => selectedIds.has(inv.id) && isRowCheckable(inv))}
                         >
                             {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
                             Confirm Clearance
@@ -292,7 +292,7 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                             <CardContent className="p-4 space-y-1">
                                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Total Invoices</p>
                                 <p className="font-bold text-foreground">
-                                    {selectedIds.size > 0 ? `${selectedIds.size} / ` : ''}{invoices.length} Invoices
+                                    {invoices.filter(inv => selectedIds.has(inv.id) && isRowCheckable(inv)).length} / {invoices.length} Invoices
                                 </p>
                             </CardContent>
                         </Card>
