@@ -33,10 +33,11 @@ import { InvoiceLine, RFIDMapping } from '../types';
 interface ScanningModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onConfirm: (scannedQtys: Record<string | number, number>) => void;
+    onConfirm: (scannedQtys: Record<string | number, number>, scannedRFIDs: Record<string | number, string[]>) => void;
     items: InvoiceLine[];
     rfidTags?: RFIDMapping[];
     initialScanned?: Record<string | number, number>;
+    initialScannedRFIDs?: Record<string | number, string[]>;
 }
 
 const ScanningModal: React.FC<ScanningModalProps> = ({
@@ -45,10 +46,14 @@ const ScanningModal: React.FC<ScanningModalProps> = ({
     onConfirm,
     items,
     initialScanned = {},
+    initialScannedRFIDs = {},
     rfidTags = []
 }) => {
     const [scannedQtys, setScannedQtys] = useState<Record<string | number, number>>(initialScanned);
+    const scannedQtysRef = useRef<Record<string | number, number>>(initialScanned);
+    const scannedRFIDsRef = useRef<Record<string | number, string[]>>(initialScannedRFIDs);
     const [scannedTags, setScannedTags] = useState<Set<string>>(new Set());
+    const scannedTagsRef = useRef<Set<string>>(new Set());
     const [lastScanned, setLastScanned] = useState<InvoiceLine | null>(null);
     const [isScanning, setIsScanning] = useState(true);
     
@@ -90,7 +95,10 @@ const ScanningModal: React.FC<ScanningModalProps> = ({
     useEffect(() => {
         if (isOpen) {
             setScannedQtys(initialScanned);
+            scannedQtysRef.current = initialScanned;
+            scannedRFIDsRef.current = initialScannedRFIDs;
             setScannedTags(new Set());
+            scannedTagsRef.current = new Set();
             bufferRef.current = '';
             setLastScanned(null);
             setIsScanning(true);
@@ -114,7 +122,7 @@ const ScanningModal: React.FC<ScanningModalProps> = ({
         if (tags.length === 0) return;
 
         tags.forEach(tag => {
-            if (scannedTags.has(tag)) {
+            if (scannedTagsRef.current.has(tag)) {
                 if (tags.length < 5) toast.warning(`RFID Tag ${tag} already scanned!`);
                 playSound('error');
                 return;
@@ -136,20 +144,31 @@ const ScanningModal: React.FC<ScanningModalProps> = ({
                 return;
             }
 
-            setScannedQtys(prev => {
-                if ((prev[item.id] || 0) >= item.qty) {
-                    if (tags.length < 5) toast.warning(`Product ${item.product_name} is already fully scanned.`);
-                    playSound('error');
-                    return prev;
-                }
+            const currentQty = scannedQtysRef.current[item.id] || 0;
+            if (currentQty >= item.qty) {
+                if (tags.length < 5) toast.warning(`Product ${item.product_name} is already fully scanned.`);
+                playSound('error');
+                // Track so we don't warn again rapidly
+                scannedTagsRef.current.add(tag);
+                setScannedTags(new Set(scannedTagsRef.current));
+                return;
+            }
 
-                const newQty = (prev[item.id] || 0) + 1;
-                setScannedTags(tagsPrev => new Set(tagsPrev).add(tag));
-                setLastScanned(item);
-                if (tags.length < 5) toast.success(`Scanned: ${item.product_name}`);
-                playSound('success');
-                return { ...prev, [item.id]: newQty };
-            });
+            const newQty = currentQty + 1;
+            scannedTagsRef.current.add(tag);
+            setScannedTags(new Set(scannedTagsRef.current));
+            
+            scannedQtysRef.current = { ...scannedQtysRef.current, [item.id]: newQty };
+            setScannedQtys(scannedQtysRef.current);
+
+            // Track the exact tag for the API payload
+            const previousTags = scannedRFIDsRef.current[item.id] || [];
+            scannedRFIDsRef.current = { ...scannedRFIDsRef.current, [item.id]: [...previousTags, tag] };
+
+            setLastScanned(item);
+            
+            if (tags.length < 5) toast.success(`Scanned: ${item.product_name}`);
+            playSound('success');
         });
     };
 
@@ -190,7 +209,7 @@ const ScanningModal: React.FC<ScanningModalProps> = ({
             // Available tags are those whose product_id is in this invoice and item not fully scanned
             const availableTags = rfidTags.filter(tag => {
                 const item = items.find(i => Number(i.product_id) === Number(tag.product_id));
-                return item && (scannedQtys[item.id] || 0) < item.qty;
+                return item && (scannedQtysRef.current[item.id] || 0) < item.qty;
             });
 
             if (availableTags.length === 0) {
@@ -209,7 +228,7 @@ const ScanningModal: React.FC<ScanningModalProps> = ({
         }
 
         // Fallback to original simulation if no rfidTags provided or if rfidTags is empty
-        const remainingItems = items.filter(item => (scannedQtys[item.id] || 0) < item.qty);
+        const remainingItems = items.filter(item => (scannedQtysRef.current[item.id] || 0) < item.qty);
         if (remainingItems.length === 0) {
             setIsScanning(false);
             toast.info("All items already scanned.");
@@ -217,14 +236,22 @@ const ScanningModal: React.FC<ScanningModalProps> = ({
         }
         const randomIndex = Math.floor(Math.random() * remainingItems.length);
         const item = remainingItems[randomIndex];
-        const newQty = (scannedQtys[item.id] || 0) + 1;
-        setScannedQtys(prev => ({ ...prev, [item.id]: newQty }));
+        const newQty = (scannedQtysRef.current[item.id] || 0) + 1;
+        
+        scannedQtysRef.current = { ...scannedQtysRef.current, [item.id]: newQty };
+        setScannedQtys(scannedQtysRef.current);
+
+        // Map dummy/generated simulation tag if no real tags are supplied, to prevent API payload errors
+        const previousTags = scannedRFIDsRef.current[item.id] || [];
+        const simTag = `SIMULATED-${item.id}-${newQty}`.padEnd(24, '0').substring(0, 24);
+        scannedRFIDsRef.current = { ...scannedRFIDsRef.current, [item.id]: [...previousTags, simTag] };
+
         setLastScanned(item);
         toast.success(`Simulated scan for: ${item.product_name}`);
         
         // Check if all items are scanned after this simulation
         const totalRequired = items.reduce((acc, i) => acc + i.qty, 0);
-        const totalScannedNow = Object.values({ ...scannedQtys, [item.id]: newQty }).reduce((acc, q) => acc + q, 0);
+        const totalScannedNow = Object.values(scannedQtysRef.current).reduce((acc, q) => acc + q, 0);
         if (totalScannedNow >= totalRequired) {
             setIsScanning(false);
             toast.success("Manifest completed!");
@@ -232,7 +259,7 @@ const ScanningModal: React.FC<ScanningModalProps> = ({
     };
 
     const handleConfirm = () => {
-        onConfirm(scannedQtys);
+        onConfirm(scannedQtys, scannedRFIDsRef.current);
         onClose();
     };
 
@@ -242,7 +269,10 @@ const ScanningModal: React.FC<ScanningModalProps> = ({
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-2xl w-[95vw] p-0 bg-background rounded-2xl md:rounded-3xl border-none shadow-2xl overflow-hidden max-h-[95vh] flex flex-col">
+            <DialogContent 
+                className="sm:max-w-2xl w-[95vw] p-0 bg-background rounded-2xl md:rounded-3xl border-none shadow-2xl overflow-hidden max-h-[95vh] flex flex-col"
+                onOpenAutoFocus={(e) => e.preventDefault()}
+            >
                 <DialogHeader className="p-4 md:p-6 pb-2 shrink-0 bg-card border-b border-border">
                     <div className="flex items-center justify-between gap-4">
                         <div className="flex items-center gap-3 overflow-hidden">

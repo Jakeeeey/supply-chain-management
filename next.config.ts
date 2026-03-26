@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  allowedDevOrigins: ["100.119.3.44", "192.168.0.247", "localhost", "msi-eulysis"],
+    // Tells Next.js to trust requests coming from your specific machine name
+    allowedDevOrigins: ["msi-andrie"],
 };
 
 export default nextConfig;
