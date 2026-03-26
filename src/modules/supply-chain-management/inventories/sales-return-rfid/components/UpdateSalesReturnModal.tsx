@@ -986,26 +986,12 @@ export function UpdateSalesReturnModal({
                           <TableCell className="text-center align-middle p-2 text-primary text-sm font-bold">
                             {group.totalQty}
                           </TableCell>
-                          <TableCell className="text-right align-middle p-2 text-muted-foreground">
-                            -
-                          </TableCell>
-                          <TableCell className="text-right text-sm text-muted-foreground align-middle font-mono">
-                            {(
-                              Number(group.totalGross)
-                            ).toLocaleString()}
-                          </TableCell>
-                          <TableCell className="align-middle p-2 text-center text-muted-foreground">
-                            -
-                          </TableCell>
-                          <TableCell className="text-right align-middle p-2 text-muted-foreground font-mono">
-                            {group.totalDiscount.toLocaleString()}
-                          </TableCell>
-                          <TableCell className="text-right font-bold text-sm text-primary align-middle">
-                            {group.totalNet.toLocaleString()}
-                          </TableCell>
-                          <TableCell className="align-middle p-2 text-center text-muted-foreground">
-                            -
-                          </TableCell>
+                          <TableCell className="text-right align-middle p-2" />
+                          <TableCell className="text-right align-middle" />
+                          <TableCell className="align-middle p-2" />
+                          <TableCell className="text-right align-middle p-2" />
+                          <TableCell className="text-right align-middle" />
+                          <TableCell className="align-middle p-2" />
                           <TableCell className="align-middle p-2">
                             {group.returnType !== "Unassigned" ? (
                               <Badge
@@ -1018,7 +1004,7 @@ export function UpdateSalesReturnModal({
                               <span className="text-muted-foreground/60 italic text-xs">Unassigned</span>
                             )}
                           </TableCell>
-                          <TableCell />
+                          {canEditAll && <TableCell />}
                         </TableRow>
 
                         {/* Child Rows (Individual Scans/Additions) */}
