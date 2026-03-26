@@ -22,6 +22,7 @@ import {
 export interface ComboboxOption {
   value: string
   label: string
+  disabled?: boolean
 }
 
 interface ComboboxProps {
@@ -77,10 +78,16 @@ export function Combobox({
                 <CommandItem
                   key={option.value}
                   value={`${option.label} ${option.value}`}
+                  disabled={option.disabled}
                   onSelect={() => {
+                    if (option.disabled) return
                     onValueChange(option.value === value ? "" : option.value)
                     setOpen(false)
                   }}
+                  className={cn(
+                    "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none",
+                    option.disabled && "opacity-50 pointer-events-none"
+                  )}
                 >
                   <Check
                     className={cn(

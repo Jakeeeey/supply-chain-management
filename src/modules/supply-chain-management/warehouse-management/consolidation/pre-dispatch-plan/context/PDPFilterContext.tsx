@@ -9,6 +9,10 @@ interface PDPFilterContextType {
   setStatus: (status: string | null) => void;
   search: string;
   setSearch: (search: string) => void;
+  branchId: number | null;
+  setBranchId: (id: number | null) => void;
+  dispatchDate: string | null;
+  setDispatchDate: (date: string | null) => void;
   resetFilters: () => void;
 }
 
@@ -20,11 +24,15 @@ export function PDPFilterProvider({ children }: { children: ReactNode }) {
   const [clusterId, setClusterId] = useState<number | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [branchId, setBranchId] = useState<number | null>(null);
+  const [dispatchDate, setDispatchDate] = useState<string | null>(null);
 
   const resetFilters = () => {
     setClusterId(null);
     setStatus(null);
     setSearch("");
+    setBranchId(null);
+    setDispatchDate(null);
   };
 
   return (
@@ -36,6 +44,10 @@ export function PDPFilterProvider({ children }: { children: ReactNode }) {
         setStatus,
         search,
         setSearch,
+        branchId,
+        setBranchId,
+        dispatchDate,
+        setDispatchDate,
         resetFilters,
       }}
     >

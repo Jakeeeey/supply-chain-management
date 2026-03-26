@@ -158,15 +158,19 @@ export function DispatchEditModal({
     const retainedStops = planDetails.filter(d => d.isManualStop || d.isPoStop);
 
     try {
-      // Do not append trip_id here so we only fetch exactly the invoices for the selected plans.
+      // Pass planId as trip_id to ensure already-dispatched invoices are included.
       const res = await fetch(
-        `/api/scm/fleet-management/trip-management/dispatch-plan/creation?type=plan_details&plan_ids=${newIds.join(",")}`,
+        `/api/scm/fleet-management/trip-management/dispatch-plan/creation?type=plan_details&plan_ids=${newIds.join(",")}&trip_id=${planId}`,
         { cache: "no-store" },
       );
       const result = await res.json();
       if (result.error) throw new Error(result.error);
       
-      const fetchedInvoices = result.data || [];
+      const fetchedItems = result.data || [];
+      // Filter out manual/PO stops from the API response because we already have them in retainedStops
+      // (and retainedStops might have unsaved local edits or sequence changes).
+      const fetchedInvoices = fetchedItems.filter((i: any) => !i.isManualStop && !i.isPoStop);
+      
       const combined = [...fetchedInvoices, ...retainedStops];
       
       combined.sort((a, b) => {

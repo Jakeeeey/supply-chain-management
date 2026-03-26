@@ -34,12 +34,14 @@ export function TripConfigurationForm({ masterData }: TripConfigurationFormProps
     name: "helpers",
   });
 
-  // Watch helper values for filtering duplicates
+  // Watch helper values and driver for filtering duplicates
   const selectedHelpers = form.watch("helpers") || [];
-  const selectedHelperIds = useMemo(() => 
-    new Set(selectedHelpers.map(h => h.user_id).filter(id => id > 0)),
-    [selectedHelpers]
-  );
+  const driverId = form.watch("driver_id");
+  const selectedHelperIds = useMemo(() => {
+    const ids = new Set(selectedHelpers.map(h => h.user_id).filter(id => id > 0));
+    if (driverId) ids.add(driverId);
+    return ids;
+  }, [selectedHelpers, driverId]);
 
   const getHelperOptions = (currentIndex: number) => {
     if (!masterData?.helpers) return [];
@@ -164,7 +166,8 @@ export function TripConfigurationForm({ masterData }: TripConfigurationFormProps
                   <Combobox
                     options={masterData?.drivers.map(d => ({
                       value: String(d.user_id),
-                      label: `${d.user_fname} ${d.user_lname}`
+                      label: `${d.user_fname} ${d.user_lname}`,
+                      disabled: selectedHelpers.some(h => h.user_id === d.user_id)
                     })) || []}
                     value={field.value ? String(field.value) : ""}
                     onValueChange={(val) => field.onChange(Number(val))}
@@ -265,7 +268,7 @@ export function TripConfigurationForm({ masterData }: TripConfigurationFormProps
         </section>
       )}
 
-      {helperFields.length < 3 && (
+      {helperFields.length < 2 && (
         <Button
           type="button"
           variant="outline"

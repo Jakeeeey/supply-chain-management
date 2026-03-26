@@ -225,7 +225,8 @@ export async function fetchMasterData(): Promise<DispatchCreationMasterData> {
     }),
     // Fetch Chart of Accounts for Budgeting
     fetchItems<COAOption>("/items/chart_of_accounts", {
-      fields: "coa_id,account_title,gl_code",
+      fields: "coa_id,account_title,gl_code,account_type,is_payment",
+      "filter[_and][0][account_type][_in]": "8,9",
       limit: -1,
     }),
   ]);
@@ -704,8 +705,9 @@ export async function fetchPlanDetails(
  */
 export async function fetchPurchaseOrders(query?: string): Promise<any[]> {
   const params: any = {
-    fields: "purchase_order_id,purchase_order_no",
+    fields: "purchase_order_id,purchase_order_no,date,supplier_name,total_amount,inventory_status",
     limit: -1,
+    sort: "-date",
   };
   if (query) {
     params["filter[purchase_order_no][_contains]"] = query;

@@ -99,8 +99,8 @@ export default function PDPCreationPage() {
         onSearch={(v: string) => setSearch(v)}
         actionComponent={
           <Button onClick={() => setIsCreateOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Create PDP
+            <Plus className="h-4 w-4" />
+            Create
           </Button>
         }
       />

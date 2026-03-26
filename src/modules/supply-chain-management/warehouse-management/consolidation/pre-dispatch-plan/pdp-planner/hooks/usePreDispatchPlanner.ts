@@ -13,7 +13,7 @@ const API_PATH =
  * Hook for the PDP Planner sub-module.
  */
 export function usePreDispatchPlanner() {
-  const { clusterId, status, search, setSearch } = usePDPFilter();
+  const { clusterId, status, search, setSearch, branchId, dispatchDate } = usePDPFilter();
 
   // ─── Plans State ──────────────────────────────────
   const [plansData, setPlansData] = useState<DispatchPlan[]>([]);
@@ -44,6 +44,8 @@ export function usePreDispatchPlanner() {
 
       if (clusterId) params.append("cluster_id", String(clusterId));
       if (status) params.append("status", status);
+      if (branchId) params.append("branch_id", String(branchId));
+      if (dispatchDate) params.append("dispatch_date", dispatchDate);
 
       const [plansRes, masterRes, metricsRes] = await Promise.all([
         fetch(`${API_PATH}?${params.toString()}`).then((r) => r.json()),
@@ -69,7 +71,7 @@ export function usePreDispatchPlanner() {
     } finally {
       setIsLoading(false);
     }
-  }, [search, clusterId, status]);
+  }, [search, clusterId, status, branchId, dispatchDate]);
 
   useEffect(() => {
     const handler = setTimeout(() => {

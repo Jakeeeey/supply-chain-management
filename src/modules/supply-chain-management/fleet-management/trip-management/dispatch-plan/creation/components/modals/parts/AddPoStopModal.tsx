@@ -53,7 +53,18 @@ interface AddPoStopModalProps {
 interface POOption {
   purchase_order_id: number;
   purchase_order_no: string;
+  date?: string;
+  supplier_name?: number | string;
+  total_amount?: number | null;
+  inventory_status?: number;
 }
+
+const inventoryStatusLabel: Record<number, string> = {
+  1: "Pending",
+  2: "Partial",
+  3: "Received",
+  4: "Cancelled",
+};
 
 export function AddPoStopModal({
   open,
@@ -63,6 +74,7 @@ export function AddPoStopModal({
   const [purchaseOrders, setPurchaseOrders] = useState<POOption[]>([]);
   const [isLoadingPOs, setIsLoadingPOs] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [poOpen, setPoOpen] = useState(false);
 
   const form = useForm<PoStopValues>({
     resolver: zodResolver(poStopSchema),
@@ -136,7 +148,7 @@ export function AddPoStopModal({
               render={({ field }) => (
                 <FormItem className="flex flex-col">
                   <FormLabel>Purchase Order</FormLabel>
-                  <Popover>
+                  <Popover open={poOpen} onOpenChange={setPoOpen}>
                     <PopoverTrigger asChild>
                       <FormControl>
                         <Button
@@ -182,17 +194,36 @@ export function AddPoStopModal({
                                 value={po.purchase_order_no}
                                 onSelect={() => {
                                   form.setValue("po_id", po.purchase_order_id);
+                                  setPoOpen(false);
                                 }}
+                                className="flex items-start gap-2 py-2"
                               >
                                 <Check
                                   className={cn(
-                                    "mr-2 h-4 w-4",
+                                    "mt-0.5 h-4 w-4 shrink-0",
                                     po.purchase_order_id === field.value
                                       ? "opacity-100"
                                       : "opacity-0",
                                   )}
                                 />
-                                {po.purchase_order_no}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-semibold text-foreground">{po.purchase_order_no}</p>
+                                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                    {po.date && (
+                                      <span className="text-[10px] text-muted-foreground">{po.date}</span>
+                                    )}
+                                    {po.inventory_status !== undefined && (
+                                      <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded font-medium">
+                                        {inventoryStatusLabel[po.inventory_status] ?? `Status ${po.inventory_status}`}
+                                      </span>
+                                    )}
+                                    {po.total_amount != null && (
+                                      <span className="text-[10px] text-muted-foreground ml-auto">
+                                        ₱{Number(po.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
                               </CommandItem>
                             ))}
                           </CommandGroup>

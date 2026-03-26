@@ -79,6 +79,7 @@ export function DispatchCreationModal({
       setSearchQuery("");
       setIsConfirming(false);
       setPendingPayload(null);
+      setPlanDetails([]);
     }
   }, [open, form]);
 
@@ -144,14 +145,23 @@ export function DispatchCreationModal({
       }
     }
 
+    // Save current sequence and manual/PO stops to prevent them from vanishing
+    const currentSeqMap = new Map();
+    planDetails.forEach((d, idx) => {
+      if (d.order_no) currentSeqMap.set(d.order_no, idx);
+      if (d.isManualStop) currentSeqMap.set(d.detail_id, idx);
+      if (d.isPoStop) currentSeqMap.set(d.detail_id, idx);
+    });
+    
+    const retainedStops = planDetails.filter(d => d.isManualStop || d.isPoStop);
+
     if (newIds.length === 0) {
-      setPlanDetails([]);
+      setPlanDetails(retainedStops);
       return;
     }
 
     // Fetch plan details (sales orders) for all combined plans
     setIsLoadingDetails(true);
-    setPlanDetails([]);
     try {
       const res = await fetch(
         `/api/scm/fleet-management/trip-management/dispatch-plan/creation?type=plan_details&plan_ids=${newIds.join(",")}`,
@@ -159,7 +169,20 @@ export function DispatchCreationModal({
       );
       const result = await res.json();
       if (result.error) throw new Error(result.error);
-      setPlanDetails(result.data || []);
+      
+      const fetchedInvoices = result.data || [];
+      const combined = [...fetchedInvoices, ...retainedStops];
+
+      // Restore sequence for existing items
+      combined.sort((a, b) => {
+        const keyA = a.isManualStop || a.isPoStop ? a.detail_id : a.order_no;
+        const keyB = b.isManualStop || b.isPoStop ? b.detail_id : b.order_no;
+        const seqA = currentSeqMap.has(keyA) ? currentSeqMap.get(keyA) : 9999;
+        const seqB = currentSeqMap.has(keyB) ? currentSeqMap.get(keyB) : 9999;
+        return seqA - seqB;
+      });
+
+      setPlanDetails(combined);
     } catch {
       toast.error("Failed to load plan details");
     } finally {
@@ -269,6 +292,8 @@ export function DispatchCreationModal({
                   planDetails.length > 0 &&
                   planDetails.some(
                     (o) =>
+                      !o.isManualStop &&
+                      !o.isPoStop &&
                       o.true_order_status !== "For Loading" &&
                       o.true_order_status !== "On Hold",
                   )
@@ -296,6 +321,8 @@ export function DispatchCreationModal({
                       planDetails.length === 0 ||
                       planDetails.some(
                         (o) =>
+                          !o.isManualStop &&
+                          !o.isPoStop &&
                           o.true_order_status !== "For Loading" &&
                           o.true_order_status !== "On Hold",
                       )
