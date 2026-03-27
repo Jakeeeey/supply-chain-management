@@ -10,9 +10,13 @@ import { useSalesReturnList } from "./hooks/useSalesReturnList";
 import { SalesReturnHistory } from "./components/SalesReturnHistory";
 import { CreateSalesReturnModal } from "./components/CreateSalesReturnModal";
 import { UpdateSalesReturnModal } from "./components/UpdateSalesReturnModal";
+import { useSearchParams } from "next/navigation";
 import { SalesReturn } from "./type";
 
 export default function SalesReturnModule() {
+  const searchParams = useSearchParams();
+  const fromClearance = searchParams.get("fromClearance");
+
   const {
     data,
     loading,
@@ -29,9 +33,14 @@ export default function SalesReturnModule() {
   } = useSalesReturnList();
 
   const [isCreateOpen, setCreateOpen] = useState(false);
-  const [selectedReturn, setSelectedReturn] = useState<SalesReturn | null>(
-    null,
-  );
+
+  React.useEffect(() => {
+    if (fromClearance === "true") {
+      setCreateOpen(true);
+    }
+  }, [fromClearance]);
+
+  const [selectedReturn, setSelectedReturn] = useState<SalesReturn | null>(null);
 
   return (
     <div className="space-y-6 p-4 md:p-8 w-full bg-background min-h-screen animate-in fade-in duration-300">

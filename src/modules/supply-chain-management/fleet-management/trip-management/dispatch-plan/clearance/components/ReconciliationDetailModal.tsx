@@ -243,7 +243,22 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
 
                     <div 
                         className="p-4 rounded-xl border-2 border-primary/10 bg-primary/5 flex items-center justify-between group cursor-pointer hover:border-primary/30 transition-all"
-                        onClick={() => window.open('/scm/inventories/sales-return-rfid', '_blank')}
+                        onClick={() => {
+                            const returnData = {
+                                invoiceId: reconciliation.invoiceId,
+                                invoiceNo: reconciliation.invoiceNo,
+                                orderNo: reconciliation.orderNo,
+                                customerCode: detail?.header.customer_code || reconciliation.customer || '',
+                                customerName: reconciliation.customerName,
+                                salesmanId: detail?.header.salesman_id,
+                                salesmanName: detail?.header.salesman_name,
+                                salesmanCode: detail?.header.salesman_code,
+                                branchId: detail?.header.branch_id,
+                                branchName: detail?.header.branch_name,
+                            };
+                            localStorage.setItem('scm_dispatch_return_data', JSON.stringify(returnData));
+                            window.open('/scm/inventories/sales-return-rfid?fromClearance=true', '_blank');
+                        }}
                     >
                         <div className="flex items-center gap-4">
                             <div className="w-5 h-5 rounded-full border-2 border-primary/40 flex items-center justify-center">
