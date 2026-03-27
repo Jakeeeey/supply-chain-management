@@ -52,6 +52,8 @@ export async function getRawReturns(
     url += `&filter[customer_code][_eq]=${encodeURIComponent(filters.customer)}`;
   if (filters.status && filters.status !== "All")
     url += `&filter[status][_eq]=${filters.status}`;
+  if ((filters as any).invoiceNo)
+    url += `&filter[invoice_no][_eq]=${encodeURIComponent((filters as any).invoiceNo)}`;
 
   return directusGet<{ data: Record<string, unknown>[]; meta?: { filter_count?: number } }>(url);
 }

@@ -61,6 +61,7 @@ import { ProductLookupModal } from "./ProductLookupModal";
 import { SalesReturnPrintSlip } from "./SalesReturnPrintSlip";
 import { createRoot } from "react-dom/client";
 import { useRfidScanner } from "../hooks/useRfidScanner";
+import { useSearchParams } from "next/navigation";
 
 interface Props {
   returnId: number;
@@ -141,6 +142,10 @@ export function UpdateSalesReturnModal({
   const [rfidScanning, setRfidScanning] = useState(false);
   const [lastScannedRfid, setLastScannedRfid] = useState("");
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+
+  const searchParams = useSearchParams();
+  const prefillInvoiceNo = searchParams.get("prefillInvoiceNo");
+  const prefillOrderNo = searchParams.get("prefillOrderNo");
 
   // 🟢 REVISED: Edit Permissions Logic
   const isPending = headerData.status === "Pending";
@@ -252,6 +257,19 @@ export function UpdateSalesReturnModal({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Handle pre-fill from Dispatch Clearance
+  useEffect(() => {
+    if (canEditAll && (prefillInvoiceNo || prefillOrderNo)) {
+      setHeaderData(prev => ({
+        ...prev,
+        invoiceNo: prefillInvoiceNo || prev.invoiceNo,
+        orderNo: prefillOrderNo || prev.orderNo
+      }));
+      if (prefillInvoiceNo) setInvoiceDropdownSearch(prefillInvoiceNo);
+      if (prefillOrderNo) setOrderSearch(prefillOrderNo);
+    }
+  }, [canEditAll, prefillInvoiceNo, prefillOrderNo]);
 
   // RFID Scanner Ref
   const rfidInputRef = useRef<HTMLInputElement>(null);

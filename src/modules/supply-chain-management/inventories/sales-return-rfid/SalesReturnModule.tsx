@@ -16,6 +16,7 @@ import { SalesReturn } from "./type";
 export default function SalesReturnModule() {
   const searchParams = useSearchParams();
   const fromClearance = searchParams.get("fromClearance");
+  const editReturnNo = searchParams.get("editReturnNo");
 
   const {
     data,
@@ -33,14 +34,28 @@ export default function SalesReturnModule() {
   } = useSalesReturnList();
 
   const [isCreateOpen, setCreateOpen] = useState(false);
+  const [selectedReturn, setSelectedReturn] = useState<SalesReturn | null>(null);
 
   React.useEffect(() => {
     if (fromClearance === "true") {
-      setCreateOpen(true);
+      if (editReturnNo) {
+        // If editing/linking, we should wait for data and find it
+        setSearch(editReturnNo);
+      } else {
+        setCreateOpen(true);
+      }
     }
-  }, [fromClearance]);
+  }, [fromClearance, editReturnNo]);
 
-  const [selectedReturn, setSelectedReturn] = useState<SalesReturn | null>(null);
+  // Auto-open selected return when data loads and editReturnNo is present
+  React.useEffect(() => {
+    if (editReturnNo && data.length > 0 && !selectedReturn) {
+      const match = data.find(r => r.returnNo === editReturnNo);
+      if (match) {
+        setSelectedReturn(match);
+      }
+    }
+  }, [data, editReturnNo, selectedReturn]);
 
   return (
     <div className="space-y-6 p-4 md:p-8 w-full bg-background min-h-screen animate-in fade-in duration-300">
