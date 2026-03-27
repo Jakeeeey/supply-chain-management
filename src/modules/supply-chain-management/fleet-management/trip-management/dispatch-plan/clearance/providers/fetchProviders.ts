@@ -85,7 +85,7 @@ export const getJoinedDispatchData = async (
 
   const query = new URLSearchParams(params).toString();
 
-  const response = await fetch(`/api/scm/fleet-management/trip-management/dispatch-clearance?${query}`);
+  const response = await fetch(`/api/scm/fleet-management/trip-management/dispatch-plan/clearance?${query}`);
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);
   }
@@ -93,7 +93,7 @@ export const getJoinedDispatchData = async (
 };
 
 export const submitClearance = async (dispatchId: number, invoices: ReconciliationRow[], isPreSave: boolean = false): Promise<void> => {
-  const response = await fetch('/api/scm/fleet-management/trip-management/dispatch-clearance', {
+  const response = await fetch('/api/scm/fleet-management/trip-management/dispatch-plan/clearance', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -108,7 +108,7 @@ export const submitClearance = async (dispatchId: number, invoices: Reconciliati
 };
 
 export const fetchInvoiceDetails = async (invoiceId: number): Promise<InvoiceDetail> => {
-  const response = await fetch(`/api/scm/fleet-management/trip-management/dispatch-clearance/invoice-details?invoice_id=${invoiceId}`);
+  const response = await fetch(`/api/scm/fleet-management/trip-management/dispatch-plan/clearance/invoice-details?invoice_id=${invoiceId}`);
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);
   }
@@ -116,7 +116,7 @@ export const fetchInvoiceDetails = async (invoiceId: number): Promise<InvoiceDet
 };
 
 export const fetchRFIDTagsForDispatch = async (dispatchId: number): Promise<RFIDMapping[]> => {
-  const response = await fetch(`/api/scm/fleet-management/trip-management/dispatch-clearance/rfid-tags?dispatch_id=${dispatchId}`);
+  const response = await fetch(`/api/scm/fleet-management/trip-management/dispatch-plan/clearance/rfid-tags?dispatch_id=${dispatchId}`);
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);
   }
