@@ -890,7 +890,7 @@ export function ReturnDetailsModal({
                   Save Changes
                 </Button>
                 <Button
-                  variant="secondary"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md font-bold transition-all active:scale-[0.98]"
                   onClick={() => handleSave(true)}
                   disabled={saving}
                 >
