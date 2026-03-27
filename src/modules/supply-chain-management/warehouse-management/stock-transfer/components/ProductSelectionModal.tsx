@@ -133,6 +133,10 @@ export function ProductSelectionModal({ open, onOpenChange, onSelect, sourceBran
                               <span className="font-mono truncate">{product.barcode || (product as any).product_code || 'NO-BARCODE'}</span>
                             </div>
                             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                              <Tag className="w-3 h-3 shrink-0 text-amber-500/70" />
+                              <span className="font-mono text-amber-600/80 font-bold">ID: {product.product_id || product.id}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                               <Package className="w-3 h-3 shrink-0 text-primary/60" />
                               <span className="font-bold text-primary/80">
                                 Unit: {typeof product.unit_of_measurement === 'object' && product.unit_of_measurement !== null ? (product.unit_of_measurement as any).unit_name : String(product.unit_of_measurement || 'Pieces')}
@@ -188,6 +192,10 @@ export function ProductSelectionModal({ open, onOpenChange, onSelect, sourceBran
                             x{(p as any).quantity}
                           </Badge>
                         )}
+                      </div>
+                      <div className="flex items-center gap-1 text-[10px] text-amber-600/80 mb-1">
+                        <Tag className="w-2.5 h-2.5" />
+                        <span className="font-mono font-bold">ID: {p.product_id || p.id}</span>
                       </div>
                       <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1 border-t border-muted/30">
                         <span className="font-mono">{p.barcode || 'NO-BARCODE'}</span>

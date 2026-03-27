@@ -19,6 +19,8 @@ export interface ReceiveGroup {
   totalAmount: number;
 }
 
+const LOCAL_STORAGE_KEY_RECEIVE = 'scm_receive_scans_v1';
+
 export function useStockTransferReceive() {
   const [stockTransfers, setStockTransfers] = useState<StockTransfer[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -27,8 +29,21 @@ export function useStockTransferReceive() {
 
   const [selectedOrderNo, setSelectedOrderNo] = useState<string | null>(null);
   
-  // Track scanned items per order for receiving: { orderNo: { productId: string[] } }
-  const [receivedItemsState, setReceivedItemsState] = useState<Record<string, Record<number, string[]>>>({});
+  // Track scanned items per order for receiving — persisted across page refreshes
+  const [receivedItemsState, setReceivedItemsState] = useState<Record<string, Record<number, string[]>>>(() => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_KEY_RECEIVE);
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  });
+
+  // Sync to localStorage whenever scans change
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(LOCAL_STORAGE_KEY_RECEIVE, JSON.stringify(receivedItemsState));
+    }
+  }, [receivedItemsState]);
 
   const fetchTransfers = useCallback(async () => {
     setLoading(true);
@@ -126,6 +141,12 @@ export function useStockTransferReceive() {
 
       toast.success(`Order ${orderNo} successfully received!`);
       setSelectedOrderNo(null);
+      // Clear this order's persisted scans
+      setReceivedItemsState(prev => {
+        const next = { ...prev };
+        delete next[orderNo];
+        return next;
+      });
       await fetchTransfers(); // Refresh list
     } catch (err: unknown) {
       console.error('Receive failed:', err);

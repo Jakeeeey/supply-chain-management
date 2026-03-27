@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ClipboardCheck, Loader2, RefreshCcw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ClipboardCheck, Loader2, RefreshCcw, ChevronLeft, ChevronRight, ServerCrash } from 'lucide-react';
 import { useStockTransferApproval } from './hooks/useStockTransferApproval';
 import { OrderSelectionModal } from '../components/OrderSelectionModal';
 import {
@@ -32,6 +32,7 @@ export default function StockTransferApprovalModule() {
     setSelectedOrderNo,
     loading,
     processing,
+    fetchError,
     updateStatus,
     getBranchName,
     stockTransfers,
@@ -105,24 +106,48 @@ export default function StockTransferApprovalModule() {
         </CardHeader>
 
         <CardContent className="mt-4 space-y-6">
+          {/* Loading Skeleton */}
+          {loading && (
+            <div className="space-y-3 py-4">
+              <div className="flex items-center gap-3 text-muted-foreground text-sm">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span className="font-medium">Loading transfer requests...</span>
+              </div>
+              <div className="h-10 rounded-md bg-muted/40 animate-pulse" />
+              <div className="h-40 rounded-md bg-muted/30 animate-pulse" />
+            </div>
+          )}
+
+          {/* Server Error Banner */}
+          {!loading && fetchError && (
+            <div className="flex flex-col items-center justify-center gap-4 py-12 text-center">
+              <ServerCrash className="w-12 h-12 text-destructive/70" />
+              <div>
+                <p className="font-bold text-destructive">Server Unreachable</p>
+                <p className="text-sm text-muted-foreground mt-1">{fetchError}</p>
+              </div>
+              <Button variant="outline" onClick={() => refresh()} className="gap-2">
+                <RefreshCcw className="w-4 h-4" /> Retry
+              </Button>
+            </div>
+          )}
+
+          {!loading && !fetchError && (
+          <>
           {/* Select Order */}
           <div className="space-y-2 max-w-sm">
             <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
               Select Request Number
             </label>
-            {loading ? (
-              <div className="h-10 rounded-md bg-muted/30 animate-pulse" />
-            ) : (
-              <OrderSelectionModal 
-                orderGroups={orderGroups}
-                selectedOrderNo={selectedOrderNo}
-                onSelect={setSelectedOrderNo}
-                getBranchName={getBranchName}
-                title="Select Pending Approval"
-                description="Choose a stock transfer request to review and approve/reject."
-                placeholder="Select Request Number..."
-              />
-            )}
+            <OrderSelectionModal 
+              orderGroups={orderGroups}
+              selectedOrderNo={selectedOrderNo}
+              onSelect={setSelectedOrderNo}
+              getBranchName={getBranchName}
+              title="Select Pending Approval"
+              description="Choose a stock transfer request to review and approve/reject."
+              placeholder="Select Request Number..."
+            />
           </div>
 
           {/* Details & Actions */}
@@ -305,6 +330,8 @@ export default function StockTransferApprovalModule() {
                 </div>
               </div>
             </div>
+          )}
+          </>
           )}
         </CardContent>
       </Card>

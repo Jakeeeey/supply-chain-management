@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
       // Check if we found the product with non-zero inventory
       const list = Array.isArray(data) ? data : (data.data || []);
       const productId = searchParams.get('productId');
-      const found = list.find((inv: any) => String(inv.productId) === productId && Number(inv.runningInventory || 0) > 0);
+      const found = list.find((inv: any) => String(inv.productId) === productId);
       
       if (found) {
         console.log(`[Proxy] Found aggregate inventory for product ${productId}: ${found.runningInventory}`);

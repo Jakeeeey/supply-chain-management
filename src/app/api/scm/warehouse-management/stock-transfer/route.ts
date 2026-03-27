@@ -513,34 +513,60 @@ export async function PATCH(request: Request) {
 
   try {
     const body = await request.json();
-    const { ids, status, rfids, scanType } = body; // rfids: Array<{ stock_transfer_id: number, rfid_tag: string }>
+    const { ids, status, rfids, scanType, items } = body; 
 
-    if (!Array.isArray(ids) || ids.length === 0 || !status) {
-      return NextResponse.json({ error: 'Missing required fields: ids array or status' }, { status: 400 });
+    if ((!Array.isArray(ids) || ids.length === 0) && (!Array.isArray(items) || items.length === 0)) {
+      return NextResponse.json({ error: 'Missing required fields: ids array or items array' }, { status: 400 });
     }
 
-    // 1. Update the status of each selected stock transfer line item
-    const results = await Promise.all(
-      ids.map(async (id: number) => {
-        return fetch(`${baseUrl}/items/stock_transfer/${id}`, {
-          method: 'PATCH',
-          headers: {
-            Authorization: `Bearer ${staticToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ 
-            // Enum values are strict: e.g. "For Picking", "For Loading", "Received"
-            status: String(status)
-          }),
-        }).then(async (res) => {
-          if (!res.ok) {
-            const err = await res.text();
-            throw new Error(`Directus PATCH failed for ID ${id}: ${err}`);
-          }
-          return res.json();
-        });
-      })
-    );
+    // 1. Update the status and properties of each selected stock transfer line item
+    let results;
+    if (Array.isArray(items) && items.length > 0) {
+      // New format: [{ id, allocated_quantity, status }]
+      results = await Promise.all(
+        items.map(async (item: any) => {
+          return fetch(`${baseUrl}/items/stock_transfer/${item.id}`, {
+            method: 'PATCH',
+            headers: {
+              Authorization: `Bearer ${staticToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+              status: item.status,
+              allocated_quantity: item.allocated_quantity
+            }),
+          }).then(async (res) => {
+            if (!res.ok) {
+              const err = await res.text();
+              throw new Error(`Directus PATCH failed for ID ${item.id}: ${err}`);
+            }
+            return res.json();
+          });
+        })
+      );
+    } else {
+      // Legacy format: ids array + status string
+      results = await Promise.all(
+        ids.map(async (id: number) => {
+          return fetch(`${baseUrl}/items/stock_transfer/${id}`, {
+            method: 'PATCH',
+            headers: {
+              Authorization: `Bearer ${staticToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+              status: String(status)
+            }),
+          }).then(async (res) => {
+            if (!res.ok) {
+              const err = await res.text();
+              throw new Error(`Directus PATCH failed for ID ${id}: ${err}`);
+            }
+            return res.json();
+          });
+        })
+      );
+    }
 
     // 2. If RFIDs are provided, insert them into the new tracking table
     let rfidResults = null;
@@ -572,7 +598,7 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json({ 
       success: true, 
-      count: ids.length, 
+      count: Array.isArray(items) ? items.length : (Array.isArray(ids) ? ids.length : 0), 
       data: results,
       rfidTracking: rfidResults
     }, { status: 200 });

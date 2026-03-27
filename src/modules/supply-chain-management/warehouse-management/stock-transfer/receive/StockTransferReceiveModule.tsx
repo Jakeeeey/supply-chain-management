@@ -54,37 +54,37 @@ export default function StockTransferReceiveModule() {
   ) || [];
 
   const [rfidInput, setRfidInput] = useState('');
-  const scannerRef = React.useRef<HTMLInputElement>(null);
-
-  // Auto-focus the hidden scanner input
-  React.useEffect(() => {
-    if (selectedOrderNo && scannerRef.current) {
-      const focusScanner = () => scannerRef.current?.focus();
-      focusScanner();
-      
-      // Re-focus if user clicks away
-      const interval = setInterval(focusScanner, 2000);
-      return () => clearInterval(interval);
-    }
-  }, [selectedOrderNo]);
-
   const [isScanning, setIsScanning] = useState(false);
+  const rfidBuffer = React.useRef('');
 
-  const onRfidKeyDown = async (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
-    
-    const val = e.currentTarget.value.trim();
-    if (!val || isScanning) return;
-    
-    setRfidInput(''); // Clear immediately for next scan
-    setIsScanning(true);
-    try {
-      await handleScanRFID(val);
-    } finally {
-      setIsScanning(false);
-    }
-  };
+  // Global RFID listener — no click required
+  React.useEffect(() => {
+    if (!selectedOrderNo) return;
+
+    const handleGlobalKey = async (e: globalThis.KeyboardEvent) => {
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+      if (e.key === 'Enter') {
+        const val = rfidBuffer.current.trim();
+        rfidBuffer.current = '';
+        setRfidInput('');
+        if (!val || isScanning) return;
+        setIsScanning(true);
+        try {
+          await handleScanRFID(val);
+        } finally {
+          setIsScanning(false);
+        }
+      } else if (e.key.length === 1) {
+        rfidBuffer.current += e.key;
+        setRfidInput(rfidBuffer.current);
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKey);
+    return () => window.removeEventListener('keydown', handleGlobalKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedOrderNo, isScanning]);
 
   const isAllReceived = selectedGroup?.items.every(i => i.receivedQty >= i.ordered_quantity);
 
@@ -165,46 +165,47 @@ export default function StockTransferReceiveModule() {
               )}
             </div>
 
-            {/* Automated Scanner UI */}
+            {/* Scanner Status Bar */}
             <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground group flex items-center gap-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
                 Scanner Status
                 {selectedGroup && (
                   <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                 )}
               </label>
-              <div 
-                className={`relative flex items-center justify-center h-10 border-2 border-dashed rounded-lg transition-all duration-500 ${
-                  selectedGroup 
-                    ? 'border-emerald-500/50 bg-emerald-500/5 cursor-default' 
-                    : 'border-muted bg-muted/20 grayscale'
-                }`}
-                onClick={() => scannerRef.current?.focus()}
-              >
-                {selectedGroup ? (
-                  <div className="flex items-center gap-3">
-                    <Radar className={cn("w-5 h-5 text-emerald-500", !isScanning && "animate-spin-slow", isScanning && "animate-pulse")} />
-                    <span className="text-sm font-medium text-emerald-600 animate-pulse">
-                      {isScanning ? 'PROCESSING SCAN...' : 'READY TO RECEIVE RFID'}
+              <div className={`relative flex flex-col gap-2 p-3 border-2 rounded-lg transition-all duration-500 ${
+                !selectedGroup ? 'border-muted bg-muted/20' : isScanning ? 'border-amber-400 bg-amber-50/10' : 'border-emerald-500/50 bg-emerald-500/5'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Radar className={cn("w-4 h-4", !selectedGroup ? "text-muted-foreground/40" : isScanning ? "text-amber-500 animate-spin" : "text-emerald-500 animate-pulse")} />
+                    <span className={cn("text-xs font-bold uppercase tracking-widest", !selectedGroup ? "text-muted-foreground/40" : isScanning ? "text-amber-600" : "text-emerald-600")}>
+                      {!selectedGroup ? 'Select order to start' : isScanning ? 'Processing...' : 'Listening for RFID...'}
                     </span>
                   </div>
-                ) : (
-                  <div className="flex items-center gap-2 text-muted-foreground/60">
-                    <ScanLine className="w-4 h-4" />
-                    <span className="text-xs uppercase font-bold tracking-widest">Select order to pulse scanner</span>
-                  </div>
+                  {selectedGroup && (() => {
+                    const totalScanned = selectedGroup.items.reduce((s, i) => s + (i.receivedQty || 0), 0);
+                    const totalRequired = selectedGroup.items.reduce((s, i) => s + (i.ordered_quantity || 0), 0);
+                    return (
+                      <span className={cn("text-lg font-black", totalScanned >= totalRequired ? "text-emerald-600" : "text-foreground")}>
+                        {totalScanned} <span className="text-sm font-normal text-muted-foreground">/ {totalRequired}</span>
+                      </span>
+                    );
+                  })()}
+                </div>
+                {selectedGroup && (() => {
+                  const totalScanned = selectedGroup.items.reduce((s, i) => s + (i.receivedQty || 0), 0);
+                  const totalRequired = selectedGroup.items.reduce((s, i) => s + (i.ordered_quantity || 0), 0);
+                  const pct = totalRequired > 0 ? Math.round((totalScanned / totalRequired) * 100) : 0;
+                  return (
+                    <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+                      <div className="bg-emerald-500 h-1.5 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+                    </div>
+                  );
+                })()}
+                {rfidInput && (
+                  <p className="text-[10px] font-mono text-muted-foreground truncate">Reading: {rfidInput}</p>
                 )}
-                
-                {/* Hidden input to catch reader output */}
-                <input
-                  ref={scannerRef}
-                  type="text"
-                  value={rfidInput}
-                  onChange={(e) => setRfidInput(e.target.value)}
-                  onKeyDown={onRfidKeyDown}
-                  className="opacity-0 absolute inset-0 w-full h-full cursor-default"
-                  autoComplete="off"
-                />
               </div>
             </div>
           </div>

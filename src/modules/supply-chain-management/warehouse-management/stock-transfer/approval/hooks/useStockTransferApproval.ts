@@ -43,6 +43,7 @@ export function useStockTransferApproval() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const [selectedOrderNo, setSelectedOrderNo] = useState<string | null>(null);
   const [allocatedQtys, setAllocatedQtys] = useState<Record<number, number>>({});
@@ -51,21 +52,22 @@ export function useStockTransferApproval() {
 
   const fetchTransfers = useCallback(async () => {
     setLoading(true);
+    setFetchError(null);
     try {
       const res = await fetch(`/api/scm/warehouse-management/stock-transfer?status=Requested&t=${Date.now()}`, {
         next: { revalidate: 0 },
         cache: 'no-store'
       });
-      if (!res.ok) throw new Error('Failed to fetch requested transfers');
+      if (!res.ok) {
+        setFetchError('Unable to reach the server. Please check your connection and try again.');
+        return;
+      }
       const json = await res.json();
       setStockTransfers(json.stockTransfers ?? []);
       setBranches(json.branches ?? []);
     } catch (err) {
       console.error('Failed to fetch transfers for approval:', err);
-      playErrorSound();
-      toast.error('Network Error', {
-        description: 'Server is unreachable. Please check your connection.'
-      });
+      setFetchError('Unable to reach the server. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -162,24 +164,20 @@ export function useStockTransferApproval() {
             current: '0'
           });
 
-          if (supplier) params.append('supplierShortcut', supplier);
-          if (category) params.append('productCategory', category);
-          if (brand) params.append('productBrand', brand);
-
           const proxyUrl = `/api/scm/warehouse-management/inventory-proxy?${params.toString()}`;
           
           const res = await fetch(proxyUrl);
           if (res.ok) {
             const data = await res.json();
             const list = Array.isArray(data) ? data : (data.data || []);
-            // For the proxy, ensure we match exactly the source branch!
-            const inventory = list.find((inv: any) => 
+            const inventoryList = list.filter((inv: any) => 
                String(inv.productId) === String(pid) && 
                String(inv.branchId) === String(selectedGroup.sourceBranch)
             );
-            const availableCount = inventory ? Number(inventory.runningInventory || 0) : 0;
+            // Sum up running_inventory from all unit permutations of this product to avoid picking the "0" row
+            const availableCount = inventoryList.reduce((acc: number, inv: any) => acc + Number(inv.runningInventory || 0), 0);
             const unitCount = Number(product?.unit_of_measurement_count || 1) || 1;
-            const finalAvailable = availableCount / unitCount;
+            const finalAvailable = Math.floor(availableCount / unitCount);
 
             newAvailable[item.id] = finalAvailable;
             // Default allocated to ordered quantity, but cap at available
@@ -272,6 +270,7 @@ export function useStockTransferApproval() {
     setSelectedOrderNo,
     loading,
     processing,
+    fetchError,
     updateStatus,
     getBranchName,
     stockTransfers,

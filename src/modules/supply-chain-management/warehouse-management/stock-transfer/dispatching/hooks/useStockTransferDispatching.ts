@@ -21,33 +21,53 @@ export interface DispatchGroup {
   status: string;
 }
 
+const LOCAL_STORAGE_KEY = 'scm_dispatching_scans_v1';
+
 export function useStockTransferDispatching() {
   const [stockTransfers, setStockTransfers] = useState<StockTransfer[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [scannedInventory, setScannedInventory] = useState<Record<number, number>>({});
 
   const [selectedOrderNo, setSelectedOrderNo] = useState<string | null>(null);
   
   // Track scanned RFIDs per order: { orderNo: { productId: string[] } }
-  const [scannedItemsState, setScannedItemsState] = useState<Record<string, Record<number, string[]>>>({});
+  // Initialize lazily from localStorage to prevent data loss
+  const [scannedItemsState, setScannedItemsState] = useState<Record<string, Record<number, string[]>>>(() => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  // Sync scans to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(scannedItemsState));
+    }
+  }, [scannedItemsState]);
 
   const fetchTransfers = useCallback(async () => {
     setLoading(true);
+    setFetchError(null);
     try {
       const statuses = 'For Picking,Picking,Picked';
       const res = await fetch(`/api/scm/warehouse-management/stock-transfer?status=${encodeURIComponent(statuses)}`);
-      if (!res.ok) throw new Error('Failed to fetch transfers');
+      if (!res.ok) {
+        setFetchError('Unable to reach the server. Please check your connection and try again.');
+        return;
+      }
       const json = await res.json();
       setStockTransfers(json.stockTransfers ?? []);
       setBranches(json.branches ?? []);
     } catch (err) {
       console.error('Failed to fetch transfers for dispatch:', err);
-      playErrorSound();
-      toast.error('Network Error', {
-        description: 'Server is unreachable. Please check your connection.'
-      });
+      setFetchError('Unable to reach the server. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -99,6 +119,75 @@ export function useStockTransferDispatching() {
     if (!selectedOrderNo) return null;
     return orderGroups.find((g) => g.orderNo === selectedOrderNo) || null;
   }, [selectedOrderNo, orderGroups]);
+
+  useEffect(() => {
+    if (!selectedOrderNo) return;
+    // Get raw items from stockTransfers to prevent infinite loop from scannedInventory dep
+    const itemsForOrder = stockTransfers.filter(st => st.order_no === selectedOrderNo);
+    if (itemsForOrder.length === 0) return;
+
+    const fetchInitialInventory = async () => {
+      try {
+        const newAvailable: Record<number, number> = { ...scannedInventory };
+        let hasChanges = false;
+        const sourceBranch = itemsForOrder[0].source_branch;
+        const sourceBranchName = getBranchName(sourceBranch);
+
+        for (const item of itemsForOrder) {
+          const product = typeof item.product_id === 'object' && item.product_id !== null ? item.product_id : null;
+          const pid = product ? (product.product_id || product.id) : item.product_id;
+          
+          if (!pid || scannedInventory[pid] !== undefined) continue;
+
+          // Helper to extract nested junction values safely
+          const extractFirst = (val: any) => Array.isArray(val) ? val[0] : val;
+          const rawCategory = extractFirst(product?.product_category);
+          const category = rawCategory?.category_name || rawCategory?.name || (typeof rawCategory === 'string' ? rawCategory : '');
+          const rawSupplierInfo = extractFirst(product?.product_per_supplier);
+          const supplier = rawSupplierInfo?.supplier_id?.supplier_shortcut || rawSupplierInfo?.supplier_shortcut || '';
+          const rawBrand = extractFirst(product?.product_brand);
+          const brand = rawBrand?.brand_name || rawBrand?.name || (typeof rawBrand === 'string' ? rawBrand : '');
+
+          const params = new URLSearchParams({
+            branchName: sourceBranchName,
+            branchId: String(sourceBranch),
+            productId: String(pid),
+            current: '0'
+          });
+
+          const proxyUrl = `/api/scm/warehouse-management/inventory-proxy?${params.toString()}`;
+          
+          const res = await fetch(proxyUrl);
+          if (res.ok) {
+            const data = await res.json();
+            const list = Array.isArray(data) ? data : (data.data || []);
+            const inventoryList = list.filter((inv: any) => 
+               String(inv.productId) === String(pid) && 
+               String(inv.branchId) === String(sourceBranch)
+            );
+            const availableCount = inventoryList.reduce((acc: number, inv: any) => acc + Number(inv.runningInventory || 0), 0);
+            const unitCount = Number(product?.unit_of_measurement_count || 1) || 1;
+            const finalAvailable = Math.floor(availableCount / unitCount);
+
+            newAvailable[pid] = finalAvailable;
+            hasChanges = true;
+          } else {
+            newAvailable[pid] = 0;
+            hasChanges = true;
+          }
+        }
+        
+        if (hasChanges) {
+          setScannedInventory(newAvailable);
+        }
+      } catch (err) {
+        console.error('Failed to fetch initial available quantities:', err);
+      }
+    };
+
+    fetchInitialInventory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedOrderNo]);
 
   const updateOrderStatus = async (orderNo: string, status: string) => {
     const group = orderGroups.find((g) => g.orderNo === orderNo);
@@ -162,6 +251,14 @@ export function useStockTransferDispatching() {
 
       toast.success(`Order ${orderNo} successfully dispatched.`);
       setSelectedOrderNo(null);
+      
+      // Clear persistence for this specific order now that it's complete
+      setScannedItemsState(prev => {
+        const nextState = { ...prev };
+        delete nextState[orderNo];
+        return nextState;
+      });
+
       await fetchTransfers(); // Refresh list
     } catch (err: unknown) {
       console.error('Dispatch failed:', err);
@@ -235,7 +332,7 @@ export function useStockTransferDispatching() {
 
       if (!res.ok) {
         playErrorSound();
-        // Removed error toast as requested: "walang error notifications for scanned rfid's"
+        toast.error(`Scan Failed: ${match.error || "Lookup Failed"}`);
         console.warn(`[Scan Error] ${match.error || "Lookup Failed"}: ${match.details || ""}`);
         return;
       }
@@ -266,7 +363,7 @@ export function useStockTransferDispatching() {
 
       if (!itemInOrder) {
         playErrorSound();
-        // Removed error toast as requested
+        toast.error(`Product is not part of this order!`);
         console.warn(`[Scan Error] Product (ID: ${productId}) is not part of this order!`);
         return;
       }
@@ -274,7 +371,7 @@ export function useStockTransferDispatching() {
       const currentRfidsForProduct = scannedItemsState[selectedOrderNo]?.[effectiveProductId] || [];
       if (currentRfidsForProduct.includes(rfid)) {
         playErrorSound();
-        // Removed warning toast
+        toast.error(`RFID already scanned for this item.`);
         console.warn(`[Scan Warning] RFID ${rfid} already scanned for this item.`);
         return;
       }
@@ -283,7 +380,7 @@ export function useStockTransferDispatching() {
       const allScannedRfidsInOrder = Object.values(scannedItemsState[selectedOrderNo] || {}).flat();
       if (allScannedRfidsInOrder.includes(rfid)) {
         playErrorSound();
-        // Removed error toast
+        toast.error(`Duplicate RFID ${rfid} in order.`);
         console.warn(`[Scan Error] Duplicate RFID ${rfid} in order.`);
         return;
       }
@@ -292,7 +389,7 @@ export function useStockTransferDispatching() {
       
       if (itemInOrder.scannedQty >= targetQty) {
         playErrorSound();
-        // Removed info toast
+        toast.error(`Required quantity already reached.`);
         console.warn(`[Scan Info] Required quantity already reached.`);
         return;
       }
@@ -309,14 +406,6 @@ export function useStockTransferDispatching() {
           }
         };
       });
-      
-      // Update local inventory count for display
-      if (match.qtyAvailable !== undefined) {
-        setScannedInventory(prev => ({
-          ...prev,
-          [effectiveProductId]: match.qtyAvailable
-        }));
-      }
       
       playSuccessSound();
       const finalName = (typeof itemInOrder.product_id === 'object' && itemInOrder.product_id?.product_name) 
@@ -375,6 +464,7 @@ export function useStockTransferDispatching() {
     dispatchOrder,
     handleScanRFID,
     getBranchName,
+    fetchError,
     refresh: fetchTransfers,
     updateLoosePackQty: (productId: number, qty: number) => {
       if (!selectedOrderNo) return;
