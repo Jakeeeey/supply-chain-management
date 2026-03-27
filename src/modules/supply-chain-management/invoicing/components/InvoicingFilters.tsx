@@ -8,7 +8,7 @@ import { AsyncCombobox } from "./AsyncCombobox";
 import { ComboboxOption } from "@/components/ui/combobox";
 import { InvoicingFilters } from "../types";
 import { InvoicingService } from "../services/InvoicingService";
-import { subMonths, addMonths, format } from "date-fns";
+import { format } from "date-fns";
 import { Loader2, X, Hash, FileSignature, User, Users, Building2, MapPin, Calendar, Search } from "lucide-react";
 
 interface InvoicingFiltersProps {
@@ -23,8 +23,6 @@ export const InvoicingFiltersComponent: React.FC<InvoicingFiltersProps> = ({ onF
         salesman: "",
         supplier: "",
         branch: "",
-        fromDate: format(subMonths(new Date(), 1), "yyyy-MM-dd"),
-        toDate: format(addMonths(new Date(), 1), "yyyy-MM-dd"),
     });
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -42,7 +40,6 @@ export const InvoicingFiltersComponent: React.FC<InvoicingFiltersProps> = ({ onF
 
     const handleResetFilters = () => {
         const newFilters = {
-            ...filters,
             orderNo: "",
             poNo: "",
             customer: "",
@@ -175,33 +172,6 @@ export const InvoicingFiltersComponent: React.FC<InvoicingFiltersProps> = ({ onF
                         onValueChange={(val) => handleComboboxChange("branch", val)}
                         placeholder="All Branches"
                         emptyMessage="No branch found."
-                        className="h-10 text-xs bg-muted/20 border-border/50 focus:bg-background transition-all duration-300 rounded-xl"
-                    />
-                </div>
-
-                <div className="space-y-2 col-span-1">
-                    <Label htmlFor="fromDate" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/70 flex items-center gap-2">
-                        <Calendar size={12} className="text-primary/60" /> From
-                    </Label>
-                    <Input
-                        id="fromDate"
-                        name="fromDate"
-                        type="date"
-                        value={filters.fromDate}
-                        onChange={handleChange}
-                        className="h-10 text-xs bg-muted/20 border-border/50 focus:bg-background transition-all duration-300 rounded-xl"
-                    />
-                </div>
-                <div className="space-y-2 col-span-1">
-                    <Label htmlFor="toDate" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/70 flex items-center gap-2">
-                        <Calendar size={12} className="text-primary/60" /> To
-                    </Label>
-                    <Input
-                        id="toDate"
-                        name="toDate"
-                        type="date"
-                        value={filters.toDate}
-                        onChange={handleChange}
                         className="h-10 text-xs bg-muted/20 border-border/50 focus:bg-background transition-all duration-300 rounded-xl"
                     />
                 </div>

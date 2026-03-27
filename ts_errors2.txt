@@ -1,0 +1,3 @@
+﻿src/modules/supply-chain-management/fleet-management/driver-management/components/DriverModal.tsx(10,1): error TS1003: Identifier expected.
+src/modules/supply-chain-management/fleet-management/driver-management/components/DriverModal.tsx(10,8): error TS1005: ',' expected.
+src/modules/supply-chain-management/fleet-management/driver-management/components/DriverModal.tsx(10,80): error TS1005: ';' expected.

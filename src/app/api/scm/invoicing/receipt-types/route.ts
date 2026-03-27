@@ -12,32 +12,22 @@ function directusHeaders() {
     return h;
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest) {
     try {
-        const resolvedParams = await params;
-        const orderId = resolvedParams.id;
-        
-        if (!orderId) {
-            return NextResponse.json({ error: "Missing sales order ID" }, { status: 400 });
-        }
-
-        const body = await req.json();
-
-        const url = `${DIRECTUS_BASE}/items/sales_order/${orderId}`;
+        const url = `${DIRECTUS_BASE}/items/sales_invoice_type?sort=type`;
         
         const response = await fetch(url, {
-            method: "PATCH",
+            cache: "no-store",
             headers: directusHeaders(),
-            body: JSON.stringify(body)
         });
 
         if (!response.ok) {
             const errorText = await response.text();
-            return NextResponse.json({ error: "Failed to update sales order", details: errorText }, { status: response.status });
+            return NextResponse.json({ error: "Failed to fetch invoice types", details: errorText }, { status: response.status });
         }
 
         const data = await response.json();
-        return NextResponse.json(data);
+        return NextResponse.json(data.data || []);
     } catch (err: any) {
         return NextResponse.json({ error: "Internal Server Error", details: err.message }, { status: 500 });
     }

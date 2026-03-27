@@ -1,0 +1,39 @@
+﻿src/modules/supply-chain-management/fleet-management/driver-management/components/DriverModal.tsx(11,25): error TS2305: Module '"@/components/ui/combobox"' has no exported member 'ComboboxOption'.
+src/modules/supply-chain-management/fleet-management/driver-management/components/DriverModal.tsx(151,29): error TS2322: Type 'Dispatch<SetStateAction<string>>' is not assignable to type '(value: string | null, eventDetails: ChangeEventDetails) => void'.
+  Types of parameters 'value' and 'value' are incompatible.
+    Type 'string | null' is not assignable to type 'SetStateAction<string>'.
+      Type 'null' is not assignable to type 'SetStateAction<string>'.
+src/modules/supply-chain-management/fleet-management/driver-management/components/DriverModal.tsx(167,29): error TS2322: Type 'Dispatch<SetStateAction<string>>' is not assignable to type '(value: string | null, eventDetails: ChangeEventDetails) => void'.
+  Types of parameters 'value' and 'value' are incompatible.
+    Type 'string | null' is not assignable to type 'SetStateAction<string>'.
+      Type 'null' is not assignable to type 'SetStateAction<string>'.
+src/modules/supply-chain-management/fleet-management/driver-management/components/DriverModal.tsx(185,29): error TS2322: Type 'Dispatch<SetStateAction<string>>' is not assignable to type '(value: string | null, eventDetails: ChangeEventDetails) => void'.
+  Types of parameters 'value' and 'value' are incompatible.
+    Type 'string | null' is not assignable to type 'SetStateAction<string>'.
+      Type 'null' is not assignable to type 'SetStateAction<string>'.
+src/modules/supply-chain-management/fleet-management/driver-management/DriverManagementModule.tsx(11,25): error TS2305: Module '"@/components/ui/combobox"' has no exported member 'ComboboxOption'.
+src/modules/supply-chain-management/fleet-management/driver-management/DriverManagementModule.tsx(125,25): error TS2322: Type 'Dispatch<SetStateAction<string>>' is not assignable to type '(value: string | null, eventDetails: ChangeEventDetails) => void'.
+  Types of parameters 'value' and 'value' are incompatible.
+    Type 'string | null' is not assignable to type 'SetStateAction<string>'.
+      Type 'null' is not assignable to type 'SetStateAction<string>'.
+src/modules/supply-chain-management/fleet-management/driver-management/DriverManagementModule.tsx(134,25): error TS2322: Type 'Dispatch<SetStateAction<string>>' is not assignable to type '(value: string | null, eventDetails: ChangeEventDetails) => void'.
+  Types of parameters 'value' and 'value' are incompatible.
+    Type 'string | null' is not assignable to type 'SetStateAction<string>'.
+      Type 'null' is not assignable to type 'SetStateAction<string>'.
+src/modules/supply-chain-management/inventory-management/physical-inventory-list/providers/fetchProvider.ts(78,17): error TS2322: Type 'number | { user_id: number; user_fname: string | null; user_lname: string | null; } | null' is not assignable to type 'number | null'.
+  Type '{ user_id: number; user_fname: string | null; user_lname: string | null; }' is not assignable to type 'number'.
+src/modules/supply-chain-management/inventory-management/stock-adjustment/components/forms/StockAdjustmentForm.tsx(126,13): error TS2322: Type '{ options: any[]; value: string; onValueChange: (val: string | null) => void; placeholder: string; disabled: boolean; renderItem: (option: any) => Element; }' is not assignable to type 'IntrinsicAttributes & Omit<Props<string, "single">, "onOpenChange" | "autoComplete" | "fillInputOnItemPress" | "formAutoComplete" | "submitOnItemClick" | ... 12 more ... | "onItemHighlighted"> & { ...; }'.
+  Property 'options' does not exist on type 'IntrinsicAttributes & Omit<Props<string, "single">, "onOpenChange" | "autoComplete" | "fillInputOnItemPress" | "formAutoComplete" | "submitOnItemClick" | ... 12 more ... | "onItemHighlighted"> & { ...; }'.
+src/modules/supply-chain-management/inventory-management/stock-adjustment/components/forms/StockAdjustmentForm.tsx(918,19): error TS2322: Type '{ options: { value: string; label: string; }[]; value: string; onValueChange: (v: string | null) => void; placeholder: string; disabled: boolean; className: string; }' is not assignable to type 'IntrinsicAttributes & Omit<Props<string, "single">, "onOpenChange" | "autoComplete" | "fillInputOnItemPress" | "formAutoComplete" | "submitOnItemClick" | ... 12 more ... | "onItemHighlighted"> & { ...; }'.
+  Property 'options' does not exist on type 'IntrinsicAttributes & Omit<Props<string, "single">, "onOpenChange" | "autoComplete" | "fillInputOnItemPress" | "formAutoComplete" | "submitOnItemClick" | ... 12 more ... | "onItemHighlighted"> & { ...; }'.
+src/modules/supply-chain-management/inventory-management/stock-adjustment/components/forms/StockAdjustmentForm.tsx(940,19): error TS2322: Type '{ options: { value: string; label: string; }[]; value: string; onValueChange: (v: string | null) => void; placeholder: string; disabled: boolean; className: string; }' is not assignable to type 'IntrinsicAttributes & Omit<Props<string, "single">, "onOpenChange" | "autoComplete" | "fillInputOnItemPress" | "formAutoComplete" | "submitOnItemClick" | ... 12 more ... | "onItemHighlighted"> & { ...; }'.
+  Property 'options' does not exist on type 'IntrinsicAttributes & Omit<Props<string, "single">, "onOpenChange" | "autoComplete" | "fillInputOnItemPress" | "formAutoComplete" | "submitOnItemClick" | ... 12 more ... | "onItemHighlighted"> & { ...; }'.
+src/modules/supply-chain-management/invoicing-v1/components/AsyncCombobox.tsx(22,10): error TS2305: Module '"@/components/ui/combobox"' has no exported member 'ComboboxOption'.
+src/modules/supply-chain-management/invoicing-v1/components/InvoicingFilters.tsx(8,10): error TS2305: Module '"@/components/ui/combobox"' has no exported member 'ComboboxOption'.
+src/modules/supply-chain-management/invoicing/components/AsyncCombobox.tsx(22,10): error TS2305: Module '"@/components/ui/combobox"' has no exported member 'ComboboxOption'.
+src/modules/supply-chain-management/invoicing/components/ConvertToInvoiceModal.tsx(528,21): error TS2322: Type 'ReceiptItem[]' is not assignable to type 'import("C:/Users/Admin/Desktop/vos-web-v2-systems/supply-chain-management/src/modules/supply-chain-management/invoicing/utils/generateInvoicingPDF").ReceiptItem[]'.
+  Property 'ordered_qty' is missing in type 'ReceiptItem' but required in type 'import("C:/Users/Admin/Desktop/vos-web-v2-systems/supply-chain-management/src/modules/supply-chain-management/invoicing/utils/generateInvoicingPDF").ReceiptItem'.
+src/modules/supply-chain-management/invoicing/components/ConvertToInvoiceModal.tsx(840,207): error TS18048: 'kpiItem' is possibly 'undefined'.
+src/modules/supply-chain-management/invoicing/components/ConvertToInvoiceModal.tsx(844,205): error TS18048: 'kpiItem' is possibly 'undefined'.
+src/modules/supply-chain-management/invoicing/components/ConvertToInvoiceModal.tsx(848,204): error TS18048: 'kpiItem' is possibly 'undefined'.
+src/modules/supply-chain-management/invoicing/components/InvoicingFilters.tsx(8,10): error TS2305: Module '"@/components/ui/combobox"' has no exported member 'ComboboxOption'.

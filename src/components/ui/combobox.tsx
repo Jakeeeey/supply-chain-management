@@ -308,3 +308,8 @@ export {
   ComboboxValue,
   useComboboxAnchor,
 }
+
+export interface ComboboxOption {
+  value: string;
+  label: string;
+}

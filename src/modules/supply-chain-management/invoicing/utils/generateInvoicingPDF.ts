@@ -353,7 +353,25 @@ const generateThermalReceipt = async (data: ReceiptData): Promise<jsPDF> => {
     leftRight("NET AMOUNT:", formatCurrency(netTotal));
     divider('=');
 
-    y += 5;
+    y += 4;
+    doc.text("Received By: ___________________", THERMAL_MARGIN, y); y += lineStep;
+    doc.text("Date: __________________________", THERMAL_MARGIN, y); y += lineStep;
+    doc.text("Printed Name: __________________", THERMAL_MARGIN, y); y += lineStep;
+    doc.text("Position: ______________________", THERMAL_MARGIN, y); y += lineStep;
+    y += 2;
+    
+    const disclaimer1 = "This Delivery Receipt confirms delivery of goods as listed above.";
+    const lines1 = doc.splitTextToSize(disclaimer1, THERMAL_CONTENT_WIDTH);
+    doc.text(lines1, THERMAL_MARGIN, y);
+    y += (lines1.length * lineStep) + 2;
+
+    const disclaimer2 = "It is issued for delivery confirmation only and is not valid for claiming input VAT.";
+    const lines2 = doc.splitTextToSize(disclaimer2, THERMAL_CONTENT_WIDTH);
+    doc.text(lines2, THERMAL_MARGIN, y);
+    y += (lines2.length * lineStep) + 2;
+
+    divider('=');
+    y += 2;
     center("--- THANK YOU ---");
     center(format(new Date(), "yyyy-MM-dd HH:mm:ss"));
 

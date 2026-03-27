@@ -238,10 +238,12 @@ export const ReceiptTemplateEditor: React.FC<Props> = ({ isOpen, onClose, onSave
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="!fixed !inset-0 !z-50 !w-screen !h-screen !max-w-none !translate-x-0 !translate-y-0 !m-0 !rounded-none flex flex-col p-0 overflow-hidden border-none shadow-none bg-background !top-0 !left-0">
-                <DialogHeader className="p-4 border-b bg-background shrink-0">
-                    <DialogTitle className="flex items-center justify-between">
+                <DialogHeader className="p-4 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 shrink-0">
+                    <DialogTitle className="flex items-center justify-between text-zinc-900 dark:text-zinc-100">
                         <div className="flex items-center gap-2">
-                            <Type className="w-5 h-5 text-primary" />
+                            <div className="p-1.5 bg-primary/10 rounded-lg">
+                                <Type className="w-5 h-5 text-primary" />
+                            </div>
                             Official Receipt Template Designer
                         </div>
                         <div className="flex items-center gap-4 mr-8">
@@ -271,9 +273,9 @@ export const ReceiptTemplateEditor: React.FC<Props> = ({ isOpen, onClose, onSave
                     </DialogTitle>
                 </DialogHeader>
 
-                <div className="flex-1 flex overflow-hidden">
+                <div className="flex-1 flex overflow-hidden bg-zinc-100 dark:bg-zinc-950">
                     {/* Sidebar / Tools */}
-                    <div className="w-96 border-r bg-muted/30 p-4 space-y-6 overflow-y-auto">
+                    <div className="w-96 border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 p-4 space-y-6 overflow-y-auto">
                         <section className="space-y-3">
                             <Label className="text-xs font-bold uppercase text-muted-foreground">Page Setup</Label>
                             <div className="grid grid-cols-2 gap-2">
@@ -353,7 +355,7 @@ export const ReceiptTemplateEditor: React.FC<Props> = ({ isOpen, onClose, onSave
                                 {Object.entries(template.fields).map(([key, config]) => (
                                     <div 
                                         key={key}
-                                        className={`p-2 rounded-lg border cursor-pointer transition-colors ${activeField === key ? 'bg-primary/10 border-primary' : 'bg-background hover:bg-accent'}`}
+                                        className={`p-2 rounded-lg border cursor-pointer transition-colors ${activeField === key ? 'bg-primary/10 border-primary ring-1 ring-primary/20' : 'bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 hover:border-primary/50'}`}
                                         onClick={() => setActiveField(key)}
                                     >
                                         <div className="flex justify-between items-center mb-2">
@@ -415,7 +417,7 @@ export const ReceiptTemplateEditor: React.FC<Props> = ({ isOpen, onClose, onSave
 
                         <section className="space-y-3">
                             <Label className="text-xs font-bold uppercase text-muted-foreground">Table Settings</Label>
-                            <div className="p-3 rounded-lg border bg-zinc-50 space-y-3">
+                            <div className="p-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 space-y-3">
                                 <div className="space-y-1">
                                     <Label className="text-[10px]">Table Font Size (pt)</Label>
                                     <Input 
@@ -475,10 +477,10 @@ export const ReceiptTemplateEditor: React.FC<Props> = ({ isOpen, onClose, onSave
                     </div>
 
                     {/* Canvas Area */}
-                    <div ref={scrollRef} className="flex-1 bg-zinc-900 flex items-start justify-center overflow-auto relative p-12">
+                    <div ref={scrollRef} className="flex-1 bg-zinc-200 dark:bg-zinc-950 flex items-start justify-center overflow-auto relative p-12">
                         <div 
                             ref={canvasRef}
-                            className="bg-white shadow-[0_0_50px_rgba(0,0,0,0.5)] relative overflow-hidden ring-1 ring-zinc-700 transition-transform origin-top"
+                            className="bg-white shadow-[0_20px_60px_rgba(0,0,0,0.3)] dark:shadow-[0_20px_60px_rgba(0,0,0,0.6)] relative overflow-hidden ring-1 ring-zinc-300 dark:ring-white/10 transition-transform origin-top"
                             style={{
                                 width: `${template.width}mm`,
                                 height: `${template.height}mm`,
@@ -501,7 +503,7 @@ export const ReceiptTemplateEditor: React.FC<Props> = ({ isOpen, onClose, onSave
                                         setActiveField(key);
                                         handleDrag(key, e);
                                     }}
-                                    className={`absolute cursor-move border border-dashed p-0.5 whitespace-nowrap select-none transition-shadow ${
+                                    className={`absolute cursor-move border border-dashed p-0.5 whitespace-nowrap select-none transition-shadow text-zinc-900 ${
                                         activeField === key ? 'border-primary ring-1 ring-primary z-50' : 'border-slate-300 z-10'
                                     }`}
                                     style={{
@@ -580,7 +582,7 @@ export const ReceiptTemplateEditor: React.FC<Props> = ({ isOpen, onClose, onSave
                                 ].map((item, idx) => (
                                     <div 
                                         key={`sample-row-${idx}`}
-                                        className="absolute w-full flex items-center pointer-events-none opacity-40 select-none grayscale"
+                                    className="absolute w-full flex items-center pointer-events-none opacity-40 select-none grayscale text-zinc-900"
                                         style={{ 
                                             top: `${template.tableSettings.startY + (idx * template.tableSettings.rowHeight)}mm`,
                                             height: `${template.tableSettings.rowHeight}mm`,
@@ -621,19 +623,16 @@ export const ReceiptTemplateEditor: React.FC<Props> = ({ isOpen, onClose, onSave
                     </div>
                 </div>
 
-                <DialogFooter className="p-4 border-t bg-background flex justify-between sm:justify-between items-center shrink-0">
-                    <div className="text-xs text-muted-foreground italic">
+                <DialogFooter className="p-4 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex justify-between sm:justify-between items-center shrink-0">
+                    <div className="text-[10px] text-muted-foreground italic font-medium">
                         * Drag items to align. Coordinates are in Millimeters (mm).
                     </div>
                     <div className="flex gap-2">
-                        <Button variant="ghost" onClick={onClose}>Cancel</Button>
-                        <Button variant="secondary" onClick={() => onSave(template)}>
-                            <Save className="w-4 h-4 mr-2" />
-                            Save as Draft
-                        </Button>
-                        <Button onClick={() => onSave(template)}>
+                        <Button variant="outline" className="h-10 px-6 rounded-xl font-bold text-xs uppercase tracking-widest border-zinc-200 dark:border-zinc-800" onClick={onClose}>Cancel</Button>
+
+                        <Button className="h-10 px-8 rounded-xl font-black text-xs uppercase tracking-[0.15em] shadow-lg shadow-primary/20" onClick={() => onSave(template)}>
                             <Maximize2 className="w-4 h-4 mr-2" />
-                            Finalize & Use Template
+                            Save Template
                         </Button>
                     </div>
                 </DialogFooter>

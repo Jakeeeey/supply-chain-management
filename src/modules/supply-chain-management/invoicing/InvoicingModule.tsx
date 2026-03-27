@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-import { subMonths, addMonths, format } from "date-fns";
+import { format } from "date-fns";
 
 const InvoicingModule: React.FC = () => {
     const [groupedOrders, setGroupedOrders] = useState<CustomerGroup[]>([]);
@@ -23,8 +23,6 @@ const InvoicingModule: React.FC = () => {
         salesman: "",
         supplier: "",
         branch: "",
-        fromDate: format(subMonths(new Date(), 1), "yyyy-MM-dd"),
-        toDate: format(addMonths(new Date(), 1), "yyyy-MM-dd"),
     });
 
     const groupOrdersByCustomer = (orders: SalesOrder[]): CustomerGroup[] => {

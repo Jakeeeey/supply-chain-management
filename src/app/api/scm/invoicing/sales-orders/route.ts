@@ -62,7 +62,8 @@ export async function GET(req: NextRequest) {
             "for_invoicing_at",
             "for_loading_at",
             "for_shipping_at",
-            "delivered_at"
+            "delivered_at",
+            "not_fulfilled_at"
         ].join(",");
 
         const url = `${DIRECTUS_BASE}/items/sales_order?${filterParams}&fields=${fields}&limit=-1`;
@@ -82,30 +83,71 @@ export async function GET(req: NextRequest) {
 
         if (orders.length === 0) return NextResponse.json([]);
 
-        // 3. Manual Join for Customers
+        // ── 1. Manual Join for Customers ──────────────────────────────────────
         const uniqueCustomerCodes = Array.from(new Set(orders.map((o: any) => o.customer_code).filter(Boolean)));
         
         const customersRes = await fetch(`${DIRECTUS_BASE}/items/customer?filter[customer_code][_in]=${uniqueCustomerCodes.join(",")}&fields=customer_code,customer_name`, {
             headers: directusHeaders(),
         });
 
+        let customerMap = new Map<string, any>();
         if (customersRes.ok) {
             const customersData = await customersRes.json();
-            const customerMap = new Map(customersData.data.map((c: any) => [c.customer_code, c]));
-            
-            // Transform the data to match the expected frontend structure
-            const enrichedOrders = orders.map((o: any) => ({
+            customerMap = new Map(customersData.data.map((c: any) => [c.customer_code, c]));
+        }
+
+        // ── 2. Batch-fetch invoices for all orders to detect recycled & void ─
+        const allOrderNos = orders.map((o: any) => o.order_no).join(",");
+        let recycledInvoiceMap = new Map<string, { invoice_id: number; invoice_no: string }>();
+        let voidInvoiceMap = new Map<string, { invoice_id: number; invoice_no: string }>();
+
+        if (allOrderNos) {
+            const invoiceRes = await fetch(
+                `${DIRECTUS_BASE}/items/sales_invoice?filter[order_id][_in]=${encodeURIComponent(allOrderNos)}&fields=invoice_id,order_id,invoice_no,transaction_status&limit=-1`,
+                { headers: directusHeaders() }
+            );
+            if (invoiceRes.ok) {
+                const invoiceData = await invoiceRes.json();
+                for (const inv of (invoiceData.data || [])) {
+                    if (inv.transaction_status === "Void") {
+                        // Void takes priority — it's a re-invoicing situation
+                        voidInvoiceMap.set(inv.order_id, { invoice_id: inv.invoice_id, invoice_no: inv.invoice_no });
+                    } else {
+                        // Non-void existing invoice — used for recycled orders
+                        if (!recycledInvoiceMap.has(inv.order_id)) {
+                            recycledInvoiceMap.set(inv.order_id, { invoice_id: inv.invoice_id, invoice_no: inv.invoice_no });
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── 3. Build enriched response ────────────────────────────────────────
+        const enrichedOrders = orders.map((o: any) => {
+            const voidInvoice = voidInvoiceMap.get(o.order_no);
+            const existingInvoice = !voidInvoice && o.not_fulfilled_at
+                ? recycledInvoiceMap.get(o.order_no)
+                : undefined;
+
+            return {
                 ...o,
                 customer_code: customerMap.get(o.customer_code) || {
                     customer_code: o.customer_code,
                     customer_name: "Unknown Customer"
-                }
-            }));
-            return NextResponse.json(enrichedOrders);
-        }
+                },
+                // Recycled order fields (only when not void)
+                existing_invoice_no: existingInvoice?.invoice_id ?? null,
+                existing_invoice_display_no: existingInvoice?.invoice_no ?? null,
+                // Void invoice fields
+                void_invoice_id: voidInvoice?.invoice_id ?? null,
+                void_invoice_display_no: voidInvoice?.invoice_no ?? null,
+            };
+        });
 
-        return NextResponse.json(orders);
+        return NextResponse.json(enrichedOrders);
     } catch (err: any) {
         return NextResponse.json({ error: "Internal Server Error", details: err.message }, { status: 500 });
     }
 }
+
+
