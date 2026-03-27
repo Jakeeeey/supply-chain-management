@@ -168,7 +168,9 @@ export function DispatchListSidebar({
           ) : (
             filteredPlans.map((plan) => {
               const isSelected = plan.id === selectedPlanId;
-              const hasBudget = (plan.budgetTotal || 0) > 0;
+              const hasBudget =
+                (plan.budgetTotal || 0) > 0 ||
+                (plan.status !== "For Approval" && plan.status !== "DRAFT");
 
               return (
                 <div
