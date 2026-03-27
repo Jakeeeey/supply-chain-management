@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useGlobalScanner } from "../hooks/useGlobalScanner";
 import type { CartItem } from "../types/rts.schema";
 
@@ -51,22 +52,34 @@ interface ProductPickerProps {
   isLoading?: boolean;
 }
 
-// ✅ HELPER: Skeleton Card Component for Loading State
+// ✅ HELPER: Skeleton Card Component for Loading State — mirrors actual product card
 function ProductSkeleton() {
   return (
-    <div className="bg-card rounded-xl border p-4 space-y-3 shadow-sm">
-      <div className="flex justify-between items-start">
-        <div className="space-y-2 w-3/4">
-          <div className="h-4 bg-muted rounded w-full animate-pulse" />
-          <div className="h-3 bg-muted/60 rounded w-1/2 animate-pulse" />
-        </div>
+    <div className="bg-card rounded-xl border shadow-sm overflow-hidden flex flex-col">
+      {/* Header area — mirrors the product family name + code */}
+      <div className="p-4 border-b bg-muted/20 space-y-2">
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-3 w-1/3" />
       </div>
-      <div className="pt-2 flex justify-between items-end border-t border-muted/50 mt-2">
-        <div className="space-y-1">
-          <div className="h-5 bg-muted rounded w-20 animate-pulse" />
-          <div className="h-3 bg-muted/50 rounded w-12 animate-pulse" />
-        </div>
-        <div className="h-8 w-20 bg-muted rounded animate-pulse" />
+      {/* Variant rows — mirrors price/stock/Add button layout */}
+      <div className="p-3 space-y-2">
+        {Array.from({ length: 2 }).map((_, j) => (
+          <div
+            key={j}
+            className="flex items-center justify-between p-3 rounded-lg bg-muted/10"
+          >
+            <div className="flex-1 min-w-0 mr-4 space-y-2">
+              <div className="flex items-baseline gap-2">
+                <Skeleton className="h-5 w-20" />
+                <Skeleton className="h-3 w-10" />
+              </div>
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-3 w-16" />
+              </div>
+            </div>
+            <Skeleton className="h-8 w-16 rounded-md" />
+          </div>
+        ))}
       </div>
     </div>
   );

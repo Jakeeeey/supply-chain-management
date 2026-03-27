@@ -27,8 +27,6 @@ import {
   Plus,
   X,
   Package,
-  ArrowRight,
-  ArrowLeft,
   Loader2,
   Check,
   ChevronsUpDown,
@@ -60,7 +58,7 @@ export function CreateReturnModal({
     isLoading: isLoadingInventory,
   } = useReturnCreationData(isOpen);
 
-  const [step, setStep] = useState<"input" | "review">("input");
+
   const [selection, setSelection] = useState({
     supplierId: "",
     branchId: "",
@@ -243,10 +241,10 @@ export function CreateReturnModal({
 
   // Auto-focus RFID input when ready
   useEffect(() => {
-    if (selection.supplierId && selection.branchId && step === "input") {
+    if (selection.supplierId && selection.branchId) {
       rfidInputRef.current?.focus();
     }
-  }, [selection.supplierId, selection.branchId, step]);
+  }, [selection.supplierId, selection.branchId]);
 
   const addToCart = useCallback((p_raw: unknown, qty = 1) => {
     const p = p_raw as Product;
@@ -481,7 +479,7 @@ export function CreateReturnModal({
    * and routes to the correct handler.
    */
   useGlobalScanner({
-    enabled: isOpen && step === "input" && !showPicker,
+    enabled: isOpen && !showPicker,
     onScan: (val) => {
       if (detectScanType(val) === "rfid") {
         handleRfidScan(val);
@@ -507,13 +505,28 @@ export function CreateReturnModal({
   const handleCloseFull = () => {
     setSelection({ supplierId: "", branchId: "", remarks: "" });
     setCart([]);
-    setStep("input");
     setShowPicker(false);
     setLastScannedRfid(""); // Reset scan display
     onClose();
   };
 
   const handleSubmit = async () => {
+    // Validate: supplier and branch must be selected
+    if (!selection.supplierId || !selection.branchId) {
+      toast.error("Validation Error", {
+        description: "Please select a Supplier and Branch before confirming.",
+      });
+      return;
+    }
+
+    // Validate: cart must not be empty
+    if (cart.length === 0) {
+      toast.error("Validation Error", {
+        description: "Please add at least one product to return.",
+      });
+      return;
+    }
+
     // Validate: all items must have a return type
     const missingReturnType = cart.some((item) => !item.return_type_id);
     if (missingReturnType) {
@@ -586,10 +599,8 @@ export function CreateReturnModal({
                 </div>
                 Add Products
               </>
-            ) : step === "input" ? (
-              "Create Return"
             ) : (
-              "Review Transaction"
+              "Create Return"
             )}
           </DialogTitle>
           <button
@@ -618,8 +629,7 @@ export function CreateReturnModal({
             />
           ) : (
             <div className="space-y-8">
-              {step === "input" ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 bg-card p-6 rounded-xl border shadow-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 bg-card p-6 rounded-xl border shadow-sm">
                   {/* Supplier Select */}
                   <div className="space-y-2 flex flex-col">
                     <Label className="text-xs font-bold uppercase">
@@ -726,6 +736,7 @@ export function CreateReturnModal({
                                       ...prev,
                                       branchId: String(b.id),
                                     }));
+                                    setCart([]);
                                     setOpenBranch(false);
                                   }}
                                 >
@@ -747,47 +758,17 @@ export function CreateReturnModal({
                     </Popover>
                   </div>
                 </div>
-              ) : (
-                <div className="bg-card p-6 rounded-xl border shadow-sm flex gap-8">
-                  <div>
-                    <div className="text-xs text-muted-foreground font-bold uppercase">
-                      Supplier
-                    </div>
-                    <div className="text-lg font-bold">
-                      {
-                        refs.suppliers.find(
-                          (s) => String(s.id) === selection.supplierId,
-                        )?.supplier_name
-                      }
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground font-bold uppercase">
-                      Branch
-                    </div>
-                    <div className="text-lg font-bold">
-                      {
-                        refs.branches.find(
-                          (b) => String(b.id) === selection.branchId,
-                        )?.branch_name
-                      }
-                    </div>
-                  </div>
-                </div>
-              )}
 
               {/* Cart Section */}
               {selection.supplierId && selection.branchId ? (
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <Label className="font-bold flex items-center gap-2">
-                       <Package className="h-4 w-4 text-primary" />{" "}
-                      {step === "input" ? "Items" : "Summary"}
+                       <Package className="h-4 w-4 text-primary" /> Items
                     </Label>
                     <div className="flex items-center gap-2">
                       {/* RFID Scan Field — scanner-only (no manual typing) */}
-                      {step === "input" && (
-                        <div className="relative">
+                      <div className="relative">
                           <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500" />
                           {/* Hidden input captures scanner keyboard wedge input */}
                           <input
@@ -817,16 +798,13 @@ export function CreateReturnModal({
                           {rfidScanning && (
                             <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 animate-spin text-emerald-500" />
                           )}
-                        </div>
-                      )}
-                      {step === "input" && (
-                        <Button
-                          onClick={() => setShowPicker(true)}
-                          className="h-9 text-xs"
-                        >
-                          <Plus className="mr-2 h-3 w-3" /> Add
-                        </Button>
-                      )}
+                      </div>
+                      <Button
+                        onClick={() => setShowPicker(true)}
+                        className="h-9 text-xs"
+                      >
+                        <Plus className="mr-2 h-3 w-3" /> Add
+                      </Button>
                     </div>
                   </div>
                   {cart.length > 0 ? (
@@ -842,7 +820,7 @@ export function CreateReturnModal({
                       setRemarks={(r) =>
                         setSelection((s) => ({ ...s, remarks: r }))
                       }
-                      readOnly={step === "review"}
+                      readOnly={false}
                     />
                   ) : (
                     <div className="border-2 border-dashed h-32 flex items-center justify-center text-muted-foreground text-sm">
@@ -862,15 +840,6 @@ export function CreateReturnModal({
         {/* Footer */}
         {!showPicker && (
           <DialogFooter className="px-8 py-5 border-t bg-background shrink-0">
-            {step === "review" && (
-              <Button
-                variant="ghost"
-                onClick={() => setStep("input")}
-                className="mr-auto"
-              >
-                <ArrowLeft className="mr-2 h-4 w-4" /> Back
-              </Button>
-            )}
             <Button
               variant="outline"
               onClick={handleCloseFull}
@@ -878,30 +847,22 @@ export function CreateReturnModal({
             >
               Cancel
             </Button>
-            {step === "input" ? (
-              <Button
-                disabled={
-                  !selection.supplierId ||
-                  !selection.branchId ||
-                  cart.length === 0
-                }
-                onClick={() => setStep("review")}
-              >
-                Review <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            ) : (
-              <Button
-                onClick={handleSubmit}
-                disabled={submitting}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground"
-              >
-                {submitting ? (
-                  <Loader2 className="animate-spin mr-2 h-4 w-4" />
-                ) : (
-                  "Confirm Return"
-                )}
-              </Button>
-            )}
+            <Button
+              onClick={handleSubmit}
+              disabled={
+                submitting ||
+                !selection.supplierId ||
+                !selection.branchId ||
+                cart.length === 0
+              }
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
+            >
+              {submitting ? (
+                <Loader2 className="animate-spin mr-2 h-4 w-4" />
+              ) : (
+                "Confirm Return"
+              )}
+            </Button>
           </DialogFooter>
         )}
       </DialogContent>
