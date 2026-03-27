@@ -322,7 +322,7 @@ export async function GET(request: NextRequest) {
           ...p,
           unit_of_measurement: typeof p.unit_of_measurement === 'number' ? unitsMap.get(p.unit_of_measurement) : p.unit_of_measurement,
           product_brand: typeof p.product_brand === 'number' ? brandsMap.get(p.product_brand) : p.product_brand,
-          qtyAvailable: qty
+          qtyAvailable: qty / (p.unit_of_measurement_count || 1)
         };
       });
 
@@ -337,7 +337,7 @@ export async function GET(request: NextRequest) {
 
   // Default: Fetch everything for the module
   try {
-    const relationalFields = 'fields=*,product_id.product_id,product_id.product_name,product_id.description,product_id.barcode,product_id.product_brand.brand_name,product_id.unit_of_measurement.unit_id,product_id.unit_of_measurement.unit_name';
+    const relationalFields = 'fields=*,product_id.product_id,product_id.product_name,product_id.description,product_id.barcode,product_id.unit_of_measurement_count,product_id.product_brand.brand_name,product_id.product_category.category_name,product_id.product_per_supplier.supplier_id.supplier_shortcut,product_id.unit_of_measurement.unit_id,product_id.unit_of_measurement.unit_name';
     
     // Correctly encode each status in the comma-separated list
     const encodedStatusFilter = statusFilter 

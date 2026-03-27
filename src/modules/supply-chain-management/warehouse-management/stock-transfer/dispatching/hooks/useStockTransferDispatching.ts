@@ -6,6 +6,7 @@ export interface DispatchItem extends StockTransfer {
   scannedQty: number;
   scannedRfids: string[];
   qtyAvailable?: number;
+  isLoosePack?: boolean;
 }
 
 export interface DispatchGroup {
@@ -83,7 +84,9 @@ export function useStockTransferDispatching() {
         ...st,
         scannedQty: rfids.length,
         scannedRfids: rfids,
-        qtyAvailable: scannedInventory[pid] ?? (st as any).qtyAvailable ?? 0
+        qtyAvailable: scannedInventory[pid] ?? (st as any).qtyAvailable ?? 0,
+        // Mark as loose pack if unit is not RFID-tracked (e.g. Unit ID 4 or name contains 'Loose')
+        isLoosePack: product?.unit_of_measurement?.unit_name?.toLowerCase().includes('loose') || product?.unit_of_measurement?.unit_id === 4 
       });
       groups[st.order_no].totalAmount += Number(st.amount || 0);
     });
@@ -232,9 +235,8 @@ export function useStockTransferDispatching() {
 
       if (!res.ok) {
         playErrorSound();
-        toast.error(match.error || "Lookup Failed", {
-          description: match.details || "RFID not recognized or not on hand."
-        });
+        // Removed error toast as requested: "walang error notifications for scanned rfid's"
+        console.warn(`[Scan Error] ${match.error || "Lookup Failed"}: ${match.details || ""}`);
         return;
       }
       
@@ -264,18 +266,16 @@ export function useStockTransferDispatching() {
 
       if (!itemInOrder) {
         playErrorSound();
-        toast.error(`Invalid Scan`, {
-          description: `Product (ID: ${productId}) is not part of this order!`
-        });
+        // Removed error toast as requested
+        console.warn(`[Scan Error] Product (ID: ${productId}) is not part of this order!`);
         return;
       }
       
       const currentRfidsForProduct = scannedItemsState[selectedOrderNo]?.[effectiveProductId] || [];
       if (currentRfidsForProduct.includes(rfid)) {
         playErrorSound();
-        toast.warning("Already Scanned", {
-          description: `RFID ${rfid} has already been packged for this item.`
-        });
+        // Removed warning toast
+        console.warn(`[Scan Warning] RFID ${rfid} already scanned for this item.`);
         return;
       }
 
@@ -283,17 +283,17 @@ export function useStockTransferDispatching() {
       const allScannedRfidsInOrder = Object.values(scannedItemsState[selectedOrderNo] || {}).flat();
       if (allScannedRfidsInOrder.includes(rfid)) {
         playErrorSound();
-        toast.error("Duplicate RFID", {
-          description: "This tag is already used for another product in this withdrawal."
-        });
+        // Removed error toast
+        console.warn(`[Scan Error] Duplicate RFID ${rfid} in order.`);
         return;
       }
       
-      if (itemInOrder.scannedQty >= itemInOrder.ordered_quantity) {
+      const targetQty = (itemInOrder as any).allocated_quantity || itemInOrder.ordered_quantity;
+      
+      if (itemInOrder.scannedQty >= targetQty) {
         playErrorSound();
-        toast.info(`Already Complete`, {
-          description: "Required quantity for this product already reached."
-        });
+        // Removed info toast
+        console.warn(`[Scan Info] Required quantity already reached.`);
         return;
       }
       
@@ -339,7 +339,8 @@ export function useStockTransferDispatching() {
           ? (scannedItemsState[selectedOrderNo]?.[effectiveProductId]?.length || 0) + 1
           : (scannedItemsState[selectedOrderNo]?.[pid]?.length || 0);
           
-        return scanCount >= item.ordered_quantity;
+        const targetQty = (item as any).allocated_quantity || item.ordered_quantity;
+        return scanCount >= targetQty;
       });
 
       if (isComplete && selectedGroup.status !== 'Picked') {
@@ -375,5 +376,20 @@ export function useStockTransferDispatching() {
     handleScanRFID,
     getBranchName,
     refresh: fetchTransfers,
+    updateLoosePackQty: (productId: number, qty: number) => {
+      if (!selectedOrderNo) return;
+      setScannedItemsState(prev => {
+        const orderState = prev[selectedOrderNo] || {};
+        // Use pseudo RFIDs for loose packs
+        const pseudoRfids = Array.from({ length: qty }, (_, i) => `LOOSE-${productId}-${i}-${Date.now()}`);
+        return {
+          ...prev,
+          [selectedOrderNo]: {
+            ...orderState,
+            [productId]: pseudoRfids
+          }
+        };
+      });
+    }
   };
 }

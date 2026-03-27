@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 export default function StockTransferApprovalModule() {
   const {
@@ -35,6 +36,10 @@ export default function StockTransferApprovalModule() {
     getBranchName,
     stockTransfers,
     refresh,
+    allocatedQtys,
+    availableQtys,
+    fetchingAvailable,
+    updateAllocatedQty,
   } = useStockTransferApproval();
 
   const [currentPage, setCurrentPage] = React.useState(1);
@@ -44,6 +49,21 @@ export default function StockTransferApprovalModule() {
   React.useEffect(() => {
     setCurrentPage(1);
   }, [selectedOrderNo]);
+
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return 'N/A';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return dateString;
+      return new Intl.DateTimeFormat('en-PH', {
+        month: 'short',
+        day: '2-digit',
+        year: 'numeric'
+      }).format(date);
+    } catch (e) {
+      return dateString;
+    }
+  };
 
   const totalItems = selectedGroup?.items.length || 0;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
@@ -120,11 +140,11 @@ export default function StockTransferApprovalModule() {
                   </div>
                   <div>
                     <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Lead Date</p>
-                    <p className="font-medium text-sm">{selectedGroup.leadDate || 'N/A'}</p>
+                    <p className="font-medium text-sm">{formatDate(selectedGroup.leadDate)}</p>
                   </div>
                   <div>
                     <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Date Requested</p>
-                    <p className="font-medium text-sm">{new Date(selectedGroup.dateRequested).toLocaleDateString()}</p>
+                    <p className="font-medium text-sm">{formatDate(selectedGroup.dateRequested)}</p>
                   </div>
                 </div>
               </div>
@@ -138,11 +158,13 @@ export default function StockTransferApprovalModule() {
                       <TableHead className="text-xs uppercase font-bold">Brand</TableHead>
                       <TableHead className="text-xs uppercase font-bold">Unit</TableHead>
                       <TableHead className="text-xs uppercase font-bold text-center">Order Qty</TableHead>
+                      <TableHead className="text-xs uppercase font-bold text-center">Available Qty</TableHead>
+                      <TableHead className="text-xs uppercase font-bold text-center">Allocated Qty</TableHead>
                       <TableHead className="text-xs uppercase font-bold text-right">Total Amount</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {paginatedItems.map((item) => {
+                    {paginatedItems.map((item: any) => {
                       const product = typeof item.product_id === 'object' && item.product_id !== null ? item.product_id : null;
                       const productName = product?.product_name || `PRD-${item.product_id}`;
                       const description = product?.description || product?.barcode || 'N/A';
@@ -163,6 +185,23 @@ export default function StockTransferApprovalModule() {
                           <TableCell className="text-xs font-medium text-primary uppercase">{brandName}</TableCell>
                           <TableCell className="text-xs font-medium uppercase text-muted-foreground">{unitName}</TableCell>
                           <TableCell className="text-sm text-center font-medium">{item.ordered_quantity}</TableCell>
+                          <TableCell className="text-sm text-center font-medium">
+                            {fetchingAvailable ? (
+                              <Loader2 className="w-3 h-3 animate-spin mx-auto text-muted-foreground" />
+                            ) : (
+                              availableQtys[item.id] ?? '—'
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm text-center">
+                            <Input
+                              type="number"
+                              className="h-8 w-20 text-center mx-auto"
+                              value={allocatedQtys[item.id] ?? item.ordered_quantity}
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateAllocatedQty(item.id, Number(e.target.value))}
+                              max={availableQtys[item.id] || 0}
+                              min={0}
+                            />
+                          </TableCell>
                           <TableCell className="text-right text-sm font-bold">₱{Number(item.amount).toLocaleString('en-PH', {minimumFractionDigits: 2})}</TableCell>
                         </TableRow>
                       );
@@ -170,9 +209,9 @@ export default function StockTransferApprovalModule() {
                   </TableBody>
                   <TableFooter className="bg-muted/30">
                     <TableRow>
-                      <TableCell colSpan={5} className="text-right font-bold text-xs uppercase tracking-wider text-muted-foreground py-4">Grand Total</TableCell>
+                      <TableCell colSpan={7} className="text-right font-bold text-xs uppercase tracking-wider text-muted-foreground py-4">Grand Total</TableCell>
                       <TableCell className="text-right text-base font-bold text-emerald-600 py-4">
-                        ₱{selectedGroup.items.reduce((sum, item) => sum + Number(item.amount || 0), 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}
+                        ₱{selectedGroup.items.reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}
                       </TableCell>
                     </TableRow>
                   </TableFooter>

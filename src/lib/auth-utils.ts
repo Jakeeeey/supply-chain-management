@@ -59,3 +59,36 @@ export function getUserNameFromToken(token: string | null | undefined): string {
   const name = [first, last].filter(Boolean).join(" ") || email || "User";
   return name;
 }
+/**
+ * Build Header User Object for NavUser from Token
+ */
+export function getHeaderUserFromToken(token: string | null | undefined) {
+  if (!token) {
+    return {
+      name: "System User",
+      email: "",
+      avatar: "/avatars/shadcn.jpg",
+    };
+  }
+
+  const payload = decodeJwtPayload(token);
+  if (!payload) {
+    return {
+      name: "Guest User",
+      email: "",
+      avatar: "/avatars/shadcn.jpg",
+    };
+  }
+
+  const first = (payload.Firstname ?? payload.FirstName ?? payload.firstName ?? payload.firstname ?? payload.first_name ?? "").trim();
+  const last = (payload.LastName ?? payload.Lastname ?? payload.lastName ?? payload.lastname ?? payload.last_name ?? "").trim();
+  const email = (payload.email ?? payload.Email ?? "").trim();
+
+  const name = [first, last].filter(Boolean).join(" ") || email || "User";
+
+  return {
+    name,
+    email: email || "",
+    avatar: "/avatars/shadcn.jpg",
+  };
+}

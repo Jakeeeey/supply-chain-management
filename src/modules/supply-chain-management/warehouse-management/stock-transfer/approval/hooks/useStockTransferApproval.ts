@@ -11,6 +11,7 @@ export interface OrderGroup {
   dateEncoded: string;
   items: StockTransfer[];
   totalAmount: number;
+  status: string;
 }
 
 export function useStockTransferApproval() {
@@ -44,6 +45,9 @@ export function useStockTransferApproval() {
   const [processing, setProcessing] = useState(false);
 
   const [selectedOrderNo, setSelectedOrderNo] = useState<string | null>(null);
+  const [allocatedQtys, setAllocatedQtys] = useState<Record<number, number>>({});
+  const [availableQtys, setAvailableQtys] = useState<Record<number, number>>({});
+  const [fetchingAvailable, setFetchingAvailable] = useState(false);
 
   const fetchTransfers = useCallback(async () => {
     setLoading(true);
@@ -71,6 +75,15 @@ export function useStockTransferApproval() {
     fetchTransfers();
   }, [fetchTransfers]);
 
+  const getBranchName = useCallback(
+    (id: number | null) => {
+      if (!id) return 'Unknown';
+      const b = branches.find((branch) => branch.id === id);
+      return b ? (b.branch_name as string) || (b.name as string) || `Branch ${id}` : `Branch ${id}`;
+    },
+    [branches]
+  );
+
   // Group the flat stockTransfers array by order_no
   const orderGroups = useMemo(() => {
     const groups: Record<string, OrderGroup> = {};
@@ -85,6 +98,7 @@ export function useStockTransferApproval() {
           dateEncoded: st.date_encoded || '',
           items: [],
           totalAmount: 0,
+          status: st.status,
         };
       }
       groups[st.order_no].items.push(st);
@@ -101,6 +115,97 @@ export function useStockTransferApproval() {
     return orderGroups.find((g) => g.orderNo === selectedOrderNo) || null;
   }, [selectedOrderNo, orderGroups]);
 
+  // Fetch available quantities when a group is selected
+  useEffect(() => {
+    if (!selectedGroup) return;
+
+    const fetchAvailable = async () => {
+      setFetchingAvailable(true);
+      try {
+        const sourceBranchName = getBranchName(selectedGroup.sourceBranch);
+        
+        const newAvailable: Record<number, number> = {};
+        const newAllocated: Record<number, number> = {};
+
+        for (const item of selectedGroup.items) {
+          const product = item.product_id;
+          
+          // Directus might expose category and supplier differently, but if they are arrays (junctions), pick the first
+          console.log('[DEBUG] product_category:', product?.product_category);
+          console.log('[DEBUG] product_per_supplier:', product?.product_per_supplier);
+          
+          // Helper to extract nested junction values safely
+          const extractFirst = (val: any) => Array.isArray(val) ? val[0] : val;
+          
+          const rawCategory = extractFirst(product?.product_category);
+          const category = rawCategory?.category_name || rawCategory?.name || (typeof rawCategory === 'string' ? rawCategory : '');
+
+          const rawSupplierInfo = extractFirst(product?.product_per_supplier);
+          const supplier = rawSupplierInfo?.supplier_id?.supplier_shortcut || rawSupplierInfo?.supplier_shortcut || '';
+
+          const rawBrand = extractFirst(product?.product_brand);
+          const brand = rawBrand?.brand_name || rawBrand?.name || (typeof rawBrand === 'string' ? rawBrand : '');
+
+          const rawUnit = extractFirst(product?.unit_of_measurement);
+          const unit = rawUnit?.unit_name || rawUnit?.name || (typeof rawUnit === 'string' ? rawUnit : '');
+
+          const pid = product?.product_id || product?.id;
+
+          // We need the aggregate inventory from the 8087 API.
+          // Do NOT pass unitName because the database stores running inventory in the base unit (e.g. Pieces).
+          // Also, only pass filter params if they are truthy to prevent strict mismatching (e.g. Empty supplier vs "MP").
+          // 8087 /filter API uses "branchName" rather than "branch"
+          const params = new URLSearchParams({
+            branchName: sourceBranchName,
+            branchId: String(selectedGroup.sourceBranch),
+            productId: String(pid),
+            current: '0'
+          });
+
+          if (supplier) params.append('supplierShortcut', supplier);
+          if (category) params.append('productCategory', category);
+          if (brand) params.append('productBrand', brand);
+
+          const proxyUrl = `/api/scm/warehouse-management/inventory-proxy?${params.toString()}`;
+          
+          const res = await fetch(proxyUrl);
+          if (res.ok) {
+            const data = await res.json();
+            const list = Array.isArray(data) ? data : (data.data || []);
+            // For the proxy, ensure we match exactly the source branch!
+            const inventory = list.find((inv: any) => 
+               String(inv.productId) === String(pid) && 
+               String(inv.branchId) === String(selectedGroup.sourceBranch)
+            );
+            const availableCount = inventory ? Number(inventory.runningInventory || 0) : 0;
+            const unitCount = Number(product?.unit_of_measurement_count || 1) || 1;
+            const finalAvailable = availableCount / unitCount;
+
+            newAvailable[item.id] = finalAvailable;
+            // Default allocated to ordered quantity, but cap at available
+            newAllocated[item.id] = Math.min(item.ordered_quantity || 0, finalAvailable);
+          } else {
+            newAvailable[item.id] = 0;
+            newAllocated[item.id] = 0;
+          }
+        }
+
+        setAvailableQtys(newAvailable);
+        setAllocatedQtys(newAllocated);
+      } catch (err) {
+        console.error('Failed to fetch available quantities:', err);
+      } finally {
+        setFetchingAvailable(false);
+      }
+    };
+
+    fetchAvailable();
+  }, [selectedGroup, getBranchName]);
+
+  const updateAllocatedQty = (itemId: number, qty: number) => {
+    setAllocatedQtys(prev => ({ ...prev, [itemId]: qty }));
+  };
+
   const updateStatus = async (orderNo: string, status: 'approved' | 'rejected') => {
     const group = orderGroups.find((g) => g.orderNo === orderNo);
     if (!group) return;
@@ -108,11 +213,32 @@ export function useStockTransferApproval() {
     setProcessing(true);
     try {
       const finalStatus = status === 'approved' ? 'For Picking' : status;
-      const ids = group.items.map((item) => item.id);
+      
+      // If approved, validate allocated quantities
+      if (status === 'approved') {
+        for (const item of group.items) {
+          const allocated = allocatedQtys[item.id] || 0;
+          const available = availableQtys[item.id] || 0;
+          if (allocated > available) {
+            toast.error(`Invalid Allocation`, {
+              description: `Allocated quantity for ${item.product_id?.product_name || 'item'} exceeds available stock.`
+            });
+            setProcessing(false);
+            return;
+          }
+        }
+      }
+
+      const itemsPayload = group.items.map((item) => ({
+        id: item.id,
+        allocated_quantity: allocatedQtys[item.id] || item.ordered_quantity,
+        status: finalStatus
+      }));
+
       const res = await fetch('/api/scm/warehouse-management/stock-transfer', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids, status: finalStatus }),
+        body: JSON.stringify({ items: itemsPayload, status: finalStatus }),
       });
 
       if (!res.ok) {
@@ -138,14 +264,6 @@ export function useStockTransferApproval() {
     }
   };
 
-  const getBranchName = useCallback(
-    (id: number | null) => {
-      if (!id) return 'Unknown';
-      const b = branches.find((branch) => branch.id === id);
-      return b ? (b.branch_name as string) || (b.name as string) || `Branch ${id}` : `Branch ${id}`;
-    },
-    [branches]
-  );
 
   return {
     orderGroups,
@@ -158,5 +276,9 @@ export function useStockTransferApproval() {
     getBranchName,
     stockTransfers,
     refresh: fetchTransfers,
+    allocatedQtys,
+    availableQtys,
+    fetchingAvailable,
+    updateAllocatedQty,
   };
 }

@@ -36,6 +36,7 @@ export default function StockTransferDispatchingModule() {
     dispatchOrder,
     handleScanRFID,
     getBranchName,
+    updateLoosePackQty,
   } = useStockTransferDispatching();
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -86,7 +87,10 @@ export default function StockTransferDispatchingModule() {
     }
   };
 
-  const isAllScanned = selectedGroup?.items.every(i => i.scannedQty >= i.ordered_quantity);
+  const isAllScanned = selectedGroup?.items.every((i: any) => {
+    const targetQty = (i as any).allocated_quantity || i.ordered_quantity;
+    return i.scannedQty >= targetQty;
+  });
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6 print:p-0 print:m-0 print:block print:h-auto">
@@ -255,7 +259,7 @@ export default function StockTransferDispatchingModule() {
                     <TableRow className="border-b print:border-black">
                       <TableHead className="text-xs uppercase font-bold print:text-black">Product Name</TableHead>
                       <TableHead className="text-xs uppercase font-bold print:text-black">Unit</TableHead>
-                      <TableHead className="text-xs uppercase font-bold print:text-black">Order Qty</TableHead>
+                      <TableHead className="text-xs uppercase font-bold print:text-black">Allocated Qty</TableHead>
                       <TableHead className="text-xs uppercase font-bold print:text-black">Available</TableHead>
                       <TableHead className="text-xs uppercase font-bold print:text-black">Scanned / Packed</TableHead>
                       <TableHead className="text-xs uppercase font-bold text-right print:text-black">Amount</TableHead>
@@ -263,8 +267,9 @@ export default function StockTransferDispatchingModule() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {paginatedItems.map((item) => {
-                      const complete = item.scannedQty >= item.ordered_quantity;
+                    {paginatedItems.map((item: any) => {
+                      const targetQty = (item as any).allocated_quantity || item.ordered_quantity;
+                      const complete = item.scannedQty >= targetQty;
                       const product = typeof item.product_id === 'object' && item.product_id !== null ? item.product_id : null;
                       const originalId = product ? (product.product_id || product.id) : item.product_id;
                       const productName = product?.product_name || `PRD-${originalId}`;
@@ -275,6 +280,9 @@ export default function StockTransferDispatchingModule() {
                             <div className="flex flex-col">
                               <span className="font-semibold text-sm">{productName}</span>
                               <span className="text-[10px] text-muted-foreground uppercase tracking-tight">ID: {String(originalId || 'N/A')}</span>
+                              {item.isLoosePack && (
+                                <span className="text-[9px] bg-blue-100 text-blue-700 px-1 py-0.5 rounded w-fit mt-1 font-bold">LOOSE PACK</span>
+                              )}
                             </div>
                           </TableCell>
                           <TableCell className="text-sm">
@@ -286,14 +294,25 @@ export default function StockTransferDispatchingModule() {
                               {product?.unit_of_measurement?.unit_name || 'unit'}
                             </span>
                           </TableCell>
-                          <TableCell className="text-sm">{item.ordered_quantity}</TableCell>
+                          <TableCell className="text-sm">{targetQty}</TableCell>
                           <TableCell className="text-sm font-medium text-muted-foreground italic">
                             {item.qtyAvailable ?? '—'}
                           </TableCell>
                           <TableCell className="text-sm font-bold">
-                            <span className={complete ? 'text-emerald-600' : 'text-amber-600'}>
-                              {item.scannedQty}
-                            </span>
+                            {item.isLoosePack ? (
+                              <Input
+                                type="number"
+                                className="h-8 w-20 text-center"
+                                value={item.scannedQty}
+                                onChange={(e) => updateLoosePackQty((originalId as number), Number(e.target.value))}
+                                max={targetQty}
+                                min={0}
+                              />
+                            ) : (
+                              <span className={complete ? 'text-emerald-600' : 'text-amber-600'}>
+                                {item.scannedQty}
+                              </span>
+                            )}
                           </TableCell>
                           <TableCell className="text-right text-sm font-semibold text-primary">
                             ₱{Number(item.amount || 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}
@@ -318,7 +337,7 @@ export default function StockTransferDispatchingModule() {
                     <TableRow className="print:border-b print:border-black bg-muted/30">
                       <TableCell colSpan={4} className="text-right font-bold text-xs uppercase tracking-wider text-muted-foreground">Total Amount</TableCell>
                       <TableCell className="text-right text-sm font-bold text-primary">
-                        ₱{selectedGroup.items.reduce((sum, item) => sum + Number(item.amount || 0), 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}
+                        ₱{selectedGroup.items.reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}
                       </TableCell>
                       <TableCell className="print:hidden" />
                     </TableRow>

@@ -253,6 +253,13 @@ export default function StockTransferModule() {
         open={showProductModal} 
         onOpenChange={setShowProductModal} 
         sourceBranch={sourceBranch}
+        selectedProducts={scannedItems.map(item => ({
+          product_name: item.productName,
+          barcode: item.description,
+          cost_per_unit: item.unitPrice,
+          quantity: item.unitQty,
+          totalAmount: item.totalAmount
+        } as any))}
         onSelect={(p) => {
           handleAddProduct(p);
           // Optional: don't close modal so user can add more?

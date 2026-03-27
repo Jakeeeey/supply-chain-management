@@ -2,7 +2,7 @@
 
 import React, { KeyboardEvent, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PackageOpen, ScanLine, Loader2, CheckCircle2, Radar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { PackageOpen, Printer, ScanLine, Loader2, CheckCircle2, Radar, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useStockTransferReceive } from './hooks/useStockTransferReceive';
 import { cn } from '@/lib/utils';
 import { OrderSelectionModal } from '../components/OrderSelectionModal';
@@ -90,12 +90,49 @@ export default function StockTransferReceiveModule() {
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-      <div className="flex items-center justify-between space-y-2">
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media print {
+          @page { 
+            margin: 0.5cm; 
+            size: auto;
+          }
+          html, body {
+            height: auto !important;
+            min-height: 0 !important;
+            overflow: visible !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: white !important;
+          }
+          .flex-1 { 
+            padding: 0 !important;
+            margin: 0 !important;
+            display: block !important;
+            height: auto !important;
+          }
+          .card-print-root {
+            border: none !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+          }
+          footer, .print-hidden { display: none !important; }
+        }
+      ` }} />
+      <div className="flex items-center justify-between space-y-2 print:hidden">
         <h2 className="text-3xl font-bold tracking-tight">Stock Transfer Receive</h2>
+        <Button 
+          variant="outline" 
+          onClick={() => window.print()} 
+          disabled={!selectedGroup}
+          className="gap-2"
+        >
+          <Printer className="w-4 h-4" /> Print Picklist
+        </Button>
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <Card className="print:border-none print:shadow-none card-print-root">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 print:hidden">
           <div className="space-y-1">
             <CardTitle className="text-2xl">Incoming Transfers</CardTitle>
             <CardDescription>
@@ -105,9 +142,9 @@ export default function StockTransferReceiveModule() {
           <PackageOpen className="h-8 w-8 text-muted-foreground" />
         </CardHeader>
 
-        <CardContent className="mt-4 space-y-6">
+        <CardContent className="mt-4 space-y-6 print:p-0">
           {/* Top Control Bar */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:hidden">
             {/* Select Order */}
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -174,37 +211,37 @@ export default function StockTransferReceiveModule() {
 
           {/* Details & Actions */}
           {selectedGroup && (
-            <div className="space-y-6 border rounded-xl overflow-hidden shadow-sm">
-              <div className="bg-muted/30 p-4 border-b">
+            <div className="space-y-6 border rounded-xl overflow-hidden shadow-sm print:border-none print:shadow-none">
+              <div className="bg-muted/30 p-4 border-b print:bg-transparent print:border-b-2 print:border-black">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div>
-                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Source Branch</p>
+                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider print:text-black">Source Branch</p>
                     <p className="font-medium text-sm">{getBranchName(selectedGroup.sourceBranch)}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Target Branch</p>
+                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider print:text-black">Target Branch</p>
                     <p className="font-medium text-sm">{getBranchName(selectedGroup.targetBranch)}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Lead Date</p>
+                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider print:text-black">Lead Date</p>
                     <p className="font-medium text-sm">{selectedGroup.leadDate || 'N/A'}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Date Requested</p>
+                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider print:text-black">Date Requested</p>
                     <p className="font-medium text-sm">{new Date(selectedGroup.dateRequested).toLocaleDateString()}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="p-4">
+              <div className="p-4 print:p-0">
                 <Table>
-                  <TableHeader className="bg-muted/50">
-                    <TableRow className="border-b">
-                      <TableHead className="text-xs uppercase font-bold">Product Name</TableHead>
-                      <TableHead className="text-xs uppercase font-bold">For Loading Qty</TableHead>
-                      <TableHead className="text-xs uppercase font-bold">Received Qty</TableHead>
-                      <TableHead className="text-xs uppercase font-bold text-right">Amount</TableHead>
-                      <TableHead className="text-xs uppercase font-bold text-right">Status</TableHead>
+                  <TableHeader className="bg-muted/50 print:bg-transparent">
+                    <TableRow className="border-b print:border-black">
+                      <TableHead className="text-xs uppercase font-bold print:text-black">Product Name</TableHead>
+                      <TableHead className="text-xs uppercase font-bold print:text-black">For Loading Qty</TableHead>
+                      <TableHead className="text-xs uppercase font-bold print:text-black">Received Qty</TableHead>
+                      <TableHead className="text-xs uppercase font-bold text-right print:text-black">Amount</TableHead>
+                      <TableHead className="text-xs uppercase font-bold text-right print:hidden">Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -215,7 +252,7 @@ export default function StockTransferReceiveModule() {
                       const productName = product?.product_name || `PRD-${originalId}`;
 
                       return (
-                        <TableRow key={item.id}>
+                        <TableRow key={item.id} className="print:border-b print:border-gray-200">
                           <TableCell className="py-2">
                             <div className="flex flex-col">
                               <span className="font-semibold text-sm">{productName}</span>
@@ -231,7 +268,7 @@ export default function StockTransferReceiveModule() {
                           <TableCell className="text-right text-sm font-semibold text-primary">
                             ₱{Number(item.amount || 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}
                           </TableCell>
-                          <TableCell className="text-right text-sm">
+                          <TableCell className="text-right text-sm print:hidden">
                             {complete ? (
                               <span className="inline-flex items-center text-blue-600 text-xs font-bold uppercase tracking-wide">
                                 <CheckCircle2 className="w-4 h-4 mr-1" />
@@ -253,13 +290,13 @@ export default function StockTransferReceiveModule() {
                       <TableCell className="text-right text-sm font-bold text-primary">
                         ₱{selectedGroup.items.reduce((sum, item) => sum + Number(item.amount || 0), 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}
                       </TableCell>
-                      <TableCell />
+                      <TableCell className="print:hidden" />
                     </TableRow>
                   </TableFooter>
                 </Table>
 
                 {/* Pagination Controls */}
-                <div className="mt-4 flex flex-col md:flex-row items-center justify-between gap-4 px-2 py-4 border-t border-muted/20">
+                <div className="mt-4 flex flex-col md:flex-row items-center justify-between gap-4 px-2 py-4 border-t border-muted/20 print:hidden">
                   <div className="flex items-center gap-4">
                     <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest whitespace-nowrap">
                       Rows per page
@@ -326,7 +363,7 @@ export default function StockTransferReceiveModule() {
                   )}
                 </div>
 
-                <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 print:hidden">
                   <div className="text-xs text-muted-foreground">
                     {!isAllReceived && (
                       <span className="text-amber-600 font-medium">Please scan all required items before concluding receive.</span>

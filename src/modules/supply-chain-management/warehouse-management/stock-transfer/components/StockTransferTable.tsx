@@ -93,9 +93,6 @@ export default function StockTransferTable({ items, onQtyChange, onDelete }: Sto
               Order Quantity
             </TableHead>
             <TableHead className="font-bold text-foreground text-[11px] uppercase tracking-wider text-right">
-              Quantity Available
-            </TableHead>
-            <TableHead className="font-bold text-foreground text-[11px] uppercase tracking-wider text-right">
               Total Amount
             </TableHead>
             <TableHead className="w-12" />
@@ -139,9 +136,6 @@ export default function StockTransferTable({ items, onQtyChange, onDelete }: Sto
                     className="h-8 w-24 text-xs text-right ml-auto bg-muted/20 border-border focus-visible:ring-1"
                   />
                 </TableCell>
-                <TableCell className="text-xs font-medium text-foreground text-right py-3">
-                  {item.qtyAvailable}
-                </TableCell>
                 <TableCell className="text-xs font-bold text-foreground text-right py-3">
                   ₱{item.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                 </TableCell>
@@ -161,7 +155,7 @@ export default function StockTransferTable({ items, onQtyChange, onDelete }: Sto
           ) : (
             <TableRow>
               <TableCell
-                colSpan={10}
+                colSpan={9}
                 className="h-32 text-center text-muted-foreground text-sm italic"
               >
                 No products added. Scan RFID to add products to transfer.
@@ -172,7 +166,7 @@ export default function StockTransferTable({ items, onQtyChange, onDelete }: Sto
         {items.length > 0 && (
           <TableFooter>
             <TableRow>
-              <TableCell colSpan={8} className="font-bold text-right text-xs uppercase tracking-wider text-muted-foreground">Total Amount</TableCell>
+              <TableCell colSpan={7} className="font-bold text-right text-xs uppercase tracking-wider text-muted-foreground">Total Amount</TableCell>
               <TableCell className="font-bold text-right text-xs text-primary">
                 ₱{items.reduce((sum, item) => sum + (item.totalAmount || 0), 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
               </TableCell>
