@@ -155,7 +155,7 @@ export default function PurchaseOrderSummaryModule({
                 onClick={resetFilters} 
                 className="h-8 text-[10px] font-bold uppercase text-muted-foreground hover:text-destructive gap-1.5"
             >
-                <FilterX className="w-3.5 h-3.5" /> Reset Filters
+                <FilterX className="w-3.5 h-3.5" /> Clear Filter
             </Button>
           </div>
         </div>
@@ -378,12 +378,15 @@ export default function PurchaseOrderSummaryModule({
 
       {/* MODAL POP-UP FOR ROW DETAILS */}
       <Dialog open={!!selectedPO} onOpenChange={(open) => !open && setSelectedPO(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold">Transaction Details</DialogTitle>
+        <DialogContent className="sm:max-w-5xl max-w-[95vw] p-0 overflow-hidden border-none shadow-2xl">
+          <DialogHeader className="p-6 pb-0">
+            <DialogTitle className="text-xl font-black uppercase tracking-tight text-primary flex items-center gap-2">
+              <div className="w-1.5 h-6 bg-primary rounded-full" />
+              Transaction Details
+            </DialogTitle>
           </DialogHeader>
           
-          <div className="space-y-4 py-4">
+          <div className="p-6 space-y-8">
             {selectedPO && (() => {
                const invStatusText = transactionStatuses.find(s => s.id === selectedPO.inventory_status)?.status || "Unknown";
                const payStatusText = paymentStatuses.find(s => s.id === selectedPO.payment_status)?.status || "Unknown";
@@ -392,67 +395,85 @@ export default function PurchaseOrderSummaryModule({
                const disc = Number(selectedPO.discounted_amount ?? selectedPO.discountAmount ?? selectedPO.discount_amount ?? selectedPO.discount_value ?? 0);
                const net = Number(selectedPO.total_amount ?? selectedPO.total ?? selectedPO.net_amount ?? 0);
                
-               return (
-                 <div className="space-y-3">
-                    <div className="flex flex-col gap-1 p-3 bg-muted/30 rounded-lg border border-border">
-                        <span className="text-[10px] font-bold uppercase text-muted-foreground">Transaction type</span>
-                        <span className="text-sm font-semibold text-foreground">
-                          {selectedPO.transaction_type === 1 ? "Trade" : "Non-Trade"}
-                        </span>
+                return (
+                  <div className="space-y-8">
+                    {/* Horizontal Table Container */}
+                    <div className="rounded-2xl border border-border bg-card/50 backdrop-blur-sm shadow-xl overflow-hidden overflow-x-auto">
+                      <Table>
+                        <TableHeader className="bg-muted/80">
+                          <TableRow className="hover:bg-transparent border-b border-border">
+                            <TableHead className="font-bold text-[10px] uppercase tracking-widest h-12 px-6">PO Number</TableHead>
+                            <TableHead className="font-bold text-[10px] uppercase tracking-widest px-4">Type</TableHead>
+                            <TableHead className="font-bold text-[10px] uppercase tracking-widest px-4">Supplier</TableHead>
+                            <TableHead className="font-bold text-[10px] uppercase tracking-widest px-4">Date</TableHead>
+                            <TableHead className="font-bold text-[10px] uppercase tracking-widest text-center px-4">Inv Status</TableHead>
+                            <TableHead className="font-bold text-[10px] uppercase tracking-widest text-center px-4">Pay Status</TableHead>
+                            <TableHead className="font-bold text-[10px] uppercase tracking-widest px-6">Remarks</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          <TableRow className="hover:bg-transparent border-none">
+                            <TableCell className="font-black text-primary font-mono py-6 px-6 text-sm tracking-tighter">
+                              {selectedPO.purchase_order_no}
+                            </TableCell>
+                            <TableCell className="text-xs font-bold text-muted-foreground whitespace-nowrap px-4 uppercase">
+                              {selectedPO.transaction_type === 1 ? "Trade" : "Non-Trade"}
+                            </TableCell>
+                            <TableCell className="text-xs font-black text-foreground max-w-[180px] truncate px-4 uppercase tracking-tight">
+                              {supplierName}
+                            </TableCell>
+                            <TableCell className="text-xs font-bold text-muted-foreground whitespace-nowrap px-4">
+                              {selectedPO.date || "--"}
+                            </TableCell>
+                            <TableCell className="text-center px-4">
+                              <Badge variant="outline" className={`${getInventoryStatusColor(invStatusText)} px-3 py-1 text-[10px] font-black border-2 rounded-lg uppercase shrink-0 shadow-sm`}>
+                                {invStatusText}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-center px-4">
+                              <Badge variant="outline" className={`${getPaymentStatusColor(payStatusText)} px-3 py-1 text-[10px] font-black border-2 rounded-lg uppercase shrink-0 shadow-sm`}>
+                                {payStatusText}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground italic min-w-[160px] px-6">
+                              {selectedPO.remark || "--"}
+                            </TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                       <div className="flex flex-col gap-1 p-3 bg-muted/30 rounded-lg border border-border">
-                          <span className="text-[10px] font-bold uppercase text-muted-foreground">PO Number</span>
-                          <span className="text-sm font-semibold text-foreground">{selectedPO.purchase_order_no}</span>
-                       </div>
-                       <div className="flex flex-col gap-1 p-3 bg-muted/30 rounded-lg border border-border">
-                          <span className="text-[10px] font-bold uppercase text-muted-foreground">Date Requested</span>
-                          <span className="text-sm font-semibold text-foreground">{selectedPO.date || "--"}</span>
-                       </div>
-                    </div>
+                    {/* Financial Summary Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div className="p-6 rounded-2xl border border-border bg-muted/30 space-y-2 shadow-inner transition-all hover:border-border/80">
+                        <div className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Gross Amount</div>
+                        <div className="text-2xl font-black font-mono text-foreground flex items-baseline gap-1">
+                          <span className="text-sm font-bold opacity-50">₱</span>
+                          {gross.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </div>
+                      </div>
+                      
+                      <div className="p-6 rounded-2xl border border-border bg-muted/30 space-y-2 shadow-inner transition-all hover:border-border/80">
+                        <div className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Discount</div>
+                        <div className="text-2xl font-black font-mono text-destructive flex items-baseline gap-1 text-red-500">
+                          <span className="text-sm font-bold opacity-50">- ₱</span>
+                          {disc.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </div>
+                      </div>
 
-                    <div className="flex flex-col gap-1 p-3 bg-muted/30 rounded-lg border border-border">
-                       <span className="text-[10px] font-bold uppercase text-muted-foreground">Supplier</span>
-                       <span className="text-sm font-semibold text-foreground">{supplierName}</span>
+                      <div className="p-6 rounded-2xl border-2 border-primary/30 bg-primary/5 space-y-2 shadow-[0_0_20px_rgba(var(--primary),0.1)] transition-all hover:border-primary/50 relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                           <div className="w-16 h-16 rounded-full bg-primary" />
+                        </div>
+                        <div className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">Total Net Amount</div>
+                        <div className="text-4xl font-black font-mono text-primary flex items-baseline gap-2">
+                          <span className="text-lg font-bold opacity-40">₱</span>
+                          {net.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </div>
+                      </div>
                     </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                       <div className="flex flex-col gap-1 p-3 bg-muted/30 rounded-lg border border-border items-start">
-                          <span className="text-[10px] font-bold uppercase text-muted-foreground">Inventory Status</span>
-                          <Badge variant="outline" className={`${getInventoryStatusColor(invStatusText)} px-2 py-0.5 mt-1 text-[10px] font-black border shadow-none uppercase`}>
-                             {invStatusText}
-                          </Badge>
-                       </div>
-                       <div className="flex flex-col gap-1 p-3 bg-muted/30 rounded-lg border border-border items-start">
-                          <span className="text-[10px] font-bold uppercase text-muted-foreground">Payment Status</span>
-                          <Badge variant="outline" className={`${getPaymentStatusColor(payStatusText)} px-2 py-0.5 mt-1 text-[10px] font-black border shadow-none uppercase`}>
-                             {payStatusText}
-                          </Badge>
-                       </div>
-                    </div>
-
-                    <div className="flex flex-col gap-1 p-3 bg-muted/30 rounded-lg border border-border">
-                       <span className="text-[10px] font-bold uppercase text-muted-foreground">Remarks</span>
-                       <span className="text-sm font-semibold text-foreground italic">{selectedPO.remark || "--"}</span>
-                    </div>
-
-                    <div className="flex flex-col gap-2 p-4 bg-muted/20 rounded-lg border border-border">
-                       <div className="flex justify-between items-center">
-                          <span className="text-xs font-semibold text-muted-foreground">Gross Amount</span>
-                          <span className="text-sm font-mono text-muted-foreground">₱{gross.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                       </div>
-                       <div className="flex justify-between items-center text-destructive">
-                          <span className="text-xs font-semibold">Discount</span>
-                          <span className="text-sm font-mono">- ₱{disc.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                       </div>
-                       <div className="pt-2 border-t border-border mt-1 flex justify-between items-center">
-                          <span className="text-[11px] font-bold uppercase text-foreground">Total Net Amount</span>
-                          <span className="text-base font-bold font-mono text-primary">₱{net.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                       </div>
-                    </div>
-                 </div>
-               );
+                  </div>
+                );
             })()}
           </div>
         </DialogContent>

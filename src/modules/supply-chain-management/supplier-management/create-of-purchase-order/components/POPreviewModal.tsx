@@ -174,9 +174,10 @@ export function POPreviewModal({
                                             <th className="px-4 py-3 text-left font-black">Brand</th>
                                             <th className="px-4 py-3 text-left font-black">Category</th>
                                             <th className="px-4 py-3 text-left font-black">Product Name</th>
-                                            <th className="px-4 py-3 text-right font-black">Price</th>
                                             <th className="px-4 py-3 text-center font-black">UOM</th>
                                             <th className="px-4 py-3 text-center font-black">Qty</th>
+                                            <th className="px-4 py-3 text-right font-black">Unit Price</th>
+                                            <th className="px-4 py-3 text-right font-black">Total Amount</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-border/50">
@@ -191,9 +192,6 @@ export function POPreviewModal({
                                                 <td className="px-4 py-3 text-[9px] font-black text-foreground uppercase tracking-tight max-w-[200px]">
                                                     <div className="truncate" title={item.name}>{item.name}</div>
                                                 </td>
-                                                <td className="px-4 py-3 text-[9px] text-right font-bold text-foreground/80 whitespace-nowrap">
-                                                    {money.format(item.price).replace("PHP", "").trim()}
-                                                </td>
                                                 <td className="px-4 py-3 text-center">
                                                     <span className="inline-flex px-1.5 py-0.5 bg-secondary text-secondary-foreground text-[7px] font-black rounded uppercase">
                                                         {item.uom}
@@ -201,6 +199,12 @@ export function POPreviewModal({
                                                 </td>
                                                 <td className="px-4 py-3 text-[9px] text-center font-black whitespace-nowrap">
                                                     {item.orderQty}
+                                                </td>
+                                                <td className="px-4 py-3 text-[9px] text-right font-bold text-foreground/80 whitespace-nowrap">
+                                                    {money.format(item.price).replace("PHP", "").trim()}
+                                                </td>
+                                                <td className="px-4 py-3 text-[9px] text-right font-black text-primary whitespace-nowrap">
+                                                    {money.format(item.netAmount).replace("PHP", "").trim()}
                                                 </td>
                                             </tr>
                                         ))}

@@ -12,13 +12,16 @@ import type {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const DEBUG = process.env.DEBUG_TAGGING_PO === "1";
+const DEBUG = false; // ✅ Back to false for production
 function dlog(...args: any[]) {
     if (DEBUG) console.log("[tagging-of-po]", ...args);
 }
 
 async function fetchJson(url: string, init?: RequestInit) {
-    return directusFetch(url, init);
+    return directusFetch(url, {
+        ...init,
+        cache: "no-store", // ✅ Ensure fresh data for tagging counts
+    });
 }
 
 // =====================
@@ -49,6 +52,7 @@ function toStr(v: any, fb = "") {
     return s ? s : fb;
 }
 function toNum(v: any) {
+    if (v && typeof v === "object" && "id" in v) return toNum(v.id);
     const n = Number(String(v ?? "").replace(/,/g, ""));
     return Number.isFinite(n) ? n : 0;
 }
@@ -74,6 +78,19 @@ function timeDisplay(iso: string) {
         minute: "2-digit",
         hour12: true
     });
+}
+
+function isDuplicateRfidMessage(msg: string) {
+    const m = (msg || "").toLowerCase();
+    return (
+        m.includes("cannot be duplicate") ||
+        (m.includes("rfid") && (m.includes("already") || m.includes("exists"))) ||
+        m.includes("already exists") ||
+        m.includes("has to be unique") ||
+        m.includes("unique") ||
+        m.includes("duplicate") ||
+        m.includes("conflict")
+    );
 }
 
 function chunk<T>(arr: T[], size: number) {
@@ -223,14 +240,13 @@ type PORow = {
     received_quantity?: number;
 };
 
-async function fetchOpenPORowsByPOIds(base: string, poIds: number[]) {
+async function fetchAllPORowsByPOIds(base: string, poIds: number[]) {
     if (!poIds.length) return [] as PORow[];
     const rows: PORow[] = [];
     for (const ids of chunk(Array.from(new Set(poIds)), 250)) {
         const url =
             `${base}/items/${PO_RECEIVING_COLLECTION}?limit=-1` +
             `&filter[purchase_order_id][_in]=${encodeURIComponent(ids.join(","))}` +
-            `&filter[isPosted][_eq]=0` +
             `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,isPosted,receipt_no,received_quantity`;
         const j = await fetchJson(url);
         rows.push(...((j?.data ?? []) as PORow[]));
@@ -238,14 +254,15 @@ async function fetchOpenPORowsByPOIds(base: string, poIds: number[]) {
     return rows;
 }
 
-async function fetchOpenPORowsByPOId(base: string, poId: number) {
+async function fetchAllPORowsByPOId(base: string, poId: number) {
+    // Try both _eq and _in for maximum compatibility with different Directus versions/configurations
     const url =
         `${base}/items/${PO_RECEIVING_COLLECTION}?limit=-1` +
-        `&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}` +
-        `&filter[isPosted][_eq]=0` +
+        `&filter[purchase_order_id][_in]=${encodeURIComponent(String(poId))}` +
         `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,isPosted,receipt_no,received_quantity`;
 
     const j = await fetchJson(url);
+    if (DEBUG) dlog(`fetchAllPORowsByPOId for PO ${poId} returned ${j?.data?.length ?? 0} rows.`);
     return (j?.data ?? []) as PORow[];
 }
 
@@ -259,6 +276,7 @@ type ReceivingItemRow = {
 
 async function fetchReceivingItemsByLinkIds(base: string, linkIds: number[]) {
     if (!linkIds.length) return [] as ReceivingItemRow[];
+
     const out: ReceivingItemRow[] = [];
     for (const ids of chunk(Array.from(new Set(linkIds)).filter(Boolean), 250)) {
         const url =
@@ -417,17 +435,25 @@ async function buildDetail(base: string, poId: number): Promise<TaggingPODetail>
     const productIds = Array.from(new Set(poProducts.map((x) => toNum(x.product_id)).filter(Boolean)));
     const productsMap = await fetchProductsMapByIds(base, productIds);
 
-    // POR rows (unposted)
-    const porRows = await fetchOpenPORowsByPOId(base, poId);
+    // ✅ Fetch ALL POR rows (even posted) to ensure we count EVERYTHING tagged for this PO
+    const allPorRows = await fetchAllPORowsByPOId(base, poId);
+    dlog(`Fetched ${allPorRows.length} allPorRows for PO ${poId}`);
+    if (allPorRows.length > 0) {
+        dlog(`Sample allPorRows[0] keys:`, Object.keys(allPorRows[0]));
+        dlog(`Sample allPorRows[0] data:`, allPorRows[0]);
+    }
 
     // Build linkId -> product::branch map (POR + POP)
     const porIdToKey = new Map<number, string>();
     const porIds: number[] = [];
-    for (const r of porRows) {
+    for (const r of allPorRows) {
         const porId = toNum(r.purchase_order_product_id);
         const pid = toNum(r.product_id);
         const bid = toNum(r.branch_id);
-        if (!porId || !pid || !bid) continue;
+        if (DEBUG) {
+            dlog(`Mapping POR row: porId=${porId}, pid=${pid}, bid=${bid}`);
+        }
+        if (!porId || !pid) continue; // bid 0 is allowed
         porIdToKey.set(porId, keyProdBranch(pid, bid));
         porIds.push(porId);
     }
@@ -438,40 +464,67 @@ async function buildDetail(base: string, poId: number): Promise<TaggingPODetail>
         const popId = toNum(ln.purchase_order_product_id);
         const pid = toNum(ln.product_id);
         const bid = toNum(ln.branch_id);
-        if (!popId || !pid || !bid) continue;
+        if (!popId || !pid) continue; // bid 0 is allowed
         popIdToKey.set(popId, keyProdBranch(pid, bid));
         popIds.push(popId);
     }
 
     // ✅ Fetch receiving items by BOTH POR ids and POP ids (compat)
     const receivingItems = await fetchReceivingItemsByLinkIds(base, [...porIds, ...popIds]);
+    dlog(`Fetched ${receivingItems.length} receivingItems for PO ${poId}`);
+    if (receivingItems.length > 0) {
+        dlog(`Sample receivingItems[0] linkId: ${receivingItems[0].purchase_order_product_id}`);
+    }
 
     // Count tags per key (product::branch)
     const taggedByKey = new Map<string, number>();
     for (const it of receivingItems) {
         const linkId = toNum(it.purchase_order_product_id);
         const key = porIdToKey.get(linkId) || popIdToKey.get(linkId);
-        if (!key) continue;
+        if (!key) {
+            if (DEBUG) console.log(`[tagging-of-po] linkId ${linkId} has no mapping key.`);
+            continue;
+        }
         taggedByKey.set(key, (taggedByKey.get(key) ?? 0) + 1);
     }
+
+    if (DEBUG) {
+        console.log(`[tagging-of-po] Aggregated taggedByKey:`, Object.fromEntries(taggedByKey));
+        console.log(`[tagging-of-po] porIdToKey size: ${porIdToKey.size}, popIdToKey size: ${popIdToKey.size}`);
+    }
+
+    const poolUsedByKey = new Map<string, number>();
 
     const items: TaggingPOItem[] = poProducts.map((line) => {
         const pid = toNum(line.product_id);
         const bid = toNum(line.branch_id);
-        const p = pid ? productsMap.get(pid) : null;
+        const p = productsMap.get(pid);
 
         const scan = p ? productPrimaryScan(p) : "";
         const sku = scan || toStr(p?.product_code) || String(pid || line.product_id);
 
-        const key = pid && bid ? keyProdBranch(pid, bid) : "";
-        const taggedQty = key ? taggedByKey.get(key) ?? 0 : 0;
+        const key = pid ? keyProdBranch(pid, bid) : "";
+        const totalPool = key ? taggedByKey.get(key) ?? 0 : 0;
+        const usedSoFar = poolUsedByKey.get(key) ?? 0;
+        const expected = toNum(line.ordered_quantity);
+
+        // ✅ Distribute tags: fill this line up to its expected quantity from the remaining pool
+        const canTake = Math.max(0, expected);
+        const remainingInPool = Math.max(0, totalPool - usedSoFar);
+        const allocated = Math.min(canTake, remainingInPool);
+
+        if (DEBUG) {
+            dlog(`Line [${sku}]: key=${key}, totalPool=${totalPool}, usedSoFar=${usedSoFar}, allocated=${allocated}`);
+        }
+
+        poolUsedByKey.set(key, usedSoFar + allocated);
 
         return {
-            id: String(line.purchase_order_product_id), // POP id (keep)
+            id: String(line.purchase_order_product_id),
             sku,
-            name: p ? productName(p) : `Product #${pid || line.product_id}`,
-            expectedQty: Math.max(0, toNum(line.ordered_quantity)),
-            taggedQty,
+            name: toStr(p?.product_name, "Unknown Product"),
+            expectedQty: expected,
+            taggedQty: allocated,
         };
     });
 
@@ -497,7 +550,8 @@ async function buildDetail(base: string, poId: number): Promise<TaggingPODetail>
         supplierName,
         items,
         activity: activity.slice(0, 50),
-    };
+        _rawTaggedByKey: taggedByKey, // Expose raw counts for SKU resolution
+    } as any;
 }
 
 // =====================
@@ -508,32 +562,42 @@ function resolvePoProductLine(args: {
     strict: boolean;
     poProducts: PoProductRow[];
     productsMap: Map<number, any>;
+    taggedByKey: Map<string, number>; // ✅ Pass existing counts to prefer incomplete rows
 }) {
     const scanned = toStr(args.sku).trim().toLowerCase();
     if (!scanned) return null;
 
-    for (const ln of args.poProducts) {
+    // 1. Try to find products by barcode or product_code
+    const matchedPids = new Set<number>();
+    for (const [pid, p] of args.productsMap.entries()) {
+        const s = productPrimaryScan(p).toLowerCase();
+        const c = toStr(p.product_code).toLowerCase();
+        if (s === scanned || c === scanned) {
+            matchedPids.add(pid);
+        }
+    }
+
+    // Sort products: Incomplete items first (those where we haven't reached expected qty)
+    const sortedLines = [...args.poProducts].sort((a, b) => {
+        const keyA = keyProdBranch(toNum(a.product_id), toNum(a.branch_id));
+        const keyB = keyProdBranch(toNum(b.product_id), toNum(b.branch_id));
+        const isDoneA = (args.taggedByKey.get(keyA) ?? 0) >= toNum(a.ordered_quantity);
+        const isDoneB = (args.taggedByKey.get(keyB) ?? 0) >= toNum(b.ordered_quantity);
+        if (isDoneA && !isDoneB) return 1;
+        if (!isDoneA && isDoneB) return -1;
+        return 0;
+    });
+
+    for (const ln of sortedLines) {
         const pid = toNum(ln.product_id);
-        const p = pid ? args.productsMap.get(pid) : null;
+        const p = args.productsMap.get(pid);
+        const skuFromProd = p ? productPrimaryScan(p).toLowerCase() : "";
+        const codeFromProd = p ? toStr(p.product_code).toLowerCase() : "";
 
-        const codes = p ? productCodes(p).map((c) => c.toLowerCase()) : [];
-        const hasCodes = codes.length > 0;
-
-        if (hasCodes) {
-            if (codes.some((c) => c === scanned)) return ln;
-            continue;
-        }
-
-        if (String(pid).toLowerCase() === scanned) return ln;
-    }
-
-    if (!args.strict) {
-        for (const ln of args.poProducts) {
-            const pid = toNum(ln.product_id);
-            if (String(pid).toLowerCase() === scanned) return ln;
+        if (skuFromProd === scanned || codeFromProd === scanned || String(pid) === scanned) {
+            return ln;
         }
     }
-
     return null;
 }
 
@@ -556,8 +620,8 @@ export async function GET() {
             expectedByPo.set(poId, (expectedByPo.get(poId) ?? 0) + Math.max(0, toNum(line.ordered_quantity)));
         }
 
-        // POR rows (unposted) for tag counting
-        const porRows = await fetchOpenPORowsByPOIds(base, poIds);
+        // POR rows (all) for comprehensive tag counting
+        const porRows = await fetchAllPORowsByPOIds(base, poIds);
         const porIdToPoId = new Map<number, number>();
         const porIds: number[] = [];
         for (const r of porRows) {
@@ -656,7 +720,15 @@ export async function POST(req: NextRequest) {
             const productIds = Array.from(new Set(poProducts.map((x) => toNum(x.product_id)).filter(Boolean)));
             const productsMap = await fetchProductsMapByIds(base, productIds);
 
-            const line = resolvePoProductLine({ sku, strict, poProducts, productsMap });
+            // Resolve matching line (now considers existing counts to find incomplete lines)
+            const detailWithRawTags = (await buildDetail(base, poId)) as any;
+            const line = resolvePoProductLine({
+                sku,
+                strict,
+                poProducts,
+                productsMap,
+                taggedByKey: detailWithRawTags._rawTaggedByKey, 
+            });
 
             if (strict && !line) {
                 return bad(`Invalid SKU '${sku}' for this PO.`, 400, {
@@ -685,7 +757,7 @@ export async function POST(req: NextRequest) {
             // ✅ RFID duplicate detection
             const existing = await fetchExistingRfidRow(base, rfid);
             if (existing) {
-                return bad("RFID already exists. Cannot be duplicate.", 409, { rfid });
+                return bad(`RFID code '${rfid}' already exists in receiving items. Cannot be duplicate.`, 409, { rfid });
             }
 
             // do not exceed expected qty
@@ -717,11 +789,61 @@ export async function POST(req: NextRequest) {
                 body: JSON.stringify(insertPayload),
             });
 
+            // 2) OPTIMISTIC UPDATE:
+            // Fetch the current state immediately. If Directus hasn't indexed the new row yet (common),
+            // we will manually inject it into the result so the UI updates instantly.
+            let updated = await buildDetail(base, poId);
+
+            const isPresent = updated.activity.some((a) => a.rfid === rfid);
+            if (!isPresent) {
+                if (DEBUG) dlog(`Optimistically injecting tag ${rfid} for SKU ${sku}`);
+                
+                // Find the line that should receive this tag
+                const line = updated.items.find((it) => it.sku === sku);
+                if (line) {
+                    // Only increment if not already "full" in the returned state
+                    // (if it's already full, Directus might have actually returned it and it's just a duplicate activity check)
+                    if (line.taggedQty < line.expectedQty) {
+                        line.taggedQty++;
+                    }
+                    
+                    // Add to activity log at the top
+                    updated.activity.unshift({
+                        id: `optimistic-${Date.now()}`,
+                        sku,
+                        productName: line.name,
+                        rfid: rfid,
+                        time: "Just Now",
+                    });
+                }
+            }
+
+            return NextResponse.json({
+                success: true,
+                message: "Item tagged successfully.",
+                updatedDetail: updated,
+            });
+        }
+
+        // -------------------------
+        // send_partially_tagged
+        // -------------------------
+        if (action === "send_partially_tagged") {
+            const poId = toNum(body?.poId);
+            if (!poId) return bad("Missing poId.", 400);
+
+            // Update status to 12 (En Route / Transit)
+            const patchUrl = `${base}/items/${PO_COLLECTION}/${encodeURIComponent(String(poId))}`;
+            await fetchJson(patchUrl, {
+                method: "PATCH",
+                body: JSON.stringify({ inventory_status: 12 }),
+            });
+
             const updated = await buildDetail(base, poId);
             return ok(updated);
         }
 
-        return bad("Invalid action.", 400);
+        return bad(`Unknown action: ${action}`, 400);
     } catch (e: any) {
         return bad(String(e?.message ?? e ?? "Request failed"), 400);
     }

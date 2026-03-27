@@ -22,8 +22,9 @@ function isDuplicateRfidMessage(msg: string) {
     return (
         m.includes("cannot be duplicate") ||
         (m.includes("rfid") && m.includes("already")) ||
-        m.includes("already exists in receiving items") ||
-        m.includes("rfid already exists")
+        m.includes("already exists") ||
+        m.includes("has to be unique") ||
+        m.includes("unique")
     );
 }
 
@@ -148,11 +149,7 @@ export default function TaggingOfPOModule() {
                 const msg = "No PO selected.";
                 setError(msg);
                 toast.error("Cannot tag item", { description: msg });
-                return (
-                    detailRef.current ??
-                    (await provider.fetchTaggingPODetail(String(selectedId)).catch(() => null)) ??
-                    ({} as TaggingPODetail)
-                );
+                return detailRef.current ?? ({} as TaggingPODetail);
             }
 
             // ✅ If scanner sent multiple tags, we keep ONLY the first (no multi-store)
@@ -167,11 +164,7 @@ export default function TaggingOfPOModule() {
                 toast.error("Invalid RFID", {
                     description: `RFID must be exactly ${RFID_LEN} hexadecimal characters (example: E280F30200000000F1EACFA1).`,
                 });
-                return (
-                    detailRef.current ??
-                    (await provider.fetchTaggingPODetail(selectedId).catch(() => null)) ??
-                    ({} as TaggingPODetail)
-                );
+                return detailRef.current ?? ({} as TaggingPODetail);
             }
 
             // ✅ Client-side qty cap (no API call)
@@ -181,73 +174,124 @@ export default function TaggingOfPOModule() {
                 toast.info("Limit reached", {
                     description: "Tagging exceeds expected quantity for this SKU. You cannot add more RFID tags.",
                 });
-                return (
-                    detailRef.current ??
-                    (await provider.fetchTaggingPODetail(selectedId).catch(() => null)) ??
-                    ({} as TaggingPODetail)
-                );
+                return detailRef.current ?? ({} as TaggingPODetail);
             }
 
             // ✅ Burst protection: only 1 request per PO+SKU at a time
             const lockKey = `${selectedId}::${String(sku ?? "").trim().toLowerCase()}`;
             if (inFlightLocksRef.current.has(lockKey)) {
-                // ignore burst calls silently (keep UI stable)
-                return (
-                    detailRef.current ??
-                    (await provider.fetchTaggingPODetail(selectedId).catch(() => null)) ??
-                    ({} as TaggingPODetail)
-                );
+                return detailRef.current ?? ({} as TaggingPODetail);
             }
 
             inFlightLocksRef.current.add(lockKey);
 
+            // ✅ CLIENT-SIDE OPTIMISTIC UPDATE — update UI immediately, before API responds
+            if (cur) {
+                const optimistic: TaggingPODetail = {
+                    ...cur,
+                    items: cur.items.map((it) =>
+                        it.sku.toLowerCase() === sku.trim().toLowerCase()
+                            ? { ...it, taggedQty: Math.min(it.taggedQty + 1, it.expectedQty) }
+                            : it
+                    ),
+                    activity: [
+                        {
+                            id: `optimistic-${Date.now()}`,
+                            sku,
+                            productName: item?.name ?? sku,
+                            rfid,
+                            time: "Just Now",
+                        },
+                        ...cur.activity,
+                    ].slice(0, 50),
+                };
+                onDetailChange(optimistic);
+            }
+
             try {
                 setError("");
-                const updated = await provider.tagItem({
+                const serverDetail = await provider.tagItem({
                     poId: selectedId,
                     sku,
-                    rfid, // ✅ normalized 24-hex only
+                    rfid,
                     strict,
                 });
 
-                // ✅ Success toast
-                const product = findItemBySku(updated, sku);
-                toast.success("Item tagged successfully", {
-                    description: product
-                        ? `${product.name} (RFID: ${rfid.slice(-6).toUpperCase()})`
-                        : `RFID: ${rfid.slice(-6).toUpperCase()}`,
-                });
+                // ✅ Merge: take the MAXIMUM taggedQty between client optimistic and server state
+                // This prevents the server's stale Directus response from rolling back our count
+                if (serverDetail && detailRef.current) {
+                    const merged: TaggingPODetail = {
+                        ...serverDetail,
+                        items: serverDetail.items.map((serverItem) => {
+                            const localItem = detailRef.current!.items.find(
+                                (it) => it.sku === serverItem.sku
+                            );
+                            return localItem
+                                ? { ...serverItem, taggedQty: Math.max(serverItem.taggedQty, localItem.taggedQty) }
+                                : serverItem;
+                        }),
+                        activity: serverDetail.activity.length > 0
+                            ? serverDetail.activity
+                            : detailRef.current.activity,
+                    };
+                    onDetailChange(merged);
+                    const product = findItemBySku(merged, sku);
+                    toast.success("Item tagged successfully", {
+                        description: product ? product.name : `SKU: ${sku}`,
+                    });
+                    return merged;
+                }
 
-                onDetailChange(updated);
-                return updated;
+                onDetailChange(serverDetail);
+                return serverDetail;
             } catch (e: unknown) {
                 const msg = String((e as Error)?.message ?? e ?? "");
 
                 if (isDuplicateRfidMessage(msg)) {
-                    toast.error("RFID Cannot Be Duplicated", {
-                        description: "This RFID is already tagged, please tag another.",
-                    });
-                    return (
-                        detailRef.current ??
-                        (await provider.fetchTaggingPODetail(selectedId).catch(() => null)) ??
-                        ({} as TaggingPODetail)
-                    );
+                    toast.error("Already tagged, please tag another.");
+                    // ✅ Roll back the optimistic update — it was a duplicate
+                    if (cur) onDetailChange(cur);
+                    return null;
+                } else {
+                    setError(msg || "Tagging failed.");
+                    toast.error("Tagging failed", { description: msg || "Please try again." });
+                    // ✅ Roll back on hard errors too
+                    if (cur) onDetailChange(cur);
                 }
 
-                setError(msg || "Tagging failed.");
-                toast.error("Tagging failed", { description: msg || "Please try again." });
-
-                return (
-                    detailRef.current ??
-                    (await provider.fetchTaggingPODetail(selectedId).catch(() => null)) ??
-                    ({} as TaggingPODetail)
-                );
+                throw e;
             } finally {
                 inFlightLocksRef.current.delete(lockKey);
             }
         },
         [selectedId, onDetailChange]
     );
+
+
+    async function onSendPartiallyTagged() {
+        if (!selectedId) return;
+        try {
+            setLoadingDetail(true);
+            const res = await fetch("/api/scm/supplier-management/tagging-of-po", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "send_partially_tagged", poId: selectedId }),
+            });
+            const j = await res.json();
+            if (!res.ok) throw new Error(j?.error || "Failed to update status.");
+
+            if (j?.data) onDetailChange(j.data);
+            
+            toast.success("Ready for Receiving", {
+                description: "This PO status is now updated and visible in Receiving Products."
+            });
+            onBack();
+        } catch (e: any) {
+            toast.error("Status Update Failed", { description: e?.message });
+        } finally {
+            setLoadingDetail(false);
+        }
+    }
 
     return (
         <>
@@ -276,6 +320,7 @@ export default function TaggingOfPOModule() {
                         onBack={onBack}
                         onChange={onDetailChange}
                         onTagItem={onTagItem}
+                        onSendPartiallyTagged={onSendPartiallyTagged}
                     />
                 )}
             </div>

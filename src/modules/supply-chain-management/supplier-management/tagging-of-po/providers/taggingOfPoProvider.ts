@@ -44,9 +44,14 @@ export async function tagItem(opts: {
         }),
     });
 
-    // ✅ If same RFID for same PO/product/branch: API returns 200 with detail (no error)
-    // ❌ If conflict: API returns 409 with clean message
-    return await asJson(res);
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        throw new Error(json?.error ?? `Request failed (${res.status})`);
+    }
+
+    // ✅ The tag_item endpoint now returns { success, message, updatedDetail }
+    // Fall back to json?.data for backwards compatibility
+    return (json?.updatedDetail ?? json?.data) as TaggingPODetail;
 }
 
 /**

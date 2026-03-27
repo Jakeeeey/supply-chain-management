@@ -478,6 +478,7 @@ export default function CreatePurchaseOrderModule() {
 
     const [tempCart, setTempCart] = React.useState<CartItem[]>([]);
     const [isInvoice, setIsInvoice] = React.useState(false);
+    const [isLocked, setIsLocked] = React.useState(false);
 
      
     const meta = React.useMemo(() => (makePoMeta() as any), []);
@@ -888,6 +889,7 @@ export default function CreatePurchaseOrderModule() {
             const json = await provider.createPurchaseOrder(payload);
 
             console.log("PO RESPONSE:", json?.data ?? json);
+            setIsLocked(true);
             return json;
         } catch (e: unknown) {
             const err = e as Error;
@@ -1014,7 +1016,7 @@ export default function CreatePurchaseOrderModule() {
                             setPickerBranchId("");
                             setTempCart([]);
                         }}
-                        disabled={isLoading || isSaving}
+                        disabled={isLoading || isSaving || isLocked}
                     />
                 </div>
 
@@ -1024,7 +1026,7 @@ export default function CreatePurchaseOrderModule() {
                         branches={branches}
                         value={selectedBranchIds}
                         onChange={setSelectedBranchIds}
-                        disabled={isLoading || isSaving}
+                        disabled={isLoading || isSaving || isLocked}
                     />
                 </div>
             </div>
@@ -1082,12 +1084,13 @@ export default function CreatePurchaseOrderModule() {
 
             <BranchAllocations
                 branches={paginatedAllocations}
-                canAddProducts={canAddProducts}
+                canAddProducts={canAddProducts && !isLocked}
                 onRemoveBranch={removeBranch}
                 onOpenPicker={openPicker}
                 onUpdateQty={updateQty}
                 onRemoveItem={removeItem}
                 discountTypes={discountTypes}
+                disabled={isLocked}
             />
 
             <PurchaseOrderSummary
@@ -1107,6 +1110,7 @@ export default function CreatePurchaseOrderModule() {
                 discountTypes={discountTypes}
                 isInvoice={isInvoice}
                 setIsInvoice={setIsInvoice}
+                isLocked={isLocked}
             />
 
             <ProductPickerDialog

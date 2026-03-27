@@ -86,6 +86,7 @@ export const generatePOSummaryPDF = (data: PurchaseOrder[], suppliers: Supplier[
       textColor: [0, 0, 0], 
       fontStyle: "bold" 
     },
+    showFoot: "lastPage",
     margin: { top: 25 },
   });
 

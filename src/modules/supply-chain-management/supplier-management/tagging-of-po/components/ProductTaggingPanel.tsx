@@ -46,6 +46,7 @@ export default function ProductTaggingPanel(props: {
     onBack: () => void;
     onChange: (next: TaggingPODetail) => void;
     onTagItem: (sku: string, rfid: string, strict: boolean) => Promise<TaggingPODetail>;
+    onSendPartiallyTagged: () => void;
 }) {
     const po = props.po;
 
@@ -95,22 +96,46 @@ export default function ProductTaggingPanel(props: {
             // ✅ Strict UI removed, but keep strict enforcement ON internally (safer; prevents duplicates/over-tagging)
             const updated = await props.onTagItem(sku.trim(), rfid.trim(), true);
 
-            props.onChange(updated);
+            // ✅ Only show success toast if we actually got an updated object
+            if (updated) {
+                props.onChange(updated);
+                toast.success("Successfully tagged!");
 
-            toast.success("Successfully tagged!");
+                // ✅ Check if this SKU is now fully tagged
+                const updatedItem = updated.items.find((x) => x.sku.toLowerCase() === sku.trim().toLowerCase());
+                const isCompleted = updatedItem && updatedItem.taggedQty >= updatedItem.expectedQty;
 
-            // ✅ Check if this SKU is now fully tagged
-            const updatedItem = updated.items.find((x) => x.sku.toLowerCase() === sku.trim().toLowerCase());
-            const isCompleted = updatedItem && updatedItem.taggedQty >= updatedItem.expectedQty;
-
-            setRfid("");
-            
-            if (isCompleted) {
-                setSku("");
-                skuRef.current?.focus();
+                setRfid("");
+                
+                if (isCompleted) {
+                    // ✅ Automatic SKU Progression: Find next incomplete item
+                    const nextIncomplete = updated.items.find((it) => it.taggedQty < it.expectedQty);
+                    
+                    if (nextIncomplete) {
+                        toast.info(`Moved to next SKU: ${nextIncomplete.name}`);
+                        setSku(nextIncomplete.sku);
+                        rfidRef.current?.focus();
+                    } else {
+                        // All done or none left
+                        setSku("");
+                        skuRef.current?.focus();
+                        toast.success("All items in this PO are fully tagged!");
+                    }
+                } else {
+                    rfidRef.current?.focus();
+                }
             } else {
+                // ✅ Case: onTagItem returned null (e.g. duplicate RFID toast shown by module)
+                // We still need to empty the field to let user try again.
+                setRfid("");
                 rfidRef.current?.focus();
             }
+        } catch (e) {
+            // ✅ Error is already handled by TaggingOfPOModule (toast shown there)
+            // Just reset the RFID field so the user can try another tag immediately.
+            setRfid("");
+            rfidRef.current?.focus();
+            console.error("Tagging error caught in panel:", e);
         } finally {
             setSaving(false);
         }
@@ -129,11 +154,10 @@ export default function ProductTaggingPanel(props: {
         doc.text(`Supplier: ${po.supplierName || 'N/A'}`, 14, 34);
         doc.text(`Total Items Tagged: ${po.activity.length}`, 14, 40);
 
-        const tableColumn = ["SKU", "Product Name", "RFID Code", "Time Tagged"];
+        const tableColumn = ["SKU", "Product Name", "Time Tagged"];
         const tableRows = po.activity.map(a => [
             a.sku,
             a.productName,
-            a.rfid,
             a.time
         ]);
 
@@ -364,15 +388,14 @@ export default function ProductTaggingPanel(props: {
                                         No activity yet. Scan a SKU and RFID to begin tagging.
                                     </div>
                                 ) : (
-                                    <div className="rounded-xl border border-border overflow-hidden">
-                                        <div className="max-h-[400px] overflow-y-auto relative [&_[data-slot=table-container]]:overflow-visible">
+                                    <div className="rounded-xl border border-border overflow-hidden bg-background">
+                                        <div className="max-h-[380px] overflow-y-auto custom-scrollbar relative">
                                             <Table>
                                                 <TableHeader className="sticky top-0 z-10 bg-muted/95 backdrop-blur-sm shadow-sm">
                                                     <TableRow>
                                                         <TableHead className="w-[160px]">SKU</TableHead>
                                                     <TableHead>Product Name</TableHead>
-                                                    <TableHead className="w-[180px]">RFID Code</TableHead>
-                                                    <TableHead className="w-[120px] text-right">Time</TableHead>
+                                                    <TableHead className="w-[150px] text-right">Time Tagged</TableHead>
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
@@ -380,7 +403,6 @@ export default function ProductTaggingPanel(props: {
                                                     <TableRow key={a.id}>
                                                         <TableCell className="font-mono text-xs">{a.sku}</TableCell>
                                                         <TableCell className="font-bold">{a.productName}</TableCell>
-                                                        <TableCell className="font-mono text-xs text-primary">{a.rfid}</TableCell>
                                                         <TableCell className="text-right text-xs text-muted-foreground">{a.time}</TableCell>
                                                     </TableRow>
                                                 ))}
@@ -448,14 +470,7 @@ export default function ProductTaggingPanel(props: {
                                             type="button"
                                             variant="outline"
                                             className="w-full text-xs font-bold border-primary/30 hover:bg-primary/10 text-primary"
-                                            onClick={() => {
-                                                props.onBack();
-                                                setTimeout(() => {
-                                                    toast.success("Ready for Receiving", {
-                                                        description: "This partially tagged PO is now visible in Receiving Products."
-                                                    });
-                                                }, 100);
-                                            }}
+                                            onClick={props.onSendPartiallyTagged}
                                         >
                                             Send Partially Tagged to Receiving
                                         </Button>
@@ -472,15 +487,46 @@ export default function ProductTaggingPanel(props: {
                                 </div>
                             </div>
 
-                            <div className="p-4 space-y-2">
-                                {po.items.map((it) => (
-                                    <div
-                                        key={it.id}
-                                        className="rounded-xl border border-border bg-background px-3 py-2 flex items-center justify-start gap-3"
-                                    >
-                                        <div className="text-xs font-bold text-foreground truncate">{it.name}</div>
-                                    </div>
-                                ))}
+                            <div className="p-4 space-y-2 max-h-[480px] overflow-y-auto custom-scrollbar border-t border-border/50">
+                                {po.items.map((it) => {
+                                    const isDone = it.taggedQty >= it.expectedQty;
+                                    return (
+                                        <button
+                                            key={it.id}
+                                            type="button"
+                                            onClick={() => {
+                                                if (isDone) {
+                                                    toast.info("This product is already fully tagged.");
+                                                }
+                                                setSku(it.sku);
+                                                rfidRef.current?.focus();
+                                            }}
+                                            className={cn(
+                                                "w-full text-left rounded-xl border px-3 py-2.5 flex flex-col gap-1 transition-all group hover:border-primary/50 hover:bg-primary/5",
+                                                isDone ? "opacity-50 border-border bg-muted/30 grayscale" : "border-border shadow-sm active:scale-[0.98]"
+                                            )}
+                                        >
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground group-hover:text-primary transition-colors">
+                                                    {it.sku}
+                                                </div>
+                                                {isDone && <BadgeCheck className="h-3.5 w-3.5 text-emerald-500" />}
+                                            </div>
+                                            <div className="text-xs font-bold text-foreground line-clamp-1">{it.name}</div>
+                                            <div className="flex items-center gap-1.5 mt-0.5">
+                                                <div className="h-1 flex-1 bg-muted rounded-full overflow-hidden">
+                                                    <div 
+                                                        className={cn("h-full", isDone ? "bg-emerald-500" : "bg-primary")} 
+                                                        style={{ width: `${pct(it.taggedQty, it.expectedQty)}%` }} 
+                                                    />
+                                                </div>
+                                                <div className="text-[9px] font-black text-muted-foreground tabular-nums">
+                                                    {it.taggedQty}/{it.expectedQty}
+                                                </div>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>

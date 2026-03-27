@@ -20,7 +20,7 @@ function statusBadge(status: string) {
 }
 
 export function PostingPODetail() {
-    const { selectedPO, postError, successMsg, clearSuccess } = usePostingOfPo();
+    const { selectedPO, postError, successMsg, clearSuccess, postAllReceipts, posting } = usePostingOfPo();
 
     if (!selectedPO) {
         return (
@@ -63,7 +63,19 @@ export function PostingPODetail() {
                     </div>
                 </div>
                 
-                <div className="shrink-0 pt-1">
+                <div className="shrink-0 pt-1 flex items-center gap-2">
+                    {/* ✅ Post All button for partially-received POs (no receipts yet) */}
+                    {selectedPO && (selectedPO.receiptsCount === 0 || selectedPO.unpostedReceiptsCount > 0) && (
+                        <Button
+                            type="button"
+                            size="sm"
+                            disabled={posting}
+                            onClick={() => postAllReceipts(String((selectedPO as any).id))}
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold"
+                        >
+                            {posting ? "Posting..." : "Post All"}
+                        </Button>
+                    )}
                     <PostingPOPrintAction />
                 </div>
             </div>

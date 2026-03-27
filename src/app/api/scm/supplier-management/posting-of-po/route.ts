@@ -547,7 +547,7 @@ export async function GET() {
     try {
         const base = getDirectusBase();
 
-        // Candidate POR rows: not posted, with some receipt/received activity
+        // ✅ STRATEGY 1: Candidate POR rows with receipt/received activity (traditional path)
         const porCandidateUrl =
             `${base}/items/${POR_COLLECTION}?limit=-1` +
             `&filter[isPosted][_eq]=0` +
@@ -559,11 +559,22 @@ export async function GET() {
 
         const candJ = await fetchJson(porCandidateUrl);
         const porCandidates = Array.isArray(candJ?.data) ? candJ.data : [];
-        if (!porCandidates.length) return ok([] as PostingListItem[]);
 
-        const candidatePoIds = Array.from(
-            new Set(porCandidates.map((r: any) => toNum(r?.purchase_order_id)).filter(Boolean))
-        ) as number[];
+        // ✅ STRATEGY 2: Also find POs by inventory_status=12 (partially tagged) or 13 (received)
+        // These are POs visible in Receiving Products that may not have receipt evidence yet
+        const statusCandidateUrl =
+            `${base}/items/${PO_COLLECTION}?limit=-1` +
+            `&filter[_or][0][inventory_status][_eq]=12` +
+            `&filter[_or][1][inventory_status][_eq]=13` +
+            `&fields=purchase_order_id`;
+        const statusCandJ = await fetchJson(statusCandidateUrl);
+        const statusCandidatePoIds = Array.isArray(statusCandJ?.data)
+            ? (statusCandJ.data as any[]).map((r) => toNum(r?.purchase_order_id)).filter(Boolean)
+            : [] as number[];
+
+        // Merge all candidate PO IDs from both strategies
+        const poIdFromPor = porCandidates.map((r: any) => toNum(r?.purchase_order_id)).filter(Boolean) as number[];
+        const candidatePoIds = Array.from(new Set([...poIdFromPor, ...statusCandidatePoIds])) as number[];
         if (!candidatePoIds.length) return ok([] as PostingListItem[]);
 
         const poHeaders = await fetchPOHeadersByIds(base, candidatePoIds);
@@ -605,12 +616,18 @@ export async function GET() {
             const poId = toNum(po?.purchase_order_id);
             if (!poId) continue;
 
+            // ✅ Skip POs already in a posted state (inventory_status=14)
+            const invStatus = toNum(po?.inventory_status);
+            if (invStatus === 14) continue;
+
             const porRows = porByPo.get(poId) ?? [];
             const lines = linesByPo.get(poId) ?? [];
 
-            // must be at least partially tagged
+            // must be at least partially tagged to show in Posting
             const taggingOk = isPartiallyTagged(poId, lines, porRows, rfidsByPorId);
-            if (!taggingOk) continue;
+            // ✅ Also allow POs with inventory_status 12 or 13 even without RFID tagging evidence in POR
+            const eligibleByStatus = invStatus === 12 || invStatus === 13;
+            if (!taggingOk && !eligibleByStatus) continue;
 
             const fully = isFullyReceived(poId, lines, porRows, rfidsByPorId);
 
@@ -899,29 +916,43 @@ export async function POST(req: NextRequest) {
             const receivingItems = porIds.length ? await fetchReceivingItems(base, porIds) : [];
             const rfidsByPorId = groupRfidsByPorId(receivingItems);
 
+            // ✅ Allow posting for any PO that has at least some tagging OR receiving activity
             const taggingOk = isPartiallyTagged(poId, lines, porRows, rfidsByPorId);
-            if (!taggingOk) return bad("Cannot post. Complete RFID tagging first.", 409);
+            const hasAnyActivity = porRows.some((r: any) => effectiveReceivedQty(r) > 0 || hasReceiptEvidence(r));
+            if (!taggingOk && !hasAnyActivity) {
+                return bad("Cannot post. Please receive items in Receiving Products first.", 409);
+            }
 
-            // Removing fully constraint to allow partial posts
+            // ✅ Determine if fully received (for status update)
             const fully = isFullyReceived(poId, lines, porRows, rfidsByPorId);
 
+            // ✅ Post ALL unposted POR rows — regardless of receipt evidence (allow partial posting)
             const toPost = porRows
                 .map((r: any) => ({
                     porId: toNum(r?.purchase_order_product_id),
                     posted: toNum(r?.isPosted) === 1,
-                    canPost: hasReceiptEvidence(r) || effectiveReceivedQty(r) > 0,
                 }))
-                .filter((x) => x.porId && !x.posted && x.canPost);
+                .filter((x) => x.porId && !x.posted);
 
             for (const row of toPost) {
                 await patchPOR(base, row.porId, { isPosted: 1 });
             }
 
+            // ✅ Update PO header:
+            // - Always set date_received
+            // - If fully received: set inventory_status=14 (Posted/Closed)
+            // - If partial: set inventory_status=13 (Partially Received & Posted)
             try {
-                await patchPO(base, poId, { date_received: nowISO() });
+                const poUpdate: any = { date_received: nowISO() };
+                if (fully) {
+                    poUpdate.inventory_status = 14; // ✅ POSTED / CLOSED
+                } else {
+                    poUpdate.inventory_status = 13; // ✅ PARTIALLY RECEIVED
+                }
+                await patchPO(base, poId, poUpdate);
             } catch {}
 
-            return ok({ ok: true, postedAt: nowISO() });
+            return ok({ ok: true, postedAt: nowISO(), fullyPosted: fully });
         }
 
         return bad("Unknown action.", 400);

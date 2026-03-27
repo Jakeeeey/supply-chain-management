@@ -50,6 +50,7 @@ export function PurchaseOrderSummary(props: {
     discountTypes: DiscountType[];
     isInvoice: boolean;
     setIsInvoice: (v: boolean) => void;
+    isLocked?: boolean;
 }) {
     // ✅ ALL HOOKS MUST BE ABOVE ANY CONDITIONAL RETURN
     const money = React.useMemo(() => buildMoneyFormatter(), []);
@@ -124,7 +125,7 @@ export function PurchaseOrderSummary(props: {
         setNotice(null);
     }, [props.poNumber]);
 
-    const disabled = !props.canSave || isSubmitting || locked;
+    const disabled = !props.canSave || isSubmitting || locked || props.isLocked;
     const { onSave } = props;
 
     const runSave = React.useCallback(async () => {
@@ -261,12 +262,12 @@ export function PurchaseOrderSummary(props: {
                             <div className="text-sm border border-border rounded-lg p-5 bg-card text-card-foreground shadow-sm space-y-3 relative overflow-hidden group">
                                 <div className="absolute top-0 right-0 w-16 h-16 bg-primary/5 -mr-8 -mt-8 rounded-full transition-transform group-hover:scale-110" />
                                 <div className="flex justify-between items-center gap-4 relative">
-                                    <span className="text-muted-foreground font-medium text-xs">PO Number:</span>
-                                    <span className="font-mono font-black text-primary text-sm sm:text-base underline decoration-dotted underline-offset-4">{props.poNumber}</span>
+                                    <span className="text-muted-foreground font-medium text-[10px] uppercase tracking-wider shrink-0">PO Number:</span>
+                                    <span className="font-mono font-black text-primary text-sm sm:text-base underline decoration-dotted underline-offset-4 truncate">{props.poNumber}</span>
                                 </div>
                                 <div className="flex justify-between items-center gap-4 relative">
-                                    <span className="text-muted-foreground font-medium text-xs">Transaction Date:</span>
-                                    <span className="font-bold text-foreground text-xs sm:text-sm">{props.poDate}</span>
+                                    <span className="text-muted-foreground font-medium text-[10px] uppercase tracking-wider shrink-0">Transaction Date:</span>
+                                    <span className="font-bold text-foreground text-xs sm:text-sm shrink-0">{props.poDate}</span>
                                 </div>
                             </div>
                         </div>
@@ -489,7 +490,7 @@ export function PurchaseOrderSummary(props: {
                     </div>
 
                     {/* Financial Summary & Actions Section */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mt-auto">
                         {/* Financial Detail Breakout */}
                         <div className="p-6 border border-border rounded-xl bg-card text-card-foreground shadow-md space-y-4">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2 pb-3 border-b border-border/60">
@@ -509,7 +510,7 @@ export function PurchaseOrderSummary(props: {
                                         htmlFor="is-invoice" 
                                         className="text-[10px] font-black uppercase tracking-widest cursor-pointer select-none text-muted-foreground group-hover:text-foreground transition-colors"
                                     >
-                                        Mark as Invoice
+                                        Invoice
                                     </Label>
                                 </div>
                             </div>
@@ -580,7 +581,7 @@ export function PurchaseOrderSummary(props: {
                                 <AlertDialog
                                     open={confirmOpen}
                                     onOpenChange={(o) => {
-                                        if (isSubmitting) return;
+                                        if (isSubmitting || locked || props.isLocked) return;
                                         setConfirmOpen(o);
                                     }}
                                 >

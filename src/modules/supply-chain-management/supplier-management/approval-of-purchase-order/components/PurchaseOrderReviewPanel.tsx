@@ -282,10 +282,18 @@ export default function PurchaseOrderReviewPanel(props: {
         return 0;
     }, [grossDirect, netAmount, discountAmount]);
 
+    const vatExclusive = React.useMemo(() => {
+        return netAmount / 1.12;
+    }, [netAmount]);
+
+    const vatAmountComputed = React.useMemo(() => {
+        return Math.max(0, netAmount - vatExclusive);
+    }, [netAmount, vatExclusive]);
+
     const ewtGoods = React.useMemo(() => {
         if (ewtDirect > 0) return ewtDirect;
-        return netAmount > 0 ? netAmount * 0.01 : 0;
-    }, [ewtDirect, netAmount]);
+        return vatExclusive > 0 ? vatExclusive * 0.01 : 0;
+    }, [ewtDirect, vatExclusive]);
 
     const totalAmount = React.useMemo(() => {
         if (totalDirect > 0) return totalDirect;
@@ -591,8 +599,8 @@ export default function PurchaseOrderReviewPanel(props: {
                                 {markAsInvoice ? (
                                     <>
                                         <div className="flex justify-between text-xs">
-                                            <span className="text-muted-foreground font-medium uppercase">VAT</span>
-                                            <span className="font-bold text-foreground">{fmt.format(vatAmount)}</span>
+                                            <span className="text-muted-foreground font-medium uppercase">VAT (12%)</span>
+                                            <span className="font-bold text-foreground">{fmt.format(vatAmount || vatAmountComputed)}</span>
                                         </div>
 
                                         <div className="flex justify-between text-xs">
@@ -601,7 +609,7 @@ export default function PurchaseOrderReviewPanel(props: {
                                         </div>
 
                                         <div className="rounded-md bg-background/60 border border-border/60 px-3 py-2 text-[11px] text-amber-600 dark:text-amber-400 font-bold italic">
-                                            Note: VAT and EWT are shown for receipt/invoice display purposes only. EWT is not yet deducted.
+                                            Note: VAT and EWT are shown for display purposes. EWT (1%) is calculated from the VAT-exclusive amount (Net / 1.12).
                                         </div>
                                     </>
                                 ) : null}

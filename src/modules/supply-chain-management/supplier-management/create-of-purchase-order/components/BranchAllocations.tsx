@@ -17,6 +17,7 @@ export function BranchAllocations(props: {
 
     // DISPLAY ONLY
     discountTypes: DiscountType[];
+    disabled?: boolean;
 }) {
     const money = React.useMemo(() => buildMoneyFormatter(), []);
 
@@ -70,7 +71,13 @@ export function BranchAllocations(props: {
 
                             <button
                                 onClick={() => props.onRemoveBranch(branch.branchId)}
-                                className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-all hover:scale-110 active:scale-90 shrink-0 shadow-sm hover:shadow-destructive/20"
+                                disabled={props.disabled}
+                                className={cn(
+                                    "p-1.5 rounded-md transition-all shrink-0 shadow-sm",
+                                    props.disabled 
+                                        ? "text-muted-foreground/30 cursor-not-allowed" 
+                                        : "text-muted-foreground hover:text-destructive hover:bg-destructive/10 hover:scale-110 active:scale-90 hover:shadow-destructive/20"
+                                )}
                             >
                                 <Trash2 className="w-4 h-4" />
                             </button>
@@ -166,13 +173,14 @@ export function BranchAllocations(props: {
                                                                         )
                                                                     }
                                                                     className="w-6 h-6 flex items-center justify-center rounded-lg border border-border bg-background hover:bg-muted disabled:opacity-30 shadow-sm transition-all hover:scale-110 active:scale-90"
-                                                                    disabled={item.orderQty <= 1}
+                                                                    disabled={item.orderQty <= 1 || props.disabled}
                                                                 >
                                                                     <Minus className="w-2.5 h-2.5" />
                                                                 </button>
                                                                 <input
                                                                     type="number"
                                                                     value={item.orderQty}
+                                                                    disabled={props.disabled}
                                                                     onChange={(e) => {
                                                                         const val = parseInt(e.target.value);
                                                                         props.onUpdateQty(
@@ -187,7 +195,10 @@ export function BranchAllocations(props: {
                                                                             props.onUpdateQty(branch.branchId, item.id, 1);
                                                                         }
                                                                     }}
-                                                                    className="w-10 text-center font-black text-[11px] tracking-tighter bg-transparent border-none outline-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                    className={cn(
+                                                                        "w-10 text-center font-black text-[11px] tracking-tighter bg-transparent border-none outline-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+                                                                        props.disabled && "text-muted-foreground cursor-not-allowed"
+                                                                    )}
                                                                 />
                                                                  <button
                                                                     onClick={() =>
@@ -198,6 +209,7 @@ export function BranchAllocations(props: {
                                                                         )
                                                                     }
                                                                     className="w-6 h-6 flex items-center justify-center rounded-lg border border-border bg-background hover:bg-muted shadow-sm transition-all hover:scale-110 active:scale-90"
+                                                                    disabled={props.disabled}
                                                                 >
                                                                     <Plus className="w-2.5 h-2.5" />
                                                                 </button>
@@ -220,7 +232,13 @@ export function BranchAllocations(props: {
                                                         <td className="px-3 py-3 text-right">
                                                             <button
                                                                 onClick={() => props.onRemoveItem(branch.branchId, item.id)}
-                                                                className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-all active:scale-90"
+                                                                disabled={props.disabled}
+                                                                className={cn(
+                                                                    "p-1.5 rounded-md transition-all",
+                                                                    props.disabled 
+                                                                        ? "text-muted-foreground/30 cursor-not-allowed" 
+                                                                        : "text-muted-foreground hover:text-destructive hover:bg-destructive/10 active:scale-90"
+                                                                )}
                                                             >
                                                                 <Trash2 className="w-4 h-4" />
                                                             </button>
@@ -236,10 +254,10 @@ export function BranchAllocations(props: {
                                         <div className="flex items-center gap-4">
                                              <button
                                                 onClick={() => props.onOpenPicker(branch.branchId)}
-                                                disabled={!props.canAddProducts}
+                                                disabled={!props.canAddProducts || props.disabled}
                                                 className={cn(
                                                     "px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2.5 transition-all border-2 border-primary bg-background text-primary hover:bg-primary hover:text-primary-foreground shadow-lg hover:shadow-primary/20 hover:-translate-y-0.5 active:scale-95 active:translate-y-0",
-                                                    !props.canAddProducts && "opacity-50 cursor-not-allowed grayscale border-muted text-muted-foreground hover:bg-background hover:text-muted-foreground shadow-none"
+                                                    (!props.canAddProducts || props.disabled) && "opacity-50 cursor-not-allowed grayscale border-muted text-muted-foreground hover:bg-background hover:text-muted-foreground shadow-none"
                                                 )}
                                             >
                                                 <Plus className="w-4 h-4" />

@@ -57,6 +57,11 @@ export type PurchaseOrder = {
     receipts: PostingReceipt[];
     createdAt: string;
 
+    // ✅ posting-specific counts
+    receiptsCount: number;
+    unpostedReceiptsCount: number;
+    postingReady?: boolean;
+
     grossAmount?: number;
     discountAmount?: number;
     vatAmount?: number;
