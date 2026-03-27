@@ -89,10 +89,10 @@ export async function getRawLinkedInvoice(returnId: number) {
 export async function getRawReferences() {
   return Promise.all([
     directusGet<{ data: Record<string, unknown>[] }>(
-      "/items/salesman?limit=-1&fields=id,salesman_name,salesman_code,price_type,branch_code",
+      "/items/salesman?limit=-1&fields=id,salesman_name,salesman_code,price_type,branch_code&filter[isActive][_eq]=1",
     ),
     directusGet<{ data: Record<string, unknown>[] }>(
-      "/items/customer?limit=-1&fields=id,customer_code,customer_name,store_name",
+      "/items/customer?limit=-1&fields=id,customer_code,customer_name,store_name&filter[isActive][_eq]=1",
     ),
     directusGet<{ data: Record<string, unknown>[] }>(
       "/items/branches?limit=-1&fields=id,branch_name",
@@ -118,7 +118,7 @@ export async function getRawProductCatalog() {
     directusGet<{ data: Record<string, unknown>[] }>(
       "/items/product_per_supplier?limit=-1",
     ),
-    directusGet<{ data: Record<string, unknown>[] }>("/items/products?limit=-1"),
+    directusGet<{ data: Record<string, unknown>[] }>("/items/products?limit=-1&filter[isActive][_eq]=1"),
   ]);
 }
 
@@ -147,6 +147,15 @@ export async function getRawInvoices(
  */
 export async function getRawUnits() {
   return directusGet<{ data: Record<string, unknown>[] }>("/items/units?limit=-1");
+}
+
+/**
+ * Fetches price types from the price_types table (A, B, C, D, E).
+ */
+export async function getRawPriceTypes() {
+  return directusGet<{ data: Record<string, unknown>[] }>(
+    "/items/price_types?limit=-1&sort=sort",
+  );
 }
 
 // =============================================================================

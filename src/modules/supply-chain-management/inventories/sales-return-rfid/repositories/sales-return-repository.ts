@@ -89,10 +89,10 @@ export async function getRawLinkedInvoice(returnId: number) {
 export async function getRawReferences() {
   return Promise.all([
     directusGet<{ data: Record<string, unknown>[] }>(
-      "/items/salesman?limit=-1&fields=id,salesman_name,salesman_code,price_type,branch_code",
+      "/items/salesman?limit=-1&fields=id,salesman_name,salesman_code,price_type,branch_code&filter[isActive][_eq]=1",
     ),
     directusGet<{ data: Record<string, unknown>[] }>(
-      "/items/customer?limit=-1&fields=id,customer_code,customer_name,store_name",
+      "/items/customer?limit=-1&fields=id,customer_code,customer_name,store_name&filter[isActive][_eq]=1",
     ),
     directusGet<{ data: Record<string, unknown>[] }>(
       "/items/branches?limit=-1&fields=id,branch_name",
@@ -118,7 +118,7 @@ export async function getRawProductCatalog() {
     directusGet<{ data: Record<string, unknown>[] }>(
       "/items/product_per_supplier?limit=-1",
     ),
-    directusGet<{ data: Record<string, unknown>[] }>("/items/products?limit=-1"),
+    directusGet<{ data: Record<string, unknown>[] }>("/items/products?limit=-1&filter[isActive][_eq]=1"),
   ]);
 }
 
@@ -144,6 +144,15 @@ export async function getRawInvoices(salesmanId?: string, customerCode?: string)
  */
 export async function getRawUnits() {
   return directusGet<{ data: Record<string, unknown>[] }>("/items/units?limit=-1");
+}
+
+/**
+ * Fetches price types from the price_types table (A, B, C, D, E).
+ */
+export async function getRawPriceTypes() {
+  return directusGet<{ data: Record<string, unknown>[] }>(
+    "/items/price_types?limit=-1&sort=sort",
+  );
 }
 
 // =============================================================================
@@ -300,6 +309,15 @@ export async function deleteRfidTag(id: number) {
   );
 }
 
+/**
+ * Checks if an RFID tag is already used in ANY sales return record.
+ * This is used to prevent the same RFID from being returned multiple times.
+ */
+export async function checkRfidDuplicate(rfidTag: string) {
+  const url = `/items/sales_return_rfid?filter[rfid_tag][_eq]=${encodeURIComponent(rfidTag)}&fields=id,sales_return_detail_id.return_no`;
+  return directusGet<{ data: Record<string, unknown>[] }>(url);
+}
+
 // =============================================================================
 // REPOSITORY METHODS — RFID LOOKUP (Spring Boot VOS API)
 // =============================================================================
@@ -340,6 +358,6 @@ export async function getSpringRfidLookup(
  */
 export async function getRawProductById(productId: number) {
   return directusGet<{ data: Record<string, unknown> }>(
-    `/items/products/${productId}?fields=product_id,product_code,product_name,description,priceA,priceB,priceC,unit_of_measurement,unit_of_measurement_count`,
+    `/items/products/${productId}?fields=product_id,product_code,product_name,description,priceA,priceB,priceC,priceD,priceE,unit_of_measurement,unit_of_measurement_count`,
   );
 }

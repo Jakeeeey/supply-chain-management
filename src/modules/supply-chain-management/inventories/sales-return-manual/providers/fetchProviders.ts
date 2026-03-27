@@ -19,6 +19,7 @@ import type {
   ProductSupplierConnection,
   API_LineDiscount,
   API_SalesReturnType,
+  PriceTypeOption,
 } from "../type";
 
 const API_BASE = "/api/scm/inventories/sales-return-manual";
@@ -104,6 +105,11 @@ export const SalesReturnProvider = {
   async getSalesReturnTypes(): Promise<API_SalesReturnType[]> {
     const refs = await this._getReferences();
     return refs.returnTypes;
+  },
+
+  async getPriceTypes(): Promise<PriceTypeOption[]> {
+    const refs = await this._getReferences();
+    return refs.priceTypes || [];
   },
 
   async getInvoiceReturnList(

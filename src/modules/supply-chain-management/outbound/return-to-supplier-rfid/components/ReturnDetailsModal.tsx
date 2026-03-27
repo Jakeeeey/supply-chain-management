@@ -6,6 +6,7 @@ import { Printer, X, Loader2, Save, Send, Plus, ScanLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type {
   ReturnToSupplier,
@@ -87,9 +88,7 @@ export function ReturnDetailsModal({
           const cartItems: CartItem[] = fetched.map((i) => {
               const validUnitCount = i.unitCount > 0 ? i.unitCount : 1;
             return {
-              id: i.rfid_tag
-                ? `${i.productId}-rfid-${i.rfid_tag}`
-                : String(i.productId),
+              id: String(i.id), // Use the unique Database Line ID to prevent duplicate React keys
               productId: i.productId,
               code: i.code,
               name: i.name,
@@ -191,14 +190,17 @@ export function ReturnDetailsModal({
 
         let discountLabel: string | undefined;
         let computedDiscount = 0;
+        let currentDiscountId: number | undefined;
 
         if (connection?.discount_type) {
           const discountObj = discountMap.get(String(connection.discount_type));
           if (discountObj) {
             computedDiscount = parseFloat(discountObj.percentage);
             discountLabel = discountObj.line_discount;
-          } else if (typeof connection.discount_type === "string") {
-            discountLabel = connection.discount_type;
+            currentDiscountId = discountObj.id;
+          } else {
+            discountLabel = String(connection.discount_type);
+            currentDiscountId = connection.discount_type;
           }
         }
 
@@ -219,6 +221,7 @@ export function ReturnDetailsModal({
           uom_id: matchedUnit?.unit_id || 0,
           discountType: discountLabel,
           supplierDiscount: computedDiscount,
+          discountId: currentDiscountId,
           parentId: item.familyId || null,
         };
       })
@@ -241,6 +244,8 @@ export function ReturnDetailsModal({
       uom_id: number;
       supplierDiscount: number;
       discountType?: string;
+      discountId?: number;
+      productId: number;
     }
 
     const groups: Record<string, {
@@ -293,7 +298,8 @@ export function ReturnDetailsModal({
             id: `${p.id}-rfid-${p.rfid_tag}`, // Unique key per RFID
             quantity: 1,
             onHand: p.stock || 0,
-            discount: p.supplierDiscount || 0,
+            discount: (p.supplierDiscount || 0) / 100,
+            discountId: p.discountId,
             customPrice: p.price,
             rfid_tag: p.rfid_tag,
           } as CartItem,
@@ -314,7 +320,8 @@ export function ReturnDetailsModal({
           ...p,
           quantity: qty,
           onHand: p.stock || 0,
-          discount: p.supplierDiscount || 0,
+          discount: (p.supplierDiscount || 0) / 100,
+          discountId: p.discountId,
           customPrice: p.price,
         },
       ];
@@ -385,7 +392,10 @@ export function ReturnDetailsModal({
         );
         if (connection?.discount_type) {
           const disc = refs.lineDiscounts.find((d) => String(d.id) === String(connection.discount_type));
-          if (disc) product.supplierDiscount = parseFloat(disc.percentage);
+          if (disc) {
+            product.supplierDiscount = parseFloat(disc.percentage);
+            (product as any).discountId = disc.id;
+          }
         }
 
         addToCartInternal(product, 1);
@@ -620,6 +630,115 @@ export function ReturnDetailsModal({
 
           <div className="flex-1 overflow-y-auto custom-scrollbar bg-background p-6">
             <div className="bg-muted/30 rounded-xl p-6 h-full">
+              {loading ? (
+                /* ===== FULL-COMPONENT SKELETON ===== */
+                <div className="space-y-8">
+                  {/* Header Info Skeleton */}
+                  <div className="bg-card rounded-xl border p-6 shadow-sm">
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <Skeleton className="h-3 w-16" />
+                          <Skeleton className="h-10 w-full rounded-md" />
+                        </div>
+                        <div className="space-y-2">
+                          <Skeleton className="h-3 w-14" />
+                          <Skeleton className="h-10 w-full rounded-md" />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="space-y-2">
+                          <Skeleton className="h-3 w-20" />
+                          <Skeleton className="h-10 w-full rounded-md" />
+                        </div>
+                        <div className="space-y-2">
+                          <Skeleton className="h-3 w-28" />
+                          <Skeleton className="h-10 w-full rounded-md" />
+                        </div>
+                        <div className="space-y-2">
+                          <Skeleton className="h-3 w-12" />
+                          <Skeleton className="h-10 w-full rounded-md" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Products to Return Label + RFID Skeleton */}
+                  <div className="flex justify-between items-center">
+                    <Skeleton className="h-5 w-36" />
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-9 w-[220px] rounded-md" />
+                      <Skeleton className="h-9 w-32 rounded-md" />
+                    </div>
+                  </div>
+
+                  {/* Table Skeleton */}
+                  <div className="rounded-md border overflow-hidden bg-card shadow-sm">
+                    <div className="bg-muted/50 border-b px-4 py-3 flex gap-4">
+                      <Skeleton className="h-3 w-[80px]" />
+                      <Skeleton className="h-3 w-[60px]" />
+                      <Skeleton className="h-3 w-[160px]" />
+                      <Skeleton className="h-3 w-[50px]" />
+                      <Skeleton className="h-3 w-[70px]" />
+                      <Skeleton className="h-3 w-[80px]" />
+                      <Skeleton className="h-3 w-[100px]" />
+                      <Skeleton className="h-3 w-[80px]" />
+                      <Skeleton className="h-3 w-[100px]" />
+                      <Skeleton className="h-3 w-[80px]" />
+                    </div>
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="px-4 py-3 flex gap-4 items-center border-b last:border-0">
+                        <Skeleton className="h-4 w-[80px]" />
+                        <Skeleton className="h-4 w-[60px]" />
+                        <Skeleton className="h-4 w-[160px]" />
+                        <Skeleton className="h-6 w-[50px] rounded" />
+                        <Skeleton className="h-8 w-[70px] rounded" />
+                        <Skeleton className="h-4 w-[80px]" />
+                        <Skeleton className="h-8 w-[100px] rounded" />
+                        <Skeleton className="h-4 w-[80px]" />
+                        <Skeleton className="h-8 w-[100px] rounded" />
+                        <Skeleton className="h-4 w-[80px]" />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Remarks & Summary Skeleton */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div className="lg:col-span-2 space-y-3">
+                      <Skeleton className="h-4 w-36" />
+                      <Skeleton className="h-40 w-full rounded-md" />
+                    </div>
+                    <div className="lg:col-span-1">
+                      <div className="bg-card rounded-xl border p-6 shadow-sm h-full space-y-4">
+                        <Skeleton className="h-4 w-28 mb-4" />
+                        <div className="space-y-3">
+                          <div className="flex justify-between">
+                            <Skeleton className="h-3 w-24" />
+                            <Skeleton className="h-3 w-8" />
+                          </div>
+                          <div className="flex justify-between">
+                            <Skeleton className="h-3 w-24" />
+                            <Skeleton className="h-3 w-16" />
+                          </div>
+                          <div className="border-t border-dashed my-3" />
+                          <div className="flex justify-between">
+                            <Skeleton className="h-3 w-24" />
+                            <Skeleton className="h-3 w-20" />
+                          </div>
+                          <Skeleton className="h-6 w-full rounded" />
+                        </div>
+                        <div className="border-t pt-4 mt-4">
+                          <div className="flex justify-between items-end">
+                            <Skeleton className="h-3 w-20" />
+                            <Skeleton className="h-8 w-32" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <>
               {/* Header Info */}
               <div className="bg-card rounded-xl border p-6 shadow-sm mb-8">
                 <div className="space-y-6">
@@ -746,6 +865,8 @@ export function ReturnDetailsModal({
                   readOnly={!isEditable}
                 />
               </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -769,7 +890,7 @@ export function ReturnDetailsModal({
                   Save Changes
                 </Button>
                 <Button
-                  variant="secondary"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md font-bold transition-all active:scale-[0.98]"
                   onClick={() => handleSave(true)}
                   disabled={saving}
                 >
@@ -814,7 +935,7 @@ export function ReturnDetailsModal({
               <X className="h-4 w-4" />
             </Button>
           </div>
-          <div className="flex-1 overflow-hidden">
+          <div className="h-[calc(95vh-72px)] overflow-hidden">
             <ProductPicker
               isVisible={true}
               onClose={() => setShowPicker(false)}

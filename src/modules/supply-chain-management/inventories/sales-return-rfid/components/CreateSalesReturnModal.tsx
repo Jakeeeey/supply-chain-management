@@ -16,6 +16,7 @@ import {
   Radio,
   ScanLine,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -27,6 +28,7 @@ import {
   API_LineDiscount,
   API_SalesReturnType,
   InvoiceOption,
+  PriceTypeOption,
 } from "../type";
 
 // Import Child Modal
@@ -68,6 +70,9 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
   // UI State for Validation
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [returnTypeError, setReturnTypeError] = useState(false);
+  const [orderError, setOrderError] = useState(false);
+  const [invoiceError, setInvoiceError] = useState(false);
 
   // Bottom Form Fields
   const [orderNo, setOrderNo] = useState("");
@@ -87,6 +92,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const [returnTypeOptions, setReturnTypeOptions] = useState<
     API_SalesReturnType[]
   >([]);
+  const [priceTypeOptions, setPriceTypeOptions] = useState<PriceTypeOption[]>([]);
 
   // INVOICE DATA LIST & DROPDOWN STATE
   const [invoiceOptions, setInvoiceOptions] = useState<InvoiceOption[]>([]);
@@ -108,6 +114,34 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   // --- 3. CART STATE ---
   const [items, setItems] = useState<SalesReturnItem[]>([]);
   const [isProductLookupOpen, setIsProductLookupOpen] = useState(false);
+
+  // --- 5. BRANCH LOCK STATE ---
+  const [lockedBranchId, setLockedBranchId] = useState<number | null>(null);
+
+  useEffect(() => {
+    const hasRfid = items.some((i) => i.rfidTags && i.rfidTags.length > 0);
+    if (!hasRfid) {
+      setLockedBranchId(null);
+    } else if (lockedBranchId === null && selectedSalesmanId) {
+      const salesman = salesmen.find((s) => s.id.toString() === selectedSalesmanId);
+      if (salesman && salesman.branchId) {
+        setLockedBranchId(salesman.branchId);
+      }
+    }
+  }, [items, selectedSalesmanId, salesmen, lockedBranchId]);
+
+  const currentSalesmanObj = salesmen.find((s) => s.id.toString() === selectedSalesmanId);
+  const currentBranchId = currentSalesmanObj?.branchId || null;
+  const isBranchLockedError = lockedBranchId !== null && currentBranchId !== null && lockedBranchId !== currentBranchId;
+
+  const handleClearItems = () => {
+    setItems([]);
+    setLockedBranchId(null);
+    if (currentBranchId) {
+      setLockedBranchId(currentBranchId);
+    }
+    toast.info("All items cleared. You may now scan items for the new branch.");
+  };
 
   // --- 4. SEARCHABLE DROPDOWN STATES ---
   const [isSalesmanOpen, setIsSalesmanOpen] = useState(false);
@@ -165,17 +199,34 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     setValidationError(null);
 
     try {
+      // 🟢 NEW: Global Duplicate Check
+      const dupCheck = await SalesReturnProvider.checkRfidDuplicate(tag);
+      if (dupCheck.isDuplicate) {
+        const errorMsg = `RFID tag "${tag}" is already linked to SR #${dupCheck.returnNo}.`;
+        setValidationError(errorMsg);
+        toast.error(errorMsg, {
+          description: "This tag cannot be returned again as it exists in another record.",
+          duration: 6000,
+        });
+        return;
+      }
+
       const result = await SalesReturnProvider.lookupRfid(tag, branchId);
 
       if (!result || !result.productId) {
-        setValidationError(
-          `No product found for RFID "${tag}" at this branch.`,
-        );
+        const errorMsg = `RFID tag "${tag}" is NOT registered to ${branchName || "this branch"}.`;
+        setValidationError(errorMsg);
+        toast.error(errorMsg, {
+          description: "Please check if the scan is correct or if the item is in the wrong location.",
+          duration: 5000,
+        });
         return;
       }
 
       if (items.some((i) => i.rfidTags?.includes(tag))) {
-        setValidationError(`RFID tag "${tag}" is already in the list.`);
+        const errorMsg = `RFID tag "${tag}" is already in the list.`;
+        setValidationError(errorMsg);
+        toast.warning(errorMsg);
         return;
       }
 
@@ -200,18 +251,30 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         reason: "",
         returnType: "",
         rfidTags: [tag],
+        // 🟢 Store additional price info for recalculation
+        priceA: result.priceA,
+        priceB: result.priceB,
+        priceC: result.priceC,
+        priceD: result.priceD,
+        priceE: result.priceE,
+        unitMultiplier: result.unitMultiplier || 1,
       };
 
       setItems((prev) => [...prev, newItem]);
+      toast.success(`Successfully scanned: ${result.productName}`, {
+        description: `RFID: ${tag} | Registered to ${branchName}`,
+      });
 
       // Auto-clear display after 2 seconds
       setTimeout(() => setLastScannedRfid(""), 2000);
     } catch (err: unknown) {
       console.error("RFID lookup error:", err);
       const error = err as Error;
-      setValidationError(
-        error.message || `Failed to look up RFID tag "${tag}".`,
-      );
+      const errorMsg = `Failed to look up RFID tag "${tag}".`;
+      setValidationError(error.message || errorMsg);
+      toast.error(errorMsg, {
+        description: error.message || "An unexpected error occurred during scan.",
+      });
     } finally {
       setRfidScanning(false);
     }
@@ -234,18 +297,21 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
             branchesData,
             lineDiscountData,
             returnTypesData,
+            priceTypesData,
           ] = await Promise.all([
             SalesReturnProvider.getFormSalesmen(),
             SalesReturnProvider.getFormCustomers(),
             SalesReturnProvider.getFormBranches(),
             SalesReturnProvider.getLineDiscounts(),
             SalesReturnProvider.getSalesReturnTypes(),
+            SalesReturnProvider.getPriceTypes(),
           ]);
           setSalesmen(salesmenData);
           setCustomers(customersData);
           setBranches(branchesData);
           setLineDiscountOptions(lineDiscountData);
           setReturnTypeOptions(returnTypesData);
+          setPriceTypeOptions(priceTypesData);
         } catch (error) {
           console.error("Failed to load form data", error);
         }
@@ -253,6 +319,41 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       loadData();
     }
   }, [isOpen]);
+
+  // 🟢 NEW: Effect to automatically update prices when Price Type changes
+  useEffect(() => {
+    if (items.length > 0) {
+      setItems((prevItems) =>
+        prevItems.map((item) => {
+          const basePrice = resolvePrice(item, priceType);
+          const newUnitPrice = item.unit === "BOX" 
+            ? basePrice * (item.unitMultiplier || 1) 
+            : basePrice;
+          
+          const newGross = item.quantity * newUnitPrice;
+          let newDiscountAmt = 0;
+
+          if (item.discountType) {
+            const selectedOption = lineDiscountOptions.find(
+              (d) => d.id.toString() === item.discountType?.toString(),
+            );
+            if (selectedOption) {
+              const percentage = parseFloat(selectedOption.percentage) || 0;
+              newDiscountAmt = newGross * (percentage / 100);
+            }
+          }
+
+          return {
+            ...item,
+            unitPrice: newUnitPrice,
+            grossAmount: newGross,
+            discountAmount: newDiscountAmt,
+            totalAmount: newGross - newDiscountAmt,
+          };
+        })
+      );
+    }
+  }, [priceType, lineDiscountOptions]);
 
   // --- 5b. FETCH INVOICES when salesman or customer changes ---
   useEffect(() => {
@@ -370,6 +471,11 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   );
 
   const handleSelectSalesman = (salesman: SalesmanOption) => {
+    const hasRfid = items.some((i) => i.rfidTags && i.rfidTags.length > 0);
+    if (hasRfid && lockedBranchId !== null && lockedBranchId !== salesman.branchId) {
+      toast.error("Current items are not registered to this branch. Change to the appropriate Branch to proceed.", { duration: 5000 });
+    }
+
     setSelectedSalesmanId(salesman.id.toString());
     setSalesmanSearch(salesman.name);
     setSalesmanCode(salesman.code);
@@ -402,14 +508,17 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const handleOpenProductLookup = () => {
     setValidationError(null);
     if (!returnDate) {
+      toast.error("Please select a Return Date before adding products.");
       setValidationError("Please select a Return Date before adding products.");
       return;
     }
     if (!selectedSalesmanId) {
+      toast.error("Please select a Salesman before adding products.");
       setValidationError("Please select a Salesman before adding products.");
       return;
     }
     if (!selectedCustomerId) {
+      toast.error("Please select a Customer before adding products.");
       setValidationError("Please select a Customer before adding products.");
       return;
     }
@@ -418,17 +527,37 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
   const handleCreateReturn = async () => {
     setValidationError(null);
+    setReturnTypeError(false);
+    setOrderError(false);
+    setInvoiceError(false);
+    
     if (!returnDate) {
+      toast.error("Return Date is required.");
       setValidationError("Return Date is required.");
       return;
     }
     if (items.length === 0) {
+      toast.error("Please add at least one product.");
       setValidationError("Please add at least one product.");
       return;
     }
+
+    if (isBranchLockedError) {
+      toast.error("Invalid Branch: Clear the products or revert the salesman to proceed.");
+      setValidationError("Invalid Branch: Clear the products or revert the salesman to proceed.");
+      return;
+    }
+
     // 🟢 REVISION: Added Validation for Order No.
     if (!orderNo.trim()) {
-      setValidationError("Order No. is required.");
+      toast.error("Order No. is required.");
+      setOrderError(true);
+      return;
+    }
+
+    if (!invoiceNo.trim()) {
+      toast.error("Invoice No. is required.");
+      setInvoiceError(true);
       return;
     }
 
@@ -437,7 +566,8 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     );
 
     if (invalidItems) {
-      setValidationError("Please select a Return Type for all items.");
+      toast.error("Please select a Return Type for all items.");
+      setReturnTypeError(true);
       return;
     }
 
@@ -489,8 +619,12 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         const productId = Number(rawId);
         
         // Strict mapping for unit checking to prevent different UOMs from merging
+        const isRfidItem = !!item.rfidTags && item.rfidTags.length > 0;
         const existingIndex = updated.findIndex(
-          (i) => i.productId === productId && i.unit === item.unit
+          (i) => {
+            const existingIsRfid = !!i.rfidTags && i.rfidTags.length > 0;
+            return i.productId === productId && i.unit === item.unit && i.unitPrice === Number(item.unitPrice) && existingIsRfid === isRfidItem;
+          }
         );
         const qty = item.quantity || 1;
         
@@ -625,21 +759,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
         {/* BODY */}
         <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
-          {validationError && (
-            <div className="p-4 bg-destructive/10 border-l-4 border-destructive text-destructive flex items-center justify-between rounded-r shadow-sm">
-              <div className="flex items-center gap-3">
-                <AlertCircle className="h-5 w-5 text-destructive shrink-0" />
-                <span className="text-sm font-medium">{validationError}</span>
-              </div>
-              <button
-                onClick={() => setValidationError(null)}
-                className="bg-destructive hover:bg-destructive text-white h-7 w-7 rounded-md flex items-center justify-center shadow-sm"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          )}
-
           {/* 1. PRIMARY DETAILS */}
           {/* ... (Same UI Code as before) ... */}
           {/* COL 1: Salesman, COL 2: Customer, COL 3: Date & Price */}
@@ -674,7 +793,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                   <ChevronDown className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
                 {isSalesmanOpen && (
-                  <div className="absolute top-[calc(100%+4px)] left-0 w-full z-20 bg-background border border-border rounded-md shadow-xl max-h-60 overflow-y-auto">
+                  <div className="absolute top-[calc(100%+4px)] left-0 w-full z-20 bg-background border border-border rounded-md shadow-xl max-h-60 overflow-y-auto font-medium">
                     {filteredSalesmen.map((s) => (
                       <div
                         key={s.id}
@@ -686,6 +805,16 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                     ))}
                   </div>
                 )}
+              </div>
+
+              {/* Salesman Code */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
+                  Salesman Code
+                </label>
+                <div className="h-9 w-full bg-muted/20 border border-border rounded-md px-3 flex items-center text-sm font-medium text-foreground italic shadow-sm">
+                  {salesmanCode || "-"}
+                </div>
               </div>
 
               {/* Customer */}
@@ -712,7 +841,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                   <ChevronDown className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
                 {isCustomerOpen && (
-                  <div className="absolute top-[calc(100%+4px)] left-0 w-full z-20 bg-background border border-border rounded-md shadow-xl max-h-60 overflow-y-auto">
+                  <div className="absolute top-[calc(100%+4px)] left-0 w-full z-20 bg-background border border-border rounded-md shadow-xl max-h-60 overflow-y-auto font-medium">
                     {filteredCustomers.map((c) => (
                       <div
                         key={c.id}
@@ -731,7 +860,28 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                 )}
               </div>
 
-              {/* Date */}
+              {/* Customer Code */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
+                  Customer Code
+                </label>
+                <div className="h-9 w-full bg-muted/20 border border-border rounded-md px-3 flex items-center text-sm font-medium text-foreground italic shadow-sm">
+                  {customerCode || "-"}
+                </div>
+              </div>
+
+              {/* ROW 2 */}
+              {/* Branch */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
+                  Branch
+                </label>
+                <div className="h-9 w-full bg-muted/20 border border-border rounded-md px-3 flex items-center text-sm font-medium text-foreground italic shadow-sm">
+                  {branchName || "-"}
+                </div>
+              </div>
+
+              {/* Return Date */}
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
                   Return Date <span className="text-destructive">*</span>
@@ -744,40 +894,20 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                 />
               </div>
 
-              {/* Salesman Code */}
-              <div className="space-y-1.5" title={salesmanCode || "-"}>
+              {/* Received Date Placeholder */}
+              <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
-                  Salesman Code
+                  Received Date
                 </label>
-                <div className="w-full h-9 px-3 flex items-center bg-muted/20 border border-border rounded-md text-sm font-medium text-foreground shadow-sm truncate">
-                  <span className="truncate">{salesmanCode || "-"}</span>
-                </div>
-              </div>
-
-              {/* Customer Code */}
-              <div className="space-y-1.5" title={customerCode || "-"}>
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
-                  Customer Code
-                </label>
-                <div className="w-full h-9 px-3 flex items-center bg-muted/20 border border-border rounded-md text-sm font-medium text-foreground shadow-sm truncate">
-                  <span className="truncate">{customerCode || "-"}</span>
-                </div>
-              </div>
-
-              {/* Branch */}
-              <div className="space-y-1.5" title={branchName || "-"}>
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
-                  Branch
-                </label>
-                <div className="w-full h-9 px-3 flex items-center bg-muted/20 border border-border rounded-md text-sm font-medium text-foreground shadow-sm truncate">
-                  <span className="truncate">{branchName || "-"}</span>
+                <div className="h-9 w-full bg-muted/20 border border-border rounded-md px-3 flex items-center text-sm font-medium text-muted-foreground italic shadow-sm opacity-60">
+                  (Auto-generated)
                 </div>
               </div>
 
               {/* Price Type */}
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
-                  Price Type
+                  Price Type <span className="text-destructive">*</span>
                 </label>
                 <div className="relative">
                   <select
@@ -785,26 +915,36 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                     value={priceType}
                     onChange={(e) => setPriceType(e.target.value)}
                   >
-                    <option value="A">Type A</option>
-                    <option value="B">Type B</option>
-                    <option value="C">Type C</option>
-                    <option value="D">Type D</option>
-                    <option value="E">Type E</option>
+                    {priceTypeOptions.length > 0 ? (
+                      priceTypeOptions.map((pt) => (
+                        <option key={pt.price_type_id} value={pt.price_type_name}>
+                          Type {pt.price_type_name}
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="A">Type A</option>
+                        <option value="B">Type B</option>
+                        <option value="C">Type C</option>
+                        <option value="D">Type D</option>
+                        <option value="E">Type E</option>
+                      </>
+                    )}
                   </select>
                   <ChevronDown className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
               </div>
 
               {/* Third Party Checkbox */}
-              <div className="flex items-center space-x-2 pt-2 col-span-2 lg:col-span-4">
+              <div className="flex items-center space-x-2 pt-2 col-span-2 lg:col-span-4 translate-y-2">
                 <Checkbox
-                  id="thirdParty"
+                  id="create-rfid-isThirdParty"
                   checked={isThirdParty}
                   onCheckedChange={(c) => setIsThirdParty(c as boolean)}
                   className="data-[state=checked]:bg-primary border-border"
                 />
                 <label
-                  htmlFor="thirdParty"
+                  htmlFor="create-rfid-isThirdParty"
                   className="text-sm font-medium text-foreground cursor-pointer select-none"
                 >
                   Third Party Transaction
@@ -858,51 +998,61 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                     </div>
                   </div>
                 </div>
+                {isBranchLockedError && (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={handleClearItems}
+                    className="shadow-md h-9 gap-2"
+                  >
+                    Clear All Items
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   onClick={handleOpenProductLookup}
-                  className="bg-primary hover:bg-primary text-white shadow-primary/20 shadow-md"
+                  className="bg-primary hover:bg-primary text-white shadow-primary/20 shadow-md h-9"
                 >
                   <Plus className="h-4 w-4 mr-1.5" /> Add Product
                 </Button>
               </div>
             </div>
 
-            <div className="overflow-x-auto relative">
-              <table className="w-full text-sm text-left min-w-[1100px]">
+            <div className="overflow-x-auto relative pb-4">
+              <table className="w-full text-sm text-left min-w-[1500px]">
                 <thead>
                   <tr className="bg-primary text-white">
-                    <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider w-28">
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-28">
                       Code
                     </th>
-                    <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider">
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider">
                       Description
                     </th>
-                    <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider w-20">
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-20">
                       Unit
                     </th>
-                    <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider w-24 text-center">
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-28 text-center">
                       Qty
                     </th>
-                    <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider w-28 text-right">
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-32 text-right">
                       Price
                     </th>
-                    <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider w-28 text-right">
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-32 text-right">
                       Gross
                     </th>
-                    <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider w-36">
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-40">
                       Disc. Type
                     </th>
-                    <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider w-28 text-right">
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-36 text-right">
                       Disc. Amt
                     </th>
-                    <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider w-32 text-right">
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-40 text-right">
                       Total
                     </th>
-                    <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider w-40">
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-48">
                       Reason
                     </th>
-                    <th className="px-4 py-3 font-semibold text-xs uppercase tracking-wider w-40">
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-48">
                       Return Type
                     </th>
                     <th className="sticky right-0 z-10 px-2 py-3 w-12 bg-primary"></th>
@@ -929,17 +1079,16 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                         if (!isManual) return null;
                         return (
                           <tr key={idx} className="hover:bg-muted/20 transition-colors duration-200 border-b border-border">
-                            <td className="px-4 py-2 font-mono text-xs text-foreground font-bold">
+                            <td className="px-4 py-2 font-mono text-sm text-foreground font-bold">
                               {item.code}
                             </td>
                             <td className="px-4 py-2 text-foreground">
-                              <div className="text-xs text-foreground font-medium truncate max-w-[220px]" title={item.description}>
+                              <div className="text-sm text-foreground font-medium truncate max-w-[220px]" title={item.description}>
                                 {item.description}
                               </div>
-                              <span className="text-muted-foreground/60 italic font-sans font-medium text-[10px] block mt-0.5">Manual Entry</span>
                             </td>
                             <td className="px-4 py-2">
-                              <span className="bg-background text-foreground px-2 py-0.5 rounded text-xs border border-border">
+                              <span className="bg-background text-foreground px-2 py-0.5 rounded text-sm border border-border">
                                 {item.unit}
                               </span>
                             </td>
@@ -952,15 +1101,15 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                                 onChange={(e) => handleItemChange(idx, "quantity", parseFloat(e.target.value) || 0)}
                               />
                             </td>
-                            <td className="px-4 py-2 text-right">
-                              ₱{item.unitPrice.toLocaleString()}
+                            <td className="px-3 py-2 text-right text-sm whitespace-nowrap">
+                              ₱{item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </td>
-                            <td className="px-4 py-2 text-right text-muted-foreground font-mono">
-                              ₱{(item.grossAmount || 0).toLocaleString()}
+                            <td className="px-3 py-2 text-right text-muted-foreground font-mono text-sm whitespace-nowrap">
+                              ₱{(item.grossAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </td>
                             <td className="px-4 py-2">
                               <select
-                                className="w-full border border-border rounded h-8 text-xs px-1 bg-background focus:border-primary outline-none"
+                                className="w-full border border-border rounded h-8 text-sm px-1 bg-background focus:border-primary outline-none"
                                 value={item.discountType || ""}
                                 onChange={(e) => handleItemChange(idx, "discountType", e.target.value)}
                               >
@@ -978,27 +1127,27 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                                 readOnly
                                 disabled
                                 className="w-full text-right border border-border bg-muted/30 text-muted-foreground rounded h-8 text-sm outline-none cursor-not-allowed"
-                                value={item.discountAmount === 0 ? "" : item.discountAmount}
+                                value={item.discountAmount ? Number(item.discountAmount).toFixed(2) : ""}
                               />
                             </td>
-                            <td className="px-4 py-2 text-right font-bold text-foreground">
-                              ₱{item.totalAmount.toLocaleString()}
+                            <td className="px-3 py-2 text-right font-bold text-sm text-foreground whitespace-nowrap">
+                              ₱{item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </td>
                             <td className="px-4 py-2">
                               <input
                                 type="text"
                                 placeholder="Enter reason"
-                                className="w-full border border-border rounded h-8 text-xs px-2 outline-none focus:border-primary"
+                                className="w-full border border-border rounded h-8 text-sm px-2 outline-none focus:border-primary"
                                 value={item.reason || ""}
                                 onChange={(e) => handleItemChange(idx, "reason", e.target.value)}
                               />
                             </td>
-                            <td className="px-4 py-2">
+                            <td className="px-3 py-2">
                               <select
                                 required
-                                className="w-full border border-border rounded h-8 text-xs px-1 bg-background outline-none focus:border-primary"
+                                className={`w-full border rounded h-8 text-sm px-1 bg-background outline-none focus:border-primary transition-colors ${returnTypeError && (!item.returnType || item.returnType === "") ? "border-destructive ring-1 ring-destructive/30 bg-destructive/5" : "border-border"}`}
                                 value={item.returnType || ""}
-                                onChange={(e) => handleItemChange(idx, "returnType", e.target.value)}
+                                onChange={(e) => { handleItemChange(idx, "returnType", e.target.value); setReturnTypeError(false); }}
                               >
                                 <option value="" disabled>Select an option</option>
                                 {returnTypeOptions.length > 0 ? (
@@ -1033,7 +1182,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                         items.filter(i => i.rfidTags && i.rfidTags.length > 0).reduce((acc, item, originalIdx) => {
                           const idx = items.findIndex(d => d === item);
                           const rType = item.returnType || "Unassigned";
-                          const key = `${item.productId}-${item.unit}-${rType}`;
+                          const key = `${item.productId}-${item.unit}-${item.unitPrice}-${rType}`;
                           if (!acc[key]) {
                             acc[key] = {
                               key,
@@ -1059,8 +1208,8 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                       ).map((group: any) => (
                         <React.Fragment key={group.key}>
                           {/* Parent Summary Row */}
-                          <tr className="bg-muted/10 font-semibold border-b border-border shadow-sm">
-                            <td className="px-4 py-2 font-mono text-xs text-foreground">
+                          <tr className="bg-muted/10 font-semibold border-b border-border">
+                            <td className="px-4 py-2 font-mono text-sm text-foreground">
                               <div className="flex items-center gap-2">
                                 {group.children.length > 0 ? (
                                   <button
@@ -1077,12 +1226,12 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                               </div>
                             </td>
                             <td className="px-4 py-2 text-foreground">
-                              <div className="text-xs text-foreground font-medium truncate max-w-[220px]" title={group.description}>
+                              <div className="text-sm text-foreground font-medium truncate max-w-[220px]" title={group.description}>
                                 {group.description}
                               </div>
                             </td>
                             <td className="px-4 py-2">
-                              <span className="bg-background text-foreground px-2 py-0.5 rounded text-xs border border-border font-normal">
+                              <span className="bg-background text-foreground px-2 py-0.5 rounded text-sm border border-border font-normal">
                                 {group.unit}
                               </span>
                             </td>
@@ -1092,16 +1241,16 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                             <td className="px-4 py-2 text-right text-muted-foreground">
                               -
                             </td>
-                            <td className="px-4 py-2 text-right text-muted-foreground font-mono text-xs">
+                            <td className="px-4 py-2 text-right text-muted-foreground font-mono text-sm">
                               ₱{group.totalGross.toLocaleString()}
                             </td>
                             <td className="px-4 py-2 text-center text-muted-foreground">
                               -
                             </td>
-                            <td className="px-4 py-2 text-right text-muted-foreground font-mono text-xs">
+                            <td className="px-4 py-2 text-right text-muted-foreground font-mono text-sm">
                               ₱{group.totalDiscount.toLocaleString()}
                             </td>
-                            <td className="px-4 py-2 text-right font-bold text-primary">
+                            <td className="px-4 py-2 text-right font-bold text-primary text-sm">
                               ₱{group.totalNet.toLocaleString()}
                             </td>
                             <td className="px-4 py-2 text-center text-muted-foreground">
@@ -1122,29 +1271,27 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                           {/* Child Rows (Individual Scans/Additions) */}
                           {expandedGroups[group.key] && group.children.map(({ item, idx }: { item: SalesReturnItem, idx: number }) => (
                             <tr key={item.id || idx} className="hover:bg-muted/20 transition-colors duration-200 border-b border-border">
-                              <td className="px-4 py-2 font-mono text-xs text-foreground font-bold pl-10" colSpan={2}>
+                              <td className="px-4 py-2 font-mono text-sm text-foreground font-bold pl-10" colSpan={2}>
                                 {item.rfidTags && item.rfidTags.length > 0 ? (
-                                  <div className="flex items-center gap-1.5 bg-background border border-border pl-2.5 pr-2 py-1 rounded-md shadow-sm w-fit truncate max-w-[200px]" title={item.rfidTags[0]}>
+                                  <div className="flex items-center gap-1.5 bg-background border border-border pl-2.5 pr-2 py-1 rounded-md w-fit truncate max-w-[200px]" title={item.rfidTags[0]}>
                                     <span className="text-primary truncate">{item.rfidTags[0]}</span>
                                     <span className="text-[10px] text-muted-foreground font-sans uppercase">RFID</span>
                                   </div>
-                                ) : (
-                                  <span className="text-muted-foreground/60 italic font-sans font-medium text-[11px]">Manual Entry</span>
-                                )}
+                                ) : null}
                               </td>
                               <td className="px-4 py-2"></td>
                               <td className="px-4 py-2">
                                 <div className="text-center font-semibold text-sm">{item.quantity}</div>
                               </td>
-                              <td className="px-4 py-2 text-right">
+                              <td className="px-4 py-2 text-right text-sm">
                                 ₱{item.unitPrice.toLocaleString()}
                               </td>
-                              <td className="px-4 py-2 text-right text-muted-foreground font-mono text-xs">
+                              <td className="px-4 py-2 text-right text-muted-foreground font-mono text-sm">
                                 ₱{(item.grossAmount || 0).toLocaleString()}
                               </td>
                               <td className="px-4 py-2">
                                 <select
-                                  className="w-full border border-border rounded h-8 text-xs px-1 bg-background focus:border-primary outline-none"
+                                  className="w-full border border-border rounded h-8 text-sm px-1 bg-background focus:border-primary outline-none"
                                   value={item.discountType || ""}
                                   onChange={(e) => handleItemChange(idx, "discountType", e.target.value)}
                                 >
@@ -1162,17 +1309,17 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                                   readOnly
                                   disabled
                                   className="w-full text-right border border-border bg-muted/30 text-muted-foreground rounded h-8 text-sm outline-none cursor-not-allowed"
-                                  value={item.discountAmount === 0 ? "" : item.discountAmount}
+                                  value={item.discountAmount ? Number(item.discountAmount).toFixed(2) : ""}
                                 />
                               </td>
-                              <td className="px-4 py-2 text-right font-bold text-foreground">
+                              <td className="px-4 py-2 text-right font-bold text-foreground text-sm">
                                 ₱{item.totalAmount.toLocaleString()}
                               </td>
                               <td className="px-4 py-2">
                                 <input
                                   type="text"
                                   placeholder="Enter reason..."
-                                  className="w-full border border-border rounded h-8 text-xs px-2 outline-none focus:border-primary"
+                                  className="w-full border border-border rounded h-8 text-sm px-2 outline-none focus:border-primary"
                                   value={item.reason || ""}
                                   onChange={(e) => handleItemChange(idx, "reason", e.target.value)}
                                 />
@@ -1180,7 +1327,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                               <td className="px-4 py-2">
                                 <select
                                   required
-                                  className="w-full border border-border rounded h-8 text-xs px-1 bg-background outline-none focus:border-primary"
+                                  className="w-full border border-border rounded h-8 text-sm px-1 bg-background outline-none focus:border-primary"
                                   value={item.returnType || ""}
                                   onChange={(e) => handleItemChange(idx, "returnType", e.target.value)}
                                 >
@@ -1233,7 +1380,11 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                   <div className="relative group">
                     <input
                       type="text"
-                      className="w-full h-9 border border-border rounded-md text-sm px-3 pr-8 bg-background outline-none focus:ring-2 focus:border-primary"
+                      className={`w-full h-9 border rounded-md text-sm px-3 pr-8 bg-background outline-none transition-all shadow-sm ${
+                        orderError
+                          ? "border-destructive bg-destructive/5 ring-1 ring-destructive"
+                          : "border-border focus:ring-2 focus:border-primary"
+                      }`}
                       placeholder="Search Order No..."
                       value={orderSearch || orderNo}
                       onChange={(e) => {
@@ -1279,12 +1430,16 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                 {/* INVOICE NO DROPDOWN */}
                 <div className="space-y-1.5" ref={invoiceWrapperRef}>
                   <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
-                    Invoice No. (Optional)
+                    Invoice No. <span className="text-destructive">*</span>
                   </label>
                   <div className="relative group">
                     <input
                       type="text"
-                      className="w-full h-9 border border-border rounded-md text-sm px-3 pr-8 bg-background outline-none focus:ring-2 focus:border-primary"
+                      className={`w-full h-9 border rounded-md text-sm px-3 pr-8 bg-background outline-none transition-all shadow-sm ${
+                        invoiceError
+                          ? "border-destructive bg-destructive/5 ring-1 ring-destructive"
+                          : "border-border focus:ring-2 focus:border-primary"
+                      }`}
                       placeholder="Search Invoice No..."
                       value={invoiceSearch || invoiceNo}
                       onChange={(e) => {
@@ -1387,7 +1542,12 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
           </Button>
           <Button
             onClick={handleCreateReturn}
-            className="bg-primary hover:bg-primary text-white shadow-primary/20 shadow-lg"
+            disabled={isBranchLockedError}
+            className={`shadow-lg ${
+              isBranchLockedError
+                ? "bg-muted text-muted-foreground cursor-not-allowed"
+                : "bg-primary hover:bg-primary text-white shadow-primary/20"
+            }`}
           >
             <Save className="h-4 w-4 mr-2" />
             Create Sales Return
@@ -1399,6 +1559,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         isOpen={isProductLookupOpen}
         onClose={() => setIsProductLookupOpen(false)}
         onConfirm={handleAddProducts}
+        priceType={priceType} // 🟢 Pass prop
       />
 
       {/* SUCCESS MODAL */}
