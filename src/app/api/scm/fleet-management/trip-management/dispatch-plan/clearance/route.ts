@@ -338,8 +338,8 @@ export async function POST(request: Request) {
         const invoiceUpdates = invoices.map((inv: any) => {
             let pdiStatus = inv.status;
             if (inv.status === 'Unfulfilled') pdiStatus = 'Not Fulfilled';
-            if (inv.status === 'Fulfilled with Concerns') pdiStatus = 'Fulfilled With Concerns';
-            if (inv.status === 'Fulfilled with Returns') pdiStatus = 'Fulfilled With Returns';
+            if (inv.status === 'Fulfilled with Concerns') pdiStatus = 'Fulfilled with Concerns';
+            if (inv.status === 'Fulfilled with Returns') pdiStatus = 'Fulfilled with Returns';
             
             return {
                 id: inv.id,
@@ -453,7 +453,7 @@ export async function POST(request: Request) {
         // 6. Handle unfulfilled transactions log
         for (const inv of invoices) {
             console.log(`[Clearance POST] Checking invoice ${inv.invoiceNo} (id: ${inv.id}, status: ${inv.status})`);
-            if (inv.status !== 'Fulfilled') {
+            if (inv.status !== 'Fulfilled' && inv.status !== 'Fulfilled with Returns') {
                 console.log(`[Clearance POST]   -> Creating unfulfilled transaction log for invoice ${inv.invoiceNo}`);
                 // Fetch original detail items to get qty and unit price
                 const detailsRes = await fetcher(`/sales_invoice_details?filter[invoice_no][_eq]=${inv.invoiceId}&limit=-1`);
@@ -463,16 +463,23 @@ export async function POST(request: Request) {
                 const detailLogs: any[] = [];
                 
                 // Collect IDs from both sources to ensure we create records for items with RFIDs even if missingQty is 0
+                // If Unfulfilled, we ensure ALL items are included even if missingQtys is empty
                 const detailIdsToLog = new Set([
                     ...Object.keys(inv.missingQtys || {}),
-                    ...Object.keys(inv.scannedRFIDs || {})
+                    ...Object.keys(inv.scannedRFIDs || {}),
+                    ...(inv.status === 'Unfulfilled' ? originalDetails.map((d: any) => (d.detail_id || d.id).toString()) : [])
                 ]);
 
                 if (detailIdsToLog.size > 0) {
                     detailIdsToLog.forEach((detailIdStr) => {
                         const detailId = Number(detailIdStr);
-                        const missingQty = (inv.missingQtys || {})[detailIdStr] || 0;
+                        let missingQty = (inv.missingQtys || {})[detailIdStr] || 0;
                         const original = originalDetails.find((d: any) => (d.detail_id || d.id) === detailId);
+
+                        // If Unfulfilled and qty is not specifically set (empty from frontend), assume full missing qty
+                        if (inv.status === 'Unfulfilled' && missingQty === 0 && original) {
+                            missingQty = original.quantity || 0;
+                        }
                         
                         let unitPrice = 0;
                         if (original) {
@@ -504,9 +511,9 @@ export async function POST(request: Request) {
                 const payload: any = {
                     sales_invoice_id: inv.invoiceId,
                     nte: inv.remarks || '',
-                    isCleared: 0,
+                    isCleared: isPreSave ? 0 : 1, // Correctly set based on isPreSave flag
                     date_acknowledged: new Date().toISOString(),
-                    variance_amount: varianceAmount
+                    variance_amount: Number.isNaN(varianceAmount) ? 0 : varianceAmount
                 };
                 
                 if (validCheckedBy) {
@@ -532,9 +539,10 @@ export async function POST(request: Request) {
                     
                     if (!patchRes.ok) {
                         const errText = await patchRes.text();
-                        console.error('Failed to UPDATE existing unfulfilled_sales_transaction:', errText);
-                        throw new Error('Failed to update unfulfilled_sales_transaction');
+                        console.error(`[Clearance POST] !! Failed to UPDATE existing unfulfilled_sales_transaction ${existingTransaction.id}:`, errText);
+                        throw new Error(`Failed to update unfulfilled_sales_transaction: ${errText}`);
                     }
+                    console.log(`[Clearance POST]   -> Successfully updated existing transaction ${existingTransaction.id}.`);
                     transactionId = existingTransaction.id;
 
                     // DELETE existing details and RFIDs to prevent duplication on update
