@@ -47,7 +47,7 @@ export const SalesReturnProvider = {
     page: number = 1,
     limit: number = 10,
     search: string = "",
-    filters: { salesman?: string; customer?: string; status?: string } = {},
+    filters: { salesman?: string; customer?: string; status?: string; invoiceNo?: string } = {},
   ): Promise<{ data: SalesReturn[]; total: number }> {
     const params = new URLSearchParams({
       action: "list",
@@ -61,6 +61,8 @@ export const SalesReturnProvider = {
       params.set("customer", filters.customer);
     if (filters.status && filters.status !== "All")
       params.set("status", filters.status);
+    if (filters.invoiceNo)
+      params.set("invoiceNo", filters.invoiceNo);
 
     const res = await fetch(`${API_BASE}?${params}`, { cache: "no-store" });
     const json = await res.json();

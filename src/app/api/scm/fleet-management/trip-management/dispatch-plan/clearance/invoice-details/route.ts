@@ -41,23 +41,31 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
         }
 
-        // 2. Fetch Customer, Products, and Units info for joining
+        // 2. Fetch Customer, Products, Units, Salesman, and Branch info for joining
         const productIds = [...new Set(lines.map((l: any) => l.product_id).filter(Boolean))];
         const unitIds = [...new Set(lines.map((l: any) => l.unit).filter(Boolean))];
 
-        const [customerRes, productsRes, unitsRes] = await Promise.all([
+        const [customerRes, productsRes, unitsRes, salesmanRes, branchRes] = await Promise.all([
             fetcher(`/customer?filter[customer_code][_eq]=${invoice.customer_code}&limit=1`),
             productIds.length > 0
                 ? fetcher(`/products?filter[product_id][_in]=${productIds.join(',')}&limit=-1`)
                 : Promise.resolve({ data: [] }),
             unitIds.length > 0
                 ? fetcher(`/units?filter[unit_id][_in]=${unitIds.join(',')}&limit=-1`)
+                : Promise.resolve({ data: [] }),
+            invoice.salesman_id
+                ? fetcher(`/salesman?filter[id][_eq]=${invoice.salesman_id}&limit=1`)
+                : Promise.resolve({ data: [] }),
+            invoice.branch_id
+                ? fetcher(`/branches?filter[id][_eq]=${invoice.branch_id}&limit=1`)
                 : Promise.resolve({ data: [] })
         ]);
 
         const customer = customerRes.data?.[0];
         const products = productsRes.data || [];
         const units = unitsRes.data || [];
+        const salesman = salesmanRes.data?.[0];
+        const branch = branchRes.data?.[0];
 
         // 3. Create maps for efficient joining
         const productMap = new Map(products.map((p: any) => [p.product_id, p]));
@@ -84,7 +92,13 @@ export async function GET(request: Request) {
                 invoice_no: invoice.invoice_no,
                 invoice_date: invoice.invoice_date,
                 customer_name: customer?.customer_name || invoice.customer_code,
-                status: invoice.transaction_status || 'Pending'
+                customer_code: invoice.customer_code,
+                status: invoice.transaction_status || 'Pending',
+                salesman_id: invoice.salesman_id,
+                salesman_name: salesman?.salesman_name || null,
+                salesman_code: salesman?.salesman_code || null,
+                branch_id: invoice.branch_id,
+                branch_name: branch?.branch_name || null
             },
             lines: enrichedLines
         };

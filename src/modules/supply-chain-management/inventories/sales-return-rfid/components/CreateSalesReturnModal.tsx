@@ -43,6 +43,8 @@ import {
 // Import RFID Scanner Hook
 import { useRfidScanner } from "../hooks/useRfidScanner";
 
+import { useSearchParams } from "next/navigation";
+
 interface Props {
   isOpen: boolean;
   onClose: () => void;
@@ -50,6 +52,8 @@ interface Props {
 }
 
 export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
+  const searchParams = useSearchParams();
+  const fromClearance = searchParams.get("fromClearance");
   // --- 1. FORM STATE ---
   const [returnDate, setReturnDate] = useState(
     new Date().toISOString().split("T")[0],
@@ -326,10 +330,10 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       setItems((prevItems) =>
         prevItems.map((item) => {
           const basePrice = resolvePrice(item, priceType);
-          const newUnitPrice = item.unit === "BOX" 
-            ? basePrice * (item.unitMultiplier || 1) 
+          const newUnitPrice = item.unit === "BOX"
+            ? basePrice * (item.unitMultiplier || 1)
             : basePrice;
-          
+
           const newGross = item.quantity * newUnitPrice;
           let newDiscountAmt = 0;
 
@@ -354,6 +358,64 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       );
     }
   }, [priceType, lineDiscountOptions]);
+  // --- 5c. PRE-FILL FROM CLEARANCE ---
+  useEffect(() => {
+    if (isOpen && fromClearance === "true" && customers.length > 0) {
+      const storedData = localStorage.getItem('scm_dispatch_return_data');
+      if (storedData) {
+        try {
+          const data = JSON.parse(storedData);
+
+          // 1. Find and set Customer (DO THIS FIRST as it clears other fields)
+          const foundCustomer = customers.find(c =>
+            (data.customerCode && c.code === data.customerCode) ||
+            (data.customerName && c.name === data.customerName)
+          );
+
+          if (foundCustomer) {
+            handleSelectCustomer(foundCustomer);
+          } else {
+            setCustomerCode(data.customerCode || "");
+            setCustomerSearch(data.customerName || "");
+          }
+
+          // 1.5 Find and set Salesman
+          const foundSalesman = salesmen.find(s =>
+            (data.salesmanId && s.id === data.salesmanId) ||
+            (data.salesmanCode && s.code === data.salesmanCode) ||
+            (data.salesmanName && s.name === data.salesmanName)
+          );
+          if (foundSalesman) {
+            handleSelectSalesman(foundSalesman);
+          } else {
+            setSelectedSalesmanId(data.salesmanId || "");
+            setSalesmanCode(data.salesmanCode || "");
+            setSalesmanSearch(data.salesmanName || "");
+          }
+
+          // 2. Set Invoice & Order
+          setInvoiceNo(data.invoiceNo || "");
+          setInvoiceSearch(data.invoiceNo || "");
+          setOrderNo(data.orderNo || "");
+          setOrderSearch(data.orderNo || "");
+
+          // 2.5 Set Branch (Override if foundSalesman sets it)
+          if (data.branchName) {
+            setBranchName(data.branchName);
+          }
+
+          // 4. Cleanup to prevent re-triggering
+          localStorage.removeItem('scm_dispatch_return_data');
+          // Clear query param from URL without reloading
+          const url = new URL(window.location.href);
+          url.searchParams.delete('fromClearance');
+          window.history.replaceState({}, '', url.toString());
+        } catch (e) {
+          console.error("Failed to parse clearance return data", e);
+        }
+      }
+    }
+  }, [isOpen, fromClearance, customers, salesmen]);
 
   // --- 5b. FETCH INVOICES when salesman or customer changes ---
   useEffect(() => {
@@ -530,7 +592,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     setReturnTypeError(false);
     setOrderError(false);
     setInvoiceError(false);
-    
+
     if (!returnDate) {
       toast.error("Return Date is required.");
       setValidationError("Return Date is required.");
@@ -617,7 +679,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       newItems.forEach((item) => {
         const rawId = item.product_id || item.productId || item.id;
         const productId = Number(rawId);
-        
+
         // Strict mapping for unit checking to prevent different UOMs from merging
         const isRfidItem = !!item.rfidTags && item.rfidTags.length > 0;
         const existingIndex = updated.findIndex(
@@ -627,12 +689,12 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
           }
         );
         const qty = item.quantity || 1;
-        
+
         if (existingIndex >= 0) {
           const existing = updated[existingIndex];
           existing.quantity += qty;
           existing.grossAmount = existing.quantity * existing.unitPrice;
-          
+
           if (existing.discountType) {
             const selectedOption = lineDiscountOptions.find(
               (d) => d.id.toString() === existing.discountType?.toString(),
@@ -642,7 +704,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
               existing.discountAmount = (existing.grossAmount || 0) * (percentage / 100);
             }
           }
-          
+
           existing.totalAmount = (existing.grossAmount || 0) - (existing.discountAmount || 0);
           if (item.rfidTags) {
             existing.rfidTags = [...(existing.rfidTags || []), ...item.rfidTags];
@@ -765,7 +827,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
           <div className="bg-background p-5 rounded-lg border border-border shadow-sm relative">
             <div className="absolute top-0 left-0 w-1 h-full bg-primary rounded-l-lg"></div>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-4">
-              
+
               {/* Salesman */}
               <div className="space-y-1.5 relative" ref={salesmanWrapperRef}>
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
@@ -979,13 +1041,12 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                     />
                     {/* Visible read-only display */}
                     <div
-                      className={`pl-9 pr-3 h-9 w-52 text-xs border border-border rounded-md font-mono flex items-center cursor-pointer select-none transition-all ${
-                        rfidScanning
+                      className={`pl-9 pr-3 h-9 w-52 text-xs border border-border rounded-md font-mono flex items-center cursor-pointer select-none transition-all ${rfidScanning
                           ? "bg-primary/10 text-primary animate-pulse"
                           : lastScannedRfid
                             ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-300"
                             : "bg-muted/30 text-muted-foreground hover:border-primary/30"
-                      }`}
+                        }`}
                       onClick={() => rfidInputRef.current?.focus()}
                     >
                       {rfidScanning
@@ -1380,11 +1441,10 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                   <div className="relative group">
                     <input
                       type="text"
-                      className={`w-full h-9 border rounded-md text-sm px-3 pr-8 bg-background outline-none transition-all shadow-sm ${
-                        orderError
+                      className={`w-full h-9 border rounded-md text-sm px-3 pr-8 bg-background outline-none transition-all shadow-sm ${orderError
                           ? "border-destructive bg-destructive/5 ring-1 ring-destructive"
                           : "border-border focus:ring-2 focus:border-primary"
-                      }`}
+                        }`}
                       placeholder="Search Order No..."
                       value={orderSearch || orderNo}
                       onChange={(e) => {
@@ -1435,11 +1495,10 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                   <div className="relative group">
                     <input
                       type="text"
-                      className={`w-full h-9 border rounded-md text-sm px-3 pr-8 bg-background outline-none transition-all shadow-sm ${
-                        invoiceError
+                      className={`w-full h-9 border rounded-md text-sm px-3 pr-8 bg-background outline-none transition-all shadow-sm ${invoiceError
                           ? "border-destructive bg-destructive/5 ring-1 ring-destructive"
                           : "border-border focus:ring-2 focus:border-primary"
-                      }`}
+                        }`}
                       placeholder="Search Invoice No..."
                       value={invoiceSearch || invoiceNo}
                       onChange={(e) => {
@@ -1543,11 +1602,10 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
           <Button
             onClick={handleCreateReturn}
             disabled={isBranchLockedError}
-            className={`shadow-lg ${
-              isBranchLockedError
+            className={`shadow-lg ${isBranchLockedError
                 ? "bg-muted text-muted-foreground cursor-not-allowed"
                 : "bg-primary hover:bg-primary text-white shadow-primary/20"
-            }`}
+              }`}
           >
             <Save className="h-4 w-4 mr-2" />
             Create Sales Return
