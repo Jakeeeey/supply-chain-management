@@ -129,9 +129,40 @@ export async function GET(request: Request) {
 
         const users = usersRes?.data || [];
         const salesInvoices = salesInvoicesRes?.data || [];
+
+        // 4. Fetch Vehicle Types and Branches
+        const vehicleTypeIds = [...new Set(vehicles.map((v: any) => v.vehicle_type).filter(Boolean))];
+        const branchIds = [...new Set(plans.map((p: any) => p.starting_point).filter(Boolean))];
+
+        const [typesRes, branchesRes] = await Promise.all([
+            vehicleTypeIds.length > 0 ? fetcher(`/vehicle_type?filter[id][_in]=${vehicleTypeIds.join(',')}&limit=-1`) : Promise.resolve({ data: [] }),
+            branchIds.length > 0 ? fetcher(`/branches?filter[id][_in]=${branchIds.join(',')}&limit=-1`) : Promise.resolve({ data: [] }),
+        ]);
+
+        const vehicleTypes = typesRes?.data || [];
+        const branches = branchesRes?.data || [];
+
+        // 6. Fetch Cluster information
+        const [pdpRes] = await Promise.all([
+            fetcher(`/post_dispatch_dispatch_plans?filter[post_dispatch_plan_id][_in]=${planIds.join(',')}&limit=-1`),
+        ]);
+        const postDispatchPlans = pdpRes?.data || [];
+        const dispatchPlanIds = [...new Set(postDispatchPlans.map((p: any) => p.dispatch_plan_id).filter(Boolean))];
+
+        const [dpRes] = await Promise.all([
+            dispatchPlanIds.length > 0 ? fetcher(`/dispatch_plan?filter[dispatch_id][_in]=${dispatchPlanIds.join(',')}&limit=-1`) : Promise.resolve({ data: [] }),
+        ]);
+        const dispatchPlans = dpRes?.data || [];
+        const clusterIds = [...new Set(dispatchPlans.map((d: any) => d.cluster_id).filter(Boolean))];
+
+        const [clustersRes] = await Promise.all([
+            clusterIds.length > 0 ? fetcher(`/cluster?filter[id][_in]=${clusterIds.join(',')}&limit=-1`) : Promise.resolve({ data: [] }),
+        ]);
+        const clusters = clustersRes?.data || [];
+
         const customerCodes = [...new Set(salesInvoices.map((si: any) => si.customer_code).filter(Boolean))];
 
-        // 4. Fetch ONLY relevant customers
+        // 5. Fetch ONLY relevant customers
         const customersRes = customerCodes.length > 0
             ? await fetcher(`/customer?filter[customer_code][_in]=${customerCodes.join(',')}&limit=-1`)
             : { data: [] };
@@ -144,6 +175,24 @@ export async function GET(request: Request) {
                 customerMap.set(normalized, c.customer_name || 'Unknown Customer');
             }
         });
+
+        // 7. Fetch Reconciliation Data (Unfulfilled Transactions)
+        const [transactionsRes] = await Promise.all([
+            invoiceIds.length > 0 ? fetcher(`/unfulfilled_sales_transaction?filter[sales_invoice_id][_in]=${invoiceIds.join(',')}&limit=-1`) : Promise.resolve({ data: [] }),
+        ]);
+        const transactions = transactionsRes?.data || [];
+        const transactionIds = transactions.map((t: any) => t.id);
+
+        const [transDetailsRes] = await Promise.all([
+            transactionIds.length > 0 ? fetcher(`/unfulfilled_sales_transaction_details?filter[unfulfilled_sales_transaction_id][_in]=${transactionIds.join(',')}&limit=-1`) : Promise.resolve({ data: [] }),
+        ]);
+        const transDetails = transDetailsRes?.data || [];
+        const transDetailIds = transDetails.map((d: any) => d.id);
+
+        const [transRFIDsRes] = await Promise.all([
+            transDetailIds.length > 0 ? fetcher(`/unfulfilled_sales_transaction_rfid?filter[unfulfilled_sales_transaction_detail_id][_in]=${transDetailIds.join(',')}&limit=-1`) : Promise.resolve({ data: [] }),
+        ]);
+        const transRFIDs = transRFIDsRes?.data || [];
 
         const joinedData = plans.map((plan: any) => {
             const planStaff = staff.find((s: any) => s.post_dispatch_plan_id === plan.id && s.role === 'Driver');
@@ -166,13 +215,64 @@ export async function GET(request: Request) {
                     return {
                         id: inv.id,
                         invoiceId: salesInv?.invoice_id || inv.invoice_id || 0,
-                        status: inv.status || 'Fulfilled',
+                        status: (() => {
+                            let s = inv.status;
+                            if (s === 'Not Fulfilled') return 'Unfulfilled';
+                            if (s === 'Fulfilled With Concerns') return 'Fulfilled with Concerns';
+                            if (s === 'Fulfilled With Returns') return 'Fulfilled with Returns';
+                            return s || 'Pending';
+                        })() as any,
                         orderNo: salesInv?.order_id || 'N/A',
                         invoiceNo: salesInv?.invoice_no || 'N/A',
                         invoiceDate: salesInv?.invoice_date || 'N/A',
                         customer: custCodeRaw || 'N/A',
                         customerName: customerName,
                         amount: Number(salesInv?.total_amount) || 0,
+                        remarks: inv.remarks || '',
+                        isCleared: !!inv.isCleared,
+                        // Reconciliation data restoration
+                        missingQtys: (() => {
+                            const transaction = transactions.find((t: any) => t.sales_invoice_id === inv.invoice_id);
+                            if (!transaction) return {};
+                            const details = transDetails.filter((d: any) => d.unfulfilled_sales_transaction_id === transaction.id);
+                            const map: Record<string | number, number> = {};
+                            details.forEach((d: any) => {
+                                map[d.sales_invoice_detail_id] = d.missing_quantity;
+                            });
+                            return map;
+                        })(),
+                        scannedQtys: (() => {
+                            const transaction = transactions.find((t: any) => t.sales_invoice_id === inv.invoice_id);
+                            if (!transaction) return {};
+                            const details = transDetails.filter((d: any) => d.unfulfilled_sales_transaction_id === transaction.id);
+                            const map: Record<string | number, number> = {};
+                            details.forEach((d: any) => {
+                                // Scanned = Original - Missing
+                                const original = d.invoice_quantity || 0;
+                                const missing = d.missing_quantity || 0;
+                                map[d.sales_invoice_detail_id] = Math.max(0, original - missing);
+                            });
+                            return map;
+                        })(),
+                        scannedRFIDs: (() => {
+                            const transaction = transactions.find((t: any) => t.sales_invoice_id === inv.invoice_id);
+                            if (!transaction) return {};
+                            const details = transDetails.filter((d: any) => {
+                                const matched = d.unfulfilled_sales_transaction_id === transaction.id;
+                                // Also ensure there are RFIDs for this detail
+                                return matched && transRFIDs.some((r: any) => r.unfulfilled_sales_transaction_detail_id === d.id);
+                            });
+                            const map: Record<string | number, string[]> = {};
+                            details.forEach((d: any) => {
+                                const matchedRFIDs = transRFIDs
+                                    .filter((r: any) => r.unfulfilled_sales_transaction_detail_id === d.id)
+                                    .map((r: any) => r.rfid_tag);
+                                if (matchedRFIDs.length > 0) {
+                                    map[d.sales_invoice_detail_id] = matchedRFIDs;
+                                }
+                            });
+                            return map;
+                        })()
                     };
                 });
 
@@ -186,6 +286,13 @@ export async function GET(request: Request) {
                 tripValue: Number(plan.amount) || 0,
                 budget,
                 status: plan.status,
+                vehicleType: vehicleTypes.find((t: any) => t.id === vehicle?.vehicle_type)?.type_name || 'N/A',
+                branchName: branches.find((b: any) => b.id === plan?.starting_point)?.branch_name || 'N/A',
+                clusterName: clusters.find((c: any) => {
+                    const pdp = postDispatchPlans.find((p: any) => p.post_dispatch_plan_id === plan.id);
+                    const dp = pdp ? dispatchPlans.find((d: any) => d.dispatch_id === pdp.dispatch_plan_id) : null;
+                    return dp && c.id === dp.cluster_id;
+                })?.cluster_name || 'N/A',
                 invoices: planInvoices
             };
         });
@@ -221,7 +328,7 @@ async function poster(endpoint: string, data: any) {
 
 export async function POST(request: Request) {
     try {
-        const { dispatchId, invoices } = await request.json();
+        const { dispatchId, invoices, isPreSave = false } = await request.json();
 
         if (!dispatchId || !Array.isArray(invoices)) {
             return NextResponse.json({ error: 'Invalid request data' }, { status: 400 });
@@ -254,81 +361,85 @@ export async function POST(request: Request) {
         if (!patchResponse.ok) {
             throw new Error('Failed to update post_dispatch_invoices');
         }
-
-        // 2. Update the dispatch plan status to 'Posted'
-        const planResponse = await fetch(`${BASE_URL}/post_dispatch_plan/${dispatchId}`, {
-            method: 'PATCH',
-            headers: {
-                'Authorization': `Bearer ${TOKEN}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ status: 'Posted' }),
-        });
-
-        if (!planResponse.ok) {
-            throw new Error('Failed to update post_dispatch_plan');
+    
+        // 2. Update the dispatch plan status to 'Posted' - SKIP if Pre-Save
+        if (!isPreSave) {
+            const planResponse = await fetch(`${BASE_URL}/post_dispatch_plan/${dispatchId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${TOKEN}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ status: 'Posted' }),
+            });
+    
+            if (!planResponse.ok) {
+                throw new Error('Failed to update post_dispatch_plan');
+            }
         }
 
-        // 3. Update sales_invoice.transaction_status
-        const siUpdates = invoices.map((inv: any) => {
-            let siStatus = 'Completed';
-            if (inv.status === 'Unfulfilled') siStatus = 'Not Delivered';
-            if (inv.status === 'Fulfilled with Concerns') siStatus = 'Completed with Concerns';
-            if (inv.status === 'Fulfilled with Returns') siStatus = 'Completed with Returns';
-
-            return {
-                invoice_id: inv.invoiceId,
-                transaction_status: siStatus
-            };
-        });
-
-        const siPatchRes = await fetch(`${BASE_URL}/sales_invoice`, {
-            method: 'PATCH',
-            headers: {
-                'Authorization': `Bearer ${TOKEN}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(siUpdates),
-        });
-
-        if (!siPatchRes.ok) {
-            throw new Error('Failed to update sales_invoice');
-        }
-
-        // 4. Update sales_order.order_status
-        const orderNos = [...new Set(invoices.map((inv: any) => inv.orderNo).filter((no: string) => no && no !== 'N/A'))];
-        if (orderNos.length > 0) {
-            // Encode properly for API query
-            const encodedOrderNos = orderNos.map(no => encodeURIComponent(no)).join(',');
-            const soRes = await fetcher(`/sales_order?filter[order_no][_in]=${encodedOrderNos}&limit=-1&fields=order_id,order_no`);
-            const salesOrders = soRes.data || [];
-
-            const soUpdates = invoices.map((inv: any) => {
-                const so = salesOrders.find((s: any) => s.order_no === inv.orderNo);
-                // If we don't find the sales order, skip it
-                if (!so || !so.order_id) return null;
-                
-                let soStatus = 'Delivered';
-                if (inv.status === 'Unfulfilled') soStatus = 'Not Fulfilled';
-                
+        // 3. Update sales_invoice.transaction_status - SKIP if Pre-Save
+        if (!isPreSave) {
+            const siUpdates = invoices.map((inv: any) => {
+                let siStatus = 'Completed';
+                if (inv.status === 'Unfulfilled') siStatus = 'Not Delivered';
+                if (inv.status === 'Fulfilled with Concerns') siStatus = 'Completed with Concerns';
+                if (inv.status === 'Fulfilled with Returns') siStatus = 'Completed with Returns';
+    
                 return {
-                    order_id: so.order_id,
-                    order_status: soStatus
+                    invoice_id: inv.invoiceId,
+                    transaction_status: siStatus
                 };
-            }).filter(Boolean);
-
-            if (soUpdates.length > 0) {
-                const soPatchRes = await fetch(`${BASE_URL}/sales_order`, {
-                    method: 'PATCH',
-                    headers: {
-                        'Authorization': `Bearer ${TOKEN}`,
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(soUpdates),
-                });
-                
-                if (!soPatchRes.ok) {
-                     throw new Error('Failed to update sales_order');
+            });
+    
+            const siPatchRes = await fetch(`${BASE_URL}/sales_invoice`, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${TOKEN}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(siUpdates),
+            });
+    
+            if (!siPatchRes.ok) {
+                throw new Error('Failed to update sales_invoice');
+            }
+    
+            // 4. Update sales_order.order_status - SKIP if Pre-Save
+            const orderNos = [...new Set(invoices.map((inv: any) => inv.orderNo).filter((no: string) => no && no !== 'N/A'))];
+            if (orderNos.length > 0) {
+                // Encode properly for API query
+                const encodedOrderNos = orderNos.map(no => encodeURIComponent(no)).join(',');
+                const soRes = await fetcher(`/sales_order?filter[order_no][_in]=${encodedOrderNos}&limit=-1&fields=order_id,order_no`);
+                const salesOrders = soRes.data || [];
+    
+                const soUpdates = invoices.map((inv: any) => {
+                    const so = salesOrders.find((s: any) => s.order_no === inv.orderNo);
+                    // If we don't find the sales order, skip it
+                    if (!so || !so.order_id) return null;
+                    
+                    let soStatus = 'Delivered';
+                    if (inv.status === 'Unfulfilled') soStatus = 'Not Fulfilled';
+                    
+                    return {
+                        order_id: so.order_id,
+                        order_status: soStatus
+                    };
+                }).filter(Boolean);
+    
+                if (soUpdates.length > 0) {
+                    const soPatchRes = await fetch(`${BASE_URL}/sales_order`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Authorization': `Bearer ${TOKEN}`,
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(soUpdates),
+                    });
+                    
+                    if (!soPatchRes.ok) {
+                         throw new Error('Failed to update sales_order');
+                    }
                 }
             }
         }
@@ -425,6 +536,43 @@ export async function POST(request: Request) {
                         throw new Error('Failed to update unfulfilled_sales_transaction');
                     }
                     transactionId = existingTransaction.id;
+
+                    // DELETE existing details and RFIDs to prevent duplication on update
+                    try {
+                        // 1. Fetch existing details for this transaction
+                        const existingDetailsRes = await fetcher(`/unfulfilled_sales_transaction_details?filter[unfulfilled_sales_transaction_id][_eq]=${transactionId}&fields=id`);
+                        const existingDetailIds = (existingDetailsRes.data || []).map((d: any) => d.id);
+
+                        if (existingDetailIds.length > 0) {
+                            // 2. Delete existing RFIDs associated with these details
+                            // First fetch the RFID IDs because bulk delete by filter might not be supported
+                            const rfidIdsRes = await fetcher(`/unfulfilled_sales_transaction_rfid?filter[unfulfilled_sales_transaction_detail_id][_in]=${existingDetailIds.join(',')}&fields=id`);
+                            const rfidIds = (rfidIdsRes.data || []).map((r: any) => r.id);
+
+                            if (rfidIds.length > 0) {
+                                await fetch(`${BASE_URL}/unfulfilled_sales_transaction_rfid`, {
+                                    method: 'DELETE',
+                                    headers: { 
+                                        'Authorization': `Bearer ${TOKEN}`,
+                                        'Content-Type': 'application/json'
+                                    },
+                                    body: JSON.stringify(rfidIds)
+                                });
+                            }
+
+                            // 3. Delete existing details by IDs
+                            await fetch(`${BASE_URL}/unfulfilled_sales_transaction_details`, {
+                                method: 'DELETE',
+                                headers: { 
+                                    'Authorization': `Bearer ${TOKEN}`,
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify(existingDetailIds)
+                            });
+                        }
+                    } catch (delErr: any) {
+                        console.warn('Failed to clear old transaction details/RFIDs:', delErr.message);
+                    }
                 } else {
                     // Create new header
                     payload.date_created = new Date().toISOString();
