@@ -11,6 +11,7 @@ import {
     PhysicalInventoryListModule,
     type PhysicalInventoryListRow,
 } from "@/modules/supply-chain-management/inventory-management/physical-inventory-list";
+import type { PhysicalInventoryHeaderRow } from "@/modules/supply-chain-management/inventory-management/physical-inventory-management/types";
 
 export default function PhysicalInventoryWorkspaceClient({ currentUser }: { currentUser?: { id: number; name: string } | null }) {
     const [selectedHeaderId, setSelectedHeaderId] = React.useState<number | null>(null);
@@ -45,7 +46,7 @@ export default function PhysicalInventoryWorkspaceClient({ currentUser }: { curr
         setIsListCollapsed(true);
     }, []);
 
-    const handleRecordChange = React.useCallback((header: any) => {
+    const handleRecordChange = React.useCallback((header: PhysicalInventoryHeaderRow) => {
         if (header.id && header.id !== selectedHeaderId) {
             setSelectedHeaderId(header.id);
         }

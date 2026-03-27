@@ -22,7 +22,6 @@ import {
 } from "../utils/compute";
 
 import { Dialog, DialogPortal, DialogOverlay } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import {
     AlertCircle,
     CheckCircle2,
@@ -672,6 +671,7 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
             rowByProductId,
             setTemporarySignal,
             existingPiTags,
+            onhandCache,
         ],
     );
 

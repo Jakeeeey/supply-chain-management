@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
     Table,
     TableBody,
@@ -26,7 +25,6 @@ type Props = {
     selectedIds: number[];
     disabled?: boolean;
     onToggleRow: (rowId: number, checked: boolean) => void;
-    onToggleAll: (checked: boolean) => void;
 };
 
 function fmtMoney(value: number): string {
@@ -49,7 +47,6 @@ export function OffsettingSelectionTable({
                                              selectedIds,
                                              disabled = false,
                                              onToggleRow,
-                                             onToggleAll,
                                          }: Props) {
     const [searchQuery, setSearchQuery] = React.useState("");
 

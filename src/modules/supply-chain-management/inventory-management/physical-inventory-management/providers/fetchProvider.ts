@@ -613,7 +613,15 @@ export async function fetchRfidOnhandByBranch(
     }
 
     try {
-        const res = await apiGet<{ ok: boolean; data: any[] }>(
+        const res = await apiGet<{
+            ok: boolean;
+            data: Array<{
+                rfid?: string;
+                tag?: string;
+                productId?: number;
+                product_id?: number;
+            }>;
+        }>(
             `${API_BASE}/rfid-onhand/all`,
             {
                 branchId: branch,
@@ -641,7 +649,9 @@ export async function fetchRfidOnhandByBranch(
 export async function fetchHistoricalRfidScan(
     rfidTag: string,
 ): Promise<{ product_id: number } | null> {
-    const rows = await directusGetItems<any>(TABLES.physical_inventory_details_rfid, {
+    const rows = await directusGetItems<{
+        pi_detail_id: number | { product_id: number };
+    }>(TABLES.physical_inventory_details_rfid, {
         filter: JSON.stringify({
             rfid_tag: { _eq: rfidTag.trim() },
         }),

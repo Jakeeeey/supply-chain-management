@@ -31,7 +31,6 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Card, CardContent } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import {
     ArrowLeft,
     CheckCircle2,
@@ -184,20 +183,6 @@ export function PhysicalInventoryOffsettingModule({
             checked ? [...new Set([...prev, rowId])] : prev.filter((id) => id !== rowId),
         );
     }, []);
-
-    const handleToggleAllShort = React.useCallback(
-        (checked: boolean) => {
-            setSelectedShortIds(checked ? openShortRows.map((row) => row.row_id) : []);
-        },
-        [openShortRows],
-    );
-
-    const handleToggleAllOver = React.useCallback(
-        (checked: boolean) => {
-            setSelectedOverIds(checked ? openOverRows.map((row) => row.row_id) : []);
-        },
-        [openOverRows],
-    );
 
     const handleCreateOffsetGroup = React.useCallback(async () => {
         if (!header?.id) {
@@ -500,7 +485,6 @@ export function PhysicalInventoryOffsettingModule({
                     rows={openShortRows}
                     selectedIds={selectedShortIds}
                     onToggleRow={handleToggleShortRow}
-                    onToggleAll={handleToggleAllShort}
                     disabled={isCreatingGroup || isCommitting || !isPending}
                 />
 
@@ -510,7 +494,6 @@ export function PhysicalInventoryOffsettingModule({
                     rows={openOverRows}
                     selectedIds={selectedOverIds}
                     onToggleRow={handleToggleOverRow}
-                    onToggleAll={handleToggleAllOver}
                     disabled={isCreatingGroup || isCommitting || !isPending}
                 />
             </div>

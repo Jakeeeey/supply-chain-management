@@ -244,7 +244,7 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                         user_id: currentUser.id,
                         user_fname: currentUser.name,
                         user_lname: "",
-                    } as any,
+                    },
                 };
             });
         }
@@ -357,10 +357,7 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
         });
     }, [activeQuickCategory, activeQuickFilter, groupedRows, productSearch]);
 
-    const allGroupedChildRows = React.useMemo(
-        () => groupedRows.flatMap((group) => group.rows),
-        [groupedRows],
-    );
+
 
     const rebuildGroupedRows = React.useCallback(
         (input?: RebuildInput) => {

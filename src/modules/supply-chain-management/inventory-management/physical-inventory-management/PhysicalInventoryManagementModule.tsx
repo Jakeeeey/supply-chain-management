@@ -264,7 +264,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
                         user_id: currentUser.id,
                         user_fname: currentUser.name,
                         user_lname: "",
-                    } as any,
+                    },
                 };
             });
         }

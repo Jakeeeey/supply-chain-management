@@ -30,7 +30,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 
 type RfidSavedPayload = {

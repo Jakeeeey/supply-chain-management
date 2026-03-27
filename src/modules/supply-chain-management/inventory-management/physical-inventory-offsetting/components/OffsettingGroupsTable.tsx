@@ -2,10 +2,8 @@
 
 import type { PhysicalInventoryOffsetGroup } from "../types";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { Edit2, Trash2 } from "lucide-react";
 
 type Props = {

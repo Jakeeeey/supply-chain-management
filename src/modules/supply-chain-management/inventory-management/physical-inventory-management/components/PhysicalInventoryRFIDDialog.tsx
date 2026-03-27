@@ -33,7 +33,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 
 type RfidSavedPayload = {
@@ -350,6 +349,10 @@ export function PhysicalInventoryRFIDDialog(props: Props) {
             onSaved,
             persistRowFromRfidCount,
             tags.length,
+            branchId,
+            onhandCache,
+            row?.product_id,
+            row?.product_name,
         ],
     );
 

@@ -7,7 +7,6 @@ import type {
     GroupedPhysicalInventoryRow,
 } from "../types";
 
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
