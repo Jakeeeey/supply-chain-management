@@ -171,7 +171,7 @@ export const getApprovalColumns = (
     meta: { label: "Actions" },
     cell: ({ row }) => {
       const sku = row.original;
-      const id = (sku as any).id || sku.product_id;
+      const id = sku.id || sku.product_id;
       return (
         <div className="flex justify-end w-[60px]">
           <DropdownMenu>

@@ -22,6 +22,7 @@ interface BundleViewModalProps {
   masterData: BundleMasterData | null;
   onApprove?: (id: number | string) => Promise<void>;
   onReject?: (id: number | string) => Promise<void>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   fetchDetails: (id: number | string) => Promise<any>;
   previewMode?: boolean;
 }
@@ -40,9 +41,10 @@ export function BundleViewModal({
   fetchDetails,
   previewMode = false,
 }: BundleViewModalProps) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [details, setDetails] = useState<any>(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
-  const statusValue = (draft as any)?.status || (draft as any)?.draft_status;
+  const statusValue = String((draft as Record<string, unknown>)?.status || (draft as Record<string, unknown>)?.draft_status || "");
   const [confirmAction, setConfirmAction] = useState<
     "approve" | "reject" | null
   >(null);
@@ -81,8 +83,8 @@ export function BundleViewModal({
   const getTypeName = () => {
     const raw = draft?.bundle_type_id;
     if (typeof raw === "object" && raw !== null)
-      return (raw as any).name || "-";
-    const found = masterData?.bundleTypes.find((t) => t.id == (raw as any));
+      return String((raw as Record<string, unknown>).name || "-");
+    const found = masterData?.bundleTypes.find((t) => t.id == (raw as number));
     return found?.name || "-";
   };
 
@@ -214,6 +216,7 @@ export function BundleViewModal({
                     </div>
                   ) : details?.items?.length ? (
                     <div className="space-y-2">
+                      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                       {details.items.map((item: any, idx: number) => {
                         const productId =
                           typeof item.product_id === "object"

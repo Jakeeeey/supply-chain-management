@@ -27,7 +27,7 @@ export async function request<T>(
       if (errorJson.errors?.[0]?.message) {
         errorMessage = errorJson.errors[0].message;
       }
-    } catch (e) {
+    } catch {
       // Not JSON or no message
     }
 
@@ -47,8 +47,8 @@ export async function request<T>(
 
 export async function fetchItems<T>(
   endpoint: string,
-  params: Record<string, any> = {},
-): Promise<{ data: T[]; meta?: any }> {
+  params: Record<string, string | number | boolean> = {},
+): Promise<{ data: T[]; meta?: Record<string, number> }> {
   const baseUrl = API_BASE_URL?.replace(/\/$/, "");
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
 
@@ -62,5 +62,5 @@ export async function fetchItems<T>(
 
   const queryString = new URLSearchParams(cleanParams).toString();
   const url = `${baseUrl}${cleanEndpoint}${queryString ? `?${queryString}` : ""}`;
-  return request<{ data: T[]; meta?: any }>(url);
+  return request<{ data: T[]; meta?: Record<string, number> }>(url);
 }

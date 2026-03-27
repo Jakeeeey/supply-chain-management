@@ -79,22 +79,6 @@ export function PDPViewModal({
       })
     : "—";
 
-  const createdDate = displayPlan.created_at
-    ? new Date(displayPlan.created_at).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "numeric",
-        day: "numeric",
-      })
-    : "—";
-
-  const createdTime = displayPlan.created_at
-    ? new Date(displayPlan.created_at).toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true,
-      })
-    : "";
-
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="w-full sm:max-w-4xl max-h-[90vh] flex flex-col p-0 overflow-hidden bg-background">
@@ -190,23 +174,6 @@ export function PDPViewModal({
                   </p>
                 </div>
               </div>
-
-              {/* <div className="bg-background border rounded-lg p-3">
-                <div className="flex items-center gap-2 text-muted-foreground mb-1.5">
-                  <Clock className="h-3.5 w-3.5" />
-                  <span className="text-[10px] font-semibold uppercase tracking-wider">
-                    Dispatch Date
-                  </span>
-                </div>
-                <div className="flex flex-col">
-                  <p className="text-sm font-medium text-foreground">
-                    {createdDate}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground font-medium">
-                    {createdTime}
-                  </p>
-                </div>
-              </div> */}
             </div>
 
             {displayPlan.remarks && (
@@ -274,7 +241,7 @@ export function PDPViewModal({
                   <span className="text-lg font-semibold text-foreground">
                     {formatNumber(
                       (displayPlan.maximum_weight || 0) -
-                      (displayPlan.total_weight || 0)
+                        (displayPlan.total_weight || 0),
                     )}{" "}
                     kg
                   </span>
