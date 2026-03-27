@@ -1,31 +1,19 @@
 "use client"
 
-import {type MouseEvent as ReactMouseEvent, useMemo, useState} from "react"
-import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from "@/components/ui/table"
-import {Input} from "@/components/ui/input"
-import {Badge} from "@/components/ui/badge"
-import {Button} from "@/components/ui/button"
-import {Popover, PopoverContent, PopoverTrigger} from "@/components/ui/popover"
-import {Checkbox} from "@/components/ui/checkbox"
-import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "@/components/ui/select"
-import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from "@/components/ui/tooltip"
+import { type MouseEvent as ReactMouseEvent, useMemo, useState } from "react"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import {
-    AlertCircle,
-    ArrowUpDown,
-    CheckCircle,
-    ChevronLeft,
-    ChevronRight,
-    ChevronsLeft,
-    ChevronsRight,
-    Filter,
-    History,
-    Layers,
-    SortAsc,
-    SortDesc,
-    Timer,
-    XCircle,
+    AlertCircle, ArrowUpDown, CheckCircle, ChevronLeft, ChevronRight, ChevronsLeft,
+    ChevronsRight, Filter, History, Layers, SortAsc, SortDesc, Timer, XCircle,
 } from "lucide-react"
-import {cn} from "@/lib/utils"
+import { cn } from "@/lib/utils"
 
 type SortableHeaderProps = {
     title: string
@@ -44,48 +32,49 @@ type SortableHeaderProps = {
     categoryFilters: string[]
     setCategoryFilters: any
     uniqueCategories: string[]
+    // 🚀 NEW: Sticky Column Props
+    isSticky?: boolean
+    leftOffset?: number
+    isLastSticky?: boolean
 }
 
 // Extracted Component
 function SortableHeader({
-                            title,
-                            sortKey,
-                            className,
-                            isBlue = false,
-                            hasFilter = false,
-                            filterType = "",
-                            tooltip,
-                            columnWidths,
-                            sortConfig,
-                            setSortConfig,
-                            handleMouseDown,
-                            classFilters,
-                            setClassFilters,
-                            categoryFilters,
-                            setCategoryFilters,
-                            uniqueCategories,
+                            title, sortKey, className, isBlue = false, hasFilter = false, filterType = "", tooltip,
+                            columnWidths, sortConfig, setSortConfig, handleMouseDown, classFilters, setClassFilters,
+                            categoryFilters, setCategoryFilters, uniqueCategories,
+                            isSticky = false, leftOffset = 0, isLastSticky = false
                         }: SortableHeaderProps) {
     const isSortable = sortKey !== "abcClass" && sortKey !== "category_name"
 
     return (
         <TableHead
             className={cn(
-                "relative font-black text-[11px] uppercase group h-14 select-none",
+                "font-black text-[11px] uppercase group h-14 select-none outline-none ring-0",
+                // 🚀 Z-Index Logic: Sticky top+left = 40, Sticky top = 30
+                isSticky ? "z-[40]" : "z-[30]",
+                isLastSticky ? "border-r-2 border-slate-200 dark:border-slate-800 shadow-[4px_0_12px_rgba(0,0,0,0.05)]" : "",
                 isBlue
-                    ? "text-white bg-blue-700"
-                    : "text-slate-700 dark:text-slate-300 bg-slate-50/90 dark:bg-slate-900/60",
+                    ? "text-white bg-blue-700 dark:bg-blue-700"
+                    : "text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-900",
                 className
             )}
-            style={{width: columnWidths[sortKey] || 120}}
+            style={{
+                width: columnWidths[sortKey] || 120,
+                minWidth: columnWidths[sortKey] || 120,
+                position: "sticky",
+                top: 0,
+                left: isSticky ? leftOffset : undefined,
+            }}
         >
-            <div className="flex items-center h-full justify-between">
+            <div className="flex items-center h-full justify-between w-full">
                 <TooltipProvider>
                     <Tooltip delayDuration={100}>
                         <TooltipTrigger asChild>
                             <button
                                 disabled={!isSortable}
                                 className={cn(
-                                    "flex items-center gap-1.5 flex-1 outline-none transition-all",
+                                    "flex items-center gap-1.5 flex-1 outline-none transition-all w-full",
                                     isSortable
                                         ? isBlue ? "hover:text-blue-100 cursor-pointer" : "hover:text-slate-900 dark:hover:text-blue-400 cursor-pointer"
                                         : "cursor-default opacity-70 hover:text-inherit dark:hover:text-inherit",
@@ -94,37 +83,23 @@ function SortableHeader({
                                 )}
                                 onClick={() => {
                                     if (!isSortable) return
-
                                     let newDirection: "asc" | "desc" | null = "asc"
-
                                     if (sortConfig.key === sortKey) {
                                         if (sortConfig.direction === "asc") newDirection = "desc"
                                         else if (sortConfig.direction === "desc") newDirection = null
                                         else newDirection = "asc"
                                     }
-
-                                    setSortConfig({
-                                        key: newDirection ? sortKey : "",
-                                        direction: newDirection,
-                                    })
+                                    setSortConfig({ key: newDirection ? sortKey : "", direction: newDirection })
                                 }}
                             >
                                 {title}
-
-                                {isSortable && sortConfig.key === sortKey && sortConfig.direction === "asc" && (
-                                    <SortAsc className="w-3 h-3 text-blue-500"/>
-                                )}
-                                {isSortable && sortConfig.key === sortKey && sortConfig.direction === "desc" && (
-                                    <SortDesc className="w-3 h-3 text-blue-500"/>
-                                )}
-                                {isSortable && sortConfig.key !== sortKey && (
-                                    <ArrowUpDown className="w-3 h-3 opacity-30 group-hover:opacity-100"/>
-                                )}
+                                {isSortable && sortConfig.key === sortKey && sortConfig.direction === "asc" && <SortAsc className="w-3 h-3 text-blue-500" />}
+                                {isSortable && sortConfig.key === sortKey && sortConfig.direction === "desc" && <SortDesc className="w-3 h-3 text-blue-500" />}
+                                {isSortable && sortConfig.key !== sortKey && <ArrowUpDown className="w-3 h-3 opacity-30 group-hover:opacity-100" />}
                             </button>
                         </TooltipTrigger>
                         {tooltip && (
-                            <TooltipContent
-                                className="bg-slate-900 text-white text-[10px] border-slate-800 shadow-xl px-3 py-2 font-bold uppercase tracking-wider">
+                            <TooltipContent className="bg-slate-900 text-white text-[10px] border-slate-800 shadow-xl px-3 py-2 font-bold uppercase tracking-wider max-w-[200px] text-center">
                                 {tooltip}
                             </TooltipContent>
                         )}
@@ -135,68 +110,31 @@ function SortableHeader({
                     <Popover>
                         <PopoverTrigger asChild>
                             <button className="ml-1 opacity-60 hover:opacity-100 transition-opacity">
-                                <Filter
-                                    className={cn(
-                                        "w-3 h-3",
-                                        (filterType === "category" ? categoryFilters.length : classFilters.length) > 0 ? "text-blue-500 opacity-100" : ""
-                                    )}
-                                />
+                                <Filter className={cn("w-3 h-3", (filterType === "category" ? categoryFilters.length : classFilters.length) > 0 ? "text-blue-500 opacity-100" : "")} />
                             </button>
                         </PopoverTrigger>
-                        <PopoverContent
-                            className="w-64 p-2 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-2xl rounded-xl z-[100]">
+                        <PopoverContent className="w-64 p-2 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-2xl rounded-xl z-[100]">
                             <div className="flex flex-col gap-1">
-                                <div
-                                    className="flex items-center justify-between px-2 py-1 mb-1 border-b dark:border-slate-800">
-                                    <span
-                                        className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Filter {title}</span>
-                                    <Button
-                                        variant="ghost"
-                                        className="h-6 px-2 text-[9px] font-black text-rose-600 uppercase hover:bg-rose-500/10"
-                                        onClick={() => (filterType === "category" ? setCategoryFilters([]) : setClassFilters([]))}
-                                    >
+                                <div className="flex items-center justify-between px-2 py-1 mb-1 border-b dark:border-slate-800">
+                                    <span className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Filter {title}</span>
+                                    <Button variant="ghost" className="h-6 px-2 text-[9px] font-black text-rose-600 uppercase hover:bg-rose-500/10" onClick={() => (filterType === "category" ? setCategoryFilters([]) : setClassFilters([]))}>
                                         Clear
                                     </Button>
                                 </div>
-
                                 {filterType === "category" ? (
                                     <div className="max-h-64 overflow-y-auto px-1 custom-scrollbar">
                                         {uniqueCategories.map((cat) => (
-                                            <div
-                                                key={cat}
-                                                className="flex items-center gap-2 mb-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 p-1.5 rounded-md transition-colors"
-                                            >
-                                                <Checkbox
-                                                    id={`cat-${cat}`}
-                                                    checked={categoryFilters.includes(cat)}
-                                                    onCheckedChange={() =>
-                                                        setCategoryFilters((prev: string[]) => (prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]))
-                                                    }
-                                                />
-                                                <label htmlFor={`cat-${cat}`}
-                                                       className="text-[10px] font-bold uppercase truncate cursor-pointer flex-1 leading-none text-slate-800 dark:text-slate-200">
-                                                    {cat}
-                                                </label>
+                                            <div key={cat} className="flex items-center gap-2 mb-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 p-1.5 rounded-md transition-colors">
+                                                <Checkbox id={`cat-${cat}`} checked={categoryFilters.includes(cat)} onCheckedChange={() => setCategoryFilters((prev: string[]) => (prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]))} />
+                                                <label htmlFor={`cat-${cat}`} className="text-[10px] font-bold uppercase truncate cursor-pointer flex-1 leading-none text-slate-800 dark:text-slate-200">{cat}</label>
                                             </div>
                                         ))}
                                     </div>
                                 ) : (
                                     ["A", "B", "C"].map((cls) => (
-                                        <div
-                                            key={cls}
-                                            className="flex items-center gap-2 mb-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 p-1.5 rounded-md transition-colors"
-                                        >
-                                            <Checkbox
-                                                id={`cls-${cls}`}
-                                                checked={classFilters.includes(cls)}
-                                                onCheckedChange={() =>
-                                                    setClassFilters((prev: string[]) => (prev.includes(cls) ? prev.filter((c) => c !== cls) : [...prev, cls]))
-                                                }
-                                            />
-                                            <label htmlFor={`cls-${cls}`}
-                                                   className="text-[10px] font-bold uppercase cursor-pointer flex-1 leading-none text-slate-800 dark:text-slate-200">
-                                                Class {cls}
-                                            </label>
+                                        <div key={cls} className="flex items-center gap-2 mb-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 p-1.5 rounded-md transition-colors">
+                                            <Checkbox id={`cls-${cls}`} checked={classFilters.includes(cls)} onCheckedChange={() => setClassFilters((prev: string[]) => (prev.includes(cls) ? prev.filter((c) => c !== cls) : [...prev, cls]))} />
+                                            <label htmlFor={`cls-${cls}`} className="text-[10px] font-bold uppercase cursor-pointer flex-1 leading-none text-slate-800 dark:text-slate-200">Class {cls}</label>
                                         </div>
                                     ))
                                 )}
@@ -207,7 +145,7 @@ function SortableHeader({
 
                 <div
                     onMouseDown={(e) => handleMouseDown(e, sortKey)}
-                    className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-transparent group-hover:bg-blue-500/30 transition-colors"
+                    className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-transparent group-hover:bg-blue-500/30 transition-colors z-[50]"
                 />
             </div>
         </TableHead>
@@ -215,52 +153,30 @@ function SortableHeader({
 }
 
 // Main Table Component
-export default function HistoricalPlanningTable({
-                                                    data = [],
-                                                    onQuantityChange,
-                                                    simulationTargets = {A: 0, B: 0, C: 0},
-                                                }: any) {
+export default function HistoricalPlanningTable({ data = [], onQuantityChange, simulationTargets = { A: 0, B: 0, C: 0 } }: any) {
     const [currentPage, setCurrentPage] = useState(1)
     const [rowsPerPage, setRowsPerPage] = useState(10)
-    const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" | null }>({
-        key: "abcClass",
-        direction: "asc",
-    })
+    const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" | null }>({ key: "abcClass", direction: "asc" })
     const [classFilters, setClassFilters] = useState<string[]>([])
     const [categoryFilters, setCategoryFilters] = useState<string[]>([])
     const [searchQuery, setSearchQuery] = useState("")
-
 
     const WORKING_DAYS = 21;
 
     const enhancedData = useMemo(() => {
         return data.map((item: any) => {
-            // 1. Normalize Inputs
             const mav = Number(item.mav || 0);
             const currentStock = Number(item.currentStockBoxes || 0);
             const inTransit = Number(item.inTransitBoxes || 0);
             const sellout = Number(item.expectedSelloutBoxes || 0);
             const orderQty = Number(item.orderQty || 0);
             const boxPrice = Number(item.computedPricePerBox || 0);
-
-            // 2. Calculate DAU (Daily Average Usage)
-
             const dau = mav / WORKING_DAYS;
-
-            // 3. Get Target Days based on ABC Class
             const targetDays = simulationTargets[item.abcClass as keyof typeof simulationTargets] || 0;
-
-            // 4. Calculate Required Inventory
             const requiredInv = dau * targetDays;
-
-            // 5. Calculate Projected Position
-            // Formula: What I have + What is coming + What I'm buying NOW - What is already sold/pending
             const projected = (currentStock + inTransit) - sellout;
-
-            // 6. Calculate Suggested Quantity
             const suggested = Math.max(0, requiredInv - (currentStock + inTransit - sellout));
 
-            // 7. Determine Status
             let status = "OK";
             if (projected < (requiredInv * 0.5)) status = "BELOW ROP";
             else if (projected < requiredInv) status = "NEAR ROP";
@@ -286,7 +202,6 @@ export default function HistoricalPlanningTable({
 
     const filteredAndSortedData = useMemo(() => {
         let items = [...enhancedData]
-
         const q = searchQuery.trim().toLowerCase()
         if (q) {
             items = items.filter((item: any) => {
@@ -295,7 +210,6 @@ export default function HistoricalPlanningTable({
                 return name.includes(q) || sku.includes(q)
             })
         }
-
         if (classFilters.length > 0) items = items.filter((item: any) => classFilters.includes(item.abcClass))
         if (categoryFilters.length > 0) items = items.filter((item: any) => categoryFilters.includes(item.category_name))
 
@@ -309,7 +223,6 @@ export default function HistoricalPlanningTable({
                 return String(aValue || "").localeCompare(String(bValue || "")) * (sortConfig.direction === "asc" ? 1 : -1)
             })
         }
-
         return items
     }, [enhancedData, sortConfig, classFilters, categoryFilters, searchQuery])
 
@@ -337,12 +250,8 @@ export default function HistoricalPlanningTable({
 
     const handleMouseDown = (e: ReactMouseEvent, columnKey: string) => {
         const startX = e.pageX
-        const startWidth = columnWidths[columnKey]
-        const onMouseMove = (moveEvent: MouseEvent) =>
-            setColumnWidths((prev) => ({
-                ...prev,
-                [columnKey]: Math.max(startWidth + (moveEvent.pageX - startX), 40),
-            }))
+        const startWidth = columnWidths[columnKey] || 120
+        const onMouseMove = (moveEvent: MouseEvent) => setColumnWidths((prev) => ({ ...prev, [columnKey]: Math.max(startWidth + (moveEvent.pageX - startX), 60) }))
         const onMouseUp = () => {
             document.removeEventListener("mousemove", onMouseMove)
             document.removeEventListener("mouseup", onMouseUp)
@@ -351,26 +260,33 @@ export default function HistoricalPlanningTable({
         document.addEventListener("mouseup", onMouseUp)
     }
 
-    // THIS BUNDLES THE PROPS FOR THE EXTRACTED HEADER COMPONENT
+    // 🚀 STICKY OFFSETS COMPUTATION (Reactive to Drag-Resizing)
+    const getW = (key: string, def: number) => columnWidths[key] ?? def;
+    const leftOffsets = {
+        brandName: 0,
+        category_name: getW("brandName", 120),
+        abcClass: getW("brandName", 120) + getW("category_name", 160),
+        productName: getW("brandName", 120) + getW("category_name", 160) + getW("abcClass", 80),
+        orderQty: getW("brandName", 120) + getW("category_name", 160) + getW("abcClass", 80) + getW("productName", 280),
+    };
+
     const headerProps = {
-        columnWidths,
-        sortConfig,
-        setSortConfig,
-        handleMouseDown,
-        classFilters,
-        setClassFilters,
-        categoryFilters,
-        setCategoryFilters,
-        uniqueCategories,
+        columnWidths, sortConfig, setSortConfig, handleMouseDown, classFilters,
+        setClassFilters, categoryFilters, setCategoryFilters, uniqueCategories,
     }
+
+    // Helper for applying sticky styles to body cells
+    const stickyCellClass = (isLast = false) => cn(
+        "sticky z-[10] bg-inherit",
+        isLast ? "border-r-2 border-slate-200 dark:border-slate-800 shadow-[4px_0_12px_rgba(0,0,0,0.05)]" : ""
+    );
 
     return (
         <div className="w-full space-y-4">
-            {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-2 pt-2">
                 <div className="flex items-center gap-3 min-w-0">
                     <div className="p-2.5 bg-blue-600 rounded-2xl shadow-lg shadow-blue-500/20 text-white shrink-0">
-                        <History className="w-6 h-6"/>
+                        <History className="w-6 h-6" />
                     </div>
                     <div className="flex flex-col min-w-0">
                         <h2 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white uppercase leading-none truncate">
@@ -381,240 +297,131 @@ export default function HistoricalPlanningTable({
                 </div>
             </div>
 
-            <div
-                className="w-full overflow-hidden border border-slate-200 dark:border-slate-800 rounded-[2rem] sm:rounded-[2.5rem] bg-white dark:bg-slate-950 shadow-xl transition-all">
-                {/* Toolbar: Search */}
-                <div
-                    className="px-4 sm:px-6 py-4 border-b border-slate-100 dark:border-slate-900 bg-white/70 dark:bg-slate-950/70">
+            <div className="w-full overflow-hidden border border-slate-200 dark:border-slate-800 rounded-[2rem] sm:rounded-[2.5rem] bg-white dark:bg-slate-950 shadow-xl transition-all">
+                <div className="px-4 sm:px-6 py-4 border-b border-slate-100 dark:border-slate-900 bg-white/70 dark:bg-slate-950/70">
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                         <div className="flex items-center gap-2 w-full md:max-w-[520px]">
                             <Input
                                 value={searchQuery}
-                                onChange={(e) => {
-                                    setSearchQuery(e.target.value)
-                                    setCurrentPage(1)
-                                }}
+                                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
                                 placeholder="Search product name or SKU..."
                                 className="h-11 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 rounded-2xl font-bold text-[12px] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus-visible:ring-blue-500/20"
                             />
                             {searchQuery.trim() && (
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    className="h-11 w-11 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 hover:bg-slate-50 dark:hover:bg-slate-900"
-                                    onClick={() => {
-                                        setSearchQuery("")
-                                        setCurrentPage(1)
-                                    }}
-                                    aria-label="Clear search"
-                                >
-                                    <XCircle className="w-5 h-5 text-slate-600 dark:text-slate-400"/>
+                                <Button type="button" variant="ghost" className="h-11 w-11 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 hover:bg-slate-50 dark:hover:bg-slate-900" onClick={() => { setSearchQuery(""); setCurrentPage(1); }}>
+                                    <XCircle className="w-5 h-5 text-slate-600 dark:text-slate-400" />
                                 </Button>
                             )}
                         </div>
 
-                        <div
-                            className="text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest">
+                        <div className="text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest">
                             {classFilters.length > 0 || categoryFilters.length > 0 || searchQuery.trim() ? (
-                                <span>
-                  Active:{" "}
-                                    {[
-                                        searchQuery.trim() ? "SEARCH" : null,
-                                        categoryFilters.length ? `CATEGORY(${categoryFilters.length})` : null,
-                                        classFilters.length ? `CLASS(${classFilters.length})` : null,
-                                    ]
-                                        .filter(Boolean)
-                                        .join(" • ")}
-                </span>
-                            ) : (
-                                <span>All Products</span>
-                            )}
+                                <span>Active: {[searchQuery.trim() ? "SEARCH" : null, categoryFilters.length ? `CATEGORY(${categoryFilters.length})` : null, classFilters.length ? `CLASS(${classFilters.length})` : null,].filter(Boolean).join(" • ")}</span>
+                            ) : <span>All Products</span>}
                         </div>
                     </div>
                 </div>
 
-                {/* Table scroll */}
-                <div className="overflow-x-auto scrollbar-thin">
+                {/* 🚀 Vertical + Horizontal Scroll Container */}
+                <div className="overflow-auto scrollbar-thin max-h-[calc(100vh-320px)] min-h-[400px] relative">
                     <Table className="w-full table-fixed border-collapse">
                         <TableHeader>
-                            <TableRow className="hover:bg-transparent border-b border-slate-200 dark:border-slate-800">
-                                {/* SPREAD THE HEADER PROPS HERE */}
-                                <SortableHeader title="Brand" sortKey="brandName" className="px-6" {...headerProps}/>
-                                <SortableHeader title="Category" sortKey="category_name" className="px-4" hasFilter
-                                                filterType="category" {...headerProps}/>
-                                <SortableHeader title="Class" sortKey="abcClass" className="text-center" hasFilter
-                                                filterType="class" {...headerProps}/>
-                                <SortableHeader title="Product" sortKey="productName"
-                                                className="px-4" {...headerProps}/>
-                                <SortableHeader title="Order" sortKey="orderQty" className="text-center"
-                                                isBlue {...headerProps}/>
-                                <SortableHeader title="Sugg. Qty" sortKey="suggestedQty"
-                                                className="text-right text-slate-500 px-4" {...headerProps}/>
-                                <SortableHeader
-                                    title="Proj Stock"
-                                    sortKey="projectedStockBoxes"
-                                    className="text-right text-amber-600 bg-amber-50/50 dark:bg-amber-900/10 px-4"
-                                    tooltip="PROJECTED POSITION (STOCK + TRANSIT - SELLOUT)"
-                                    {...headerProps}
-                                />
-                                <SortableHeader title="Req. Inv" sortKey="targetStock"
-                                                className="text-right text-emerald-600 px-4"
-                                                tooltip="REQUIRED INVENTORY (DAU x TARGET DAYS)" {...headerProps}/>
-                                <SortableHeader title="MAV (Avg Boxes)" sortKey="mav"
-                                                className="text-right text-purple-500 px-4"
-                                                tooltip="Monthly Average Volume (Boxes/Month) calculated from total pieces sold in selected months" {...headerProps}/>
-                                <SortableHeader title="Inventory" sortKey="currentStockBoxes"
-                                                className="text-right text-blue-800 dark:text-blue-300 bg-blue-100/80 dark:bg-blue-900/40 px-4 border-x border-blue-200 dark:border-blue-800"
-                                                tooltip="On-hand stock in boxes (Total Pieces ÷ Box Multiplier)" {...headerProps}/>
-                                <SortableHeader title="In-Transit" sortKey="inTransitBoxes"
-                                                className="text-right text-indigo-500 px-4" {...headerProps}/>
-                                <SortableHeader title="DAU (Boxes)" sortKey="dailyUsage"
-                                                className="text-right text-slate-400 px-4"
-                                                tooltip="Daily Average Usage in Boxes (MAV ÷ 21 working days)" {...headerProps}/>
-                                <SortableHeader title="Total Value" sortKey="totalAmount"
-                                                className="text-right text-slate-500 px-4" {...headerProps}/>
-                                <SortableHeader title="Box Price" sortKey="unitPrice" className="text-right px-4"
-                                                tooltip="Price per BOX. Formula: (Piece Cost × Box Multiplier)" {...headerProps}/>
-                                <SortableHeader title="Exp Sellout" sortKey="expectedSelloutBoxes"
-                                                className="text-right text-red-500 bg-red-50/50 dark:bg-red-900/10 px-4" {...headerProps}/>
-                                <SortableHeader title="Status" sortKey="inventoryStatus"
-                                                className="text-center px-6" {...headerProps}/>
+                            <TableRow className="hover:bg-transparent border-b-2 border-slate-200 dark:border-slate-800">
+                                <SortableHeader title="Brand" sortKey="brandName" className="px-6" isSticky leftOffset={leftOffsets.brandName} {...headerProps} />
+                                <SortableHeader title="Category" sortKey="category_name" className="px-4" hasFilter filterType="category" isSticky leftOffset={leftOffsets.category_name} {...headerProps} />
+                                <SortableHeader title="Class" sortKey="abcClass" className="text-center" hasFilter filterType="class" isSticky leftOffset={leftOffsets.abcClass} {...headerProps} />
+                                <SortableHeader title="Product" sortKey="productName" className="px-4" isSticky leftOffset={leftOffsets.productName} {...headerProps} />
+                                <SortableHeader title="Order" sortKey="orderQty" className="text-center" isBlue isSticky leftOffset={leftOffsets.orderQty} isLastSticky {...headerProps} />
+
+                                {/* Standard Columns */}
+                                <SortableHeader title="Sugg. Qty" sortKey="suggestedQty" className="text-right text-slate-500 px-4" {...headerProps} />
+                                <SortableHeader title="Proj Stock" sortKey="projectedStockBoxes" className="text-right text-amber-600 bg-amber-50/50 dark:bg-amber-900/10 px-4" tooltip="PROJECTED POSITION (STOCK + TRANSIT - SELLOUT)" {...headerProps} />
+                                <SortableHeader title="Req. Inv" sortKey="targetStock" className="text-right text-emerald-600 px-4" tooltip="REQUIRED INVENTORY (DAU x TARGET DAYS)" {...headerProps} />
+                                <SortableHeader title="MAV (Avg Boxes)" sortKey="mav" className="text-right text-purple-500 px-4" tooltip="Monthly Average Volume (Boxes/Month)" {...headerProps} />
+                                <SortableHeader title="Inventory" sortKey="currentStockBoxes" className="text-right text-blue-800 dark:text-blue-300 bg-blue-100/80 dark:bg-blue-900/40 px-4 border-x border-blue-200 dark:border-blue-800" tooltip="On-hand stock in boxes" {...headerProps} />
+                                <SortableHeader title="In-Transit" sortKey="inTransitBoxes" className="text-right text-indigo-500 px-4" {...headerProps} />
+                                <SortableHeader title="DAU (Boxes)" sortKey="dailyUsage" className="text-right text-slate-400 px-4" tooltip="Daily Average Usage in Boxes" {...headerProps} />
+                                <SortableHeader title="Total Value" sortKey="totalAmount" className="text-right text-slate-500 px-4" {...headerProps} />
+                                <SortableHeader title="Box Price" sortKey="unitPrice" className="text-right px-4" tooltip="Price per BOX. Formula: (Piece Cost × Box Multiplier)" {...headerProps} />
+                                <SortableHeader title="Exp Sellout" sortKey="expectedSelloutBoxes" className="text-right text-red-500 bg-red-50/50 dark:bg-red-900/10 px-4" {...headerProps} />
+                                <SortableHeader title="Status" sortKey="inventoryStatus" className="text-center px-6" {...headerProps} />
                             </TableRow>
                         </TableHeader>
 
                         <TableBody>
                             {paginatedData.map((row: any) => {
                                 const rowId = String(row.product_id || row.id || row.keyProductId)
-
-                                const statusStyles =
-                                    ({
-                                        "BELOW ROP": "bg-red-500/10 text-red-600 border-red-500/20",
-                                        "NEAR ROP": "bg-orange-500/10 text-orange-600 border-orange-500/20",
-                                        OK: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
-                                    } as any)[row.inventoryStatus as string] || "bg-slate-500/10 text-slate-600 border-slate-500/20"
-
+                                const statusStyles = ({ "BELOW ROP": "bg-red-500/10 text-red-600 border-red-500/20", "NEAR ROP": "bg-orange-500/10 text-orange-600 border-orange-500/20", OK: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" } as any)[row.inventoryStatus as string] || "bg-slate-500/10 text-slate-600 border-slate-500/20"
                                 const StatusIcon = row.inventoryStatus === "OK" ? CheckCircle : row.inventoryStatus === "NEAR ROP" ? Timer : AlertCircle
 
                                 return (
                                     <TableRow
                                         key={rowId}
-                                        className="h-16 border-b border-slate-100 dark:border-slate-900 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors"
+                                        // 🚀 FIX: Setting a solid base color so `bg-inherit` on sticky cells works beautifully on hover
+                                        className="h-16 border-b border-slate-100 dark:border-slate-900 bg-white dark:bg-slate-950 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors"
                                     >
-                                        <TableCell
-                                            className="px-6 font-black text-blue-700 dark:text-blue-400 text-[13px] uppercase italic truncate">
+                                        <TableCell className={cn("px-6 font-black text-blue-700 dark:text-blue-400 text-[13px] uppercase italic truncate", stickyCellClass())} style={{ left: leftOffsets.brandName }}>
                                             {row.brandName}
                                         </TableCell>
 
-                                        <TableCell className="px-4">
-                                            <div
-                                                className="inline-flex items-center gap-1.5 px-2 py-1 bg-blue-50 dark:bg-blue-900/20 rounded-md max-w-full border border-blue-100 dark:border-blue-800">
-                                                <Layers className="w-3 h-3 text-blue-500 shrink-0"/>
-                                                <span
-                                                    className="font-black text-blue-700 dark:text-blue-300 uppercase text-[11px] truncate">{row.category_name}</span>
+                                        <TableCell className={cn("px-4", stickyCellClass())} style={{ left: leftOffsets.category_name }}>
+                                            <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-blue-50 dark:bg-blue-900/20 rounded-md max-w-full border border-blue-100 dark:border-blue-800">
+                                                <Layers className="w-3 h-3 text-blue-500 shrink-0" />
+                                                <span className="font-black text-blue-700 dark:text-blue-300 uppercase text-[11px] truncate">{row.category_name}</span>
                                             </div>
                                         </TableCell>
 
-                                        <TableCell className="text-center">
-                                            <Badge
-                                                variant="outline"
-                                                className={cn(
-                                                    "font-black text-[11px] px-3",
-                                                    row.abcClass === "A" ? "border-red-500 text-red-600" : row.abcClass === "B" ? "border-purple-500 text-purple-600" : "border-slate-400 text-slate-500"
-                                                )}
-                                            >
+                                        <TableCell className={cn("text-center", stickyCellClass())} style={{ left: leftOffsets.abcClass }}>
+                                            <Badge variant="outline" className={cn("font-black text-[11px] px-3", row.abcClass === "A" ? "border-red-500 text-red-600" : row.abcClass === "B" ? "border-purple-500 text-purple-600" : "border-slate-400 text-slate-500")}>
                                                 {row.abcClass}
                                             </Badge>
                                         </TableCell>
 
-                                        <TableCell
-                                            className="px-4 font-bold text-slate-900 dark:text-slate-200 uppercase text-[13px] leading-tight">
-                                            <div className="max-w-[260px] truncate" title={row.productName}>
-                                                {row.productName}
-                                            </div>
-                                            {row.sku ? (
-                                                <div
-                                                    className="mt-1 text-[11px] font-black tracking-widest uppercase text-slate-500 dark:text-slate-500 truncate">
-                                                    SKU: {row.sku}
-                                                </div>
-                                            ) : null}
+                                        <TableCell className={cn("px-4 font-bold text-slate-900 dark:text-slate-200 uppercase text-[13px] leading-tight", stickyCellClass())} style={{ left: leftOffsets.productName }}>
+                                            <div className="max-w-[260px] truncate" title={row.productName}>{row.productName}</div>
+                                            {row.sku && <div className="mt-1 text-[11px] font-black tracking-widest uppercase text-slate-500 dark:text-slate-500 truncate">SKU: {row.sku}</div>}
                                         </TableCell>
 
-                                        <TableCell className="px-2 py-2 bg-blue-600/5">
+                                        <TableCell className={cn("px-2 py-2", stickyCellClass(true))} style={{ left: leftOffsets.orderQty }}>
                                             <Input
                                                 type="number"
-                                                className="h-10 w-full text-center font-black text-[15px] bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 border-blue-200 dark:border-blue-900/40 focus-visible:ring-2 focus-visible:ring-blue-500/20 focus-visible:border-blue-500 rounded-lg shadow-sm"
+                                                className="h-10 w-full text-center font-black text-[15px] bg-blue-50/50 dark:bg-blue-950/50 text-slate-900 dark:text-slate-100 border-blue-200 dark:border-blue-900/40 focus-visible:ring-2 focus-visible:ring-blue-500/20 focus-visible:border-blue-500 rounded-lg shadow-sm"
                                                 value={row.orderQty || ""}
                                                 onChange={(e) => onQuantityChange(rowId, parseFloat(e.target.value) || 0)}
                                             />
                                         </TableCell>
 
-                                        <TableCell
-                                            className="text-right font-mono font-black text-slate-800 dark:text-slate-200 px-4 text-[14px]">
-                                            {(Number(row.suggestedQty) || 0).toFixed(1)}
-                                        </TableCell>
+                                        <TableCell className="text-right font-mono font-black text-slate-800 dark:text-slate-200 px-4 text-[14px]">{(Number(row.suggestedQty) || 0).toFixed(1)}</TableCell>
+                                        <TableCell className="text-right font-mono font-black text-amber-700 dark:text-amber-400 text-[15px] px-4 bg-amber-500/5">{(Number(row.projectedStockBoxes) || 0).toFixed(1)}</TableCell>
+                                        <TableCell className="text-right font-mono font-black text-emerald-700 dark:text-emerald-400 px-4 text-[15px] bg-emerald-500/5">{(Number(row.targetStock) || 0).toFixed(1)}</TableCell>
+                                        <TableCell className="text-right font-mono font-black text-purple-700 dark:text-purple-400 text-[14px] px-4">{(Number(row.mav) || 0).toFixed(2)}</TableCell>
+                                        <TableCell className="text-right font-mono font-black text-blue-800 dark:text-blue-300 text-[14px] px-4 bg-blue-50/40 dark:bg-blue-900/20 border-x border-blue-100 dark:border-blue-900/30">{(Number(row.currentStockBoxes) || 0).toFixed(2)}</TableCell>
+                                        <TableCell className="text-right font-mono font-black text-indigo-600 dark:text-indigo-400 text-[14px] px-4">{(row.inTransitBoxes || 0).toFixed(1)}</TableCell>
+                                        <TableCell className="text-right font-mono font-black text-slate-500 dark:text-slate-400 text-[13px] px-4 italic">{(row.dailyUsage || 0).toFixed(2)}</TableCell>
+                                        <TableCell className="text-right font-mono font-black text-slate-900 dark:text-slate-100 px-4 text-[14px]">₱{(row.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
 
-                                        <TableCell
-                                            className="text-right font-mono font-black text-amber-700 dark:text-amber-400 text-[15px] px-4 bg-amber-500/5">
-                                            {(Number(row.projectedStockBoxes) || 0).toFixed(1)}
-                                        </TableCell>
-
-                                        <TableCell
-                                            className="text-right font-mono font-black text-emerald-700 dark:text-emerald-400 px-4 text-[15px] bg-emerald-500/5">
-                                            {(Number(row.targetStock) || 0).toFixed(1)}
-                                        </TableCell>
-
-                                        <TableCell
-                                            className="text-right font-mono font-black text-purple-700 dark:text-purple-400 text-[14px] px-4">
-                                            {(Number(row.mav) || 0).toFixed(2)}
-                                        </TableCell>
-
-                                        <TableCell
-                                            className="text-right font-mono font-black text-blue-800 dark:text-blue-300 text-[14px] px-4 bg-blue-50/40 dark:bg-blue-900/20 border-x border-blue-100 dark:border-blue-900/30">
-                                            {(Number(row.currentStockBoxes) || 0).toFixed(2)}
-                                        </TableCell>
-
-                                        <TableCell
-                                            className="text-right font-mono font-black text-indigo-600 dark:text-indigo-400 text-[14px] px-4">
-                                            {(row.inTransitBoxes || 0).toFixed(1)}
-                                        </TableCell>
-
-                                        <TableCell
-                                            className="text-right font-mono font-black text-slate-500 dark:text-slate-400 text-[13px] px-4 italic">
-                                            {(row.dailyUsage || 0).toFixed(2)}
-                                        </TableCell>
-
-                                        <TableCell
-                                            className="text-right font-mono font-black text-slate-900 dark:text-slate-100 px-4 text-[14px]">
-                                            ₱{(row.totalAmount || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
-                                        </TableCell>
-
-                                        <TableCell
-                                            className="text-right font-mono font-black text-slate-600 dark:text-slate-300 text-[14px] px-4">
+                                        <TableCell className="text-right font-mono font-black text-slate-600 dark:text-slate-300 text-[14px] px-4">
                                             <TooltipProvider>
                                                 <Tooltip delayDuration={100}>
                                                     <TooltipTrigger asChild>
-                                <span className="cursor-help underline decoration-dotted decoration-slate-400">
-                                  ₱{(Number(row.computedPricePerBox) || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
-                                </span>
+                                                        <span className="cursor-help underline decoration-dotted decoration-slate-400">
+                                                            ₱{(Number(row.computedPricePerBox) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                        </span>
                                                     </TooltipTrigger>
-                                                    <TooltipContent
-                                                        className="bg-slate-900 text-white text-[10px] p-2 font-bold uppercase border-slate-700 shadow-xl">
-                                                        ₱{(Number(row.last_cost || row.lastCost) || 0).toLocaleString(undefined, {minimumFractionDigits: 2})} per
-                                                        Piece × {row.boxMultiplier} Units
+                                                    <TooltipContent className="bg-slate-900 text-white text-[10px] p-2 font-bold uppercase border-slate-700 shadow-xl">
+                                                        ₱{(Number(row.last_cost || row.lastCost) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} per Piece × {row.boxMultiplier} Units
                                                     </TooltipContent>
                                                 </Tooltip>
                                             </TooltipProvider>
                                         </TableCell>
 
-                                        <TableCell
-                                            className="text-right text-red-600 font-mono font-black text-[14px] px-4">
+                                        <TableCell className="text-right text-red-600 font-mono font-black text-[14px] px-4">
                                             {Math.abs(row.expectedSelloutBoxes || 0).toFixed(1)}
                                         </TableCell>
 
                                         <TableCell className="px-6 text-center">
-                                            <div
-                                                className={cn("px-3 py-2 rounded-xl text-[11px] font-black uppercase inline-flex items-center gap-1.5 shadow-sm border", statusStyles)}>
-                                                <StatusIcon className="w-3.5 h-3.5"/> {row.inventoryStatus || "OK"}
+                                            <div className={cn("px-3 py-2 rounded-xl text-[11px] font-black uppercase inline-flex items-center gap-1.5 shadow-sm border", statusStyles)}>
+                                                <StatusIcon className="w-3.5 h-3.5" /> {row.inventoryStatus || "OK"}
                                             </div>
                                         </TableCell>
                                     </TableRow>
@@ -625,35 +432,16 @@ export default function HistoricalPlanningTable({
                 </div>
 
                 {/* Pagination */}
-                <div
-                    className="p-4 sm:p-6 lg:p-8 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800 rounded-b-[2rem] sm:rounded-b-[2.5rem]">
+                <div className="p-4 sm:p-6 lg:p-8 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800 rounded-b-[2rem] sm:rounded-b-[2.5rem]">
                     <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 lg:gap-8 w-full">
                         <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 flex-wrap">
                             <div className="flex items-center gap-2">
-                                <span
-                                    className="text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase">Show</span>
-
-                                <Select
-                                    value={rowsPerPage.toString()}
-                                    onValueChange={(val) => {
-                                        setRowsPerPage(parseInt(val))
-                                        setCurrentPage(1)
-                                    }}
-                                >
-                                    {/* ✅ FIX: explicit text colors for LIGHT MODE */}
-                                    <SelectTrigger
-                                        className={cn(
-                                            "h-9 w-[120px] text-[12px] font-black rounded-xl shadow-sm",
-                                            "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950",
-                                            "text-slate-900 dark:text-slate-100",
-                                            "[&>span]:text-slate-900 dark:[&>span]:text-slate-100"
-                                        )}
-                                    >
-                                        <SelectValue/>
+                                <span className="text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase">Show</span>
+                                <Select value={rowsPerPage.toString()} onValueChange={(val) => { setRowsPerPage(parseInt(val)); setCurrentPage(1); }}>
+                                    <SelectTrigger className={cn("h-9 w-[120px] text-[12px] font-black rounded-xl shadow-sm", "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950", "text-slate-900 dark:text-slate-100", "[&>span]:text-slate-900 dark:[&>span]:text-slate-100")}>
+                                        <SelectValue />
                                     </SelectTrigger>
-
-                                    <SelectContent
-                                        className="rounded-xl border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+                                    <SelectContent className="rounded-xl border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100">
                                         <SelectItem value="10">10 Rows</SelectItem>
                                         <SelectItem value="20">20 Rows</SelectItem>
                                         <SelectItem value="50">50 Rows</SelectItem>
@@ -661,65 +449,27 @@ export default function HistoricalPlanningTable({
                                     </SelectContent>
                                 </Select>
                             </div>
-
-                            <div className="hidden sm:block h-8 w-px bg-slate-200 dark:bg-slate-800"/>
-
-                            {/* ✅ FIX: explicit text colors for LIGHT MODE */}
-                            <span
-                                className="text-[12px] font-black text-slate-700 dark:text-slate-400 uppercase tracking-widest min-w-[200px]">
-                Showing {(currentPage - 1) * rowsPerPage + 1} - {Math.min(currentPage * rowsPerPage, filteredAndSortedData.length)} of{" "}
-                                {filteredAndSortedData.length} Products
-              </span>
+                            <div className="hidden sm:block h-8 w-px bg-slate-200 dark:bg-slate-800" />
+                            <span className="text-[12px] font-black text-slate-700 dark:text-slate-400 uppercase tracking-widest min-w-[200px]">
+                                Showing {(currentPage - 1) * rowsPerPage + 1} - {Math.min(currentPage * rowsPerPage, filteredAndSortedData.length)} of {filteredAndSortedData.length} Products
+                            </span>
                         </div>
 
-                        <div
-                            className="flex items-center justify-between sm:justify-end gap-2 bg-white dark:bg-slate-950 p-2 lg:p-3 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm w-full lg:w-auto">
-                            {/* ✅ FIX: explicit icon/text color for LIGHT MODE */}
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-10 w-10 rounded-xl text-slate-800 dark:text-slate-200 hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-slate-900 dark:hover:text-blue-400 disabled:opacity-40"
-                                onClick={() => setCurrentPage(1)}
-                                disabled={currentPage === 1}
-                            >
-                                <ChevronsLeft className="w-5 h-5"/>
+                        <div className="flex items-center justify-between sm:justify-end gap-2 bg-white dark:bg-slate-950 p-2 lg:p-3 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm w-full lg:w-auto">
+                            <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl text-slate-800 dark:text-slate-200 hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-slate-900 dark:hover:text-blue-400 disabled:opacity-40" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}>
+                                <ChevronsLeft className="w-5 h-5" />
                             </Button>
-
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-10 w-10 rounded-xl text-slate-800 dark:text-slate-200 hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-slate-900 dark:hover:text-blue-400 disabled:opacity-40"
-                                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                                disabled={currentPage === 1}
-                            >
-                                <ChevronLeft className="w-5 h-5"/>
+                            <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl text-slate-800 dark:text-slate-200 hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-slate-900 dark:hover:text-blue-400 disabled:opacity-40" onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}>
+                                <ChevronLeft className="w-5 h-5" />
                             </Button>
-
-                            <div
-                                className="flex items-center px-4 sm:px-6 h-10 bg-blue-600 rounded-xl shadow-md shadow-blue-500/20 whitespace-nowrap min-w-[120px] justify-center">
-                <span className="text-[12px] font-black text-white uppercase tracking-tighter">
-                  Page {currentPage} of {totalPages}
-                </span>
+                            <div className="flex items-center px-4 sm:px-6 h-10 bg-blue-600 rounded-xl shadow-md shadow-blue-500/20 whitespace-nowrap min-w-[120px] justify-center">
+                                <span className="text-[12px] font-black text-white uppercase tracking-tighter">Page {currentPage} of {totalPages}</span>
                             </div>
-
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-10 w-10 rounded-xl text-slate-800 dark:text-slate-200 hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-slate-900 dark:hover:text-blue-400 disabled:opacity-40"
-                                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                                disabled={currentPage === totalPages}
-                            >
-                                <ChevronRight className="w-5 h-5"/>
+                            <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl text-slate-800 dark:text-slate-200 hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-slate-900 dark:hover:text-blue-400 disabled:opacity-40" onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
+                                <ChevronRight className="w-5 h-5" />
                             </Button>
-
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-10 w-10 rounded-xl text-slate-800 dark:text-slate-200 hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-slate-900 dark:hover:text-blue-400 disabled:opacity-40"
-                                onClick={() => setCurrentPage(totalPages)}
-                                disabled={currentPage === totalPages}
-                            >
-                                <ChevronsRight className="w-5 h-5"/>
+                            <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl text-slate-800 dark:text-slate-200 hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-slate-900 dark:hover:text-blue-400 disabled:opacity-40" onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}>
+                                <ChevronsRight className="w-5 h-5" />
                             </Button>
                         </div>
                     </div>

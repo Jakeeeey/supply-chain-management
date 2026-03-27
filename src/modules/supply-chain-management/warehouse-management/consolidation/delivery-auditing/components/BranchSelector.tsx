@@ -61,7 +61,7 @@ export function BranchSelector({
                             <div className="flex flex-col items-start truncate">
                                 <span
                                     className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 leading-none mb-1">
-                                    Active Terminal
+                                    Branches
                                 </span>
                                 <span className="font-bold text-sm truncate">
                                     {selectedBranch ? selectedBranch.branchName : "Select Branch..."}
