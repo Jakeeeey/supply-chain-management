@@ -260,10 +260,6 @@ const data = {
                                 },
                             ],
                         },
-                        {
-                            title: "Dispatch Clearance",
-                            url: "/scm/fleet-management/trip-management/dispatch-clearance",
-                        },
                     ],
                 },
                 {
