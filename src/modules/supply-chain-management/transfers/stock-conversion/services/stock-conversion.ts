@@ -190,6 +190,7 @@ export async function fetchStockList(
         brand: brandMap.get(brandId) || "Unknown",
         category: catMap.get(categoryId) || "Unknown",
         productCode: p.product_code || "",
+        productName: p.product_name || "",
         productDescription: p.description || p.product_name || "",
         family: `FAM-${parentId}`,
         currentUnit: unitMap.get(unitId) || "Unknown",

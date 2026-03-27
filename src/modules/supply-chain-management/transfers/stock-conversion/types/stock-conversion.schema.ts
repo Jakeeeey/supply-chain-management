@@ -17,6 +17,7 @@ export const stockConversionProductSchema = z.object({
   brand: z.string(),
   category: z.string(),
   productCode: z.string().optional(),
+  productName: z.string().optional(),
   productDescription: z.string(),
   family: z.string().optional(),
   conversionFactor: z.number().optional(), // multiplier vs base unit

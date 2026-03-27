@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useStockConversion } from "./hooks/useStockConversion";
 import { StockConversionTable } from "./components/StockConversionTable";
 import { StockConversionModal } from "./components/StockConversionModal";
@@ -19,10 +19,28 @@ interface StockConversionModuleProps {
 }
 
 export default function StockConversionModule({ user }: StockConversionModuleProps) {
+  const [selectedBranchId, setSelectedBranchId] = useState<number | undefined>(user?.branchId);
+  const [branches, setBranches] = useState<{ id: number; branch_name: string }[]>([]);
+
+  useEffect(() => {
+    const fetchBranches = async () => {
+      try {
+        const res = await fetch("/api/scm/inventory-management/branch-management");
+        const json = await res.json();
+        if (json.branches) {
+          setBranches(json.branches);
+        }
+      } catch (e) {
+        console.error("Failed to fetch branches", e);
+      }
+    };
+    fetchBranches();
+  }, []);
+
   const { 
     data, totalCount, page, pageSize, setPage, setPageSize,
     isLoading, error, refresh, loadInventory, loadProductsInventory, convertStock 
-  } = useStockConversion(user?.branchId);
+  } = useStockConversion(selectedBranchId);
   
   const [selectedProduct, setSelectedProduct] = useState<StockConversionProduct | null>(null);
   
@@ -75,7 +93,7 @@ export default function StockConversionModule({ user }: StockConversionModulePro
       quantityToConvert: pendingConversion.qtyToConvert,
       convertedQuantity: pendingConversion.convertedQuantity,
       pricePerUnit: selectedProduct.pricePerUnit || 0,
-      branchId: user?.branchId || 190, // Use branchId from session or fallback
+      branchId: selectedBranchId || user?.branchId || 190, // Use selected or fallback
       userId: user?.id || 24, // Use userId from session or fallback
       rfidTags: tags
     };
@@ -126,6 +144,9 @@ export default function StockConversionModule({ user }: StockConversionModulePro
          onRefresh={loadInventory}
          loadProductsInventory={loadProductsInventory}
          isLoading={isLoading}
+         branches={branches}
+         selectedBranchId={selectedBranchId}
+         onBranchChange={setSelectedBranchId}
       />
 
       <StockConversionModal

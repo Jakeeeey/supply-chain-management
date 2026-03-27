@@ -248,6 +248,12 @@ export function useStockConversion(branchId?: number) {
     refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    if (hasBeganGlobalFetch && branchId !== undefined) {
+      loadInventory();
+    }
+  }, [branchId, loadInventory]);
+
   return {
     data,
     totalCount,

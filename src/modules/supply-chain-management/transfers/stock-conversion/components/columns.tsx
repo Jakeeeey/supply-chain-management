@@ -23,8 +23,8 @@ export const getColumns = (
     header: "CATEGORY",
   },
   {
-    accessorKey: "productDescription",
-    header: "PRODUCT DESCRIPTION",
+    accessorKey: "productName",
+    header: "PRODUCT NAME",
   },
   {
     accessorKey: "currentUnit",

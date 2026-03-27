@@ -38,11 +38,15 @@ interface StockConversionTableProps {
   onRefresh: (filters?: any) => void;
   loadProductsInventory: (productIds: number[]) => void;
   isLoading?: boolean;
+  branches?: any[];
+  selectedBranchId?: number;
+  onBranchChange?: (branchId: number) => void;
 }
 
 export function StockConversionTable({ 
   data, page, pageSize, setPage, setPageSize,
-  onConvertClick, onRefresh, loadProductsInventory, isLoading 
+  onConvertClick, onRefresh, loadProductsInventory, isLoading,
+  branches, selectedBranchId, onBranchChange
 }: StockConversionTableProps) {
   const [brandFilter, setBrandFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -70,7 +74,7 @@ export function StockConversionTable({
       
       const q = searchQuery.trim().toLowerCase();
       const matchSearch = q.length === 0 || 
-        (String(item.productDescription || "").toLowerCase().includes(q)) || 
+        (String(item.productName || item.productDescription || "").toLowerCase().includes(q)) || 
         (String(item.productCode || "").toLowerCase().includes(q)) ||
         (String(item.supplierName || "").toLowerCase().includes(q)) ||
         (String(item.brand || "").toLowerCase().includes(q)) ||
@@ -142,6 +146,22 @@ export function StockConversionTable({
            </div>
 
            <div className="h-4 w-px bg-border mx-1 hidden sm:block" />
+
+           <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-foreground flex items-center gap-1">
+                Branch:
+              </span>
+              <Select value={selectedBranchId ? String(selectedBranchId) : ""} onValueChange={(val) => onBranchChange?.(Number(val))}>
+                <SelectTrigger className="w-[180px] bg-background">
+                  <SelectValue placeholder="Select Branch" />
+                </SelectTrigger>
+                <SelectContent position="popper" className="z-50 bg-background max-h-[300px]">
+                  {branches?.map(b => (
+                    <SelectItem key={b.id} value={String(b.id)}>{b.branch_name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+           </div>
 
            <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-foreground flex items-center gap-1">
