@@ -201,6 +201,43 @@ export function UpdateSalesReturnModal({
     }
   }, [returnId, headerData.returnNo, headerData.customerCode]);
 
+  // 🟢 NEW: Effect to automatically update prices when Price Type changes
+  useEffect(() => {
+    if (details.length > 0) {
+      setDetails((prevDetails) =>
+        prevDetails.map((item) => {
+          const key = `price${headerData.priceType}` as string;
+          const basePrice = Number(item[key as keyof SalesReturnItem]) || Number(item.priceA) || Number(item.unitPrice) || 0;
+          
+          const newUnitPrice = item.unit === "BOX" 
+            ? basePrice * (item.unitMultiplier || 1) 
+            : basePrice;
+          
+          const newGross = Number(item.quantity) * newUnitPrice;
+          let newDiscountAmt = 0;
+
+          if (item.discountType && item.discountType !== "No Discount") {
+            const selectedOption = discountOptions.find(
+              (d) => d.id.toString() === item.discountType?.toString(),
+            );
+            if (selectedOption) {
+              const percentage = parseFloat(selectedOption.percentage) || 0;
+              newDiscountAmt = newGross * (percentage / 100);
+            }
+          }
+
+          return {
+            ...item,
+            unitPrice: newUnitPrice,
+            grossAmount: newGross,
+            discountAmount: newDiscountAmt,
+            totalAmount: newGross - newDiscountAmt,
+          };
+        })
+      );
+    }
+  }, [headerData.priceType, discountOptions]);
+
   // Click outside handler for order/invoice dropdowns
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -264,12 +301,28 @@ export function UpdateSalesReturnModal({
     setValidationError(null);
 
     try {
+      // 🟢 NEW: Global Duplicate Check
+      const dupCheck = await SalesReturnProvider.checkRfidDuplicate(tag);
+      if (dupCheck.isDuplicate && dupCheck.returnNo !== headerData.returnNo) {
+        const errorMsg = `RFID tag "${tag}" is already linked to SR #${dupCheck.returnNo}.`;
+        setValidationError(errorMsg);
+        toast.error(errorMsg, {
+          description: "This tag cannot be returned again as it exists in another record.",
+          duration: 6000,
+        });
+        return;
+      }
+
       const result = await SalesReturnProvider.lookupRfid(tag, branchId);
 
       if (!result || !result.productId) {
-        setValidationError(
-          `No product found for RFID "${tag}" at this branch.`,
-        );
+        const branchName = salesmanOpt?.branch || "this branch";
+        const errorMsg = `RFID tag "${tag}" is NOT registered to ${branchName}.`;
+        setValidationError(errorMsg);
+        toast.error(errorMsg, {
+          description: "Please check if the scan is correct or if the item is in the wrong location.",
+          duration: 5000,
+        });
         return;
       }
 
@@ -298,18 +351,29 @@ export function UpdateSalesReturnModal({
         reason: "",
         returnType: "",
         rfidTags: [tag],
+        priceA: result.priceA,
+        priceB: result.priceB,
+        priceC: result.priceC,
+        priceD: result.priceD,
+        priceE: result.priceE,
+        unitMultiplier: result.unitMultiplier || 1,
       };
 
       setDetails((prev) => [...prev, newItem]);
+      toast.success(`Successfully scanned: ${result.productName}`, {
+        description: `RFID: ${tag} | Registered to ${salesmanOpt?.branch || "branch"}`,
+      });
 
       // Auto-clear display after 2 seconds
       setTimeout(() => setLastScannedRfid(""), 2000);
     } catch (err: unknown) {
       console.error("RFID lookup error:", err);
       const error = err as Error;
-      setValidationError(
-        error.message || `Failed to look up RFID tag "${tag}".`,
-      );
+      const errorMsg = `Failed to look up RFID tag "${tag}".`;
+      setValidationError(error.message || errorMsg);
+      toast.error(errorMsg, {
+        description: error.message || "An unexpected error occurred during scan.",
+      });
     } finally {
       setRfidScanning(false);
     }
@@ -378,62 +442,31 @@ export function UpdateSalesReturnModal({
     setDetails((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleAddProductsToEdit = (newItems: (Partial<SalesReturnItem> & { price?: number, product_name?: string })[]) => {
-    if (!newItems || newItems.length === 0) return;
-
+  const handleConfirmProductLookup = (newItems: SalesReturnItem[]) => {
     setDetails((prev) => {
       const updated = [...prev];
-      newItems.forEach((item, index) => {
-        const rawId = item.product_id || item.productId || item.id;
-        const productId = Number(rawId);
-
-        const isRfidItem = !!item.rfidTags && item.rfidTags.length > 0;
-        const existingIndex = updated.findIndex(
-          (i) => {
-            const existingIsRfid = !!i.rfidTags && i.rfidTags.length > 0;
-            return i.productId === productId && i.unit === item.unit && existingIsRfid === isRfidItem;
-          }
+      newItems.forEach((item) => {
+        // Find if already exists in details (by productId and unit)
+        const existingIdx = updated.findIndex(
+          (d) => d.product_id === item.productId && d.unit === item.unit
         );
-        const qty = Number(item.quantity) || 1;
-
-        if (existingIndex >= 0) {
-          const existing = updated[existingIndex];
-          existing.quantity = Number(existing.quantity || 0) + qty;
-          existing.grossAmount = existing.quantity * existing.unitPrice;
-
-          if (existing.discountType && existing.discountType !== "No Discount") {
-            const selectedDisc = discountOptions.find(
-              (d) => d.id.toString() === existing.discountType?.toString()
-            );
-            if (selectedDisc) {
-              const percentage = parseFloat(selectedDisc.percentage);
-              existing.discountAmount = existing.grossAmount * (percentage / 100);
-            }
-          }
-
-          existing.totalAmount = existing.grossAmount - (Number(existing.discountAmount) || 0);
-          if (item.rfidTags) {
-            existing.rfidTags = [...(existing.rfidTags || []), ...item.rfidTags];
-          }
+        if (existingIdx !== -1) {
+          // Increment quantity
+          const existing = updated[existingIdx];
+          const newQty = (Number(existing.quantity) || 0) + (Number(item.quantity) || 0);
+          const newGross = newQty * Number(existing.unitPrice || 0);
+          updated[existingIdx] = {
+            ...existing,
+            quantity: newQty,
+            grossAmount: newGross,
+            totalAmount: newGross - (Number(existing.discountAmount) || 0),
+          };
         } else {
-          const price = Number(item.unitPrice) || Number(item.price) || 0;
-          const gross = price * qty;
-          const discAmt = Number(item.discountAmount) || 0;
-
+          // Add as new row
           updated.push({
-            id: `added-${Date.now()}-${index}-${Math.floor(Math.random() * 10000)}`,
-            productId: productId,
-            code: item.code || "N/A",
-            description: item.description || item.product_name || "Unknown Item",
-            unit: item.unit || "Pcs",
-            quantity: qty,
-            unitPrice: price,
-            grossAmount: gross,
-            discountType: item.discountType || null,
-            discountAmount: discAmt,
-            totalAmount: gross - discAmt,
-            reason: item.reason || "",
-            returnType: item.returnType || "",
+            ...item,
+            id: `new-${Date.now()}-${Math.random()}`, // Temp ID for new rows
+            product_id: item.productId,
           });
         }
       });
@@ -671,7 +704,7 @@ export function UpdateSalesReturnModal({
             <ReadOnlyField label="Return Date" value={headerData.returnDate} />
             <ReadOnlyField label="Received Date" value={headerData.createdAt} />
             <ReadOnlyField label="Price Type" value={headerData.priceType} />
-
+            
             <div className="flex items-center space-x-2 pt-2 col-span-2 lg:col-span-4">
               <Checkbox
                 id="isThirdParty"
@@ -733,7 +766,8 @@ export function UpdateSalesReturnModal({
                           ? "Looking up..."
                           : lastScannedRfid
                             ? `✓ ${lastScannedRfid.slice(0, 16)}...`
-                            : details.filter((i) => i.rfidTags && i.rfidTags.length > 0).length > 0
+                            : details.filter((i) => i.rfidTags && i.rfidTags.length > 0)
+                                .length > 0
                               ? `${details.filter((i) => i.rfidTags && i.rfidTags.length > 0).length} RFID items`
                               : "Scan RFID..."}
                       </div>
@@ -741,8 +775,8 @@ export function UpdateSalesReturnModal({
                   </div>
                   <Button
                     size="sm"
-                    className="bg-primary hover:bg-primary text-white gap-2 shadow-md shadow-primary/20"
                     onClick={() => setIsProductLookupOpen(true)}
+                    className="bg-primary hover:bg-primary text-white shadow-primary/20 shadow-md h-9 gap-2"
                   >
                     <Plus className="h-4 w-4" /> Add Product
                   </Button>
@@ -966,7 +1000,7 @@ export function UpdateSalesReturnModal({
                             // Find the true index in details
                             const idx = details.findIndex(d => d === item);
                             const rType = item.returnType || "Unassigned";
-                            const key = `${item.productId}-${item.unit}-${rType}`;
+                            const key = `${item.productId}-${item.unit}-${item.unitPrice}-${rType}`;
                             if (!acc[key]) {
                               acc[key] = {
                                 key,
@@ -1491,15 +1525,6 @@ export function UpdateSalesReturnModal({
         </div>
       </DialogContent>
 
-      {/* --- NESTED MODALS --- */}
-      {isProductLookupOpen && (
-        <ProductLookupModal
-          isOpen={isProductLookupOpen}
-          onClose={() => setIsProductLookupOpen(false)}
-          onConfirm={handleAddProductsToEdit}
-        />
-      )}
-
       {/* 2. INVOICE LOOKUP - 🟢 REVISED: Shows Amount */}
       <Dialog open={isInvoiceLookupOpen} onOpenChange={setIsInvoiceLookupOpen}>
         <DialogContent className="max-w-md">
@@ -1567,6 +1592,13 @@ export function UpdateSalesReturnModal({
           </div>
         </DialogContent>
       </Dialog>
+
+      <ProductLookupModal
+        isOpen={isProductLookupOpen}
+        onClose={() => setIsProductLookupOpen(false)}
+        onConfirm={handleConfirmProductLookup}
+        priceType={headerData.priceType || "A"}
+      />
 
       {/* CONFIRM DIALOGS (Update, Success, Receive) remain same structure */}
       <Dialog open={isUpdateConfirmOpen} onOpenChange={setIsUpdateConfirmOpen}>

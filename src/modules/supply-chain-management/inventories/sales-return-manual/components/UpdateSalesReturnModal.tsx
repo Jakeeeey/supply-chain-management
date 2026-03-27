@@ -197,6 +197,43 @@ export function UpdateSalesReturnModal({
     }
   }, [returnId, headerData.returnNo, headerData.customerCode]);
 
+  // 🟢 NEW: Effect to automatically update prices when Price Type changes
+  useEffect(() => {
+    if (details.length > 0) {
+      setDetails((prevDetails) =>
+        prevDetails.map((item) => {
+          const key = `price${headerData.priceType}` as string;
+          const basePrice = Number(item[key as keyof SalesReturnItem]) || Number(item.priceA) || Number(item.unitPrice) || 0;
+          
+          const newUnitPrice = item.unit === "BOX" 
+            ? basePrice * (item.unitMultiplier || 1) 
+            : basePrice;
+          
+          const newGross = Number(item.quantity) * newUnitPrice;
+          let newDiscountAmt = 0;
+
+          if (item.discountType && item.discountType !== "No Discount") {
+            const selectedOption = discountOptions.find(
+              (d) => d.id.toString() === item.discountType?.toString(),
+            );
+            if (selectedOption) {
+              const percentage = parseFloat(selectedOption.percentage) || 0;
+              newDiscountAmt = newGross * (percentage / 100);
+            }
+          }
+
+          return {
+            ...item,
+            unitPrice: newUnitPrice,
+            grossAmount: newGross,
+            discountAmount: newDiscountAmt,
+            totalAmount: newGross - newDiscountAmt,
+          };
+        })
+      );
+    }
+  }, [headerData.priceType, discountOptions]);
+
   // Click outside handler for order/invoice dropdowns
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -282,7 +319,7 @@ export function UpdateSalesReturnModal({
         const existingIndex = updated.findIndex(
           (i) => {
             const existingIsRfid = !!i.rfidTags && i.rfidTags.length > 0;
-            return i.productId === productId && i.unit === item.unit && existingIsRfid === isRfidItem;
+            return i.productId === productId && i.unit === item.unit && i.unitPrice === Number(item.unitPrice) && existingIsRfid === isRfidItem;
           }
         );
         const qty = Number(item.quantity) || 1;
@@ -1371,6 +1408,7 @@ export function UpdateSalesReturnModal({
           isOpen={isProductLookupOpen}
           onClose={() => setIsProductLookupOpen(false)}
           onConfirm={handleAddProductsToEdit}
+          priceType={headerData.priceType || "A"} // 🟢 Pass prop
         />
       )}
 
@@ -1516,6 +1554,13 @@ export function UpdateSalesReturnModal({
           </div>
         </DialogContent>
       </Dialog>
+
+      <ProductLookupModal
+        isOpen={isProductLookupOpen}
+        onClose={() => setIsProductLookupOpen(false)}
+        onConfirm={handleAddProductsToEdit}
+        priceType={headerData.priceType || "A"}
+      />
 
       <Dialog
         open={isReceiveConfirmOpen}

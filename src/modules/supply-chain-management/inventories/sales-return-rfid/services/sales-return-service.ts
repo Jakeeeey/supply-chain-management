@@ -18,6 +18,7 @@ import type {
   ProductSupplierConnection,
   API_LineDiscount,
   API_SalesReturnType,
+  PriceTypeOption,
 } from "../type";
 
 import * as repo from "../repositories/sales-return-repository";
@@ -192,6 +193,12 @@ export async function fetchReturnDetails(
         : "",
       returnType: returnTypeObj ? returnTypeObj.type_name : "Good Order",
       rfidTags: rfidMap.get(detail.detail_id || detail.id) || [],
+      priceA: product.priceA,
+      priceB: product.priceB,
+      priceC: product.priceC,
+      priceD: product.priceD,
+      priceE: product.priceE,
+      unitMultiplier: product.unit_of_measurement_count || 1,
     } as SalesReturnItem;
   });
 }
@@ -207,9 +214,19 @@ export async function fetchReferences(): Promise<{
   branches: BranchOption[];
   lineDiscounts: API_LineDiscount[];
   returnTypes: API_SalesReturnType[];
+  priceTypes: PriceTypeOption[];
 }> {
   const [salesmenRes, customersRes, branchesRes, lineDiscountsRes, returnTypesRes] =
     await repo.getRawReferences();
+
+  // Fetch price types separately (not part of getRawReferences to avoid breaking the tuple)
+  let priceTypesData: PriceTypeOption[] = [];
+  try {
+    const priceTypesRes = await repo.getRawPriceTypes();
+    priceTypesData = ((priceTypesRes.data || []) as unknown as PriceTypeOption[]);
+  } catch (err) {
+    console.error("Failed to fetch price types:", err);
+  }
 
   const salesmenData = (salesmenRes.data || []) as any[];
   const customersData = (customersRes.data || []) as any[];
@@ -263,6 +280,7 @@ export async function fetchReferences(): Promise<{
     branches,
     lineDiscounts: (lineDiscountsRes.data || []) as unknown as API_LineDiscount[],
     returnTypes: (returnTypesRes.data || []) as unknown as API_SalesReturnType[],
+    priceTypes: priceTypesData,
   };
 }
 
@@ -656,6 +674,22 @@ export async function fetchRfidTags(
 }
 
 /**
+ * Checks if an RFID tag is already present in any sales return record.
+ */
+export async function checkRfidDuplicate(rfidTag: string) {
+  const result = await repo.checkRfidDuplicate(rfidTag);
+  if (result.data && result.data.length > 0) {
+    const firstMatch = result.data[0];
+    const returnNo = (firstMatch.sales_return_detail_id as any)?.return_no || "Unknown";
+    return {
+      isDuplicate: true,
+      returnNo,
+    };
+  }
+  return { isDuplicate: false };
+}
+
+/**
  * Looks up an RFID tag to find the associated product and returns product info.
  * Used for automatic product addition on RFID scan.
  */
@@ -670,6 +704,12 @@ export async function lookupRfid(
   unitPrice: number;
   unitShortcut: string;
   unitOfMeasurementCount: number;
+  priceA: number;
+  priceB?: number;
+  priceC?: number;
+  priceD?: number;
+  priceE?: number;
+  unitMultiplier?: number;
 } | null> {
   const results = await repo.getSpringRfidLookup(rfidTag, branchId, token);
   if (!results || results.length === 0) return null;
@@ -700,6 +740,12 @@ export async function lookupRfid(
       unitPrice: Number(product.priceA) || 0,
       unitShortcut: matchedUnit?.unit_shortcut || "Pcs",
       unitOfMeasurementCount: Number(product.unit_of_measurement_count) || 1,
+      priceA: Number(product.priceA) || 0,
+      priceB: Number(product.priceB) || 0,
+      priceC: Number(product.priceC) || 0,
+      priceD: Number(product.priceD) || 0,
+      priceE: Number(product.priceE) || 0,
+      unitMultiplier: Number(product.unit_of_measurement_count) || 1,
     };
   } catch (err) {
     console.error("[Sales Return RFID] Product lookup failed:", err);

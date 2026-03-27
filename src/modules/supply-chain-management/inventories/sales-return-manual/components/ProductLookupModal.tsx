@@ -32,9 +32,15 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: (items: SalesReturnItem[]) => void;
+  priceType: string; // 🟢 NEW
 }
 
-export function ProductLookupModal({ isOpen, onClose, onConfirm }: Props) {
+export function ProductLookupModal({
+  isOpen,
+  onClose,
+  onConfirm,
+  priceType = "A", // 🟢 NEW
+}: Props) {
   // --- STATES ---
   const [searchCode, setSearchCode] = useState("");
   const [filterName, setFilterName] = useState("");
@@ -208,6 +214,16 @@ export function ProductLookupModal({ isOpen, onClose, onConfirm }: Props) {
   );
 
   // --- HANDLERS ---
+
+  /**
+   * Resolves the correct unit price based on the selected priceType.
+   */
+  const resolvePrice = (product: Product, currentType: string): number => {
+    const key = `price${currentType}` as keyof Product;
+    const price = Number(product[key]) || Number(product.priceA) || 0;
+    return price;
+  };
+
   const handleAddItem = (
     product: Product,
     unitLabel: string,
@@ -215,7 +231,7 @@ export function ProductLookupModal({ isOpen, onClose, onConfirm }: Props) {
   ) => {
     setSelectedItems((prevItems) => {
       const existingItemIndex = prevItems.findIndex(
-        (item) => item.productId === product.product_id && item.unit === unitLabel,
+        (item) => item.productId === product.product_id && item.unit === unitLabel && item.unitPrice === selectedPrice,
       );
 
       if (existingItemIndex !== -1) {
@@ -250,6 +266,13 @@ export function ProductLookupModal({ isOpen, onClose, onConfirm }: Props) {
           totalAmount: selectedPrice,
           returnType: "Good Order",
           reason: "",
+          // 🟢 Store additional price info for recalculation
+          priceA: product.priceA,
+          priceB: product.priceB,
+          priceC: product.priceC,
+          priceD: product.priceD,
+          priceE: product.priceE,
+          unitMultiplier: product.unit_of_measurement_count || 1,
         };
         return [...prevItems, newItem];
       }
@@ -581,7 +604,8 @@ export function ProductLookupModal({ isOpen, onClose, onConfirm }: Props) {
 
                 {!isLoading &&
                   paginatedProducts.map((product) => {
-                    const safePricePcs = product.priceA ?? 0;
+                    const basePrice = resolvePrice(product, priceType);
+                    const safePricePcs = basePrice;
                     const boxMultiplier =
                       product.unit_of_measurement_count || 1;
                     const safePriceBox = safePricePcs * boxMultiplier;

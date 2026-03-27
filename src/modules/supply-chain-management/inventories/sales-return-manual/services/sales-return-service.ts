@@ -18,6 +18,7 @@ import type {
   ProductSupplierConnection,
   API_LineDiscount,
   API_SalesReturnType,
+  PriceTypeOption,
 } from "../type";
 
 import * as repo from "../repositories/sales-return-repository";
@@ -168,6 +169,12 @@ export async function fetchReturnDetails(
         ? Number(detail.sales_return_type_id)
         : "",
       returnType: returnTypeObj ? returnTypeObj.type_name : "Good Order",
+      priceA: product.priceA,
+      priceB: product.priceB,
+      priceC: product.priceC,
+      priceD: product.priceD,
+      priceE: product.priceE,
+      unitMultiplier: product.unit_of_measurement_count || 1,
     } as SalesReturnItem;
   });
 }
@@ -183,9 +190,19 @@ export async function fetchReferences(): Promise<{
   branches: BranchOption[];
   lineDiscounts: API_LineDiscount[];
   returnTypes: API_SalesReturnType[];
+  priceTypes: PriceTypeOption[];
 }> {
   const [salesmenRes, customersRes, branchesRes, lineDiscountsRes, returnTypesRes] =
     await repo.getRawReferences();
+
+  // Fetch price types separately (not part of getRawReferences to avoid breaking the tuple)
+  let priceTypesData: PriceTypeOption[] = [];
+  try {
+    const priceTypesRes = await repo.getRawPriceTypes();
+    priceTypesData = ((priceTypesRes.data || []) as unknown as PriceTypeOption[]);
+  } catch (err) {
+    console.error("Failed to fetch price types:", err);
+  }
 
   const salesmenData = (salesmenRes.data || []) as any[];
   const customersData = (customersRes.data || []) as any[];
@@ -239,6 +256,7 @@ export async function fetchReferences(): Promise<{
     branches,
     lineDiscounts: (lineDiscountsRes.data || []) as unknown as API_LineDiscount[],
     returnTypes: (returnTypesRes.data || []) as unknown as API_SalesReturnType[],
+    priceTypes: priceTypesData,
   };
 }
 

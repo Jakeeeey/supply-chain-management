@@ -173,19 +173,19 @@ export const SalesReturnPrintSlip = forwardRef<
       <hr className="border-black mb-4" />
 
       {/* --- FOOTER --- */}
-      <div className="flex justify-between items-end">
+      <div className="flex justify-between items-start">
         {/* Remarks (Left) */}
-        <div className="w-2/3">
+        <div className="flex-1">
           <span className="font-bold block mb-1">Remarks:</span>
-          <div className="text-sm border-b border-border pb-1 inline-block min-w-[300px]">
+          <div className="text-sm border-b border-border pb-1 min-w-[300px] max-w-[500px]">
             {data.remarks || "-"}
           </div>
         </div>
 
         {/* Grand Total (Right) */}
-        <div className="text-right">
-          <div className="text-xl font-bold flex gap-4">
-            <span>Grand Total:</span>
+        <div className="text-right pl-4">
+          <div className="text-xl font-bold flex flex-row items-baseline justify-end gap-3 whitespace-nowrap">
+            <span className="shrink-0 text-muted-foreground uppercase text-xs tracking-wider">Grand Total:</span>
             <span>
               {Number(data.totalAmount).toLocaleString(undefined, {
                 minimumFractionDigits: 2,

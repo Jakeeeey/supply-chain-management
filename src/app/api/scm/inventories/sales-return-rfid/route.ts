@@ -14,6 +14,7 @@ import {
   fetchStatusCard,
   fetchRfidTags,
   lookupRfid,
+  checkRfidDuplicate,
   submitReturn,
   updateReturn,
   updateStatus,
@@ -89,6 +90,13 @@ export async function GET(req: NextRequest) {
         }
         const data = await fetchStatusCard(Number(id));
         return json({ data });
+      }
+
+      case "check-rfid-duplicate": {
+        const rfid = url.searchParams.get("rfid");
+        if (!rfid) return json({ error: "rfid is required" }, 400);
+        const result = await checkRfidDuplicate(rfid);
+        return json({ data: result });
       }
 
       case "rfid-lookup": {

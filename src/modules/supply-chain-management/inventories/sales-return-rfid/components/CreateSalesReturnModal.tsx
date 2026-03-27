@@ -28,6 +28,7 @@ import {
   API_LineDiscount,
   API_SalesReturnType,
   InvoiceOption,
+  PriceTypeOption,
 } from "../type";
 
 // Import Child Modal
@@ -91,6 +92,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const [returnTypeOptions, setReturnTypeOptions] = useState<
     API_SalesReturnType[]
   >([]);
+  const [priceTypeOptions, setPriceTypeOptions] = useState<PriceTypeOption[]>([]);
 
   // INVOICE DATA LIST & DROPDOWN STATE
   const [invoiceOptions, setInvoiceOptions] = useState<InvoiceOption[]>([]);
@@ -112,6 +114,34 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   // --- 3. CART STATE ---
   const [items, setItems] = useState<SalesReturnItem[]>([]);
   const [isProductLookupOpen, setIsProductLookupOpen] = useState(false);
+
+  // --- 5. BRANCH LOCK STATE ---
+  const [lockedBranchId, setLockedBranchId] = useState<number | null>(null);
+
+  useEffect(() => {
+    const hasRfid = items.some((i) => i.rfidTags && i.rfidTags.length > 0);
+    if (!hasRfid) {
+      setLockedBranchId(null);
+    } else if (lockedBranchId === null && selectedSalesmanId) {
+      const salesman = salesmen.find((s) => s.id.toString() === selectedSalesmanId);
+      if (salesman && salesman.branchId) {
+        setLockedBranchId(salesman.branchId);
+      }
+    }
+  }, [items, selectedSalesmanId, salesmen, lockedBranchId]);
+
+  const currentSalesmanObj = salesmen.find((s) => s.id.toString() === selectedSalesmanId);
+  const currentBranchId = currentSalesmanObj?.branchId || null;
+  const isBranchLockedError = lockedBranchId !== null && currentBranchId !== null && lockedBranchId !== currentBranchId;
+
+  const handleClearItems = () => {
+    setItems([]);
+    setLockedBranchId(null);
+    if (currentBranchId) {
+      setLockedBranchId(currentBranchId);
+    }
+    toast.info("All items cleared. You may now scan items for the new branch.");
+  };
 
   // --- 4. SEARCHABLE DROPDOWN STATES ---
   const [isSalesmanOpen, setIsSalesmanOpen] = useState(false);
@@ -169,17 +199,34 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     setValidationError(null);
 
     try {
+      // 🟢 NEW: Global Duplicate Check
+      const dupCheck = await SalesReturnProvider.checkRfidDuplicate(tag);
+      if (dupCheck.isDuplicate) {
+        const errorMsg = `RFID tag "${tag}" is already linked to SR #${dupCheck.returnNo}.`;
+        setValidationError(errorMsg);
+        toast.error(errorMsg, {
+          description: "This tag cannot be returned again as it exists in another record.",
+          duration: 6000,
+        });
+        return;
+      }
+
       const result = await SalesReturnProvider.lookupRfid(tag, branchId);
 
       if (!result || !result.productId) {
-        setValidationError(
-          `No product found for RFID "${tag}" at this branch.`,
-        );
+        const errorMsg = `RFID tag "${tag}" is NOT registered to ${branchName || "this branch"}.`;
+        setValidationError(errorMsg);
+        toast.error(errorMsg, {
+          description: "Please check if the scan is correct or if the item is in the wrong location.",
+          duration: 5000,
+        });
         return;
       }
 
       if (items.some((i) => i.rfidTags?.includes(tag))) {
-        setValidationError(`RFID tag "${tag}" is already in the list.`);
+        const errorMsg = `RFID tag "${tag}" is already in the list.`;
+        setValidationError(errorMsg);
+        toast.warning(errorMsg);
         return;
       }
 
@@ -204,18 +251,30 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         reason: "",
         returnType: "",
         rfidTags: [tag],
+        // 🟢 Store additional price info for recalculation
+        priceA: result.priceA,
+        priceB: result.priceB,
+        priceC: result.priceC,
+        priceD: result.priceD,
+        priceE: result.priceE,
+        unitMultiplier: result.unitMultiplier || 1,
       };
 
       setItems((prev) => [...prev, newItem]);
+      toast.success(`Successfully scanned: ${result.productName}`, {
+        description: `RFID: ${tag} | Registered to ${branchName}`,
+      });
 
       // Auto-clear display after 2 seconds
       setTimeout(() => setLastScannedRfid(""), 2000);
     } catch (err: unknown) {
       console.error("RFID lookup error:", err);
       const error = err as Error;
-      setValidationError(
-        error.message || `Failed to look up RFID tag "${tag}".`,
-      );
+      const errorMsg = `Failed to look up RFID tag "${tag}".`;
+      setValidationError(error.message || errorMsg);
+      toast.error(errorMsg, {
+        description: error.message || "An unexpected error occurred during scan.",
+      });
     } finally {
       setRfidScanning(false);
     }
@@ -238,18 +297,21 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
             branchesData,
             lineDiscountData,
             returnTypesData,
+            priceTypesData,
           ] = await Promise.all([
             SalesReturnProvider.getFormSalesmen(),
             SalesReturnProvider.getFormCustomers(),
             SalesReturnProvider.getFormBranches(),
             SalesReturnProvider.getLineDiscounts(),
             SalesReturnProvider.getSalesReturnTypes(),
+            SalesReturnProvider.getPriceTypes(),
           ]);
           setSalesmen(salesmenData);
           setCustomers(customersData);
           setBranches(branchesData);
           setLineDiscountOptions(lineDiscountData);
           setReturnTypeOptions(returnTypesData);
+          setPriceTypeOptions(priceTypesData);
         } catch (error) {
           console.error("Failed to load form data", error);
         }
@@ -257,6 +319,41 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       loadData();
     }
   }, [isOpen]);
+
+  // 🟢 NEW: Effect to automatically update prices when Price Type changes
+  useEffect(() => {
+    if (items.length > 0) {
+      setItems((prevItems) =>
+        prevItems.map((item) => {
+          const basePrice = resolvePrice(item, priceType);
+          const newUnitPrice = item.unit === "BOX" 
+            ? basePrice * (item.unitMultiplier || 1) 
+            : basePrice;
+          
+          const newGross = item.quantity * newUnitPrice;
+          let newDiscountAmt = 0;
+
+          if (item.discountType) {
+            const selectedOption = lineDiscountOptions.find(
+              (d) => d.id.toString() === item.discountType?.toString(),
+            );
+            if (selectedOption) {
+              const percentage = parseFloat(selectedOption.percentage) || 0;
+              newDiscountAmt = newGross * (percentage / 100);
+            }
+          }
+
+          return {
+            ...item,
+            unitPrice: newUnitPrice,
+            grossAmount: newGross,
+            discountAmount: newDiscountAmt,
+            totalAmount: newGross - newDiscountAmt,
+          };
+        })
+      );
+    }
+  }, [priceType, lineDiscountOptions]);
 
   // --- 5b. FETCH INVOICES when salesman or customer changes ---
   useEffect(() => {
@@ -374,6 +471,11 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   );
 
   const handleSelectSalesman = (salesman: SalesmanOption) => {
+    const hasRfid = items.some((i) => i.rfidTags && i.rfidTags.length > 0);
+    if (hasRfid && lockedBranchId !== null && lockedBranchId !== salesman.branchId) {
+      toast.error("Current items are not registered to this branch. Change to the appropriate Branch to proceed.", { duration: 5000 });
+    }
+
     setSelectedSalesmanId(salesman.id.toString());
     setSalesmanSearch(salesman.name);
     setSalesmanCode(salesman.code);
@@ -439,6 +541,13 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       setValidationError("Please add at least one product.");
       return;
     }
+
+    if (isBranchLockedError) {
+      toast.error("Invalid Branch: Clear the products or revert the salesman to proceed.");
+      setValidationError("Invalid Branch: Clear the products or revert the salesman to proceed.");
+      return;
+    }
+
     // 🟢 REVISION: Added Validation for Order No.
     if (!orderNo.trim()) {
       toast.error("Order No. is required.");
@@ -514,7 +623,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         const existingIndex = updated.findIndex(
           (i) => {
             const existingIsRfid = !!i.rfidTags && i.rfidTags.length > 0;
-            return i.productId === productId && i.unit === item.unit && existingIsRfid === isRfidItem;
+            return i.productId === productId && i.unit === item.unit && i.unitPrice === Number(item.unitPrice) && existingIsRfid === isRfidItem;
           }
         );
         const qty = item.quantity || 1;
@@ -806,8 +915,21 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                     value={priceType}
                     onChange={(e) => setPriceType(e.target.value)}
                   >
-                    <option value="B">Type B</option>
-                    <option value="O">Type O</option>
+                    {priceTypeOptions.length > 0 ? (
+                      priceTypeOptions.map((pt) => (
+                        <option key={pt.price_type_id} value={pt.price_type_name}>
+                          Type {pt.price_type_name}
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="A">Type A</option>
+                        <option value="B">Type B</option>
+                        <option value="C">Type C</option>
+                        <option value="D">Type D</option>
+                        <option value="E">Type E</option>
+                      </>
+                    )}
                   </select>
                   <ChevronDown className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
@@ -876,10 +998,20 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                     </div>
                   </div>
                 </div>
+                {isBranchLockedError && (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={handleClearItems}
+                    className="shadow-md h-9 gap-2"
+                  >
+                    Clear All Items
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   onClick={handleOpenProductLookup}
-                  className="bg-primary hover:bg-primary text-white shadow-primary/20 shadow-md"
+                  className="bg-primary hover:bg-primary text-white shadow-primary/20 shadow-md h-9"
                 >
                   <Plus className="h-4 w-4 mr-1.5" /> Add Product
                 </Button>
@@ -1050,7 +1182,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                         items.filter(i => i.rfidTags && i.rfidTags.length > 0).reduce((acc, item, originalIdx) => {
                           const idx = items.findIndex(d => d === item);
                           const rType = item.returnType || "Unassigned";
-                          const key = `${item.productId}-${item.unit}-${rType}`;
+                          const key = `${item.productId}-${item.unit}-${item.unitPrice}-${rType}`;
                           if (!acc[key]) {
                             acc[key] = {
                               key,
@@ -1410,7 +1542,12 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
           </Button>
           <Button
             onClick={handleCreateReturn}
-            className="bg-primary hover:bg-primary text-white shadow-primary/20 shadow-lg"
+            disabled={isBranchLockedError}
+            className={`shadow-lg ${
+              isBranchLockedError
+                ? "bg-muted text-muted-foreground cursor-not-allowed"
+                : "bg-primary hover:bg-primary text-white shadow-primary/20"
+            }`}
           >
             <Save className="h-4 w-4 mr-2" />
             Create Sales Return
@@ -1422,6 +1559,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         isOpen={isProductLookupOpen}
         onClose={() => setIsProductLookupOpen(false)}
         onConfirm={handleAddProducts}
+        priceType={priceType} // 🟢 Pass prop
       />
 
       {/* SUCCESS MODAL */}

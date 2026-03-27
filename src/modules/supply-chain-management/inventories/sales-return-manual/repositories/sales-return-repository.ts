@@ -149,6 +149,15 @@ export async function getRawUnits() {
   return directusGet<{ data: Record<string, unknown>[] }>("/items/units?limit=-1");
 }
 
+/**
+ * Fetches price types from the price_types table (A, B, C, D, E).
+ */
+export async function getRawPriceTypes() {
+  return directusGet<{ data: Record<string, unknown>[] }>(
+    "/items/price_types?limit=-1&sort=sort",
+  );
+}
+
 // =============================================================================
 // REPOSITORY METHODS — WRITE
 // =============================================================================

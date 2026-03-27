@@ -146,6 +146,15 @@ export async function getRawUnits() {
   return directusGet<{ data: Record<string, unknown>[] }>("/items/units?limit=-1");
 }
 
+/**
+ * Fetches price types from the price_types table (A, B, C, D, E).
+ */
+export async function getRawPriceTypes() {
+  return directusGet<{ data: Record<string, unknown>[] }>(
+    "/items/price_types?limit=-1&sort=sort",
+  );
+}
+
 // =============================================================================
 // REPOSITORY METHODS — WRITE
 // =============================================================================
@@ -300,6 +309,15 @@ export async function deleteRfidTag(id: number) {
   );
 }
 
+/**
+ * Checks if an RFID tag is already used in ANY sales return record.
+ * This is used to prevent the same RFID from being returned multiple times.
+ */
+export async function checkRfidDuplicate(rfidTag: string) {
+  const url = `/items/sales_return_rfid?filter[rfid_tag][_eq]=${encodeURIComponent(rfidTag)}&fields=id,sales_return_detail_id.return_no`;
+  return directusGet<{ data: Record<string, unknown>[] }>(url);
+}
+
 // =============================================================================
 // REPOSITORY METHODS — RFID LOOKUP (Spring Boot VOS API)
 // =============================================================================
@@ -340,6 +358,6 @@ export async function getSpringRfidLookup(
  */
 export async function getRawProductById(productId: number) {
   return directusGet<{ data: Record<string, unknown> }>(
-    `/items/products/${productId}?fields=product_id,product_code,product_name,description,priceA,priceB,priceC,unit_of_measurement,unit_of_measurement_count`,
+    `/items/products/${productId}?fields=product_id,product_code,product_name,description,priceA,priceB,priceC,priceD,priceE,unit_of_measurement,unit_of_measurement_count`,
   );
 }

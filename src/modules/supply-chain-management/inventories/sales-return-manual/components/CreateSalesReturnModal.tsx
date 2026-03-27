@@ -27,6 +27,7 @@ import {
   API_LineDiscount,
   API_SalesReturnType,
   InvoiceOption,
+  PriceTypeOption,
 } from "../type";
 
 // Import Child Modal
@@ -86,6 +87,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const [returnTypeOptions, setReturnTypeOptions] = useState<
     API_SalesReturnType[]
   >([]);
+  const [priceTypeOptions, setPriceTypeOptions] = useState<PriceTypeOption[]>([]);
 
   // INVOICE DATA LIST & DROPDOWN STATE
   const [invoiceOptions, setInvoiceOptions] = useState<InvoiceOption[]>([]);
@@ -138,18 +140,21 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
             branchesData,
             lineDiscountData,
             returnTypesData,
+            priceTypesData,
           ] = await Promise.all([
             SalesReturnProvider.getFormSalesmen(),
             SalesReturnProvider.getFormCustomers(),
             SalesReturnProvider.getFormBranches(),
             SalesReturnProvider.getLineDiscounts(),
             SalesReturnProvider.getSalesReturnTypes(),
+            SalesReturnProvider.getPriceTypes(),
           ]);
           setSalesmen(salesmenData);
           setCustomers(customersData);
           setBranches(branchesData);
           setLineDiscountOptions(lineDiscountData);
           setReturnTypeOptions(returnTypesData);
+          setPriceTypeOptions(priceTypesData);
         } catch (error) {
           console.error("Failed to load form data", error);
         }
@@ -157,6 +162,41 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       loadData();
     }
   }, [isOpen]);
+
+  // 🟢 NEW: Effect to automatically update prices when Price Type changes
+  useEffect(() => {
+    if (items.length > 0) {
+      setItems((prevItems) =>
+        prevItems.map((item) => {
+          const basePrice = resolvePrice(item, priceType);
+          const newUnitPrice = item.unit === "BOX" 
+            ? basePrice * (item.unitMultiplier || 1) 
+            : basePrice;
+          
+          const newGross = item.quantity * newUnitPrice;
+          let newDiscountAmt = 0;
+
+          if (item.discountType) {
+            const selectedOption = lineDiscountOptions.find(
+              (d) => d.id.toString() === item.discountType?.toString(),
+            );
+            if (selectedOption) {
+              const percentage = parseFloat(selectedOption.percentage) || 0;
+              newDiscountAmt = newGross * (percentage / 100);
+            }
+          }
+
+          return {
+            ...item,
+            unitPrice: newUnitPrice,
+            grossAmount: newGross,
+            discountAmount: newDiscountAmt,
+            totalAmount: newGross - newDiscountAmt,
+          };
+        })
+      );
+    }
+  }, [priceType, lineDiscountOptions]);
 
   // --- 5b. FETCH INVOICES when salesman or customer changes ---
   useEffect(() => {
@@ -412,7 +452,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         const existingIndex = updated.findIndex(
           (i) => {
             const existingIsRfid = !!i.rfidTags && i.rfidTags.length > 0;
-            return i.productId === productId && i.unit === item.unit && existingIsRfid === isRfidItem;
+            return i.productId === productId && i.unit === item.unit && i.unitPrice === Number(item.unitPrice) && existingIsRfid === isRfidItem;
           }
         );
         const qty = item.quantity || 1;
@@ -704,8 +744,21 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                     value={priceType}
                     onChange={(e) => setPriceType(e.target.value)}
                   >
-                    <option value="B">Type B</option>
-                    <option value="O">Type O</option>
+                    {priceTypeOptions.length > 0 ? (
+                      priceTypeOptions.map((pt) => (
+                        <option key={pt.price_type_id} value={pt.price_type_name}>
+                          Type {pt.price_type_name}
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="A">Type A</option>
+                        <option value="B">Type B</option>
+                        <option value="C">Type C</option>
+                        <option value="D">Type D</option>
+                        <option value="E">Type E</option>
+                      </>
+                    )}
                   </select>
                   <ChevronDown className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
@@ -1294,6 +1347,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         isOpen={isProductLookupOpen}
         onClose={() => setIsProductLookupOpen(false)}
         onConfirm={handleAddProducts}
+        priceType={priceType} // 🟢 Pass prop
       />
 
       {/* SUCCESS MODAL */}
