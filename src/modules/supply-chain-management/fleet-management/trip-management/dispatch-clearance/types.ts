@@ -81,6 +81,9 @@ export interface DispatchRow {
   tripValue: number;
   budget: number;
   status: string;
+  vehicleType?: string;
+  branchName?: string;
+  clusterName?: string;
   invoices: ReconciliationRow[];
 }
 
@@ -94,6 +97,7 @@ export interface ReconciliationRow {
   customerName: string;
   amount: number;
   remarks?: string;
+  isCleared?: boolean;
   missingQtys?: Record<string | number, number>;
   scannedQtys?: Record<string | number, number>;
   scannedRFIDs?: Record<string | number, string[]>;

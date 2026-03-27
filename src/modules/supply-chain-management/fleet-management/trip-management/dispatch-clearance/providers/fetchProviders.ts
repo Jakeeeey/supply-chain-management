@@ -92,13 +92,13 @@ export const getJoinedDispatchData = async (
   return response.json();
 };
 
-export const submitClearance = async (dispatchId: number, invoices: ReconciliationRow[]): Promise<void> => {
+export const submitClearance = async (dispatchId: number, invoices: ReconciliationRow[], isPreSave: boolean = false): Promise<void> => {
   const response = await fetch('/api/scm/fleet-management/trip-management/dispatch-clearance', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ dispatchId, invoices }),
+    body: JSON.stringify({ dispatchId, invoices, isPreSave }),
   });
 
   if (!response.ok) {

@@ -112,6 +112,7 @@ export default function DetailsTab({ vehicle }: { vehicle: VehicleRow }) {
   const maxLiters = cleanStr(raw?.max_liters, "N/A");
   const cbmLength = cleanStr(raw?.cbm_length, "N/A");
   const cbmWidth = cleanStr(raw?.cbm_width, "N/A");
+  const cbmHeight = cleanStr(raw?.cbm_height, "N/A");
 
   return (
     <div className="grid gap-4">
@@ -188,6 +189,7 @@ export default function DetailsTab({ vehicle }: { vehicle: VehicleRow }) {
                 <Field label="Maximum Load" value={maxLoad} />
                 <Field label="CBM Length" value={cbmLength} />
                 <Field label="CBM Width" value={cbmWidth} />
+                <Field label="CBM Height" value={cbmHeight} />
               </div>
             </CardContent>
           </Card>
