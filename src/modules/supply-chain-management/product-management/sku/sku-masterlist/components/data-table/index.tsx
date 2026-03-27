@@ -5,7 +5,7 @@ import {
   SKU,
   MasterData,
 } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
-import { Skeleton } from "@/components/ui/skeleton";
+
 import { DataTable } from "@/components/ui/new-data-table";
 import { getMasterlistColumns } from "./columns";
 import { SortingState } from "@tanstack/react-table";
@@ -44,6 +44,7 @@ export function MasterlistTable({
   manualSorting = true,
   masterData,
   isLoading,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   title,
   onSearch,
   onSelectionChange,

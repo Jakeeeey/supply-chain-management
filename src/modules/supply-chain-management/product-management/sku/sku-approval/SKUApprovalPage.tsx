@@ -75,9 +75,9 @@ export default function SKUApprovalPage() {
           (item) => String(item.id || item.product_id) !== String(id),
         ),
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error("Activation Failed", {
-        description: err.message || "An error occurred during SKU activation.",
+        description: err instanceof Error ? err.message : "An error occurred during SKU activation.",
       });
     }
   };
@@ -86,7 +86,7 @@ export default function SKUApprovalPage() {
     setIsUpdating(true);
     try {
       const ids = selectedSKUs.map((sku) =>
-        String((sku as any).id || sku.product_id),
+        String(sku.id || sku.product_id),
       );
       await bulkApproveSKUs(ids);
       toast.success("Bulk Approval Successful", {
@@ -94,9 +94,9 @@ export default function SKUApprovalPage() {
       });
       setSelectedSKUs([]);
       setIsBulkApproveOpen(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error("Bulk Approval Failed", {
-        description: err.message || "Could not process bulk activation.",
+        description: err instanceof Error ? err.message : "Could not process bulk activation.",
       });
     } finally {
       setIsUpdating(false);
@@ -114,9 +114,9 @@ export default function SKUApprovalPage() {
       });
       setSelectedSKUs([]);
       setIsBulkRejectOpen(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error("Bulk Rejection Failed", {
-        description: err.message || "Could not process bulk rejection.",
+        description: err instanceof Error ? err.message : "Could not process bulk rejection.",
       });
     } finally {
       setIsUpdating(false);
@@ -137,9 +137,9 @@ export default function SKUApprovalPage() {
       });
       refresh();
       setRejectingSKU(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error("Process Failed", {
-        description: err.message || "Could not complete the rejection process.",
+        description: err instanceof Error ? err.message : "Could not complete the rejection process.",
       });
     } finally {
       setIsUpdating(false);
@@ -170,9 +170,9 @@ export default function SKUApprovalPage() {
       });
       refresh();
       setEditingSKU(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error("Update Failed", {
-        description: err.message || "Could not update the product description.",
+        description: err instanceof Error ? err.message : "Could not update the product description.",
       });
     } finally {
       setIsUpdating(false);
@@ -208,8 +208,8 @@ export default function SKUApprovalPage() {
         onSearch={handleSearch}
         masterData={masterData}
         isLoading={isLoading}
-        onApprove={handleApproveAndActivate as any}
-        onReject={handleReject as any}
+        onApprove={(id: number | string) => handleApproveAndActivate(id)}
+        onReject={(sku: SKU) => handleReject(sku)}
         onEdit={setEditingSKU}
         onSelectionChange={setSelectedSKUs}
         actionComponent={

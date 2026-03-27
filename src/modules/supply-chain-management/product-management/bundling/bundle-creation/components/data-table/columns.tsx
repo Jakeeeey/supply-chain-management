@@ -17,7 +17,6 @@ import { DataTableColumnHeader } from "./table-column-header";
 interface ColumnOptions {
   masterData: BundleMasterData | null;
   onSubmit: (id: number | string) => void;
-  onDelete: (id: number | string) => void;
   onView: (draft: BundleDraft) => void;
   onEdit: (id: number | string) => void;
 }
@@ -28,7 +27,6 @@ interface ColumnOptions {
 export function getDraftColumns({
   masterData,
   onSubmit,
-  onDelete,
   onView,
   onEdit,
 }: ColumnOptions): ColumnDef<BundleDraft>[] {

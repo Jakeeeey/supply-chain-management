@@ -33,7 +33,8 @@ export function RejectRemarksModal({
 
   const handleConfirm = async () => {
     if (!sku) return;
-    const id = (sku as any).id || (sku as any).product_id;
+    const id = sku.id || sku.product_id;
+    if (id == null) return;
     await onConfirm(id, remarks);
     setRemarks("");
     onClose();

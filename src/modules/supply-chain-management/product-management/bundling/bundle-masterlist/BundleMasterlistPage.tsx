@@ -15,6 +15,7 @@ import { useState } from "react";
 import { BundleViewModal } from "../components/modals/bundle-view-modal";
 
 export default function BundleMasterlistPage() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [selectedBundle, setSelectedBundle] = useState<any>(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
 
@@ -37,12 +38,14 @@ export default function BundleMasterlistPage() {
   } = useBundles();
 
   const handleView = (id: number) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const bundle = (approvedData as any[]).find((b) => b.id === id);
     setSelectedBundle(bundle || null);
     setIsViewOpen(true);
   };
 
   const fetchDetails = async (id: number | string) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const bundle = (approvedData as any[]).find((b) => b.id === id);
     const isApproved = bundle?.status === "APPROVED";
     const type = isApproved ? "approved" : "draft";
@@ -91,7 +94,7 @@ export default function BundleMasterlistPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
-                {masterData?.bundleTypes.map((t: any) => (
+                {masterData?.bundleTypes.map((t) => (
                   <SelectItem key={t.id} value={t.id.toString()}>
                     {t.name}
                   </SelectItem>
@@ -104,6 +107,7 @@ export default function BundleMasterlistPage() {
 
       {/* Data Table */}
       <BundleMasterlistTable
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         data={approvedData as any}
         totalCount={approvedTotal}
         pageIndex={approvedPage}

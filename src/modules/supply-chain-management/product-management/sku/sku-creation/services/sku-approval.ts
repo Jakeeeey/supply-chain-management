@@ -15,12 +15,12 @@ async function resolveParentMasterId(
 ): Promise<number | string | null> {
   if (!draft.parent_id) return null;
 
-  let parentCode = (draft.parent_id as any)?.product_code;
+  let parentCode = (draft.parent_id as unknown as { product_code?: string } | undefined)?.product_code;
 
   if (!parentCode) {
     const parentId =
       typeof draft.parent_id === "object"
-        ? (draft.parent_id as any).id
+        ? (draft.parent_id as unknown as { id: number }).id
         : draft.parent_id;
 
     const { data: pDraft } = await request<{ data: SKU }>(
@@ -71,7 +71,7 @@ async function upsertMasterProduct(
   } else {
     const res: {
       data: { id: number | string; product_id: number | string };
-    } = await request<{ data: any }>(`${API_BASE_URL}/items/products`, {
+    } = await request<{ data: { id: number | string; product_id: number | string } }>(`${API_BASE_URL}/items/products`, {
       method: "POST",
       body: JSON.stringify(payload),
     });
@@ -89,7 +89,7 @@ async function syncSupplierLink(
   draft: SKU,
   finalMasterId: number | string,
 ): Promise<void> {
-  const draftId = draft.id || (draft as any).product_id;
+  const draftId = draft.id || draft.product_id;
   let sId: number | null = null;
 
   try {
@@ -106,15 +106,15 @@ async function syncSupplierLink(
       const rawValue = draft.product_supplier;
       if (rawValue) {
         if (typeof rawValue === "object") {
-          sId = (rawValue as any).id;
+          sId = (rawValue as { id: number }).id;
         } else {
           const num = parseInt(String(rawValue));
           sId = isNaN(num) || num === 0 ? null : num;
         }
       }
     }
-  } catch (err: any) {
-    console.error(`[SKU Approval] Error fetching junction link:`, err.message);
+  } catch (err: unknown) {
+    console.error(`[SKU Approval] Error fetching junction link:`, err instanceof Error ? err.message : err);
   }
 
   const resolvedMasterId = (() => {
@@ -125,7 +125,7 @@ async function syncSupplierLink(
 
   if (sId && resolvedMasterId) {
     try {
-      const { data: existingLink } = await fetchItems<any>(
+      const { data: existingLink } = await fetchItems<Record<string, unknown>>(
         "/items/product_per_supplier",
         {
           filter: JSON.stringify({
@@ -139,7 +139,7 @@ async function syncSupplierLink(
       );
 
       if (!existingLink || existingLink.length === 0) {
-        await request<any>(`${API_BASE_URL}/items/product_per_supplier`, {
+        await request<unknown>(`${API_BASE_URL}/items/product_per_supplier`, {
           method: "POST",
           body: JSON.stringify({
             product_id: resolvedMasterId,
@@ -151,8 +151,8 @@ async function syncSupplierLink(
           `[SKU Approval] Linked Product ${resolvedMasterId} to Supplier ${sId}`,
         );
       }
-    } catch (linkErr: any) {
-      console.error("[SKU Approval] Linkage error:", linkErr.message);
+    } catch (linkErr: unknown) {
+      console.error("[SKU Approval] Linkage error:", linkErr instanceof Error ? linkErr.message : linkErr);
     }
   }
 }
@@ -167,7 +167,7 @@ async function handleOrphanAdoption(
   draft: SKU,
 ): Promise<void> {
   if (!draft.parent_id) {
-    const orphanConditions: any[] = [
+    const orphanConditions: Record<string, Record<string, unknown>>[] = [
       { product_name: { _eq: draft.product_name } },
       { parent_id: { _null: true } },
       { product_id: { _neq: finalMasterId } },
@@ -205,7 +205,7 @@ async function handleOrphanAdoption(
  * Tries PATCH first; falls back to DELETE if PATCH is rejected.
  */
 async function cleanupDraft(draft: SKU): Promise<void> {
-  const dId = draft.id || (draft as any).product_id;
+  const dId = draft.id || draft.product_id;
   try {
     await request(`${API_BASE_URL}/items/product_draft/${dId}`, {
       method: "PATCH",
@@ -216,10 +216,10 @@ async function cleanupDraft(draft: SKU): Promise<void> {
       await request(`${API_BASE_URL}/items/product_draft/${dId}`, {
         method: "DELETE",
       });
-    } catch (delErr: any) {
+    } catch (delErr: unknown) {
       console.error(
         `[SKU Approval] Failed to cleanup draft ${dId} after approval:`,
-        delErr.message,
+        delErr instanceof Error ? delErr.message : delErr,
       );
     }
   }

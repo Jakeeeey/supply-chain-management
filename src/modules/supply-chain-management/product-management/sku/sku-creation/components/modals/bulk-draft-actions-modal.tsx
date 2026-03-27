@@ -58,7 +58,7 @@ export function BulkDraftActionsModal({
             <ul className="space-y-2">
               {selectedSKUs.map((sku) => (
                 <li
-                  key={(sku as any).id || sku.product_id}
+                  key={sku.id || sku.product_id}
                   className="text-sm flex items-center justify-between"
                 >
                   <span className="truncate pr-4">{sku.product_name}</span>
