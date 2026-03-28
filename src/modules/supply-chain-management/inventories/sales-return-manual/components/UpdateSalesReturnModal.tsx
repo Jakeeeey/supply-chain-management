@@ -217,7 +217,7 @@ export function UpdateSalesReturnModal({
               (d) => d.id.toString() === item.discountType?.toString(),
             );
             if (selectedOption) {
-              const percentage = parseFloat(selectedOption.percentage) || 0;
+              const percentage = parseFloat(selectedOption.total_percent) || 0;
               newDiscountAmt = Math.round(newGross * (percentage / 100) * 100) / 100;
             }
           }
@@ -282,7 +282,7 @@ export function UpdateSalesReturnModal({
             (d) => d.id.toString() === value,
           );
           if (selectedDisc) {
-            const percentage = parseFloat(selectedDisc.percentage);
+            const percentage = parseFloat(selectedDisc.total_percent);
             const gross =
               Math.round(Number(item.quantity || 0) * Number(item.unitPrice || 0) * 100) / 100;
             item.discountAmount = Math.round(gross * (percentage / 100) * 100) / 100;
@@ -335,7 +335,7 @@ export function UpdateSalesReturnModal({
               (d) => d.id.toString() === existing.discountType?.toString()
             );
             if (selectedDisc) {
-              const percentage = parseFloat(selectedDisc.percentage);
+              const percentage = parseFloat(selectedDisc.total_percent);
               existing.discountAmount = Math.round(existing.grossAmount * (percentage / 100) * 100) / 100;
             }
           }
@@ -789,14 +789,14 @@ export function UpdateSalesReturnModal({
                                       <SelectItem value="No Discount">None</SelectItem>
                                       {discountOptions.map((opt) => (
                                         <SelectItem key={opt.id} value={opt.id.toString()}>
-                                          {opt.line_discount}
+                                          {opt.discount_type}
                                         </SelectItem>
                                       ))}
                                     </SelectContent>
                                   </Select>
                                 ) : (
                                   <span className="text-xs text-muted-foreground">
-                                    {discountOptions.find((d) => d.id.toString() == item.discountType)?.line_discount || "None"}
+                                    {discountOptions.find((d) => d.id.toString() == item.discountType)?.discount_type || "None"}
                                   </span>
                                 )}
                               </TableCell>
@@ -1050,7 +1050,7 @@ export function UpdateSalesReturnModal({
                                         key={opt.id}
                                         value={opt.id.toString()}
                                       >
-                                        {opt.line_discount}
+                                        {opt.discount_type}
                                       </SelectItem>
                                     ))}
                                   </SelectContent>
@@ -1059,7 +1059,7 @@ export function UpdateSalesReturnModal({
                                 <span className="text-sm text-muted-foreground">
                                   {discountOptions.find(
                                     (d) => d.id.toString() == item.discountType,
-                                  )?.line_discount || "None"}
+                                  )?.discount_type || "None"}
                                 </span>
                               )}
                             </TableCell>

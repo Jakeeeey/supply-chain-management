@@ -345,7 +345,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
               (d) => d.id.toString() === item.discountType?.toString(),
             );
             if (selectedOption) {
-              const percentage = parseFloat(selectedOption.percentage) || 0;
+              const percentage = parseFloat(selectedOption.total_percent) || 0;
               newDiscountAmt = Math.round(newGross * (percentage / 100) * 100) / 100;
             }
           }
@@ -706,7 +706,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
               (d) => d.id.toString() === existing.discountType?.toString(),
             );
             if (selectedOption) {
-              const percentage = parseFloat(selectedOption.percentage) || 0;
+              const percentage = parseFloat(selectedOption.total_percent) || 0;
               existing.discountAmount = Math.round((existing.grossAmount || 0) * (percentage / 100) * 100) / 100;
             }
           }
@@ -758,7 +758,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
             (d) => d.id.toString() === item.discountType?.toString(),
           );
           if (selectedOption) {
-            const percentage = parseFloat(selectedOption.percentage) || 0;
+            const percentage = parseFloat(selectedOption.total_percent) || 0;
             item.discountAmount = Math.round((item.grossAmount || 0) * (percentage / 100) * 100) / 100;
           }
         }
@@ -772,7 +772,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
             (d) => d.id.toString() === value.toString(),
           );
           if (selectedOption) {
-            const percentage = parseFloat(selectedOption.percentage) || 0;
+            const percentage = parseFloat(selectedOption.total_percent) || 0;
             item.discountAmount = Math.round((item.grossAmount || 0) * (percentage / 100) * 100) / 100;
           }
         }
@@ -1183,7 +1183,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                                 <option value="">None</option>
                                 {lineDiscountOptions.map((opt) => (
                                   <option key={opt.id} value={opt.id}>
-                                    {opt.line_discount}
+                                    {opt.discount_type}
                                   </option>
                                 ))}
                               </select>
@@ -1365,7 +1365,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                                   <option value="">None</option>
                                   {lineDiscountOptions.map((opt) => (
                                     <option key={opt.id} value={opt.id}>
-                                      {opt.line_discount}
+                                      {opt.discount_type}
                                     </option>
                                   ))}
                                 </select>
