@@ -478,9 +478,10 @@ export function UpdateSalesReturnModal({
         isThirdParty: headerData.isThirdParty,
       };
       await SalesReturnProvider.updateReturn(savePayload);
-      // Then update status
-      await SalesReturnProvider.updateStatus(headerData.id, "Received");
-      setHeaderData({ ...headerData, status: "Received" });
+      // Then update status with extra fields
+      const now = new Date().toISOString();
+      await SalesReturnProvider.updateStatus(headerData.id, "Received", true, now);
+      setHeaderData({ ...headerData, status: "Received", isReceived: true, receivedAt: now });
       setStatusCardData((prev) =>
         prev
           ? { ...prev, isReceived: true, transactionStatus: "Received" }

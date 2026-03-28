@@ -45,6 +45,8 @@ export interface SalesReturn {
   orderNo?: string;
   isThirdParty?: boolean;
   priceType?: string;
+  isReceived?: boolean;
+  receivedAt?: string;
   createdDate?: string;
   createdAt?: string;
 }
