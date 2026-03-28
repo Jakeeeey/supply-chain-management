@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { NavUser } from "../../_components/nav-user";
+import { NavUser } from "../../../_components/nav-user";
 
 import { cookies } from "next/headers";
 import PhysicalInventoryWorkspaceClient from "./PhysicalInventoryWorkspaceClient";
@@ -100,12 +100,7 @@ export default async function Page() {
                     <div className="min-w-0 overflow-hidden">
                         <Breadcrumb>
                             <BreadcrumbList>
-                                <BreadcrumbItem className="hidden md:block">
-                                    <BreadcrumbLink href="#">
-                                        Supply Chain Management
-                                    </BreadcrumbLink>
-                                </BreadcrumbItem>
-                                <BreadcrumbSeparator className="hidden md:block" />
+
                                 <BreadcrumbItem className="hidden md:block">
                                     <BreadcrumbLink href="#">
                                         Physical Inventory Management
@@ -113,7 +108,7 @@ export default async function Page() {
                                 </BreadcrumbItem>
                                 <BreadcrumbSeparator className="hidden md:block" />
                                 <BreadcrumbItem>
-                                    <BreadcrumbPage>Physical Inventory List</BreadcrumbPage>
+                                    <BreadcrumbPage>Physical Count RDID</BreadcrumbPage>
                                 </BreadcrumbItem>
                             </BreadcrumbList>
                         </Breadcrumb>

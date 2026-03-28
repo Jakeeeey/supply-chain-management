@@ -202,7 +202,7 @@ const data = {
                     items: [
                         {
                             title: "Physical Count (RFID)",
-                            url: "/scm/inventory-management/physical-inventory   ",
+                            url: "/scm/inventory-management/physical-inventory/physical-count",
                         },
                         {
                             title: "Offsetting",
@@ -210,7 +210,7 @@ const data = {
                         },
                         {
                             title: "Manual Count (No RFID)",
-                            url: "/scm/inventory-management/physical-inventory-manual",
+                            url: "/scm/inventory-management/physical-inventory/manual-count",
                         },
                     ]
                 },
