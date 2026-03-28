@@ -46,7 +46,6 @@ export const SalesReturnProvider = {
   async getReturns(
     page: number = 1,
     limit: number = 10,
-    search: string = "",
     filters: { salesman?: string; customer?: string; status?: string; invoiceNo?: string } = {},
   ): Promise<{ data: SalesReturn[]; total: number }> {
     const params = new URLSearchParams({

@@ -108,8 +108,8 @@ export interface ProductSupplierConnection {
 // --- API LOOKUPS ---
 export interface API_LineDiscount {
   id: number;
-  line_discount: string;
-  percentage: string;
+  discount_type: string;
+  total_percent: string;
 }
 
 export interface API_SalesReturnType {

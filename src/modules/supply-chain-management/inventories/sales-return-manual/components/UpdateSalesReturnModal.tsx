@@ -10,11 +10,9 @@ import {
   Save,
   AlertTriangle,
   CheckCircle,
-  AlertCircle,
   Link as LinkIcon,
   FileText,
   Search,
-  Radio,
   ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -59,6 +57,20 @@ import {
 import { ProductLookupModal } from "./ProductLookupModal";
 import { SalesReturnPrintSlip } from "./SalesReturnPrintSlip";
 import { createRoot } from "react-dom/client";
+
+interface SalesReturnGroup {
+  key: string;
+  code: string;
+  description: string;
+  unit: string;
+  returnType: string;
+  unitPrice: number;
+  totalQty: number;
+  totalGross: number;
+  totalDiscount: number;
+  totalNet: number;
+  children: { item: SalesReturnItem; idx: number }[];
+}
 
 interface Props {
   returnId: number;
@@ -116,10 +128,8 @@ export function UpdateSalesReturnModal({
   const [isUpdateSuccessOpen, setIsUpdateSuccessOpen] = useState(false);
   const [isReceiveConfirmOpen, setIsReceiveConfirmOpen] = useState(false);
   const [isInvoiceLookupOpen, setIsInvoiceLookupOpen] = useState(false);
-
   const [isUpdating, setIsUpdating] = useState(false);
   const [isReceiving, setIsReceiving] = useState(false);
-  const [validationError, setValidationError] = useState<string | null>(null);
   const [returnTypeError, setReturnTypeError] = useState(false);
   const [orderError, setOrderError] = useState(false);
   const [invoiceError, setInvoiceError] = useState(false);
@@ -195,21 +205,21 @@ export function UpdateSalesReturnModal({
     if (returnId) {
       loadFullDetails();
     }
-  }, [returnId, headerData.returnNo, headerData.customerCode]);
+  }, [returnId, headerData.returnNo, headerData.customerCode, headerData.salesmanId]);
 
   // 🟢 NEW: Effect to automatically update prices when Price Type changes
   useEffect(() => {
     if (details.length > 0) {
       setDetails((prevDetails) =>
         prevDetails.map((item) => {
-          const key = `price${headerData.priceType}` as string;
-          const basePrice = Number(item[key as keyof SalesReturnItem]) || Number(item.priceA) || Number(item.unitPrice) || 0;
+          const key = `price${headerData.priceType}` as keyof SalesReturnItem;
+          const basePrice = Number(item[key]) || Number(item.priceA) || Number(item.unitPrice) || 0;
           
-          const newUnitPrice = item.unit === "BOX" 
+          const newUnitPrice = Math.round((item.unit === "BOX" 
             ? basePrice * (item.unitMultiplier || 1) 
-            : basePrice;
+            : basePrice) * 100) / 100;
           
-          const newGross = Number(item.quantity) * newUnitPrice;
+          const newGross = Math.round(Number(item.quantity) * newUnitPrice * 100) / 100;
           let newDiscountAmt = 0;
 
           if (item.discountType && item.discountType !== "No Discount") {
@@ -217,8 +227,8 @@ export function UpdateSalesReturnModal({
               (d) => d.id.toString() === item.discountType?.toString(),
             );
             if (selectedOption) {
-              const percentage = parseFloat(selectedOption.percentage) || 0;
-              newDiscountAmt = newGross * (percentage / 100);
+              const percentage = parseFloat(selectedOption.total_percent) || 0;
+              newDiscountAmt = Math.round(newGross * (percentage / 100) * 100) / 100;
             }
           }
 
@@ -227,12 +237,12 @@ export function UpdateSalesReturnModal({
             unitPrice: newUnitPrice,
             grossAmount: newGross,
             discountAmount: newDiscountAmt,
-            totalAmount: newGross - newDiscountAmt,
+            totalAmount: Math.round((newGross - newDiscountAmt) * 100) / 100,
           };
         })
       );
     }
-  }, [headerData.priceType, discountOptions]);
+  }, [headerData.priceType, discountOptions, details.length]);
 
   // Click outside handler for order/invoice dropdowns
   useEffect(() => {
@@ -282,20 +292,21 @@ export function UpdateSalesReturnModal({
             (d) => d.id.toString() === value,
           );
           if (selectedDisc) {
-            const percentage = parseFloat(selectedDisc.percentage);
+            const percentage = parseFloat(selectedDisc.total_percent);
             const gross =
-              Number(item.quantity || 0) * Number(item.unitPrice || 0);
-            item.discountAmount = gross * (percentage / 100);
+              Math.round(Number(item.quantity || 0) * Number(item.unitPrice || 0) * 100) / 100;
+            item.discountAmount = Math.round(gross * (percentage / 100) * 100) / 100;
           }
         }
       }
 
       const qty = Number(item.quantity || 0);
       const price = Number(item.unitPrice || 0);
+      const gross = Math.round(qty * price * 100) / 100;
       const disc = Number(item.discountAmount || 0);
 
-      item.grossAmount = qty * price;
-      item.totalAmount = qty * price - disc;
+      item.grossAmount = gross;
+      item.totalAmount = Math.round((gross - disc) * 100) / 100;
 
       newDetails[index] = item;
       return newDetails;
@@ -327,25 +338,25 @@ export function UpdateSalesReturnModal({
         if (existingIndex >= 0) {
           const existing = updated[existingIndex];
           existing.quantity = Number(existing.quantity || 0) + qty;
-          existing.grossAmount = existing.quantity * existing.unitPrice;
+          existing.grossAmount = Math.round(existing.quantity * existing.unitPrice * 100) / 100;
           
           if (existing.discountType && existing.discountType !== "No Discount") {
             const selectedDisc = discountOptions.find(
               (d) => d.id.toString() === existing.discountType?.toString()
             );
             if (selectedDisc) {
-              const percentage = parseFloat(selectedDisc.percentage);
-              existing.discountAmount = existing.grossAmount * (percentage / 100);
+              const percentage = parseFloat(selectedDisc.total_percent);
+              existing.discountAmount = Math.round(existing.grossAmount * (percentage / 100) * 100) / 100;
             }
           }
           
-          existing.totalAmount = existing.grossAmount - (Number(existing.discountAmount) || 0);
+          existing.totalAmount = Math.round((existing.grossAmount - (Number(existing.discountAmount) || 0)) * 100) / 100;
           if (item.rfidTags) {
             existing.rfidTags = [...(existing.rfidTags || []), ...item.rfidTags];
           }
         } else {
-          const price = Number(item.unitPrice) || Number(item.price) || 0;
-          const gross = price * qty;
+          const price = Math.round((Number(item.unitPrice) || Number(item.price) || 0) * 100) / 100;
+          const gross = Math.round(price * qty * 100) / 100;
           const discAmt = Number(item.discountAmount) || 0;
 
           updated.push({
@@ -359,7 +370,7 @@ export function UpdateSalesReturnModal({
             grossAmount: gross,
             discountType: item.discountType || null,
             discountAmount: discAmt,
-            totalAmount: gross - discAmt,
+            totalAmount: Math.round((gross - discAmt) * 100) / 100,
             reason: item.reason || "",
             returnType: item.returnType || "",
           });
@@ -372,7 +383,6 @@ export function UpdateSalesReturnModal({
 
   // --- HANDLERS: UPDATE ---
   const handleUpdateClick = () => {
-    setValidationError(null);
     setReturnTypeError(false);
     setOrderError(false);
     setInvoiceError(false);
@@ -401,7 +411,6 @@ export function UpdateSalesReturnModal({
   };
 
   const handleReceiveClick = () => {
-    setValidationError(null);
     setReturnTypeError(false);
     setOrderError(false);
     setInvoiceError(false);
@@ -534,18 +543,18 @@ export function UpdateSalesReturnModal({
   };
 
   // --- RENDER ---
-  const totalGross = details.reduce(
+  const totalGross = Math.round(details.reduce(
     (acc, i) => acc + Number(i.quantity) * Number(i.unitPrice),
     0,
-  );
-  const totalDiscount = details.reduce(
+  ) * 100) / 100;
+  const totalDiscount = Math.round(details.reduce(
     (acc, i) => acc + (Number(i.discountAmount) || 0),
     0,
-  );
-  const totalNet = details.reduce(
+  ) * 100) / 100;
+  const totalNet = Math.round(details.reduce(
     (acc, i) => acc + (Number(i.totalAmount) || 0),
     0,
-  );
+  ) * 100) / 100;
   const filteredInvoices = invoiceOptions.filter((inv) =>
     inv.invoice_no.toLowerCase().includes(invoiceSearch.toLowerCase()),
   );
@@ -788,14 +797,14 @@ export function UpdateSalesReturnModal({
                                       <SelectItem value="No Discount">None</SelectItem>
                                       {discountOptions.map((opt) => (
                                         <SelectItem key={opt.id} value={opt.id.toString()}>
-                                          {opt.line_discount}
+                                          {opt.discount_type}
                                         </SelectItem>
                                       ))}
                                     </SelectContent>
                                   </Select>
                                 ) : (
                                   <span className="text-xs text-muted-foreground">
-                                    {discountOptions.find((d) => d.id.toString() == item.discountType)?.line_discount || "None"}
+                                    {discountOptions.find((d) => d.id.toString() == item.discountType)?.discount_type || "None"}
                                   </span>
                                 )}
                               </TableCell>
@@ -857,9 +866,8 @@ export function UpdateSalesReturnModal({
                           );
                         })}
 
-                        {/* 2. RENDER RFID ITEMS (Grouped) */}
                         {Object.values(
-                          details.filter(i => i.rfidTags && i.rfidTags.length > 0).reduce((acc, item, originalIdx) => {
+                          details.filter(i => i.rfidTags && i.rfidTags.length > 0).reduce((acc, item) => {
                             // Find the true index in details
                             const idx = details.findIndex(d => d === item);
                             const rType = item.returnType || "Unassigned";
@@ -885,8 +893,8 @@ export function UpdateSalesReturnModal({
                             acc[key].totalNet += Number(item.totalAmount) || 0;
                             acc[key].children.push({ item, idx });
                             return acc;
-                          }, {} as Record<string, any>)
-                        ).map((group: any) => (
+                          }, {} as Record<string, SalesReturnGroup>)
+                        ).map((group: SalesReturnGroup) => (
                           <React.Fragment key={group.key}>
                         {/* Parent Summary Row */}
                         <TableRow className="bg-muted/10 font-semibold border-b border-border">
@@ -1049,7 +1057,7 @@ export function UpdateSalesReturnModal({
                                         key={opt.id}
                                         value={opt.id.toString()}
                                       >
-                                        {opt.line_discount}
+                                        {opt.discount_type}
                                       </SelectItem>
                                     ))}
                                   </SelectContent>
@@ -1058,7 +1066,7 @@ export function UpdateSalesReturnModal({
                                 <span className="text-sm text-muted-foreground">
                                   {discountOptions.find(
                                     (d) => d.id.toString() == item.discountType,
-                                  )?.line_discount || "None"}
+                                  )?.discount_type || "None"}
                                 </span>
                               )}
                             </TableCell>

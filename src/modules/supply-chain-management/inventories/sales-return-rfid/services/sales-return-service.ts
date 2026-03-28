@@ -50,6 +50,34 @@ const cleanId = (id: any) => {
   return isNaN(num) ? id : num;
 };
 
+/**
+ * Builds a Map<discount_type_id, total_percentage> by summing linked
+ * line_discount.percentage values through the line_per_discount_type junction.
+ */
+async function buildDiscountPercentMap(): Promise<Map<number, number>> {
+  const [junctionRes, lineDiscRes] = await Promise.all([
+    repo.getRawLinePerDiscountType(),
+    repo.getRawLineDiscounts(),
+  ]);
+
+  const junctionRows = (junctionRes.data || []) as { type_id: number; line_id: number }[];
+  const lineDiscRows = (lineDiscRes.data || []) as { id: number; percentage: string | number }[];
+
+  // Build a lookup: line_discount.id → percentage
+  const linePercentMap = new Map<number, number>();
+  lineDiscRows.forEach((ld) => linePercentMap.set(ld.id, parseFloat(String(ld.percentage)) || 0));
+
+  // Aggregate: for each discount_type_id, sum all linked line_discount percentages
+  const discountMap = new Map<number, number>();
+  junctionRows.forEach((row) => {
+    const existing = discountMap.get(row.type_id) || 0;
+    const linePct = linePercentMap.get(row.line_id) || 0;
+    discountMap.set(row.type_id, Math.round((existing + linePct) * 10000) / 10000);
+  });
+
+  return discountMap;
+}
+
 // =============================================================================
 // PUBLIC SERVICE METHODS
 // =============================================================================
@@ -96,18 +124,19 @@ export async function fetchReturnDetails(
 ): Promise<SalesReturnItem[]> {
   if (!returnNo) return [];
 
-  const [detailsRes, unitsRes, lineDiscountsRes, returnTypesRes] =
+  const [detailsRes, unitsRes, returnTypesRes] =
     await Promise.all([
       repo.getRawReturnDetails(returnNo),
       repo.getRawUnits(),
-      repo.getRawReferences().then((refs) => refs[3]),
       repo.getRawReferences().then((refs) => refs[4]),
     ]);
 
   const rawItems = detailsRes.data || [];
   const units = (unitsRes.data || []) as unknown as Unit[];
-  const lineDiscounts = (lineDiscountsRes.data || []) as unknown as API_LineDiscount[];
   const returnTypes = (returnTypesRes.data || []) as unknown as API_SalesReturnType[];
+
+  // Build aggregate discount percentage map from junction + line_discount tables
+  const discountPercentMap = await buildDiscountPercentMap();
 
   // Fetch all RFIDs associated with these detail lines
   const detailIds = rawItems.map((item: any) => item.detail_id || item.id);
@@ -166,11 +195,7 @@ export async function fetchReturnDetails(
           ? Number(detail.discount_type)
           : null;
         if (!discId) return 0;
-        const disc = lineDiscounts.find(
-          (ld: API_LineDiscount) => ld.id === discId,
-        );
-        if (!disc) return 0;
-        const percentage = parseFloat(disc.percentage) || 0;
+        const percentage = discountPercentMap.get(discId) || 0;
         const gross = Number(detail.quantity) * Number(detail.unit_price);
         return Math.round(gross * (percentage / 100) * 100) / 100;
       })(),
@@ -180,11 +205,7 @@ export async function fetchReturnDetails(
           ? Number(detail.discount_type)
           : null;
         if (!discId) return gross;
-        const disc = lineDiscounts.find(
-          (ld: API_LineDiscount) => ld.id === discId,
-        );
-        if (!disc) return gross;
-        const percentage = parseFloat(disc.percentage) || 0;
+        const percentage = discountPercentMap.get(discId) || 0;
         return Math.round((gross - gross * (percentage / 100)) * 100) / 100;
       })(),
       reason: detail.reason || "",
@@ -272,13 +293,22 @@ export async function fetchReferences(): Promise<{
     name: item.branch_name,
   }));
 
+  // Enrich discount_type records with computed total_percent from junction + line_discount
+  const discountPercentMap = await buildDiscountPercentMap();
+  const rawDiscountTypes = (lineDiscountsRes.data || []) as any[];
+  const enrichedLineDiscounts: API_LineDiscount[] = rawDiscountTypes.map((dt: any) => ({
+    id: dt.id,
+    discount_type: dt.discount_type,
+    total_percent: String(discountPercentMap.get(dt.id) || 0),
+  }));
+
   return {
     salesmen,
     formSalesmen,
     customers,
     formCustomers,
     branches,
-    lineDiscounts: (lineDiscountsRes.data || []) as unknown as API_LineDiscount[],
+    lineDiscounts: enrichedLineDiscounts,
     returnTypes: (returnTypesRes.data || []) as unknown as API_SalesReturnType[],
     priceTypes: priceTypesData,
   };
@@ -392,26 +422,24 @@ export async function fetchStatusCard(
 export async function submitReturn(payload: any): Promise<any> {
   // Fetch line discounts for discount calculation
   const refsResult = await repo.getRawReferences();
-  const lineDiscounts = (refsResult[3].data || []) as unknown as API_LineDiscount[];
   const returnTypes = (refsResult[4].data || []) as unknown as API_SalesReturnType[];
 
-  const lineDiscountMap = new Map<number, number>();
-  lineDiscounts.forEach((ld) =>
-    lineDiscountMap.set(ld.id, parseFloat(ld.percentage) || 0),
-  );
+  // Build aggregate discount percentage map from junction + line_discount tables
+  const lineDiscountMap = await buildDiscountPercentMap();
 
   const totalGross = payload.items.reduce(
     (sum: number, item: any) =>
-      sum + Number(item.quantity) * Number(item.unitPrice),
+      Math.round((sum + Number(item.quantity) * Number(item.unitPrice)) * 100) / 100,
     0,
   );
 
   const totalDiscount = payload.items.reduce(
     (sum: number, item: any) => {
-      const gross = Number(item.quantity) * Number(item.unitPrice);
+      const gross = Math.round(Number(item.quantity) * Number(item.unitPrice) * 100) / 100;
       const discId = item.discountType ? Number(item.discountType) : null;
       const percentage = discId ? lineDiscountMap.get(discId) || 0 : 0;
-      return sum + gross * (percentage / 100);
+      const discount = Math.round(gross * (percentage / 100) * 100) / 100;
+      return Math.round((sum + discount) * 100) / 100;
     },
     0,
   );
@@ -429,7 +457,7 @@ export async function submitReturn(payload: any): Promise<any> {
     invoice_no: payload.invoiceNo || "",
     customer_code: payload.customer || payload.customerCode,
     salesman_id: cleanId(payload.salesmanId),
-    total_amount: payload.totalAmount,
+    total_amount: Math.round(Number(payload.totalAmount) * 100) / 100,
     status: "Pending",
     return_date: formattedDate,
     price_type: payload.priceType || "A",
@@ -450,13 +478,13 @@ export async function submitReturn(payload: any): Promise<any> {
       ? matchedType.type_id
       : returnTypes[0]?.type_id || 1;
 
-    const gross = Number(item.quantity) * Number(item.unitPrice);
+    const gross = Math.round(Number(item.quantity) * Number(item.unitPrice) * 100) / 100;
     const discId =
       item.discountType && item.discountType !== ""
         ? Number(item.discountType)
         : null;
     const percentage = discId ? lineDiscountMap.get(discId) || 0 : 0;
-    const discountAmt = gross * (percentage / 100);
+    const discountAmt = Math.round(gross * (percentage / 100) * 100) / 100;
 
     const detailPayload = {
       return_no: finalReturnNo,
@@ -465,7 +493,7 @@ export async function submitReturn(payload: any): Promise<any> {
       unit_price: Number(item.unitPrice),
       gross_amount: gross,
       discount_amount: discountAmt,
-      total_amount: gross - discountAmt,
+      total_amount: Math.round((gross - discountAmt) * 100) / 100,
       sales_return_type_id: typeId,
       discount_type: discId,
       reason: item.reason || null,
@@ -507,23 +535,20 @@ export async function updateReturn(payload: {
 }): Promise<any> {
   // Fetch line discounts
   const refsResult = await repo.getRawReferences();
-  const lineDiscounts = (refsResult[3].data || []) as unknown as API_LineDiscount[];
   const returnTypes = (refsResult[4].data || []) as unknown as API_SalesReturnType[];
 
-  const lineDiscountMap = new Map<number, number>();
-  lineDiscounts.forEach((ld) =>
-    lineDiscountMap.set(ld.id, parseFloat(ld.percentage) || 0),
-  );
+  // Build aggregate discount percentage map from junction + line_discount tables
+  const lineDiscountMap = await buildDiscountPercentMap();
 
   const totalGross = payload.items.reduce(
     (sum: number, item: any) =>
-      sum + Number(item.quantity) * Number(item.unitPrice),
+      Math.round((sum + Number(item.quantity) * Number(item.unitPrice)) * 100) / 100,
     0,
   );
 
   const totalDiscount = payload.items.reduce(
     (sum: number, item: any) => {
-      const gross = Number(item.quantity) * Number(item.unitPrice);
+      const gross = Math.round(Number(item.quantity) * Number(item.unitPrice) * 100) / 100;
       const discId =
         item.discountType &&
         item.discountType !== "No Discount" &&
@@ -531,12 +556,13 @@ export async function updateReturn(payload: {
           ? Number(item.discountType)
           : null;
       const percentage = discId ? lineDiscountMap.get(discId) || 0 : 0;
-      return sum + gross * (percentage / 100);
+      const discount = Math.round(gross * (percentage / 100) * 100) / 100;
+      return Math.round((sum + discount) * 100) / 100;
     },
     0,
   );
 
-  const totalNet = totalGross - totalDiscount;
+  const totalNet = Math.round((totalGross - totalDiscount) * 100) / 100;
 
   const headerPayload = {
     remarks: payload.remarks ?? "",
@@ -600,7 +626,7 @@ export async function updateReturn(payload: {
       ? matchedType.type_id
       : returnTypes[0]?.type_id || 1;
 
-    const gross = Number(item.quantity) * Number(item.unitPrice);
+    const gross = Math.round(Number(item.quantity) * Number(item.unitPrice) * 100) / 100;
     const discId =
       item.discountType &&
       item.discountType !== "No Discount" &&
@@ -608,14 +634,14 @@ export async function updateReturn(payload: {
         ? Number(item.discountType)
         : null;
     const percentage = discId ? lineDiscountMap.get(discId) || 0 : 0;
-    const discountAmt = gross * (percentage / 100);
+    const discountAmt = Math.round(gross * (percentage / 100) * 100) / 100;
 
     const detailPayload = {
       quantity: Number(item.quantity),
       unit_price: Number(item.unitPrice),
       gross_amount: gross,
       discount_amount: discountAmt,
-      total_amount: gross - discountAmt,
+      total_amount: Math.round((gross - discountAmt) * 100) / 100,
       sales_return_type_id: typeId,
       discount_type: discId,
       reason: item.reason || null,

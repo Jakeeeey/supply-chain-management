@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { getDirectusBase, directusFetch } from "@/lib/directus";
 
 // =============================================================================
@@ -98,12 +97,30 @@ export async function getRawReferences() {
       "/items/branches?limit=-1&fields=id,branch_name",
     ),
     directusGet<{ data: Record<string, unknown>[] }>(
-      "/items/line_discount?limit=-1",
+      "/items/discount_type?limit=-1",
     ),
     directusGet<{ data: Record<string, unknown>[] }>(
       "/items/sales_return_type?limit=-1",
     ),
   ]);
+}
+
+/**
+ * Fetches the line_per_discount_type junction table.
+ */
+export async function getRawLinePerDiscountType() {
+  return directusGet<{ data: Record<string, unknown>[] }>(
+    "/items/line_per_discount_type?limit=-1&fields=id,type_id,line_id",
+  );
+}
+
+/**
+ * Fetches the line_discount table (individual discount percentages).
+ */
+export async function getRawLineDiscounts() {
+  return directusGet<{ data: Record<string, unknown>[] }>(
+    "/items/line_discount?limit=-1&fields=id,line_discount,percentage",
+  );
 }
 
 /**

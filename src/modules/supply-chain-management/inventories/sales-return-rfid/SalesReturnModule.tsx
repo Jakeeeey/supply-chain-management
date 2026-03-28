@@ -57,7 +57,7 @@ export default function SalesReturnModule() {
         setCreateOpen(true);
       }
     }
-  }, [fromClearance, editReturnNo]);
+  }, [fromClearance, editReturnNo, setSearch, setCreateOpen]);
 
   // Auto-open selected return when data loads and editReturnNo is present
   React.useEffect(() => {
@@ -67,7 +67,7 @@ export default function SalesReturnModule() {
         setSelectedReturn(match);
       }
     }
-  }, [data, editReturnNo, selectedReturn]);
+  }, [data, editReturnNo, selectedReturn, setSelectedReturn]);
 
   return (
     <div className="space-y-6 p-4 md:p-8 w-full bg-background min-h-screen animate-in fade-in duration-300">

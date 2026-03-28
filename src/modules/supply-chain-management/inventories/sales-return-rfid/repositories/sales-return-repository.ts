@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { getDirectusBase, directusFetch } from "@/lib/directus";
 
 // =============================================================================
@@ -39,7 +38,7 @@ async function directusMutate<T>(
 export async function getRawReturns(
   page: number = 1,
   limit: number = 10,
-  filters: { salesman?: string; customer?: string; status?: string } = {},
+  filters: { salesman?: string; customer?: string; status?: string; invoiceNo?: string } = {},
 ) {
   const allowedFields =
     "return_id,return_number,invoice_no,customer_code,salesman_id,total_amount,status,return_date,remarks,order_id,isThirdParty,created_at,price_type";
@@ -52,8 +51,8 @@ export async function getRawReturns(
     url += `&filter[customer_code][_eq]=${encodeURIComponent(filters.customer)}`;
   if (filters.status && filters.status !== "All")
     url += `&filter[status][_eq]=${filters.status}`;
-  if ((filters as any).invoiceNo)
-    url += `&filter[invoice_no][_eq]=${encodeURIComponent((filters as any).invoiceNo)}`;
+  if (filters.invoiceNo)
+    url += `&filter[invoice_no][_eq]=${encodeURIComponent(filters.invoiceNo)}`;
 
   return directusGet<{ data: Record<string, unknown>[]; meta?: { filter_count?: number } }>(url);
 }
@@ -100,12 +99,30 @@ export async function getRawReferences() {
       "/items/branches?limit=-1&fields=id,branch_name",
     ),
     directusGet<{ data: Record<string, unknown>[] }>(
-      "/items/line_discount?limit=-1",
+      "/items/discount_type?limit=-1",
     ),
     directusGet<{ data: Record<string, unknown>[] }>(
       "/items/sales_return_type?limit=-1",
     ),
   ]);
+}
+
+/**
+ * Fetches the line_per_discount_type junction table.
+ */
+export async function getRawLinePerDiscountType() {
+  return directusGet<{ data: Record<string, unknown>[] }>(
+    "/items/line_per_discount_type?limit=-1&fields=id,type_id,line_id",
+  );
+}
+
+/**
+ * Fetches the line_discount table (individual discount percentages).
+ */
+export async function getRawLineDiscounts() {
+  return directusGet<{ data: Record<string, unknown>[] }>(
+    "/items/line_discount?limit=-1&fields=id,line_discount,percentage",
+  );
 }
 
 /**

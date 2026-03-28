@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { SalesReturn } from "../type";
 import { SalesReturnProvider } from "../providers/fetchProviders";
 
@@ -30,7 +30,7 @@ export function useSalesReturnList() {
     return str.replace(/\s+/g, "").toUpperCase();
   };
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     setLoading(true);
     try {
       // 1. Determine if we're searching (hybrid strategy)
@@ -43,7 +43,6 @@ export function useSalesReturnList() {
         SalesReturnProvider.getReturns(
           isSearching ? 1 : page,
           isSearching ? -1 : pageSize,
-          "",  // search is no longer passed to the provider
           filters,
         ),
         SalesReturnProvider.getCustomersList(),
@@ -121,7 +120,7 @@ export function useSalesReturnList() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [search, page, pageSize, filters]);
 
   // Reset to page 1 when search or filters change
   useEffect(() => {
@@ -130,7 +129,7 @@ export function useSalesReturnList() {
 
   useEffect(() => {
     refresh();
-  }, [page, pageSize, search, filters]);
+  }, [refresh]);
 
   return {
     data,
