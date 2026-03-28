@@ -378,16 +378,17 @@ export async function submitReturn(payload: any): Promise<any> {
 
   const totalGross = payload.items.reduce(
     (sum: number, item: any) =>
-      sum + Number(item.quantity) * Number(item.unitPrice),
+      Math.round((sum + Number(item.quantity) * Number(item.unitPrice)) * 100) / 100,
     0,
   );
 
   const totalDiscount = payload.items.reduce(
     (sum: number, item: any) => {
-      const gross = Number(item.quantity) * Number(item.unitPrice);
+      const gross = Math.round(Number(item.quantity) * Number(item.unitPrice) * 100) / 100;
       const discId = item.discountType ? Number(item.discountType) : null;
       const percentage = discId ? lineDiscountMap.get(discId) || 0 : 0;
-      return sum + gross * (percentage / 100);
+      const discount = Math.round(gross * (percentage / 100) * 100) / 100;
+      return Math.round((sum + discount) * 100) / 100;
     },
     0,
   );
@@ -405,7 +406,7 @@ export async function submitReturn(payload: any): Promise<any> {
     invoice_no: payload.invoiceNo || "",
     customer_code: payload.customer || payload.customerCode,
     salesman_id: cleanId(payload.salesmanId),
-    total_amount: payload.totalAmount,
+    total_amount: Math.round(Number(payload.totalAmount) * 100) / 100,
     status: "Pending",
     return_date: formattedDate,
     price_type: payload.priceType || "A",
@@ -426,13 +427,13 @@ export async function submitReturn(payload: any): Promise<any> {
       ? matchedType.type_id
       : returnTypes[0]?.type_id || 1;
 
-    const gross = Number(item.quantity) * Number(item.unitPrice);
+    const gross = Math.round(Number(item.quantity) * Number(item.unitPrice) * 100) / 100;
     const discId =
       item.discountType && item.discountType !== ""
         ? Number(item.discountType)
         : null;
     const percentage = discId ? lineDiscountMap.get(discId) || 0 : 0;
-    const discountAmt = gross * (percentage / 100);
+    const discountAmt = Math.round(gross * (percentage / 100) * 100) / 100;
 
     const detailPayload = {
       return_no: finalReturnNo,
@@ -441,7 +442,7 @@ export async function submitReturn(payload: any): Promise<any> {
       unit_price: Number(item.unitPrice),
       gross_amount: gross,
       discount_amount: discountAmt,
-      total_amount: gross - discountAmt,
+      total_amount: Math.round((gross - discountAmt) * 100) / 100,
       sales_return_type_id: typeId,
       discount_type: discId,
       reason: item.reason || null,
@@ -479,13 +480,13 @@ export async function updateReturn(payload: {
 
   const totalGross = payload.items.reduce(
     (sum: number, item: any) =>
-      sum + Number(item.quantity) * Number(item.unitPrice),
+      Math.round((sum + Number(item.quantity) * Number(item.unitPrice)) * 100) / 100,
     0,
   );
 
   const totalDiscount = payload.items.reduce(
     (sum: number, item: any) => {
-      const gross = Number(item.quantity) * Number(item.unitPrice);
+      const gross = Math.round(Number(item.quantity) * Number(item.unitPrice) * 100) / 100;
       const discId =
         item.discountType &&
         item.discountType !== "No Discount" &&
@@ -493,12 +494,13 @@ export async function updateReturn(payload: {
           ? Number(item.discountType)
           : null;
       const percentage = discId ? lineDiscountMap.get(discId) || 0 : 0;
-      return sum + gross * (percentage / 100);
+      const discount = Math.round(gross * (percentage / 100) * 100) / 100;
+      return Math.round((sum + discount) * 100) / 100;
     },
     0,
   );
 
-  const totalNet = totalGross - totalDiscount;
+  const totalNet = Math.round((totalGross - totalDiscount) * 100) / 100;
 
   const headerPayload = {
     remarks: payload.remarks ?? "",
@@ -562,7 +564,7 @@ export async function updateReturn(payload: {
       ? matchedType.type_id
       : returnTypes[0]?.type_id || 1;
 
-    const gross = Number(item.quantity) * Number(item.unitPrice);
+    const gross = Math.round(Number(item.quantity) * Number(item.unitPrice) * 100) / 100;
     const discId =
       item.discountType &&
       item.discountType !== "No Discount" &&
@@ -570,14 +572,14 @@ export async function updateReturn(payload: {
         ? Number(item.discountType)
         : null;
     const percentage = discId ? lineDiscountMap.get(discId) || 0 : 0;
-    const discountAmt = gross * (percentage / 100);
+    const discountAmt = Math.round(gross * (percentage / 100) * 100) / 100;
 
     const detailPayload = {
       quantity: Number(item.quantity),
       unit_price: Number(item.unitPrice),
       gross_amount: gross,
       discount_amount: discountAmt,
-      total_amount: gross - discountAmt,
+      total_amount: Math.round((gross - discountAmt) * 100) / 100,
       sales_return_type_id: typeId,
       discount_type: discId,
       reason: item.reason || null,

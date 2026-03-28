@@ -15,6 +15,7 @@ import {
   Minus,
   Radio,
   ScanLine,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -71,6 +72,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const [isThirdParty, setIsThirdParty] = useState(false);
   // Success Modal State
   const [isSuccessOpen, setSuccessOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // UI State for Validation
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -165,7 +167,8 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
    */
   const resolvePrice = (product: any, currentPriceType: string): number => {
     const key = `price${currentPriceType}` as string;
-    return Number(product[key]) || Number(product.priceA) || Number(product.unitPrice) || 0;
+    const price = Number(product[key]) || Number(product.priceA) || Number(product.unitPrice) || 0;
+    return Math.round(price * 100) / 100;
   };
 
   /**
@@ -236,7 +239,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
       // Build item from lookup result
       const unitPrice = resolvePrice(result, priceType);
-      const grossAmount = unitPrice * 1;
+      const grossAmount = Math.round(unitPrice * 1 * 100) / 100;
 
       const newItem: SalesReturnItem = {
         id: `rfid-${tag}-${Date.now()}`,
@@ -330,11 +333,11 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       setItems((prevItems) =>
         prevItems.map((item) => {
           const basePrice = resolvePrice(item, priceType);
-          const newUnitPrice = item.unit === "BOX"
+          const newUnitPrice = Math.round((item.unit === "BOX"
             ? basePrice * (item.unitMultiplier || 1)
-            : basePrice;
+            : basePrice) * 100) / 100;
 
-          const newGross = item.quantity * newUnitPrice;
+          const newGross = Math.round(item.quantity * newUnitPrice * 100) / 100;
           let newDiscountAmt = 0;
 
           if (item.discountType) {
@@ -343,7 +346,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
             );
             if (selectedOption) {
               const percentage = parseFloat(selectedOption.percentage) || 0;
-              newDiscountAmt = newGross * (percentage / 100);
+              newDiscountAmt = Math.round(newGross * (percentage / 100) * 100) / 100;
             }
           }
 
@@ -352,7 +355,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
             unitPrice: newUnitPrice,
             grossAmount: newGross,
             discountAmount: newDiscountAmt,
-            totalAmount: newGross - newDiscountAmt,
+            totalAmount: Math.round((newGross - newDiscountAmt) * 100) / 100,
           };
         })
       );
@@ -634,6 +637,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     }
 
     try {
+      setIsSubmitting(true);
       const selectedSalesmanObj = salesmen.find(
         (s) => s.id.toString() === selectedSalesmanId,
       );
@@ -663,6 +667,8 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       console.error(err);
       const error = err as Error;
       setValidationError(error.message || "Failed to create Sales Return.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -693,7 +699,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         if (existingIndex >= 0) {
           const existing = updated[existingIndex];
           existing.quantity += qty;
-          existing.grossAmount = existing.quantity * existing.unitPrice;
+          existing.grossAmount = Math.round(existing.quantity * existing.unitPrice * 100) / 100;
 
           if (existing.discountType) {
             const selectedOption = lineDiscountOptions.find(
@@ -701,11 +707,11 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
             );
             if (selectedOption) {
               const percentage = parseFloat(selectedOption.percentage) || 0;
-              existing.discountAmount = (existing.grossAmount || 0) * (percentage / 100);
+              existing.discountAmount = Math.round((existing.grossAmount || 0) * (percentage / 100) * 100) / 100;
             }
           }
 
-          existing.totalAmount = (existing.grossAmount || 0) - (existing.discountAmount || 0);
+          existing.totalAmount = Math.round(((existing.grossAmount || 0) - (existing.discountAmount || 0)) * 100) / 100;
           if (item.rfidTags) {
             existing.rfidTags = [...(existing.rfidTags || []), ...item.rfidTags];
           }
@@ -718,11 +724,11 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
             description: item.description || "Unknown Item",
             unit: item.unit || "Pcs",
             quantity: qty,
-            unitPrice: item.unitPrice || 0,
-            grossAmount: (item.unitPrice || 0) * qty,
+            unitPrice: Math.round(Number(item.unitPrice || 0) * 100) / 100,
+            grossAmount: Math.round((item.unitPrice || 0) * qty * 100) / 100,
             discountType: "",
             discountAmount: 0,
-            totalAmount: (item.unitPrice || 0) * qty,
+            totalAmount: Math.round((item.unitPrice || 0) * qty * 100) / 100,
             reason: "",
             returnType: "",
           } as SalesReturnItem);
@@ -746,14 +752,14 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       const item = { ...updated[index], [field]: value } as SalesReturnItem;
 
       if (field === "quantity" || field === "unitPrice") {
-        item.grossAmount = item.quantity * item.unitPrice;
+        item.grossAmount = Math.round(item.quantity * item.unitPrice * 100) / 100;
         if (item.discountType) {
           const selectedOption = lineDiscountOptions.find(
             (d) => d.id.toString() === item.discountType?.toString(),
           );
           if (selectedOption) {
             const percentage = parseFloat(selectedOption.percentage) || 0;
-            item.discountAmount = (item.grossAmount || 0) * (percentage / 100);
+            item.discountAmount = Math.round((item.grossAmount || 0) * (percentage / 100) * 100) / 100;
           }
         }
       }
@@ -767,27 +773,27 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
           );
           if (selectedOption) {
             const percentage = parseFloat(selectedOption.percentage) || 0;
-            item.discountAmount = (item.grossAmount || 0) * (percentage / 100);
+            item.discountAmount = Math.round((item.grossAmount || 0) * (percentage / 100) * 100) / 100;
           }
         }
       }
 
-      item.totalAmount = (item.grossAmount || 0) - (item.discountAmount || 0);
+      item.totalAmount = Math.round(((item.grossAmount || 0) - (item.discountAmount || 0)) * 100) / 100;
       updated[index] = item;
       return updated;
     });
   };
 
   // --- 10. CALCULATIONS ---
-  const totalGross = items.reduce(
+  const totalGross = Math.round(items.reduce(
     (sum, item) => sum + (item.grossAmount || 0),
     0,
-  );
-  const totalDiscount = items.reduce(
+  ) * 100) / 100;
+  const totalDiscount = Math.round(items.reduce(
     (sum, item) => sum + (item.discountAmount || 0),
     0,
-  );
-  const totalNet = items.reduce((sum, item) => sum + item.totalAmount, 0);
+  ) * 100) / 100;
+  const totalNet = Math.round(items.reduce((sum, item) => sum + item.totalAmount, 0) * 100) / 100;
 
   if (!isOpen) return null;
 
@@ -1601,14 +1607,18 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
           </Button>
           <Button
             onClick={handleCreateReturn}
-            disabled={isBranchLockedError}
-            className={`shadow-lg ${isBranchLockedError
-                ? "bg-muted text-muted-foreground cursor-not-allowed"
-                : "bg-primary hover:bg-primary text-white shadow-primary/20"
+            disabled={isBranchLockedError || isSubmitting}
+            className={`shadow-lg ${isBranchLockedError || isSubmitting
+              ? "bg-muted text-muted-foreground cursor-not-allowed"
+              : "bg-primary hover:bg-primary text-white shadow-primary/20"
               }`}
           >
-            <Save className="h-4 w-4 mr-2" />
-            Create Sales Return
+            {isSubmitting ? (
+              <Loader2 className="h-4 w-4 mr-2 mx-auto animate-spin" />
+            ) : (
+              <Save className="h-4 w-4 mr-2" />
+            )}
+            {isSubmitting ? "Submitting..." : "Create Sales Return"}
           </Button>
         </div>
       </div>

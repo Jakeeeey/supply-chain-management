@@ -214,11 +214,11 @@ export function UpdateSalesReturnModal({
           const key = `price${headerData.priceType}` as string;
           const basePrice = Number(item[key as keyof SalesReturnItem]) || Number(item.priceA) || Number(item.unitPrice) || 0;
           
-          const newUnitPrice = item.unit === "BOX" 
+          const newUnitPrice = Math.round((item.unit === "BOX" 
             ? basePrice * (item.unitMultiplier || 1) 
-            : basePrice;
+            : basePrice) * 100) / 100;
           
-          const newGross = Number(item.quantity) * newUnitPrice;
+          const newGross = Math.round(Number(item.quantity) * newUnitPrice * 100) / 100;
           let newDiscountAmt = 0;
 
           if (item.discountType && item.discountType !== "No Discount") {
@@ -227,7 +227,7 @@ export function UpdateSalesReturnModal({
             );
             if (selectedOption) {
               const percentage = parseFloat(selectedOption.percentage) || 0;
-              newDiscountAmt = newGross * (percentage / 100);
+              newDiscountAmt = Math.round(newGross * (percentage / 100) * 100) / 100;
             }
           }
 
@@ -236,7 +236,7 @@ export function UpdateSalesReturnModal({
             unitPrice: newUnitPrice,
             grossAmount: newGross,
             discountAmount: newDiscountAmt,
-            totalAmount: newGross - newDiscountAmt,
+            totalAmount: Math.round((newGross - newDiscountAmt) * 100) / 100,
           };
         })
       );
@@ -347,10 +347,10 @@ export function UpdateSalesReturnModal({
       const currentPriceType = headerData.priceType || "A";
       const priceKey = `price${currentPriceType}` as string;
       const unitPrice =
-        Number((result as any)[priceKey]) ||
+        Math.round((Number((result as any)[priceKey]) ||
         Number(result.unitPrice) ||
-        0;
-      const grossAmount = unitPrice * 1;
+        0) * 100) / 100;
+      const grossAmount = Math.round(unitPrice * 1 * 100) / 100;
 
       const newItem: SalesReturnItem = {
         id: `added-rfid-${tag}-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
@@ -438,18 +438,19 @@ export function UpdateSalesReturnModal({
           if (selectedDisc) {
             const percentage = parseFloat(selectedDisc.percentage);
             const gross =
-              Number(item.quantity || 0) * Number(item.unitPrice || 0);
-            item.discountAmount = gross * (percentage / 100);
+              Math.round(Number(item.quantity || 0) * Number(item.unitPrice || 0) * 100) / 100;
+            item.discountAmount = Math.round(gross * (percentage / 100) * 100) / 100;
           }
         }
       }
 
       const qty = Number(item.quantity || 0);
       const price = Number(item.unitPrice || 0);
+      const gross = Math.round(qty * price * 100) / 100;
       const disc = Number(item.discountAmount || 0);
 
-      item.grossAmount = qty * price;
-      item.totalAmount = qty * price - disc;
+      item.grossAmount = gross;
+      item.totalAmount = Math.round((gross - disc) * 100) / 100;
 
       newDetails[index] = item;
       return newDetails;
@@ -472,12 +473,12 @@ export function UpdateSalesReturnModal({
           // Increment quantity
           const existing = updated[existingIdx];
           const newQty = (Number(existing.quantity) || 0) + (Number(item.quantity) || 0);
-          const newGross = newQty * Number(existing.unitPrice || 0);
+          const newGross = Math.round(newQty * Number(existing.unitPrice || 0) * 100) / 100;
           updated[existingIdx] = {
             ...existing,
             quantity: newQty,
             grossAmount: newGross,
-            totalAmount: newGross - (Number(existing.discountAmount) || 0),
+            totalAmount: Math.round((newGross - (Number(existing.discountAmount) || 0)) * 100) / 100,
           };
         } else {
           // Add as new row
@@ -485,6 +486,10 @@ export function UpdateSalesReturnModal({
             ...item,
             id: `new-${Date.now()}-${Math.random()}`, // Temp ID for new rows
             product_id: item.productId,
+            unitPrice: Math.round(Number(item.unitPrice || 0) * 100) / 100,
+            grossAmount: Math.round(Number(item.grossAmount || 0) * 100) / 100,
+            discountAmount: Math.round(Number(item.discountAmount || 0) * 100) / 100,
+            totalAmount: Math.round(Number(item.totalAmount || 0) * 100) / 100,
           });
         }
       });
@@ -657,18 +662,18 @@ export function UpdateSalesReturnModal({
   };
 
   // --- RENDER ---
-  const totalGross = details.reduce(
-    (acc, i) => acc + Number(i.quantity) * Number(i.unitPrice),
+  const totalGross = Math.round(details.reduce(
+    (acc, i) => acc + (Number(i.grossAmount) || 0),
     0,
-  );
-  const totalDiscount = details.reduce(
+  ) * 100) / 100;
+  const totalDiscount = Math.round(details.reduce(
     (acc, i) => acc + (Number(i.discountAmount) || 0),
     0,
-  );
-  const totalNet = details.reduce(
+  ) * 100) / 100;
+  const totalNet = Math.round(details.reduce(
     (acc, i) => acc + (Number(i.totalAmount) || 0),
     0,
-  );
+  ) * 100) / 100;
   const filteredInvoices = invoiceOptions.filter((inv) =>
     inv.invoice_no.toLowerCase().includes(invoiceSearch.toLowerCase()),
   );
@@ -927,7 +932,7 @@ export function UpdateSalesReturnModal({
                                 )}
                               </TableCell>
                               <TableCell className="text-right text-sm text-muted-foreground align-middle font-mono whitespace-nowrap">
-                                {(Number(item.quantity) * Number(item.unitPrice)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                {(Number(item.grossAmount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                               </TableCell>
                               {/* Discount */}
                               <TableCell className="align-middle p-2">
@@ -1163,10 +1168,8 @@ export function UpdateSalesReturnModal({
                                     </span>
                                   )}
                                 </TableCell>
-                                <TableCell className="text-right text-sm text-muted-foreground align-middle font-mono">
-                                  {(
-                                    Number(item.quantity) * Number(item.unitPrice)
-                                  ).toLocaleString()}
+                                <TableCell className="text-right text-sm text-muted-foreground align-middle font-mono whitespace-nowrap">
+                                  {(Number(item.grossAmount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                 </TableCell>
                                 <TableCell className="align-middle p-2">
                                   {canEditAll ? (

@@ -205,11 +205,11 @@ export function UpdateSalesReturnModal({
           const key = `price${headerData.priceType}` as string;
           const basePrice = Number(item[key as keyof SalesReturnItem]) || Number(item.priceA) || Number(item.unitPrice) || 0;
           
-          const newUnitPrice = item.unit === "BOX" 
+          const newUnitPrice = Math.round((item.unit === "BOX" 
             ? basePrice * (item.unitMultiplier || 1) 
-            : basePrice;
+            : basePrice) * 100) / 100;
           
-          const newGross = Number(item.quantity) * newUnitPrice;
+          const newGross = Math.round(Number(item.quantity) * newUnitPrice * 100) / 100;
           let newDiscountAmt = 0;
 
           if (item.discountType && item.discountType !== "No Discount") {
@@ -218,7 +218,7 @@ export function UpdateSalesReturnModal({
             );
             if (selectedOption) {
               const percentage = parseFloat(selectedOption.percentage) || 0;
-              newDiscountAmt = newGross * (percentage / 100);
+              newDiscountAmt = Math.round(newGross * (percentage / 100) * 100) / 100;
             }
           }
 
@@ -227,7 +227,7 @@ export function UpdateSalesReturnModal({
             unitPrice: newUnitPrice,
             grossAmount: newGross,
             discountAmount: newDiscountAmt,
-            totalAmount: newGross - newDiscountAmt,
+            totalAmount: Math.round((newGross - newDiscountAmt) * 100) / 100,
           };
         })
       );
@@ -284,18 +284,19 @@ export function UpdateSalesReturnModal({
           if (selectedDisc) {
             const percentage = parseFloat(selectedDisc.percentage);
             const gross =
-              Number(item.quantity || 0) * Number(item.unitPrice || 0);
-            item.discountAmount = gross * (percentage / 100);
+              Math.round(Number(item.quantity || 0) * Number(item.unitPrice || 0) * 100) / 100;
+            item.discountAmount = Math.round(gross * (percentage / 100) * 100) / 100;
           }
         }
       }
 
       const qty = Number(item.quantity || 0);
       const price = Number(item.unitPrice || 0);
+      const gross = Math.round(qty * price * 100) / 100;
       const disc = Number(item.discountAmount || 0);
 
-      item.grossAmount = qty * price;
-      item.totalAmount = qty * price - disc;
+      item.grossAmount = gross;
+      item.totalAmount = Math.round((gross - disc) * 100) / 100;
 
       newDetails[index] = item;
       return newDetails;
@@ -327,7 +328,7 @@ export function UpdateSalesReturnModal({
         if (existingIndex >= 0) {
           const existing = updated[existingIndex];
           existing.quantity = Number(existing.quantity || 0) + qty;
-          existing.grossAmount = existing.quantity * existing.unitPrice;
+          existing.grossAmount = Math.round(existing.quantity * existing.unitPrice * 100) / 100;
           
           if (existing.discountType && existing.discountType !== "No Discount") {
             const selectedDisc = discountOptions.find(
@@ -335,17 +336,17 @@ export function UpdateSalesReturnModal({
             );
             if (selectedDisc) {
               const percentage = parseFloat(selectedDisc.percentage);
-              existing.discountAmount = existing.grossAmount * (percentage / 100);
+              existing.discountAmount = Math.round(existing.grossAmount * (percentage / 100) * 100) / 100;
             }
           }
           
-          existing.totalAmount = existing.grossAmount - (Number(existing.discountAmount) || 0);
+          existing.totalAmount = Math.round((existing.grossAmount - (Number(existing.discountAmount) || 0)) * 100) / 100;
           if (item.rfidTags) {
             existing.rfidTags = [...(existing.rfidTags || []), ...item.rfidTags];
           }
         } else {
-          const price = Number(item.unitPrice) || Number(item.price) || 0;
-          const gross = price * qty;
+          const price = Math.round((Number(item.unitPrice) || Number(item.price) || 0) * 100) / 100;
+          const gross = Math.round(price * qty * 100) / 100;
           const discAmt = Number(item.discountAmount) || 0;
 
           updated.push({
@@ -359,7 +360,7 @@ export function UpdateSalesReturnModal({
             grossAmount: gross,
             discountType: item.discountType || null,
             discountAmount: discAmt,
-            totalAmount: gross - discAmt,
+            totalAmount: Math.round((gross - discAmt) * 100) / 100,
             reason: item.reason || "",
             returnType: item.returnType || "",
           });
@@ -534,18 +535,18 @@ export function UpdateSalesReturnModal({
   };
 
   // --- RENDER ---
-  const totalGross = details.reduce(
+  const totalGross = Math.round(details.reduce(
     (acc, i) => acc + Number(i.quantity) * Number(i.unitPrice),
     0,
-  );
-  const totalDiscount = details.reduce(
+  ) * 100) / 100;
+  const totalDiscount = Math.round(details.reduce(
     (acc, i) => acc + (Number(i.discountAmount) || 0),
     0,
-  );
-  const totalNet = details.reduce(
+  ) * 100) / 100;
+  const totalNet = Math.round(details.reduce(
     (acc, i) => acc + (Number(i.totalAmount) || 0),
     0,
-  );
+  ) * 100) / 100;
   const filteredInvoices = invoiceOptions.filter((inv) =>
     inv.invoice_no.toLowerCase().includes(invoiceSearch.toLowerCase()),
   );

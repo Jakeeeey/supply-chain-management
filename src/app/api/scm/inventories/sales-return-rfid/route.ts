@@ -19,8 +19,9 @@ import {
   updateReturn,
   updateStatus,
 } from "@/modules/supply-chain-management/inventories/sales-return-rfid/services/sales-return-service";
-
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 function json(res: any, status = 200) {
   return NextResponse.json(res, { status });
