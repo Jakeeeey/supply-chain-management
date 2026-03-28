@@ -196,11 +196,12 @@ export function PhysicalInventoryTable(props: Props) {
                                     <TableHeader>
                                         <TableRow className="bg-background">
                                             <TableHead className="w-[100px]">UOM</TableHead>
-                                            <TableHead className="text-right">Factor</TableHead>
+                                            <TableHead className="text-right">UOM Count</TableHead>
                                             <TableHead className="text-right">System</TableHead>
                                             <TableHead className="text-right">Physical</TableHead>
                                             <TableHead className="text-right">Variance</TableHead>
                                             <TableHead className="hidden text-right lg:table-cell">Var Base</TableHead>
+                                            <TableHead className="hidden text-right xl:table-cell">Cost</TableHead>
                                             <TableHead className="hidden text-right xl:table-cell">Price</TableHead>
                                             <TableHead className="hidden text-right xl:table-cell">Amount</TableHead>
                                             <TableHead className="hidden text-right lg:table-cell">Diff Cost</TableHead>
@@ -280,6 +281,10 @@ export function PhysicalInventoryTable(props: Props) {
                                                         className={`hidden text-right font-medium tabular-nums lg:table-cell ${varianceBaseClass}`}
                                                     >
                                                         {fmtQty(row.variance_base)}
+                                                    </TableCell>
+
+                                                    <TableCell className="hidden text-right tabular-nums xl:table-cell">
+                                                        ₱ {fmtMoney(row.cost_per_unit ?? 0)}
                                                     </TableCell>
 
                                                     <TableCell className="hidden text-right tabular-nums xl:table-cell">

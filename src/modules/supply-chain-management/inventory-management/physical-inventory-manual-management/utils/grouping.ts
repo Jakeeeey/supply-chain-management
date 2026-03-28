@@ -120,7 +120,7 @@ export function buildGroupedPhysicalInventoryRows(
                     ? coalesceNumber(rfidCountByDetailId[detailId], 0)
                     : 0;
 
-            const isRfidRow = requiresRfid(variant.unit_order);
+            const isRfidRow = requiresRfid();
             const physicalCount = isRfidRow
                 ? rfidCount
                 : coalesceNumber(detail?.physical_count, 0);

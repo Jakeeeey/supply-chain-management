@@ -13,7 +13,11 @@ import {
     type PhysicalInventoryListRow,
 } from "@/modules/supply-chain-management/inventory-management/physical-inventory-list";
 
-export default function PhysicalInventoryOffsettingWorkspaceClient() {
+type Props = {
+    currentUser?: { id: number; name: string };
+};
+
+export default function PhysicalInventoryOffsettingWorkspaceClient({ currentUser }: Props) {
     const searchParams = useSearchParams();
     const urlPhId = searchParams.get("id");
 
@@ -110,6 +114,7 @@ export default function PhysicalInventoryOffsettingWorkspaceClient() {
                         <PhysicalInventoryOffsettingModule
                             key={selectedHeaderId}
                             phId={selectedHeaderId}
+                            currentUser={currentUser}
                         />
                     ) : (
                         <div className="flex min-h-[420px] items-center justify-center rounded-2xl border bg-background">
