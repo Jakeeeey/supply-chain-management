@@ -463,11 +463,11 @@ export async function POST(request: Request) {
                 const detailLogs: any[] = [];
                 
                 // Collect IDs from both sources to ensure we create records for items with RFIDs even if missingQty is 0
-                // If Unfulfilled, we ensure ALL items are included even if missingQtys is empty
+                // If Unfulfilled AND Final Confirm, we ensure ALL items are included even if missingQtys is empty
                 const detailIdsToLog = new Set([
                     ...Object.keys(inv.missingQtys || {}),
                     ...Object.keys(inv.scannedRFIDs || {}),
-                    ...(inv.status === 'Unfulfilled' ? originalDetails.map((d: any) => (d.detail_id || d.id).toString()) : [])
+                    ...(!isPreSave && inv.status === 'Unfulfilled' ? originalDetails.map((d: any) => (d.detail_id || d.id).toString()) : [])
                 ]);
 
                 if (detailIdsToLog.size > 0) {
@@ -476,8 +476,8 @@ export async function POST(request: Request) {
                         let missingQty = (inv.missingQtys || {})[detailIdStr] || 0;
                         const original = originalDetails.find((d: any) => (d.detail_id || d.id) === detailId);
 
-                        // If Unfulfilled and qty is not specifically set (empty from frontend), assume full missing qty
-                        if (inv.status === 'Unfulfilled' && missingQty === 0 && original) {
+                        // If Unfulfilled AND Final Confirm and qty is not specifically set (empty from frontend), assume full missing qty
+                        if (!isPreSave && inv.status === 'Unfulfilled' && missingQty === 0 && original) {
                             missingQty = original.quantity || 0;
                         }
                         
@@ -504,6 +504,12 @@ export async function POST(request: Request) {
                 }
 
                 console.log(`[Clearance POST]   -> Found ${detailLogs.length} detail logs to be persisted.`);
+
+                // Skip creating/updating transaction header if no details to log during Pre-Save
+                if (isPreSave && detailLogs.length === 0) {
+                    console.log(`[Clearance POST]   -> No interactive data for invoice ${inv.invoiceNo}. Skipping transaction log for Pre-Save.`);
+                    continue;
+                }
 
                 // Make sure to process scannedQtys if they are treated as returns, ensuring they are logged too
                 // For simplicity, we assume missingQtys already captures the differences correctly per frontend logic.
