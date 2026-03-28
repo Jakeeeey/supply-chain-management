@@ -251,7 +251,7 @@ export async function fetchInventoryMap(token?: string, branchId?: number, filte
       
       url = `${SPRING_API}/api/view-running-inventory/filter?${sp.toString()}`;
     } else {
-      url = `${SPRING_API}/api/view-running-inventory/all${branchId !== undefined ? `?branch_id=${branchId}` : ""}`;
+      url = `${SPRING_API}/api/view-running-inventory-balance/all${branchId !== undefined ? `?branch_id=${branchId}` : ""}`;
     }
     if (url.includes("/all")) {
       const now = Date.now();
@@ -281,7 +281,7 @@ export async function fetchInventoryMap(token?: string, branchId?: number, filte
         // If /filter failed (e.g. 404 or 400), try falling back to /all as a last resort
         if (url.includes("/filter")) {
           console.warn(`[Stock-Conversion] /filter failed (${status}). Falling back to /all...`);
-          const fallbackUrl = `${SPRING_API}/api/view-running-inventory/all${branchId !== undefined ? `?branch_id=${branchId}` : ""}`;
+          const fallbackUrl = `${SPRING_API}/api/view-running-inventory-balance/all${branchId !== undefined ? `?branch_id=${branchId}` : ""}`;
           const fallbackRes = await fetchWithTimeout(fallbackUrl, { 
             headers: springHeaders(token), 
             next: { revalidate: 60 } // NextJS ISR cache for 60s

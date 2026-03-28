@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -25,6 +25,7 @@ import { Filter, Cuboid, Layers, Users, RefreshCw, Search } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 
 interface StockConversionTableProps {
   data: StockConversionProduct[];
@@ -40,7 +41,7 @@ interface StockConversionTableProps {
   isLoading?: boolean;
   branches?: any[];
   selectedBranchId?: number;
-  onBranchChange?: (branchId: number) => void;
+  onBranchChange?: (branchId: number | undefined) => void;
 }
 
 export function StockConversionTable({ 
@@ -58,10 +59,36 @@ export function StockConversionTable({
   const uniqueBrands = useMemo(() => Array.from(new Set(data.map(d => d.brand))), [data]);
   const uniqueCategories = useMemo(() => Array.from(new Set(data.map(d => d.category))), [data]);
   const uniqueUnits = useMemo(() => Array.from(new Set(data.map(d => d.currentUnit))), [data]);
-  const uniqueSuppliers = useMemo(() => Array.from(new Set(data.map(d => d.supplierName || "No Supplier"))), [data]);
+  const uniqueSuppliers = useMemo(() => {
+    const map = new Map<string, string>();
+    data.forEach(d => {
+      if (d.supplierName && d.supplierShortcut) {
+        map.set(d.supplierName, d.supplierShortcut);
+      }
+    });
+    return Array.from(map.entries()).map(([name, shortcut]) => ({ name, shortcut }));
+  }, [data]);
+
+  const currentFilters = useMemo(() => {
+    const selectedSupplier = uniqueSuppliers.find(s => s.name === supplierFilter);
+    return {
+      supplierShortcut: selectedSupplier?.shortcut || (supplierFilter === "all" ? "all" : undefined),
+      productBrand: brandFilter,
+      productCategory: categoryFilter,
+      unitName: unitFilter,
+    };
+  }, [supplierFilter, brandFilter, categoryFilter, unitFilter, uniqueSuppliers]);
 
   const hasRequiredFilter = supplierFilter !== "all" || brandFilter !== "all" || categoryFilter !== "all" || searchQuery.trim().length >= 3;
-  const hasAnyFilter = hasRequiredFilter || unitFilter !== "all" || searchQuery.trim().length > 0;
+  const hasAnyFilter = hasRequiredFilter || unitFilter !== "all" || searchQuery.trim().length > 0 || selectedBranchId !== undefined;
+
+  // Effect to auto-refresh inventory when main filters change
+  useEffect(() => {
+     if (hasRequiredFilter) {
+        onRefresh(currentFilters);
+     }
+  }, [supplierFilter, brandFilter, categoryFilter, hasRequiredFilter, onRefresh]); // Debounced refresh would be better but let's start here
+
 
   const filteredData = useMemo(() => {
     if (!hasRequiredFilter) return [];
@@ -119,7 +146,7 @@ export function StockConversionTable({
             <Button 
                variant="ghost" 
                size="sm" 
-               onClick={onRefresh} 
+               onClick={() => onRefresh(currentFilters)} 
                disabled={isLoading}
                className="h-8 w-8 p-0 hover:bg-muted rounded-full"
             >
@@ -151,16 +178,13 @@ export function StockConversionTable({
               <span className="text-sm font-medium text-foreground flex items-center gap-1">
                 Branch:
               </span>
-              <Select value={selectedBranchId ? String(selectedBranchId) : ""} onValueChange={(val) => onBranchChange?.(Number(val))}>
-                <SelectTrigger className="w-[180px] bg-background">
-                  <SelectValue placeholder="Select Branch" />
-                </SelectTrigger>
-                <SelectContent position="popper" className="z-50 bg-background max-h-[300px]">
-                  {branches?.map(b => (
-                    <SelectItem key={b.id} value={String(b.id)}>{b.branch_name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableCombobox
+                options={branches?.map(b => ({ value: String(b.id), label: b.branch_name })) || []}
+                value={selectedBranchId ? String(selectedBranchId) : ""}
+                onValueChange={(val) => onBranchChange?.(val ? Number(val) : undefined)}
+                placeholder="Select Branch"
+                className="w-[180px] bg-background"
+              />
            </div>
 
            <div className="flex items-center gap-2">
@@ -168,17 +192,16 @@ export function StockConversionTable({
                 <Users className="w-3.5 h-3.5 text-muted-foreground" />
                 Supplier:
               </span>
-              <Select value={supplierFilter} onValueChange={setSupplierFilter}>
-                <SelectTrigger className="w-[180px] bg-background">
-                  <SelectValue placeholder="All Suppliers" />
-                </SelectTrigger>
-                <SelectContent position="popper" className="z-50 bg-background">
-                  <SelectItem value="all">All Suppliers</SelectItem>
-                  {uniqueSuppliers.map(s => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+               <SearchableCombobox
+                options={[
+                  { value: "all", label: "All Suppliers" },
+                  ...uniqueSuppliers.map(s => ({ value: s.name, label: s.name }))
+                ]}
+                value={supplierFilter}
+                onValueChange={(val) => setSupplierFilter(val || "all")}
+                placeholder="All Suppliers"
+                className="w-[180px] bg-background"
+              />
            </div>
 
            <div className="flex items-center gap-2">
@@ -237,6 +260,7 @@ export function StockConversionTable({
                  setCategoryFilter("all");
                  setUnitFilter("all");
                  setSearchQuery("");
+                 onBranchChange?.(undefined);
                }}
              >
                Clear

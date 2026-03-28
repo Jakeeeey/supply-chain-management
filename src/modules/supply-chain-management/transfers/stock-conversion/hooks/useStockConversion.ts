@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { type StockConversionProduct, type StockConversionPayload } from "../types";
+import { type InventoryFilters } from "../services/stock-conversion";
 
 // --- IN-MEMORY CACHE FOR INSTANT NAVIGATION ---
 // This safely preserves data when moving between modules without refetching.
@@ -74,18 +75,24 @@ export function useStockConversion(branchId?: number) {
   }, []);
 
   // 2. Targeted Inventory Fetch: Triggered by UI/Filters
-  const loadInventory = useCallback(async () => {
-    console.log("[useStockConversion] Triggering global background inventory fetch...");
+  const loadInventory = useCallback(async (filters?: InventoryFilters) => {
+    console.log("[useStockConversion] Triggering targeted background inventory fetch...", filters);
     
     // Set loading state for products matching these filters
-    // If we have filters, we might not know which products match yet locally,
-    // so we set all to loading if it's a "big refresh" or just the specific ones if known.
     setData(prev => prev.map(p => p.inventoryLoaded !== true ? { ...p, inventoryLoaded: false } : p));
 
     try {
       const sp = new URLSearchParams();
       sp.set("type", "inventory");
       if (branchId !== undefined) sp.set("branchId", String(branchId));
+
+      if (filters) {
+          if (filters.supplierShortcut && filters.supplierShortcut !== "all") sp.set("supplierShortcut", filters.supplierShortcut);
+          if (filters.productCategory && filters.productCategory !== "all") sp.set("productCategory", filters.productCategory);
+          if (filters.unitName && filters.unitName !== "all") sp.set("unitName", filters.unitName);
+          if (filters.productBrand && filters.productBrand !== "all") sp.set("productBrand", filters.productBrand);
+          if (filters.productIds && filters.productIds.length > 0) sp.set("productIds", filters.productIds.join(","));
+      }
 
       const invUrl = `/api/scm/transfers/stock-conversion?${sp.toString()}`;
       const res = await fetch(invUrl);
@@ -97,15 +104,14 @@ export function useStockConversion(branchId?: number) {
       setData(prev => {
         const next = prev.map(p => {
           const qty = invMap[p.productId];
-          if (qty !== undefined) {
-            return {
-                ...p,
-                quantity: qty,
-                totalAmount: Number((qty * (p.pricePerUnit || 0)).toFixed(2)),
-                inventoryLoaded: true
-            };
-          }
-          return p;
+          const finalQty = qty !== undefined ? qty : 0;
+          return {
+              ...p,
+              quantity: finalQty,
+              totalAmount: Number((finalQty * (p.pricePerUnit || 0)).toFixed(2)),
+              inventoryLoaded: true,
+              inventoryError: false
+          };
         });
         
         cachedData = next; // sync cache

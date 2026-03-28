@@ -64,7 +64,7 @@ export default function StockConversionModule({ user }: StockConversionModulePro
     setIsUnitModalOpen(true);
   };
 
-  const handleConfirmUnitConversion = (qtyToConvert: number, targetUnit: { unitId: number, targetProductId?: number }, convertedQuantity: number) => {
+  const handleConfirmUnitConversion = async (qtyToConvert: number, targetUnit: { unitId: number, targetProductId?: number }, convertedQuantity: number) => {
     console.log("[StockConversionModule] Confirming unit conversion:", { qtyToConvert, targetUnit, convertedQuantity });
     setPendingConversion({ 
       qtyToConvert, 
@@ -74,11 +74,43 @@ export default function StockConversionModule({ user }: StockConversionModulePro
     });
     setIsUnitModalOpen(false);
     
-    // Open RFID Modal immediately after
-    setTimeout(() => {
-      console.log("[StockConversionModule] Opening RFID Modal...");
-      setIsRfidModalOpen(true);
-    }, 150);
+    const targetUnitRecord = selectedProduct?.availableUnits?.find(u => u.unitId === targetUnit.unitId);
+    const isBoxInvolved = 
+      selectedProduct?.currentUnit?.toLowerCase().includes('box') ||
+      targetUnitRecord?.name?.toLowerCase().includes('box');
+
+    if (isBoxInvolved) {
+      // Open RFID Modal immediately after
+      setTimeout(() => {
+        console.log("[StockConversionModule] Opening RFID Modal...");
+        setIsRfidModalOpen(true);
+      }, 150);
+    } else {
+      if (!selectedProduct) return;
+      const payload = {
+        productId: selectedProduct.productId,
+        sourceUnitId: selectedProduct.currentUnitId || 11,
+        targetUnitId: targetUnit.unitId,
+        targetProductId: targetUnit.targetProductId || selectedProduct.productId,
+        quantityToConvert: qtyToConvert,
+        convertedQuantity: convertedQuantity,
+        pricePerUnit: selectedProduct.pricePerUnit || 0,
+        branchId: selectedBranchId || user?.branchId || 190,
+        userId: user?.id || 24,
+        rfidTags: []
+      };
+
+      setIsSubmitting(true);
+      try {
+        await convertStock(payload);
+        setSelectedProduct(null);
+        setPendingConversion(null);
+      } catch (e: unknown) {
+        console.error(e);
+      } finally {
+        setIsSubmitting(false);
+      }
+    }
   };
 
   const handleConfirmRFID = async (tags: RFIDTag[]) => {

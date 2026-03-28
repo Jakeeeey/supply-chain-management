@@ -160,8 +160,7 @@ export function StockConversionModal({
                     {u.name}
                   </div>
                   <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-tighter">
-                    {/* Display generic info or leave empty if specific packaging info is no longer in schema */}
-                    Conversion Factor: {u.conversionFactor}
+                    UoM Count: {u.conversionFactor}
                   </div>
                 </div>
               ))}
