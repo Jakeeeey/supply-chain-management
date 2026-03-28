@@ -10,11 +10,9 @@ import {
   Save,
   AlertTriangle,
   CheckCircle,
-  AlertCircle,
   Link as LinkIcon,
   FileText,
   Search,
-  Radio,
   ChevronDown,
   ScanLine,
 } from "lucide-react";
@@ -62,6 +60,20 @@ import { SalesReturnPrintSlip } from "./SalesReturnPrintSlip";
 import { createRoot } from "react-dom/client";
 import { useRfidScanner } from "../hooks/useRfidScanner";
 import { useSearchParams } from "next/navigation";
+
+interface SalesReturnGroup {
+  key: string;
+  code: string;
+  description: string;
+  unit: string;
+  returnType: string;
+  unitPrice: number;
+  totalQty: number;
+  totalGross: number;
+  totalDiscount: number;
+  totalNet: number;
+  children: { item: SalesReturnItem; idx: number }[];
+}
 
 interface Props {
   returnId: number;
@@ -122,7 +134,6 @@ export function UpdateSalesReturnModal({
 
   const [isUpdating, setIsUpdating] = useState(false);
   const [isReceiving, setIsReceiving] = useState(false);
-  const [validationError, setValidationError] = useState<string | null>(null);
   const [returnTypeError, setReturnTypeError] = useState(false);
   const [orderError, setOrderError] = useState(false);
   const [invoiceError, setInvoiceError] = useState(false);
@@ -204,7 +215,7 @@ export function UpdateSalesReturnModal({
     if (returnId) {
       loadFullDetails();
     }
-  }, [returnId, headerData.returnNo, headerData.customerCode]);
+  }, [returnId, headerData.returnNo, headerData.customerCode, headerData.salesmanId]);
 
   // 🟢 NEW: Effect to automatically update prices when Price Type changes
   useEffect(() => {
@@ -241,7 +252,7 @@ export function UpdateSalesReturnModal({
         })
       );
     }
-  }, [headerData.priceType, discountOptions]);
+  }, [headerData.priceType, discountOptions, details.length]);
 
   // Click outside handler for order/invoice dropdowns
   useEffect(() => {
@@ -280,7 +291,7 @@ export function UpdateSalesReturnModal({
   const handleRfidScan = async (tag: string) => {
     if (!tag.trim()) return;
     if (!canEditAll) {
-      setValidationError("Cannot add items when status is not Pending.");
+      toast.error("Cannot add items when status is not Pending.");
       return;
     }
 
@@ -304,26 +315,24 @@ export function UpdateSalesReturnModal({
     }
 
     if (!branchId) {
-      setValidationError("Cannot determine branch for RFID lookup.");
+      toast.error("Cannot determine branch for RFID lookup.");
       return;
     }
 
     // Check for duplicate RFID already in details
     if (details.some((item) => item.rfidTags?.includes(tag))) {
-      setValidationError(`RFID tag "${tag}" is already in the list.`);
+      toast.error(`RFID tag "${tag}" is already in the list.`);
       return;
     }
 
     setRfidScanning(true);
     setLastScannedRfid(tag);
-    setValidationError(null);
 
     try {
       // 🟢 NEW: Global Duplicate Check
       const dupCheck = await SalesReturnProvider.checkRfidDuplicate(tag);
       if (dupCheck.isDuplicate && dupCheck.returnNo !== headerData.returnNo) {
         const errorMsg = `RFID tag "${tag}" is already linked to SR #${dupCheck.returnNo}.`;
-        setValidationError(errorMsg);
         toast.error(errorMsg, {
           description: "This tag cannot be returned again as it exists in another record.",
           duration: 6000,
@@ -336,7 +345,6 @@ export function UpdateSalesReturnModal({
       if (!result || !result.productId) {
         const branchName = salesmanOpt?.branch || "this branch";
         const errorMsg = `RFID tag "${tag}" is NOT registered to ${branchName}.`;
-        setValidationError(errorMsg);
         toast.error(errorMsg, {
           description: "Please check if the scan is correct or if the item is in the wrong location.",
           duration: 5000,
@@ -346,9 +354,10 @@ export function UpdateSalesReturnModal({
 
       const currentPriceType = headerData.priceType || "A";
       const priceKey = `price${currentPriceType}` as string;
+      const resultRecord = result as Record<string, unknown>;
       const unitPrice =
-        Math.round((Number((result as any)[priceKey]) ||
-        Number(result.unitPrice) ||
+        Math.round((Number(resultRecord[priceKey]) ||
+        Number(resultRecord.unitPrice) ||
         0) * 100) / 100;
       const grossAmount = Math.round(unitPrice * 1 * 100) / 100;
 
@@ -388,7 +397,6 @@ export function UpdateSalesReturnModal({
       console.error("RFID lookup error:", err);
       const error = err as Error;
       const errorMsg = `Failed to look up RFID tag "${tag}".`;
-      setValidationError(error.message || errorMsg);
       toast.error(errorMsg, {
         description: error.message || "An unexpected error occurred during scan.",
       });
@@ -500,7 +508,6 @@ export function UpdateSalesReturnModal({
 
   // --- HANDLERS: UPDATE ---
   const handleUpdateClick = () => {
-    setValidationError(null);
     setReturnTypeError(false);
     setOrderError(false);
     setInvoiceError(false);
@@ -529,7 +536,6 @@ export function UpdateSalesReturnModal({
   };
 
   const handleReceiveClick = () => {
-    setValidationError(null);
     setReturnTypeError(false);
     setOrderError(false);
     setInvoiceError(false);
@@ -1019,7 +1025,7 @@ export function UpdateSalesReturnModal({
 
                         {/* 2. RENDER RFID ITEMS (Grouped) */}
                         {Object.values(
-                          details.filter(i => i.rfidTags && i.rfidTags.length > 0).reduce((acc, item, originalIdx) => {
+                          details.filter(i => i.rfidTags && i.rfidTags.length > 0).reduce((acc, item) => {
                             // Find the true index in details
                             const idx = details.findIndex(d => d === item);
                             const rType = item.returnType || "Unassigned";
@@ -1045,8 +1051,8 @@ export function UpdateSalesReturnModal({
                             acc[key].totalNet += Number(item.totalAmount) || 0;
                             acc[key].children.push({ item, idx });
                             return acc;
-                          }, {} as Record<string, any>)
-                        ).map((group: any) => (
+                          }, {} as Record<string, SalesReturnGroup>)
+                        ).map((group: SalesReturnGroup) => (
                           <React.Fragment key={group.key}>
                             {/* Parent Summary Row */}
                             <TableRow className="bg-muted/10 font-semibold border-b border-border">

@@ -10,11 +10,9 @@ import {
   Save,
   AlertTriangle,
   CheckCircle,
-  AlertCircle,
   Link as LinkIcon,
   FileText,
   Search,
-  Radio,
   ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -59,6 +57,20 @@ import {
 import { ProductLookupModal } from "./ProductLookupModal";
 import { SalesReturnPrintSlip } from "./SalesReturnPrintSlip";
 import { createRoot } from "react-dom/client";
+
+interface SalesReturnGroup {
+  key: string;
+  code: string;
+  description: string;
+  unit: string;
+  returnType: string;
+  unitPrice: number;
+  totalQty: number;
+  totalGross: number;
+  totalDiscount: number;
+  totalNet: number;
+  children: { item: SalesReturnItem; idx: number }[];
+}
 
 interface Props {
   returnId: number;
@@ -116,10 +128,8 @@ export function UpdateSalesReturnModal({
   const [isUpdateSuccessOpen, setIsUpdateSuccessOpen] = useState(false);
   const [isReceiveConfirmOpen, setIsReceiveConfirmOpen] = useState(false);
   const [isInvoiceLookupOpen, setIsInvoiceLookupOpen] = useState(false);
-
   const [isUpdating, setIsUpdating] = useState(false);
   const [isReceiving, setIsReceiving] = useState(false);
-  const [validationError, setValidationError] = useState<string | null>(null);
   const [returnTypeError, setReturnTypeError] = useState(false);
   const [orderError, setOrderError] = useState(false);
   const [invoiceError, setInvoiceError] = useState(false);
@@ -195,15 +205,15 @@ export function UpdateSalesReturnModal({
     if (returnId) {
       loadFullDetails();
     }
-  }, [returnId, headerData.returnNo, headerData.customerCode]);
+  }, [returnId, headerData.returnNo, headerData.customerCode, headerData.salesmanId]);
 
   // 🟢 NEW: Effect to automatically update prices when Price Type changes
   useEffect(() => {
     if (details.length > 0) {
       setDetails((prevDetails) =>
         prevDetails.map((item) => {
-          const key = `price${headerData.priceType}` as string;
-          const basePrice = Number(item[key as keyof SalesReturnItem]) || Number(item.priceA) || Number(item.unitPrice) || 0;
+          const key = `price${headerData.priceType}` as keyof SalesReturnItem;
+          const basePrice = Number(item[key]) || Number(item.priceA) || Number(item.unitPrice) || 0;
           
           const newUnitPrice = Math.round((item.unit === "BOX" 
             ? basePrice * (item.unitMultiplier || 1) 
@@ -232,7 +242,7 @@ export function UpdateSalesReturnModal({
         })
       );
     }
-  }, [headerData.priceType, discountOptions]);
+  }, [headerData.priceType, discountOptions, details.length]);
 
   // Click outside handler for order/invoice dropdowns
   useEffect(() => {
@@ -373,7 +383,6 @@ export function UpdateSalesReturnModal({
 
   // --- HANDLERS: UPDATE ---
   const handleUpdateClick = () => {
-    setValidationError(null);
     setReturnTypeError(false);
     setOrderError(false);
     setInvoiceError(false);
@@ -402,7 +411,6 @@ export function UpdateSalesReturnModal({
   };
 
   const handleReceiveClick = () => {
-    setValidationError(null);
     setReturnTypeError(false);
     setOrderError(false);
     setInvoiceError(false);
@@ -858,9 +866,8 @@ export function UpdateSalesReturnModal({
                           );
                         })}
 
-                        {/* 2. RENDER RFID ITEMS (Grouped) */}
                         {Object.values(
-                          details.filter(i => i.rfidTags && i.rfidTags.length > 0).reduce((acc, item, originalIdx) => {
+                          details.filter(i => i.rfidTags && i.rfidTags.length > 0).reduce((acc, item) => {
                             // Find the true index in details
                             const idx = details.findIndex(d => d === item);
                             const rType = item.returnType || "Unassigned";
@@ -886,8 +893,8 @@ export function UpdateSalesReturnModal({
                             acc[key].totalNet += Number(item.totalAmount) || 0;
                             acc[key].children.push({ item, idx });
                             return acc;
-                          }, {} as Record<string, any>)
-                        ).map((group: any) => (
+                          }, {} as Record<string, SalesReturnGroup>)
+                        ).map((group: SalesReturnGroup) => (
                           <React.Fragment key={group.key}>
                         {/* Parent Summary Row */}
                         <TableRow className="bg-muted/10 font-semibold border-b border-border">

@@ -1,19 +1,16 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   X,
   Plus,
   Trash2,
   Save,
   ChevronDown,
-  AlertCircle,
   FileText,
   User,
   Calculator,
   CheckCircle,
-  Minus,
-  Radio,
   Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -22,7 +19,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-
 import {
   SalesReturnItem,
   API_LineDiscount,
@@ -47,6 +43,20 @@ interface Props {
   onSuccess?: () => void;
 }
 
+interface SalesReturnGroup {
+  key: string;
+  code: string;
+  description: string;
+  unit: string;
+  returnType: string;
+  unitPrice: number;
+  totalQty: number;
+  totalGross: number;
+  totalDiscount: number;
+  totalNet: number;
+  children: { item: SalesReturnItem; idx: number }[];
+}
+
 export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   // --- 1. FORM STATE ---
   const [returnDate, setReturnDate] = useState(
@@ -68,7 +78,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // UI State for Validation
-  const [validationError, setValidationError] = useState<string | null>(null);
   const [returnTypeError, setReturnTypeError] = useState(false);
 
   // Bottom Form Fields
@@ -105,9 +114,8 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const [orderError, setOrderError] = useState(false);
   const [invoiceError, setInvoiceError] = useState(false);
 
-  // --- 3. CART STATE ---
+  // --- RFID State ---
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
-  const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({});
 
   // --- 3. CART STATE ---
   const [items, setItems] = useState<SalesReturnItem[]>([]);
@@ -126,9 +134,10 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
    * Resolves the correct unit price based on the selected salesman's priceType.
    * Falls back to priceA if the specific price type is not available.
    */
-  const resolvePrice = (product: any, currentPriceType: string): number => {
-    const key = `price${currentPriceType}` as string;
-    const price = Number(product[key]) || Number(product.priceA) || Number(product.unitPrice) || 0;
+  const resolvePrice = (product: SalesReturnItem | Record<string, unknown>, currentPriceType: string): number => {
+    const key = `price${currentPriceType}`;
+    const productRecord = product as Record<string, unknown>;
+    const price = Number(productRecord[key]) || Number(productRecord.priceA) || Number(productRecord.unitPrice) || 0;
     return Math.round(price * 100) / 100;
   };
 
@@ -199,7 +208,32 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         })
       );
     }
-  }, [priceType, lineDiscountOptions]);
+  }, [priceType, lineDiscountOptions, items.length]);
+
+  const handleSelectSalesman = useCallback((salesman: SalesmanOption) => {
+    setSelectedSalesmanId(salesman.id.toString());
+    setSalesmanSearch(salesman.name);
+    setSalesmanCode(salesman.code);
+    setPriceType(salesman.priceType || "A");
+    const linkedBranch = branches.find((b) => b.id === salesman.branchId);
+    setBranchName(linkedBranch ? linkedBranch.name : "");
+    setIsSalesmanOpen(false);
+    setOrderNo("");
+    setOrderSearch("");
+    setInvoiceNo("");
+    setInvoiceSearch("");
+  }, [branches]);
+
+  const handleSelectCustomer = useCallback((customer: CustomerOption) => {
+    setSelectedCustomerId(customer.id.toString());
+    setCustomerSearch(customer.name);
+    setCustomerCode(customer.code || "");
+    setIsCustomerOpen(false);
+    setOrderNo("");
+    setOrderSearch("");
+    setInvoiceNo("");
+    setInvoiceSearch("");
+  }, []);
 
   // --- 5b. FETCH INVOICES when salesman or customer changes ---
   useEffect(() => {
@@ -220,14 +254,13 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     } else {
       setInvoiceOptions([]);
     }
-  }, [selectedSalesmanId, customerCode]);
+  }, [selectedSalesmanId, customerCode, handleSelectSalesman, handleSelectCustomer]);
 
   // --- 6. CLICK OUTSIDE HANDLERS ---
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       const target = event.target as Node;
 
-      // Salesman
       if (
         salesmanWrapperRef.current &&
         !salesmanWrapperRef.current.contains(target)
@@ -239,7 +272,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         if (found) setSalesmanSearch(found.name);
       }
 
-      // Customer
       if (
         customerWrapperRef.current &&
         !customerWrapperRef.current.contains(target)
@@ -251,7 +283,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         if (found) setCustomerSearch(found.name);
       }
 
-      // Invoice
       if (
         invoiceWrapperRef.current &&
         !invoiceWrapperRef.current.contains(target)
@@ -259,7 +290,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         setIsInvoiceOpen(false);
       }
 
-      // Order No
       if (
         orderWrapperRef.current &&
         !orderWrapperRef.current.contains(target)
@@ -289,7 +319,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     setInvoiceNo("");
     setInvoiceSearch("");
     setIsThirdParty(false);
-    setValidationError(null);
     setInvoiceOptions([]);
   };
 
@@ -298,7 +327,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     onClose();
   };
 
-  // --- 7. FILTERING & SELECTION ---
   const filteredSalesmen = salesmen.filter((s) =>
     s.name.toLowerCase().includes(salesmanSearch.toLowerCase()),
   );
@@ -306,81 +334,35 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     c.name.toLowerCase().includes(customerSearch.toLowerCase()),
   );
 
-  const filteredInvoices = invoiceOptions.filter((inv) =>
-    inv.invoice_no.toLowerCase().includes(invoiceSearch.toLowerCase()),
-  );
-
-  const filteredOrders = invoiceOptions.filter((inv) =>
-    inv.order_id.toLowerCase().includes(orderSearch.toLowerCase()),
-  );
-
-  const handleSelectSalesman = (salesman: SalesmanOption) => {
-    setSelectedSalesmanId(salesman.id.toString());
-    setSalesmanSearch(salesman.name);
-    setSalesmanCode(salesman.code);
-    setPriceType(salesman.priceType || "A");
-    const linkedBranch = branches.find((b) => b.id === salesman.branchId);
-    setBranchName(linkedBranch ? linkedBranch.name : "");
-    setValidationError(null);
-    setIsSalesmanOpen(false);
-    // Clear order/invoice on salesman change
-    setOrderNo("");
-    setOrderSearch("");
-    setInvoiceNo("");
-    setInvoiceSearch("");
-  };
-
-  const handleSelectCustomer = (customer: CustomerOption) => {
-    setSelectedCustomerId(customer.id.toString());
-    setCustomerSearch(customer.name);
-    setCustomerCode(customer.code || "");
-    setValidationError(null);
-    setIsCustomerOpen(false);
-    // Clear order/invoice on customer change
-    setOrderNo("");
-    setOrderSearch("");
-    setInvoiceNo("");
-    setInvoiceSearch("");
-  };
-
-  // --- 8. VALIDATION & ACTIONS ---
   const handleOpenProductLookup = () => {
-    setValidationError(null);
     if (!returnDate) {
       toast.error("Please select a Return Date before adding products.");
-      setValidationError("Please select a Return Date before adding products.");
       return;
     }
     if (!selectedSalesmanId) {
       toast.error("Please select a Salesman before adding products.");
-      setValidationError("Please select a Salesman before adding products.");
       return;
     }
     if (!selectedCustomerId) {
       toast.error("Please select a Customer before adding products.");
-      setValidationError("Please select a Customer before adding products.");
       return;
     }
     setIsProductLookupOpen(true);
   };
 
   const handleCreateReturn = async () => {
-    setValidationError(null);
     setReturnTypeError(false);
     setOrderError(false);
     setInvoiceError(false);
     
     if (!returnDate) {
       toast.error("Return Date is required.");
-      setValidationError("Return Date is required.");
       return;
     }
     if (items.length === 0) {
       toast.error("Please add at least one product.");
-      setValidationError("Please add at least one product.");
       return;
     }
-    // 🟢 REVISION: Added Validation for Order No.
     if (!orderNo.trim()) {
       toast.error("Order No. is required.");
       setOrderError(true);
@@ -432,8 +414,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       setSuccessOpen(true);
     } catch (err: unknown) {
       console.error(err);
-      const error = err as Error;
-      setValidationError(error.message || "Failed to create Sales Return.");
+      toast.error("Failed to create Sales Return.");
     } finally {
       setIsSubmitting(false);
     }
@@ -483,6 +464,13 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
             existing.rfidTags = [...(existing.rfidTags || []), ...item.rfidTags];
           }
         } else {
+          const resultRecord = item as Record<string, unknown>;
+          const priceKey = `price${priceType}`;
+          const unitPrice =
+            Math.round((Number(resultRecord[priceKey]) ||
+            Number(resultRecord.unitPrice) ||
+            0) * 100) / 100;
+
           updated.push({
             ...item,
             productId,
@@ -491,11 +479,11 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
             description: item.description || "Unknown Item",
             unit: item.unit || "Pcs",
             quantity: qty,
-            unitPrice: Math.round(Number(item.unitPrice || 0) * 100) / 100,
-            grossAmount: Math.round((item.unitPrice || 0) * qty * 100) / 100,
+            unitPrice: unitPrice,
+            grossAmount: Math.round(unitPrice * qty * 100) / 100,
             discountType: "",
             discountAmount: 0,
-            totalAmount: Math.round((item.unitPrice || 0) * qty * 100) / 100,
+            totalAmount: Math.round(unitPrice * qty * 100) / 100,
             reason: "",
             returnType: "",
           } as SalesReturnItem);
@@ -562,12 +550,19 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   ) * 100) / 100;
   const totalNet = Math.round(items.reduce((sum, item) => sum + item.totalAmount, 0) * 100) / 100;
 
+  const filteredInvoices = invoiceOptions.filter((inv) =>
+    inv.invoice_no.toLowerCase().includes(invoiceSearch.toLowerCase()),
+  );
+
+  const filteredOrders = invoiceOptions.filter((inv) =>
+    inv.order_id.toLowerCase().includes(orderSearch.toLowerCase()),
+  );
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-2 md:p-4 animate-in fade-in duration-300">
       <div className="bg-background w-full h-full md:max-w-[1300px] md:h-[95vh] md:rounded-xl shadow-2xl flex flex-col overflow-hidden ring-1 ring-white/20 animate-in zoom-in-95 duration-300 ease-out">
-        {/* HEADER */}
         <div className="flex justify-between items-center px-6 py-4 border-b border-border bg-background">
           <div className="flex items-center gap-3">
             <div className="bg-primary/10 p-2 rounded-lg">
@@ -592,16 +587,11 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
           </button>
         </div>
 
-        {/* BODY */}
         <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
-          {/* 1. PRIMARY DETAILS */}
-          {/* ... (Same UI Code as before) ... */}
-          {/* COL 1: Salesman, COL 2: Customer, COL 3: Date & Price */}
           <div className="bg-background p-5 rounded-lg border border-border shadow-sm relative">
             <div className="absolute top-0 left-0 w-1 h-full bg-primary rounded-l-lg"></div>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-4">
               
-              {/* Salesman */}
               <div className="space-y-1.5 relative" ref={salesmanWrapperRef}>
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
                   Salesman <span className="text-destructive">*</span>
@@ -642,7 +632,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                 )}
               </div>
 
-              {/* Salesman Code */}
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
                   Salesman Code
@@ -652,7 +641,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                 </div>
               </div>
 
-              {/* Customer */}
               <div className="space-y-1.5 relative" ref={customerWrapperRef}>
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
                   Customer <span className="text-destructive">*</span>
@@ -865,7 +853,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                           <FileText className="h-8 w-8 text-muted-foreground mb-1" />
                           <p>No items added yet.</p>
                           <span className="text-xs">
-                            Click "Add Product" to browse catalog.
+                            Click &quot;Add Product&quot; to browse catalog.
                           </span>
                         </div>
                       </td>
@@ -978,7 +966,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
                       {/* 2. RENDER RFID ITEMS (Grouped) */}
                       {Object.values(
-                        items.filter(i => i.rfidTags && i.rfidTags.length > 0).reduce((acc, item, originalIdx) => {
+                        items.filter(i => i.rfidTags && i.rfidTags.length > 0).reduce((acc, item) => {
                           const idx = items.findIndex(d => d === item);
                           const rType = item.returnType || "Unassigned";
                           const key = `${item.productId}-${item.unit}-${rType}`;
@@ -1003,8 +991,8 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                           acc[key].totalNet += Number(item.totalAmount) || 0;
                           acc[key].children.push({ item, idx });
                           return acc;
-                        }, {} as Record<string, any>)
-                      ).map((group: any) => (
+                        }, {} as Record<string, SalesReturnGroup>)
+                      ).map((group: SalesReturnGroup) => (
                         <React.Fragment key={group.key}>
                           {/* Parent Summary Row */}
                           <tr className="bg-muted/10 font-semibold border-b border-border">

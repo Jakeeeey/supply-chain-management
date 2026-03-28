@@ -124,17 +124,15 @@ export async function fetchReturnDetails(
 ): Promise<SalesReturnItem[]> {
   if (!returnNo) return [];
 
-  const [detailsRes, unitsRes, lineDiscountsRes, returnTypesRes] =
+  const [detailsRes, unitsRes, returnTypesRes] =
     await Promise.all([
       repo.getRawReturnDetails(returnNo),
       repo.getRawUnits(),
-      repo.getRawReferences().then((refs) => refs[3]),
       repo.getRawReferences().then((refs) => refs[4]),
     ]);
 
   const rawItems = detailsRes.data || [];
   const units = (unitsRes.data || []) as unknown as Unit[];
-  const lineDiscounts = (lineDiscountsRes.data || []) as unknown as API_LineDiscount[];
   const returnTypes = (returnTypesRes.data || []) as unknown as API_SalesReturnType[];
 
   // Build aggregate discount percentage map from junction + line_discount tables

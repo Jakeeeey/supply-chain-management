@@ -1,19 +1,16 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   X,
   Plus,
   Trash2,
   Save,
   ChevronDown,
-  AlertCircle,
   FileText,
   User,
   Calculator,
   CheckCircle,
-  Minus,
-  Radio,
   ScanLine,
   Loader2,
 } from "lucide-react";
@@ -31,6 +28,20 @@ import {
   InvoiceOption,
   PriceTypeOption,
 } from "../type";
+
+interface SalesReturnGroup {
+  key: string;
+  code: string;
+  description: string;
+  unit: string;
+  returnType: string;
+  unitPrice: number;
+  totalQty: number;
+  totalGross: number;
+  totalDiscount: number;
+  totalNet: number;
+  children: { item: SalesReturnItem; idx: number }[];
+}
 
 // Import Child Modal
 import { ProductLookupModal } from "./ProductLookupModal";
@@ -71,11 +82,11 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
   const [isThirdParty, setIsThirdParty] = useState(false);
   // Success Modal State
+  // Success Modal State
   const [isSuccessOpen, setSuccessOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // UI State for Validation
-  const [validationError, setValidationError] = useState<string | null>(null);
   const [returnTypeError, setReturnTypeError] = useState(false);
   const [orderError, setOrderError] = useState(false);
   const [invoiceError, setInvoiceError] = useState(false);
@@ -115,7 +126,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const [rfidScanning, setRfidScanning] = useState(false);
   const [lastScannedRfid, setLastScannedRfid] = useState("");
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
-  const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({});
 
   // --- 3. CART STATE ---
   const [items, setItems] = useState<SalesReturnItem[]>([]);
@@ -165,11 +175,44 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
    * Resolves the correct unit price based on the selected salesman's priceType.
    * Falls back to priceA if the specific price type is not available.
    */
-  const resolvePrice = (product: any, currentPriceType: string): number => {
-    const key = `price${currentPriceType}` as string;
-    const price = Number(product[key]) || Number(product.priceA) || Number(product.unitPrice) || 0;
+  const resolvePrice = (product: SalesReturnItem | Record<string, unknown>, currentPriceType: string): number => {
+    const key = `price${currentPriceType}`;
+    const productRecord = product as Record<string, unknown>;
+    const price = Number(productRecord[key]) || Number(productRecord.priceA) || Number(productRecord.unitPrice) || 0;
     return Math.round(price * 100) / 100;
   };
+
+  const handleSelectSalesman = useCallback((salesman: SalesmanOption) => {
+    const hasRfid = items.some((i) => i.rfidTags && i.rfidTags.length > 0);
+    if (hasRfid && lockedBranchId !== null && lockedBranchId !== salesman.branchId) {
+      toast.error("Current items are not registered to this branch. Change to the appropriate Branch to proceed.", { duration: 5000 });
+    }
+
+    setSelectedSalesmanId(salesman.id.toString());
+    setSalesmanSearch(salesman.name);
+    setSalesmanCode(salesman.code);
+    setPriceType(salesman.priceType || "A");
+    const linkedBranch = branches.find((b) => b.id === salesman.branchId);
+    setBranchName(linkedBranch ? linkedBranch.name : "");
+    setIsSalesmanOpen(false);
+    // Clear order/invoice on salesman change
+    setOrderNo("");
+    setOrderSearch("");
+    setInvoiceNo("");
+    setInvoiceSearch("");
+  }, [items, lockedBranchId, branches]);
+
+  const handleSelectCustomer = useCallback((customer: CustomerOption) => {
+    setSelectedCustomerId(customer.id.toString());
+    setCustomerSearch(customer.name);
+    setCustomerCode(customer.code || "");
+    setIsCustomerOpen(false);
+    // Clear order/invoice on customer change
+    setOrderNo("");
+    setOrderSearch("");
+    setInvoiceNo("");
+    setInvoiceSearch("");
+  }, []);
 
   /**
    * RFID Scan Handler — looks up the product and auto-adds to items table.
@@ -182,13 +225,13 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       (s) => s.id.toString() === selectedSalesmanId,
     );
     if (!selectedSalesmanObj) {
-      setValidationError("Please select a Salesman before scanning RFID.");
+      toast.error("Please select a Salesman before scanning RFID.");
       return;
     }
 
     const branchId = selectedSalesmanObj.branchId;
     if (!branchId) {
-      setValidationError("The selected salesman has no branch assigned.");
+      toast.error("The selected salesman has no branch assigned.");
       return;
     }
 
@@ -197,20 +240,18 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       (item) => item.rfidTags && item.rfidTags.includes(tag),
     );
     if (isDuplicate) {
-      setValidationError(`RFID tag "${tag}" is already in the list.`);
+      toast.error(`RFID tag "${tag}" is already in the list.`);
       return;
     }
 
     setRfidScanning(true);
     setLastScannedRfid(tag);
-    setValidationError(null);
 
     try {
       // 🟢 NEW: Global Duplicate Check
       const dupCheck = await SalesReturnProvider.checkRfidDuplicate(tag);
       if (dupCheck.isDuplicate) {
         const errorMsg = `RFID tag "${tag}" is already linked to SR #${dupCheck.returnNo}.`;
-        setValidationError(errorMsg);
         toast.error(errorMsg, {
           description: "This tag cannot be returned again as it exists in another record.",
           duration: 6000,
@@ -222,7 +263,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
       if (!result || !result.productId) {
         const errorMsg = `RFID tag "${tag}" is NOT registered to ${branchName || "this branch"}.`;
-        setValidationError(errorMsg);
         toast.error(errorMsg, {
           description: "Please check if the scan is correct or if the item is in the wrong location.",
           duration: 5000,
@@ -232,7 +272,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
       if (items.some((i) => i.rfidTags?.includes(tag))) {
         const errorMsg = `RFID tag "${tag}" is already in the list.`;
-        setValidationError(errorMsg);
         toast.warning(errorMsg);
         return;
       }
@@ -278,7 +317,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       console.error("RFID lookup error:", err);
       const error = err as Error;
       const errorMsg = `Failed to look up RFID tag "${tag}".`;
-      setValidationError(error.message || errorMsg);
       toast.error(errorMsg, {
         description: error.message || "An unexpected error occurred during scan.",
       });
@@ -360,7 +398,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         })
       );
     }
-  }, [priceType, lineDiscountOptions]);
+  }, [priceType, lineDiscountOptions, items.length]);
   // --- 5c. PRE-FILL FROM CLEARANCE ---
   useEffect(() => {
     if (isOpen && fromClearance === "true" && customers.length > 0) {
@@ -418,7 +456,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         }
       }
     }
-  }, [isOpen, fromClearance, customers, salesmen]);
+  }, [isOpen, fromClearance, customers, salesmen, handleSelectCustomer, handleSelectSalesman]);
 
   // --- 5b. FETCH INVOICES when salesman or customer changes ---
   useEffect(() => {
@@ -439,7 +477,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     } else {
       setInvoiceOptions([]);
     }
-  }, [selectedSalesmanId, customerCode]);
+  }, [selectedSalesmanId, customerCode, handleSelectSalesman, handleSelectCustomer]);
 
   // --- 6. CLICK OUTSIDE HANDLERS ---
   useEffect(() => {
@@ -508,7 +546,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     setInvoiceNo("");
     setInvoiceSearch("");
     setIsThirdParty(false);
-    setValidationError(null);
     setLastScannedRfid("");
     setRfidScanning(false);
     setInvoiceOptions([]);
@@ -535,81 +572,41 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     inv.order_id.toLowerCase().includes(orderSearch.toLowerCase()),
   );
 
-  const handleSelectSalesman = (salesman: SalesmanOption) => {
-    const hasRfid = items.some((i) => i.rfidTags && i.rfidTags.length > 0);
-    if (hasRfid && lockedBranchId !== null && lockedBranchId !== salesman.branchId) {
-      toast.error("Current items are not registered to this branch. Change to the appropriate Branch to proceed.", { duration: 5000 });
-    }
 
-    setSelectedSalesmanId(salesman.id.toString());
-    setSalesmanSearch(salesman.name);
-    setSalesmanCode(salesman.code);
-    setPriceType(salesman.priceType || "A");
-    const linkedBranch = branches.find((b) => b.id === salesman.branchId);
-    setBranchName(linkedBranch ? linkedBranch.name : "");
-    setValidationError(null);
-    setIsSalesmanOpen(false);
-    // Clear order/invoice on salesman change
-    setOrderNo("");
-    setOrderSearch("");
-    setInvoiceNo("");
-    setInvoiceSearch("");
-  };
-
-  const handleSelectCustomer = (customer: CustomerOption) => {
-    setSelectedCustomerId(customer.id.toString());
-    setCustomerSearch(customer.name);
-    setCustomerCode(customer.code || "");
-    setValidationError(null);
-    setIsCustomerOpen(false);
-    // Clear order/invoice on customer change
-    setOrderNo("");
-    setOrderSearch("");
-    setInvoiceNo("");
-    setInvoiceSearch("");
-  };
 
   // --- 8. VALIDATION & ACTIONS ---
   const handleOpenProductLookup = () => {
-    setValidationError(null);
     if (!returnDate) {
       toast.error("Please select a Return Date before adding products.");
-      setValidationError("Please select a Return Date before adding products.");
       return;
     }
     if (!selectedSalesmanId) {
       toast.error("Please select a Salesman before adding products.");
-      setValidationError("Please select a Salesman before adding products.");
       return;
     }
     if (!selectedCustomerId) {
       toast.error("Please select a Customer before adding products.");
-      setValidationError("Please select a Customer before adding products.");
       return;
     }
     setIsProductLookupOpen(true);
   };
 
   const handleCreateReturn = async () => {
-    setValidationError(null);
     setReturnTypeError(false);
     setOrderError(false);
     setInvoiceError(false);
 
     if (!returnDate) {
       toast.error("Return Date is required.");
-      setValidationError("Return Date is required.");
       return;
     }
     if (items.length === 0) {
       toast.error("Please add at least one product.");
-      setValidationError("Please add at least one product.");
       return;
     }
 
     if (isBranchLockedError) {
       toast.error("Invalid Branch: Clear the products or revert the salesman to proceed.");
-      setValidationError("Invalid Branch: Clear the products or revert the salesman to proceed.");
       return;
     }
 
@@ -665,8 +662,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       setSuccessOpen(true);
     } catch (err: unknown) {
       console.error(err);
-      const error = err as Error;
-      setValidationError(error.message || "Failed to create Sales Return.");
+      toast.error("Failed to create Sales Return.");
     } finally {
       setIsSubmitting(false);
     }
@@ -1133,7 +1129,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                           <FileText className="h-8 w-8 text-muted-foreground mb-1" />
                           <p>No items added yet.</p>
                           <span className="text-xs">
-                            Click "Add Product" to browse catalog.
+                            Click &quot;Add Product&quot; to browse catalog.
                           </span>
                         </div>
                       </td>
@@ -1246,7 +1242,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
                       {/* 2. RENDER RFID ITEMS (Grouped) */}
                       {Object.values(
-                        items.filter(i => i.rfidTags && i.rfidTags.length > 0).reduce((acc, item, originalIdx) => {
+                        items.filter(i => i.rfidTags && i.rfidTags.length > 0).reduce((acc, item) => {
                           const idx = items.findIndex(d => d === item);
                           const rType = item.returnType || "Unassigned";
                           const key = `${item.productId}-${item.unit}-${item.unitPrice}-${rType}`;
@@ -1271,8 +1267,8 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                           acc[key].totalNet += Number(item.totalAmount) || 0;
                           acc[key].children.push({ item, idx });
                           return acc;
-                        }, {} as Record<string, any>)
-                      ).map((group: any) => (
+                        }, {} as Record<string, SalesReturnGroup>)
+                      ).map((group: SalesReturnGroup) => (
                         <React.Fragment key={group.key}>
                           {/* Parent Summary Row */}
                           <tr className="bg-muted/10 font-semibold border-b border-border">
