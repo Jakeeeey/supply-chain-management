@@ -341,6 +341,19 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                                 </div>
                             </div>
                         </div>
+
+                        {/* Remarks for Returns */}
+                        <div className="space-y-2 pt-2 border-t border-border/50">
+                            <p className="text-sm font-bold text-foreground">
+                                Remarks (Mandatory)
+                            </p>
+                            <Textarea
+                                placeholder="E.g. Customer returned items, linked to existing SR..."
+                                value={remarks}
+                                onChange={(e) => setRemarks(e.target.value)}
+                                className="rounded-xl border-border bg-muted/30 focus:ring-1 focus:ring-primary min-h-[80px] text-sm resize-none text-foreground placeholder:text-muted-foreground"
+                            />
+                        </div>
                     </div>
 
                     <div className="flex justify-end gap-3 pt-4 border-t border-border">
@@ -377,7 +390,7 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                                 }
                                 handleSave(); // Also save the clearance status
                             }} 
-                            disabled={returnMode === 'link' && !selectedReturnNo}
+                            disabled={(returnMode === 'link' && !selectedReturnNo) || !remarks.trim()}
                             className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl px-8 font-bold shadow-lg shadow-primary/20 transition-all active:scale-95"
                         >
                             Open & Confirm
