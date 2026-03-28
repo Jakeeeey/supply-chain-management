@@ -10,11 +10,13 @@ import { useSalesReturnList } from "./hooks/useSalesReturnList";
 import { SalesReturnHistory } from "./components/SalesReturnHistory";
 import { CreateSalesReturnModal } from "./components/CreateSalesReturnModal";
 import { UpdateSalesReturnModal } from "./components/UpdateSalesReturnModal";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { SalesReturn } from "./type";
 
 export default function SalesReturnModule() {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const fromClearance = searchParams.get("fromClearance");
   const editReturnNo = searchParams.get("editReturnNo");
 
@@ -35,6 +37,16 @@ export default function SalesReturnModule() {
 
   const [isCreateOpen, setCreateOpen] = useState(false);
   const [selectedReturn, setSelectedReturn] = useState<SalesReturn | null>(null);
+
+  const handleCloseModal = () => {
+    setSelectedReturn(null);
+    setCreateOpen(false);
+    
+    // 🟢 Clear search parameters from URL so the auto-open triggered by fromClearance/editReturnNo doesn't re-run
+    if (searchParams.toString()) {
+      router.push(pathname);
+    }
+  };
 
   React.useEffect(() => {
     if (fromClearance === "true") {
@@ -99,7 +111,7 @@ export default function SalesReturnModule() {
       {/* MODALS */}
       <CreateSalesReturnModal
         isOpen={isCreateOpen}
-        onClose={() => setCreateOpen(false)}
+        onClose={handleCloseModal}
         onSuccess={refresh}
       />
 
@@ -107,7 +119,7 @@ export default function SalesReturnModule() {
         <UpdateSalesReturnModal
           returnId={selectedReturn.id}
           initialData={selectedReturn}
-          onClose={() => setSelectedReturn(null)}
+          onClose={handleCloseModal}
           onSuccess={refresh}
         />
       )}
