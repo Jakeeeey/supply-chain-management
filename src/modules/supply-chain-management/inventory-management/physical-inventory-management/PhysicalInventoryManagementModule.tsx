@@ -214,6 +214,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
     const [isHydratingRecord, setIsHydratingRecord] = React.useState(false);
     const [isRebuildingGroups, setIsRebuildingGroups] = React.useState(false);
     const [isSavingDetailBatch, setIsSavingDetailBatch] = React.useState(false);
+    const [isConfirmLoadDialogOpen, setIsConfirmLoadDialogOpen] = React.useState(false);
 
     const [branches, setBranches] = React.useState<BranchRow[]>([]);
     const [suppliers, setSuppliers] = React.useState<SupplierRow[]>([]);
@@ -960,37 +961,6 @@ export function PhysicalInventoryManagementModule(props: Props) {
         totalAmount,
     ]);
 
-    const handleResetFilters = React.useCallback(() => {
-        if (!canEdit) return;
-
-        setFilters({
-            branch_id: null,
-            supplier_id: null,
-            category_id: null,
-            price_type_id: null,
-        });
-        setCategories([]);
-        setDetailRows([]);
-        setGroupedRows([]);
-        setRunningInventoryRows([]);
-        setRfidCountByDetailId({});
-        setProductSearch("");
-        setActiveQuickFilter("ALL");
-        setActiveQuickCategory("ALL");
-        dirtyDetailIdsRef.current.clear();
-        setHeader((prev) => {
-            if (!prev) return prev;
-            return {
-                ...prev,
-                branch_id: null,
-                supplier_id: null,
-                category_id: null,
-                price_type: null,
-                starting_date: null,
-                total_amount: 0,
-            };
-        });
-    }, [canEdit]);
 
     const handleLoadProducts = React.useCallback(async () => {
         const validation = validateLoadProductsFilters(filters);
@@ -1477,8 +1447,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
                         };
                     });
                 }}
-                onReset={handleResetFilters}
-                onLoadProducts={handleLoadProducts}
+                onLoadProducts={() => setIsConfirmLoadDialogOpen(true)}
             />
 
             {groupedRows.length > 0 ? (
@@ -1777,6 +1746,31 @@ export function PhysicalInventoryManagementModule(props: Props) {
                 onOpenChange={setIsGlobalScannerOpen}
                 onSaved={handleAfterAnyScan}
             />
+
+            <AlertDialog open={isConfirmLoadDialogOpen} onOpenChange={setIsConfirmLoadDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Load Products for Counting?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will fetch all eligible products based on your selected Branch, Supplier, Category, and Price Type.
+                            Once loaded, the filter criteria will be locked for this record.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel className="cursor-pointer">Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            className="cursor-pointer"
+                            onClick={(event) => {
+                                event.preventDefault();
+                                setIsConfirmLoadDialogOpen(false);
+                                void handleLoadProducts();
+                            }}
+                        >
+                            Load Products
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
             <AlertDialog open={openCancelDialog} onOpenChange={setOpenCancelDialog}>
                 <AlertDialogContent>
