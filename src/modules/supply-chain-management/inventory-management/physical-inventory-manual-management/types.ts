@@ -97,6 +97,8 @@ export type PhysicalInventoryHeaderRow = {
     remarks: string | null;
     isComitted: number;
     isCancelled: number;
+    committed_at: string | null;
+    cancelled_at: string | null;
     total_amount: number | null;
     supplier_id: number | null;
     category_id: number | null;
@@ -148,6 +150,8 @@ export type PhysicalInventoryHeaderUpsertPayload = {
     encoder_id?: number | null;
     isComitted?: number;
     isCancelled?: number;
+    committed_at?: string | null;
+    cancelled_at?: string | null;
     total_amount?: number | null;
 
     // optional future-ready field

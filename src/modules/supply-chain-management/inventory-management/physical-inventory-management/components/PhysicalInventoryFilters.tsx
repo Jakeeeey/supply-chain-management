@@ -40,7 +40,6 @@ import {
     ChevronsUpDown,
     Loader2,
     Lock,
-    RotateCcw,
     Search,
     Workflow,
 } from "lucide-react";
@@ -58,7 +57,6 @@ type Props = {
     onChangeSupplier: (value: number | null) => void;
     onChangeCategory: (value: number | null) => void;
     onChangePriceType: (value: number | null) => void;
-    onReset: () => void;
     onLoadProducts: () => void;
 };
 
@@ -81,7 +79,7 @@ function helperText(
     hasLoadedDetails: boolean,
 ): string {
     if (hasLoadedDetails) {
-        return "Filters are locked because products have already been loaded. Reset to change scope.";
+        return "Filters are locked because products have already been loaded.";
     }
     if (!filters.branch_id) {
         return "Step 1: Select a branch.";
@@ -249,7 +247,6 @@ export function PhysicalInventoryFilters(props: Props) {
         onChangeSupplier,
         onChangeCategory,
         onChangePriceType,
-        onReset,
         onLoadProducts,
     } = props;
 
@@ -294,8 +291,7 @@ export function PhysicalInventoryFilters(props: Props) {
                         <div className="text-sm">
                             <p className="font-medium">Filters locked</p>
                             <p className="text-amber-700/90 dark:text-amber-300/90">
-                                Detail rows already exist for this PI. Reset first if you need to
-                                change the branch, supplier, category, or price type.
+                                Detail rows already exist for this PI. Branch, supplier, category, and price type can no longer be changed.
                             </p>
                         </div>
                     </div>
@@ -375,15 +371,6 @@ export function PhysicalInventoryFilters(props: Props) {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                            variant="outline"
-                            className="cursor-pointer"
-                            onClick={onReset}
-                            disabled={!canEdit || isLoadingProducts}
-                        >
-                            <RotateCcw className="mr-2 h-4 w-4" />
-                            Reset
-                        </Button>
 
                         <Button
                             className="cursor-pointer"

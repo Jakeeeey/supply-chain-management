@@ -397,11 +397,20 @@ export function buildEligibleVariants(input: {
     );
     const isAllCategory = isAllCategoryName(selectedCategory?.category_name);
 
-    const productIdsBySupplier = new Set(
+    const directlyEligibleBySupplier = new Set(
         lookup.product_per_supplier
             .filter((row) => row.supplier_id === supplierId)
             .map((row) => row.product_id),
     );
+
+    // If any member of a family is mapped to the supplier, the whole family is considered eligible
+    const eligibleFamilyKeys = new Set<number>();
+    for (const productId of directlyEligibleBySupplier) {
+        const product = lookup.products.find((p) => p.product_id === productId);
+        if (product) {
+            eligibleFamilyKeys.add(product.parent_id ?? product.product_id);
+        }
+    }
 
     const priceMap = new Map<number, ProductPerPriceTypeRow>();
     for (const row of lookup.product_per_price_type) {
@@ -422,7 +431,10 @@ export function buildEligibleVariants(input: {
 
     return lookup.products
         .filter((product) => product.isActive === 1)
-        .filter((product) => productIdsBySupplier.has(product.product_id))
+        .filter((product) => {
+            const familyKey = product.parent_id ?? product.product_id;
+            return eligibleFamilyKeys.has(familyKey);
+        })
         .filter((product) => {
             if (isAllCategory) return true;
             return product.product_category === categoryId;
@@ -975,15 +987,27 @@ function buildNextPhNoFromLatest(latestPhNo: string | null | undefined): string 
 }
 
 export async function fetchNextPhysicalInventoryNumber(): Promise<string> {
+    // Fetch up to 100 recent rows to find the highest numerical sequence.
+    // Lexicographical sort (+id) might be misleading, so we fetch a sample and sort numerically in-memory.
     const rows = await directusGetItems<Pick<PhysicalInventoryHeaderRow, "id" | "ph_no">>(
         TABLES.physical_inventory,
         {
             fields: "id,ph_no",
-            sort: "-id",
-            limit: "1",
+            sort: "-ph_no",
+            limit: "100",
         },
     );
 
-    const latest = rows[0] ?? null;
+    // Extract numbers and sort by their true numeric value (descending)
+    const numericRows = rows
+        .map((r) => ({
+            ...r,
+            num: r.ph_no ? extractTrailingNumber(r.ph_no) : null,
+        }))
+        .filter((r) => r.num !== null)
+        .sort((a, b) => (b.num || 0) - (a.num || 0));
+
+    // The first record in numericRows is our true "latest" numeric ID
+    const latest = numericRows[0] || rows[0] || null;
     return buildNextPhNoFromLatest(latest?.ph_no);
 }
