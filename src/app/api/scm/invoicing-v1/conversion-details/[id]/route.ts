@@ -81,7 +81,7 @@ export async function GET(
         const productIds = Array.from(new Set(items.map((it: any) => normalizeId(it.product_id)).filter(Boolean)));
         console.log(`[Conversion API] Unique Product IDs to lookup:`, productIds);
 
-        let productMap: Record<string, any> = {};
+        const productMap: Record<string, any> = {};
 
         if (productIds.length > 0) {
             // Fetch product_name and unit_shortcut
@@ -123,7 +123,7 @@ export async function GET(
         }
 
         // 5. Fetch Consolidation Details for quantity pool
-        let conDetailsMap: Record<string, any> = {};
+        const conDetailsMap: Record<string, any> = {};
         if (consolidatorId) {
             const cdRes = await fetch(`${DIRECTUS_BASE}/items/consolidator_details?filter[consolidator_id][_eq]=${consolidatorId}&fields=*`, {
                 headers: directusHeaders()

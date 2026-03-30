@@ -792,7 +792,7 @@ export async function POST(req: NextRequest) {
             // 2) OPTIMISTIC UPDATE:
             // Fetch the current state immediately. If Directus hasn't indexed the new row yet (common),
             // we will manually inject it into the result so the UI updates instantly.
-            let updated = await buildDetail(base, poId);
+            const updated = await buildDetail(base, poId);
 
             const isPresent = updated.activity.some((a) => a.rfid === rfid);
             if (!isPresent) {

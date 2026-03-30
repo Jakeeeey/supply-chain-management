@@ -53,7 +53,7 @@ export function ProductSelectionModal({ open, onOpenChange, onSelect, sourceBran
     return () => {
       active = false;
     };
-  }, [open, search]);
+  }, [open, search, sourceBranch]);
 
   const handleSelect = (product: SKU) => {
     onSelect(product);
@@ -98,7 +98,7 @@ export function ProductSelectionModal({ open, onOpenChange, onSelect, sourceBran
               ) : products.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground">
                   <Package className="w-16 h-16 opacity-10" />
-                  <p className="text-lg font-medium">No results found for "{search}"</p>
+                  <p className="text-lg font-medium">No results found for &quot;{search}&quot;</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-8 pb-8">
@@ -116,7 +116,7 @@ export function ProductSelectionModal({ open, onOpenChange, onSelect, sourceBran
                         <div className="absolute top-2 left-2">
                           <Badge variant="secondary" className="bg-background/80 backdrop-blur-sm text-[9px] uppercase font-bold tracking-tighter">
                             {typeof product.product_brand === 'object' && product.product_brand !== null 
-                              ? (product.product_brand as any).brand_name 
+                              ? (product.product_brand as { brand_name?: string }).brand_name 
                               : product.product_brand || 'No Brand'}
                           </Badge>
                         </div>
@@ -130,7 +130,7 @@ export function ProductSelectionModal({ open, onOpenChange, onSelect, sourceBran
                           <div className="flex flex-col gap-1">
                             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                               <Search className="w-3 h-3 shrink-0" />
-                              <span className="font-mono truncate">{product.barcode || (product as any).product_code || 'NO-BARCODE'}</span>
+                              <span className="font-mono truncate">{product.barcode || (product as { product_code?: string }).product_code || 'NO-BARCODE'}</span>
                             </div>
                             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                               <Tag className="w-3 h-3 shrink-0 text-amber-500/70" />
@@ -139,7 +139,7 @@ export function ProductSelectionModal({ open, onOpenChange, onSelect, sourceBran
                             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                               <Package className="w-3 h-3 shrink-0 text-primary/60" />
                               <span className="font-bold text-primary/80">
-                                Unit: {typeof product.unit_of_measurement === 'object' && product.unit_of_measurement !== null ? (product.unit_of_measurement as any).unit_name : String(product.unit_of_measurement || 'Pieces')}
+                                Unit: {typeof product.unit_of_measurement === 'object' && product.unit_of_measurement !== null ? (product.unit_of_measurement as { unit_name?: string }).unit_name : String(product.unit_of_measurement || 'Pieces')}
                               </span>
                             </div>
                           </div>
@@ -147,7 +147,7 @@ export function ProductSelectionModal({ open, onOpenChange, onSelect, sourceBran
 
                         <div className="flex items-center justify-between pt-2 border-t mt-auto">
                           <div className="text-xs font-bold text-primary">
-                            ₱{Number((product as any).cost_per_unit || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                            ₱{Number((product as { cost_per_unit?: number }).cost_per_unit || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                           </div>
                           <Button 
                             size="sm" 
@@ -187,9 +187,9 @@ export function ProductSelectionModal({ open, onOpenChange, onSelect, sourceBran
                     <div key={idx} className="bg-background border rounded-lg p-3 shadow-sm hover:border-primary/30 transition-colors">
                       <div className="flex items-start justify-between gap-2 overflow-hidden mb-1">
                         <p className="text-xs font-bold line-clamp-2 leading-tight">{p.product_name}</p>
-                        {(p as any).quantity > 1 && (
+                        {(p as { quantity?: number }).quantity && (p as { quantity?: number }).quantity! > 1 && (
                           <Badge variant="outline" className="shrink-0 h-5 px-1.5 text-[10px] font-black bg-primary/5 text-primary border-primary/20">
-                            x{(p as any).quantity}
+                            x{(p as { quantity?: number }).quantity}
                           </Badge>
                         )}
                       </div>
@@ -200,8 +200,8 @@ export function ProductSelectionModal({ open, onOpenChange, onSelect, sourceBran
                       <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1 border-t border-muted/30">
                         <span className="font-mono">{p.barcode || 'NO-BARCODE'}</span>
                         <div className="flex flex-col items-end">
-                          <span className="font-bold text-primary">₱{Number((p as any).totalAmount || p.cost_per_unit || 0).toLocaleString()}</span>
-                          {(p as any).quantity > 1 && (
+                          <span className="font-bold text-primary">₱{Number((p as { totalAmount?: number }).totalAmount || p.cost_per_unit || 0).toLocaleString()}</span>
+                          {(p as { quantity?: number }).quantity && (p as { quantity?: number }).quantity! > 1 && (
                             <span className="text-[8px] opacity-60">₱{Number(p.cost_per_unit).toLocaleString()} / ea</span>
                           )}
                         </div>
@@ -217,11 +217,11 @@ export function ProductSelectionModal({ open, onOpenChange, onSelect, sourceBran
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total Amount</span>
                   <span className="text-lg font-black text-primary">
-                    ₱{selectedProducts.reduce((sum, p) => sum + Number((p as any).totalAmount || p.cost_per_unit || 0), 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                    ₱{selectedProducts.reduce((sum, p) => sum + Number((p as { totalAmount?: number }).totalAmount || p.cost_per_unit || 0), 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
                 <p className="text-[10px] text-muted-foreground text-right italic">
-                  Sum of all {selectedProducts.reduce((sum, p) => sum + ((p as any).quantity || 1), 0)} items
+                  Sum of all {selectedProducts.reduce((sum, p) => sum + ((p as { quantity?: number }).quantity || 1), 0)} items
                 </p>
               </div>
             )}

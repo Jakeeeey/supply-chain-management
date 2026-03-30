@@ -40,7 +40,7 @@ export function BranchCombobox({
     } else {
       setSearch('');
     }
-  }, [value, branches]);
+  }, [value, branches, selectedBranch]);
 
   return (
     <Combobox

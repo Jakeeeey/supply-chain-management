@@ -266,7 +266,7 @@ export async function GET(request: NextRequest) {
     const token = request.cookies.get('vos_access_token')?.value;
     
     // Test fetch directly to capture error
-    let debugInfo: any = { attempts: [] };
+    const debugInfo: any = { attempts: [] };
     if (springBase && token) {
        const url = `${springBase.replace(/\/$/, '')}/api/view-rfid-onhand?branchId=${branchId}`;
        try {

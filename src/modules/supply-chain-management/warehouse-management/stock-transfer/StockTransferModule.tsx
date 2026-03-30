@@ -259,7 +259,7 @@ export default function StockTransferModule() {
           cost_per_unit: item.unitPrice,
           quantity: item.unitQty,
           totalAmount: item.totalAmount
-        } as any))}
+        }))}
         onSelect={(p) => {
           handleAddProduct(p);
           // Optional: don't close modal so user can add more?

@@ -14,7 +14,7 @@ function directusHeaders() {
 
 export async function GET(req: NextRequest) {
     try {
-        let url = `${DIRECTUS_BASE}/items/discount_type?limit=100`;
+        const url = `${DIRECTUS_BASE}/items/discount_type?limit=100`;
         
         const response = await fetch(url, {
             cache: "no-store",

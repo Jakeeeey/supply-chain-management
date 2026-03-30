@@ -87,8 +87,8 @@ export function useStockTransferReceive() {
         };
       }
       
-      const product = typeof st.product_id === 'object' && st.product_id !== null ? st.product_id : null;
-      const pid = product ? (product.product_id || product.id) : st.product_id;
+      const product = typeof st.product_id === 'object' && st.product_id !== null ? (st.product_id as { product_id?: number; id?: number }) : null;
+      const pid = Number(product ? (product.product_id || product.id) : st.product_id);
       
       const rfids = receivedItemsState[st.order_no]?.[pid] || [];
       
@@ -96,7 +96,7 @@ export function useStockTransferReceive() {
         ...st,
         receivedQty: rfids.length,
         receivedRfids: rfids,
-        dispatched_rfids: (st as any).dispatched_rfids || []
+        dispatched_rfids: (st as { dispatched_rfids?: string[] }).dispatched_rfids || []
       });
       groups[st.order_no].totalAmount += Number(st.amount || 0);
     });
@@ -161,7 +161,7 @@ export function useStockTransferReceive() {
 
   const playSuccessSound = () => {
     try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
       if (audioCtx.state === 'suspended') {
         audioCtx.resume();
       }
@@ -186,7 +186,7 @@ export function useStockTransferReceive() {
 
   const playErrorSound = () => {
     try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
       if (audioCtx.state === 'suspended') audioCtx.resume();
       
       const oscillator = audioCtx.createOscillator();
@@ -228,13 +228,13 @@ export function useStockTransferReceive() {
       const productId = match.productId;
       
       // Check if product is in the current order
-      let itemInOrder = selectedGroup.items.find(i => {
-        const itemProduct = typeof i.product_id === 'object' && i.product_id !== null ? i.product_id : null;
-        const itemPid = itemProduct ? (itemProduct.product_id || itemProduct.id) : i.product_id;
+      const itemInOrder = selectedGroup.items.find(i => {
+        const itemProduct = typeof i.product_id === 'object' && i.product_id !== null ? (i.product_id as { product_id?: number; id?: number }) : null;
+        const itemPid = Number(itemProduct ? (itemProduct.product_id || itemProduct.id) : i.product_id);
         return itemPid === productId;
       });
       
-      let effectiveProductId = productId;
+      const effectiveProductId = productId;
       /*
       // REMOVED: UAT FALLBACK
       // If the match is our specific mock product and it's NOT in the order, 
@@ -308,7 +308,7 @@ export function useStockTransferReceive() {
       });
       
       playSuccessSound();
-      const finalName = (typeof itemInOrder.product_id === 'object' && itemInOrder.product_id?.product_name) 
+      const finalName = (typeof itemInOrder.product_id === 'object' && (itemInOrder.product_id as { product_name?: string })?.product_name) 
         || match.productName 
         || "Product";
       toast.success(`Received & Verified: ${finalName}`);

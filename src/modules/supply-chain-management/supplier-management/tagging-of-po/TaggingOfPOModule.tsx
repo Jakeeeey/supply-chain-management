@@ -286,8 +286,8 @@ export default function TaggingOfPOModule() {
                 description: "This PO status is now updated and visible in Receiving Products."
             });
             onBack();
-        } catch (e: any) {
-            toast.error("Status Update Failed", { description: e?.message });
+        } catch (e: unknown) {
+            toast.error("Status Update Failed", { description: (e as Error)?.message });
         } finally {
             setLoadingDetail(false);
         }

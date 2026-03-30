@@ -72,11 +72,9 @@ export function ProductCombobox({ onSelect }: ProductComboboxProps) {
               <div className="flex flex-col">
                 <span className="font-medium">{product.product_name}</span>
                 <span className="text-[10px] text-muted-foreground uppercase">
-                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                  {product.barcode || (product as any).product_code || 'No Code'} • {' '}
-                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  {product.barcode || (product as { product_code?: string }).product_code || 'No Code'} • {' '}
                   Brand: {typeof product.product_brand === 'object' && product.product_brand !== null 
-                    ? (product.product_brand as any).brand_name || 'N/A' 
+                    ? (product.product_brand as { brand_name?: string }).brand_name || 'N/A' 
                     : product.product_brand || 'N/A'}
                 </span>
               </div>

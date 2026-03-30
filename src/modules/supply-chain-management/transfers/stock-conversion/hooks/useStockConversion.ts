@@ -72,6 +72,7 @@ export function useStockConversion(branchId?: number) {
       setError(err?.message ?? "An error occurred");
       setIsLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 2. Targeted Inventory Fetch: Triggered by UI/Filters

@@ -224,7 +224,7 @@ export async function GET(req: NextRequest) {
 
       // Collect unique user IDs and resolve names from the user table
       const userIds = [...new Set(merged.map((r) => r.updated_by).filter(Boolean))] as number[];
-      let userMap = new Map<number, { first_name: string; last_name: string }>();
+      const userMap = new Map<number, { first_name: string; last_name: string }>();
 
       if (userIds.length > 0) {
         try {

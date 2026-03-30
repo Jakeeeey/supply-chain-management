@@ -248,8 +248,8 @@ export default function StockTransferReceiveModule() {
                   <TableBody>
                     {paginatedItems.map((item) => {
                       const complete = item.receivedQty >= item.ordered_quantity;
-                      const product = typeof item.product_id === 'object' && item.product_id !== null ? item.product_id : null;
-                      const originalId = product ? (product.product_id || product.id) : item.product_id;
+                      const product = typeof item.product_id === 'object' && item.product_id !== null ? (item.product_id as { product_id?: number; id?: number; product_name?: string }) : null;
+                      const originalId = Number(product ? (product.product_id || product.id) : item.product_id);
                       const productName = product?.product_name || `PRD-${originalId}`;
 
                       return (

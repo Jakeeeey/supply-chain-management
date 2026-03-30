@@ -221,7 +221,7 @@ export interface InventoryFilters {
   productIds?: number[];
 }
 
-let localInventoryCache: { data: Record<number, number> | null; timestamp: number } = {
+const localInventoryCache: { data: Record<number, number> | null; timestamp: number } = {
   data: null,
   timestamp: 0,
 };

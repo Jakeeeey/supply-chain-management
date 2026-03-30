@@ -39,7 +39,7 @@ interface StockConversionTableProps {
   onRefresh: (filters?: any) => void;
   loadProductsInventory: (productIds: number[]) => void;
   isLoading?: boolean;
-  branches?: any[];
+  branches?: Record<string, unknown>[];
   selectedBranchId?: number;
   onBranchChange?: (branchId: number | undefined) => void;
 }
@@ -87,7 +87,7 @@ export function StockConversionTable({
      if (hasRequiredFilter) {
         onRefresh(currentFilters);
      }
-  }, [supplierFilter, brandFilter, categoryFilter, hasRequiredFilter, onRefresh]); // Debounced refresh would be better but let's start here
+  }, [supplierFilter, brandFilter, categoryFilter, hasRequiredFilter, onRefresh, currentFilters]); // Debounced refresh would be better but let's start here
 
 
   const filteredData = useMemo(() => {

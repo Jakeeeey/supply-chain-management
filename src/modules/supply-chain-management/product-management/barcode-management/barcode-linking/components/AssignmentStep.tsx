@@ -134,7 +134,7 @@ export function AssignmentStep({
                 setScanSuccess(true);
             }
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, [setBarcode, setScanSuccess]);
 
     return (

@@ -340,13 +340,13 @@ export function useStockTransferDispatching() {
       const productId = match.productId;
       
       // Check if product is in the current order
-      let itemInOrder = selectedGroup.items.find(i => {
+      const itemInOrder = selectedGroup.items.find(i => {
         const itemProduct = typeof i.product_id === 'object' && i.product_id !== null ? i.product_id : null;
         const itemPid = itemProduct ? (itemProduct.product_id || itemProduct.id) : i.product_id;
         return itemPid === productId;
       });
       
-      let effectiveProductId = productId;
+      const effectiveProductId = productId;
       /* 
       // REMOVED: UAT FALLBACK
       // If the match is our specific mock product and it's NOT in the order, 
