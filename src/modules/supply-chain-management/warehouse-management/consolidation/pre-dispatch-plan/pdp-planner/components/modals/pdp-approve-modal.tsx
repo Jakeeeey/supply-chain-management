@@ -13,7 +13,10 @@ import {
   DispatchPlan,
   DispatchPlanDetail,
 } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/types/dispatch-plan.schema";
-import { formatNumber, formatPeso } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/utils/format";
+import {
+  formatNumber,
+  formatPeso,
+} from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/utils/format";
 import {
   AlertTriangle,
   Calendar,
@@ -100,7 +103,8 @@ export function PDPApproveModal({
                 {displayPlan.dispatch_no}
               </DialogTitle>
               <p className="text-xs text-muted-foreground font-medium">
-                Please review the full trip details before confirming the approval.
+                Please review the full trip details before confirming the
+                approval.
               </p>
             </div>
           </div>
@@ -119,7 +123,9 @@ export function PDPApproveModal({
                     Date
                   </span>
                 </div>
-                <p className="text-xs font-semibold text-foreground">{formattedDate}</p>
+                <p className="text-xs font-semibold text-foreground">
+                  {formattedDate}
+                </p>
               </div>
 
               {/* Cluster */}
@@ -168,9 +174,7 @@ export function PDPApproveModal({
                   {details.length || displayPlan.outlet_count || 0} order(s)
                 </p>
                 <p className="text-[9px] text-muted-foreground font-medium">
-                  {formatNumber(
-                    totalWeight || displayPlan.total_weight || 0
-                  )}{" "}
+                  {formatNumber(totalWeight || displayPlan.total_weight || 0)}{" "}
                   kg
                 </p>
               </div>
@@ -196,7 +200,9 @@ export function PDPApproveModal({
             {/* Manifest Table */}
             <div className="bg-background border rounded-lg overflow-hidden">
               <div className="px-4 py-3 border-b bg-muted/30 flex items-center justify-between shrink-0">
-                <h4 className="text-xs font-semibold">Detailed Trip Manifest</h4>
+                <h4 className="text-xs font-semibold">
+                  Detailed Trip Manifest
+                </h4>
                 <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
                   {details.length} orders
                 </div>
@@ -285,7 +291,8 @@ export function PDPApproveModal({
                   Total Trip Value
                 </span>
                 <p className="text-[10px] text-muted-foreground">
-                  {formatNumber(totalWeight || displayPlan.total_weight || 0)} kg total weight
+                  {formatNumber(totalWeight || displayPlan.total_weight || 0)}{" "}
+                  kg total weight
                 </p>
               </div>
               <span className="text-2xl font-bold tracking-tight text-primary">
@@ -293,7 +300,7 @@ export function PDPApproveModal({
                   totalAmount ||
                     (displayPlan.total_amount
                       ? parseFloat(displayPlan.total_amount.toString())
-                      : 0)
+                      : 0),
                 )}
               </span>
             </div>
@@ -326,7 +333,7 @@ export function PDPApproveModal({
             className="h-9 px-4 text-xs font-semibold"
           >
             <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-            {isLoading ? "Approving..." : "Confirm Approval"}
+            {isLoading ? "Approving..." : "Confirm"}
           </Button>
         </div>
       </DialogContent>

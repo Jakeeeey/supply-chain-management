@@ -140,7 +140,8 @@ function renderOffsetGroups(groups: PhysicalInventoryOffsetGroup[]): string {
                 .map(
                     (row) => `
                         <div class="product-item wrap-text" title="${escapeHtml(row.product_label)}">
-                            ${escapeHtml(row.product_label)}
+                            <span class="product-name">${escapeHtml(row.product_label)}</span>
+                            <span class="product-variance">(${fmtNumber(Math.abs(row.variance_base ?? row.variance ?? 0))} ${escapeHtml(row.unit_shortcut || row.unit_name || "PCS")})</span>
                         </div>
                     `,
                 )
@@ -150,7 +151,8 @@ function renderOffsetGroups(groups: PhysicalInventoryOffsetGroup[]): string {
                 .map(
                     (row) => `
                         <div class="product-item wrap-text" title="${escapeHtml(row.product_label)}">
-                            ${escapeHtml(row.product_label)}
+                            <span class="product-name">${escapeHtml(row.product_label)}</span>
+                            <span class="product-variance">(${fmtNumber(Math.abs(row.variance_base ?? row.variance ?? 0))} ${escapeHtml(row.unit_shortcut || row.unit_name || "PCS")})</span>
                         </div>
                     `,
                 )
@@ -421,6 +423,10 @@ export function printPhysicalInventoryOffsettingReport(args: PrintArgs): void {
             line-height: 1.35;
         }
 
+        .page-break {
+            page-break-before: always;
+        }
+
         .truncate {
             display: block;
             width: 100%;
@@ -432,6 +438,15 @@ export function printPhysicalInventoryOffsettingReport(args: PrintArgs): void {
 
         .product-item {
             padding: 4px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .product-variance {
+            color: var(--muted);
+            font-size: 10px;
+            font-weight: 400;
         }
 
         .product-item + .product-item {
@@ -680,7 +695,7 @@ export function printPhysicalInventoryOffsettingReport(args: PrintArgs): void {
         </table>
     </div>
 
-    <div class="section">
+    <div class="section page-break">
         <h3 class="section-title">Manual Offsetting Summary</h3>
         <table class="offset-table">
             <thead>

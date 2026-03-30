@@ -17,6 +17,20 @@ export interface PlanDetailItem {
   po_no?: string;
 }
 
+export interface GroupedPlanDetailItem {
+  id: string; // Aggregation key
+  items: PlanDetailItem[];
+  customer_name?: string;
+  city?: string;
+  isManualStop?: boolean;
+  isPoStop?: boolean;
+  remarks?: string;
+  distance?: number;
+  po_no?: string;
+  totalAmount: number;
+  status?: string; // Summary status
+}
+
 export const getStatusColor = (status: string) => {
   switch (status) {
     case "For Picking":

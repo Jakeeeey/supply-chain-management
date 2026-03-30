@@ -21,6 +21,8 @@ const EMPTY_REFS: ReferenceData = {
   lineDiscounts: [],
   connections: [],
   returnTypes: [],
+  discountTypes: [],
+  linePerDiscountType: [],
 };
 
 /**

@@ -181,12 +181,20 @@ export const SalesReturnProvider = {
     return handleResponse(res);
   },
 
-  async updateStatus(id: number | string, status: string): Promise<any> {
+  async updateStatus(
+    id: number | string,
+    status: string,
+    isReceived?: boolean,
+    receivedAt?: string,
+  ): Promise<any> {
     const params = new URLSearchParams({
       action: "status",
       id: String(id),
       status,
     });
+    if (isReceived !== undefined) params.set("isReceived", String(isReceived));
+    if (receivedAt) params.set("receivedAt", receivedAt);
+
     const res = await fetch(`${API_BASE}?${params}`, { method: "PATCH" });
     return handleResponse(res);
   },

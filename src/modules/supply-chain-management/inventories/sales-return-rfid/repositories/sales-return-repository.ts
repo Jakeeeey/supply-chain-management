@@ -241,11 +241,20 @@ export async function updateReturnDetail(
 /**
  * Updates the status of a sales return.
  */
-export async function updateReturnStatus(id: number, status: string) {
+export async function updateReturnStatus(
+  id: number,
+  status: string,
+  isReceived?: number,
+  received_at?: string,
+) {
+  const payload: Record<string, unknown> = { status };
+  if (isReceived !== undefined) payload.isReceived = isReceived;
+  if (received_at !== undefined) payload.received_at = received_at;
+
   return directusMutate<{ data: Record<string, unknown> }>(
     `/items/sales_return/${id}`,
     "PATCH",
-    { status },
+    payload,
   );
 }
 
