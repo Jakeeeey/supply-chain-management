@@ -15,6 +15,7 @@ export interface ReceiveGroup {
   leadDate: string | null;
   dateRequested: string;
   dateEncoded: string;
+  status: string;
   items: ReceiveItem[];
   totalAmount: number;
 }
@@ -80,6 +81,7 @@ export function useStockTransferReceive() {
           leadDate: st.lead_date,
           dateRequested: st.date_requested,
           dateEncoded: st.date_encoded || '',
+          status: st.status || 'For Loading',
           items: [],
           totalAmount: 0,
         };

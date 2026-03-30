@@ -251,7 +251,7 @@ export default function TaggingOfPOModule() {
                     toast.error("Already tagged, please tag another.");
                     // ✅ Roll back the optimistic update — it was a duplicate
                     if (cur) onDetailChange(cur);
-                    return null;
+                    return detailRef.current ?? ({} as TaggingPODetail);
                 } else {
                     setError(msg || "Tagging failed.");
                     toast.error("Tagging failed", { description: msg || "Please try again." });
