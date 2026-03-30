@@ -483,8 +483,9 @@ export async function POST(request: Request) {
                         let missingQty = (inv.missingQtys || {})[detailIdStr] || 0;
                         const original = originalDetails.find((d: any) => (d.detail_id || d.id) === detailId);
 
-                        // If Unfulfilled AND Final Confirm and qty is not specifically set (empty from frontend), assume full missing qty
-                        if (!isPreSave && inv.status === 'Unfulfilled' && missingQty === 0 && original) {
+                        // If Unfulfilled AND Final Confirm and item was NOT interacted with (not in payload), assume full missing qty
+                        const wasInteracted = Object.prototype.hasOwnProperty.call(inv.missingQtys || {}, detailIdStr);
+                        if (!isPreSave && inv.status === 'Unfulfilled' && !wasInteracted && original) {
                             missingQty = original.quantity || 0;
                         }
                         
