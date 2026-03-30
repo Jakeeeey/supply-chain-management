@@ -120,13 +120,13 @@ export function useStockConversion(branchId?: number) {
       });
     } catch (e: unknown) {
         const err = e as Error;
-        console.error("Inventory fetch failed:", err);
+        console.warn("[Caught] Inventory fetch failed:", err.message);
         hasBeganGlobalFetch = false;
         setData(prev => prev.map(p => p.inventoryLoaded === false ? { ...p, inventoryLoaded: true, inventoryError: true } : p));
         // Surface auth errors as a critical error on the page
         if (err?.message?.includes("session") || err?.message?.includes("expired") || err?.message?.includes("401") || err?.message?.includes("403")) {
             setError(err.message);
-        } else if (!err?.message?.toLowerCase().includes("aborted")) {
+        } else if (!err?.message?.toLowerCase().includes("aborted") && !err?.message?.toLowerCase().includes("fetch failed")) {
             toast.error(`Inventory failed: ${err.message}`);
         }
     }
@@ -187,7 +187,7 @@ export function useStockConversion(branchId?: number) {
       });
     } catch (e: unknown) {
       const err = e as Error;
-      console.error("Batch inventory fetch failed:", err);
+      console.warn("[Caught] Batch inventory fetch failed:", err.message);
       // Surface auth errors as critical
       if (err?.message?.includes("session") || err?.message?.includes("expired") || err?.message?.includes("401") || err?.message?.includes("403")) {
           setError(err.message);
