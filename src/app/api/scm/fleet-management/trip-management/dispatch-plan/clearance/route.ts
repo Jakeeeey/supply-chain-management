@@ -386,10 +386,17 @@ export async function POST(request: Request) {
                 if (inv.status === 'Fulfilled with Concerns') siStatus = 'Completed with Concerns';
                 if (inv.status === 'Fulfilled with Returns') siStatus = 'Completed with Returns';
     
-                return {
+                const update: any = {
                     invoice_id: inv.invoiceId,
                     transaction_status: siStatus
                 };
+
+                // If Not Delivered, reset isDispatched to 0
+                if (siStatus === 'Not Delivered') {
+                    update.isDispatched = 0;
+                }
+
+                return update;
             });
     
             const siPatchRes = await fetch(`${BASE_URL}/sales_invoice`, {
