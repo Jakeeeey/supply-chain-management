@@ -96,8 +96,8 @@ const columns: ColumnDef<ReturnToSupplier>[] = [
         className={cn(
           "text-[10px] font-bold uppercase px-2 py-0.5",
           row.original.status === "Posted"
-            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-            : "bg-amber-50 text-amber-700 border-amber-200",
+            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+            : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
         )}
       >
         {row.original.status}

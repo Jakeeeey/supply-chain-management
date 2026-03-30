@@ -19,6 +19,7 @@ export const createReturnItemSchema = z.object({
   net_amount: z.number().min(0),
   item_remarks: z.string().default(""),
   return_type_id: z.number().nullable().optional(),
+  discount_type_id: z.number().nullable().optional(),
   rfid_tag: z.string().optional(),
 });
 
@@ -29,6 +30,9 @@ export const createReturnSchema = z.object({
   transaction_date: z.string().min(1, "Transaction date is required"),
   remarks: z.string().default(""),
   is_posted: z.number().min(0).max(1).default(0),
+  encoder_id: z.number().nullable().optional(),
+  date_posted: z.string().nullable().optional(),
+  total_net_amount: z.number().nullable().optional(),
   rts_items: z
     .array(createReturnItemSchema)
     .min(1, "At least one item is required"),
@@ -49,9 +53,11 @@ export interface API_ReturnToSupplier {
   supplier_id: number | { id: number; supplier_name: string };
   branch_id: number | { id: number; branch_name: string };
   transaction_date: string;
-  total_net_amount: string;
+  total_net_amount: string | number;
   remarks: string;
   is_posted: number;
+  encoder_id?: number | { id: number; user_name: string };
+  date_posted?: string;
   date_created: string;
 }
 
@@ -75,8 +81,8 @@ export interface API_RTS_Item {
   discount_rate: string;
   discount_amount: string;
   net_amount: string;
-  item_remarks: string | null;
   return_type_id?: number;
+  discount_type_id?: number;
 }
 
 // =============================================================================
@@ -114,7 +120,7 @@ export interface Product {
   rawStock?: number;
   discountType?: string;
   supplierDiscount?: number;
-  discountId?: number;
+  discountTypeId?: number;
 }
 /** A unit-of-measurement reference record (from Directus `units` table). */
 export interface Unit {
@@ -148,11 +154,13 @@ export interface RTSReturnType {
 
 /** An item in the shopping cart / return builder. */
 export interface CartItem extends Product {
+  cartId?: string;
   quantity: number;
   onHand: number;
   discount: number;
   customPrice?: number;
   return_type_id?: number | null;
+  discountTypeId?: number;
   rfid_tag?: string;
 }
 
@@ -168,6 +176,8 @@ export interface ReturnToSupplier {
   totalAmount: number; // Net Amount
   grossAmount: number;
   discountAmount: number;
+  encoder_id?: number;
+  date_posted?: string;
 }
 
 /** A mapped RTS item record for transaction details. */
@@ -185,6 +195,7 @@ export interface RTSItem {
   total: number;
   unitCount: number;
   returnTypeId?: number;
+  discountTypeId?: number;
   rfid_tag?: string;
 }
 
@@ -238,6 +249,8 @@ export interface InventoryRecord {
   familyId: number; // parent_id or self
   price: number; // cost_per_unit from products
   product_barcode?: string;
+  return_type_id?: number;
+  discountTypeId?: number;
 }
 
 // =============================================================================
@@ -275,6 +288,8 @@ export interface ReferenceData {
   lineDiscounts: LineDiscount[];
   connections: ProductSupplier[];
   returnTypes: RTSReturnType[];
+  discountTypes: any[];
+  linePerDiscountType: any[];
 }
 
 /** Response from the Spring Boot RFID on-hand lookup. */

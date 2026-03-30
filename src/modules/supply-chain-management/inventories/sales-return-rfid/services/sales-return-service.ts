@@ -681,8 +681,10 @@ export async function updateReturn(payload: {
 export async function updateStatus(
   id: number,
   status: string,
+  isReceived?: number,
+  received_at?: string,
 ): Promise<any> {
-  return repo.updateReturnStatus(id, status);
+  return repo.updateReturnStatus(id, status, isReceived, received_at);
 }
 
 /**

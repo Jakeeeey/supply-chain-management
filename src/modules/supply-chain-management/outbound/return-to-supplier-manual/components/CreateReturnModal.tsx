@@ -104,9 +104,17 @@ export function CreateReturnModal({
     );
 
     const discountMap = new Map<string, (typeof refs.lineDiscounts)[0]>();
-    refs.lineDiscounts.forEach((d) =>
-      discountMap.set(String(d.id), d),
-    );
+    refs.lineDiscounts.forEach((d) => discountMap.set(String(d.id), d));
+
+    const discountTypeMap = new Map<string, any>();
+    refs.discountTypes.forEach((dt) => discountTypeMap.set(String(dt.id), dt));
+
+    const linePerDiscountMap = new Map<string, number[]>();
+    refs.linePerDiscountType.forEach((lpd) => {
+      const typeId = String(lpd.type_id);
+      if (!linePerDiscountMap.has(typeId)) linePerDiscountMap.set(typeId, []);
+      linePerDiscountMap.get(typeId)?.push(Number(lpd.line_id));
+    });
 
     // Build unit order map (unit_name/shortcut -> order) for filtering
     const unitOrderMap = new Map<string, number>();
@@ -124,17 +132,24 @@ export function CreateReturnModal({
 
         let discountLabel: string | undefined;
         let computedDiscount = 0;
-        let currentDiscountId: number | undefined;
+        let currentDiscountTypeId: number | undefined;
 
         if (connection?.discount_type) {
-          const discountObj = discountMap.get(String(connection.discount_type));
-          if (discountObj) {
-            computedDiscount = parseFloat(discountObj.percentage) / 100;
-            discountLabel = discountObj.line_discount;
-            currentDiscountId = discountObj.id;
-          } else {
-            discountLabel = String(connection.discount_type);
-            currentDiscountId = connection.discount_type;
+          const discountTypeObj = discountTypeMap.get(String(connection.discount_type));
+          if (discountTypeObj) {
+            currentDiscountTypeId = discountTypeObj.id;
+            discountLabel = discountTypeObj.discount_type_name ||
+              discountTypeObj.discount_type ||
+              discountTypeObj.name;
+            
+            // Resolve to first percentage found in junction
+            const lineIds = linePerDiscountMap.get(String(discountTypeObj.id));
+            if (lineIds && lineIds.length > 0) {
+              const lineDiscountObj = discountMap.get(String(lineIds[0]));
+              if (lineDiscountObj) {
+                computedDiscount = parseFloat(lineDiscountObj.percentage) / 100;
+              }
+            }
           }
         }
 
@@ -155,7 +170,7 @@ export function CreateReturnModal({
           uom_id: matchedUnit?.unit_id || 0,
           discountType: discountLabel,
           supplierDiscount: computedDiscount,
-          discountId: currentDiscountId,
+          discountTypeId: currentDiscountTypeId,
         };
       })
       // Filter: only products with stock > 0
@@ -173,7 +188,7 @@ export function CreateReturnModal({
       uom_id: number;
       discountType?: string;
       supplierDiscount: number;
-      discountId?: number;
+      discountTypeId?: number;
     }
 
     // Group by familyId
@@ -209,7 +224,7 @@ export function CreateReturnModal({
           supplierDiscount:
             v.supplierDiscount || parentDiscount.supplierDiscount,
           discountType: v.discountType || parentDiscount.discountType,
-          discountId: v.discountId || parentDiscount.discountId,
+          discountTypeId: v.discountTypeId || parentDiscount.discountTypeId,
         }));
       }
 
@@ -251,7 +266,7 @@ export function CreateReturnModal({
           quantity: qty,
           onHand: p.stock ?? 0,
           discount: (p.supplierDiscount || 0),
-          discountId: p.discountId,
+          discountTypeId: p.discountTypeId,
           customPrice: p.price,
         } as CartItem,
       ];
@@ -298,6 +313,34 @@ export function CreateReturnModal({
         return;
       }
 
+      const connection = refs.connections.find(
+        (c) => c.product_id === invRecord!.product_id && c.supplier_id === Number(selection.supplierId),
+      );
+
+      let computedDiscount = 0;
+      let currentDiscountTypeId: number | undefined;
+
+      if (connection?.discount_type) {
+        const discountTypeObj = refs.discountTypes.find(
+          (dt) => dt.id === connection.discount_type
+        );
+        if (discountTypeObj) {
+          currentDiscountTypeId = discountTypeObj.id;
+          
+          const junctions = refs.linePerDiscountType.filter(
+            (lpd) => lpd.type_id === discountTypeObj.id
+          );
+          if (junctions.length > 0) {
+            const lineDiscountObj = refs.lineDiscounts.find(
+              (ld) => ld.id === junctions[0].line_id
+            );
+            if (lineDiscountObj) {
+              computedDiscount = parseFloat(lineDiscountObj.percentage) / 100;
+            }
+          }
+        }
+      }
+
       // Add to cart
       addToCart({
         id: String(invRecord!.product_id), // Standard Identity
@@ -309,7 +352,8 @@ export function CreateReturnModal({
         stock: invRecord!.running_inventory,
         price: invRecord!.price,
         uom_id: matchedUnit.unit_id,
-        supplierDiscount: 0,
+        supplierDiscount: computedDiscount,
+        discountTypeId: currentDiscountTypeId,
       }, 1);
 
       toast.success("Barcode Scanned", {
@@ -384,6 +428,7 @@ export function CreateReturnModal({
           net_amount: net,
           item_remarks: "",
           return_type_id: item.return_type_id || null,
+          discount_type_id: item.discountTypeId || null,
         };
       });
 
@@ -609,6 +654,8 @@ export function CreateReturnModal({
                     <ReturnReviewPanel
                       items={cart}
                       lineDiscounts={refs.lineDiscounts}
+                      discountTypes={refs.discountTypes}
+                      linePerDiscountType={refs.linePerDiscountType}
                       returnTypes={refs.returnTypes || []}
                       onUpdateItem={updateCart}
                       onRemoveItem={(cartId) =>

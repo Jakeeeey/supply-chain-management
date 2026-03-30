@@ -36,7 +36,7 @@ async function directusMutate<T>(path: string, method: "POST" | "PATCH" | "DELET
  */
 export async function getRawRtsHeaders() {
   return directusGet<{ data: Record<string, unknown>[] }>(
-    "/items/return_to_supplier?limit=-1&fields=id,doc_no,transaction_date,is_posted,remarks,supplier_id.supplier_name,branch_id.branch_name&sort=-date_created"
+    "/items/return_to_supplier?limit=-1&fields=id,doc_no,transaction_date,is_posted,remarks,supplier_id.supplier_name,branch_id.branch_name,total_net_amount,encoder_id,date_posted&sort=-date_created"
   );
 }
 
@@ -56,7 +56,7 @@ export async function getRawItemsByRtsId(id: string) {
   const params = new URLSearchParams({
     "filter[rts_id][_eq]": id,
     fields:
-      "id,quantity,gross_unit_price,discount_rate,discount_amount,net_amount,return_type_id,product_id.product_name,product_id.product_code,product_id.product_id,product_id.unit_of_measurement_count,uom_id.unit_shortcut,uom_id.unit_id",
+      "id,quantity,gross_unit_price,discount_rate,discount_amount,net_amount,return_type_id,discount_type_id,product_id.product_name,product_id.product_code,product_id.product_id,product_id.unit_of_measurement_count,uom_id.unit_shortcut,uom_id.unit_id",
   });
   return directusGet<{ data: Record<string, unknown>[] }>(`/items/rts_items?${params}`);
 }
@@ -88,6 +88,8 @@ export async function getRawReferences() {
       "/items/product_per_supplier?limit=-1&fields=id,product_id,supplier_id,discount_type",
     ),
     directusGet<{ data: Record<string, unknown>[] }>("/items/rts_return_type?limit=-1"),
+    directusGet<{ data: Record<string, unknown>[] }>("/items/discount_type?limit=-1"),
+    directusGet<{ data: Record<string, unknown>[] }>("/items/line_per_discount_type?limit=-1&fields=id,type_id,line_id"),
   ]);
 }
 

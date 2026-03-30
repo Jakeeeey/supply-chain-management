@@ -14,6 +14,7 @@ import {
   createTransaction,
   updateTransaction,
 } from "@/modules/supply-chain-management/outbound/return-to-supplier-rfid/services/rts-service";
+import { decodeJwtPayload } from "@/lib/auth-utils";
 
 export const runtime = "nodejs";
 
@@ -127,7 +128,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const data = await createTransaction(parsed.data);
+    // Extract user ID from JWT cookie for audit trail
+    const token = req.cookies.get("vos_access_token")?.value;
+    const jwtPayload = token ? decodeJwtPayload(token) : null;
+    const userId = jwtPayload?.user_id ?? jwtPayload?.userId ?? jwtPayload?.sub ?? null;
+
+    const payloadWithAudit = {
+      ...parsed.data,
+      encoder_id: userId ? Number(userId) : undefined,
+    };
+
+    const data = await createTransaction(payloadWithAudit as any);
     return json({ data }, 201);
   } catch (error: any) {
     console.error("RTS API POST Error:", error);
@@ -161,7 +172,12 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    await updateTransaction(id, parsed.data);
+    const payloadWithAudit = {
+      ...parsed.data,
+      ...(parsed.data.is_posted === 1 ? { date_posted: new Date().toISOString() } : {}),
+    };
+
+    await updateTransaction(id, payloadWithAudit as any);
     return json({ data: { success: true } });
   } catch (error: any) {
     console.error("RTS API PATCH Error:", error);

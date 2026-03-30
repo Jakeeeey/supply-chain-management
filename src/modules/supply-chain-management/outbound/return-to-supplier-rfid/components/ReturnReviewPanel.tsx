@@ -26,8 +26,10 @@ import type { CartItem, LineDiscount, RTSReturnType } from "../types/rts.schema"
 interface ReturnReviewPanelProps {
   items: CartItem[];
   lineDiscounts: LineDiscount[];
+  discountTypes: any[];
+  linePerDiscountType: any[];
   returnTypes: RTSReturnType[];
-  onUpdateItem: (id: string, field: keyof CartItem, value: number) => void;
+  onUpdateItem: (id: string, field: keyof CartItem, value: any) => void;
   onRemoveItem: (id: string) => void;
   remarks: string;
   setRemarks: (val: string) => void;
@@ -51,6 +53,8 @@ interface GroupedProduct {
 export function ReturnReviewPanel({
   items,
   lineDiscounts,
+  discountTypes,
+  linePerDiscountType,
   returnTypes = [],
   onUpdateItem,
   onRemoveItem,
@@ -81,21 +85,23 @@ export function ReturnReviewPanel({
 
   // Helper to find discount name by ID or fallback
   const getDiscountName = (item: CartItem) => {
-    if (item.discountId) {
-      const match = lineDiscounts.find((d) => d.id === item.discountId);
-      if (match) return match.line_discount;
+    if (item.discountTypeId) {
+      const match = discountTypes.find((d) => d.id === item.discountTypeId);
+      if (match) {
+        return (
+          match.discount_type_name ||
+          match.discount_type ||
+          match.name ||
+          `Type ${match.id}`
+        );
+      }
     }
-    // Tolerance fallback if no ID but value is close to a known discount
-    const percentage = item.discount;
-    if (percentage === 0) return "0%";
-
     const matchByValue = lineDiscounts.find(
-      (d) => Math.abs(Number(d.percentage) / 100 - percentage) < 0.0001
+      (d) => Math.abs(Number(d.percentage) / 100 - item.discount) < 0.0001
     );
     if (matchByValue) return matchByValue.line_discount;
 
-    // Show actual decimal representation to prevent "Ghost" zeros
-    return `${(percentage * 100).toFixed(4).replace(/\.?0+$/, "")}%`;
+    return `${(item.discount * 100).toFixed(4).replace(/\.?0+$/, "")}%`;
   };
 
   // Separate items into RFID (grouped) and Manual (flat)
@@ -144,6 +150,28 @@ export function ReturnReviewPanel({
   };
 
   const colSpanCount = readOnly ? 10 : 11;
+
+  const handleDiscountChange = (itemId: string, val: string) => {
+    const selectedType = discountTypes.find((d) => d.id.toString() === val);
+    if (selectedType) {
+      onUpdateItem(itemId, "discountTypeId", selectedType.id);
+
+      // Resolve percentage
+      const junctions = linePerDiscountType.filter(
+        (j) => String(j.type_id) === String(selectedType.id)
+      );
+      if (junctions.length > 0) {
+        const lineDiscount = lineDiscounts.find(
+          (ld) => String(ld.id) === String(junctions[0].line_id)
+        );
+        if (lineDiscount) {
+          onUpdateItem(itemId, "discount", Number(lineDiscount.percentage) / 100);
+        }
+      } else {
+        onUpdateItem(itemId, "discount", 0);
+      }
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -269,40 +297,22 @@ export function ReturnReviewPanel({
                           <div className="flex justify-center">
                             <Select
                               value={
-                                item.discountId
-                                  ? item.discountId.toString()
-                                  : lineDiscounts.find((d) => Math.abs(Number(d.percentage) / 100 - item.discount) < 0.0001)?.id.toString() || "custom"
+                                item.discountTypeId
+                                  ? item.discountTypeId.toString()
+                                  : ""
                               }
-                              onValueChange={(val) => {
-                                if (val === "custom") {
-                                  // Custom logic if implemented
-                                } else {
-                                  const selected = lineDiscounts.find(
-                                    (d) => d.id.toString() === val,
-                                  );
-                                  if (selected) {
-                                    onUpdateItem(
-                                      item.id,
-                                      "discount",
-                                      Number(selected.percentage) / 100,
-                                    );
-                                    onUpdateItem(
-                                      item.id,
-                                      "discountId" as keyof CartItem,
-                                      selected.id as any,
-                                    );
-                                  }
-                                }
-                              }}
+                              onValueChange={(val) => handleDiscountChange(item.id, val)}
                             >
                               <SelectTrigger className="h-8 w-full text-xs truncate">
                                 <SelectValue placeholder="-" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="custom">Custom</SelectItem>
-                                {lineDiscounts.map((d) => (
+                                {discountTypes.map((d) => (
                                   <SelectItem key={d.id} value={d.id.toString()}>
-                                    {d.line_discount}
+                                  {d.discount_type_name ||
+                                    d.discount_type ||
+                                    d.name ||
+                                    `Type ${d.id}`}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -518,38 +528,22 @@ export function ReturnReviewPanel({
                                 <div className="flex justify-center">
                                   <Select
                                     value={
-                                      item.discountId
-                                        ? item.discountId.toString()
-                                        : lineDiscounts.find((d) => Math.abs(Number(d.percentage) / 100 - item.discount) < 0.0001)?.id.toString() || "custom"
+                                      item.discountTypeId
+                                        ? item.discountTypeId.toString()
+                                        : ""
                                     }
-                                    onValueChange={(val) => {
-                                      if (val !== "custom") {
-                                        const selected = lineDiscounts.find(
-                                          (d) => d.id.toString() === val,
-                                        );
-                                        if (selected) {
-                                          onUpdateItem(
-                                            item.id,
-                                            "discount",
-                                            Number(selected.percentage) / 100,
-                                          );
-                                          onUpdateItem(
-                                            item.id,
-                                            "discountId" as keyof CartItem,
-                                            selected.id as any,
-                                          );
-                                        }
-                                      }
-                                    }}
+                                    onValueChange={(val) => handleDiscountChange(item.id, val)}
                                   >
                                     <SelectTrigger className="h-8 w-full text-xs truncate">
                                       <SelectValue placeholder="-" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      <SelectItem value="custom">Custom</SelectItem>
-                                      {lineDiscounts.map((d) => (
+                                      {discountTypes.map((d) => (
                                         <SelectItem key={d.id} value={d.id.toString()}>
-                                          {d.line_discount}
+                                          {d.discount_type_name ||
+                                          d.discount_type ||
+                                          d.name ||
+                                          `Type ${d.id}`}
                                         </SelectItem>
                                       ))}
                                     </SelectContent>
