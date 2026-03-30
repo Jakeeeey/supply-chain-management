@@ -2,22 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-    X,
     CheckCircle2,
     AlertCircle,
     RotateCcw,
     AlertTriangle,
     Loader2,
-    Info,
-    Calendar,
-    User,
-    ChevronDown,
     Scan,
-    Box,
-    Save,
-    Receipt,
-    ScrollText,
-    ScanLine,
     Keyboard,
 } from 'lucide-react';
 import {
@@ -35,7 +25,6 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
     Select,
@@ -48,7 +37,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
-import { InvoiceDetail, InvoiceLine, ReconciliationRow, RFIDMapping } from '../types';
+import { InvoiceDetail, ReconciliationRow, RFIDMapping } from '../types';
 import { fetchInvoiceDetails } from '../providers/fetchProviders';
 import ScanningModal from './ScanningModal';
 import ManualInputModal from './ManualInputModal';
@@ -80,10 +69,10 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
 
     // 🟢 Link Sales Return State
     const [returnMode, setReturnMode] = useState<'create' | 'link'>('create');
-    const [existingReturns, setExistingReturns] = useState<any[]>([]);
+    const [existingReturns, setExistingReturns] = useState<{ id: number; returnNo: string; returnDate: string; totalAmount: number }[]>([]);
     const [selectedReturnNo, setSelectedReturnNo] = useState<string>('');
-    const [isFetchingReturns, setIsFetchingReturns] = useState(false);
 
+    // Reset/initialize state when modal opens — intentional reset pattern
     useEffect(() => {
         if (isOpen && reconciliation?.invoiceId) {
             setIsLoading(true);
@@ -156,10 +145,6 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
         onClose();
     };
 
-    const handleMissingQtyChange = (lineId: string | number, value: string) => {
-        const num = parseInt(value) || 0;
-        setMissingQtys(prev => ({ ...prev, [lineId]: num }));
-    };
 
     const handleScanningConfirm = (scanned: Record<string | number, number>, returnedRFIDs: Record<string | number, string[]> = {}) => {
         setScannedQtys(scanned);

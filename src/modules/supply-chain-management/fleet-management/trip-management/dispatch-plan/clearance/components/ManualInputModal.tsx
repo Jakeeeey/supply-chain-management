@@ -42,11 +42,14 @@ const ManualInputModal: React.FC<ManualInputModalProps> = ({
 }) => {
     const [inputQtys, setInputQtys] = useState<Record<string | number, number>>(initialValues);
 
+    // Reset state when modal opens — intentional reset pattern
+    /* eslint-disable react-hooks/set-state-in-effect */
     useEffect(() => {
         if (isOpen) {
             setInputQtys(initialValues);
         }
     }, [isOpen, initialValues]);
+    /* eslint-enable react-hooks/set-state-in-effect */
 
     const handleQtyChange = (itemId: string | number, value: string, maxQty: number) => {
         // Only allow numbers
