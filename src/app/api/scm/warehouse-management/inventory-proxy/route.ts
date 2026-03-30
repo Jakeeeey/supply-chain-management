@@ -5,8 +5,15 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   
-  // Construct the target external URL
-  const targetUrl = new URL('http://100.81.225.79:8087/api/view-running-inventory/filter');
+  const springBase = process.env.SPRING_API_BASE_URL?.replace(/\/$/, '');
+  
+  if (!springBase) {
+    console.error('[Proxy] SPRING_API_BASE_URL is not configured');
+    return NextResponse.json({ error: 'SPRING_API_BASE_URL is not configured' }, { status: 500 });
+  }
+
+  // Construct the target external URL dynamically
+  const targetUrl = new URL(`${springBase}/api/view-running-inventory/filter`);
   
   // Forward all query parameters
   searchParams.forEach((value, key) => {
@@ -19,6 +26,7 @@ export async function GET(request: NextRequest) {
   console.log(`[Proxy] Token present: ${!!token}, Length: ${token?.length}`);
   
   if (token) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     require('fs').writeFileSync('/tmp/latest_token.txt', token);
   }
 
@@ -59,7 +67,6 @@ export async function GET(request: NextRequest) {
     // ── 2. Fallback to Tag Count (v_rfid_onhand) if aggregate is 0 or missing ──
     const branchId = searchParams.get('branchId');
     const productId = searchParams.get('productId');
-    const springBase = process.env.SPRING_API_BASE_URL;
 
     if (branchId && productId && springBase) {
       console.log(`[Proxy] Falling back to tag count for product ${productId} in branch ${branchId}`);

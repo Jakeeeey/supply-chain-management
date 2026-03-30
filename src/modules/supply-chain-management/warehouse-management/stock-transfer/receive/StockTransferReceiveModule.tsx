@@ -213,8 +213,20 @@ export default function StockTransferReceiveModule() {
           {/* Details & Actions */}
           {selectedGroup && (
             <div className="space-y-6 border rounded-xl overflow-hidden shadow-sm print:border-none print:shadow-none">
-              <div className="bg-muted/30 p-4 border-b print:bg-transparent print:border-b-2 print:border-black">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-muted/30 p-4 border-b print:bg-transparent print:border-0 print:p-0">
+                
+                {/* Print Header */}
+                <div className="hidden print:block mb-8 border-b-2 border-black pb-4">
+                  <div className="flex justify-between items-end">
+                    <h1 className="text-4xl font-black uppercase tracking-widest text-black">RECEIVED</h1>
+                    <div className="text-right">
+                      <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Stock Transfer No.</p>
+                      <p className="text-xl font-black text-black">{selectedOrderNo}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:border-b-2 print:border-black print:pb-4">
                   <div>
                     <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider print:text-black">Source Branch</p>
                     <p className="font-medium text-sm">{getBranchName(selectedGroup.sourceBranch)}</p>

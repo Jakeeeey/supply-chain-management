@@ -41,60 +41,7 @@ export async function GET(request: NextRequest) {
     const cached = getCachedRfid(cacheKey);
     if (cached) return NextResponse.json(cached);
 
-    // ── 1. MOCK FALLBACK (Unblock User Sandbox/Testing) ──
-    const userRFIDs = [
-      'E280F302000000010513C7C5',
-      'E280F302000000010AC6A8A2', 
-      'E280F302000000010513CA2A',
-      'E280F302000000010513C9D1',
-      'E280F302000000010513CBCE',
-      'E280F302000000010513C865',
-      '513C8B1',
-      // New ones from the latest logs to resolve 404s
-      'E280F302000000010AC68297',
-      'E280F302000000010513C7E1',
-      'E280F302000000010AC6CA48',
-      'E280F302000000010AC6A2C3',
-      'E280F302000000010AC6A482',
-      'E280F302000000010AC6A6AB',
-      'E280F302000000010AC6AB54',
-      'E280F302000000010AC6A357',
-      'E280F302000000010AC6A868',
-      'E280F302000000010EC7AE5F',
-      'E280F302000000010EC7AE8F',
-      'E280F302000000010EC7AE47',
-      'E280F302000000010EC7CEE8',
-      'E280F302000000010EC7AE2F',
-      'E280F302000000010EC7AB97',
-      'E280F302000000010EC7AA53',
-      'E280F302000000010513C7AD',
-      'E280F302000000010513C759',
-      'E280F302000000010513C82D',
-      'E280F302000000010513C7F9',
-      'E280F302000000010513C775',
-      'E280F302000000010513C845',
-      'E280F302000000010513C811',
-      'E280F302000000010AC68419',
-      'E280F302000000010513C791',
-      'E280F302000000010AC68435'
-    ];
-    
-    /* 
-    // REMOVED: Overly aggressive UAT mock that was mapping many tags to a single sanitizer product ID.
-    // This was causing confusion during real testing where "Box" RFIDs were being scanned as "Pieces".
-    if (userRFIDs.includes(rfid)) {
-      const mockResult = {
-        rfid,
-        productId: 22345,
-        productName: "Alcogel Hand Sanitizer 250ml (MOCK)",
-        barcode: "MOCK-22345",
-        unitPrice: 150,
-        branchId: branchId || 190,
-      };
-      setCachedRfid(cacheKey, mockResult);
-      return NextResponse.json(mockResult);
-    }
-    */
+
 
     const springApiUrl = process.env.SPRING_API_BASE_URL?.replace(/\/$/, '');
 
