@@ -66,6 +66,19 @@ function fmtMoney(value: number | null | undefined): string {
     });
 }
 
+function formatDisplayDate(value: string | null | undefined): string {
+    if (!value) return "—";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return value;
+    return parsed.toLocaleString("en-PH", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+}
+
 type RowView = {
     row: PhysicalInventoryHeaderRow;
     branch_name: string;
@@ -181,15 +194,15 @@ export function PhysicalInventoryList(props: Props) {
                                             <TableCell>{item.supplier_name}</TableCell>
                                             <TableCell>{item.category_name}</TableCell>
                                             <TableCell>{item.price_type_name}</TableCell>
-                                            <TableCell>{item.row.starting_date ?? "—"}</TableCell>
-                                            <TableCell>{item.row.cutOff_date ?? "—"}</TableCell>
+                                            <TableCell>{formatDisplayDate(item.row.starting_date)}</TableCell>
+                                            <TableCell>{formatDisplayDate(item.row.cutOff_date)}</TableCell>
                                             <TableCell className="text-right">
                                                 ₱ {fmtMoney(item.row.total_amount)}
                                             </TableCell>
                                             <TableCell>
                                                 <PhysicalInventoryStatusBadge status={item.status} />
                                             </TableCell>
-                                            <TableCell>{item.row.date_encoded ?? "—"}</TableCell>
+                                            <TableCell>{formatDisplayDate(item.row.date_encoded)}</TableCell>
                                             <TableCell className="text-right">
                                                 <Button
                                                     variant="outline"

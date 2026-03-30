@@ -130,6 +130,14 @@ const DispatchClearanceModule = () => {
         );
         setData(joinedData);
         setTotalItems(total);
+
+        // 🟢 Update selectedDispatch if currently selected and modal is open
+        // This ensures props stay fresh when background refreshes happen (like after pre-save)
+        setSelectedDispatch(prev => {
+          if (!prev) return null;
+          const fresh = joinedData.find(d => d.id === prev.id);
+          return fresh || prev;
+        });
       } catch (err) {
         console.error('Failed to load dispatch data:', err);
       } finally {

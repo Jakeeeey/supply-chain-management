@@ -30,13 +30,14 @@ type Props = {
     onChangeStartingDate: (value: string) => void;
 };
 
-function toInputDate(value: string | null | undefined): string {
+function toInputDateTimeLocal(value: string | null | undefined): string {
     if (!value) return "";
     const trimmed = value.trim();
     if (!trimmed) return "";
-    if (trimmed.includes("T")) return trimmed.slice(0, 10);
-    if (trimmed.includes(" ")) return trimmed.slice(0, 10);
-    return trimmed;
+    if (trimmed.includes("T")) return trimmed.slice(0, 16);
+    if (trimmed.includes(" ")) return trimmed.replace(" ", "T").slice(0, 16);
+    if (trimmed.length === 10) return `${trimmed}T00:00`;
+    return trimmed.slice(0, 16);
 }
 
 function formatMoney(value: number): string {
@@ -149,20 +150,10 @@ export function PhysicalInventoryHeader(props: Props) {
                             id="pi-ph-no"
                             value={header?.ph_no ?? ""}
                             onChange={(e) => onChangePhNo(e.target.value)}
-                            placeholder="Enter PH No"
-                            disabled={!canEdit}
-                            className="font-medium"
-                        />
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label htmlFor="pi-cutoff-date">Cut Off Date</Label>
-                        <Input
-                            id="pi-cutoff-date"
-                            type="date"
-                            value={toInputDate(header?.cutOff_date)}
-                            onChange={(e) => onChangeCutoffDate(e.target.value)}
-                            disabled={!canEdit}
+                            placeholder="Auto-generated"
+                            disabled
+                            readOnly
+                            className="font-medium outline-none focus-visible:ring-0"
                         />
                     </div>
 
@@ -172,9 +163,20 @@ export function PhysicalInventoryHeader(props: Props) {
                         </Label>
                         <Input
                             id="pi-starting-date"
-                            type="date"
-                            value={toInputDate(header?.starting_date)}
+                            type="datetime-local"
+                            value={toInputDateTimeLocal(header?.starting_date)}
                             onChange={(e) => onChangeStartingDate(e.target.value)}
+                            disabled={!canEdit}
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label htmlFor="pi-cutoff-date">Cut Off Date</Label>
+                        <Input
+                            id="pi-cutoff-date"
+                            type="datetime-local"
+                            value={toInputDateTimeLocal(header?.cutOff_date)}
+                            onChange={(e) => onChangeCutoffDate(e.target.value)}
                             disabled={!canEdit}
                         />
                     </div>

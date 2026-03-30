@@ -172,14 +172,11 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                 ? `Progress saved for Dispatch ${dispatch.dispatchNo}` 
                 : `Clearance confirmed for Dispatch ${dispatch.dispatchNo}`);
             
+            // 🟢 Always notify parent of change (pre-save or final)
+            onSuccess?.();
+
             if (!isPreSave) {
-                onSuccess?.();
                 onClose();
-            } else {
-                // For pre-save, we might want to refresh the list or just stay open.
-                // The user said "para pwede pang mabalikan", implying they might close it manually or it can stay open.
-                // Closing it after pre-save is also common. Let's keep it open so they can continue, but they can click Cancel/X to exit.
-                // Actually, if we don't close, we should ensure the state is synced if needed.
             }
         } catch (error: any) {
             console.error('Clearance Error:', error);

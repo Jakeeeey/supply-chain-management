@@ -24,6 +24,8 @@ type PhysicalInventoryHeaderRow = {
     remarks: string | null;
     isComitted: number;
     isCancelled: number;
+    committed_at: string | null;
+    cancelled_at: string | null;
     total_amount: number | null;
     supplier_id: number | null;
     category_id: number | null;
@@ -96,7 +98,7 @@ export async function POST(_req: NextRequest, context: RouteContext) {
         }
 
         const header = await directusGetSingle<PhysicalInventoryHeaderRow>(
-            `/items/${TABLE_PH}/${headerId}?fields=id,ph_no,cutOff_date,starting_date,price_type,stock_type,branch_id,remarks,isComitted,isCancelled,total_amount,supplier_id,category_id,encoder_id`,
+            `/items/${TABLE_PH}/${headerId}?fields=id,ph_no,cutOff_date,starting_date,price_type,stock_type,branch_id,remarks,isComitted,isCancelled,committed_at,cancelled_at,total_amount,supplier_id,category_id,encoder_id`,
         );
 
         if (!header) {
@@ -125,6 +127,7 @@ export async function POST(_req: NextRequest, context: RouteContext) {
             {
                 isCancelled: 1,
                 isComitted: 0,
+                cancelled_at: new Date().toISOString(),
             },
         );
 
