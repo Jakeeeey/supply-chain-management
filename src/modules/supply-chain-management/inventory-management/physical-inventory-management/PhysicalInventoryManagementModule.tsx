@@ -233,6 +233,39 @@ export function PhysicalInventoryManagementModule(props: Props) {
     );
 
     const [header, setHeader] = React.useState<PhysicalInventoryHeaderRow | null>(null);
+
+    const setHydratedHeader = React.useCallback(
+        (
+            next:
+                | PhysicalInventoryHeaderRow
+                | null
+                | ((prev: PhysicalInventoryHeaderRow | null) => PhysicalInventoryHeaderRow | null),
+        ) => {
+            setHeader((prev) => {
+                const result = typeof next === "function" ? next(prev) : next;
+                if (!result || !currentUser) return result;
+
+                const numericId =
+                    typeof result.encoder_id === "object"
+                        ? result.encoder_id?.user_id
+                        : result.encoder_id;
+
+                if (numericId === currentUser.id) {
+                    return {
+                        ...result,
+                        encoder_id: {
+                            user_id: currentUser.id,
+                            user_fname: currentUser.name,
+                            user_lname: "",
+                        },
+                    };
+                }
+                return result;
+            });
+        },
+        [currentUser],
+    );
+
     const [detailRows, setDetailRows] = React.useState<PhysicalInventoryDetailRow[]>([]);
     const [groupedRows, setGroupedRows] = React.useState<GroupedPhysicalInventoryRow[]>([]);
     const [rfidDialogRow, setRfidDialogRow] =
@@ -254,7 +287,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
 
     React.useEffect(() => {
         if (filters.branch_id && currentUser) {
-            setHeader((prev) => {
+            setHydratedHeader((prev) => {
                 if (!prev) return prev;
                 if (prev.id !== 0) return prev;
                 if (prev.date_encoded && prev.encoder_id) return prev;
@@ -269,7 +302,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
                 };
             });
         }
-    }, [filters.branch_id, currentUser]);
+    }, [filters.branch_id, currentUser, setHydratedHeader]);
 
     const hasLoadedDetails = detailRows.length > 0;
 
@@ -534,7 +567,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
                 total_amount: sumHeaderTotalAmount(nextDetails),
             });
 
-            setHeader(nextHeader);
+            setHydratedHeader(nextHeader);
             onRecordChange?.(nextHeader);
 
             rebuildGroupedRows({
@@ -571,7 +604,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
                     total_amount: sumHeaderTotalAmount(nextDetails),
                 };
 
-                setHeader(nextHeader);
+                setHydratedHeader(nextHeader);
                 onRecordChange?.(nextHeader);
 
                 if (header.id > 0) {
@@ -645,7 +678,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
                         price_type_id: existingHeader.price_type,
                     };
 
-                    setHeader(existingHeader);
+                    setHydratedHeader(existingHeader);
                     setDetailRows(existingDetails);
                     setFilters(nextFilters);
 
@@ -754,7 +787,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
 
                 if (cancelled) return;
 
-                setHeader(draftHeader);
+                setHydratedHeader(draftHeader);
                 setDetailRows([]);
                 setGroupedRows([]);
                 setCategories([]);
@@ -791,7 +824,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
             try {
                 const latestCutoff = await fetchLatestCommittedCutoffDateByBranch(filters.branch_id);
 
-                setHeader((prev) => {
+                setHydratedHeader((prev) => {
                     if (!prev) return prev;
 
                     if (prev.branch_id === filters.branch_id && prev.starting_date === latestCutoff) {
@@ -941,14 +974,20 @@ export function PhysicalInventoryManagementModule(props: Props) {
         };
 
         if (header.id > 0) {
-            const updated = await updatePhysicalInventoryHeader(header.id, payload);
-            setHeader(updated);
+            const updated = await updatePhysicalInventoryHeader(header.id, {
+                ...payload,
+                encoder_id: typeof header.encoder_id === "object" ? header.encoder_id?.user_id : header.encoder_id || currentUser?.id,
+            });
+            setHydratedHeader(updated);
             onRecordChange?.(updated);
             return updated;
         }
 
-        const created = await createPhysicalInventoryHeader(payload);
-        setHeader(created);
+        const created = await createPhysicalInventoryHeader({
+            ...payload,
+            encoder_id: currentUser?.id,
+        });
+        setHydratedHeader(created);
         onRecordChange?.(created);
         return created;
     }, [
@@ -1069,7 +1108,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
                 total_amount: sumHeaderTotalAmount(persistedDetails),
             });
 
-            setHeader(nextHeader);
+            setHydratedHeader(nextHeader);
             onRecordChange?.(nextHeader);
 
             rebuildGroupedRows({
@@ -1244,7 +1283,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
 
             const updatedHeader = await cancelPhysicalInventory(header.id);
 
-            setHeader(updatedHeader);
+            setHydratedHeader(updatedHeader);
             onRecordChange?.(updatedHeader);
 
             rebuildGroupedRows({
@@ -1364,19 +1403,19 @@ export function PhysicalInventoryManagementModule(props: Props) {
                 canEdit={canEdit}
                 totalAmount={totalAmount}
                 onChangePhNo={(value) =>
-                    setHeader((prev) => (prev ? { ...prev, ph_no: value } : prev))
+                    setHydratedHeader((prev) => (prev ? { ...prev, ph_no: value } : prev))
                 }
                 onChangeStockType={(value) =>
-                    setHeader((prev) => (prev ? { ...prev, stock_type: value } : prev))
+                    setHydratedHeader((prev) => (prev ? { ...prev, stock_type: value } : prev))
                 }
                 onChangeRemarks={(value) =>
-                    setHeader((prev) => (prev ? { ...prev, remarks: value } : prev))
+                    setHydratedHeader((prev) => (prev ? { ...prev, remarks: value } : prev))
                 }
                 onChangeCutoffDate={(value) =>
-                    setHeader((prev) => (prev ? { ...prev, cutOff_date: value } : prev))
+                    setHydratedHeader((prev) => (prev ? { ...prev, cutOff_date: value } : prev))
                 }
                 onChangeStartingDate={(value) =>
-                    setHeader((prev) => (prev ? { ...prev, starting_date: value } : prev))
+                    setHydratedHeader((prev) => (prev ? { ...prev, starting_date: value } : prev))
                 }
             />
 
