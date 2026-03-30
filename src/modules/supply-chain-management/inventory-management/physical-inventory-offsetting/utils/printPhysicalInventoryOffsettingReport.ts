@@ -423,6 +423,10 @@ export function printPhysicalInventoryOffsettingReport(args: PrintArgs): void {
             line-height: 1.35;
         }
 
+        .page-break {
+            page-break-before: always;
+        }
+
         .truncate {
             display: block;
             width: 100%;
@@ -691,7 +695,7 @@ export function printPhysicalInventoryOffsettingReport(args: PrintArgs): void {
         </table>
     </div>
 
-    <div class="section">
+    <div class="section page-break">
         <h3 class="section-title">Manual Offsetting Summary</h3>
         <table class="offset-table">
             <thead>
