@@ -40,6 +40,7 @@ export function useDispatchBudgeting() {
       try {
         const budgetRes = await fetch(
           "/api/scm/fleet-management/trip-management/dispatch-plan/creation?type=budget_summary",
+          { cache: "no-store" },
         );
         const budgetResult = await budgetRes.json();
         const budgets = budgetResult.data || [];

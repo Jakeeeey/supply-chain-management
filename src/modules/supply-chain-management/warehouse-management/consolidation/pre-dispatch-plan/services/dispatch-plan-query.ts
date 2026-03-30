@@ -587,6 +587,47 @@ export const dispatchPlanQueryService = {
       );
     }
 
+    // Step 5.5: Filter "Not Fulfilled" by Clearance Status
+    const notFulfilledOrderNos = orderList
+      .filter((o) => o.order_status === "Not Fulfilled")
+      .map((o) => o.order_no)
+      .filter(Boolean);
+
+    const clearedOrderNos = new Set<string>();
+    if (notFulfilledOrderNos.length) {
+      // 1. Fetch invoices matching these order numbers
+      const invoicesRes = await fetchItems<any>("/items/sales_invoice", {
+        "filter[order_id][_in]": notFulfilledOrderNos.join(","),
+        fields: "invoice_id,order_id",
+        limit: -1,
+      });
+      const invoices = invoicesRes.data || [];
+      const invoiceIds = invoices.map((i: any) => i.invoice_id);
+
+      if (invoiceIds.length) {
+        // 2. Check which of these invoices are cleared
+        const clearanceRes = await fetchItems<any>(
+          "/items/post_dispatch_invoices",
+          {
+            "filter[invoice_id][_in]": invoiceIds.join(","),
+            "filter[isCleared][_eq]": 1,
+            fields: "invoice_id",
+            limit: -1,
+          },
+        );
+        const clearedInvoiceIds = new Set(
+          (clearanceRes.data || []).map((c: any) => c.invoice_id),
+        );
+
+        // 3. Map back to order numbers
+        invoices.forEach((inv: any) => {
+          if (clearedInvoiceIds.has(inv.invoice_id)) {
+            clearedOrderNos.add(inv.order_id);
+          }
+        });
+      }
+    }
+
     // Step 6: Filter by Cluster Area and Exclude Assigned Orders
     const allOrderIds = orderList.map((o) => o.order_id);
     let assignedOrderIds = new Set<number>();
@@ -597,6 +638,7 @@ export const dispatchPlanQueryService = {
         {
           "filter[sales_order_id][_in]": allOrderIds.join(","),
           "filter[dispatch_id][status][_nin]": "Dispatched,Cancelled,Delivered",
+          "filter[sales_order_id][order_status][_neq]": "Not Fulfilled",
           fields: "sales_order_id",
           limit: -1,
         },
@@ -609,6 +651,13 @@ export const dispatchPlanQueryService = {
     // Final construction and filtering
     return orderList
       .filter((o) => !assignedOrderIds.has(o.order_id))
+      .filter((o) => {
+        // If Not Fulfilled, must be cleared
+        if (o.order_status === "Not Fulfilled") {
+          return clearedOrderNos.has(o.order_no);
+        }
+        return true;
+      })
       .filter((o) => {
         if (!clusterId || !allowedAreas.length) return true;
         const customer = customerMap.get(o.customer_code);

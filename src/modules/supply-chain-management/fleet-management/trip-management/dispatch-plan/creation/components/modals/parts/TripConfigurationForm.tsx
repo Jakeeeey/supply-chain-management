@@ -37,19 +37,20 @@ export function TripConfigurationForm({ masterData }: TripConfigurationFormProps
   // Watch helper values and driver for filtering duplicates
   const selectedHelpers = form.watch("helpers") || [];
   const driverId = form.watch("driver_id");
-  const selectedHelperIds = useMemo(() => {
-    const ids = new Set(selectedHelpers.map(h => h.user_id).filter(id => id > 0));
-    if (driverId) ids.add(driverId);
-    return ids;
-  }, [selectedHelpers, driverId]);
 
   const getHelperOptions = (currentIndex: number) => {
     if (!masterData?.helpers) return [];
+    
+    // Calculate disabled IDs on the fly to avoid reference staleness from React Hook Form
+    const currentDisabledIds = new Set(selectedHelpers.map(h => h.user_id).filter(id => id > 0));
+    if (driverId) currentDisabledIds.add(driverId);
+
     const currentId = selectedHelpers[currentIndex]?.user_id;
+
     return masterData.helpers.map(h => ({
       value: String(h.user_id),
       label: `${h.user_fname} ${h.user_lname}`,
-      disabled: h.user_id !== currentId && selectedHelperIds.has(h.user_id)
+      disabled: h.user_id !== currentId && currentDisabledIds.has(h.user_id)
     }));
   };
 

@@ -20,8 +20,8 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, MapPin, Package, Plus, ShoppingCart, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { ChevronDown, ChevronUp, GripVertical, MapPin, Package, Plus, ShoppingCart, Trash2 } from "lucide-react";
+import { useState, useMemo } from "react";
 import {
   Tooltip,
   TooltipContent,
@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/tooltip";
 import { AddManualStopModal } from "./AddManualStopModal";
 import { AddPoStopModal } from "./AddPoStopModal";
-import { PlanDetailItem } from "./types";
+import { PlanDetailItem, GroupedPlanDetailItem } from "./types";
 
 interface InvoiceItemsSidebarProps {
   selectedPlanIds: number[];
@@ -40,17 +40,16 @@ interface InvoiceItemsSidebarProps {
   selectedAmount: number;
 }
 
-function DraggableInvoiceItem({
-  order,
+function DraggableGroupedStop({
+  stop,
   index,
   onDelete,
-  onEdit,
 }: {
-  order: PlanDetailItem;
+  stop: GroupedPlanDetailItem;
   index: number;
   onDelete: (id: string | number) => void;
-  onEdit: (order: PlanDetailItem) => void;
 }) {
+  const [isExpanded, setIsExpanded] = useState(false);
   const {
     attributes,
     listeners,
@@ -58,140 +57,172 @@ function DraggableInvoiceItem({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: order.detail_id });
+  } = useSortable({ id: stop.id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
   };
 
-  const isManual = order.isManualStop;
+  const isManual = stop.isManualStop;
+  const isInvoice = !stop.isManualStop && !stop.isPoStop;
+  const itemCount = stop.items.length;
 
   return (
     <div
       ref={setNodeRef}
       style={style}
       className={cn(
-        "flex items-start gap-2 p-3 rounded-lg border border-border/60 bg-background transition-shadow group",
+        "flex flex-col rounded-lg border border-border/60 bg-background transition-shadow group overflow-hidden",
         isDragging && "shadow-lg ring-1 ring-border opacity-80",
         isManual && "border-primary/20 bg-primary/2"
       )}
     >
-      {/* Sequence number */}
-      <span className="text-[11px] font-bold text-muted-foreground w-4 shrink-0 mt-0.5 tabular-nums">
-        {index + 1}
-      </span>
+      <div className="flex items-start gap-2 p-3">
+        {/* Sequence number */}
+        <span className="text-[11px] font-bold text-muted-foreground w-4 shrink-0 mt-0.5 tabular-nums">
+          {index + 1}
+        </span>
 
-      {/* Drag handle */}
-      <button
-        type="button"
-        className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground transition-colors mt-0.5 shrink-0"
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="w-3.5 h-3.5" />
-      </button>
+        {/* Drag handle */}
+        <button
+          type="button"
+          className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground transition-colors mt-0.5 shrink-0"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="w-3.5 h-3.5" />
+        </button>
 
-      {/* Content */}
-      <div className="flex-1 min-w-0 space-y-1">
-        <div className="flex items-start justify-between gap-2">
-          {order.isManualStop ? (
-            <div className="flex items-center gap-1.5 min-w-0">
-              <MapPin className="w-3 h-3 text-primary shrink-0" />
+        {/* Content */}
+        <div className="flex-1 min-w-0 space-y-1">
+          <div className="flex items-start justify-between gap-2">
+            {stop.isManualStop ? (
+              <div className="flex items-center gap-1.5 min-w-0">
+                <MapPin className="w-3 h-3 text-primary shrink-0" />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="text-xs font-semibold text-foreground leading-tight truncate cursor-default">
+                      {stop.remarks}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{stop.remarks}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            ) : stop.isPoStop ? (
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Package className="w-3 h-3 text-amber-600 shrink-0" />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="text-xs font-semibold text-foreground leading-tight truncate cursor-default">
+                      {stop.po_no}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{stop.po_no}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            ) : (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="text-xs font-semibold text-foreground leading-tight truncate cursor-default">
-                    {order.remarks}
+                    {stop.customer_name}
                   </span>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>{order.remarks}</p>
+                  <p>{stop.customer_name}</p>
                 </TooltipContent>
               </Tooltip>
-            </div>
-          ) : order.isPoStop ? (
-            <div className="flex items-center gap-1.5 min-w-0">
-              <Package className="w-3 h-3 text-amber-600 shrink-0" />
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="text-xs font-semibold text-foreground leading-tight truncate cursor-default">
-                    {order.po_no}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{order.po_no}</p>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          ) : (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="text-xs font-semibold text-foreground leading-tight truncate cursor-default">
-                  {order.customer_name}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{order.customer_name}</p>
-              </TooltipContent>
-            </Tooltip>
-          )}
-          
-          <div className="flex flex-col items-end gap-1 shrink-0 translate-y-[-2px]">
-            <Badge
-              variant={
-                order.isManualStop || order.isPoStop
-                  ? order.status?.includes("Fulfilled")
-                    ? "default"
-                    : "secondary"
-                  : order.order_status === "Draft"
-                    ? "outline"
-                    : order.order_status === "For Loading"
+            )}
+            
+            <div className="flex flex-col items-end gap-1 shrink-0 translate-y-[-2px]">
+              <Badge
+                variant={
+                  stop.isManualStop || stop.isPoStop
+                    ? stop.status?.includes("Fulfilled")
                       ? "default"
                       : "secondary"
-              }
-              className="text-[9px] h-4 px-1.5 shrink-0"
-            >
-              {order.isManualStop || order.isPoStop 
-                ? order.status || "Not Fulfilled" 
-                : order.order_status}
-            </Badge>
+                    : stop.status === "Draft"
+                      ? "outline"
+                      : stop.status === "For Loading"
+                        ? "default"
+                        : "secondary"
+                }
+                className="text-[9px] h-4 px-1.5 shrink-0"
+              >
+                {stop.status || "Not Fulfilled"}
+              </Badge>
+            </div>
           </div>
-        </div>
 
-        <div className="flex items-center justify-between gap-2 mt-0.5 min-h-[20px]">
-          <p className="text-[11px] text-muted-foreground font-medium truncate">
-            {order.isManualStop 
-              ? `Manual Route Stop · ${order.distance || 0} km` 
-              : order.isPoStop 
-                ? `Purchase Order · ${order.distance || 0} km`
-                : order.order_no}
-          </p>
-          {(order.isManualStop || order.isPoStop) && (
-            <button
-              type="button"
-              onClick={() => onDelete(order.detail_id)}
-              className="opacity-0 group-hover:opacity-100 p-1 rounded-md hover:bg-destructive/10 text-destructive transition-all shrink-0"
-            >
-              <Trash2 className="w-3 h-3" />
-            </button>
+          <div className="flex items-center justify-between gap-2 mt-0.5 min-h-[20px]">
+            <p className="text-[11px] text-muted-foreground font-medium truncate">
+              {stop.isManualStop 
+                ? `Manual Route Stop · ${stop.distance || 0} km` 
+                : stop.isPoStop 
+                  ? `Purchase Order · ${stop.distance || 0} km`
+                  : `${itemCount} Invoice${itemCount !== 1 ? "s" : ""}`}
+            </p>
+            <div className="flex items-center gap-1 shrink-0">
+                {isInvoice && itemCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className="p-1 rounded-md hover:bg-muted text-muted-foreground transition-all"
+                  >
+                    {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  </button>
+                )}
+                {(stop.isManualStop || stop.isPoStop) && (
+                  <button
+                    type="button"
+                    onClick={() => onDelete(stop.id)}
+                    className="opacity-0 group-hover:opacity-100 p-1 rounded-md hover:bg-destructive/10 text-destructive transition-all"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                )}
+            </div>
+          </div>
+
+          {isInvoice && (
+            <div className="flex items-center justify-between mt-1">
+              <span className="text-[11px] text-muted-foreground flex items-center gap-1 truncate">
+                <MapPin className="w-3 h-3 shrink-0" />
+                {stop.city}
+              </span>
+              <span className="text-xs font-semibold text-foreground tabular-nums">
+                ₱
+                {Number(stop.totalAmount || 0).toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                })}
+              </span>
+            </div>
           )}
         </div>
-
-        {!order.isManualStop && !order.isPoStop && (
-          <div className="flex items-center justify-between mt-1">
-            <span className="text-[11px] text-muted-foreground flex items-center gap-1 truncate">
-              <MapPin className="w-3 h-3 shrink-0" />
-              {order.city}
-            </span>
-            <span className="text-xs font-semibold text-foreground tabular-nums">
-              ₱
-              {Number(order.amount || 0).toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-              })}
-            </span>
-          </div>
-        )}
       </div>
+
+      {/* Expanded list of items */}
+      {isExpanded && isInvoice && (
+        <div className="bg-muted/30 border-t border-border/40 px-3 py-2 space-y-1.5">
+          {stop.items.map((item) => (
+            <div key={item.detail_id} className="flex items-center justify-between text-[11px]">
+              <span className="text-muted-foreground font-medium">{item.order_no}</span>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-[8px] h-3 px-1">
+                  {item.order_status}
+                </Badge>
+                <span className="text-foreground font-semibold">
+                  ₱{Number(item.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -212,12 +243,55 @@ export function InvoiceItemsSidebar({
     }),
   );
 
+  const groupedPlanDetails = useMemo(() => {
+    const grouped: GroupedPlanDetailItem[] = [];
+    const keyToGroup = new Map<string, GroupedPlanDetailItem>();
+
+    planDetails.forEach((item) => {
+      let key: string;
+      if (item.isManualStop || item.isPoStop) {
+        key = String(item.detail_id);
+      } else {
+        key = `${item.customer_name}-${item.city}`;
+      }
+
+      const existing = keyToGroup.get(key);
+      if (existing && !item.isManualStop && !item.isPoStop) {
+        existing.items.push(item);
+        existing.totalAmount += item.amount;
+      } else {
+        const newGroup: GroupedPlanDetailItem = {
+          id: key,
+          items: [item],
+          customer_name: item.customer_name,
+          city: item.city,
+          isManualStop: item.isManualStop,
+          isPoStop: item.isPoStop,
+          remarks: item.remarks,
+          distance: item.distance,
+          po_no: item.po_no,
+          totalAmount: item.amount,
+          status: item.isManualStop || item.isPoStop ? (item.status || "Not Fulfilled") : item.order_status,
+        };
+        grouped.push(newGroup);
+        if (!item.isManualStop && !item.isPoStop) {
+          keyToGroup.set(key, newGroup);
+        }
+      }
+    });
+
+    return grouped;
+  }, [planDetails]);
+
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (active.id !== over?.id) {
-      const oldIndex = planDetails.findIndex((i) => i.detail_id === active.id);
-      const newIndex = planDetails.findIndex((i) => i.detail_id === over?.id);
-      onReorder(arrayMove(planDetails, oldIndex, newIndex));
+      const oldIndex = groupedPlanDetails.findIndex((i) => i.id === active.id);
+      const newIndex = groupedPlanDetails.findIndex((i) => i.id === over?.id);
+      
+      const newGrouped = arrayMove(groupedPlanDetails, oldIndex, newIndex);
+      const flattened = newGrouped.flatMap(g => g.items);
+      onReorder(flattened);
     }
   }
 
@@ -247,7 +321,7 @@ export function InvoiceItemsSidebar({
   };
 
   const handleDeleteStop = (id: string | number) => {
-    onReorder(planDetails.filter((item) => item.detail_id !== id));
+    onReorder(planDetails.filter((item) => String(item.detail_id) !== String(id)));
   };
 
   return (
@@ -298,8 +372,8 @@ export function InvoiceItemsSidebar({
           </div>
         </div>
         <p className="text-xs text-muted-foreground">
-          {planDetails.length > 0
-            ? `${planDetails.length} stop${planDetails.length !== 1 ? "s" : ""} in route`
+          {groupedPlanDetails.length > 0
+            ? `${groupedPlanDetails.length} stop${groupedPlanDetails.length !== 1 ? "s" : ""} in route`
             : "No stops added yet."}
         </p>
       </div>
@@ -327,17 +401,16 @@ export function InvoiceItemsSidebar({
             modifiers={[restrictToVerticalAxis]}
           >
             <SortableContext
-              items={planDetails.map((o) => o.detail_id)}
+              items={groupedPlanDetails.map((o) => o.id)}
               strategy={verticalListSortingStrategy}
             >
               <div className="space-y-2">
-                {planDetails.map((order, index) => (
-                  <DraggableInvoiceItem
-                    key={order.detail_id}
-                    order={order}
+                {groupedPlanDetails.map((stop, index) => (
+                  <DraggableGroupedStop
+                    key={stop.id}
+                    stop={stop}
                     index={index}
                     onDelete={handleDeleteStop}
-                    onEdit={() => {}} // TODO: implement edit if needed
                   />
                 ))}
               </div>
