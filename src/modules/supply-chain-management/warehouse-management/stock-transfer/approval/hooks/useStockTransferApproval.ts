@@ -130,7 +130,7 @@ export function useStockTransferApproval() {
         const newAllocated: Record<number, number> = {};
 
         for (const item of selectedGroup.items) {
-          const product = item.product_id;
+          const product = item.product_id as any;
           
           // Directus might expose category and supplier differently, but if they are arrays (junctions), pick the first
           console.log('[DEBUG] product_category:', product?.product_category);
@@ -210,7 +210,7 @@ export function useStockTransferApproval() {
 
     setProcessing(true);
     try {
-      const finalStatus = status === 'approved' ? 'For Picking' : status;
+      const finalStatus = status === 'approved' ? 'For Picking' : 'Rejected';
       
       // If approved, validate allocated quantities
       if (status === 'approved') {
@@ -219,7 +219,7 @@ export function useStockTransferApproval() {
           const available = availableQtys[item.id] || 0;
           if (allocated > available) {
             toast.error(`Invalid Allocation`, {
-              description: `Allocated quantity for ${item.product_id?.product_name || 'item'} exceeds available stock.`
+              description: `Allocated quantity for ${(item.product_id as any)?.product_name || 'item'} exceeds available stock.`
             });
             setProcessing(false);
             return;
@@ -227,11 +227,17 @@ export function useStockTransferApproval() {
         }
       }
 
-      const itemsPayload = group.items.map((item) => ({
-        id: item.id,
-        allocated_quantity: allocatedQtys[item.id] || item.ordered_quantity,
-        status: finalStatus
-      }));
+      const itemsPayload = group.items.map((item) => {
+        const payload: any = {
+          id: item.id,
+          status: finalStatus
+        };
+        // ONLY attach allocated_quantity if we are actively approving, allowing Rejections to ignore it
+        if (status === 'approved') {
+          payload.allocated_quantity = allocatedQtys[item.id] ?? item.ordered_quantity ?? 0;
+        }
+        return payload;
+      });
 
       const res = await fetch('/api/scm/warehouse-management/stock-transfer', {
         method: 'PATCH',

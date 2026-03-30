@@ -4,6 +4,17 @@ import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ClipboardCheck, Loader2, RefreshCcw, ChevronLeft, ChevronRight, ServerCrash } from 'lucide-react';
 import { useStockTransferApproval } from './hooks/useStockTransferApproval';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { OrderSelectionModal } from '../components/OrderSelectionModal';
 import {
   Table,
@@ -311,22 +322,64 @@ export default function StockTransferApprovalModule() {
                 </div>
 
                 <div className="mt-6 flex items-center justify-end gap-3">
-                  <Button 
-                    variant="outline" 
-                    className="border-destructive text-destructive hover:bg-destructive/10"
-                    disabled={processing}
-                    onClick={() => updateStatus(selectedGroup.orderNo, 'rejected')}
-                  >
-                    Reject Request
-                  </Button>
-                  <Button 
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                    disabled={processing}
-                    onClick={() => updateStatus(selectedGroup.orderNo, 'approved')}
-                  >
-                    {processing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Approve (For Picking)
-                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        className="border-destructive text-destructive hover:bg-destructive/10"
+                        disabled={processing}
+                      >
+                        Reject Request
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Reject Stock Transfer?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure to reject this ST#{selectedGroup.orderNo}? 
+                          This action cannot be undone and will notify the requesting branch.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => updateStatus(selectedGroup.orderNo, 'rejected')}
+                          className="bg-destructive hover:bg-destructive/90 text-white"
+                        >
+                          Yes, Reject
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button 
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                        disabled={processing}
+                      >
+                        {processing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Approve (For Picking)
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Approve Stock Transfer?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure you want to approve this ST request? 
+                          Once approved, the source branch will be notified to begin picking the items.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => updateStatus(selectedGroup.orderNo, 'approved')}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                        >
+                          Yes, Approve
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
               </div>
             </div>

@@ -472,16 +472,18 @@ export async function PATCH(request: Request) {
       // New format: [{ id, allocated_quantity, status }]
       results = await Promise.all(
         items.map(async (item: any) => {
-          return fetch(`${baseUrl}/items/stock_transfer/${item.id}`, {
-            method: 'PATCH',
-            headers: {
-              Authorization: `Bearer ${staticToken}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ 
-              status: item.status,
-              allocated_quantity: item.allocated_quantity
-            }),
+            const patchPayload: Record<string, any> = { status: item.status };
+            if (item.allocated_quantity !== undefined && item.allocated_quantity !== null) {
+              patchPayload.allocated_quantity = Number(item.allocated_quantity);
+            }
+            
+            return fetch(`${baseUrl}/items/stock_transfer/${item.id}`, {
+              method: 'PATCH',
+              headers: {
+                Authorization: `Bearer ${staticToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(patchPayload),
           }).then(async (res) => {
             if (!res.ok) {
               const err = await res.text();
