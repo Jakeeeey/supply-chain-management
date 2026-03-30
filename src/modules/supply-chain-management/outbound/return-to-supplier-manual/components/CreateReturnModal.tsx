@@ -39,7 +39,11 @@ import { ReturnReviewPanel } from "./ReturnReviewPanel";
 import { calculateLineItem } from "../utils/calculations";
 import { validateBarcode } from "../utils/barcodeUtils";
 import { useGlobalScanner } from "../hooks/useGlobalScanner";
-import type { CartItem, InventoryRecord } from "../types/rts.schema";
+import type { 
+  CartItem, 
+  InventoryRecord, 
+  DiscountType 
+} from "../types/rts.schema";
 
 export function CreateReturnModal({
   isOpen,
@@ -106,7 +110,7 @@ export function CreateReturnModal({
     const discountMap = new Map<string, (typeof refs.lineDiscounts)[0]>();
     refs.lineDiscounts.forEach((d) => discountMap.set(String(d.id), d));
 
-    const discountTypeMap = new Map<string, any>();
+    const discountTypeMap = new Map<string, DiscountType>();
     refs.discountTypes.forEach((dt) => discountTypeMap.set(String(dt.id), dt));
 
     const linePerDiscountMap = new Map<string, number[]>();
@@ -360,7 +364,17 @@ export function CreateReturnModal({
         description: `Added "${invRecord.product_name}"`,
       });
     },
-    [selection.branchId, selection.supplierId, inventory, addToCart, refs.units],
+    [
+      selection.branchId,
+      selection.supplierId,
+      inventory,
+      addToCart,
+      refs.units,
+      refs.connections,
+      refs.discountTypes,
+      refs.lineDiscounts,
+      refs.linePerDiscountType,
+    ],
   );
 
   /**
@@ -373,7 +387,7 @@ export function CreateReturnModal({
     }
   });
 
-  const updateCart = (cartId: string, field: keyof CartItem, val: any) => {
+  const updateCart = (cartId: string, field: keyof CartItem, val: string | number | undefined | null) => {
     setCart((prev) =>
       prev.map((i) => ((i.cartId || i.id) === cartId ? { ...i, [field]: val } : i)),
     );

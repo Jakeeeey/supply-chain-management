@@ -162,7 +162,7 @@ export async function getSpringRfidLookup(rfidTag: string, branchId: number, tok
  * Persistence: Checks if an RFID tag is already bound to any RTS item.
  */
 export async function checkRfidAlreadyBound(rfidTag: string) {
-  const res = await directusGet<{ data: any[] }>(
+  const res = await directusGet<{ data: Record<string, unknown>[] }>(
     `/items/rts_item_rfid?filter[rfid_tag][_eq]=${encodeURIComponent(rfidTag)}&limit=1&fields=id`
   );
   return res.data && res.data.length > 0;

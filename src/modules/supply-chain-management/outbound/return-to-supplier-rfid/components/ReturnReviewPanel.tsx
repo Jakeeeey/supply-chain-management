@@ -21,15 +21,21 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import type { CartItem, LineDiscount, RTSReturnType } from "../types/rts.schema";
+import type { 
+  CartItem, 
+  LineDiscount, 
+  RTSReturnType, 
+  DiscountType, 
+  LinePerDiscountType 
+} from "../types/rts.schema";
 
 interface ReturnReviewPanelProps {
   items: CartItem[];
   lineDiscounts: LineDiscount[];
-  discountTypes: any[];
-  linePerDiscountType: any[];
+  discountTypes: DiscountType[];
+  linePerDiscountType: LinePerDiscountType[];
   returnTypes: RTSReturnType[];
-  onUpdateItem: (id: string, field: keyof CartItem, value: any) => void;
+  onUpdateItem: (id: string, field: keyof CartItem, value: string | number | undefined | null) => void;
   onRemoveItem: (id: string) => void;
   remarks: string;
   setRemarks: (val: string) => void;
@@ -67,7 +73,7 @@ export function ReturnReviewPanel({
   // Unified calculation: use the SAME per-row formula as the table rows,
   // rounding each row to 2 decimal places before accumulating.
   const { totalAmount, totalQuantity, totalDiscountAmount, grossAmount } =
-    items.reduce(
+    useMemo(() => items.reduce(
       (acc, item) => {
         const unitPrice = item.customPrice || item.price;
         const rowGross = Math.round(unitPrice * item.quantity * 100) / 100;
@@ -81,7 +87,7 @@ export function ReturnReviewPanel({
         return acc;
       },
       { totalAmount: 0, totalQuantity: 0, totalDiscountAmount: 0, grossAmount: 0 },
-    );
+    ), [items]);
 
   // Helper to find discount name by ID or fallback
   const getDiscountName = (item: CartItem) => {

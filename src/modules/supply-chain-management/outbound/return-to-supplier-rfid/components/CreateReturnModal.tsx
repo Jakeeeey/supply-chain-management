@@ -40,7 +40,13 @@ import { ReturnReviewPanel } from "./ReturnReviewPanel";
 import { calculateLineItem } from "../utils/calculations";
 import { validateBarcode, detectScanType } from "../utils/barcodeUtils";
 import { useGlobalScanner } from "../hooks/useGlobalScanner";
-import type { CartItem, InventoryRecord, Product } from "../types/rts.schema";
+import type { 
+  CartItem, 
+  InventoryRecord, 
+  Product,
+  DiscountType, 
+  LinePerDiscountType 
+} from "../types/rts.schema";
 
 export function CreateReturnModal({
   isOpen,
@@ -111,11 +117,11 @@ export function CreateReturnModal({
     const discountMap = new Map<string, (typeof refs.lineDiscounts)[0]>();
     refs.lineDiscounts.forEach((d) => discountMap.set(String(d.id), d));
 
-    const discountTypeMap = new Map<string, any>();
+    const discountTypeMap = new Map<string, DiscountType>();
     refs.discountTypes.forEach((dt) => discountTypeMap.set(String(dt.id), dt));
 
     const linePerDiscountMap = new Map<string, number[]>();
-    refs.linePerDiscountType.forEach((lpd) => {
+    refs.linePerDiscountType.forEach((lpd: LinePerDiscountType) => {
       const typeId = String(lpd.type_id);
       if (!linePerDiscountMap.has(typeId)) linePerDiscountMap.set(typeId, []);
       linePerDiscountMap.get(typeId)?.push(Number(lpd.line_id));
@@ -521,7 +527,7 @@ export function CreateReturnModal({
     }
   }, [isOpen]);
 
-  const updateCart = (id: string, field: keyof CartItem, val: number) => {
+  const updateCart = (id: string, field: keyof CartItem, val: string | number | undefined | null) => {
     setCart((prev) =>
       prev.map((i) => (i.id === id ? { ...i, [field]: val } : i)),
     );

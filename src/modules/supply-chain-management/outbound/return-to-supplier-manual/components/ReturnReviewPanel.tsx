@@ -21,13 +21,19 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import type { CartItem, LineDiscount, RTSReturnType } from "../types/rts.schema";
+import type { 
+  CartItem, 
+  LineDiscount, 
+  RTSReturnType, 
+  DiscountType, 
+  LinePerDiscountType 
+} from "../types/rts.schema";
 
 interface ReturnReviewPanelProps {
   items: CartItem[];
   lineDiscounts: LineDiscount[];
-  discountTypes: any[];
-  linePerDiscountType: any[];
+  discountTypes: DiscountType[];
+  linePerDiscountType: LinePerDiscountType[];
   returnTypes: RTSReturnType[];
   onUpdateItem: (
     id: string,
@@ -52,8 +58,6 @@ export function ReturnReviewPanel({
   setRemarks,
   readOnly = false,
 }: ReturnReviewPanelProps) {
-  // Unified calculation: use the SAME per-row formula as the table rows,
-  // rounding each row to 2 decimal places before accumulating.
   const { totalAmount, totalQuantity, totalDiscountAmount, grossAmount } =
     items.reduce(
       (acc, item) => {
@@ -71,7 +75,6 @@ export function ReturnReviewPanel({
       { totalAmount: 0, totalQuantity: 0, totalDiscountAmount: 0, grossAmount: 0 },
     );
 
-  // Helper to find discount name by ID or fallback
   const getDiscountName = (item: CartItem) => {
     if (item.discountTypeId) {
       const match = discountTypes.find((d) => d.id === item.discountTypeId);
@@ -94,7 +97,6 @@ export function ReturnReviewPanel({
 
   return (
     <div className="space-y-8">
-      {/* 1. TABLE SECTION */}
       <div className="rounded-md border overflow-hidden bg-card shadow-sm">
         <Table>
           <TableHeader className="bg-muted/50 border-b">
@@ -196,7 +198,6 @@ export function ReturnReviewPanel({
                       </div>
                     </TableCell>
 
-                    {/* ✅ DISCOUNT TYPE COLUMN */}
                     <TableCell>
                       {readOnly ? (
                         <div className="text-center text-sm font-medium">
@@ -221,7 +222,6 @@ export function ReturnReviewPanel({
                                   selectedType.id,
                                 );
 
-                                // Resolve percentage
                                 const junctions = linePerDiscountType.filter(
                                   (j) => String(j.type_id) === String(selectedType.id)
                                 );
