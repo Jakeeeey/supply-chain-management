@@ -99,7 +99,7 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
 
   const dbId = useWatch({ control, name: `items.${index}.db_id` });
 
-  const totalCost = (quantity || 0) * (costPerUnit || 0);
+  const totalCost = Number(quantity || 0) * Number(costPerUnit || 0);
 
   return (
     <div
@@ -226,8 +226,7 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
             Cost/Unit
           </Label>
           <Input
-            type="text"
-            value={`â‚±${(costPerUnit || 0).toFixed(2)}`}
+            value={`₱${Number(costPerUnit || 0).toFixed(2)}`}
             className="h-10 border-input bg-muted/30 rounded-md text-sm"
             readOnly
           />
@@ -239,8 +238,8 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
             Total Cost
           </Label>
           <div className="h-10 border border-blue-100/20 dark:border-blue-900/20 bg-blue-50/30 dark:bg-blue-900/10 rounded-md flex items-center px-3 font-bold text-blue-600 text-sm">
-            â‚±
-            {totalCost.toLocaleString(undefined, {
+            ₱
+            {Number(totalCost || 0).toLocaleString(undefined, {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
             })}
@@ -330,8 +329,8 @@ function FormSummary({
     let amt = 0;
     let rfid = 0;
     for (const item of items) {
-      const q = item?.quantity || 0;
-      const c = item?.cost_per_unit || 0;
+      const q = Number(item?.quantity || 0);
+      const c = Number(item?.cost_per_unit || 0);
       qty += q;
       amt += q * c;
       if (item?.has_rfid) rfid++;
@@ -361,8 +360,8 @@ function FormSummary({
             Total Amount:
           </span>
           <span className="text-xl font-bold text-blue-600 dark:text-blue-400">
-            â‚±
-            {totalAmount.toLocaleString(undefined, {
+            ₱
+            {Number(totalAmount || 0).toLocaleString(undefined, {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
             })}
@@ -466,8 +465,10 @@ export function StockAdjustmentForm({
   // --- Memoize product options to prevent expensive re-mapping in every row ---
   const productOptions = useMemo(() => {
     return products.map((p) => ({
-      value: String(p.product_id || p.id),
-      label: p.product_name,
+      // Use record PK (id) for absolute uniqueness, fallback to product_id
+      value: String(p.id || p.product_id),
+      // Include unit in label to prevent CommandItem collision and help user selection
+      label: p.unit_name ? `${p.product_name} (${p.unit_name})` : p.product_name,
       item: p
     }));
   }, [products]);
@@ -524,8 +525,8 @@ export function StockAdjustmentForm({
             items: data.items.map((item) => ({
               ...item,
               product_id: String(
-                (item.product_id as any)?.product_id ||
-                  (item.product_id as any)?.id ||
+                (item.product_id as any)?.id ||
+                  (item.product_id as any)?.product_id ||
                   item.product_id
               ),
               product_name:
@@ -697,9 +698,11 @@ export function StockAdjustmentForm({
     async (index: number, product: any) => {
       if (!product) return;
 
-      // â‘  Optimistically show product info IMMEDIATELY
+      // Store the specific record ID for correct dropdown matching, but keep item properties
+      const selectionId = String(product.id || product.product_id);
       const productId = product.product_id || product.id;
-      form.setValue(`items.${index}.product_id`, productId);
+
+      form.setValue(`items.${index}.product_id`, selectionId);
       form.setValue(`items.${index}.product_name`, product.product_name);
       form.setValue(`items.${index}.product_code`, product.product_code);
       form.setValue(`items.${index}.cost_per_unit`, product.cost_per_unit || product.price_per_unit || 0);
