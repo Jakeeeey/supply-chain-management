@@ -408,7 +408,11 @@ export function buildEligibleVariants(input: {
     for (const productId of directlyEligibleBySupplier) {
         const product = lookup.products.find((p) => p.product_id === productId);
         if (product) {
-            eligibleFamilyKeys.add(product.parent_id ?? product.product_id);
+            eligibleFamilyKeys.add(
+                (product.parent_id && product.parent_id > 0)
+                    ? product.parent_id
+                    : product.product_id
+            );
         }
     }
 
@@ -432,7 +436,9 @@ export function buildEligibleVariants(input: {
     return lookup.products
         .filter((product) => product.isActive === 1)
         .filter((product) => {
-            const familyKey = product.parent_id ?? product.product_id;
+            const familyKey = (product.parent_id && product.parent_id > 0)
+                ? product.parent_id
+                : product.product_id;
             return eligibleFamilyKeys.has(familyKey);
         })
         .filter((product) => {
