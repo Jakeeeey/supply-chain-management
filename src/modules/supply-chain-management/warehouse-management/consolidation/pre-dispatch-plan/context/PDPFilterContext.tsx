@@ -1,19 +1,33 @@
 "use client";
 
 import { createContext, ReactNode, useContext, useState } from "react";
+import { DateRange } from "react-day-picker";
 
 interface PDPFilterContextType {
+  // Applied filters (used by hooks to fetch data)
   clusterId: number | null;
-  setClusterId: (id: number | null) => void;
-  status: string | null;
-  setStatus: (status: string | null) => void;
-  search: string;
-  setSearch: (search: string) => void;
   branchId: number | null;
-  setBranchId: (id: number | null) => void;
-  dispatchDate: string | null;
-  setDispatchDate: (date: string | null) => void;
+  dateRange: DateRange | undefined;
+  status: string | null;
+  search: string;
+
+  // Staged filters (used by UI inputs)
+  stagedClusterId: number | null;
+  stagedBranchId: number | null;
+  stagedDateRange: DateRange | undefined;
+  stagedStatus: string | null;
+
+  // Setters for staged filters
+  setStagedClusterId: (id: number | null) => void;
+  setStagedBranchId: (id: number | null) => void;
+  setStagedDateRange: (range: DateRange | undefined) => void;
+  setStagedStatus: (status: string | null) => void;
+  setSearch: (search: string) => void;
+
+  // Actions
+  applyFilters: () => void;
   resetFilters: () => void;
+  isDirty: boolean;
 }
 
 const PDPFilterContext = createContext<PDPFilterContextType | undefined>(
@@ -21,34 +35,70 @@ const PDPFilterContext = createContext<PDPFilterContextType | undefined>(
 );
 
 export function PDPFilterProvider({ children }: { children: ReactNode }) {
+  // Applied state
   const [clusterId, setClusterId] = useState<number | null>(null);
+  const [branchId, setBranchId] = useState<number | null>(null);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [status, setStatus] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [branchId, setBranchId] = useState<number | null>(null);
-  const [dispatchDate, setDispatchDate] = useState<string | null>(null);
+
+  // Staged state
+  const [stagedClusterId, setStagedClusterId] = useState<number | null>(null);
+  const [stagedBranchId, setStagedBranchId] = useState<number | null>(null);
+  const [stagedDateRange, setStagedDateRange] = useState<DateRange | undefined>(
+    undefined,
+  );
+  const [stagedStatus, setStagedStatus] = useState<string | null>(null);
+
+  const applyFilters = () => {
+    setClusterId(stagedClusterId);
+    setBranchId(stagedBranchId);
+    setDateRange(stagedDateRange);
+    setStatus(stagedStatus);
+  };
 
   const resetFilters = () => {
-    setClusterId(null);
-    setStatus(null);
+    setStagedClusterId(null);
+    setStagedBranchId(null);
+    setStagedDateRange(undefined);
+    setStagedStatus(null);
     setSearch("");
+
+    setClusterId(null);
     setBranchId(null);
-    setDispatchDate(null);
+    setDateRange(undefined);
+    setStatus(null);
   };
+
+  const isDirty =
+    stagedClusterId !== clusterId ||
+    stagedBranchId !== branchId ||
+    stagedDateRange !== dateRange ||
+    stagedStatus !== status;
 
   return (
     <PDPFilterContext.Provider
       value={{
         clusterId,
-        setClusterId,
-        status,
-        setStatus,
-        search,
-        setSearch,
         branchId,
-        setBranchId,
-        dispatchDate,
-        setDispatchDate,
+        dateRange,
+        status,
+        search,
+
+        stagedClusterId,
+        stagedBranchId,
+        stagedDateRange,
+        stagedStatus,
+
+        setStagedClusterId,
+        setStagedBranchId,
+        setStagedDateRange,
+        setStagedStatus,
+        setSearch,
+
+        applyFilters,
         resetFilters,
+        isDirty,
       }}
     >
       {children}

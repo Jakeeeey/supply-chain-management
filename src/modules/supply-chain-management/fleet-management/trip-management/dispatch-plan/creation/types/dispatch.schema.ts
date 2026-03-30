@@ -31,7 +31,7 @@ export const InvoiceRefSchema = z.object({
   invoice_no: z.string().optional(),
   sequence: z.number(),
   remarks: z.string().optional(),
-  distance: z.number().min(0, "Distance cannot be negative"),
+  distance: z.number().min(0, "Distance cannot be negative").optional(),
   isManualStop: z.boolean().optional(),
   isPoStop: z.boolean().optional(),
   po_id: z.number().optional(),

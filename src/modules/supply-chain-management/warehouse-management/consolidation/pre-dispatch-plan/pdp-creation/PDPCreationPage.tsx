@@ -30,6 +30,8 @@ export default function PDPCreationPage() {
     isLoading,
     error,
     setSearch,
+    clusterId,
+    branchId,
     refresh,
     createPlan,
     updatePlan,
@@ -114,6 +116,8 @@ export default function PDPCreationPage() {
         availableOrders={availableOrders}
         isLoadingOrders={isLoadingOrders}
         onFilterChange={handleFilterChange}
+        initialClusterId={clusterId}
+        initialBranchId={branchId}
         editPlan={editPlan}
         editDetails={editDetails}
       />
