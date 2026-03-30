@@ -102,6 +102,10 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
             return !!(hasMissingQtys || hasScannedQtys);
         }
 
+        if (inv.status === 'Fulfilled with Returns') {
+            return !!inv.remarks && inv.remarks.trim().length > 0;
+        }
+
         return true;
     };
 
