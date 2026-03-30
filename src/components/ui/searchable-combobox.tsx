@@ -86,22 +86,27 @@ export function SearchableCombobox({
 
       <ComboboxContent className="z-50 min-w-[180px]">
         <ComboboxList>
-          <ComboboxEmpty>{emptyMessage}</ComboboxEmpty>
-          {filteredOptions.map((option) => (
-            <ComboboxItem
-              key={option.value}
-              value={option.value}
-              className="flex items-center gap-2"
-            >
-              <Check
-                className={cn(
-                  "h-4 w-4 shrink-0",
-                  value === option.value ? "opacity-100" : "opacity-0"
-                )}
-              />
-              {option.label}
-            </ComboboxItem>
-          ))}
+          {filteredOptions.length === 0 ? (
+            <div className="py-6 text-center text-sm text-muted-foreground">
+              {emptyMessage}
+            </div>
+          ) : (
+            filteredOptions.map((option) => (
+              <ComboboxItem
+                key={option.value}
+                value={option.value}
+                className="flex items-center gap-2"
+              >
+                <Check
+                  className={cn(
+                    "h-4 w-4 shrink-0",
+                    value === option.value ? "opacity-100" : "opacity-0"
+                  )}
+                />
+                {option.label}
+              </ComboboxItem>
+            ))
+          )}
         </ComboboxList>
       </ComboboxContent>
     </Combobox>
