@@ -355,6 +355,10 @@ const data = {
                     title: "Branch Management",
                     url: "/scm/inventory-management/branch-management",
                 },
+                {
+                    title: "Stock Adjustment",
+                    url: "/scm/inventory-management/stock-adjustment",
+                }
             ],
         },
         {
