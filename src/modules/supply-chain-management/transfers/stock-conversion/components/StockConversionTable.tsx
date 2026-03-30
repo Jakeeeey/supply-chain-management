@@ -179,7 +179,7 @@ export function StockConversionTable({
                 Branch:
               </span>
               <SearchableCombobox
-                options={branches?.map(b => ({ value: String(b.id), label: b.branch_name })) || []}
+                options={branches?.map(b => ({ value: String(b.id), label: String(b.branch_name || b.name || b.id) })) || []}
                 value={selectedBranchId ? String(selectedBranchId) : ""}
                 onValueChange={(val) => onBranchChange?.(val ? Number(val) : undefined)}
                 placeholder="Select Branch"

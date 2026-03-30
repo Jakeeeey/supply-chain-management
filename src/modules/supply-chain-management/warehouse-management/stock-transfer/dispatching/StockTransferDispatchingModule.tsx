@@ -345,7 +345,7 @@ export default function StockTransferDispatchingModule() {
                                 type="number"
                                 className="h-8 w-20 text-center"
                                 value={item.scannedQty}
-                                onChange={(e) => updateLoosePackQty((originalId as number), Number(e.target.value))}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateLoosePackQty((originalId as number), Number(e.target.value))}
                                 max={targetQty}
                                 min={0}
                               />
