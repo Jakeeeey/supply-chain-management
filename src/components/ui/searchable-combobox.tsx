@@ -35,8 +35,8 @@ export function SearchableCombobox({
   className,
 }: SearchableComboboxProps) {
   // Separate query state for client-side filtering.
-  // @base-ui manages its own internal input value — we only need this for filtering.
   const [filterQuery, setFilterQuery] = React.useState("");
+  const [isOpen, setIsOpen] = React.useState(false);
 
   // Label of the currently selected option (shown as placeholder when closed)
   const selectedLabel = React.useMemo(
@@ -46,6 +46,7 @@ export function SearchableCombobox({
 
   // Reset filter when dropdown closes so next open shows full list
   const handleOpenChange = React.useCallback((open: boolean) => {
+    setIsOpen(open);
     if (!open) setFilterQuery("");
   }, []);
 
@@ -68,13 +69,13 @@ export function SearchableCombobox({
     >
       <div className={cn("relative", className)}>
         <ComboboxInput
-          // When closed: show the selected label as placeholder; when open: user types to filter
-          placeholder={value ? selectedLabel : placeholder}
+          placeholder={placeholder}
           showTrigger
           showClear={!!value}
-          // Use native onInput (not onInputChange) — @base-ui doesn't expose onInputChange
-          onInput={(e: React.FormEvent<HTMLInputElement>) =>
-            setFilterQuery((e.currentTarget as HTMLInputElement).value)
+          value={isOpen ? filterQuery : selectedLabel}
+          // Use native onChange to update our state while overriding standard Base UI input value
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+            setFilterQuery(e.target.value)
           }
           className={cn(
             "h-9 w-full",

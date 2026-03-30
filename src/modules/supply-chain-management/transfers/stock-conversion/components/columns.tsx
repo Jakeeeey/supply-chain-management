@@ -8,7 +8,8 @@ export const formatCurrency = (amount: number) =>
 
 export const getColumns = (
   onConvertClick: (product: StockConversionProduct) => void,
-  onRetryInventory: (productId: number) => void
+  onRetryInventory: (productId: number) => void,
+  canConvert: boolean = true
 ): ColumnDef<StockConversionProduct>[] => [
   {
     accessorKey: "supplierName",
@@ -91,15 +92,19 @@ export const getColumns = (
     id: "actions",
     header: "ACTIONS",
     cell: ({ row }) => (
-      <Button
-        variant="default"
-        size="sm"
-        className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto font-medium shadow-sm transition-colors rounded-lg flex items-center gap-1"
-        onClick={() => onConvertClick(row.original)}
-      >
-        <ArrowLeftRight className="w-4 h-4" />
-        Convert
-      </Button>
+      <div title={!canConvert ? "Select a Branch and at least one filter (Supplier, Brand, or Category) to enable conversion" : undefined}>
+        <Button
+          variant="default"
+          size="sm"
+          className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto font-medium shadow-sm transition-colors rounded-lg flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+          onClick={() => onConvertClick(row.original)}
+          disabled={!canConvert}
+        >
+          <ArrowLeftRight className="w-4 h-4" />
+          Convert
+        </Button>
+      </div>
     ),
   },
 ];
+

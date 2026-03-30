@@ -5,6 +5,7 @@ import { StockConversionProduct, RFIDTag } from "../types";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { ScanLine, X, AlertCircle } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 
@@ -61,10 +62,7 @@ export function RFIDManagementModal({
     setRfidInput("");
   };
 
-  const handleGenerate = () => {
-    const randomTag = Math.floor(10000000 + Math.random() * 90000000).toString();
-    setRfidInput(randomTag);
-  };
+
 
   const handleRemoveTag = (id: string) => {
     setAssignedTags(prev => prev.filter(t => t.id !== id));
@@ -120,22 +118,13 @@ export function RFIDManagementModal({
                      }
                    }}
                  />
-                 <div className="flex gap-2 w-full sm:w-auto">
-                    <Button 
-                      onClick={handleAddTag} 
-                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-widest px-4 gap-2 flex-1 sm:flex-initial"
-                    >
-                      <ScanLine className="w-4 h-4" />
-                      Add Tag
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={handleGenerate}
-                      className="text-blue-600 border-blue-200 dark:border-blue-900/50 hover:bg-blue-50 dark:hover:bg-blue-900/20 font-bold text-xs uppercase tracking-widest flex-1 sm:flex-initial"
-                    >
-                      Generate
-                    </Button>
-                 </div>
+                 <Button 
+                   onClick={handleAddTag} 
+                   className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-widest px-4 gap-2 w-full sm:w-auto"
+                 >
+                   <ScanLine className="w-4 h-4" />
+                   Add Tag
+                 </Button>
              </div>
           </div>
 
@@ -147,40 +136,41 @@ export function RFIDManagementModal({
                 )}
              </div>
              
-             <div className="border border-border rounded-lg min-h-[140px] max-h-[260px] overflow-y-auto bg-muted/20 p-2 space-y-2 shadow-inner">
+             <div className="border border-border rounded-lg min-h-[140px] bg-muted/20 shadow-inner">
                 {assignedTags.length === 0 ? (
                    <div className="h-full flex flex-col items-center justify-center text-muted-foreground py-10 animate-in fade-in duration-500">
                       <div className="w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center mb-4 border border-border/50">
                          <AlertCircle className="w-6 h-6 text-muted-foreground/50" />
                       </div>
                       <p className="font-bold text-primary tracking-tight">No RFID tags assigned</p>
-                      <p className="text-[11px] font-medium opacity-70">Scan or generate tags to get started</p>
+                      <p className="text-[11px] font-medium opacity-70">Scan tags to get started</p>
                    </div>
                 ) : (
-                   assignedTags.map((tag, index) => (
-                     <div key={tag.id} className="flex items-center justify-between bg-card p-3 rounded-md border border-border shadow-sm hover:border-blue-500/30 transition-all animate-in fade-in slide-in-from-bottom-2 duration-300">
-                        <div className="flex items-center gap-3">
-                           <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400 font-black text-xs border border-blue-500/20">
-                              {index + 1}
-                           </div>
-                           <div>
-                              <div className="font-bold text-foreground text-sm tracking-tight">{tag.rfid_tag}</div>
-                              <div className="text-[10px] text-muted-foreground font-medium">Assigned: {tag.assignedDate}</div>
-                           </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                           <span className="hidden sm:inline-block px-2 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-black rounded uppercase tracking-widest border border-emerald-500/20">
-                              Active
-                           </span>
-                           <Button variant="outline" size="sm" className="h-7 text-[10px] px-2 text-muted-foreground font-bold uppercase tracking-tighter hover:text-foreground">
-                              Deactivate
-                           </Button>
-                           <button onClick={() => handleRemoveTag(tag.id as string)} className="text-destructive/60 hover:text-destructive p-1.5 rounded-full hover:bg-destructive/10 transition-colors">
-                              <X className="w-4 h-4" />
-                           </button>
-                        </div>
+                   <ScrollArea className="max-h-[360px]">
+                     <div className="p-2 space-y-2">
+                       {assignedTags.map((tag, index) => (
+                         <div key={tag.id} className="flex items-center justify-between bg-card p-3 rounded-md border border-border shadow-sm hover:border-blue-500/30 transition-all animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <div className="flex items-center gap-3">
+                               <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400 font-black text-xs border border-blue-500/20">
+                                  {index + 1}
+                               </div>
+                               <div>
+                                  <div className="font-bold text-foreground text-sm tracking-tight">{tag.rfid_tag}</div>
+                                  <div className="text-[10px] text-muted-foreground font-medium">Assigned: {tag.assignedDate}</div>
+                               </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                               <span className="hidden sm:inline-block px-2 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-black rounded uppercase tracking-widest border border-emerald-500/20">
+                                  Active
+                               </span>
+                               <button onClick={() => handleRemoveTag(tag.id as string)} className="text-destructive/60 hover:text-destructive p-1.5 rounded-full hover:bg-destructive/10 transition-colors">
+                                  <X className="w-4 h-4" />
+                               </button>
+                            </div>
+                         </div>
+                       ))}
                      </div>
-                   ))
+                   </ScrollArea>
                 )}
              </div>
           </div>
@@ -192,7 +182,6 @@ export function RFIDManagementModal({
                 <ul className="list-disc pl-4 text-[11px] font-bold opacity-80 space-y-1 uppercase tracking-tighter">
                    <li>Multiple RFID tags can be tracked per product variant</li>
                    <li>Tags must be unique and registered in the system</li>
-                   <li>Status can be toggled after conversion if needed</li>
                 </ul>
              </div>
           </div>

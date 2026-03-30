@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, Fragment } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -171,7 +171,7 @@ export function StockConversionTable({
 
     if (isGrouped) {
       result = [...result].sort((a, b) =>
-        (a.family || "").localeCompare(b.family || "")
+        (a.currentUnit || "").localeCompare(b.currentUnit || "")
       );
     }
 
@@ -187,10 +187,15 @@ export function StockConversionTable({
     hasRequiredFilter,
   ]);
 
+  // canConvert: user must select a branch AND at least one specific filter
+  const canConvert = selectedBranchId !== undefined && (
+    supplierFilter !== "all" || brandFilter !== "all" || categoryFilter !== "all"
+  );
+
   const columns = useMemo(
     () =>
-      getColumns(onConvertClick, (id: number) => loadProductsInventory([id])),
-    [onConvertClick, loadProductsInventory]
+      getColumns(onConvertClick, (id: number) => loadProductsInventory([id]), canConvert),
+    [onConvertClick, loadProductsInventory, canConvert]
   );
 
   const table = useReactTable({
@@ -371,19 +376,19 @@ export function StockConversionTable({
 
           <div className="h-4 w-px bg-border mx-2 hidden sm:block" />
 
-          {/* Group by Family */}
+          {/* Group by Unit */}
           <div className="flex items-center space-x-2">
             <Checkbox
-              id="group-family"
+              id="group-unit"
               checked={isGrouped}
               onCheckedChange={(checked) => setIsGrouped(!!checked)}
             />
             <Label
-              htmlFor="group-family"
+              htmlFor="group-unit"
               className="text-sm font-medium flex items-center gap-1 cursor-pointer"
             >
               <Layers className="w-4 h-4 text-blue-500" />
-              Group by Family
+              Group by Unit
             </Label>
           </div>
         </div>
@@ -427,24 +432,51 @@ export function StockConversionTable({
               </TableHeader>
               <TableBody>
                 {table.getRowModel().rows?.length ? (
-                  table.getRowModel().rows.map((row) => (
-                    <TableRow
-                      key={row.id}
-                      data-state={row.getIsSelected() && "selected"}
-                    >
-                      {row.getVisibleCells().map((cell) => (
-                        <TableCell
-                          key={cell.id}
-                          className="py-3 text-sm font-medium text-foreground whitespace-nowrap"
-                        >
-                          {flexRender(
-                            cell.column.columnDef.cell,
-                            cell.getContext()
+                  (() => {
+                    const rows = table.getRowModel().rows;
+                    let lastUnit = "";
+                    return rows.map((row) => {
+                      const currentUnit = row.original.currentUnit || "";
+                      const showGroupHeader = isGrouped && currentUnit !== lastUnit;
+                      lastUnit = currentUnit;
+                      const unitCount = isGrouped ? rows.filter(r => r.original.currentUnit === currentUnit).length : 0;
+
+                      return (
+                        <Fragment key={`row-${row.id}`}>
+                          {showGroupHeader && (
+                            <TableRow key={`group-${currentUnit}`} className="bg-blue-50/50 dark:bg-blue-950/20 border-y border-blue-200/50 dark:border-blue-800/30">
+                              <TableCell colSpan={columns.length} className="py-2 px-4">
+                                <div className="flex items-center gap-2">
+                                  <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-black bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 uppercase tracking-widest border border-blue-200 dark:border-blue-800/50">
+                                    {currentUnit}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground font-medium">
+                                    {unitCount} product{unitCount !== 1 ? "s" : ""}
+                                  </span>
+                                </div>
+                              </TableCell>
+                            </TableRow>
                           )}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))
+                          <TableRow
+                            key={row.id}
+                            data-state={row.getIsSelected() && "selected"}
+                          >
+                            {row.getVisibleCells().map((cell) => (
+                              <TableCell
+                                key={cell.id}
+                                className="py-3 text-sm font-medium text-foreground whitespace-nowrap"
+                              >
+                                {flexRender(
+                                  cell.column.columnDef.cell,
+                                  cell.getContext()
+                                )}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        </Fragment>
+                      );
+                    });
+                  })()
                 ) : (
                   <TableRow>
                     <TableCell
