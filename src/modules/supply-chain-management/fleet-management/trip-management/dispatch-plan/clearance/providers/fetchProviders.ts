@@ -74,7 +74,7 @@ export const getJoinedDispatchData = async (
   startDate?: string,
   endDate?: string
 ): Promise<{ data: DispatchRow[]; total: number }> => {
-  const params: any = {
+  const params: Record<string, string> = {
     page: page.toString(),
     limit: limit.toString(),
     search: search
@@ -123,7 +123,8 @@ export const fetchRFIDTagsForDispatch = async (dispatchId: number): Promise<RFID
   return response.json();
 };
 
-export const fetchSalesReturnsByInvoice = async (invoiceNo: string): Promise<any[]> => {
+export const fetchSalesReturnsByInvoice = async (invoiceNo: string): Promise<{ id: number; returnNo: string; returnDate: string; totalAmount: number }[]> => {
+
   const response = await fetch(`/api/scm/inventories/sales-return-rfid?action=list&invoiceNo=${encodeURIComponent(invoiceNo)}`);
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);

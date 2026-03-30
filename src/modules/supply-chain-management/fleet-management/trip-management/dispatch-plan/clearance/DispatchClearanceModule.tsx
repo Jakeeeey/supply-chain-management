@@ -1,14 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Plus,
   Search,
-  Filter,
   Calendar,
-  MoreHorizontal,
-  CheckCircle2,
-  Clock,
   FileText,
   Truck,
   User as UserIcon
@@ -21,20 +16,11 @@ import {
   TableHeader,
   TableRow
 } from '@/components/ui/table';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { getJoinedDispatchData } from './providers/fetchProviders';
@@ -58,7 +44,7 @@ const DispatchClearanceModule = () => {
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'tomorrow' | 'week' | 'month' | 'year' | 'custom'>('all');
   const [customRange, setCustomRange] = useState<{ start: string; end: string }>({ start: '', end: '' });
 
-  const getDateRange = (filter: string) => {
+  const getDateRange = useCallback((filter: string) => {
     const now = new Date();
     const start = new Date(now);
     const end = new Date(now);
@@ -105,7 +91,7 @@ const DispatchClearanceModule = () => {
       start: start.toISOString(),
       end: end.toISOString()
     };
-  };
+  }, [customRange]);
 
   // Debounce search query
   useEffect(() => {
@@ -145,7 +131,7 @@ const DispatchClearanceModule = () => {
       }
     };
     loadData();
-  }, [currentPage, debouncedSearch, refreshKey, dateFilter, customRange]);
+  }, [currentPage, debouncedSearch, refreshKey, dateFilter, getDateRange]);
 
   const handleOpenClearance = (dispatch: DispatchRow) => {
     setSelectedDispatch(dispatch);
@@ -190,7 +176,7 @@ const DispatchClearanceModule = () => {
                 key={btn.value}
                 variant={dateFilter === btn.value ? 'default' : 'ghost'}
                 size="sm"
-                onClick={() => setDateFilter(btn.value as any)}
+                onClick={() => setDateFilter(btn.value as typeof dateFilter)}
                 className={`h-8 rounded-lg text-xs font-bold transition-all px-4 ${
                   dateFilter === btn.value 
                     ? 'shadow-md shadow-primary/20 bg-primary text-primary-foreground' 

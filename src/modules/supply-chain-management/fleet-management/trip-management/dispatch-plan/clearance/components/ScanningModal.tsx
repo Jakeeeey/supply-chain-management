@@ -3,16 +3,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
     Scan,
-    X,
     CheckCircle2,
     Loader2,
-    Plus,
-    Minus,
     ArrowRight,
-    Search,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Input } from '@/components/ui/input';
 import {
     Dialog,
     DialogContent,
@@ -62,7 +57,7 @@ const ScanningModal: React.FC<ScanningModalProps> = ({
 
     const playSound = (type: 'success' | 'error') => {
         try {
-            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+            const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
             if (!AudioContextClass) return;
             const ctx = new AudioContextClass();
             const osc = ctx.createOscillator();
@@ -92,6 +87,7 @@ const ScanningModal: React.FC<ScanningModalProps> = ({
         }
     };
 
+    // Reset all state when modal opens — intentional reset pattern, not prop-to-state sync
     useEffect(() => {
         if (isOpen) {
             setScannedQtys(initialScanned);
@@ -103,7 +99,7 @@ const ScanningModal: React.FC<ScanningModalProps> = ({
             setLastScanned(null);
             setIsScanning(true);
         }
-    }, [isOpen, initialScanned]);
+    }, [isOpen, initialScanned, initialScannedRFIDs]);
 
     const handleRFIDScan = (input: string) => {
         const rawInput = input.trim().toUpperCase();
@@ -200,6 +196,7 @@ const ScanningModal: React.FC<ScanningModalProps> = ({
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, isScanning, rfidTags, items, scannedQtys, scannedTags]);
 
     // Internal simulation for RFID scan - Updated to use real RFID tags

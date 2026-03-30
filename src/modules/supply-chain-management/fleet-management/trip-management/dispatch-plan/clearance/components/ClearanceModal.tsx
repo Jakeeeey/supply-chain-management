@@ -2,9 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-    X,
-    CheckCircle2,
-    AlertCircle,
     RotateCcw,
     PackageCheck,
     PackageX,
@@ -18,7 +15,6 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
-    DialogFooter
 } from '@/components/ui/dialog';
 import {
     Table,
@@ -36,7 +32,6 @@ import {
     SelectValue
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { DispatchRow, ReconciliationRow, RFIDMapping } from '../types';
@@ -58,15 +53,14 @@ const STATUS_VARIANTS = {
 };
 
 const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSuccess, dispatch }) => {
-    const [invoices, setInvoices] = useState<ReconciliationRow[]>([]);
-    const [loading, setLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
     const [isDetailOpen, setIsDetailOpen] = useState(false);
     const [activeReconciliation, setActiveReconciliation] = useState<ReconciliationRow | null>(null);
-    const [selectedInvoice, setSelectedInvoice] = useState<ReconciliationRow | null>(null);
     const [rfidTags, setRfidTags] = useState<RFIDMapping[]>([]);
+    const [invoices, setInvoices] = useState<ReconciliationRow[]>([]);
 
+    // Fetch RFID tags when modal opens — intentional data fetch pattern
     useEffect(() => {
         if (isOpen && dispatch.id) {
             fetchRFIDTagsForDispatch(dispatch.id)
@@ -75,6 +69,8 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
         }
     }, [isOpen, dispatch.id]);
 
+
+    // Reset invoice state when modal opens — intentional reset pattern
     useEffect(() => {
         if (isOpen && dispatch.invoices) {
             setInvoices(dispatch.invoices);
@@ -100,6 +96,10 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
             const hasMissingQtys = inv.missingQtys && Object.keys(inv.missingQtys).length > 0;
             const hasScannedQtys = inv.scannedQtys && Object.keys(inv.scannedQtys).length > 0;
             return !!(hasMissingQtys || hasScannedQtys);
+        }
+
+        if (inv.status === 'Fulfilled with Returns') {
+            return !!inv.remarks && inv.remarks.trim().length > 0;
         }
 
         return true;
@@ -178,9 +178,9 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
             if (!isPreSave) {
                 onClose();
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Clearance Error:', error);
-            toast.error(error.message || `Failed to ${isPreSave ? 'save progress' : 'confirm clearance'}`);
+            toast.error(error instanceof Error ? error.message : `Failed to ${isPreSave ? 'save progress' : 'confirm clearance'}`);
         } finally {
             setIsSubmitting(false);
         }
@@ -204,7 +204,7 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
 
     const handleConfirmProductReconciliation = (id: number, status: string, remarks: string, missingQtys: Record<string | number, number>, scannedQtys: Record<string | number, number>, scannedRFIDs: Record<string | number, string[]>) => {
         setInvoices(prev => prev.map(inv =>
-            inv.id === id ? { ...inv, status: status as any, remarks, missingQtys, scannedQtys, scannedRFIDs } : inv
+            inv.id === id ? { ...inv, status: status as ReconciliationRow['status'], remarks, missingQtys, scannedQtys, scannedRFIDs } : inv
         ));
         // Auto-select row after reconciliation if not already selected
         setSelectedIds(prev => {
@@ -334,16 +334,7 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {loading ? (
-                                        <TableRow>
-                                            <TableCell colSpan={8} className="h-64 text-center">
-                                                <div className="flex flex-col items-center gap-2">
-                                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                                                    <span className="text-sm text-muted-foreground">Loading invoices...</span>
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    ) : invoices.length === 0 ? (
+                                    {invoices.length === 0 ? (
                                         <TableRow>
                                             <TableCell colSpan={8} className="h-48 text-center text-muted-foreground italic text-sm">
                                                 No invoices attached to this dispatch.
@@ -351,7 +342,6 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                                         </TableRow>
                                     ) : (
                                         invoices.map((inv) => {
-                                            const checkable = isRowCheckable(inv);
                                             const hasValidStatus = inv.status && ['Fulfilled', 'Unfulfilled', 'Fulfilled with Concerns', 'Fulfilled with Returns'].includes(inv.status as string);
                                             
                                             return (
@@ -370,7 +360,7 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
                                                 <TableCell onClick={(e) => e.stopPropagation()}>
                                                     <Select
                                                         value={inv.status}
-                                                        onValueChange={(val: any) => handleStatusChange(inv.id, val)}
+                                                        onValueChange={(val: ReconciliationRow['status']) => handleStatusChange(inv.id, val)}
                                                     >
                                                         <SelectTrigger className={`w-[190px] h-9 border-none text-xs font-bold ring-1 ring-inset ${STATUS_VARIANTS[inv.status] || 'bg-muted text-muted-foreground ring-border'}`}>
                                                             <SelectValue placeholder="Select Status" />
