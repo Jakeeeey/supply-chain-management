@@ -23,9 +23,17 @@ function statusBadge(status: string) {
         return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20";
     if (s === "RECEIVED")
         return "bg-teal-500/15 text-teal-700 dark:text-teal-300 border border-teal-500/20";
+    if (s === "PARTIAL_POSTED")
+        return "bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/20";
     if (s === "PARTIAL")
         return "bg-orange-500/15 text-orange-700 dark:text-orange-300 border border-orange-500/20";
     return "bg-primary/15 text-primary border border-primary/20";
+}
+
+function statusLabel(status: string) {
+    const s = String(status || "").toUpperCase();
+    if (s === "PARTIAL_POSTED") return "PARTIAL POSTED";
+    return s;
 }
 
 export function PostingPOList() {
@@ -36,7 +44,6 @@ export function PostingPOList() {
         refreshList,
         openPO,
         selectedPO,
-
         q,
         setQ,
         page,
@@ -44,9 +51,6 @@ export function PostingPOList() {
         pageSize,
         setPageSize,
     } = usePostingOfPo();
-
-    // ✅ confirm dialog state (for the "Post" button)
-    // Dialog removed
 
     const filtered = React.useMemo(() => {
         const s = q.trim().toLowerCase();
@@ -58,10 +62,10 @@ export function PostingPOList() {
         });
     }, [list, q]);
 
-    const totalPages = React.useMemo(() => {
-        const n = filtered.length;
-        return Math.max(1, Math.ceil(n / pageSize));
-    }, [filtered.length, pageSize]);
+    const totalPages = React.useMemo(
+        () => Math.max(1, Math.ceil(filtered.length / pageSize)),
+        [filtered.length, pageSize]
+    );
 
     React.useEffect(() => {
         if (page > totalPages) setPage(totalPages);
@@ -72,7 +76,6 @@ export function PostingPOList() {
         const start = (page - 1) * pageSize;
         return filtered.slice(start, start + pageSize);
     }, [filtered, page, pageSize]);
-
 
     return (
         <Card className="p-4">
@@ -179,7 +182,6 @@ export function PostingPOList() {
                         const active = selectedPO?.id === po.id;
 
                         return (
-                            // ✅ FIX: not a <button> anymore (prevents nested button + hydration error)
                             <div
                                 key={po.id}
                                 role="button"
@@ -218,33 +220,40 @@ export function PostingPOList() {
                                                 variant="secondary"
                                                 className={cn("text-[10px] font-bold", statusBadge(po.status))}
                                             >
-                                                {po.status}
+                                                {statusLabel(po.status)}
                                             </Badge>
                                             <span>
-                        Items:{" "}
+                                                Items:{" "}
                                                 <span className="font-semibold text-foreground">
-                          {po.itemsCount}
-                        </span>
-                      </span>
+                                                    {po.itemsCount}
+                                                </span>
+                                            </span>
                                             <span>
-                        Branches:{" "}
+                                                Branches:{" "}
                                                 <span className="font-semibold text-foreground">
-                          {po.branchesCount}
-                        </span>
-                      </span>
+                                                    {po.branchesCount}
+                                                </span>
+                                            </span>
                                             <span>
-                        Receipts:{" "}
+                                                Receipts:{" "}
                                                 <span className="font-semibold text-foreground">
-                          {po.receiptsCount}
-                        </span>
-                      </span>
+                                                    {po.receiptsCount}
+                                                </span>
+                                            </span>
                                             <span>
-                        Unposted:{" "}
+                                                Unposted:{" "}
                                                 <span className="font-semibold text-foreground">
-                          {po.unpostedReceiptsCount}
-                        </span>
-                      </span>
+                                                    {po.unpostedReceiptsCount}
+                                                </span>
+                                            </span>
                                         </div>
+
+                                        {/* Hint for PARTIAL_POSTED: remind user more receipts can still be posted */}
+                                        {po.status === "PARTIAL_POSTED" && (
+                                            <div className="mt-1.5 text-[11px] text-blue-600 dark:text-blue-400">
+                                                Partially posted — awaiting full receiving
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="flex items-center gap-2 shrink-0">
@@ -256,7 +265,6 @@ export function PostingPOList() {
                     })
                 )}
             </div>
-
         </Card>
     );
 }

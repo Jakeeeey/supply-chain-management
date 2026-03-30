@@ -1,4 +1,14 @@
-export type POStatus = "OPEN" | "PARTIAL" | "RECEIVED" | "CLOSED";
+// types.ts
+
+// ── Status flow ────────────────────────────────────────────────────────────
+// OPEN           → inventory_status 0-11  (not yet receiving)
+// PARTIAL        → inventory_status 12    (some items received, nothing posted yet)
+// PARTIAL_POSTED → inventory_status 13    (some items received & posted, NOT fully received yet)
+// RECEIVED       → inventory_status 13*   (fully received, not all posted)
+//   *both PARTIAL_POSTED and RECEIVED map to DB status 13;
+//    the difference is determined by isFullyReceived() in the API
+// CLOSED         → inventory_status 14    (fully received AND all posted)
+export type POStatus = "OPEN" | "PARTIAL" | "PARTIAL_POSTED" | "RECEIVED" | "CLOSED";
 
 export type POListItem = {
     id: string;
@@ -24,8 +34,8 @@ export type POItem = {
     name: string;
     barcode: string;
     uom: string;
-    expectedQty: number; // tagged RFIDs count
-    receivedQty: number; // received_quantity
+    expectedQty: number;
+    receivedQty: number;
     requiresRfid?: boolean;
     unitPrice?: number;
     grossAmount?: number;
@@ -39,9 +49,9 @@ export type POBranchAllocation = {
 
 export type PostingReceipt = {
     receiptNo: string;
-    receiptDate: string; // YYYY-MM-DD or ISO
-    receivedAt?: string; // ISO
-    isPosted: boolean;
+    receiptDate: string;          // YYYY-MM-DD or ISO
+    receivedAt?: string;          // ISO
+    isPosted: 0 | 1 | boolean;   // API returns 0|1; UI normalises to boolean
     linesCount: number;
     totalReceivedQty: number;
 };
@@ -57,7 +67,7 @@ export type PurchaseOrder = {
     receipts: PostingReceipt[];
     createdAt: string;
 
-    // ✅ posting-specific counts
+    // posting-specific counts
     receiptsCount: number;
     unpostedReceiptsCount: number;
     postingReady?: boolean;
@@ -68,7 +78,6 @@ export type PurchaseOrder = {
     withholdingTaxAmount?: number;
 };
 
-// ✅ removed lot fields (per request)
 export type ReceiptForm = {
     receiptNumber: string;
     receiptTypeCode: string;
@@ -86,6 +95,7 @@ export type ReceiptTypeOption = {
     code: string;
     label: string;
 };
+
 export type PostingPODetail = PurchaseOrder & {
     postingReady?: boolean;
     [key: string]: unknown;
