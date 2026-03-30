@@ -22,6 +22,8 @@ import { PrintableReturnSlip } from "./PrintableReturnSlip";
 import { ReturnReviewPanel } from "./ReturnReviewPanel";
 import { ProductPicker } from "./ProductPicker";
 import { useReturnCreationData } from "../hooks/useReturnCreationData";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { calculateLineItem } from "../utils/calculations";
 
 interface ReturnDetailsModalProps {
@@ -43,7 +45,7 @@ interface VariantItem {
   uom_id: number;
   discountType?: string;
   supplierDiscount: number;
-  discountId?: number;
+  discountTypeId?: number;
 }
 
 export function ReturnDetailsModal({
@@ -110,6 +112,7 @@ export function ReturnDetailsModal({
               customPrice: i.price,
               unitCount: validUnitCount,
               return_type_id: i.returnTypeId,
+              discountTypeId: i.discountTypeId,
               parentId: null,
             };
           });
@@ -190,17 +193,30 @@ export function ReturnDetailsModal({
 
         let discountLabel: string | undefined;
         let computedDiscount = 0;
-        let currentDiscountId: number | undefined;
+        let currentDiscountTypeId: number | undefined;
 
         if (connection?.discount_type) {
-          const discountObj = discountMap.get(String(connection.discount_type));
-          if (discountObj) {
-            computedDiscount = parseFloat(discountObj.percentage) / 100;
-            discountLabel = discountObj.line_discount;
-            currentDiscountId = discountObj.id;
-          } else {
-            discountLabel = String(connection.discount_type);
-            currentDiscountId = connection.discount_type;
+          const discountTypeObj = refs.discountTypes.find(
+            (dt) => dt.id === connection.discount_type
+          );
+          if (discountTypeObj) {
+            currentDiscountTypeId = discountTypeObj.id;
+            discountLabel = discountTypeObj.discount_type_name ||
+              discountTypeObj.discount_type ||
+              discountTypeObj.name;
+            
+            // Resolve to first percentage found in junction
+            const junctions = refs.linePerDiscountType.filter(
+              (lpd) => lpd.type_id === discountTypeObj.id
+            );
+            if (junctions.length > 0) {
+              const lineDiscountObj = refs.lineDiscounts.find(
+                (ld) => ld.id === junctions[0].line_id
+              );
+              if (lineDiscountObj) {
+                computedDiscount = parseFloat(lineDiscountObj.percentage) / 100;
+              }
+            }
           }
         }
 
@@ -221,7 +237,7 @@ export function ReturnDetailsModal({
           uom_id: matchedUnit?.unit_id || 0,
           discountType: discountLabel,
           supplierDiscount: computedDiscount,
-          discountId: currentDiscountId,
+          discountTypeId: currentDiscountTypeId,
         } as VariantItem;
       })
       .filter((p) => {
@@ -288,7 +304,7 @@ export function ReturnDetailsModal({
           quantity: qty,
           onHand: p.stock || 0,
           discount: p.supplierDiscount || 0,
-          discountId: p.discountId,
+          discountTypeId: p.discountTypeId,
           customPrice: p.price,
         } as CartItem,
       ];
@@ -312,6 +328,34 @@ export function ReturnDetailsModal({
 
     const matchedUnit = refs.units.find((u) => u.unit_name === inv.unit_name);
 
+    const connection = refs.connections.find(
+      (c) => c.product_id === inv.product_id && c.supplier_id === Number(currentSupplierId),
+    );
+
+    let computedDiscount = 0;
+    let currentDiscountTypeId: number | undefined;
+
+    if (connection?.discount_type) {
+      const discountTypeObj = refs.discountTypes.find(
+        (dt) => dt.id === connection.discount_type
+      );
+      if (discountTypeObj) {
+        currentDiscountTypeId = discountTypeObj.id;
+        
+        const junctions = refs.linePerDiscountType.filter(
+          (lpd) => lpd.type_id === discountTypeObj.id
+        );
+        if (junctions.length > 0) {
+          const lineDiscountObj = refs.lineDiscounts.find(
+            (ld) => ld.id === junctions[0].line_id
+          );
+          if (lineDiscountObj) {
+            computedDiscount = parseFloat(lineDiscountObj.percentage) / 100;
+          }
+        }
+      }
+    }
+
     addToCartInternal({
       id: String(inv.product_id), // Standard Identity
       cartId: Math.random().toString(36).substring(2, 15),
@@ -323,7 +367,8 @@ export function ReturnDetailsModal({
       stock: inv.running_inventory,
       price: inv.price,
       uom_id: matchedUnit?.unit_id || 0,
-      supplierDiscount: 0,
+      supplierDiscount: computedDiscount,
+      discountTypeId: currentDiscountTypeId,
     }, 1);
 
     if (!matchedUnit) {
@@ -413,9 +458,12 @@ export function ReturnDetailsModal({
           discount_amount: discountAmount,
           net_amount: net,
           return_type_id: item.return_type_id || null,
+          discount_type_id: item.discountTypeId || null,
           item_remarks: "",
         };
       });
+
+      const total_net_amount = rts_items.reduce((sum, i) => sum + i.net_amount, 0);
 
       const payload = {
         supplier_id: currentSupplierId ?? 0,
@@ -423,6 +471,7 @@ export function ReturnDetailsModal({
         transaction_date: data.returnDate,
         is_posted: post ? 1 : 0,
         remarks: remarks,
+        total_net_amount,
         rts_items: rts_items,
       };
 
@@ -476,6 +525,17 @@ export function ReturnDetailsModal({
               </DialogTitle>
               <div className="flex items-center gap-3 text-sm mt-1">
                 <span className="text-muted-foreground">{data.returnNo}</span>
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "text-[10px] font-bold uppercase px-2 py-0.5",
+                    data.status === "Posted"
+                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                      : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+                  )}
+                >
+                  {data.status}
+                </Badge>
               </div>
             </div>
             <div className="flex gap-2">
@@ -683,6 +743,8 @@ export function ReturnDetailsModal({
                 <ReturnReviewPanel
                   items={items}
                   lineDiscounts={refs.lineDiscounts}
+                  discountTypes={refs.discountTypes}
+                  linePerDiscountType={refs.linePerDiscountType}
                   returnTypes={refs.returnTypes || []}
                   onUpdateItem={(cartId, field, val) =>
                     setItems((prev) =>

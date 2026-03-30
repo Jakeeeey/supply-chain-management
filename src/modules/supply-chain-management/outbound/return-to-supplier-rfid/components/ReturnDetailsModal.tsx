@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type {
   ReturnToSupplier,
@@ -101,6 +102,7 @@ export function ReturnDetailsModal({
               customPrice: i.price,
               unitCount: validUnitCount,
               return_type_id: i.returnTypeId,
+              discountTypeId: i.discountTypeId,
               parentId: null,
               rfid_tag: i.rfid_tag,
             };
@@ -190,17 +192,30 @@ export function ReturnDetailsModal({
 
         let discountLabel: string | undefined;
         let computedDiscount = 0;
-        let currentDiscountId: number | undefined;
+        let currentDiscountTypeId: number | undefined;
 
         if (connection?.discount_type) {
-          const discountObj = discountMap.get(String(connection.discount_type));
-          if (discountObj) {
-            computedDiscount = parseFloat(discountObj.percentage);
-            discountLabel = discountObj.line_discount;
-            currentDiscountId = discountObj.id;
-          } else {
-            discountLabel = String(connection.discount_type);
-            currentDiscountId = connection.discount_type;
+          const discountTypeObj = refs.discountTypes.find(
+            (dt) => dt.id === connection.discount_type
+          );
+          if (discountTypeObj) {
+            currentDiscountTypeId = discountTypeObj.id;
+            discountLabel = discountTypeObj.discount_type_name ||
+              discountTypeObj.discount_type ||
+              discountTypeObj.name;
+            
+            // Resolve to first percentage found in junction
+            const junctions = refs.linePerDiscountType.filter(
+              (lpd) => lpd.type_id === discountTypeObj.id
+            );
+            if (junctions.length > 0) {
+              const lineDiscountObj = refs.lineDiscounts.find(
+                (ld) => ld.id === junctions[0].line_id
+              );
+              if (lineDiscountObj) {
+                computedDiscount = parseFloat(lineDiscountObj.percentage);
+              }
+            }
           }
         }
 
@@ -221,7 +236,7 @@ export function ReturnDetailsModal({
           uom_id: matchedUnit?.unit_id || 0,
           discountType: discountLabel,
           supplierDiscount: computedDiscount,
-          discountId: currentDiscountId,
+          discountTypeId: currentDiscountTypeId,
           parentId: item.familyId || null,
         };
       })
@@ -244,7 +259,7 @@ export function ReturnDetailsModal({
       uom_id: number;
       supplierDiscount: number;
       discountType?: string;
-      discountId?: number;
+      discountTypeId?: number;
       productId: number;
     }
 
@@ -299,7 +314,7 @@ export function ReturnDetailsModal({
             quantity: 1,
             onHand: p.stock || 0,
             discount: (p.supplierDiscount || 0) / 100,
-            discountId: p.discountId,
+            discountTypeId: p.discountTypeId,
             customPrice: p.price,
             rfid_tag: p.rfid_tag,
           } as CartItem,
@@ -321,7 +336,7 @@ export function ReturnDetailsModal({
           quantity: qty,
           onHand: p.stock || 0,
           discount: (p.supplierDiscount || 0) / 100,
-          discountId: p.discountId,
+          discountTypeId: p.discountTypeId,
           customPrice: p.price,
         },
       ];
@@ -382,6 +397,7 @@ export function ReturnDetailsModal({
           supplierDiscount: 0,
           rfid_tag: rfidTag,
           parentId: invRecord.familyId || null,
+          discountTypeId: undefined as number | undefined,
         };
 
         // Inherit discount
@@ -391,10 +407,23 @@ export function ReturnDetailsModal({
             c.supplier_id === currentSupplierId,
         );
         if (connection?.discount_type) {
-          const disc = refs.lineDiscounts.find((d) => String(d.id) === String(connection.discount_type));
-          if (disc) {
-            product.supplierDiscount = parseFloat(disc.percentage);
-            (product as any).discountId = disc.id;
+          const discountTypeObj = refs.discountTypes.find(
+            (dt) => String(dt.id) === String(connection.discount_type)
+          );
+          if (discountTypeObj) {
+            product.discountTypeId = discountTypeObj.id;
+            const lineIds = refs.linePerDiscountType
+              .filter((lpd) => String(lpd.type_id) === String(discountTypeObj.id))
+              .map((lpd) => lpd.line_id);
+            
+            if (lineIds.length > 0) {
+              const discountObj = refs.lineDiscounts.find(
+                (d) => String(d.id) === String(lineIds[0])
+              );
+              if (discountObj) {
+                product.supplierDiscount = parseFloat(discountObj.percentage);
+              }
+            }
           }
         }
 
@@ -532,10 +561,13 @@ export function ReturnDetailsModal({
           discount_amount: discountAmount,
           net_amount: net,
           return_type_id: item.return_type_id || null,
+          discount_type_id: item.discountTypeId || null,
           item_remarks: "",
           rfid_tag: item.rfid_tag,
         };
       });
+
+      const total_net_amount = rts_items.reduce((sum, i) => sum + i.net_amount, 0);
 
       const payload = {
         supplier_id: currentSupplierId ?? 0,
@@ -543,6 +575,7 @@ export function ReturnDetailsModal({
         transaction_date: data.returnDate,
         is_posted: post ? 1 : 0,
         remarks: remarks,
+        total_net_amount,
         rts_items: rts_items,
       };
 
@@ -607,6 +640,17 @@ export function ReturnDetailsModal({
               </DialogTitle>
               <div className="flex items-center gap-3 text-sm mt-1">
                 <span className="text-muted-foreground">{data.returnNo}</span>
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "text-[10px] font-bold uppercase px-2 py-0.5",
+                    data.status === "Posted"
+                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                      : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+                  )}
+                >
+                  {data.status}
+                </Badge>
               </div>
             </div>
             <div className="flex gap-2">
@@ -849,6 +893,8 @@ export function ReturnDetailsModal({
                 <ReturnReviewPanel
                   items={items}
                   lineDiscounts={refs.lineDiscounts}
+                  discountTypes={refs.discountTypes}
+                  linePerDiscountType={refs.linePerDiscountType}
                   returnTypes={refs.returnTypes || []}
                   onUpdateItem={(id, field, val) =>
                     setItems((prev) =>
