@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { UseFormReturn } from "react-hook-form";
+import { UseFormReturn, useWatch } from "react-hook-form";
 import { MapPin, Trash2 } from "lucide-react";
 
 import {
@@ -39,35 +39,39 @@ export function AreaRow({
   const [cities, setCities] = useState<{ code: string; name: string }[]>([]);
   const [barangays, setBarangays] = useState<{ code: string; name: string }[]>([]);
 
-  // For initial load during Edit
-  const currentProvince = form.getValues(`areas.${index}.province`);
-  const currentCity = form.getValues(`areas.${index}.city`);
+  // For initial load during Edit - using useWatch for reactivity
+  const currentProvince = useWatch({ control: form.control, name: `areas.${index}.province` });
+  const currentCity = useWatch({ control: form.control, name: `areas.${index}.city` });
 
   useEffect(() => {
     let mounted = true;
-    if (provinces.length > 0 && currentProvince) {
-      const p = provinces.find((x) => x.name === currentProvince);
-      if (p) {
-        fetchCities(p.code).then((data) => {
-          if (mounted) setCities(data);
-        });
-      }
-    }
-    return () => { mounted = false; };
-  }, [provinces, currentProvince]);
 
-  useEffect(() => {
-    let mounted = true;
-    if (cities.length > 0 && currentCity) {
-      const c = cities.find((x) => x.name === currentCity);
-      if (c) {
-        fetchBarangays(c.code).then((data) => {
-          if (mounted) setBarangays(data);
-        });
+    const initializeAreas = async () => {
+      // Only initialize if we have provinces and an initial province set, but cities aren't loaded yet.
+      if (provinces.length === 0 || !currentProvince || cities.length > 0) return;
+
+      const p = provinces.find((x) => x.name.toLowerCase() === currentProvince.toLowerCase());
+      if (!p) return;
+
+      // 1. Fetch cities for the initial province
+      const fetchedCities = await fetchCities(p.code);
+      if (!mounted) return;
+      setCities(fetchedCities);
+
+      // 2. Fetch barangays immediately if there's an initial city
+      if (currentCity) {
+        const c = fetchedCities.find((x) => x.name.toLowerCase() === currentCity.toLowerCase());
+        if (c) {
+          const fetchedBarangays = await fetchBarangays(c.code);
+          if (mounted) setBarangays(fetchedBarangays);
+        }
       }
-    }
+    };
+
+    initializeAreas();
+
     return () => { mounted = false; };
-  }, [cities, currentCity]);
+  }, [provinces, currentProvince, currentCity, cities.length]);
 
   const onProvinceChange = async (provinceCode: string) => {
     const provinceName = provinces.find((p) => p.code === provinceCode)?.name || "";
@@ -135,7 +139,7 @@ export function AreaRow({
                     value: p.code,
                     label: p.name,
                   }))}
-                  value={provinces.find((p) => p.name === field.value)?.code}
+                  value={provinces.find((p) => p.name.toLowerCase() === String(field.value || "").toLowerCase())?.code}
                   onValueChange={(val) => onProvinceChange(val)}
                   placeholder="Select Province"
                   className={cn(selectBase, selectFocus)}
@@ -158,7 +162,7 @@ export function AreaRow({
                     value: c.code,
                     label: c.name,
                   }))}
-                  value={cities.find((c) => c.name === field.value)?.code}
+                  value={cities.find((c) => c.name.toLowerCase() === String(field.value || "").toLowerCase())?.code}
                   onValueChange={(val) => onCityChange(val)}
                   placeholder="Select City"
                   disabled={!cities.length}
@@ -182,7 +186,7 @@ export function AreaRow({
                     value: b.code,
                     label: b.name,
                   }))}
-                  value={barangays.find((b) => b.name === field.value)?.code}
+                  value={barangays.find((b) => b.name.toLowerCase() === String(field.value || "").toLowerCase())?.code}
                   onValueChange={(val) => onBarangayChange(val)}
                   placeholder="Select Barangay"
                   disabled={!barangays.length}

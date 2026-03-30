@@ -14,7 +14,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { CalendarDays, FileText, Package2, PhilippinePeso, User } from "lucide-react";
+import { CalendarDays, FileText, Package2, PhilippinePeso, ScanLine, User } from "lucide-react";
 
 import { PhysicalInventoryStatusBadge } from "./PhysicalInventoryStatusBadge";
 
@@ -30,13 +30,14 @@ type Props = {
     onChangeStartingDate: (value: string) => void;
 };
 
-function toInputDate(value: string | null | undefined): string {
+function toInputDateTimeLocal(value: string | null | undefined): string {
     if (!value) return "";
     const trimmed = value.trim();
     if (!trimmed) return "";
-    if (trimmed.includes("T")) return trimmed.slice(0, 10);
-    if (trimmed.includes(" ")) return trimmed.slice(0, 10);
-    return trimmed;
+    if (trimmed.includes("T")) return trimmed.slice(0, 16);
+    if (trimmed.includes(" ")) return trimmed.replace(" ", "T").slice(0, 16);
+    if (trimmed.length === 10) return `${trimmed}T00:00`;
+    return trimmed.slice(0, 16);
 }
 
 function formatMoney(value: number): string {
@@ -139,24 +140,24 @@ export function PhysicalInventoryHeader(props: Props) {
                             </div>
                         </div>
 
-                        <div className="flex min-w-[180px] items-center justify-between gap-3 rounded-2xl border bg-background px-4 py-3 shadow-sm">
-                            <div className="min-w-0">
+                        <div className="flex min-w-[200px] items-start gap-3 rounded-2xl border bg-background px-4 py-3 shadow-sm">
+                            <ScanLine className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                            <div className="min-w-0 flex-1">
                                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
                                     Status
                                 </p>
-                                <div className="mt-1">
+                                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                                     <PhysicalInventoryStatusBadge status={status} />
+                                    <div
+                                        className={[
+                                            "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-tight",
+                                            stockTypeTone(header?.stock_type),
+                                        ].join(" ")}
+                                    >
+                                        <Package2 className="mr-1 h-3 w-3" />
+                                        {header?.stock_type === "BAD" ? "BAD STOCK" : "GOOD STOCK"}
+                                    </div>
                                 </div>
-                            </div>
-
-                            <div
-                                className={[
-                                    "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold",
-                                    stockTypeTone(header?.stock_type),
-                                ].join(" ")}
-                            >
-                                <Package2 className="mr-1.5 h-3.5 w-3.5" />
-                                {header?.stock_type === "BAD" ? "BAD STOCK" : "GOOD STOCK"}
                             </div>
                         </div>
                     </div>
@@ -171,20 +172,10 @@ export function PhysicalInventoryHeader(props: Props) {
                             id="pi-ph-no"
                             value={header?.ph_no ?? ""}
                             onChange={(e) => onChangePhNo(e.target.value)}
-                            placeholder="Enter PH No"
-                            disabled={!canEdit}
-                            className="font-medium"
-                        />
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label htmlFor="pi-cutoff-date">Cut Off Date</Label>
-                        <Input
-                            id="pi-cutoff-date"
-                            type="date"
-                            value={toInputDate(header?.cutOff_date)}
-                            onChange={(e) => onChangeCutoffDate(e.target.value)}
-                            disabled={!canEdit}
+                            placeholder="Auto-generated"
+                            disabled
+                            readOnly
+                            className="font-medium outline-none focus-visible:ring-0"
                         />
                     </div>
 
@@ -194,9 +185,20 @@ export function PhysicalInventoryHeader(props: Props) {
                         </Label>
                         <Input
                             id="pi-starting-date"
-                            type="date"
-                            value={toInputDate(header?.starting_date)}
+                            type="datetime-local"
+                            value={toInputDateTimeLocal(header?.starting_date)}
                             onChange={(e) => onChangeStartingDate(e.target.value)}
+                            disabled={!canEdit}
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label htmlFor="pi-cutoff-date">Cut Off Date</Label>
+                        <Input
+                            id="pi-cutoff-date"
+                            type="datetime-local"
+                            value={toInputDateTimeLocal(header?.cutOff_date)}
+                            onChange={(e) => onChangeCutoffDate(e.target.value)}
                             disabled={!canEdit}
                         />
                     </div>

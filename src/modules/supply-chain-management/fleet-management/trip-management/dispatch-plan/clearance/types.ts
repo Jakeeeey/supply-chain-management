@@ -94,6 +94,7 @@ export interface ReconciliationRow {
   orderNo: string;
   invoiceNo: string;
   invoiceDate: string;
+  customer: string;
   customerName: string;
   amount: number;
   remarks?: string;
@@ -120,7 +121,13 @@ export interface InvoiceDetail {
     invoice_no: string;
     invoice_date: string;
     customer_name: string;
+    customer_code: string;
     status: string;
+    salesman_id?: number;
+    salesman_name?: string | null;
+    salesman_code?: string | null;
+    branch_id?: number;
+    branch_name?: string | null;
   };
   lines: InvoiceLine[];
 }

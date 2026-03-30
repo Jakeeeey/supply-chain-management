@@ -26,6 +26,8 @@ import type { CartItem, LineDiscount, RTSReturnType } from "../types/rts.schema"
 interface ReturnReviewPanelProps {
   items: CartItem[];
   lineDiscounts: LineDiscount[];
+  discountTypes: any[];
+  linePerDiscountType: any[];
   returnTypes: RTSReturnType[];
   onUpdateItem: (
     id: string,
@@ -41,6 +43,8 @@ interface ReturnReviewPanelProps {
 export function ReturnReviewPanel({
   items,
   lineDiscounts,
+  discountTypes,
+  linePerDiscountType,
   returnTypes = [],
   onUpdateItem,
   onRemoveItem,
@@ -48,31 +52,44 @@ export function ReturnReviewPanel({
   setRemarks,
   readOnly = false,
 }: ReturnReviewPanelProps) {
-  const totalAmount = items.reduce(
-    (sum, item) =>
-      sum +
-      (item.customPrice || item.price) *
-        item.quantity *
-        (1 - item.discount),
-    0,
-  );
+  // Unified calculation: use the SAME per-row formula as the table rows,
+  // rounding each row to 2 decimal places before accumulating.
+  const { totalAmount, totalQuantity, totalDiscountAmount, grossAmount } =
+    items.reduce(
+      (acc, item) => {
+        const unitPrice = item.customPrice || item.price;
+        const rowGross = Math.round(unitPrice * item.quantity * 100) / 100;
+        const rowDiscount = Math.round(rowGross * item.discount * 100) / 100;
+        const rowNet = Math.round((rowGross - rowDiscount) * 100) / 100;
 
-  const totalQuantity = items.reduce((acc, i) => acc + i.quantity, 0);
-  const totalDiscountAmount = items.reduce(
-    (sum, item) =>
-      sum +
-      (item.customPrice || item.price) * item.quantity * item.discount,
-    0,
-  );
-  const grossAmount = totalAmount + totalDiscountAmount;
-
-  // Helper to find discount name by percentage
-  const getDiscountName = (percentage: number) => {
-    if (percentage === 0) return "0%";
-    const match = lineDiscounts.find(
-      (d) => (parseFloat(d.percentage) / 100) === percentage,
+        acc.grossAmount += rowGross;
+        acc.totalDiscountAmount += rowDiscount;
+        acc.totalAmount += rowNet;
+        acc.totalQuantity += item.quantity;
+        return acc;
+      },
+      { totalAmount: 0, totalQuantity: 0, totalDiscountAmount: 0, grossAmount: 0 },
     );
-    return match ? match.line_discount : `${(percentage * 100).toFixed(0)}%`; // Fallback to % if custom
+
+  // Helper to find discount name by ID or fallback
+  const getDiscountName = (item: CartItem) => {
+    if (item.discountTypeId) {
+      const match = discountTypes.find((d) => d.id === item.discountTypeId);
+      if (match) {
+        return (
+          match.discount_type_name ||
+          match.discount_type ||
+          match.name ||
+          `Type ${match.id}`
+        );
+      }
+    }
+    const matchByValue = lineDiscounts.find(
+      (d) => Math.abs(Number(d.percentage) / 100 - item.discount) < 0.0001
+    );
+    if (matchByValue) return matchByValue.line_discount;
+
+    return `${(item.discount * 100).toFixed(4).replace(/\.?0+$/, "")}%`;
   };
 
   return (
@@ -134,7 +151,7 @@ export function ReturnReviewPanel({
 
                 return (
                   <TableRow
-                    key={item.id}
+                    key={item.cartId}
                     className="hover:bg-muted/30 border-b last:border-0"
                   >
                     <TableCell className="text-xs text-muted-foreground font-mono pl-4">
@@ -160,7 +177,7 @@ export function ReturnReviewPanel({
                           value={item.quantity}
                           onChange={(e) =>
                             onUpdateItem(
-                              item.id,
+                              item.cartId,
                               "quantity",
                               Math.max(1, parseFloat(e.target.value) || 0),
                             )
@@ -183,31 +200,45 @@ export function ReturnReviewPanel({
                     <TableCell>
                       {readOnly ? (
                         <div className="text-center text-sm font-medium">
-                          {getDiscountName(item.discount)}
+                          {getDiscountName(item)}
                         </div>
                       ) : (
                         <div className="flex justify-center">
                           <Select
                             value={
-                              lineDiscounts
-                                .find(
-                                  (d) => (Number(d.percentage) / 100) === item.discount,
-                                )
-                                ?.id.toString() || "custom"
+                              item.discountTypeId
+                                ? item.discountTypeId.toString()
+                                : ""
                             }
                             onValueChange={(val) => {
-                              if (val === "custom") {
-                                // Custom logic if implemented
-                              } else {
-                                const selected = lineDiscounts.find(
-                                  (d) => d.id.toString() === val,
+                              const selectedType = discountTypes.find(
+                                (d) => d.id.toString() === val,
+                              );
+                              if (selectedType) {
+                                onUpdateItem(
+                                  item.cartId,
+                                  "discountTypeId",
+                                  selectedType.id,
                                 );
-                                if (selected)
-                                  onUpdateItem(
-                                    item.id,
-                                    "discount",
-                                    Number(selected.percentage) / 100,
+
+                                // Resolve percentage
+                                const junctions = linePerDiscountType.filter(
+                                  (j) => String(j.type_id) === String(selectedType.id)
+                                );
+                                if (junctions.length > 0) {
+                                  const lineDiscount = lineDiscounts.find(
+                                    (ld) => String(ld.id) === String(junctions[0].line_id)
                                   );
+                                  if (lineDiscount) {
+                                    onUpdateItem(
+                                      item.cartId,
+                                      "discount",
+                                      Number(lineDiscount.percentage) / 100
+                                    );
+                                  }
+                                } else {
+                                   onUpdateItem(item.cartId, "discount", 0);
+                                }
                               }
                             }}
                           >
@@ -215,10 +246,12 @@ export function ReturnReviewPanel({
                               <SelectValue placeholder="-" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="custom">Custom</SelectItem>
-                              {lineDiscounts.map((d) => (
+                              {discountTypes.map((d) => (
                                 <SelectItem key={d.id} value={d.id.toString()}>
-                                  {d.line_discount}
+                                  {d.discount_type_name ||
+                                    d.discount_type ||
+                                    d.name ||
+                                    `Type ${d.id}`}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -257,7 +290,7 @@ export function ReturnReviewPanel({
                             }
                             onValueChange={(val) => {
                               onUpdateItem(
-                                item.id,
+                                item.cartId,
                                 "return_type_id",
                                 Number(val),
                               );
@@ -290,7 +323,7 @@ export function ReturnReviewPanel({
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => onRemoveItem(item.id)}
+                          onClick={() => onRemoveItem(item.cartId)}
                           className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
                         >
                           <Trash2 className="h-4 w-4" />

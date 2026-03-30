@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { getDirectusBase, directusFetch } from "@/lib/directus";
 
 // =============================================================================
@@ -89,21 +88,39 @@ export async function getRawLinkedInvoice(returnId: number) {
 export async function getRawReferences() {
   return Promise.all([
     directusGet<{ data: Record<string, unknown>[] }>(
-      "/items/salesman?limit=-1&fields=id,salesman_name,salesman_code,price_type,branch_code",
+      "/items/salesman?limit=-1&fields=id,salesman_name,salesman_code,price_type,branch_code&filter[isActive][_eq]=1",
     ),
     directusGet<{ data: Record<string, unknown>[] }>(
-      "/items/customer?limit=-1&fields=id,customer_code,customer_name,store_name",
+      "/items/customer?limit=-1&fields=id,customer_code,customer_name,store_name&filter[isActive][_eq]=1",
     ),
     directusGet<{ data: Record<string, unknown>[] }>(
       "/items/branches?limit=-1&fields=id,branch_name",
     ),
     directusGet<{ data: Record<string, unknown>[] }>(
-      "/items/line_discount?limit=-1",
+      "/items/discount_type?limit=-1",
     ),
     directusGet<{ data: Record<string, unknown>[] }>(
       "/items/sales_return_type?limit=-1",
     ),
   ]);
+}
+
+/**
+ * Fetches the line_per_discount_type junction table.
+ */
+export async function getRawLinePerDiscountType() {
+  return directusGet<{ data: Record<string, unknown>[] }>(
+    "/items/line_per_discount_type?limit=-1&fields=id,type_id,line_id",
+  );
+}
+
+/**
+ * Fetches the line_discount table (individual discount percentages).
+ */
+export async function getRawLineDiscounts() {
+  return directusGet<{ data: Record<string, unknown>[] }>(
+    "/items/line_discount?limit=-1&fields=id,line_discount,percentage",
+  );
 }
 
 /**
@@ -118,7 +135,7 @@ export async function getRawProductCatalog() {
     directusGet<{ data: Record<string, unknown>[] }>(
       "/items/product_per_supplier?limit=-1",
     ),
-    directusGet<{ data: Record<string, unknown>[] }>("/items/products?limit=-1"),
+    directusGet<{ data: Record<string, unknown>[] }>("/items/products?limit=-1&filter[isActive][_eq]=1"),
   ]);
 }
 
@@ -147,6 +164,15 @@ export async function getRawInvoices(
  */
 export async function getRawUnits() {
   return directusGet<{ data: Record<string, unknown>[] }>("/items/units?limit=-1");
+}
+
+/**
+ * Fetches price types from the price_types table (A, B, C, D, E).
+ */
+export async function getRawPriceTypes() {
+  return directusGet<{ data: Record<string, unknown>[] }>(
+    "/items/price_types?limit=-1&sort=sort",
+  );
 }
 
 // =============================================================================
@@ -216,11 +242,20 @@ export async function updateReturnDetail(
 /**
  * Updates the status of a sales return.
  */
-export async function updateReturnStatus(id: number, status: string) {
+export async function updateReturnStatus(
+  id: number,
+  status: string,
+  isReceived?: number,
+  received_at?: string,
+) {
+  const payload: Record<string, unknown> = { status };
+  if (isReceived !== undefined) payload.isReceived = isReceived;
+  if (received_at !== undefined) payload.received_at = received_at;
+
   return directusMutate<{ data: Record<string, unknown> }>(
     `/items/sales_return/${id}`,
     "PATCH",
-    { status },
+    payload,
   );
 }
 

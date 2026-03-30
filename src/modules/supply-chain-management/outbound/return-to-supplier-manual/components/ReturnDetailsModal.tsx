@@ -6,6 +6,7 @@ import { Printer, X, Loader2, Save, Send, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import type {
   ReturnToSupplier,
   CartItem,
@@ -21,6 +22,8 @@ import { PrintableReturnSlip } from "./PrintableReturnSlip";
 import { ReturnReviewPanel } from "./ReturnReviewPanel";
 import { ProductPicker } from "./ProductPicker";
 import { useReturnCreationData } from "../hooks/useReturnCreationData";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { calculateLineItem } from "../utils/calculations";
 
 interface ReturnDetailsModalProps {
@@ -42,6 +45,7 @@ interface VariantItem {
   uom_id: number;
   discountType?: string;
   supplierDiscount: number;
+  discountTypeId?: number;
 }
 
 export function ReturnDetailsModal({
@@ -94,7 +98,9 @@ export function ReturnDetailsModal({
           const cartItems: CartItem[] = fetched.map((i) => {
             const validUnitCount = i.unitCount > 0 ? i.unitCount : 1;
             return {
-              id: String(i.productId),
+              cartId: Math.random().toString(36).substring(2, 15),
+              id: String(i.productId), // Simple ID for matching logic
+              product_id: i.productId, // actual DB item reference
               code: i.code,
               name: i.name,
               price: i.price,
@@ -106,6 +112,7 @@ export function ReturnDetailsModal({
               customPrice: i.price,
               unitCount: validUnitCount,
               return_type_id: i.returnTypeId,
+              discountTypeId: i.discountTypeId,
               parentId: null,
             };
           });
@@ -186,12 +193,30 @@ export function ReturnDetailsModal({
 
         let discountLabel: string | undefined;
         let computedDiscount = 0;
+        let currentDiscountTypeId: number | undefined;
 
         if (connection?.discount_type) {
-          const discountObj = discountMap.get(String(connection.discount_type));
-          if (discountObj) {
-            computedDiscount = parseFloat(discountObj.percentage) / 100;
-            discountLabel = discountObj.line_discount;
+          const discountTypeObj = refs.discountTypes.find(
+            (dt) => dt.id === connection.discount_type
+          );
+          if (discountTypeObj) {
+            currentDiscountTypeId = discountTypeObj.id;
+            discountLabel = discountTypeObj.discount_type_name ||
+              discountTypeObj.discount_type ||
+              discountTypeObj.name;
+            
+            // Resolve to first percentage found in junction
+            const junctions = refs.linePerDiscountType.filter(
+              (lpd) => lpd.type_id === discountTypeObj.id
+            );
+            if (junctions.length > 0) {
+              const lineDiscountObj = refs.lineDiscounts.find(
+                (ld) => ld.id === junctions[0].line_id
+              );
+              if (lineDiscountObj) {
+                computedDiscount = parseFloat(lineDiscountObj.percentage) / 100;
+              }
+            }
           }
         }
 
@@ -200,7 +225,8 @@ export function ReturnDetailsModal({
         );
 
         return {
-          id: String(item.product_id),
+          id: String(item.product_id), // Search ID (for quantity increment logic)
+          product_id: item.product_id, // actual DB item reference
           masterId: String(item.familyId),
           code: item.product_code || "N/A",
           name: item.product_name,
@@ -211,6 +237,7 @@ export function ReturnDetailsModal({
           uom_id: matchedUnit?.unit_id || 0,
           discountType: discountLabel,
           supplierDiscount: computedDiscount,
+          discountTypeId: currentDiscountTypeId,
         } as VariantItem;
       })
       .filter((p) => {
@@ -261,10 +288,11 @@ export function ReturnDetailsModal({
   const addToCartInternal = useCallback((p_raw: unknown, qty = 1) => {
     const p = p_raw as CartItem & { stock?: number; supplierDiscount?: number };
     setItems((prev) => {
-      const exists = prev.find((i) => i.id === p.id);
+      // Find exact same product variant to increment quantity
+      const exists = prev.find((i) => String(i.id) === String(p.id) && i.uom_id === p.uom_id);
       if (exists)
         return prev.map((i) =>
-          i.id === p.id
+          String(i.id) === String(p.id) && i.uom_id === p.uom_id
             ? { ...i, quantity: i.quantity + qty }
             : i,
         );
@@ -272,9 +300,11 @@ export function ReturnDetailsModal({
         ...prev,
         {
           ...p,
+          cartId: Math.random().toString(36).substring(2, 15),
           quantity: qty,
           onHand: p.stock || 0,
           discount: p.supplierDiscount || 0,
+          discountTypeId: p.discountTypeId,
           customPrice: p.price,
         } as CartItem,
       ];
@@ -298,8 +328,38 @@ export function ReturnDetailsModal({
 
     const matchedUnit = refs.units.find((u) => u.unit_name === inv.unit_name);
 
+    const connection = refs.connections.find(
+      (c) => c.product_id === inv.product_id && c.supplier_id === Number(currentSupplierId),
+    );
+
+    let computedDiscount = 0;
+    let currentDiscountTypeId: number | undefined;
+
+    if (connection?.discount_type) {
+      const discountTypeObj = refs.discountTypes.find(
+        (dt) => dt.id === connection.discount_type
+      );
+      if (discountTypeObj) {
+        currentDiscountTypeId = discountTypeObj.id;
+        
+        const junctions = refs.linePerDiscountType.filter(
+          (lpd) => lpd.type_id === discountTypeObj.id
+        );
+        if (junctions.length > 0) {
+          const lineDiscountObj = refs.lineDiscounts.find(
+            (ld) => ld.id === junctions[0].line_id
+          );
+          if (lineDiscountObj) {
+            computedDiscount = parseFloat(lineDiscountObj.percentage) / 100;
+          }
+        }
+      }
+    }
+
     addToCartInternal({
-      id: String(inv.product_id),
+      id: String(inv.product_id), // Standard Identity
+      cartId: Math.random().toString(36).substring(2, 15),
+      product_id: inv.product_id,
       code: inv.product_code,
       name: inv.product_name,
       unit: inv.unit_name,
@@ -307,7 +367,8 @@ export function ReturnDetailsModal({
       stock: inv.running_inventory,
       price: inv.price,
       uom_id: matchedUnit?.unit_id || 0,
-      supplierDiscount: 0,
+      supplierDiscount: computedDiscount,
+      discountTypeId: currentDiscountTypeId,
     }, 1);
 
     if (!matchedUnit) {
@@ -388,7 +449,7 @@ export function ReturnDetailsModal({
       const rts_items = items.map((item) => {
         const { gross, discountAmount, net } = calculateLineItem(item);
         return {
-          product_id: Number(item.id),
+          product_id: Number(item.product_id), // Clean mapping
           uom_id: item.uom_id,
           quantity: item.quantity * (item.unitCount || 1),
           gross_unit_price: item.customPrice || item.price,
@@ -397,9 +458,12 @@ export function ReturnDetailsModal({
           discount_amount: discountAmount,
           net_amount: net,
           return_type_id: item.return_type_id || null,
+          discount_type_id: item.discountTypeId || null,
           item_remarks: "",
         };
       });
+
+      const total_net_amount = rts_items.reduce((sum, i) => sum + i.net_amount, 0);
 
       const payload = {
         supplier_id: currentSupplierId ?? 0,
@@ -407,6 +471,7 @@ export function ReturnDetailsModal({
         transaction_date: data.returnDate,
         is_posted: post ? 1 : 0,
         remarks: remarks,
+        total_net_amount,
         rts_items: rts_items,
       };
 
@@ -443,7 +508,7 @@ export function ReturnDetailsModal({
       quantity: i.quantity,
       price: i.customPrice || i.price,
       discount: i.discount,
-      total: (i.customPrice || i.price) * i.quantity,
+      total: (i.customPrice || i.price) * i.quantity * (1 - i.discount),
       returnType: returnTypeName,
     };
   });
@@ -460,6 +525,17 @@ export function ReturnDetailsModal({
               </DialogTitle>
               <div className="flex items-center gap-3 text-sm mt-1">
                 <span className="text-muted-foreground">{data.returnNo}</span>
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "text-[10px] font-bold uppercase px-2 py-0.5",
+                    data.status === "Posted"
+                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                      : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+                  )}
+                >
+                  {data.status}
+                </Badge>
               </div>
             </div>
             <div className="flex gap-2">
@@ -483,6 +559,112 @@ export function ReturnDetailsModal({
 
           <div className="flex-1 overflow-y-auto custom-scrollbar bg-background p-6">
             <div className="bg-muted/30 rounded-xl p-6 h-full">
+              {loading ? (
+                /* ===== FULL-COMPONENT SKELETON ===== */
+                <div className="space-y-8">
+                  {/* Header Info Skeleton */}
+                  <div className="bg-card rounded-xl border p-6 shadow-sm">
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <Skeleton className="h-3 w-16" />
+                          <Skeleton className="h-10 w-full rounded-md" />
+                        </div>
+                        <div className="space-y-2">
+                          <Skeleton className="h-3 w-14" />
+                          <Skeleton className="h-10 w-full rounded-md" />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="space-y-2">
+                          <Skeleton className="h-3 w-20" />
+                          <Skeleton className="h-10 w-full rounded-md" />
+                        </div>
+                        <div className="space-y-2">
+                          <Skeleton className="h-3 w-28" />
+                          <Skeleton className="h-10 w-full rounded-md" />
+                        </div>
+                        <div className="space-y-2">
+                          <Skeleton className="h-3 w-12" />
+                          <Skeleton className="h-10 w-full rounded-md" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Products to Return Label Skeleton */}
+                  <div className="flex justify-between items-center">
+                    <Skeleton className="h-5 w-36" />
+                    <Skeleton className="h-9 w-32 rounded-md" />
+                  </div>
+
+                  {/* Table Skeleton */}
+                  <div className="rounded-md border overflow-hidden bg-card shadow-sm">
+                    {/* Table Header */}
+                    <div className="bg-muted/50 border-b px-4 py-3 flex gap-4">
+                      <Skeleton className="h-3 w-[80px]" />
+                      <Skeleton className="h-3 w-[160px]" />
+                      <Skeleton className="h-3 w-[50px]" />
+                      <Skeleton className="h-3 w-[70px]" />
+                      <Skeleton className="h-3 w-[80px]" />
+                      <Skeleton className="h-3 w-[100px]" />
+                      <Skeleton className="h-3 w-[80px]" />
+                      <Skeleton className="h-3 w-[100px]" />
+                      <Skeleton className="h-3 w-[80px]" />
+                    </div>
+                    {/* Table Rows */}
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="px-4 py-3 flex gap-4 items-center border-b last:border-0">
+                        <Skeleton className="h-4 w-[80px]" />
+                        <Skeleton className="h-4 w-[160px]" />
+                        <Skeleton className="h-6 w-[50px] rounded" />
+                        <Skeleton className="h-8 w-[70px] rounded" />
+                        <Skeleton className="h-4 w-[80px]" />
+                        <Skeleton className="h-8 w-[100px] rounded" />
+                        <Skeleton className="h-4 w-[80px]" />
+                        <Skeleton className="h-8 w-[100px] rounded" />
+                        <Skeleton className="h-4 w-[80px]" />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Remarks & Summary Skeleton */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div className="lg:col-span-2 space-y-3">
+                      <Skeleton className="h-4 w-36" />
+                      <Skeleton className="h-40 w-full rounded-md" />
+                    </div>
+                    <div className="lg:col-span-1">
+                      <div className="bg-card rounded-xl border p-6 shadow-sm h-full space-y-4">
+                        <Skeleton className="h-4 w-28 mb-4" />
+                        <div className="space-y-3">
+                          <div className="flex justify-between">
+                            <Skeleton className="h-3 w-24" />
+                            <Skeleton className="h-3 w-8" />
+                          </div>
+                          <div className="flex justify-between">
+                            <Skeleton className="h-3 w-24" />
+                            <Skeleton className="h-3 w-16" />
+                          </div>
+                          <div className="border-t border-dashed my-3" />
+                          <div className="flex justify-between">
+                            <Skeleton className="h-3 w-24" />
+                            <Skeleton className="h-3 w-20" />
+                          </div>
+                          <Skeleton className="h-6 w-full rounded" />
+                        </div>
+                        <div className="border-t pt-4 mt-4">
+                          <div className="flex justify-between items-end">
+                            <Skeleton className="h-3 w-20" />
+                            <Skeleton className="h-8 w-32" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <>
               {/* Header Info */}
               <div className="bg-card rounded-xl border p-6 shadow-sm mb-8">
                 <div className="space-y-6">
@@ -561,22 +743,26 @@ export function ReturnDetailsModal({
                 <ReturnReviewPanel
                   items={items}
                   lineDiscounts={refs.lineDiscounts}
+                  discountTypes={refs.discountTypes}
+                  linePerDiscountType={refs.linePerDiscountType}
                   returnTypes={refs.returnTypes || []}
-                  onUpdateItem={(id, field, val) =>
+                  onUpdateItem={(cartId, field, val) =>
                     setItems((prev) =>
                       prev.map((i) =>
-                        i.id === id ? { ...i, [field]: val } : i,
+                        i.cartId === cartId ? { ...i, [field]: val } : i,
                       ),
                     )
                   }
-                  onRemoveItem={(id) =>
-                    setItems((prev) => prev.filter((i) => i.id !== id))
+                  onRemoveItem={(cartId) =>
+                    setItems((prev) => prev.filter((i) => i.cartId !== cartId))
                   }
                   remarks={remarks}
                   setRemarks={setRemarks}
                   readOnly={!isEditable}
                 />
               </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -600,7 +786,7 @@ export function ReturnDetailsModal({
                   Save Changes
                 </Button>
                 <Button
-                  variant="secondary"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md font-bold transition-all active:scale-[0.98]"
                   onClick={() => handleSave(true)}
                   disabled={saving}
                 >
@@ -645,19 +831,19 @@ export function ReturnDetailsModal({
               <X className="h-4 w-4" />
             </Button>
           </div>
-          <div className="flex-1 overflow-hidden">
+          <div className="h-[calc(95vh-72px)] overflow-hidden">
             <ProductPicker
               isVisible={true}
               onClose={() => setShowPicker(false)}
               products={availableProducts}
               addedProducts={items}
               onAdd={(p, q) => addToCartInternal(p, q)}
-              onRemove={(id) =>
-                setItems((prev) => prev.filter((i) => i.id !== id))
+              onRemove={(cartId) =>
+                setItems((prev) => prev.filter((i) => (i.cartId || i.id) !== cartId))
               }
-              onUpdateQty={(id, q) =>
+              onUpdateQty={(cartId, q) =>
                 setItems((prev) =>
-                  prev.map((i) => (i.id === id ? { ...i, quantity: q } : i)),
+                  prev.map((i) => ((i.cartId || i.id) === cartId ? { ...i, quantity: q } : i)),
                 )
               }
               onClearAll={() => setItems([])}

@@ -148,11 +148,13 @@ interface SalesReturnHistoryProps {
   data: SalesReturn[];
   loading: boolean;
   page: number;
+  pageSize: number;
   totalPages: number;
   filters: { salesman: string; customer: string; status: string };
   salesmenOptions: { value: string; label: string }[];
   customerOptions: { value: string; label: string }[];
   onPageChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
   onSearchChange: (term: string) => void;
   onFilterChange: (filters: {
     salesman: string;
@@ -166,11 +168,13 @@ export function SalesReturnHistory({
   data,
   loading,
   page,
+  pageSize,
   totalPages,
   filters,
   salesmenOptions,
   customerOptions,
   onPageChange,
+  onPageSizeChange,
   onSearchChange,
   onFilterChange,
   onRowClick,
@@ -419,8 +423,14 @@ export function SalesReturnHistory({
         isLoading={loading}
         manualPagination={true}
         pageCount={totalPages}
-        pagination={{ pageIndex: page - 1, pageSize: 10 }}
-        onPaginationChange={(p) => onPageChange(p.pageIndex + 1)}
+        pagination={{ pageIndex: page - 1, pageSize: pageSize }}
+        onPaginationChange={(p) => {
+          if (p.pageSize !== pageSize) {
+            onPageSizeChange(p.pageSize);
+          } else {
+            onPageChange(p.pageIndex + 1);
+          }
+        }}
         emptyTitle="No return records found"
         emptyDescription={
           hasActiveFilters

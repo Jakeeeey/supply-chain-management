@@ -27,7 +27,7 @@ type BuildGroupedRowsParams = {
 };
 
 function familyKeyOf(row: { parent_id: number | null; product_id: number }): number {
-    return row.parent_id ?? row.product_id;
+    return (row.parent_id && row.parent_id > 0) ? row.parent_id : row.product_id;
 }
 
 function getBaseVariant(rows: EligibleVariantRow[]): EligibleVariantRow {
@@ -149,6 +149,7 @@ export function buildGroupedPhysicalInventoryRows(
                 unit_count: unitCount,
 
                 unit_price: variant.unit_price,
+                cost_per_unit: variant.cost_per_unit,
 
                 detail_id: detailId,
                 ph_id: detail?.ph_id ?? ph_id,

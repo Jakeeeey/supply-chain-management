@@ -19,6 +19,7 @@ import type {
   ProductSupplierConnection,
   API_LineDiscount,
   API_SalesReturnType,
+  PriceTypeOption,
 } from "../type";
 
 const API_BASE = "/api/scm/inventories/sales-return-manual";
@@ -45,7 +46,6 @@ export const SalesReturnProvider = {
   async getReturns(
     page: number = 1,
     limit: number = 10,
-    search: string = "",
     filters: { salesman?: string; customer?: string; status?: string } = {},
   ): Promise<{ data: SalesReturn[]; total: number }> {
     const params = new URLSearchParams({
@@ -104,6 +104,11 @@ export const SalesReturnProvider = {
   async getSalesReturnTypes(): Promise<API_SalesReturnType[]> {
     const refs = await this._getReferences();
     return refs.returnTypes;
+  },
+
+  async getPriceTypes(): Promise<PriceTypeOption[]> {
+    const refs = await this._getReferences();
+    return refs.priceTypes || [];
   },
 
   async getInvoiceReturnList(
@@ -176,12 +181,20 @@ export const SalesReturnProvider = {
     return handleResponse(res);
   },
 
-  async updateStatus(id: number | string, status: string): Promise<any> {
+  async updateStatus(
+    id: number | string,
+    status: string,
+    isReceived?: boolean,
+    receivedAt?: string,
+  ): Promise<any> {
     const params = new URLSearchParams({
       action: "status",
       id: String(id),
       status,
     });
+    if (isReceived !== undefined) params.set("isReceived", String(isReceived));
+    if (receivedAt) params.set("receivedAt", receivedAt);
+
     const res = await fetch(`${API_BASE}?${params}`, { method: "PATCH" });
     return handleResponse(res);
   },

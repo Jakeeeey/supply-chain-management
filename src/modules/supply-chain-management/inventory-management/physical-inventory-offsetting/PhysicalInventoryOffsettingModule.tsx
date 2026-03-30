@@ -31,7 +31,6 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Card, CardContent } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import {
     ArrowLeft,
     CheckCircle2,
@@ -50,6 +49,7 @@ type Props = {
     phId: number;
     onBack?: () => void;
     onCommitted?: (header: PhysicalInventoryHeaderRow) => void;
+    currentUser?: { id: number; name: string };
 };
 
 function fmtMoney(value: number): string {
@@ -71,6 +71,7 @@ export function PhysicalInventoryOffsettingModule({
                                                       phId,
                                                       onBack,
                                                       onCommitted,
+                                                      currentUser,
                                                   }: Props) {
     const [isLoading, setIsLoading] = React.useState(true);
     const [isCommitting, setIsCommitting] = React.useState(false);
@@ -183,20 +184,6 @@ export function PhysicalInventoryOffsettingModule({
         );
     }, []);
 
-    const handleToggleAllShort = React.useCallback(
-        (checked: boolean) => {
-            setSelectedShortIds(checked ? openShortRows.map((row) => row.row_id) : []);
-        },
-        [openShortRows],
-    );
-
-    const handleToggleAllOver = React.useCallback(
-        (checked: boolean) => {
-            setSelectedOverIds(checked ? openOverRows.map((row) => row.row_id) : []);
-        },
-        [openOverRows],
-    );
-
     const handleCreateOffsetGroup = React.useCallback(async () => {
         if (!header?.id) {
             toast.error("Physical Inventory header is missing.");
@@ -263,6 +250,7 @@ export function PhysicalInventoryOffsettingModule({
                 unresolvedShortRows: openShortRows,
                 unresolvedOverRows: openOverRows,
                 offsetGroups,
+                preparedBy: currentUser?.name || reportMeta.encoder_name,
             });
         } catch (error) {
             const message =
@@ -279,6 +267,7 @@ export function PhysicalInventoryOffsettingModule({
         openOverRows,
         openShortRows,
         reportMeta,
+        currentUser?.name,
     ]);
 
     const handleCommit = React.useCallback(async () => {
@@ -305,6 +294,31 @@ export function PhysicalInventoryOffsettingModule({
             setIsCommitting(false);
         }
     }, [header?.id, onCommitted]);
+
+    const handleEditOffsetGroup = React.useCallback(
+        (groupId: string) => {
+            const group = offsetGroups.find((g) => g.id === groupId);
+            if (!group) return;
+
+            // Restore products to selection
+            setSelectedShortIds((prev) => [
+                ...new Set([...prev, ...group.short_rows.map((r) => r.row_id)]),
+            ]);
+            setSelectedOverIds((prev) => [
+                ...new Set([...prev, ...group.over_rows.map((r) => r.row_id)]),
+            ]);
+
+            // Remove group
+            setOffsetGroups((prev) => prev.filter((g) => g.id !== groupId));
+            toast.info("Group disbanded. Items restored to selection pool.");
+        },
+        [offsetGroups],
+    );
+
+    const handleDeleteOffsetGroup = React.useCallback((groupId: string) => {
+        setOffsetGroups((prev) => prev.filter((g) => g.id !== groupId));
+        toast.info("Offset group removed.");
+    }, []);
 
     const isPending = React.useMemo(() => {
         if (!header) return false;
@@ -471,7 +485,6 @@ export function PhysicalInventoryOffsettingModule({
                     rows={openShortRows}
                     selectedIds={selectedShortIds}
                     onToggleRow={handleToggleShortRow}
-                    onToggleAll={handleToggleAllShort}
                     disabled={isCreatingGroup || isCommitting || !isPending}
                 />
 
@@ -481,7 +494,6 @@ export function PhysicalInventoryOffsettingModule({
                     rows={openOverRows}
                     selectedIds={selectedOverIds}
                     onToggleRow={handleToggleOverRow}
-                    onToggleAll={handleToggleAllOver}
                     disabled={isCreatingGroup || isCommitting || !isPending}
                 />
             </div>
@@ -544,7 +556,18 @@ export function PhysicalInventoryOffsettingModule({
                 </CardContent>
             </Card>
 
-            <OffsettingGroupsTable groups={offsetGroups} />
+            <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                    <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-tight">Reconciliation Groups</h2>
+                </div>
+                <OffsettingGroupsTable
+                    groups={offsetGroups}
+                    onEditGroup={handleEditOffsetGroup}
+                    onDeleteGroup={handleDeleteOffsetGroup}
+                    isPending={isPending}
+                    disabled={isCommitting}
+                />
+            </div>
 
             <AlertDialog open={openCommitDialog} onOpenChange={setOpenCommitDialog}>
                 <AlertDialogContent>

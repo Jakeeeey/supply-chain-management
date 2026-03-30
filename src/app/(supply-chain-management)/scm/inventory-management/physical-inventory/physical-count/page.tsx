@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { NavUser } from "../../_components/nav-user";
+import { NavUser } from "../../../_components/nav-user";
 
 import { cookies } from "next/headers";
 import PhysicalInventoryWorkspaceClient from "./PhysicalInventoryWorkspaceClient";
@@ -82,6 +82,9 @@ export default async function Page() {
     const token = cookieStore.get(COOKIE_NAME)?.value ?? null;
 
     const headerUser = buildHeaderUserFromToken(token);
+    const payload = token ? decodeJwtPayload(token) : null;
+    const userId = payload?.sub ? Number(payload.sub) : null;
+    const currentUser = userId ? { id: userId, name: headerUser.name } : null;
 
     return (
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -97,12 +100,7 @@ export default async function Page() {
                     <div className="min-w-0 overflow-hidden">
                         <Breadcrumb>
                             <BreadcrumbList>
-                                <BreadcrumbItem className="hidden md:block">
-                                    <BreadcrumbLink href="#">
-                                        Supply Chain Management
-                                    </BreadcrumbLink>
-                                </BreadcrumbItem>
-                                <BreadcrumbSeparator className="hidden md:block" />
+
                                 <BreadcrumbItem className="hidden md:block">
                                     <BreadcrumbLink href="#">
                                         Physical Inventory Management
@@ -110,7 +108,7 @@ export default async function Page() {
                                 </BreadcrumbItem>
                                 <BreadcrumbSeparator className="hidden md:block" />
                                 <BreadcrumbItem>
-                                    <BreadcrumbPage>Physical Inventory List</BreadcrumbPage>
+                                    <BreadcrumbPage>Physical Count RDID</BreadcrumbPage>
                                 </BreadcrumbItem>
                             </BreadcrumbList>
                         </Breadcrumb>
@@ -123,7 +121,7 @@ export default async function Page() {
             </header>
 
             <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-2 sm:p-4">
-                <PhysicalInventoryWorkspaceClient />
+                <PhysicalInventoryWorkspaceClient currentUser={currentUser} />
             </main>
         </div>
     );

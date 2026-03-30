@@ -46,6 +46,8 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { toast } from 'sonner';
+import { Label } from '@/components/ui/label';
 import { InvoiceDetail, InvoiceLine, ReconciliationRow, RFIDMapping } from '../types';
 import { fetchInvoiceDetails } from '../providers/fetchProviders';
 import ScanningModal from './ScanningModal';
@@ -76,12 +78,26 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
     const [isManualInputOpen, setIsManualInputOpen] = useState(false);
     const [selectedLineIds, setSelectedLineIds] = useState<Set<string | number>>(new Set());
 
+    // 🟢 Link Sales Return State
+    const [returnMode, setReturnMode] = useState<'create' | 'link'>('create');
+    const [existingReturns, setExistingReturns] = useState<any[]>([]);
+    const [selectedReturnNo, setSelectedReturnNo] = useState<string>('');
+    const [isFetchingReturns, setIsFetchingReturns] = useState(false);
+
     useEffect(() => {
         if (isOpen && reconciliation?.invoiceId) {
             setIsLoading(true);
-            fetchInvoiceDetails(reconciliation.invoiceId)
-                .then(data => {
+            const invoiceNo = reconciliation.invoiceNo;
+            
+            Promise.all([
+                fetchInvoiceDetails(reconciliation.invoiceId),
+                reconciliation.status === 'Fulfilled with Returns' 
+                    ? import('../providers/fetchProviders').then(m => m.fetchSalesReturnsByInvoice(invoiceNo))
+                    : Promise.resolve([])
+            ])
+                .then(([data, returns]) => {
                     setDetail(data);
+                    setExistingReturns(returns);
                     setMissingQtys(reconciliation.missingQtys || {});
                     setScannedQtys(reconciliation.scannedQtys || {});
                     setScannedRFIDs(reconciliation.scannedRFIDs || {});
@@ -107,6 +123,9 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
             setMissingQtys({});
             setScannedQtys({});
             setSelectedLineIds(new Set());
+            setReturnMode('create');
+            setExistingReturns([]);
+            setSelectedReturnNo('');
         }
     }, [isOpen, reconciliation]);
 
@@ -150,10 +169,10 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
         const newQtys: Record<string | number, number> = {};
         detail?.lines.forEach(line => {
             // Only calculate for selected if status is Concerns, otherwise calculate for all
-            if (reconciliation.status !== 'Fulfilled with Concerns' || selectedLineIds.has(line.id)) {
+            if (reconciliation?.status !== 'Fulfilled with Concerns' || selectedLineIds.has(line.id)) {
                 const scanCount = scanned[line.id] || 0;
                 const diff = Math.max(0, line.qty - scanCount);
-                if (diff > 0 || (reconciliation.status !== 'Fulfilled' && scanCount > 0)) {
+                if (diff > 0 || (reconciliation?.status !== 'Fulfilled' && scanCount > 0)) {
                     newQtys[line.id] = diff;
                 }
             }
@@ -192,9 +211,8 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
         }
     };
 
-    if (!isOpen) return null;
-
     const renderHeader = () => {
+        if (!reconciliation) return null;
         const Icon = reconciliation.status === 'Fulfilled' ? CheckCircle2 :
             reconciliation.status === 'Unfulfilled' ? AlertCircle :
                 reconciliation.status === 'Fulfilled with Concerns' ? AlertTriangle : RotateCcw;
@@ -241,26 +259,142 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                         This customer has a return flag. How do you want to process this transaction?
                     </p>
 
-                    <div 
-                        className="p-4 rounded-xl border-2 border-primary/10 bg-primary/5 flex items-center justify-between group cursor-pointer hover:border-primary/30 transition-all"
-                        onClick={() => window.open('/scm/inventories/sales-return-rfid', '_blank')}
-                    >
-                        <div className="flex items-center gap-4">
-                            <div className="w-5 h-5 rounded-full border-2 border-primary/40 flex items-center justify-center">
-                                <div className="w-2.5 h-2.5 rounded-full bg-primary"></div>
-                            </div>
-                            <div className="space-y-1">
-                                <p className="font-bold text-foreground">Open Sales Return</p>
-                                <div className="flex items-center gap-1 text-muted-foreground text-xs font-medium">
-                                    -- This will open a new tab to create a Sales Return -- <ChevronDown className="w-3 h-3" />
+                    <div className="space-y-3">
+                        {/* Create New Option */}
+                        <div 
+                            className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${
+                                returnMode === 'create' 
+                                ? 'border-primary bg-primary/5' 
+                                : 'border-border bg-background hover:border-primary/30'
+                            }`}
+                            onClick={() => setReturnMode('create')}
+                        >
+                            <div className="flex items-center gap-4">
+                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                                    returnMode === 'create' ? 'border-primary' : 'border-muted-foreground/30'
+                                }`}>
+                                    {returnMode === 'create' && <div className="w-2.5 h-2.5 rounded-full bg-primary"></div>}
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="font-bold text-foreground">Open Sales Return</p>
+                                    <p className="text-muted-foreground text-[10px] font-medium uppercase tracking-wide">
+                                        Create a new Sales Return record for this invoice
+                                    </p>
                                 </div>
                             </div>
+                        </div>
+
+                        {/* Link Existing Option */}
+                        <div 
+                            className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${
+                                returnMode === 'link' 
+                                ? 'border-primary bg-primary/5' 
+                                : 'border-border bg-background hover:border-primary/30'
+                            }`}
+                            onClick={() => setReturnMode('link')}
+                        >
+                            <div className="items-start flex gap-4">
+                                <div className={`mt-1 w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                                    returnMode === 'link' ? 'border-primary' : 'border-muted-foreground/30'
+                                }`}>
+                                    {returnMode === 'link' && <div className="w-2.5 h-2.5 rounded-full bg-primary"></div>}
+                                </div>
+                                <div className="space-y-3 flex-1">
+                                    <div className="space-y-1">
+                                        <p className="font-bold text-foreground">Link Sales Return</p>
+                                        <p className="text-muted-foreground text-[10px] font-medium uppercase tracking-wide">
+                                            Attach this invoice to an existing Sales Return record
+                                        </p>
+                                    </div>
+                                    
+                                    {returnMode === 'link' && (
+                                        <div className="pt-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                                            {existingReturns.length > 0 ? (
+                                                <div className="space-y-2">
+                                                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Select Existing Return</Label>
+                                                    <Select value={selectedReturnNo} onValueChange={setSelectedReturnNo}>
+                                                        <SelectTrigger className="w-full bg-background border-border h-11 rounded-xl focus:ring-1 focus:ring-primary shadow-sm">
+                                                            <SelectValue placeholder="Choose a Sales Return..." />
+                                                        </SelectTrigger>
+                                                        <SelectContent className="rounded-xl border-border shadow-xl">
+                                                            {existingReturns.map((sr) => (
+                                                                <SelectItem key={sr.id} value={sr.returnNo} className="cursor-pointer hover:bg-primary/5 focus:bg-primary/5 py-3 border-b border-border/50 last:border-0">
+                                                                    <div className="flex flex-col gap-0.5">
+                                                                        <span className="font-bold text-primary">{sr.returnNo}</span>
+                                                                        <span className="text-[10px] text-muted-foreground uppercase font-medium">
+                                                                            Date: {sr.returnDate} | Total: ₱{sr.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                                        </span>
+                                                                    </div>
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            ) : (
+                                                <div className="p-4 rounded-lg bg-amber-500/5 border border-amber-500/20 flex items-center gap-3">
+                                                    <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
+                                                    <p className="text-xs font-semibold text-amber-600">No existing Sales Returns found for this invoice.</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Remarks for Returns */}
+                        <div className="space-y-2 pt-2 border-t border-border/50">
+                            <p className="text-sm font-bold text-foreground">
+                                Remarks (Mandatory)
+                            </p>
+                            <Textarea
+                                placeholder="E.g. Customer returned items, linked to existing SR..."
+                                value={remarks}
+                                onChange={(e) => setRemarks(e.target.value)}
+                                className="rounded-xl border-border bg-muted/30 focus:ring-1 focus:ring-primary min-h-[80px] text-sm resize-none text-foreground placeholder:text-muted-foreground"
+                            />
                         </div>
                     </div>
 
                     <div className="flex justify-end gap-3 pt-4 border-t border-border">
                         <Button variant="outline" onClick={onClose} className="rounded-xl px-6 border-border">Cancel</Button>
-                        <Button onClick={handleSave} className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl px-8 font-bold">Confirm & Clear</Button>
+                        <Button 
+                            onClick={() => {
+                                if (returnMode === 'create') {
+                                    const returnData = {
+                                        invoiceId: reconciliation.invoiceId,
+                                        invoiceNo: reconciliation.invoiceNo,
+                                        orderNo: reconciliation.orderNo,
+                                        customerCode: detail?.header.customer_code || reconciliation.customer || '',
+                                        customerName: reconciliation.customerName,
+                                        salesmanId: detail?.header.salesman_id,
+                                        salesmanName: detail?.header.salesman_name,
+                                        salesmanCode: detail?.header.salesman_code,
+                                        branchId: detail?.header.branch_id,
+                                        branchName: detail?.header.branch_name,
+                                    };
+                                    localStorage.setItem('scm_dispatch_return_data', JSON.stringify(returnData));
+                                    window.open('/scm/inventories/sales-return-rfid?fromClearance=true', '_blank');
+                                } else {
+                                    if (!selectedReturnNo) {
+                                        toast.error("Please select a Sales Return to link.");
+                                        return;
+                                    }
+                                    const returnData = {
+                                        invoiceNo: reconciliation.invoiceNo,
+                                        orderNo: reconciliation.orderNo,
+                                        isLinking: true
+                                    };
+                                    localStorage.setItem('scm_dispatch_return_link_data', JSON.stringify(returnData));
+                                    window.open(`/scm/inventories/sales-return-rfid?fromClearance=true&editReturnNo=${selectedReturnNo}&prefillInvoiceNo=${reconciliation.invoiceNo}&prefillOrderNo=${reconciliation.orderNo}`, '_blank');
+                                }
+                                handleSave(); // Also save the clearance status
+                            }} 
+                            disabled={(returnMode === 'link' && !selectedReturnNo) || !remarks.trim()}
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl px-8 font-bold shadow-lg shadow-primary/20 transition-all active:scale-95"
+                        >
+                            Open & Confirm
+                        </Button>
                     </div>
                 </div>
             );

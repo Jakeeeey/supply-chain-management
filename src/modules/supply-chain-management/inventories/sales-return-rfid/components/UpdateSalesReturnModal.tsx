@@ -10,14 +10,13 @@ import {
   Save,
   AlertTriangle,
   CheckCircle,
-  AlertCircle,
   Link as LinkIcon,
   FileText,
   Search,
-  Radio,
   ChevronDown,
   ScanLine,
 } from "lucide-react";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -60,6 +59,21 @@ import { ProductLookupModal } from "./ProductLookupModal";
 import { SalesReturnPrintSlip } from "./SalesReturnPrintSlip";
 import { createRoot } from "react-dom/client";
 import { useRfidScanner } from "../hooks/useRfidScanner";
+import { useSearchParams } from "next/navigation";
+
+interface SalesReturnGroup {
+  key: string;
+  code: string;
+  description: string;
+  unit: string;
+  returnType: string;
+  unitPrice: number;
+  totalQty: number;
+  totalGross: number;
+  totalDiscount: number;
+  totalNet: number;
+  children: { item: SalesReturnItem; idx: number }[];
+}
 
 interface Props {
   returnId: number;
@@ -120,7 +134,9 @@ export function UpdateSalesReturnModal({
 
   const [isUpdating, setIsUpdating] = useState(false);
   const [isReceiving, setIsReceiving] = useState(false);
-  const [validationError, setValidationError] = useState<string | null>(null);
+  const [returnTypeError, setReturnTypeError] = useState(false);
+  const [orderError, setOrderError] = useState(false);
+  const [invoiceError, setInvoiceError] = useState(false);
 
   const [invoiceOptions, setInvoiceOptions] = useState<InvoiceOption[]>([]);
   const [invoiceSearch, setInvoiceSearch] = useState("");
@@ -137,6 +153,10 @@ export function UpdateSalesReturnModal({
   const [rfidScanning, setRfidScanning] = useState(false);
   const [lastScannedRfid, setLastScannedRfid] = useState("");
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+
+  const searchParams = useSearchParams();
+  const prefillInvoiceNo = searchParams.get("prefillInvoiceNo");
+  const prefillOrderNo = searchParams.get("prefillOrderNo");
 
   // 🟢 REVISED: Edit Permissions Logic
   const isPending = headerData.status === "Pending";
@@ -195,7 +215,44 @@ export function UpdateSalesReturnModal({
     if (returnId) {
       loadFullDetails();
     }
-  }, [returnId, headerData.returnNo, headerData.customerCode]);
+  }, [returnId, headerData.returnNo, headerData.customerCode, headerData.salesmanId]);
+
+  // 🟢 NEW: Effect to automatically update prices when Price Type changes
+  useEffect(() => {
+    if (details.length > 0) {
+      setDetails((prevDetails) =>
+        prevDetails.map((item) => {
+          const key = `price${headerData.priceType}` as string;
+          const basePrice = Number(item[key as keyof SalesReturnItem]) || Number(item.priceA) || Number(item.unitPrice) || 0;
+          
+          const newUnitPrice = Math.round((item.unit === "BOX" 
+            ? basePrice * (item.unitMultiplier || 1) 
+            : basePrice) * 100) / 100;
+          
+          const newGross = Math.round(Number(item.quantity) * newUnitPrice * 100) / 100;
+          let newDiscountAmt = 0;
+
+          if (item.discountType && item.discountType !== "No Discount") {
+            const selectedOption = discountOptions.find(
+              (d) => d.id.toString() === item.discountType?.toString(),
+            );
+            if (selectedOption) {
+              const percentage = parseFloat(selectedOption.total_percent) || 0;
+              newDiscountAmt = Math.round(newGross * (percentage / 100) * 100) / 100;
+            }
+          }
+
+          return {
+            ...item,
+            unitPrice: newUnitPrice,
+            grossAmount: newGross,
+            discountAmount: newDiscountAmt,
+            totalAmount: Math.round((newGross - newDiscountAmt) * 100) / 100,
+          };
+        })
+      );
+    }
+  }, [headerData.priceType, discountOptions, details.length]);
 
   // Click outside handler for order/invoice dropdowns
   useEffect(() => {
@@ -212,6 +269,19 @@ export function UpdateSalesReturnModal({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Handle pre-fill from Dispatch Clearance
+  useEffect(() => {
+    if (canEditAll && (prefillInvoiceNo || prefillOrderNo)) {
+      setHeaderData(prev => ({
+        ...prev,
+        invoiceNo: prefillInvoiceNo || prev.invoiceNo,
+        orderNo: prefillOrderNo || prev.orderNo
+      }));
+      if (prefillInvoiceNo) setInvoiceDropdownSearch(prefillInvoiceNo);
+      if (prefillOrderNo) setOrderSearch(prefillOrderNo);
+    }
+  }, [canEditAll, prefillInvoiceNo, prefillOrderNo]);
+
   // RFID Scanner Ref
   const rfidInputRef = useRef<HTMLInputElement>(null);
 
@@ -221,7 +291,7 @@ export function UpdateSalesReturnModal({
   const handleRfidScan = async (tag: string) => {
     if (!tag.trim()) return;
     if (!canEditAll) {
-      setValidationError("Cannot add items when status is not Pending.");
+      toast.error("Cannot add items when status is not Pending.");
       return;
     }
 
@@ -245,37 +315,51 @@ export function UpdateSalesReturnModal({
     }
 
     if (!branchId) {
-      setValidationError("Cannot determine branch for RFID lookup.");
+      toast.error("Cannot determine branch for RFID lookup.");
       return;
     }
 
     // Check for duplicate RFID already in details
     if (details.some((item) => item.rfidTags?.includes(tag))) {
-      setValidationError(`RFID tag "${tag}" is already in the list.`);
+      toast.error(`RFID tag "${tag}" is already in the list.`);
       return;
     }
 
     setRfidScanning(true);
     setLastScannedRfid(tag);
-    setValidationError(null);
 
     try {
+      // 🟢 NEW: Global Duplicate Check
+      const dupCheck = await SalesReturnProvider.checkRfidDuplicate(tag);
+      if (dupCheck.isDuplicate && dupCheck.returnNo !== headerData.returnNo) {
+        const errorMsg = `RFID tag "${tag}" is already linked to SR #${dupCheck.returnNo}.`;
+        toast.error(errorMsg, {
+          description: "This tag cannot be returned again as it exists in another record.",
+          duration: 6000,
+        });
+        return;
+      }
+
       const result = await SalesReturnProvider.lookupRfid(tag, branchId);
 
       if (!result || !result.productId) {
-        setValidationError(
-          `No product found for RFID "${tag}" at this branch.`,
-        );
+        const branchName = salesmanOpt?.branch || "this branch";
+        const errorMsg = `RFID tag "${tag}" is NOT registered to ${branchName}.`;
+        toast.error(errorMsg, {
+          description: "Please check if the scan is correct or if the item is in the wrong location.",
+          duration: 5000,
+        });
         return;
       }
 
       const currentPriceType = headerData.priceType || "A";
       const priceKey = `price${currentPriceType}` as string;
+      const resultRecord = result as Record<string, unknown>;
       const unitPrice =
-        Number((result as any)[priceKey]) ||
-        Number(result.unitPrice) ||
-        0;
-      const grossAmount = unitPrice * 1;
+        Math.round((Number(resultRecord[priceKey]) ||
+        Number(resultRecord.unitPrice) ||
+        0) * 100) / 100;
+      const grossAmount = Math.round(unitPrice * 1 * 100) / 100;
 
       const newItem: SalesReturnItem = {
         id: `added-rfid-${tag}-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
@@ -294,18 +378,28 @@ export function UpdateSalesReturnModal({
         reason: "",
         returnType: "",
         rfidTags: [tag],
+        priceA: result.priceA,
+        priceB: result.priceB,
+        priceC: result.priceC,
+        priceD: result.priceD,
+        priceE: result.priceE,
+        unitMultiplier: result.unitMultiplier || 1,
       };
 
       setDetails((prev) => [...prev, newItem]);
+      toast.success(`Successfully scanned: ${result.productName}`, {
+        description: `RFID: ${tag} | Registered to ${salesmanOpt?.branch || "branch"}`,
+      });
 
       // Auto-clear display after 2 seconds
       setTimeout(() => setLastScannedRfid(""), 2000);
     } catch (err: unknown) {
       console.error("RFID lookup error:", err);
       const error = err as Error;
-      setValidationError(
-        error.message || `Failed to look up RFID tag "${tag}".`,
-      );
+      const errorMsg = `Failed to look up RFID tag "${tag}".`;
+      toast.error(errorMsg, {
+        description: error.message || "An unexpected error occurred during scan.",
+      });
     } finally {
       setRfidScanning(false);
     }
@@ -350,20 +444,21 @@ export function UpdateSalesReturnModal({
             (d) => d.id.toString() === value,
           );
           if (selectedDisc) {
-            const percentage = parseFloat(selectedDisc.percentage);
+            const percentage = parseFloat(selectedDisc.total_percent);
             const gross =
-              Number(item.quantity || 0) * Number(item.unitPrice || 0);
-            item.discountAmount = gross * (percentage / 100);
+              Math.round(Number(item.quantity || 0) * Number(item.unitPrice || 0) * 100) / 100;
+            item.discountAmount = Math.round(gross * (percentage / 100) * 100) / 100;
           }
         }
       }
 
       const qty = Number(item.quantity || 0);
       const price = Number(item.unitPrice || 0);
+      const gross = Math.round(qty * price * 100) / 100;
       const disc = Number(item.discountAmount || 0);
 
-      item.grossAmount = qty * price;
-      item.totalAmount = qty * price - disc;
+      item.grossAmount = gross;
+      item.totalAmount = Math.round((gross - disc) * 100) / 100;
 
       newDetails[index] = item;
       return newDetails;
@@ -374,58 +469,35 @@ export function UpdateSalesReturnModal({
     setDetails((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleAddProductsToEdit = (newItems: (Partial<SalesReturnItem> & { price?: number, product_name?: string })[]) => {
-    if (!newItems || newItems.length === 0) return;
-
+  const handleConfirmProductLookup = (newItems: SalesReturnItem[]) => {
     setDetails((prev) => {
       const updated = [...prev];
-      newItems.forEach((item, index) => {
-        const rawId = item.product_id || item.productId || item.id;
-        const productId = Number(rawId);
-        
-        const existingIndex = updated.findIndex(
-          (i) => i.productId === productId && i.unit === item.unit
+      newItems.forEach((item) => {
+        // Find if already exists in details (by productId and unit)
+        const existingIdx = updated.findIndex(
+          (d) => d.product_id === item.productId && d.unit === item.unit
         );
-        const qty = Number(item.quantity) || 1;
-        
-        if (existingIndex >= 0) {
-          const existing = updated[existingIndex];
-          existing.quantity = Number(existing.quantity || 0) + qty;
-          existing.grossAmount = existing.quantity * existing.unitPrice;
-          
-          if (existing.discountType && existing.discountType !== "No Discount") {
-            const selectedDisc = discountOptions.find(
-              (d) => d.id.toString() === existing.discountType?.toString()
-            );
-            if (selectedDisc) {
-              const percentage = parseFloat(selectedDisc.percentage);
-              existing.discountAmount = existing.grossAmount * (percentage / 100);
-            }
-          }
-          
-          existing.totalAmount = existing.grossAmount - (Number(existing.discountAmount) || 0);
-          if (item.rfidTags) {
-            existing.rfidTags = [...(existing.rfidTags || []), ...item.rfidTags];
-          }
+        if (existingIdx !== -1) {
+          // Increment quantity
+          const existing = updated[existingIdx];
+          const newQty = (Number(existing.quantity) || 0) + (Number(item.quantity) || 0);
+          const newGross = Math.round(newQty * Number(existing.unitPrice || 0) * 100) / 100;
+          updated[existingIdx] = {
+            ...existing,
+            quantity: newQty,
+            grossAmount: newGross,
+            totalAmount: Math.round((newGross - (Number(existing.discountAmount) || 0)) * 100) / 100,
+          };
         } else {
-          const price = Number(item.unitPrice) || Number(item.price) || 0;
-          const gross = price * qty;
-          const discAmt = Number(item.discountAmount) || 0;
-
+          // Add as new row
           updated.push({
-            id: `added-${Date.now()}-${index}-${Math.floor(Math.random() * 10000)}`,
-            productId: productId,
-            code: item.code || "N/A",
-            description: item.description || item.product_name || "Unknown Item",
-            unit: item.unit || "Pcs",
-            quantity: qty,
-            unitPrice: price,
-            grossAmount: gross,
-            discountType: item.discountType || null,
-            discountAmount: discAmt,
-            totalAmount: gross - discAmt,
-            reason: item.reason || "",
-            returnType: item.returnType || "",
+            ...item,
+            id: `new-${Date.now()}-${Math.random()}`, // Temp ID for new rows
+            product_id: item.productId,
+            unitPrice: Math.round(Number(item.unitPrice || 0) * 100) / 100,
+            grossAmount: Math.round(Number(item.grossAmount || 0) * 100) / 100,
+            discountAmount: Math.round(Number(item.discountAmount || 0) * 100) / 100,
+            totalAmount: Math.round(Number(item.totalAmount || 0) * 100) / 100,
           });
         }
       });
@@ -436,9 +508,19 @@ export function UpdateSalesReturnModal({
 
   // --- HANDLERS: UPDATE ---
   const handleUpdateClick = () => {
-    setValidationError(null);
+    setReturnTypeError(false);
+    setOrderError(false);
+    setInvoiceError(false);
+    
     if (!headerData.orderNo || !headerData.orderNo.toString().trim()) {
-      setValidationError("Order No. is required.");
+      toast.error("Order No. is required.");
+      setOrderError(true);
+      return;
+    }
+
+    if (!headerData.invoiceNo || !headerData.invoiceNo.toString().trim()) {
+      toast.error("Invoice No. is required.");
+      setInvoiceError(true);
       return;
     }
 
@@ -446,10 +528,39 @@ export function UpdateSalesReturnModal({
       (item) => !item.returnType || item.returnType === "",
     );
     if (hasIncompleteItems) {
-      setValidationError("Please select a 'Return Type' for all items.");
+      toast.error("Please select a 'Return Type' for all items.");
+      setReturnTypeError(true);
       return;
     }
     setIsUpdateConfirmOpen(true);
+  };
+
+  const handleReceiveClick = () => {
+    setReturnTypeError(false);
+    setOrderError(false);
+    setInvoiceError(false);
+    
+    if (!headerData.orderNo || !headerData.orderNo.toString().trim()) {
+      toast.error("Order No. is required.");
+      setOrderError(true);
+      return;
+    }
+
+    if (!headerData.invoiceNo || !headerData.invoiceNo.toString().trim()) {
+      toast.error("Invoice No. is required.");
+      setInvoiceError(true);
+      return;
+    }
+
+    const hasIncompleteItems = details.some(
+      (item) => !item.returnType || item.returnType === "",
+    );
+    if (hasIncompleteItems) {
+      toast.error("Please select a 'Return Type' for all items.");
+      setReturnTypeError(true);
+      return;
+    }
+    setIsReceiveConfirmOpen(true);
   };
 
   const handleConfirmUpdate = async () => {
@@ -480,8 +591,22 @@ export function UpdateSalesReturnModal({
   const handleConfirmReceive = async () => {
     try {
       setIsReceiving(true);
-      await SalesReturnProvider.updateStatus(headerData.id, "Received");
-      setHeaderData({ ...headerData, status: "Received" });
+      // Auto-save changes before marking as Received
+      const savePayload = {
+        returnId: headerData.id,
+        returnNo: headerData.returnNo,
+        items: details,
+        remarks: headerData.remarks || "",
+        invoiceNo: headerData.invoiceNo,
+        orderNo: headerData.orderNo,
+        appliedInvoiceId: appliedInvoiceId ?? undefined,
+        isThirdParty: headerData.isThirdParty,
+      };
+      await SalesReturnProvider.updateReturn(savePayload);
+      // Then update status with extra fields
+      const now = new Date().toISOString();
+      await SalesReturnProvider.updateStatus(headerData.id, "Received", true, now);
+      setHeaderData({ ...headerData, status: "Received", isReceived: true, receivedAt: now });
       setStatusCardData((prev) =>
         prev
           ? { ...prev, isReceived: true, transactionStatus: "Received" }
@@ -491,7 +616,7 @@ export function UpdateSalesReturnModal({
       setIsUpdateSuccessOpen(true);
     } catch (error) {
       console.error("Receive failed", error);
-      alert("Failed to receive sales return.");
+      toast.error("Failed to receive sales return.");
     } finally {
       setIsReceiving(false);
     }
@@ -544,18 +669,18 @@ export function UpdateSalesReturnModal({
   };
 
   // --- RENDER ---
-  const totalGross = details.reduce(
-    (acc, i) => acc + Number(i.quantity) * Number(i.unitPrice),
+  const totalGross = Math.round(details.reduce(
+    (acc, i) => acc + (Number(i.grossAmount) || 0),
     0,
-  );
-  const totalDiscount = details.reduce(
+  ) * 100) / 100;
+  const totalDiscount = Math.round(details.reduce(
     (acc, i) => acc + (Number(i.discountAmount) || 0),
     0,
-  );
-  const totalNet = details.reduce(
+  ) * 100) / 100;
+  const totalNet = Math.round(details.reduce(
     (acc, i) => acc + (Number(i.totalAmount) || 0),
     0,
-  );
+  ) * 100) / 100;
   const filteredInvoices = invoiceOptions.filter((inv) =>
     inv.invoice_no.toLowerCase().includes(invoiceSearch.toLowerCase()),
   );
@@ -594,35 +719,20 @@ export function UpdateSalesReturnModal({
           </button>
         </div>
 
-        {validationError && (
-          <div className="mx-8 mt-6 mb-0 p-4 bg-destructive/10 border-l-4 border-destructive text-destructive flex items-center justify-between rounded-r shadow-sm">
-            <div className="flex items-center gap-3">
-              <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0" />
-              <span className="text-sm font-medium">{validationError}</span>
-            </div>
-            <button
-              onClick={() => setValidationError(null)}
-              className="bg-destructive hover:bg-destructive text-white h-7 w-7 rounded-md flex items-center justify-center shadow-sm"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        )}
-
         {/* SCROLLABLE BODY */}
         <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-muted/50">
           {/* METADATA */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-4 bg-background p-5 rounded-xl border border-border shadow-sm relative">
             <div className="absolute top-0 left-0 w-1 h-full bg-primary rounded-l-xl"></div>
-            
+
             <ReadOnlyField label="Salesman" value={getSalesmanName(headerData.salesmanId)} />
-            <ReadOnlyField label="Customer" value={getCustomerName(headerData.customerCode)} />
-            <ReadOnlyField label="Return Date" value={headerData.returnDate} />
             <ReadOnlyField label="Salesman Code" value={getSalesmanCode(headerData.salesmanId)} />
-            
+            <ReadOnlyField label="Customer" value={getCustomerName(headerData.customerCode)} />
             <ReadOnlyField label="Customer Code" value={headerData.customerCode} />
-            <ReadOnlyField label="Received Date" value={headerData.createdAt} />
+
             <ReadOnlyField label="Branch" value={getSalesmanBranch(headerData.salesmanId)} />
+            <ReadOnlyField label="Return Date" value={headerData.returnDate} />
+            <ReadOnlyField label="Received Date" value={headerData.createdAt} />
             <ReadOnlyField label="Price Type" value={headerData.priceType} />
             
             <div className="flex items-center space-x-2 pt-2 col-span-2 lg:col-span-4">
@@ -686,7 +796,8 @@ export function UpdateSalesReturnModal({
                           ? "Looking up..."
                           : lastScannedRfid
                             ? `✓ ${lastScannedRfid.slice(0, 16)}...`
-                            : details.filter((i) => i.rfidTags && i.rfidTags.length > 0).length > 0
+                            : details.filter((i) => i.rfidTags && i.rfidTags.length > 0)
+                                .length > 0
                               ? `${details.filter((i) => i.rfidTags && i.rfidTags.length > 0).length} RFID items`
                               : "Scan RFID..."}
                       </div>
@@ -694,8 +805,8 @@ export function UpdateSalesReturnModal({
                   </div>
                   <Button
                     size="sm"
-                    className="bg-primary hover:bg-primary text-white gap-2 shadow-md shadow-primary/20"
                     onClick={() => setIsProductLookupOpen(true)}
+                    className="bg-primary hover:bg-primary text-white shadow-primary/20 shadow-md h-9 gap-2"
                   >
                     <Plus className="h-4 w-4" /> Add Product
                   </Button>
@@ -704,41 +815,41 @@ export function UpdateSalesReturnModal({
             </div>
 
             <div className="border border-border rounded-xl overflow-hidden bg-background shadow-sm">
-              <div className="overflow-x-auto">
-                <Table>
+              <div className="overflow-x-auto pb-4">
+                <Table className="min-w-[1500px]">
                   <TableHeader>
                     <TableRow className="bg-primary hover:bg-primary! border-none">
                       <TableHead className="text-white font-semibold h-11 w-[120px] uppercase text-xs">
                         Code
                       </TableHead>
-                      <TableHead className="text-white font-semibold h-11 min-w-[200px] uppercase text-xs">
+                      <TableHead className="text-white font-semibold h-11 min-w-[180px] uppercase text-xs">
                         Description
                       </TableHead>
                       <TableHead className="text-white font-semibold h-11 w-[80px] uppercase text-xs">
                         Unit
                       </TableHead>
-                      <TableHead className="text-white font-semibold h-11 text-center min-w-[100px] uppercase text-xs">
+                      <TableHead className="text-white font-semibold h-11 text-center w-[150px] uppercase text-xs">
                         Qty
                       </TableHead>
-                      <TableHead className="text-white font-semibold h-11 text-right min-w-[120px] uppercase text-xs">
+                      <TableHead className="text-white font-semibold h-11 text-right min-w-[100px] uppercase text-xs">
                         Price
                       </TableHead>
-                      <TableHead className="text-white font-semibold h-11 text-right w-[100px] uppercase text-xs">
+                      <TableHead className="text-white font-semibold h-11 text-right min-w-[120px] uppercase text-xs">
                         Gross
                       </TableHead>
-                      <TableHead className="text-white font-semibold h-11 w-[130px] uppercase text-xs">
+                      <TableHead className="text-white font-semibold h-11 w-[160px] uppercase text-xs">
                         Disc. Type
                       </TableHead>
-                      <TableHead className="text-white font-semibold h-11 text-right w-[100px] uppercase text-xs">
+                      <TableHead className="text-white font-semibold h-11 text-right min-w-[120px] uppercase text-xs">
                         Disc. Amt
                       </TableHead>
-                      <TableHead className="text-white font-semibold h-11 text-right w-[100px] uppercase text-xs">
+                      <TableHead className="text-white font-semibold h-11 text-right min-w-[120px] uppercase text-xs">
                         Total
                       </TableHead>
-                      <TableHead className="text-white font-semibold h-11 min-w-[150px] uppercase text-xs">
+                      <TableHead className="text-white font-semibold h-11 min-w-[180px] uppercase text-xs">
                         Reason
                       </TableHead>
-                      <TableHead className="text-white font-semibold h-11 w-[160px] uppercase text-xs">
+                      <TableHead className="text-white font-semibold h-11 w-[200px] uppercase text-xs">
                         Return Type
                       </TableHead>
                       {/* 🟢 REVISED: Delete Column hidden if not Pending */}
@@ -774,19 +885,18 @@ export function UpdateSalesReturnModal({
                               key={item.id || idx}
                               className="border-b border-border hover:bg-muted/20 transition-colors duration-200"
                             >
-                              <TableCell className="text-xs text-foreground font-bold align-middle font-mono">
+                              <TableCell className="text-sm text-foreground font-bold align-middle font-mono">
                                 {item.code}
                               </TableCell>
                               <TableCell className="align-middle">
                                 <div
-                                  className="text-xs text-foreground font-medium truncate max-w-[220px]"
+                                  className="text-sm text-foreground font-medium truncate max-w-[220px]"
                                   title={item.description}
                                 >
                                   {item.description}
                                 </div>
-                                <span className="text-muted-foreground/60 italic font-sans font-medium text-[10px] block mt-0.5">Manual Entry</span>
                               </TableCell>
-                              <TableCell className="text-xs text-muted-foreground align-middle">
+                              <TableCell className="text-sm text-muted-foreground align-middle">
                                 <Badge
                                   variant="outline"
                                   className="text-foreground bg-background border-border font-normal"
@@ -806,7 +916,7 @@ export function UpdateSalesReturnModal({
                                     }
                                   />
                                 ) : (
-                                  <span className="text-xs font-semibold text-foreground">
+                                  <span className="text-sm font-semibold text-foreground">
                                     {item.quantity}
                                   </span>
                                 )}
@@ -823,13 +933,13 @@ export function UpdateSalesReturnModal({
                                     }
                                   />
                                 ) : (
-                                  <span className="text-xs text-foreground">
+                                  <span className="text-sm text-foreground">
                                     {Number(item.unitPrice).toLocaleString()}
                                   </span>
                                 )}
                               </TableCell>
-                              <TableCell className="text-right text-xs text-muted-foreground align-middle font-mono">
-                                {(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}
+                              <TableCell className="text-right text-sm text-muted-foreground align-middle font-mono whitespace-nowrap">
+                                {(Number(item.grossAmount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                               </TableCell>
                               {/* Discount */}
                               <TableCell className="align-middle p-2">
@@ -845,22 +955,22 @@ export function UpdateSalesReturnModal({
                                       <SelectItem value="No Discount">None</SelectItem>
                                       {discountOptions.map((opt) => (
                                         <SelectItem key={opt.id} value={opt.id.toString()}>
-                                          {opt.line_discount}
+                                          {opt.discount_type}
                                         </SelectItem>
                                       ))}
                                     </SelectContent>
                                   </Select>
                                 ) : (
                                   <span className="text-xs text-muted-foreground">
-                                    {discountOptions.find((d) => d.id.toString() == item.discountType)?.line_discount || "None"}
+                                    {discountOptions.find((d) => d.id.toString() == item.discountType)?.discount_type || "None"}
                                   </span>
                                 )}
                               </TableCell>
                               <TableCell className="text-right align-middle p-2">
-                                <Input type="number" readOnly className="h-9 w-full text-right text-sm bg-muted/30 text-muted-foreground cursor-not-allowed" value={item.discountAmount} />
+                                <Input type="number" readOnly className="h-9 w-full text-right text-sm bg-muted/30 text-muted-foreground cursor-not-allowed" value={item.discountAmount ? Number(item.discountAmount).toFixed(2) : ""} />
                               </TableCell>
-                              <TableCell className="text-right font-bold text-sm text-foreground align-middle">
-                                {(Number(item.totalAmount) || 0).toLocaleString()}
+                              <TableCell className="text-right font-bold text-sm text-foreground align-middle whitespace-nowrap">
+                                ₱{(Number(item.totalAmount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                               </TableCell>
                               {/* Reason */}
                               <TableCell className="align-middle p-2">
@@ -872,7 +982,7 @@ export function UpdateSalesReturnModal({
                                     onChange={(e) => handleDetailChange(idx, "reason", e.target.value)}
                                   />
                                 ) : (
-                                  <span className="text-xs text-muted-foreground italic truncate block max-w-[120px]" title={item.reason || ""}>
+                                  <span className="text-sm text-muted-foreground italic truncate block max-w-[120px]" title={item.reason || ""}>
                                     {item.reason || "-"}
                                   </span>
                                 )}
@@ -880,8 +990,8 @@ export function UpdateSalesReturnModal({
                               {/* Return Type */}
                               <TableCell className="align-middle p-2">
                                 {canEditAll ? (
-                                  <Select value={item.returnType as string} onValueChange={(val) => handleDetailChange(idx, "returnType", val)}>
-                                    <SelectTrigger className="h-9 w-full text-xs border-border bg-background">
+                                  <Select value={item.returnType as string} onValueChange={(val) => { handleDetailChange(idx, "returnType", val); setReturnTypeError(false); }}>
+                                    <SelectTrigger className={`h-9 w-full text-xs bg-background ${returnTypeError && (!item.returnType || item.returnType === "") ? "border-destructive ring-1 ring-destructive/30 bg-destructive/5" : "border-border"}`}>
                                       <SelectValue placeholder="Select type" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -916,11 +1026,11 @@ export function UpdateSalesReturnModal({
 
                         {/* 2. RENDER RFID ITEMS (Grouped) */}
                         {Object.values(
-                          details.filter(i => i.rfidTags && i.rfidTags.length > 0).reduce((acc, item, originalIdx) => {
+                          details.filter(i => i.rfidTags && i.rfidTags.length > 0).reduce((acc, item) => {
                             // Find the true index in details
                             const idx = details.findIndex(d => d === item);
                             const rType = item.returnType || "Unassigned";
-                            const key = `${item.productId}-${item.unit}-${rType}`;
+                            const key = `${item.productId}-${item.unit}-${item.unitPrice}-${rType}`;
                             if (!acc[key]) {
                               acc[key] = {
                                 key,
@@ -942,273 +1052,255 @@ export function UpdateSalesReturnModal({
                             acc[key].totalNet += Number(item.totalAmount) || 0;
                             acc[key].children.push({ item, idx });
                             return acc;
-                          }, {} as Record<string, any>)
-                        ).map((group: any) => (
+                          }, {} as Record<string, SalesReturnGroup>)
+                        ).map((group: SalesReturnGroup) => (
                           <React.Fragment key={group.key}>
-                        {/* Parent Summary Row */}
-                        <TableRow className="bg-muted/10 font-semibold border-b border-border shadow-sm">
-                          {/* 🟢 REVISED: All inputs disabled if not Pending (canEditAll) */}
-                          <TableCell className="text-xs text-foreground align-middle font-mono">
-                            <div className="flex items-center gap-2">
-                              {group.children.length > 0 ? (
-                                <button
-                                  type="button"
-                                  onClick={() => setExpandedGroups(prev => ({ ...prev, [group.key]: !prev[group.key] }))}
-                                  className="p-1 hover:bg-muted rounded-md transition-colors text-foreground"
-                                >
-                                  <ChevronDown className={`h-4 w-4 transition-transform ${expandedGroups[group.key] ? 'rotate-180' : ''}`} />
-                                </button>
-                              ) : (
-                                <div className="w-6" /> // spacer
-                              )}
-                              <span>{group.code}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="align-middle">
-                            <div
-                              className="text-xs text-foreground font-medium truncate max-w-[220px]"
-                              title={group.description}
-                            >
-                              {group.description}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground align-middle">
-                            <Badge
-                              variant="outline"
-                              className="text-foreground bg-background border-border font-normal"
-                            >
-                              {group.unit}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-center align-middle p-2 text-primary text-sm font-bold">
-                            {group.totalQty}
-                          </TableCell>
-                          <TableCell className="text-right align-middle p-2 text-muted-foreground">
-                            -
-                          </TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground align-middle font-mono">
-                            {(
-                              Number(group.totalGross)
-                            ).toLocaleString()}
-                          </TableCell>
-                          <TableCell className="align-middle p-2 text-center text-muted-foreground">
-                            -
-                          </TableCell>
-                          <TableCell className="text-right align-middle p-2 text-muted-foreground font-mono">
-                            {group.totalDiscount.toLocaleString()}
-                          </TableCell>
-                          <TableCell className="text-right font-bold text-sm text-primary align-middle">
-                            {group.totalNet.toLocaleString()}
-                          </TableCell>
-                          <TableCell className="align-middle p-2 text-center text-muted-foreground">
-                            -
-                          </TableCell>
-                          <TableCell className="align-middle p-2">
-                            {group.returnType !== "Unassigned" ? (
-                              <Badge
-                                variant="secondary"
-                                className="bg-primary/20 text-primary hover:bg-primary/20 hover:text-primary font-medium"
-                              >
-                                {group.returnType}
-                              </Badge>
-                            ) : (
-                              <span className="text-muted-foreground/60 italic text-xs">Unassigned</span>
-                            )}
-                          </TableCell>
-                          <TableCell />
-                        </TableRow>
-
-                        {/* Child Rows (Individual Scans/Additions) */}
-                        {expandedGroups[group.key] && group.children.map(({ item, idx }: { item: SalesReturnItem, idx: number }) => (
-                          <TableRow
-                            key={item.id || idx}
-                            className="border-b border-border hover:bg-muted/20 transition-colors duration-200"
-                          >
-                            {/* 🟢 REVISED: All inputs disabled if not Pending (canEditAll) */}
-                            <TableCell colSpan={2} className="text-xs text-foreground font-bold align-middle pl-10 font-mono">
-                              {item.rfidTags && item.rfidTags.length > 0 ? (
-                                <div className="flex items-center gap-1.5 bg-background border border-border pl-2.5 pr-2 py-1 rounded-md shadow-sm w-fit truncate max-w-[200px]" title={item.rfidTags[0]}>
-                                  <span className="text-primary truncate">{item.rfidTags[0]}</span>
-                                  <span className="text-[10px] text-muted-foreground font-sans uppercase">RFID</span>
+                            {/* Parent Summary Row */}
+                            <TableRow className="bg-muted/10 font-semibold border-b border-border">
+                              {/* 🟢 REVISED: All inputs disabled if not Pending (canEditAll) */}
+                              <TableCell className="text-sm text-foreground align-middle font-mono">
+                                <div className="flex items-center gap-2">
+                                  {group.children.length > 0 ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setExpandedGroups(prev => ({ ...prev, [group.key]: !prev[group.key] }))}
+                                      className="p-1 hover:bg-muted rounded-md transition-colors text-foreground"
+                                    >
+                                      <ChevronDown className={`h-4 w-4 transition-transform ${expandedGroups[group.key] ? 'rotate-180' : ''}`} />
+                                    </button>
+                                  ) : (
+                                    <div className="w-6" /> // spacer
+                                  )}
+                                  <span>{group.code}</span>
                                 </div>
-                              ) : (
-                                <span className="text-muted-foreground/60 italic font-sans font-medium text-[11px]">Manual Entry</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground align-middle">
-                            </TableCell>
-                            <TableCell className="text-center align-middle p-2">
-                              {canEditAll ? (
-                                item.rfidTags && item.rfidTags.length > 0 ? (
-                                  <div className="text-center font-semibold text-sm">{item.quantity}</div>
+                              </TableCell>
+                              <TableCell className="align-middle">
+                                <div
+                                  className="text-sm text-foreground font-medium truncate max-w-[220px]"
+                                  title={group.description}
+                                >
+                                  {group.description}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground align-middle">
+                                <Badge
+                                  variant="outline"
+                                  className="text-foreground bg-background border-border font-normal"
+                                >
+                                  {group.unit}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-center align-middle p-2 text-primary text-sm font-bold">
+                                {group.totalQty}
+                              </TableCell>
+                              <TableCell className="text-right align-middle p-2" />
+                              <TableCell className="text-right align-middle" />
+                              <TableCell className="align-middle p-2" />
+                              <TableCell className="text-right align-middle p-2" />
+                              <TableCell className="text-right align-middle" />
+                              <TableCell className="align-middle p-2" />
+                              <TableCell className="align-middle p-2">
+                                {group.returnType !== "Unassigned" ? (
+                                  <Badge
+                                    variant="secondary"
+                                    className="bg-primary/20 text-primary hover:bg-primary/20 hover:text-primary font-medium"
+                                  >
+                                    {group.returnType}
+                                  </Badge>
                                 ) : (
+                                  <span className="text-muted-foreground/60 italic text-xs">Unassigned</span>
+                                )}
+                              </TableCell>
+                              {canEditAll && <TableCell />}
+                            </TableRow>
+
+                            {/* Child Rows (Individual Scans/Additions) */}
+                            {expandedGroups[group.key] && group.children.map(({ item, idx }: { item: SalesReturnItem, idx: number }) => (
+                              <TableRow
+                                key={item.id || idx}
+                                className="border-b border-border hover:bg-muted/20 transition-colors duration-200"
+                              >
+                                {/* 🟢 REVISED: All inputs disabled if not Pending (canEditAll) */}
+                                <TableCell colSpan={2} className="text-sm text-foreground font-bold align-middle pl-10 font-mono">
+                                  {item.rfidTags && item.rfidTags.length > 0 ? (
+                                    <div className="flex items-center gap-1.5 bg-background border border-border pl-2.5 pr-2 py-1 rounded-md w-fit truncate max-w-[200px]" title={item.rfidTags[0]}>
+                                      <span className="text-primary truncate">{item.rfidTags[0]}</span>
+                                      <span className="text-[10px] text-muted-foreground font-sans uppercase">RFID</span>
+                                    </div>
+                                  ) : null}
+                                </TableCell>
+                                <TableCell className="text-sm text-muted-foreground align-middle">
+                                </TableCell>
+                                <TableCell className="text-center align-middle p-2">
+                                  {canEditAll ? (
+                                    item.rfidTags && item.rfidTags.length > 0 ? (
+                                      <div className="text-center font-semibold text-sm">{item.quantity}</div>
+                                    ) : (
+                                      <Input
+                                        type="number"
+                                        className="h-9 w-full text-center text-sm border-border px-2"
+                                        value={item.quantity}
+                                        onChange={(e) =>
+                                          handleDetailChange(
+                                            idx,
+                                            "quantity",
+                                            e.target.value,
+                                          )
+                                        }
+                                      />
+                                    )
+                                  ) : (
+                                    <span className="text-sm font-semibold text-foreground">
+                                      {item.quantity}
+                                    </span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right align-middle p-2">
+                                  {canEditAll ? (
+                                    <Input
+                                      type="number"
+                                      className="h-9 w-full text-right text-sm border-border px-2"
+                                      value={item.unitPrice}
+                                      onChange={(e) =>
+                                        handleDetailChange(
+                                          idx,
+                                          "unitPrice",
+                                          e.target.value,
+                                        )
+                                      }
+                                    />
+                                  ) : (
+                                    <span className="text-sm text-foreground">
+                                      {Number(item.unitPrice).toLocaleString()}
+                                    </span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right text-sm text-muted-foreground align-middle font-mono whitespace-nowrap">
+                                  {(Number(item.grossAmount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </TableCell>
+                                <TableCell className="align-middle p-2">
+                                  {canEditAll ? (
+                                    <Select
+                                      value={
+                                        item.discountType?.toString() || "No Discount"
+                                      }
+                                      onValueChange={(val) =>
+                                        handleDetailChange(idx, "discountType", val)
+                                      }
+                                    >
+                                      <SelectTrigger className="h-9 w-full text-sm border-border bg-background">
+                                        <SelectValue placeholder="None" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="No Discount">
+                                          None
+                                        </SelectItem>
+                                        {discountOptions.map((opt) => (
+                                          <SelectItem
+                                            key={opt.id}
+                                            value={opt.id.toString()}
+                                          >
+                                            {opt.discount_type}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  ) : (
+                                    <span className="text-sm text-muted-foreground">
+                                      {discountOptions.find(
+                                        (d) => d.id.toString() == item.discountType,
+                                      )?.discount_type || "None"}
+                                    </span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right align-middle p-2">
                                   <Input
                                     type="number"
-                                    className="h-9 w-full text-center text-sm border-border px-2"
-                                    value={item.quantity}
-                                    onChange={(e) =>
-                                      handleDetailChange(
-                                        idx,
-                                        "quantity",
-                                        e.target.value,
-                                      )
-                                    }
+                                    readOnly
+                                    className="h-9 w-full text-right text-sm bg-muted/30 text-muted-foreground cursor-not-allowed"
+                                    value={item.discountAmount ? Number(item.discountAmount).toFixed(2) : ""}
                                   />
-                                )
-                              ) : (
-                                <span className="text-xs font-semibold text-foreground">
-                                  {item.quantity}
-                                </span>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right align-middle p-2">
-                              {canEditAll ? (
-                                <Input
-                                  type="number"
-                                  className="h-9 w-full text-right text-sm border-border px-2"
-                                  value={item.unitPrice}
-                                  onChange={(e) =>
-                                    handleDetailChange(
-                                      idx,
-                                      "unitPrice",
-                                      e.target.value,
-                                    )
-                                  }
-                                />
-                              ) : (
-                                <span className="text-xs text-foreground">
-                                  {Number(item.unitPrice).toLocaleString()}
-                                </span>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right text-xs text-muted-foreground align-middle font-mono">
-                              {(
-                                Number(item.quantity) * Number(item.unitPrice)
-                              ).toLocaleString()}
-                            </TableCell>
-                            <TableCell className="align-middle p-2">
-                              {canEditAll ? (
-                                <Select
-                                  value={
-                                    item.discountType?.toString() || "No Discount"
-                                  }
-                                  onValueChange={(val) =>
-                                    handleDetailChange(idx, "discountType", val)
-                                  }
-                                >
-                                  <SelectTrigger className="h-9 w-full text-xs border-border bg-background">
-                                    <SelectValue placeholder="None" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="No Discount">
-                                      None
-                                    </SelectItem>
-                                    {discountOptions.map((opt) => (
-                                      <SelectItem
-                                        key={opt.id}
-                                        value={opt.id.toString()}
-                                      >
-                                        {opt.line_discount}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">
-                                  {discountOptions.find(
-                                    (d) => d.id.toString() == item.discountType,
-                                  )?.line_discount || "None"}
-                                </span>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right align-middle p-2">
-                              <Input
-                                type="number"
-                                readOnly
-                                className="h-9 w-full text-right text-sm bg-muted/30 text-muted-foreground cursor-not-allowed"
-                                value={item.discountAmount}
-                              />
-                            </TableCell>
-                            <TableCell className="text-right font-bold text-sm text-foreground align-middle">
-                              {(Number(item.totalAmount) || 0).toLocaleString()}
-                            </TableCell>
-                            <TableCell className="align-middle p-2">
-                              {canEditAll ? (
-                                <Input
-                                  className="h-9 w-full text-sm border-border bg-background"
-                                  placeholder="Enter reason..."
-                                  value={item.reason}
-                                  onChange={(e) =>
-                                    handleDetailChange(
-                                      idx,
-                                      "reason",
-                                      e.target.value,
-                                    )
-                                  }
-                                />
-                              ) : (
-                                <span className="text-xs text-muted-foreground italic">
-                                  {item.reason || "-"}
-                                </span>
-                              )}
-                            </TableCell>
-                            <TableCell className="align-middle p-2">
-                              {canEditAll ? (
-                                <Select
-                                  value={item.returnType as string}
-                                  onValueChange={(val) =>
-                                    handleDetailChange(idx, "returnType", val)
-                                  }
-                                >
-                                  <SelectTrigger className="h-9 w-full text-xs border-border bg-background">
-                                    <SelectValue placeholder="Select type" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {returnTypeOptions.length > 0 ? (
-                                      returnTypeOptions.map((type) => (
-                                        <SelectItem
-                                          key={type.type_id}
-                                          value={type.type_name}
-                                        >
-                                          {type.type_name}
-                                        </SelectItem>
-                                      ))
-                                    ) : (
-                                      <>
-                                        <SelectItem value="Good Order">
-                                          Good Order
-                                        </SelectItem>
-                                        <SelectItem value="Bad Order">
-                                          Bad Order
-                                        </SelectItem>
-                                      </>
-                                    )}
-                                  </SelectContent>
-                                </Select>
-                              ) : (
-                                <Badge
-                                  variant="secondary"
-                                  className="text-[10px] font-normal"
-                                >
-                                  {item.returnType as React.ReactNode}
-                                </Badge>
-                              )}
-                            </TableCell>
-                            {canEditAll && (
-                              <TableCell className="text-center align-middle">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-destructive hover:text-white hover:bg-destructive"
-                                  onClick={() => handleDeleteRow(idx)}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </TableCell>
-                            )}
-                          </TableRow>
-                        ))}
-                        </React.Fragment>
+                                </TableCell>
+                                <TableCell className="text-right font-bold text-sm text-foreground align-middle">
+                                  {(Number(item.totalAmount) || 0).toLocaleString()}
+                                </TableCell>
+                                <TableCell className="align-middle p-2">
+                                  {canEditAll ? (
+                                    <Input
+                                      className="h-9 w-full text-sm border-border bg-background"
+                                      placeholder="Enter reason..."
+                                      value={item.reason}
+                                      onChange={(e) =>
+                                        handleDetailChange(
+                                          idx,
+                                          "reason",
+                                          e.target.value,
+                                        )
+                                      }
+                                    />
+                                  ) : (
+                                    <span className="text-sm text-muted-foreground italic">
+                                      {item.reason || "-"}
+                                    </span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="align-middle p-2">
+                                  {canEditAll ? (
+                                    <Select
+                                      value={item.returnType as string}
+                                      onValueChange={(val) =>
+                                        handleDetailChange(idx, "returnType", val)
+                                      }
+                                    >
+                                      <SelectTrigger className="h-9 w-full text-sm border-border bg-background">
+                                        <SelectValue placeholder="Select type" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {returnTypeOptions.length > 0 ? (
+                                          returnTypeOptions.map((type) => (
+                                            <SelectItem
+                                              key={type.type_id}
+                                              value={type.type_name}
+                                            >
+                                              {type.type_name}
+                                            </SelectItem>
+                                          ))
+                                        ) : (
+                                          <>
+                                            <SelectItem value="Good Order">
+                                              Good Order
+                                            </SelectItem>
+                                            <SelectItem value="Bad Order">
+                                              Bad Order
+                                            </SelectItem>
+                                          </>
+                                        )}
+                                      </SelectContent>
+                                    </Select>
+                                  ) : (
+                                    <Badge
+                                      variant="secondary"
+                                      className="text-[10px] font-normal"
+                                    >
+                                      {item.returnType as React.ReactNode}
+                                    </Badge>
+                                  )}
+                                </TableCell>
+                                {canEditAll && (
+                                  <TableCell className="text-center align-middle">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-destructive hover:text-white hover:bg-destructive"
+                                      onClick={() => handleDeleteRow(idx)}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </TableCell>
+                                )}
+                              </TableRow>
+                            ))}
+                          </React.Fragment>
                         ))}
                       </>
                     )}
@@ -1224,14 +1316,18 @@ export function UpdateSalesReturnModal({
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5" ref={orderDropdownRef}>
                   <Label className="text-xs uppercase font-bold text-muted-foreground">
-                    Order No.
+                    Order No. <span className="text-destructive">*</span>
                   </Label>
                   {/* Order No Dropdown */}
                   {canEditAll ? (
                     <div className="relative group">
                       <input
                         type="text"
-                        className="w-full h-9 border border-border rounded-md text-sm px-3 pr-8 bg-background outline-none focus:ring-2 focus:border-primary"
+                        className={`w-full h-9 border rounded-md text-sm px-3 pr-8 bg-background outline-none transition-all shadow-sm ${
+                          orderError
+                            ? "border-destructive bg-destructive/5 ring-1 ring-destructive"
+                            : "border-border focus:ring-2 focus:border-primary"
+                        }`}
                         placeholder="Search Order No..."
                         value={orderSearch || headerData.orderNo || ""}
                         onChange={(e) => {
@@ -1282,14 +1378,18 @@ export function UpdateSalesReturnModal({
                 </div>
                 <div className="space-y-1.5" ref={invoiceDropdownRef}>
                   <Label className="text-xs uppercase font-bold text-muted-foreground">
-                    Invoice No.
+                    Invoice No. <span className="text-destructive">*</span>
                   </Label>
                   {/* Invoice No Dropdown */}
                   {canEditAll ? (
                     <div className="relative group">
                       <input
                         type="text"
-                        className="w-full h-9 border border-border rounded-md text-sm px-3 pr-8 bg-background outline-none focus:ring-2 focus:border-primary"
+                        className={`w-full h-9 border rounded-md text-sm px-3 pr-8 bg-background outline-none transition-all shadow-sm ${
+                          invoiceError
+                            ? "border-destructive bg-destructive/5 ring-1 ring-destructive"
+                            : "border-border focus:ring-2 focus:border-primary"
+                        }`}
                         placeholder="Search Invoice No..."
                         value={invoiceDropdownSearch || headerData.invoiceNo || ""}
                         onChange={(e) => {
@@ -1438,7 +1538,7 @@ export function UpdateSalesReturnModal({
           </Button>
           <Button
             className="min-w-[100px]"
-            onClick={() => setIsReceiveConfirmOpen(true)}
+            onClick={handleReceiveClick}
             disabled={!isPending}
           >
             Receive
@@ -1452,15 +1552,6 @@ export function UpdateSalesReturnModal({
           </Button>
         </div>
       </DialogContent>
-
-      {/* --- NESTED MODALS --- */}
-      {isProductLookupOpen && (
-        <ProductLookupModal
-          isOpen={isProductLookupOpen}
-          onClose={() => setIsProductLookupOpen(false)}
-          onConfirm={handleAddProductsToEdit}
-        />
-      )}
 
       {/* 2. INVOICE LOOKUP - 🟢 REVISED: Shows Amount */}
       <Dialog open={isInvoiceLookupOpen} onOpenChange={setIsInvoiceLookupOpen}>
@@ -1529,6 +1620,13 @@ export function UpdateSalesReturnModal({
           </div>
         </DialogContent>
       </Dialog>
+
+      <ProductLookupModal
+        isOpen={isProductLookupOpen}
+        onClose={() => setIsProductLookupOpen(false)}
+        onConfirm={handleConfirmProductLookup}
+        priceType={headerData.priceType || "A"}
+      />
 
       {/* CONFIRM DIALOGS (Update, Success, Receive) remain same structure */}
       <Dialog open={isUpdateConfirmOpen} onOpenChange={setIsUpdateConfirmOpen}>

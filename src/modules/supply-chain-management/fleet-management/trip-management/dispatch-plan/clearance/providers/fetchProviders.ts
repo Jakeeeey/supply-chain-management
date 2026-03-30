@@ -122,3 +122,12 @@ export const fetchRFIDTagsForDispatch = async (dispatchId: number): Promise<RFID
   }
   return response.json();
 };
+
+export const fetchSalesReturnsByInvoice = async (invoiceNo: string): Promise<any[]> => {
+  const response = await fetch(`/api/scm/inventories/sales-return-rfid?action=list&invoiceNo=${encodeURIComponent(invoiceNo)}`);
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  const result = await response.json();
+  return result.data || [];
+};

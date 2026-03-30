@@ -32,9 +32,15 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: (items: SalesReturnItem[]) => void;
+  priceType: string; // 🟢 NEW
 }
 
-export function ProductLookupModal({ isOpen, onClose, onConfirm }: Props) {
+export function ProductLookupModal({
+  isOpen,
+  onClose,
+  onConfirm,
+  priceType = "A", // 🟢 NEW
+}: Props) {
   // --- STATES ---
   const [searchCode, setSearchCode] = useState("");
   const [filterName, setFilterName] = useState("");
@@ -54,6 +60,10 @@ export function ProductLookupModal({ isOpen, onClose, onConfirm }: Props) {
   const [isLoading, setIsLoading] = useState(false);
 
   const [selectedItems, setSelectedItems] = useState<SalesReturnItem[]>([]);
+
+  // PAGINATION
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 20;
 
   // DROPDOWN STATES
   const [isSupplierOpen, setIsSupplierOpen] = useState(false);
@@ -192,16 +202,36 @@ export function ProductLookupModal({ isOpen, onClose, onConfirm }: Props) {
     return matchesSearch && matchesBrand && matchesCategory && matchesSupplier;
   });
 
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterName, searchCode, selectedSupplierId, selectedCategoryId, selectedBrandId]);
+
+  const totalPages = Math.ceil(visibleProducts.length / ITEMS_PER_PAGE);
+  const paginatedProducts = visibleProducts.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE,
+  );
+
   // --- HANDLERS ---
+
+  /**
+   * Resolves the correct unit price based on the selected priceType.
+   */
+  const resolvePrice = (product: Product, currentType: string): number => {
+    const key = `price${currentType}` as keyof Product;
+    const price = Number(product[key]) || Number(product.priceA) || 0;
+    return price;
+  };
+
   const handleAddItem = (
     product: Product,
     unitLabel: string,
     selectedPrice: number,
   ) => {
     setSelectedItems((prevItems) => {
-      const uniqueCode = `${product.product_code}-${unitLabel}`;
       const existingItemIndex = prevItems.findIndex(
-        (item) => item.code === uniqueCode,
+        (item) => item.productId === product.product_id && item.unit === unitLabel && item.unitPrice === selectedPrice,
       );
 
       if (existingItemIndex !== -1) {
@@ -225,7 +255,7 @@ export function ProductLookupModal({ isOpen, onClose, onConfirm }: Props) {
           tempId: `added-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
           productId: product.product_id,
           product_id: product.product_id,
-          code: uniqueCode,
+          code: product.product_code || product.barcode || "N/A",
           description: product.product_name,
           unit: unitLabel,
           quantity: 1,
@@ -236,6 +266,13 @@ export function ProductLookupModal({ isOpen, onClose, onConfirm }: Props) {
           totalAmount: selectedPrice,
           returnType: "Good Order",
           reason: "",
+          // 🟢 Store additional price info for recalculation
+          priceA: product.priceA,
+          priceB: product.priceB,
+          priceC: product.priceC,
+          priceD: product.priceD,
+          priceE: product.priceE,
+          unitMultiplier: product.unit_of_measurement_count || 1,
         };
         return [...prevItems, newItem];
       }
@@ -252,7 +289,26 @@ export function ProductLookupModal({ isOpen, onClose, onConfirm }: Props) {
           return {
             ...item,
             quantity: newQty,
+            grossAmount: newQty * item.unitPrice,
             totalAmount: newQty * item.unitPrice,
+          };
+        }
+        return item;
+      }),
+    );
+  };
+
+  const setItemQuantityDirect = (tempId: string | undefined, qty: number) => {
+    if (!tempId) return;
+    const safeQty = Math.max(1, Math.floor(qty));
+    setSelectedItems((prev) =>
+      prev.map((item) => {
+        if (item.tempId === tempId) {
+          return {
+            ...item,
+            quantity: safeQty,
+            grossAmount: safeQty * item.unitPrice,
+            totalAmount: safeQty * item.unitPrice,
           };
         }
         return item;
@@ -330,7 +386,23 @@ export function ProductLookupModal({ isOpen, onClose, onConfirm }: Props) {
             {/* Filter Section */}
             <div className="p-5 bg-background border-b border-border shadow-sm z-10 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                {/* 1. Supplier */}
+                {/* 1. Product Name (FIRST) */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                    Product Name
+                  </label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Filter by name..."
+                      className="h-10 text-sm pl-9 bg-muted/30 border-border focus:bg-background transition-all text-foreground"
+                      value={filterName}
+                      onChange={(e) => setFilterName(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* 2. Supplier (SECOND) */}
                 <div className="space-y-1.5 relative" ref={supplierWrapperRef}>
                   <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                     Supplier
@@ -386,22 +458,6 @@ export function ProductLookupModal({ isOpen, onClose, onConfirm }: Props) {
                       })}
                     </div>
                   )}
-                </div>
-
-                {/* 2. Product Name */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                    Product Name
-                  </label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Filter by name..."
-                      className="h-10 text-sm pl-9 bg-muted/30 border-border focus:bg-background transition-all text-foreground"
-                      value={filterName}
-                      onChange={(e) => setFilterName(e.target.value)}
-                    />
-                  </div>
                 </div>
 
                 {/* 3. Category */}
@@ -524,17 +580,32 @@ export function ProductLookupModal({ isOpen, onClose, onConfirm }: Props) {
 
             {/* Scrollable Grid */}
             <div className="flex-1 overflow-y-auto p-5 bg-muted/30">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-5 pb-20">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-5 pb-4">
                 {isLoading && (
-                  <div className="col-span-full flex flex-col items-center justify-center py-20 text-muted-foreground animate-pulse">
-                    <div className="h-10 w-10 bg-muted rounded-full mb-3"></div>
-                    <p>Loading products...</p>
-                  </div>
+                  <>
+                    {Array.from({ length: 8 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="bg-background rounded-lg border border-border shadow-sm p-5 animate-pulse flex flex-col gap-3"
+                      >
+                        <div className="h-4 bg-muted rounded w-3/4"></div>
+                        <div className="h-3 bg-muted rounded w-1/2"></div>
+                        <div className="mt-auto flex justify-between items-center pt-4">
+                          <div>
+                            <div className="h-4 bg-muted rounded w-20 mb-1"></div>
+                            <div className="h-3 bg-muted rounded w-16"></div>
+                          </div>
+                          <div className="h-8 bg-muted rounded w-16"></div>
+                        </div>
+                      </div>
+                    ))}
+                  </>
                 )}
 
                 {!isLoading &&
-                  visibleProducts.map((product) => {
-                    const safePricePcs = product.priceA ?? 0;
+                  paginatedProducts.map((product) => {
+                    const basePrice = resolvePrice(product, priceType);
+                    const safePricePcs = basePrice;
                     const boxMultiplier =
                       product.unit_of_measurement_count || 1;
                     const safePriceBox = safePricePcs * boxMultiplier;
@@ -652,13 +723,45 @@ export function ProductLookupModal({ isOpen, onClose, onConfirm }: Props) {
                   </div>
                 )}
               </div>
+
+              {/* Pagination Controls */}
+              {!isLoading && totalPages > 1 && (
+                <div className="flex items-center justify-between pt-4 pb-2 border-t border-border mt-2">
+                  <p className="text-xs text-muted-foreground">
+                    Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, visibleProducts.length)} of {visibleProducts.length}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={currentPage <= 1}
+                      onClick={() => setCurrentPage((p) => p - 1)}
+                      className="h-8 px-3 text-xs"
+                    >
+                      Previous
+                    </Button>
+                    <span className="text-xs font-medium text-foreground">
+                      {currentPage} / {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={currentPage >= totalPages}
+                      onClick={() => setCurrentPage((p) => p + 1)}
+                      className="h-8 px-3 text-xs"
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
           {/* RIGHT PANEL: SELECTED SUMMARY (SIDEBAR) */}
           <div className="w-[380px] bg-background border-l border-border flex flex-col h-full shadow-2xl z-30">
             {/* Sidebar Header */}
-            <div className="p-5 border-b border-border bg-linear-to-b from-white to-gray-50/50">
+            <div className="p-5 border-b border-border bg-muted/30">
               <div className="flex justify-between items-end mb-1">
                 <h3 className="font-bold text-foreground flex items-center gap-2">
                   <ShoppingCart className="h-5 w-5 text-primary" />
@@ -740,9 +843,18 @@ export function ProductLookupModal({ isOpen, onClose, onConfirm }: Props) {
                           >
                             <Minus className="h-3 w-3" />
                           </button>
-                          <span className="w-8 text-center text-xs font-bold text-foreground">
-                            {item.quantity}
-                          </span>
+                          <input
+                            type="number"
+                            min={1}
+                            value={item.quantity}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value, 10);
+                              if (!isNaN(val) && val > 0) {
+                                setItemQuantityDirect(item.tempId, val);
+                              }
+                            }}
+                            className="w-10 text-center text-xs font-bold text-foreground bg-transparent border-0 outline-none appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                          />
                           <button
                             className="px-2 h-full text-muted-foreground hover:text-primary hover:bg-background rounded-r-md transition-colors"
                             onClick={() => updateItemQuantity(item.tempId, 1)}

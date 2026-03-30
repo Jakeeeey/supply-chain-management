@@ -899,15 +899,27 @@ function buildNextPhNoFromLatest(latestPhNo: string | null | undefined): string 
 }
 
 export async function fetchNextPhysicalInventoryNumber(): Promise<string> {
+    // Fetch up to 100 recent rows to find the highest numerical sequence.
+    // Lexicographical sort (+id) might be misleading, so we fetch a sample and sort numerically in-memory.
     const rows = await directusGetItems<Pick<PhysicalInventoryHeaderRow, "id" | "ph_no">>(
         TABLES.physical_inventory,
         {
             fields: "id,ph_no",
-            sort: "-id",
-            limit: "1",
+            sort: "-ph_no",
+            limit: "100",
         },
     );
 
-    const latest = rows[0] ?? null;
+    // Extract numbers and sort by their true numeric value (descending)
+    const numericRows = rows
+        .map((r) => ({
+            ...r,
+            num: r.ph_no ? extractTrailingNumber(r.ph_no) : null,
+        }))
+        .filter((r) => r.num !== null)
+        .sort((a, b) => (b.num || 0) - (a.num || 0));
+
+    // The first record in numericRows is our true "latest" numeric ID
+    const latest = numericRows[0] || rows[0] || null;
     return buildNextPhNoFromLatest(latest?.ph_no);
 }
