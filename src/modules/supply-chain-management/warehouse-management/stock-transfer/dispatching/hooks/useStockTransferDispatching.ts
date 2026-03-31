@@ -447,6 +447,8 @@ export function useStockTransferDispatching() {
     }
   };
 
+  const [manualMode, setManualMode] = useState(false);
+
   const getBranchName = useCallback(
     (id: number | null) => {
       if (!id) return 'Unknown';
@@ -455,6 +457,22 @@ export function useStockTransferDispatching() {
     },
     [branches]
   );
+
+  const updateManualQty = useCallback((productId: number, qty: number) => {
+    if (!selectedOrderNo) return;
+    setScannedItemsState(prev => {
+      const orderState = prev[selectedOrderNo] || {};
+      // Use pseudo RFIDs for manual/loose packs
+      const pseudoRfids = Array.from({ length: qty }, (_, i) => `MANU-${productId}-${i}-${Date.now()}`);
+      return {
+        ...prev,
+        [selectedOrderNo]: {
+          ...orderState,
+          [productId]: pseudoRfids
+        }
+      };
+    });
+  }, [selectedOrderNo]);
 
   return {
     orderGroups,
@@ -468,20 +486,9 @@ export function useStockTransferDispatching() {
     getBranchName,
     fetchError,
     refresh: fetchTransfers,
-    updateLoosePackQty: (productId: number, qty: number) => {
-      if (!selectedOrderNo) return;
-      setScannedItemsState(prev => {
-        const orderState = prev[selectedOrderNo] || {};
-        // Use pseudo RFIDs for loose packs
-        const pseudoRfids = Array.from({ length: qty }, (_, i) => `LOOSE-${productId}-${i}-${Date.now()}`);
-        return {
-          ...prev,
-          [selectedOrderNo]: {
-            ...orderState,
-            [productId]: pseudoRfids
-          }
-        };
-      });
-    }
+    manualMode,
+    setManualMode,
+    updateManualQty,
+    updateLoosePackQty: updateManualQty, // Keep for backward compatibility if needed
   };
 }

@@ -75,6 +75,39 @@ async function getMasterData(headers: any) {
     return masterCache;
 }
 
+/**
+ * Fallback parser to extract multi-pack counts from product descriptions if DB count is 1.
+ * Looks for patterns like "X 24", "X24", "X 10 PCS", "12'S", etc.
+ */
+function parseMultiplierFromDescription(description: string, dbCount: number): number {
+  if (dbCount > 1) return dbCount;
+  
+  const desc = (description || "").toUpperCase();
+  
+  // Pattern 1: "X 24" or "X24" or "X  24"
+  const xMatch = desc.match(/X\s*(\d+)/);
+  if (xMatch && xMatch[1]) {
+    const val = parseInt(xMatch[1], 10);
+    if (!isNaN(val) && val > 0) return val;
+  }
+  
+  // Pattern 2: "24PCS" or "24 PIECES" or "24 PCS"
+  const pcsMatch = desc.match(/(\d+)\s*(PCS|PIECES)/);
+  if (pcsMatch && pcsMatch[1]) {
+    const val = parseInt(pcsMatch[1], 10);
+    if (!isNaN(val) && val > 0) return val;
+  }
+
+  // Pattern 3: "12'S" (e.g. 12'S or 24'S)
+  const sMatch = desc.match(/(\d+)\s*'S/);
+  if (sMatch && sMatch[1]) {
+    const val = parseInt(sMatch[1], 10);
+    if (!isNaN(val) && val > 0) return val;
+  }
+  
+  return dbCount;
+}
+
 export async function fetchStockList(
   limit: number = 20,
   offset: number = 0,
@@ -86,8 +119,8 @@ export async function fetchStockList(
     const startTime = Date.now();
     const headers = getHeaders();
 
-    // 1. Fetch products with limit and offset (Cached for 60 seconds because inventory is handled entirely dynamically elsewhere)
-    const prodRes = await fetchWithTimeout(`${DIRECTUS_API}/items/products?limit=${limit}&offset=${offset}&meta=filter_count&fields=product_id,product_name,description,product_code,parent_id,unit_of_measurement,product_brand,product_category,cost_per_unit,price_per_unit`, { headers, next: { revalidate: 120 } });
+    // 1. Fetch products with limit and offset (Force fresh data to ensure UOM counts are accurate)
+    const prodRes = await fetchWithTimeout(`${DIRECTUS_API}/items/products?limit=${limit}&offset=${offset}&meta=filter_count&fields=product_id,product_name,description,product_code,parent_id,unit_of_measurement,unit_of_measurement_count,product_brand,product_category,cost_per_unit,price_per_unit`, { headers, cache: "no-store" });
 
     // 2. Fetch or retrieve cached master dictionaries
     const cache = await getMasterData(headers);
@@ -131,20 +164,27 @@ export async function fetchStockList(
 
     // 2. Strict Grouping logic to prevent JSON explosion (No more name-based fuzzy grouping)
     // We only group products that are explicitly parts of a parent-child relationship.
-    const productGroups = new Map<number, any[]>();
+    const productGroups = new Map<string, any[]>();
     products.forEach((p: any) => {
         const pId = Number(p.product_id);
-        const parentId = p.parent_id ? Number(p.parent_id) : pId;
-        if (!productGroups.has(parentId)) productGroups.set(parentId, []);
-        productGroups.get(parentId)!.push(p);
+        const parentId = p.parent_id ? Number(p.parent_id) : undefined;
+        const nameKey = (p.product_name || "").trim().toLowerCase();
+        
+        // Group by Parent ID if available, otherwise by Name
+        const groupKey = parentId ? `ID-${parentId}` : `NAME-${nameKey}`;
+        
+        if (!productGroups.has(groupKey)) productGroups.set(groupKey, []);
+        productGroups.get(groupKey)!.push(p);
     });
 
     const result: StockConversionProduct[] = [];
 
     products.forEach((p: any) => {
       const pId = Number(p.product_id);
-      const parentId = p.parent_id ? Number(p.parent_id) : pId;
-      const group = productGroups.get(parentId) || [p];
+      const parentId = p.parent_id ? Number(p.parent_id) : undefined;
+      const nameKey = (p.product_name || "").trim().toLowerCase();
+      const groupKey = parentId ? `ID-${parentId}` : `NAME-${nameKey}`;
+      const group = productGroups.get(groupKey) || [p];
 
       // Safe extraction of IDs handling both number and object (Directus behavior)
       const brandId = Number(typeof p.product_brand === 'object' ? p.product_brand?.brand_id : p.product_brand);
@@ -158,16 +198,22 @@ export async function fetchStockList(
         })
         .map((v: any) => {
             const vUnitId = Number(typeof v.unit_of_measurement === 'object' ? v.unit_of_measurement?.unit_id : v.unit_of_measurement);
+            const dbFactor = Number(v.unit_of_measurement_count) || 1;
+            const parsedFactor = parseMultiplierFromDescription(v.description || v.product_name || "", dbFactor);
+            
             return {
                 unitId: vUnitId,
                 name: unitMap.get(vUnitId) || "Unknown",
-                conversionFactor: Number(v.unit_of_measurement_count) || 1,
+                conversionFactor: parsedFactor,
                 targetProductId: Number(v.product_id)
             };
         });
 
       // Robust supplier lookup: check product then parent, try to find a named one
-      const sIds = [...(supplierMap.get(pId) || []), ...(supplierMap.get(parentId) || [])];
+      const sIds = [
+          ...(supplierMap.get(pId) || []),
+          ...(parentId !== undefined ? (supplierMap.get(parentId) || []) : [])
+      ];
       let finalSupplierId = sIds[0];
       let finalSupplierName = "No Supplier";
       let finalSupplierShortcut = "";
@@ -198,6 +244,7 @@ export async function fetchStockList(
         quantity: 0,
         pricePerUnit: Number(p.cost_per_unit || p.price_per_unit || 0),
         totalAmount: 0,
+        conversionFactor: parseMultiplierFromDescription(p.description || p.product_name || "", Number(p.unit_of_measurement_count) || 1),
         inventoryLoaded: false,
         availableUnits,
       });

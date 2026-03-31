@@ -23,6 +23,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Check, AlertCircle } from 'lucide-react';
 
 
 export default function StockTransferReceiveModule() {
@@ -36,6 +40,10 @@ export default function StockTransferReceiveModule() {
     receiveOrder,
     handleScanRFID,
     getBranchName,
+    manualMode,
+    setManualMode,
+    updateManualQty,
+    verifyAll,
   } = useStockTransferReceive();
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -208,6 +216,32 @@ export default function StockTransferReceiveModule() {
                 )}
               </div>
             </div>
+
+            {/* Manual Verification Toggle */}
+            <div className="flex items-center justify-end h-full pt-6">
+              <div className="flex flex-col items-end gap-3">
+                {selectedGroup && manualMode && (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={verifyAll}
+                    className="h-8 gap-2 bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                  >
+                    <Check className="w-4 h-4" /> Verify All Items
+                  </Button>
+                )}
+                <div className="flex items-center space-x-2 bg-muted/30 px-4 py-2 rounded-xl border border-dashed border-muted-foreground/20">
+                  <Switch 
+                    id="manual-receive" 
+                    checked={manualMode} 
+                    onCheckedChange={setManualMode}
+                  />
+                  <Label htmlFor="manual-receive" className="text-xs font-bold uppercase tracking-tight cursor-pointer">
+                    Manual Verification
+                  </Label>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Details & Actions */}
@@ -273,12 +307,23 @@ export default function StockTransferReceiveModule() {
                             </div>
                           </TableCell>
                           <TableCell className="text-sm">{item.ordered_quantity}</TableCell>
-                          <TableCell className="text-sm font-bold">
-                            <span className={complete ? 'text-blue-600' : 'text-amber-600'}>
-                              {item.receivedQty}
-                            </span>
+                           <TableCell className="text-sm font-bold">
+                            {manualMode ? (
+                              <Input
+                                type="number"
+                                className="h-8 w-20 text-center"
+                                value={item.receivedQty}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateManualQty(originalId, Number(e.target.value))}
+                                max={item.ordered_quantity}
+                                min={0}
+                              />
+                            ) : (
+                              <span className={complete ? 'text-blue-600' : 'text-amber-600'}>
+                                {item.receivedQty}
+                              </span>
+                            )}
                           </TableCell>
-                          <TableCell className="text-right text-sm font-semibold text-primary">
+                          <TableCell className="text-right text-sm font-semibold text-primary font-mono">
                             ₱{Number(item.amount || 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}
                           </TableCell>
                           <TableCell className="text-right text-sm print:hidden">

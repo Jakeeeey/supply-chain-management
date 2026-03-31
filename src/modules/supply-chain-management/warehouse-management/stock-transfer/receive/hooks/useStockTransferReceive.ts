@@ -322,6 +322,59 @@ export function useStockTransferReceive() {
     }
   };
 
+  const [manualMode, setManualMode] = useState(false);
+
+  const updateManualQty = useCallback((productId: number, qty: number) => {
+    if (!selectedOrderNo || !selectedGroup) return;
+    
+    const item = selectedGroup.items.find(i => {
+      const itemProduct = typeof i.product_id === 'object' && i.product_id !== null ? (i.product_id as { product_id?: number; id?: number }) : null;
+      const itemPid = Number(itemProduct ? (itemProduct.product_id || itemProduct.id) : i.product_id);
+      return itemPid === productId;
+    });
+
+    if (!item) return;
+
+    // Use only the RFIDs that were actually dispatched
+    const dispatchedTags = item.dispatched_rfids || [];
+    const rfidsToReceive = dispatchedTags.slice(0, Math.min(qty, item.ordered_quantity));
+
+    setReceivedItemsState(prev => {
+      const orderState = prev[selectedOrderNo] || {};
+      return {
+        ...prev,
+        [selectedOrderNo]: {
+          ...orderState,
+          [productId]: rfidsToReceive
+        }
+      };
+    });
+  }, [selectedOrderNo, selectedGroup]);
+
+  const verifyAll = useCallback(() => {
+    if (!selectedOrderNo || !selectedGroup) return;
+    
+    setReceivedItemsState(prev => {
+      const orderState = { ...(prev[selectedOrderNo] || {}) };
+      
+      selectedGroup.items.forEach(item => {
+        const itemProduct = typeof item.product_id === 'object' && item.product_id !== null ? (item.product_id as { product_id?: number; id?: number }) : null;
+        const itemPid = Number(itemProduct ? (itemProduct.product_id || itemProduct.id) : item.product_id);
+        
+        const dispatchedTags = item.dispatched_rfids || [];
+        // Match 1:1 what was dispatched
+        orderState[itemPid] = [...dispatchedTags];
+      });
+
+      return {
+        ...prev,
+        [selectedOrderNo]: orderState
+      };
+    });
+    
+    toast.success("All items verified as received.");
+  }, [selectedOrderNo, selectedGroup]);
+
   const getBranchName = useCallback(
     (id: number | null) => {
       if (!id) return 'Unknown';
@@ -342,5 +395,9 @@ export function useStockTransferReceive() {
     handleScanRFID,
     getBranchName,
     refresh: fetchTransfers,
+    manualMode,
+    setManualMode,
+    updateManualQty,
+    verifyAll,
   };
 }

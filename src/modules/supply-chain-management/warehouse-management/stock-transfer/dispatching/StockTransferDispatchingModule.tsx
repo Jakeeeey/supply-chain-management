@@ -24,6 +24,8 @@ import {
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 export default function StockTransferDispatchingModule() {
   const {
@@ -37,7 +39,9 @@ export default function StockTransferDispatchingModule() {
     dispatchOrder,
     handleScanRFID,
     getBranchName,
-    updateLoosePackQty,
+    updateManualQty,
+    manualMode,
+    setManualMode,
     refresh,
   } = useStockTransferDispatching();
 
@@ -262,6 +266,20 @@ export default function StockTransferDispatchingModule() {
                 )}
               </div>
             </div>
+
+            {/* Manual Mode Toggle */}
+            <div className="flex items-center justify-end h-full pt-6">
+              <div className="flex items-center space-x-2 bg-muted/30 px-4 py-2 rounded-xl border border-dashed border-muted-foreground/20">
+                <Switch 
+                  id="manual-mode" 
+                  checked={manualMode} 
+                  onCheckedChange={setManualMode}
+                />
+                <Label htmlFor="manual-mode" className="text-xs font-bold uppercase tracking-tight cursor-pointer">
+                  Manual Entry Mode
+                </Label>
+              </div>
+            </div>
           </div>
           )}
 
@@ -340,12 +358,12 @@ export default function StockTransferDispatchingModule() {
                             {item.qtyAvailable ?? '—'}
                           </TableCell>
                           <TableCell className="text-sm font-bold">
-                            {item.isLoosePack ? (
+                            {item.isLoosePack || manualMode ? (
                               <Input
                                 type="number"
                                 className="h-8 w-20 text-center"
                                 value={item.scannedQty}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateLoosePackQty((originalId as number), Number(e.target.value))}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateManualQty((originalId as number), Number(e.target.value))}
                                 max={targetQty}
                                 min={0}
                               />

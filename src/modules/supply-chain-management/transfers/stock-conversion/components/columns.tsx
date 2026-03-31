@@ -26,6 +26,18 @@ export const getColumns = (
   {
     accessorKey: "productName",
     header: "PRODUCT NAME",
+    cell: ({ row }) => (
+      <div className="flex flex-col">
+        <span className="font-semibold text-foreground line-clamp-1">
+          {row.getValue("productName")}
+        </span>
+        {row.original.productCode && (
+          <span className="text-[10px] text-muted-foreground font-mono uppercase tracking-tighter">
+            {row.original.productCode}
+          </span>
+        )}
+      </div>
+    ),
   },
   {
     accessorKey: "currentUnit",
@@ -67,8 +79,9 @@ export const getColumns = (
           </span>
         );
       }
+      const isNegative = p.quantity < 0;
       return (
-        <span className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
+        <span className={isNegative ? "font-black text-destructive" : "font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400"}>
            {p.quantity}
         </span>
       );
@@ -91,20 +104,30 @@ export const getColumns = (
   {
     id: "actions",
     header: "ACTIONS",
-    cell: ({ row }) => (
-      <div title={!canConvert ? "Select a Branch and at least one filter (Supplier, Brand, or Category) to enable conversion" : undefined}>
-        <Button
-          variant="default"
-          size="sm"
-          className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto font-medium shadow-sm transition-colors rounded-lg flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
-          onClick={() => onConvertClick(row.original)}
-          disabled={!canConvert}
-        >
-          <ArrowLeftRight className="w-4 h-4" />
-          Convert
-        </Button>
-      </div>
-    ),
+    cell: ({ row }) => {
+      const hasStock = row.original.quantity > 0;
+      let tooltip = "";
+      if (!canConvert) {
+        tooltip = "Select a Branch and at least one filter (Supplier, Brand, or Category) to enable conversion";
+      } else if (!hasStock) {
+        tooltip = "This product has no available stock to convert FROM. You can only convert INTO this product.";
+      }
+
+      return (
+        <div title={tooltip || undefined}>
+          <Button
+            variant="default"
+            size="sm"
+            className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto font-medium shadow-sm transition-colors rounded-lg flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+            onClick={() => onConvertClick(row.original)}
+            disabled={!canConvert || !hasStock}
+          >
+            <ArrowLeftRight className="w-4 h-4" />
+            Convert
+          </Button>
+        </div>
+      );
+    },
   },
 ];
 
