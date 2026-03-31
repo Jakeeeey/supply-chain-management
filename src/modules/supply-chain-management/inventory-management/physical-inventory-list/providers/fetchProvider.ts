@@ -75,7 +75,7 @@ export async function fetchPhysicalInventoryListRows(): Promise<{
                 total_amount: header.total_amount,
                 supplier_id: header.supplier_id,
                 category_id: header.category_id,
-                encoder_id: header.encoder_id,
+                encoder_id: typeof header.encoder_id === "object" && header.encoder_id !== null ? (header.encoder_id as any).user_id : (header.encoder_id as number | null),
 
                 branch_name: header.branch_id
                     ? branchMap.get(header.branch_id)?.branch_name ?? null

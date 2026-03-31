@@ -22,6 +22,9 @@ export const dispatchPlanQueryService = {
     status?: string,
     search?: string,
     clusterId?: number,
+    branchId?: number,
+    startDate?: string,
+    endDate?: string,
   ): Promise<PaginatedDispatchPlans> {
     const params: Record<string, any> = {
       fields: "*",
@@ -41,6 +44,21 @@ export const dispatchPlanQueryService = {
 
     if (clusterId) {
       params["filter[cluster_id][_eq]"] = clusterId;
+    }
+
+    if (branchId) {
+      params["filter[branch_id][_eq]"] = branchId;
+    }
+
+    if (startDate && endDate) {
+      params["filter[dispatch_date][_between]"] = [
+        `${startDate}T00:00:00`,
+        `${endDate}T23:59:59`,
+      ];
+    } else if (startDate) {
+      params["filter[dispatch_date][_gte]"] = `${startDate}T00:00:00`;
+    } else if (endDate) {
+      params["filter[dispatch_date][_lte]"] = `${endDate}T23:59:59`;
     }
 
     const result = await fetchItems<DispatchPlan>(
@@ -315,10 +333,11 @@ export const dispatchPlanQueryService = {
           net_amount: number;
           allocated_amount: number | null;
           po_no: string | null;
+          order_status: string | null;
         }>("/items/sales_order", {
           "filter[order_id][_in]": soIds.join(","),
           fields:
-            "order_id,order_no,customer_code,total_amount,net_amount,allocated_amount,po_no",
+            "order_id,order_no,order_status,customer_code,total_amount,net_amount,allocated_amount,po_no",
           limit: -1,
         }),
       ]);
@@ -424,8 +443,13 @@ export const dispatchPlanQueryService = {
             customer?.customer_name || customer?.store_name || "\u2014",
           city: customer?.city ?? undefined,
           province: customer?.province ?? undefined,
-          amount: order?.allocated_amount ?? order?.net_amount ?? order?.total_amount ?? 0,
+          amount:
+            order?.allocated_amount ??
+            order?.net_amount ??
+            order?.total_amount ??
+            0,
           po_no: order?.po_no ?? undefined,
+          order_status: order?.order_status,
           weight: soWeightMap.get(detail.sales_order_id) || 0,
         } as any);
       }
@@ -462,27 +486,37 @@ export const dispatchPlanQueryService = {
       allowedAreas = areasRes.data || [];
     }
 
-    // Step 2: Fetch sales order details as the base table (Detail-First approach)
-    const detailsParams: Record<string, any> = {
-      "filter[order_id][order_status][_eq]": "For Consolidation",
+    // Step 2: Fetch sales order details as the base table (Split-Fetch approach)
+    // We fetch statuses in parallel to avoid one status burying the other due to limits
+    const baseParams: Record<string, any> = {
       fields:
-        "ordered_quantity,allocated_quantity,product_id,order_id.order_id,order_id.order_no,order_id.customer_code,order_id.total_amount,order_id.net_amount,order_id.allocated_amount,order_id.po_no",
+        "ordered_quantity,allocated_quantity,product_id,order_id.order_id,order_id.order_no,order_id.order_status,order_id.customer_code,order_id.total_amount,order_id.net_amount,order_id.allocated_amount,order_id.po_no",
       limit: -1,
     };
 
     if (search) {
-      detailsParams["filter[order_id][order_no][_contains]"] = search;
+      baseParams["filter[order_id][order_no][_icontains]"] = search;
     }
 
     if (branchId) {
-      detailsParams["filter[order_id][branch_id][_eq]"] = branchId;
+      baseParams["filter[order_id][branch_id][_eq]"] = branchId;
     }
 
-    const detailsRes = await fetchItems<any>(
-      "/items/sales_order_details",
-      detailsParams,
-    );
-    const details = detailsRes.data || [];
+    const [consolidationRes, notFulfilledRes] = await Promise.all([
+      fetchItems<any>("/items/sales_order_details", {
+        ...baseParams,
+        "filter[order_id][order_status][_eq]": "For Consolidation",
+      }),
+      fetchItems<any>("/items/sales_order_details", {
+        ...baseParams,
+        "filter[order_id][order_status][_eq]": "Not Fulfilled",
+      }),
+    ]);
+
+    const details = [
+      ...(consolidationRes.data || []),
+      ...(notFulfilledRes.data || []),
+    ];
 
     if (!details.length) return [];
 
@@ -561,14 +595,58 @@ export const dispatchPlanQueryService = {
       );
     }
 
+    // Step 5.5: Filter "Not Fulfilled" by Clearance Status
+    const notFulfilledOrderNos = orderList
+      .filter((o) => o.order_status === "Not Fulfilled")
+      .map((o) => o.order_no)
+      .filter(Boolean);
+
+    const clearedOrderNos = new Set<string>();
+    if (notFulfilledOrderNos.length) {
+      // 1. Fetch invoices matching these order numbers
+      const invoicesRes = await fetchItems<any>("/items/sales_invoice", {
+        "filter[order_id][_in]": notFulfilledOrderNos.join(","),
+        fields: "invoice_id,order_id",
+        limit: -1,
+      });
+      const invoices = invoicesRes.data || [];
+      const invoiceIds = invoices.map((i: any) => i.invoice_id);
+
+      if (invoiceIds.length) {
+        // 2. Check which of these invoices are cleared
+        const clearanceRes = await fetchItems<any>(
+          "/items/post_dispatch_invoices",
+          {
+            "filter[invoice_id][_in]": invoiceIds.join(","),
+            "filter[isCleared][_eq]": 1,
+            fields: "invoice_id",
+            limit: -1,
+          },
+        );
+        const clearedInvoiceIds = new Set(
+          (clearanceRes.data || []).map((c: any) => c.invoice_id),
+        );
+
+        // 3. Map back to order numbers
+        invoices.forEach((inv: any) => {
+          if (clearedInvoiceIds.has(inv.invoice_id)) {
+            clearedOrderNos.add(inv.order_id);
+          }
+        });
+      }
+    }
+
     // Step 6: Filter by Cluster Area and Exclude Assigned Orders
     const allOrderIds = orderList.map((o) => o.order_id);
     let assignedOrderIds = new Set<number>();
+    // Step 7: Exclude Already Assigned Orders (Only for non-terminal plans)
     if (allOrderIds.length) {
       const assignedRes = await fetchItems<{ sales_order_id: number }>(
         "/items/dispatch_plan_details",
         {
           "filter[sales_order_id][_in]": allOrderIds.join(","),
+          "filter[dispatch_id][status][_nin]": "Dispatched,Cancelled,Delivered",
+          "filter[sales_order_id][order_status][_neq]": "Not Fulfilled",
           fields: "sales_order_id",
           limit: -1,
         },
@@ -581,6 +659,13 @@ export const dispatchPlanQueryService = {
     // Final construction and filtering
     return orderList
       .filter((o) => !assignedOrderIds.has(o.order_id))
+      .filter((o) => {
+        // If Not Fulfilled, must be cleared
+        if (o.order_status === "Not Fulfilled") {
+          return clearedOrderNos.has(o.order_no);
+        }
+        return true;
+      })
       .filter((o) => {
         if (!clusterId || !allowedAreas.length) return true;
         const customer = customerMap.get(o.customer_code);
@@ -605,6 +690,7 @@ export const dispatchPlanQueryService = {
           net_amount: o.net_amount,
           allocated_amount: o.allocated_amount,
           po_no: o.po_no,
+          order_status: o.order_status,
           total_weight: o.total_weight,
         };
       });

@@ -7,7 +7,12 @@ export async function GET(req: NextRequest) {
     const cookieStore = await cookies();
     const token = cookieStore.get("vos_access_token")?.value;
 
-    if (!token) return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
+    // 👇 Print the token to the server console
+    console.log("Access Token:", token);
+
+    if (!token) {
+        return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
+    }
 
     const springBaseUrl = process.env.SPRING_API_BASE_URL?.replace(/\/$/, "");
     const targetUrl = `${springBaseUrl}/api/v1/dispatch-approvals/pending`;

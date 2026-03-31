@@ -35,39 +35,39 @@ export function PDPMetrics({ metrics }: PDPMetricsProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
       <PDPMetricCard
-        title="Pending Plans"
+        title="Pending PDP's"
         value={data.pendingCount}
-        trend={{ value: "12%", isUp: true }}
+        // trend={{ value: "12%", isUp: true }}
         icon={ClipboardList}
       />
       <PDPMetricCard
-        title="Pending Value"
+        title="Pending PDP Amount"
         value={`₱${data.pendingValue.toLocaleString()}`}
-        trend={{ value: "8%", isUp: true }}
+        // trend={{ value: "8%", isUp: true }}
         icon={DollarSign}
       />
       <PDPMetricCard
-        title="Ready for Picking"
+        title="Approved PDP's"
         value={data.readyCount}
-        trend={{ value: "8%", isUp: true }}
+        // trend={{ value: "8%", isUp: true }}
         icon={CheckCircle2}
       />
       <PDPMetricCard
-        title="Active Picking"
+        title="Active Picking/Picked"
         value={data.activeCount}
-        trend={{ value: "3%", isUp: false }}
+        // trend={{ value: "3%", isUp: false }}
         icon={Package}
       />
       <PDPMetricCard
         title="Dispatched Plans"
         value={data.dispatchedCount}
-        trend={{ value: "15%", isUp: true }}
+        // trend={{ value: "15%", isUp: true }}
         icon={Truck}
       />
       <PDPMetricCard
         title="Dispatched Value"
         value={`₱${data.dispatchedValue.toLocaleString()}`}
-        trend={{ value: "22%", isUp: true }}
+        // trend={{ value: "22%", isUp: true }}
         icon={TrendingUp}
       />
     </div>

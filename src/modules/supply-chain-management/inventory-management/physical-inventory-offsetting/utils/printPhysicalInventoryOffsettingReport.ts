@@ -13,6 +13,7 @@ type PrintArgs = {
     unresolvedShortRows: OffsettingSelectableRow[];
     unresolvedOverRows: OffsettingSelectableRow[];
     offsetGroups: PhysicalInventoryOffsetGroup[];
+    preparedBy?: string;
 };
 
 function escapeHtml(value: string): string {
@@ -70,35 +71,58 @@ function moneyCell(value: number, variant: "default" | "offset" = "default"): st
     `;
 }
 
-function renderFindingsRows(rows: OffsettingSelectableRow[]): string {
-    if (!rows.length) {
-        return `
-            <tr>
-                <td colspan="5" class="empty-cell">No records found.</td>
-            </tr>
-        `;
+function renderFindingsRow(row: OffsettingSelectableRow): string {
+    const varianceValue = Math.abs(row.variance_base ?? row.variance ?? 0);
+    const diffCost = Math.abs(row.difference_cost ?? 0);
+
+    return `
+        <tr>
+            <td class="findings-product-cell">
+                <div class="wrap-text">
+                    ${escapeHtml(row.product_label)}
+                </div>
+            </td>
+            <td>${escapeHtml(String(row.detail_id || row.product_id))}</td>
+            <td class="text-right number">${fmtNumber(varianceValue)}</td>
+            <td class="text-right">${moneyCell(diffCost, "default")}</td>
+            <td class="text-right">${moneyCell(row.selection_amount, "default")}</td>
+        </tr>
+    `;
+}
+
+function renderFindingsSectionRows(
+    allRows: OffsettingSelectableRow[],
+    offsetGroups: PhysicalInventoryOffsetGroup[],
+): string {
+    // Collect all row_ids that appear in any offset group
+    const offsetRowIds = new Set<number>();
+    for (const group of offsetGroups) {
+        for (const r of group.short_rows) offsetRowIds.add(r.row_id);
+        for (const r of group.over_rows) offsetRowIds.add(r.row_id);
     }
 
-    return rows
-        .map((row) => {
-            const varianceValue = Math.abs(row.variance_base ?? row.variance ?? 0);
-            const diffCost = Math.abs(row.difference_cost ?? 0);
+    const notOffsetRows = allRows.filter((r) => !offsetRowIds.has(r.row_id));
+    const offsetRows = allRows.filter((r) => offsetRowIds.has(r.row_id));
 
-            return `
-                <tr>
-                    <td class="findings-product-cell">
-                        <div class="wrap-text">
-                            ${escapeHtml(row.product_label)}
-                        </div>
-                    </td>
-                    <td>${escapeHtml(String(row.detail_id || row.product_id))}</td>
-                    <td class="text-right number">${fmtNumber(varianceValue)}</td>
-                    <td class="text-right">${moneyCell(diffCost, "default")}</td>
-                    <td class="text-right">${moneyCell(row.selection_amount, "default")}</td>
-                </tr>
-            `;
-        })
-        .join("");
+    let html = "";
+
+    // --- Not Offset sub-group ---
+    html += `<tr class="subgroup-header"><td colspan="5">Not Offset</td></tr>`;
+    if (notOffsetRows.length === 0) {
+        html += `<tr><td colspan="5" class="empty-cell">No records found.</td></tr>`;
+    } else {
+        html += notOffsetRows.map(renderFindingsRow).join("");
+    }
+
+    // --- Offset Products sub-group ---
+    html += `<tr class="subgroup-header"><td colspan="5">Offset Products</td></tr>`;
+    if (offsetRows.length === 0) {
+        html += `<tr><td colspan="5" class="empty-cell">No records found.</td></tr>`;
+    } else {
+        html += offsetRows.map(renderFindingsRow).join("");
+    }
+
+    return html;
 }
 
 function renderOffsetGroups(groups: PhysicalInventoryOffsetGroup[]): string {
@@ -115,8 +139,9 @@ function renderOffsetGroups(groups: PhysicalInventoryOffsetGroup[]): string {
             const shortLabels = group.short_rows
                 .map(
                     (row) => `
-                        <div class="truncate" title="${escapeHtml(row.product_label)}">
-                            ${escapeHtml(row.product_label)}
+                        <div class="product-item wrap-text" title="${escapeHtml(row.product_label)}">
+                            <span class="product-name">${escapeHtml(row.product_label)}</span>
+                            <span class="product-variance">(${fmtNumber(Math.abs(row.variance_base ?? row.variance ?? 0))} ${escapeHtml(row.unit_shortcut || row.unit_name || "PCS")})</span>
                         </div>
                     `,
                 )
@@ -125,8 +150,9 @@ function renderOffsetGroups(groups: PhysicalInventoryOffsetGroup[]): string {
             const overLabels = group.over_rows
                 .map(
                     (row) => `
-                        <div class="truncate" title="${escapeHtml(row.product_label)}">
-                            ${escapeHtml(row.product_label)}
+                        <div class="product-item wrap-text" title="${escapeHtml(row.product_label)}">
+                            <span class="product-name">${escapeHtml(row.product_label)}</span>
+                            <span class="product-variance">(${fmtNumber(Math.abs(row.variance_base ?? row.variance ?? 0))} ${escapeHtml(row.unit_shortcut || row.unit_name || "PCS")})</span>
                         </div>
                     `,
                 )
@@ -158,6 +184,7 @@ export function printPhysicalInventoryOffsettingReport(args: PrintArgs): void {
         unresolvedShortRows,
         unresolvedOverRows,
         offsetGroups,
+        preparedBy,
     } = args;
 
     const totalShortAmount = sumRowAmounts(allShortRows);
@@ -396,6 +423,10 @@ export function printPhysicalInventoryOffsettingReport(args: PrintArgs): void {
             line-height: 1.35;
         }
 
+        .page-break {
+            page-break-before: always;
+        }
+
         .truncate {
             display: block;
             width: 100%;
@@ -405,8 +436,36 @@ export function printPhysicalInventoryOffsettingReport(args: PrintArgs): void {
             line-height: 1.35;
         }
 
+        .product-item {
+            padding: 4px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .product-variance {
+            color: var(--muted);
+            font-size: 10px;
+            font-weight: 400;
+        }
+
+        .product-item + .product-item {
+            border-top: 1px solid #e5e7eb;
+        }
+
         .findings-product-cell {
             min-width: 320px;
+        }
+
+        .subgroup-header td {
+            background: #e8eaed;
+            font-weight: 700;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            padding: 5px 8px;
+            color: #374151;
+            border-bottom: 2px solid var(--border);
         }
 
         .offset-col {
@@ -443,24 +502,28 @@ export function printPhysicalInventoryOffsettingReport(args: PrintArgs): void {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 18px;
-            margin-top: 28px;
+            margin-top: 48px;
         }
 
         .signoff-box {
             text-align: center;
-            padding-top: 28px;
+        }
+
+        .signoff-name {
+            font-weight: 700;
+            font-size: 13px;
+            margin-bottom: 2px;
+            min-height: 1.4em;
         }
 
         .signoff-line {
             border-top: 1px solid #111827;
-            padding-top: 6px;
-            font-weight: 700;
         }
 
         .signoff-role {
             color: var(--muted);
             font-size: 11px;
-            margin-top: 2px;
+            margin-top: 4px;
         }
 
         .w-id { width: 10%; }
@@ -547,7 +610,7 @@ export function printPhysicalInventoryOffsettingReport(args: PrintArgs): void {
                 </div>
                 <div class="detail-line">
                     <div class="detail-label">Record ID</div>
-                    <div class="detail-value">${escapeHtml(String(header.id))}</div>
+                    <div class="detail-value">${escapeHtml(header.ph_no || String(header.id))}</div>
                 </div>
             </div>
         </div>
@@ -609,7 +672,7 @@ export function printPhysicalInventoryOffsettingReport(args: PrintArgs): void {
                 </tr>
             </thead>
             <tbody>
-                ${renderFindingsRows(allShortRows)}
+                ${renderFindingsSectionRows(allShortRows, offsetGroups)}
             </tbody>
         </table>
     </div>
@@ -627,12 +690,12 @@ export function printPhysicalInventoryOffsettingReport(args: PrintArgs): void {
                 </tr>
             </thead>
             <tbody>
-                ${renderFindingsRows(allOverRows)}
+                ${renderFindingsSectionRows(allOverRows, offsetGroups)}
             </tbody>
         </table>
     </div>
 
-    <div class="section">
+    <div class="section page-break">
         <h3 class="section-title">Manual Offsetting Summary</h3>
         <table class="offset-table">
             <thead>
@@ -677,16 +740,19 @@ export function printPhysicalInventoryOffsettingReport(args: PrintArgs): void {
 
     <div class="signoff-grid">
         <div class="signoff-box">
-            <div class="signoff-line">Prepared By</div>
-            <div class="signoff-role">Inventory Personnel</div>
+            <div class="signoff-name">${escapeHtml(preparedBy || "")}</div>
+            <div class="signoff-line"></div>
+            <div class="signoff-role">Prepared By</div>
         </div>
         <div class="signoff-box">
-            <div class="signoff-line">Reviewed By</div>
-            <div class="signoff-role">Warehouse Supervisor</div>
+            <div class="signoff-name"></div>
+            <div class="signoff-line"></div>
+            <div class="signoff-role">Reviewed By</div>
         </div>
         <div class="signoff-box">
-            <div class="signoff-line">Approved By</div>
-            <div class="signoff-role">Department Manager</div>
+            <div class="signoff-name"></div>
+            <div class="signoff-line"></div>
+            <div class="signoff-role">Approved By</div>
         </div>
     </div>
 </body>

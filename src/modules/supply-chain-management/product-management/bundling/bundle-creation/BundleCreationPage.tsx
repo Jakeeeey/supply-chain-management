@@ -62,8 +62,8 @@ export default function BundleCreationPage() {
       }
       setIsCreateOpen(false);
       setEditDraftId(null);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to save bundle");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to save bundle");
     }
   };
 
@@ -87,8 +87,8 @@ export default function BundleCreationPage() {
     try {
       await submitForApproval(id);
       toast.success("Bundle submitted for approval");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to submit bundle");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to submit bundle");
     }
   };
 
@@ -96,8 +96,8 @@ export default function BundleCreationPage() {
     try {
       await deleteDraft(id);
       toast.success("Bundle deleted successfully");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to delete bundle");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete bundle");
     }
   };
 
@@ -114,8 +114,8 @@ export default function BundleCreationPage() {
       }
       setBulkAction(null);
       setSelectedRows([]);
-    } catch (err: any) {
-      toast.error(err.message || "Bulk operation failed");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Bulk operation failed");
     } finally {
       setIsProcessing(false);
     }
@@ -138,7 +138,7 @@ export default function BundleCreationPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Types</SelectItem>
-            {masterData?.bundleTypes.map((t: any) => (
+            {masterData?.bundleTypes.map((t) => (
               <SelectItem key={t.id} value={t.id.toString()}>
                 {t.name}
               </SelectItem>

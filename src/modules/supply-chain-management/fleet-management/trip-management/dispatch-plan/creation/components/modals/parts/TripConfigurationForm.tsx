@@ -34,20 +34,23 @@ export function TripConfigurationForm({ masterData }: TripConfigurationFormProps
     name: "helpers",
   });
 
-  // Watch helper values for filtering duplicates
+  // Watch helper values and driver for filtering duplicates
   const selectedHelpers = form.watch("helpers") || [];
-  const selectedHelperIds = useMemo(() => 
-    new Set(selectedHelpers.map(h => h.user_id).filter(id => id > 0)),
-    [selectedHelpers]
-  );
+  const driverId = form.watch("driver_id");
 
   const getHelperOptions = (currentIndex: number) => {
     if (!masterData?.helpers) return [];
+    
+    // Calculate disabled IDs on the fly to avoid reference staleness from React Hook Form
+    const currentDisabledIds = new Set(selectedHelpers.map(h => h.user_id).filter(id => id > 0));
+    if (driverId) currentDisabledIds.add(driverId);
+
     const currentId = selectedHelpers[currentIndex]?.user_id;
+
     return masterData.helpers.map(h => ({
       value: String(h.user_id),
       label: `${h.user_fname} ${h.user_lname}`,
-      disabled: h.user_id !== currentId && selectedHelperIds.has(h.user_id)
+      disabled: h.user_id !== currentId && currentDisabledIds.has(h.user_id)
     }));
   };
 
@@ -164,7 +167,8 @@ export function TripConfigurationForm({ masterData }: TripConfigurationFormProps
                   <Combobox
                     options={masterData?.drivers.map(d => ({
                       value: String(d.user_id),
-                      label: `${d.user_fname} ${d.user_lname}`
+                      label: `${d.user_fname} ${d.user_lname}`,
+                      disabled: selectedHelpers.some(h => h.user_id === d.user_id)
                     })) || []}
                     value={field.value ? String(field.value) : ""}
                     onValueChange={(val) => field.onChange(Number(val))}
@@ -265,7 +269,7 @@ export function TripConfigurationForm({ masterData }: TripConfigurationFormProps
         </section>
       )}
 
-      {helperFields.length < 3 && (
+      {helperFields.length < 2 && (
         <Button
           type="button"
           variant="outline"

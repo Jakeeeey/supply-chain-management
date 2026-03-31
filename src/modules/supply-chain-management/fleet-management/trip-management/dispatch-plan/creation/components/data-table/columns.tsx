@@ -4,8 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
-import { DataTableColumnHeader } from "./table-column-header";
 import { Users } from "lucide-react";
+import { DataTableColumnHeader } from "./table-column-header";
 
 export type CustomerTransaction = {
   id: string;
@@ -203,13 +203,18 @@ export const getDispatchPlanColumns = (
   {
     id: "actions",
     header: "",
-    cell: ({ row }) => (
-      <Button
-        className="text-sm rounded-lg"
-        onClick={() => onEdit(row.original)}
-      >
-        Edit
-      </Button>
-    ),
+    cell: ({ row }) => {
+      const status = row.original.status;
+      const isEditable = status === "For Approval" || status === "DRAFT";
+      if (!isEditable) return null;
+      return (
+        <Button
+          className="text-sm rounded-lg"
+          onClick={() => onEdit(row.original)}
+        >
+          Edit
+        </Button>
+      );
+    },
   },
 ];

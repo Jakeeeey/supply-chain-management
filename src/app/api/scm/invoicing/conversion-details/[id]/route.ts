@@ -100,8 +100,9 @@ export async function GET(
             console.log(`[Conversion API] Mapped ${Object.keys(productMap).length} product names and units`);
         }
 
-        // 4. Find the Consolidator and Logistics Info
-        const dpdRes = await fetch(`${DIRECTUS_BASE}/items/dispatch_plan_details?filter[sales_order_id][_eq]=${orderId}&fields=dispatch_id.dispatch_no`, {
+        // 4. Find the LATEST Consolidator and Logistics Info (Source of Truth)
+        // Sort by dispatch_id DESC to get the most recent process
+        const dpdRes = await fetch(`${DIRECTUS_BASE}/items/dispatch_plan_details?filter[sales_order_id][_eq]=${orderId}&fields=dispatch_id.dispatch_no,dispatch_id.dispatch_id&sort=-dispatch_id`, {
             headers: directusHeaders()
         });
         const dpdData = await dpdRes.json();
@@ -124,6 +125,9 @@ export async function GET(
 
         // 5. Fetch Consolidation Details for quantity pool
         let conDetailsMap: Record<string, any> = {};
+        let totalAllocated = 0;
+        let totalPicked = 0;
+        
         if (consolidatorId) {
             const cdRes = await fetch(`${DIRECTUS_BASE}/items/consolidator_details?filter[consolidator_id][_eq]=${consolidatorId}&fields=*`, {
                 headers: directusHeaders()
@@ -132,6 +136,10 @@ export async function GET(
             (cdData.data || []).forEach((cd: any) => {
                 const pid = normalizeId(cd.product_id);
                 if (pid) conDetailsMap[String(pid)] = cd;
+                
+                // Aggregate totals for the whole consolidator
+                totalAllocated += (Number(cd.ordered_quantity) || 0);
+                totalPicked += (Number(cd.picked_quantity) || 0);
             });
         }
 
@@ -148,6 +156,8 @@ export async function GET(
             const picked = cd.picked_quantity || 0;
             const applied = cd.applied_quantity || 0;
             const remaining = picked - applied;
+            
+            const conOrdered = cd.ordered_quantity || 0;
 
             return {
                 product_id: pid || 0,
@@ -155,6 +165,8 @@ export async function GET(
                 consolidator_no: consolidatorNo,
                 order_no: order.order_no,
                 ordered_quantity: sod.ordered_quantity,
+                allocated_quantity: sod.allocated_quantity || 0,
+                total_allocated_quantity: conOrdered,
                 picked_quantity: picked,
                 applied_quantity: applied,
                 remaining_quantity: remaining,
@@ -175,7 +187,9 @@ export async function GET(
             is_official: order.receipt_type?.isOfficial ?? null,
             discount_types: dtData.data || [],
             customer: customerInfo,
-            payment_name: paymentName
+            payment_name: paymentName,
+            total_allocated_quantity: totalAllocated,
+            total_picked_quantity: totalPicked
         });
 
     } catch (err: any) {

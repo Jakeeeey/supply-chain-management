@@ -1,17 +1,17 @@
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowRight } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { ArrowRight, Loader2 } from "lucide-react";
 import { DispatchCreationMasterData } from "../../../types/dispatch.types";
 import { PlanDetailItem } from "./types";
-import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
+import { computeDeliveryDays, groupPlanDetails } from "./utils";
 
 interface DispatchConfirmationModalProps {
   open: boolean;
@@ -38,22 +38,23 @@ export function DispatchConfirmationModal({
 
   // Computations
   const startingPointNode = masterData?.branches?.find(
-    (b: { id: number; branch_name: string }) => b.id === payload.starting_point
+    (b: { id: number; branch_name: string }) => b.id === payload.starting_point,
   );
   const startingPointName = startingPointNode?.branch_name || "Unknown";
 
-  const totalTransactions = planDetails.filter(
-    (d) => !d.isManualStop && !d.isPoStop
-  ).length;
+  const totalTransactions = planDetails.length;
 
-  const totalStops = planDetails.length;
+  const totalStops = groupPlanDetails(planDetails).length;
 
   const totalDistance = planDetails.reduce(
     (sum, d) => sum + (d.distance || 0),
-    0
+    0,
   );
 
-  const deliveryDays = 1.0; // Default or could be computed
+  const deliveryDays = computeDeliveryDays(
+    payload.estimated_time_of_dispatch,
+    payload.estimated_time_of_arrival,
+  );
 
   const tripAmount = payload.amount || 0;
 
@@ -65,7 +66,10 @@ export function DispatchConfirmationModal({
         <DialogHeader className="px-6 py-5 border-b border-border/50 bg-muted/20">
           <DialogTitle className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
             New Dispatch Plan
-            <Badge variant="secondary" className="font-mono text-xs font-medium px-2 py-0.5 ml-2">
+            <Badge
+              variant="secondary"
+              className="font-mono text-xs font-medium px-2 py-0.5 ml-2"
+            >
               DRAFT
             </Badge>
           </DialogTitle>
@@ -77,14 +81,18 @@ export function DispatchConfirmationModal({
               <span className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
                 Starting Point
               </span>
-              <span className="font-medium text-foreground">{startingPointName}</span>
+              <span className="font-medium text-foreground">
+                {startingPointName}
+              </span>
             </div>
 
             <div className="flex flex-col gap-1 border-b border-border/40 pb-2 text-right">
               <span className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
                 Total Transactions
               </span>
-              <span className="font-medium text-foreground">{totalTransactions}</span>
+              <span className="font-medium text-foreground">
+                {totalTransactions}
+              </span>
             </div>
 
             <div className="flex flex-col gap-1 border-b border-border/40 pb-2">
@@ -108,7 +116,7 @@ export function DispatchConfirmationModal({
                 Delivery Days
               </span>
               <span className="font-medium text-foreground">
-                {deliveryDays.toFixed(2)}
+                {Math.ceil(deliveryDays)}
               </span>
             </div>
 
@@ -117,7 +125,10 @@ export function DispatchConfirmationModal({
                 Trip Amount
               </span>
               <span className="font-medium text-foreground tabular-nums">
-                ₱{Number(tripAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                ₱
+                {Number(tripAmount).toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                })}
               </span>
             </div>
           </div>

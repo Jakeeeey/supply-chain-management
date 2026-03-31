@@ -108,8 +108,13 @@ export const skuSchema = z
 
 export type SKU = z.infer<typeof skuSchema>;
 
+export interface SKUUnit {
+  id: number;
+  name: string;
+}
+
 export interface MasterData {
-  units: { id: number; name: string }[];
+  units: SKUUnit[];
   categories: { id: number; name: string; code: string }[];
   brands: { id: number; name: string; code: string }[];
   suppliers: { id: number; name: string }[];

@@ -40,7 +40,7 @@ export function useDispatchCreation() {
     setIsLoadingSummary(true);
     try {
       const res = await fetch(
-        "/api/scm/fleet-management/trip-management/dispatch-summary",
+        "/api/scm/fleet-management/trip-management/dispatch-plan/creation/summary",
         { cache: "no-store" },
       );
       const result = await res.json();

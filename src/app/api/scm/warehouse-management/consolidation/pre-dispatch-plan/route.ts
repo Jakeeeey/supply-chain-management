@@ -34,8 +34,19 @@ export async function GET(req: NextRequest) {
     // Dashboard metrics
     if (type === "metrics") {
       const clusterId = searchParams.get("cluster_id");
+      const branchId = searchParams.get("branch_id");
+      const status = searchParams.get("status");
+      const search = searchParams.get("search");
+      const startDate = searchParams.get("start_date");
+      const endDate = searchParams.get("end_date");
+
       const data = await dispatchPlanService.fetchMetrics(
         clusterId ? Number(clusterId) : undefined,
+        branchId ? Number(branchId) : undefined,
+        status || undefined,
+        search || undefined,
+        startDate || undefined,
+        endDate || undefined,
       );
       return NextResponse.json({ data });
     }
@@ -47,6 +58,9 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get("status") || undefined;
     const search = searchParams.get("search") || undefined;
     const clusterId = searchParams.get("cluster_id") || undefined;
+    const branchId = searchParams.get("branch_id") || undefined;
+    const startDate = searchParams.get("start_date") || undefined;
+    const endDate = searchParams.get("end_date") || undefined;
 
     const result = await dispatchPlanService.fetchPlans(
       limit,
@@ -54,6 +68,9 @@ export async function GET(req: NextRequest) {
       status,
       search,
       clusterId ? Number(clusterId) : undefined,
+      branchId ? Number(branchId) : undefined,
+      startDate,
+      endDate,
     );
 
     return NextResponse.json(result);

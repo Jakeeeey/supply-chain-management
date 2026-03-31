@@ -13,10 +13,10 @@ import type { CartItem } from "../types/rts.schema";
  */
 export const calculateLineItem = (item: CartItem) => {
   const price = item.customPrice ?? item.price;
-  // Formula: Discount Amount = (unit price x Qty) x Discount type
-  const discountAmount = (price * item.quantity) * item.discount;
-  const gross = price * item.quantity;
-  const net = gross - discountAmount;
+  // Round each step to 2 decimal places to match the UI display
+  const gross = Math.round(price * item.quantity * 100) / 100;
+  const discountAmount = Math.round(gross * item.discount * 100) / 100;
+  const net = Math.round((gross - discountAmount) * 100) / 100;
   return { gross, discountAmount, net };
 };
 

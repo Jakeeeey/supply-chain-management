@@ -20,6 +20,14 @@ export interface SalesReturnItem {
   totalAmount: number;
   reason?: string;
   returnType?: string;
+  rfidTags?: string[];
+  // 🟢 Fields for Price Type Recalculation
+  priceA?: number;
+  priceB?: number;
+  priceC?: number;
+  priceD?: number;
+  priceE?: number;
+  unitMultiplier?: number;
 }
 
 export interface SalesReturn {
@@ -37,6 +45,8 @@ export interface SalesReturn {
   orderNo?: string;
   isThirdParty?: boolean;
   priceType?: string;
+  isReceived?: boolean;
+  receivedAt?: string;
   createdDate?: string;
   createdAt?: string;
 }
@@ -81,11 +91,12 @@ export interface Product {
   unit_of_measurement: number;
   unit_of_measurement_count: number;
 
-  // 🟢 UPDATE: Add price fields from your API
+  // Price fields from products table (A through E)
   priceA: number;
   priceB?: number;
   priceC?: number;
-  // ... add others if needed
+  priceD?: number;
+  priceE?: number;
 }
 
 // ... rest of the file ...
@@ -99,14 +110,21 @@ export interface ProductSupplierConnection {
 // --- API LOOKUPS ---
 export interface API_LineDiscount {
   id: number;
-  line_discount: string;
-  percentage: string;
+  discount_type: string;
+  total_percent: string;
 }
 
 export interface API_SalesReturnType {
   type_id: number;
   type_name: string;
   description: string;
+}
+
+// --- PRICE TYPE OPTIONS (from price_types table) ---
+export interface PriceTypeOption {
+  price_type_id: number;
+  price_type_name: string;
+  sort?: number;
 }
 
 export interface API_SalesReturnDetail {

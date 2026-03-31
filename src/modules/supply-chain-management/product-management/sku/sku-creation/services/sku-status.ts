@@ -8,7 +8,7 @@ export const skuStatusService = {
   async updateProductStatus(
     id: number | string,
     isActive: boolean,
-  ): Promise<any> {
+  ): Promise<unknown> {
     const val = isActive ? 1 : 0;
     const status = isActive ? "ACTIVE" : "INACTIVE";
 
@@ -25,7 +25,7 @@ export const skuStatusService = {
   async bulkUpdateProductStatus(
     ids: (number | string)[],
     isActive: boolean,
-  ): Promise<any> {
+  ): Promise<unknown> {
     const val = isActive ? 1 : 0;
     const status = isActive ? "ACTIVE" : "INACTIVE";
 

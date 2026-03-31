@@ -25,6 +25,7 @@ import type {
   RawSalesInvoice,
   RawSalesOrder,
   UpdateHeaderPayload,
+  PostDispatchInvoiceRow,
 } from "../types/dispatch.types";
 import { fetchItems } from "./api";
 import { directusHeaders, getDirectusBaseUrl } from "./dispatch.helpers";
@@ -225,7 +226,8 @@ export async function fetchMasterData(): Promise<DispatchCreationMasterData> {
     }),
     // Fetch Chart of Accounts for Budgeting
     fetchItems<COAOption>("/items/chart_of_accounts", {
-      fields: "coa_id,account_title,gl_code",
+      fields: "coa_id,account_title,gl_code,account_type,is_payment",
+      "filter[_and][0][account_type][_in]": "8,9",
       limit: -1,
     }),
   ]);
@@ -468,13 +470,14 @@ export async function fetchPlanDetails(
   // 2. Identify already linked invoices & manual stops if in Edit mode
   const currentlyLinkedInvIds = new Set<number>();
   let manualStops: EnrichedPlanDetail[] = [];
+  const invoiceSequenceMap = new Map<number, { sequence: number; status: string }>();
 
   if (tripId) {
     const [tripInvoicesRes, tripOthersRes, tripPurchasesRes] =
       await Promise.all([
-        fetchItems<{ invoice_id: number }>("/items/post_dispatch_invoices", {
+        fetchItems<PostDispatchInvoiceRow>("/items/post_dispatch_invoices", {
           "filter[post_dispatch_plan_id][_eq]": tripId,
-          fields: "invoice_id",
+          fields: "invoice_id,sequence,status",
           limit: -1,
         }),
         fetchItems<{
@@ -509,7 +512,13 @@ export async function fetchPlanDetails(
 
     (tripInvoicesRes.data || []).forEach((ti) => {
       const id = Number(ti.invoice_id);
-      if (id) currentlyLinkedInvIds.add(id);
+      if (id) {
+        currentlyLinkedInvIds.add(id);
+        invoiceSequenceMap.set(id, {
+          sequence: ti.sequence,
+          status: ti.status || "Not Fulfilled",
+        });
+      }
     });
 
     // Extract manual stops (those that don't correspond to the currently fetched PDP invoices)
@@ -605,16 +614,19 @@ export async function fetchPlanDetails(
         ? customerMap.get(String(order.customer_code))
         : undefined;
 
+      const tripData = invoiceSequenceMap.get(invId);
+
       return {
         detail_id: d.detail_id,
         sales_order_id: Number(d.sales_order_id),
         invoice_id: invId || undefined,
         order_no: orderNo || "—",
-        order_status: invoice?.transaction_status || orderStatus,
+        order_status: tripData?.status || invoice?.transaction_status || orderStatus,
         true_order_status: orderStatus,
         customer_name: customer?.customer_name || customer?.store_name || "—",
         city: customer?.city || "—",
         amount: order.net_amount ?? order.total_amount ?? 0,
+        sequence: tripData?.sequence,
       };
     })
     .filter((d): d is EnrichedPlanDetail => d !== null);
@@ -704,8 +716,9 @@ export async function fetchPlanDetails(
  */
 export async function fetchPurchaseOrders(query?: string): Promise<any[]> {
   const params: any = {
-    fields: "purchase_order_id,purchase_order_no",
+    fields: "purchase_order_id,purchase_order_no,date,supplier_name,total_amount,inventory_status",
     limit: -1,
+    sort: "-date",
   };
   if (query) {
     params["filter[purchase_order_no][_contains]"] = query;

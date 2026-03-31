@@ -3,6 +3,9 @@ export interface StopItemDto {
     quantity: number;
     unit: string;
     amount: number;
+    supplier: string;
+    brand: string;
+    category: string;
 }
 
 export interface StopDto {
@@ -14,6 +17,7 @@ export interface StopDto {
     distance: number;
     status: string;
     remarks?: string;
+    date: string;
     items?: StopItemDto[];
 }
 

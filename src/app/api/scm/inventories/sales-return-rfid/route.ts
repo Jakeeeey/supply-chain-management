@@ -14,12 +14,14 @@ import {
   fetchStatusCard,
   fetchRfidTags,
   lookupRfid,
+  checkRfidDuplicate,
   submitReturn,
   updateReturn,
   updateStatus,
 } from "@/modules/supply-chain-management/inventories/sales-return-rfid/services/sales-return-service";
-
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 function json(res: any, status = 200) {
   return NextResponse.json(res, { status });
@@ -41,6 +43,7 @@ export async function GET(req: NextRequest) {
           salesman: url.searchParams.get("salesman") || undefined,
           customer: url.searchParams.get("customer") || undefined,
           status: url.searchParams.get("status") || undefined,
+          invoiceNo: url.searchParams.get("invoiceNo") || undefined,
         };
         const data = await fetchReturns(page, limit, filters);
         return json({ data: data.data, total: data.total });
@@ -89,6 +92,13 @@ export async function GET(req: NextRequest) {
         }
         const data = await fetchStatusCard(Number(id));
         return json({ data });
+      }
+
+      case "check-rfid-duplicate": {
+        const rfid = url.searchParams.get("rfid");
+        if (!rfid) return json({ error: "rfid is required" }, 400);
+        const result = await checkRfidDuplicate(rfid);
+        return json({ data: result });
       }
 
       case "rfid-lookup": {
@@ -154,7 +164,10 @@ export async function PATCH(req: NextRequest) {
       if (!id || !status) {
         return json({ error: "id and status are required" }, 400);
       }
-      const data = await updateStatus(Number(id), status);
+      const isReceived = url.searchParams.get("isReceived") === "true" ? 1 : undefined;
+      const receivedAt = url.searchParams.get("receivedAt") || undefined;
+
+      const data = await updateStatus(Number(id), status, isReceived, receivedAt);
       return json({ data });
     }
 

@@ -9,7 +9,7 @@ import { skuQueryService } from "./sku-query";
  * parent→child cascade) are preserved exactly as they were in sku.ts.
  */
 export const skuLifecycleService = {
-  async createDraft(sku: SKU): Promise<any> {
+  async createDraft(sku: SKU): Promise<SKU> {
     const { units: rawUnits = [], ...baseData } = sku;
     const units =
       rawUnits.length > 0
@@ -39,7 +39,7 @@ export const skuLifecycleService = {
     );
 
     const createPayload = (
-      u: any,
+      u: { unit_id: number; conversion_factor: number; price?: number | null; cost?: number | null; barcode?: string | null },
       code: string,
       pId: number | string | null = null,
     ) => ({
@@ -55,7 +55,7 @@ export const skuLifecycleService = {
       product_code: code,
     });
 
-    const { data: parent } = await request<{ data: any }>(
+    const { data: parent } = await request<{ data: SKU }>(
       `${API_BASE_URL}/items/product_draft`,
       {
         method: "POST",
@@ -72,10 +72,10 @@ export const skuLifecycleService = {
           method: "POST",
           body: JSON.stringify({ product_draft_id: pId, supplier_id: sId }),
         });
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error(
           `[SKU Lifecycle] Failed to save supplier for draft ${pId}:`,
-          err.message,
+          err instanceof Error ? err.message : err,
         );
       }
     }
@@ -103,7 +103,7 @@ export const skuLifecycleService = {
     const sId = sku.product_supplier;
     if (sId) {
       try {
-        const { data: existing } = await fetchItems<any>(
+        const { data: existing } = await fetchItems<{ id: number; supplier_id: number }>(
           "/items/product_draft_per_supplier",
           {
             filter: JSON.stringify({ product_draft_id: { _eq: id } }),
@@ -122,10 +122,10 @@ export const skuLifecycleService = {
             body: JSON.stringify({ product_draft_id: id, supplier_id: sId }),
           });
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error(
           `[SKU Lifecycle] Failed to sync supplier for draft ${id}:`,
-          err.message,
+          err instanceof Error ? err.message : err,
         );
       }
     }
@@ -208,9 +208,9 @@ export const skuLifecycleService = {
           ),
         );
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(
-        `[SKU Lifecycle] Cleanup failed for draft ${id}: ${err.message}`,
+        `[SKU Lifecycle] Cleanup failed for draft ${id}: ${err instanceof Error ? err.message : err}`,
       );
     }
 

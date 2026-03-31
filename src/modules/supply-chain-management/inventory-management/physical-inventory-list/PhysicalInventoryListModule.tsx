@@ -11,8 +11,21 @@ import type {
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
 import {
     Select,
     SelectContent,
@@ -20,7 +33,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { ClipboardList, Loader2, Plus, RefreshCcw } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Check, ChevronDown, ClipboardList, Loader2, Plus, RefreshCcw } from "lucide-react";
 
 import { PhysicalInventoryListTable } from "./components/PhysicalInventoryListTable";
 import { fetchPhysicalInventoryListRows } from "./providers/fetchProvider";
@@ -38,6 +52,73 @@ type Props = {
 
 const PAGE_SIZE = 6;
 
+// ─── Searchable Combobox ──────────────────────────────────────────────────────
+type ComboboxOption = { value: string; label: string };
+
+function SearchableCombobox({
+    options,
+    value,
+    onChange,
+    placeholder,
+    searchPlaceholder,
+    emptyText,
+}: {
+    options: ComboboxOption[];
+    value: string;
+    onChange: (value: string) => void;
+    placeholder: string;
+    searchPlaceholder: string;
+    emptyText: string;
+}) {
+    const [open, setOpen] = React.useState(false);
+    const selectedLabel = options.find((o) => o.value === value)?.label ?? placeholder;
+
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={open}
+                    className="w-full justify-between font-normal"
+                >
+                    <span className="truncate">{selectedLabel}</span>
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <Command>
+                    <CommandInput placeholder={searchPlaceholder} />
+                    <CommandList>
+                        <CommandEmpty>{emptyText}</CommandEmpty>
+                        <CommandGroup>
+                            {options.map((option) => (
+                                <CommandItem
+                                    key={option.value}
+                                    value={option.label}
+                                    onSelect={() => {
+                                        onChange(option.value);
+                                        setOpen(false);
+                                    }}
+                                >
+                                    <Check
+                                        className={cn(
+                                            "mr-2 h-4 w-4 shrink-0",
+                                            value === option.value ? "opacity-100" : "opacity-0",
+                                        )}
+                                    />
+                                    {option.label}
+                                </CommandItem>
+                            ))}
+                        </CommandGroup>
+                    </CommandList>
+                </Command>
+            </PopoverContent>
+        </Popover>
+    );
+}
+
+// ─── Module ───────────────────────────────────────────────────────────────────
 export function PhysicalInventoryListModule(props: Props) {
     const {
         selectedHeaderId = null,
@@ -57,6 +138,7 @@ export function PhysicalInventoryListModule(props: Props) {
         branch_id: null,
         supplier_id: null,
         status: "All",
+        stock_type: "All",
     });
 
     const loadRows = React.useCallback(async () => {
@@ -101,18 +183,22 @@ export function PhysicalInventoryListModule(props: Props) {
             const matchesStatus =
                 filters.status === "All" || row.status === filters.status;
 
+            const matchesStockType =
+                filters.stock_type === "All" || row.stock_type === filters.stock_type;
+
             return (
                 matchesSearch &&
                 matchesBranch &&
                 matchesSupplier &&
-                matchesStatus
+                matchesStatus &&
+                matchesStockType
             );
         });
     }, [filters, rows]);
 
     React.useEffect(() => {
         setPage(1);
-    }, [filters.search, filters.branch_id, filters.supplier_id, filters.status]);
+    }, [filters.search, filters.branch_id, filters.supplier_id, filters.status, filters.stock_type]);
 
     const totalCount = filteredRows.length;
     const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
@@ -129,6 +215,23 @@ export function PhysicalInventoryListModule(props: Props) {
             onOpenRecord?.(row);
         },
         [onOpenRecord],
+    );
+
+    // Build combobox options
+    const branchOptions: ComboboxOption[] = React.useMemo(
+        () => [
+            { value: "all", label: "All branches" },
+            ...branches.map((b) => ({ value: String(b.id), label: b.branch_name })),
+        ],
+        [branches],
+    );
+
+    const supplierOptions: ComboboxOption[] = React.useMemo(
+        () => [
+            { value: "all", label: "All suppliers" },
+            ...suppliers.map((s) => ({ value: String(s.id), label: s.supplier_name })),
+        ],
+        [suppliers],
     );
 
     return (
@@ -186,7 +289,8 @@ export function PhysicalInventoryListModule(props: Props) {
 
             <Card className="rounded-2xl border shadow-sm">
                 <CardContent className="pt-5">
-                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        {/* Search */}
                         <div className="space-y-2">
                             <Label htmlFor="pi-list-search">Search</Label>
                             <Input
@@ -202,56 +306,43 @@ export function PhysicalInventoryListModule(props: Props) {
                             />
                         </div>
 
+                        {/* Branch — searchable combobox */}
                         <div className="space-y-2">
                             <Label>Branch</Label>
-                            <Select
+                            <SearchableCombobox
+                                options={branchOptions}
                                 value={filters.branch_id ? String(filters.branch_id) : "all"}
-                                onValueChange={(value) =>
+                                onChange={(val) =>
                                     setFilters((prev) => ({
                                         ...prev,
-                                        branch_id: value === "all" ? null : Number(value),
+                                        branch_id: val === "all" ? null : Number(val),
                                     }))
                                 }
-                            >
-                                <SelectTrigger className="cursor-pointer">
-                                    <SelectValue placeholder="All branches" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All branches</SelectItem>
-                                    {branches.map((row) => (
-                                        <SelectItem key={row.id} value={String(row.id)}>
-                                            {row.branch_name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                                placeholder="All branches"
+                                searchPlaceholder="Search branch..."
+                                emptyText="No branch found."
+                            />
                         </div>
 
+                        {/* Supplier — searchable combobox */}
                         <div className="space-y-2">
                             <Label>Supplier</Label>
-                            <Select
+                            <SearchableCombobox
+                                options={supplierOptions}
                                 value={filters.supplier_id ? String(filters.supplier_id) : "all"}
-                                onValueChange={(value) =>
+                                onChange={(val) =>
                                     setFilters((prev) => ({
                                         ...prev,
-                                        supplier_id: value === "all" ? null : Number(value),
+                                        supplier_id: val === "all" ? null : Number(val),
                                     }))
                                 }
-                            >
-                                <SelectTrigger className="cursor-pointer">
-                                    <SelectValue placeholder="All suppliers" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All suppliers</SelectItem>
-                                    {suppliers.map((row) => (
-                                        <SelectItem key={row.id} value={String(row.id)}>
-                                            {row.supplier_name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                                placeholder="All suppliers"
+                                searchPlaceholder="Search supplier..."
+                                emptyText="No supplier found."
+                            />
                         </div>
 
+                        {/* Status */}
                         <div className="space-y-2">
                             <Label>Status</Label>
                             <Select
@@ -263,7 +354,7 @@ export function PhysicalInventoryListModule(props: Props) {
                                     }))
                                 }
                             >
-                                <SelectTrigger className="cursor-pointer">
+                                <SelectTrigger className="cursor-pointer w-full">
                                     <SelectValue placeholder="All statuses" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -271,6 +362,29 @@ export function PhysicalInventoryListModule(props: Props) {
                                     <SelectItem value="Pending">Pending</SelectItem>
                                     <SelectItem value="Committed">Committed</SelectItem>
                                     <SelectItem value="Cancelled">Cancelled</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Stock Type */}
+                        <div className="space-y-2">
+                            <Label>Stock Type</Label>
+                            <Select
+                                value={filters.stock_type}
+                                onValueChange={(value) =>
+                                    setFilters((prev) => ({
+                                        ...prev,
+                                        stock_type: value as PhysicalInventoryListFilters["stock_type"],
+                                    }))
+                                }
+                            >
+                                <SelectTrigger className="cursor-pointer w-full">
+                                    <SelectValue placeholder="All stock types" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="All">All stock types</SelectItem>
+                                    <SelectItem value="GOOD">Good Stock</SelectItem>
+                                    <SelectItem value="BAD">Bad Stock</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>

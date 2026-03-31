@@ -1,9 +1,18 @@
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { AlertCircle, Search, Truck } from "lucide-react";
+import { AlertCircle, Filter, Search, Truck } from "lucide-react";
 import { useMemo, useState } from "react";
 import { DispatchPlanSummary } from "../../creation/components/data-table/index";
 
@@ -21,17 +30,37 @@ export function DispatchListSidebar({
   onSelectPlan,
 }: DispatchListSidebarProps) {
   const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<"all" | "pending" | "budgeted">("all");
+
+  const counts = useMemo(() => {
+    return {
+      all: plans.length,
+      pending: plans.filter((p) => (p.budgetTotal || 0) === 0).length,
+      budgeted: plans.filter((p) => (p.budgetTotal || 0) > 0).length,
+    };
+  }, [plans]);
 
   const filteredPlans = useMemo(() => {
-    if (!search) return plans;
-    const lower = search.toLowerCase();
-    return plans.filter(
-      (p) =>
-        p.dpNumber?.toLowerCase().includes(lower) ||
-        p.driverName?.toLowerCase().includes(lower) ||
-        p.vehiclePlateNo?.toLowerCase().includes(lower),
-    );
-  }, [plans, search]);
+    let result = plans;
+
+    if (search) {
+      const lower = search.toLowerCase();
+      result = result.filter(
+        (p) =>
+          p.dpNumber?.toLowerCase().includes(lower) ||
+          p.driverName?.toLowerCase().includes(lower) ||
+          p.vehiclePlateNo?.toLowerCase().includes(lower),
+      );
+    }
+
+    if (filter === "pending") {
+      result = result.filter((p) => (p.budgetTotal || 0) === 0);
+    } else if (filter === "budgeted") {
+      result = result.filter((p) => (p.budgetTotal || 0) > 0);
+    }
+
+    return result;
+  }, [plans, search, filter]);
 
   return (
     <div className="w-96 border-r border-border/60 bg-muted/10 flex flex-col h-full overflow-hidden">
@@ -39,18 +68,69 @@ export function DispatchListSidebar({
         <h2 className="text-sm font-semibold tracking-tight text-foreground">
           Active Dispatch Plans
         </h2>
-        <div className="relative">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search dispatch no. or driver..."
-            className="pl-9 h-9"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search dispatch no. or driver..."
+              className="pl-9 h-9"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="default" size="icon">
+                <Filter className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel className="text-xs text-muted-foreground">
+                Filter by Status
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <div className="p-1">
+                <DropdownMenuItem
+                  onClick={() => setFilter("all")}
+                  className="text-xs"
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span>All Plans</span>
+                    <Badge variant="secondary" className="text-[10px]">
+                      {counts.all}
+                    </Badge>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setFilter("pending")}
+                  className="text-xs"
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span>Pending Budget</span>
+                    <Badge variant="secondary" className="text-[10px]">
+                      {counts.pending}
+                    </Badge>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setFilter("budgeted")}
+                  className="text-xs"
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span>Budgeted</span>
+                    <Badge variant="secondary" className="text-[10px]">
+                      {counts.budgeted}
+                    </Badge>
+                  </div>
+                </DropdownMenuItem>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
-      <ScrollArea className="flex-1 max-h-[75vh]">
+      <ScrollArea className="flex-1 max-h-[80vh]">
         <div className="p-4 space-y-3">
           {isLoading ? (
             Array.from({ length: 5 }).map((_, i) => (
@@ -88,7 +168,9 @@ export function DispatchListSidebar({
           ) : (
             filteredPlans.map((plan) => {
               const isSelected = plan.id === selectedPlanId;
-              const hasBudget = (plan.budgetTotal || 0) > 0;
+              const hasBudget =
+                (plan.budgetTotal || 0) > 0 ||
+                (plan.status !== "For Approval" && plan.status !== "DRAFT");
 
               return (
                 <div
@@ -102,12 +184,12 @@ export function DispatchListSidebar({
                   )}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded-sm bg-primary/10 text-primary">
+                    <span className="text-xs font-semibold">
                       {plan.dpNumber}
                     </span>
                     {!hasBudget ? (
                       <Badge
-                        variant="outline"
+                        variant="destructive"
                         className="h-5 text-[9px] px-1.5 rounded-sm"
                       >
                         Pending Budget

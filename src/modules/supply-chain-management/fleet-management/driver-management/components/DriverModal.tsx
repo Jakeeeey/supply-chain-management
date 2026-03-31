@@ -8,6 +8,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+<<<<<<< HEAD
 import {
     Popover,
     PopoverContent,
@@ -21,6 +22,10 @@ import {
     CommandItem,
     CommandList,
 } from "@/components/ui/command";
+=======
+import { LegacyCombobox as Combobox } from "@/components/ui/legacy-combobox";
+import { ComboboxOption } from "@/components/ui/combobox";
+>>>>>>> master
 import { Button } from "@/components/ui/button";
 import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";

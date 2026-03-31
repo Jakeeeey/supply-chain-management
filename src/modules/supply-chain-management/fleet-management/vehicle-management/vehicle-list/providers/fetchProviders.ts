@@ -114,6 +114,14 @@ const VEHICLE_ALLOWED_KEYS = new Set([
   "year_to_last",
   "image",
   "custodian_id",
+  "rfid_code",
+  "seats",
+  "maximum_weight",
+  "minimum_load",
+  "max_liters",
+  "cbm_length",
+  "cbm_width",
+  "cbm_height",
 ]);
 
 function sanitizeVehicleCreatePayload(payload: Record<string, any>) {

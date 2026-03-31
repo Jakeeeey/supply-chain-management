@@ -5,12 +5,12 @@ import { SKU } from "../types/sku.schema";
 /**
  * Extracts a unique 4-letter code from an item/string using consonant priority
  */
-export const getSanitizedCode = (item: any, defaultCode: string): string => {
+export const getSanitizedCode = (item: Record<string, unknown> | null | undefined, defaultCode: string): string => {
   if (!item) return defaultCode;
 
   // Priority 1: Use explicit code if it exists (trimmed to 4)
   if (item.code)
-    return item.code
+    return (item.code as string)
       .replace(/[^a-zA-Z0-9]/g, "")
       .substring(0, 4)
       .toUpperCase();
@@ -30,7 +30,7 @@ export const getSanitizedCode = (item: any, defaultCode: string): string => {
   );
 
   if (name) {
-    const clean = name.replace(/[^a-zA-Z]/g, "").toUpperCase();
+    const clean = (name as string).replace(/[^a-zA-Z]/g, "").toUpperCase();
     if (clean.length <= 4) return clean.padEnd(4, "X");
 
     const consonants = clean.replace(/[AEIOU]/g, "");
@@ -153,26 +153,28 @@ export const CellHelpers = {
    * Renders master data text with fallback for missing values
    */
   renderMasterText: (
-    raw: any,
-    masterList: any[] = [],
+    raw: unknown,
+    masterList: Record<string, unknown>[] = [],
     fallback: string = "Unassigned",
-  ) => {
+  ): string => {
     if (!raw) return fallback;
-    if (typeof raw === "object")
+    if (typeof raw === "object") {
+      const obj = raw as Record<string, string>;
       return (
-        raw.name ||
-        raw.title ||
-        raw.category_name ||
-        raw.brand_name ||
-        raw.supplier_name ||
+        obj.name ||
+        obj.title ||
+        obj.category_name ||
+        obj.brand_name ||
+        obj.supplier_name ||
         fallback
       );
+    }
     const item = masterList.find((i) => i.id == raw);
     return (
-      item?.name ||
-      item?.brand_name ||
-      item?.category_name ||
-      item?.supplier_name ||
+      (item?.name as string) ||
+      (item?.brand_name as string) ||
+      (item?.category_name as string) ||
+      (item?.supplier_name as string) ||
       fallback
     );
   },
@@ -194,7 +196,7 @@ export const CellHelpers = {
   /**
    * Converts TanStack SortingState to Directus sort string
    */
-  getDirectusSort: (sorting?: any[]): string | undefined => {
+  getDirectusSort: (sorting?: { id: string; desc: boolean }[]): string | undefined => {
     if (!sorting || sorting.length === 0) return undefined;
     const { id, desc } = sorting[0];
 

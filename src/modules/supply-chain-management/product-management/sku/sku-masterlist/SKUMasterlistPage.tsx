@@ -16,7 +16,7 @@ export default function SKUMasterlistModule() {
     setPage,
     limit,
     setLimit,
-    search,
+    // search is provided by hook but only used via setSearch
     setSearch,
     sorting,
     setSorting,
@@ -58,12 +58,12 @@ export default function SKUMasterlistModule() {
   const handleBulkDeactivate = async () => {
     const ids = selectedRows
       .map((row) => {
-        const idVal = (row as any).id || row.product_id;
+        const idVal = row.id || row.product_id;
         return typeof idVal === "string" && /^\d+$/.test(idVal)
           ? parseInt(idVal)
           : idVal;
       })
-      .filter(Boolean);
+      .filter((v): v is number => v != null);
 
     if (ids.length > 0) {
       await bulkUpdateStatus(ids, false);
@@ -74,12 +74,12 @@ export default function SKUMasterlistModule() {
   const handleBulkActivate = async () => {
     const ids = selectedRows
       .map((row) => {
-        const idVal = (row as any).id || row.product_id;
+        const idVal = row.id || row.product_id;
         return typeof idVal === "string" && /^\d+$/.test(idVal)
           ? parseInt(idVal)
           : idVal;
       })
-      .filter(Boolean);
+      .filter((v): v is number => v != null);
 
     if (ids.length > 0) {
       await bulkUpdateStatus(ids, true);

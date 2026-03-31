@@ -6,6 +6,7 @@ import { ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ConsolidatorDto } from "../types";
+import { cn } from "@/lib/utils";
 
 interface BatchCardProps {
     batch: ConsolidatorDto;
@@ -28,19 +29,22 @@ export const BatchCard = ({ batch, onClick }: BatchCardProps) => {
         >
             <Card
                 onClick={() => onClick(batch)}
-                className={`
-          cursor-pointer group overflow-hidden border-2 shadow-lg relative
-          ${isComplete ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-border/50 bg-card hover:border-primary/50'}
-        `}
+                className={cn(
+                    "cursor-pointer group overflow-hidden border-2 shadow-lg relative",
+                    isComplete ? "border-emerald-500/50 bg-emerald-500/5" : "border-border/50 bg-card hover:border-primary/50"
+                )}
             >
                 <CardContent className="p-6">
                     <div className="flex justify-between items-start mb-6">
                         <div>
-                            <Badge variant="outline"
-                                   className={`mb-2 font-black uppercase text-[10px] tracking-widest ${
-                                       isComplete ? 'text-emerald-500 border-emerald-500/20' : 'text-primary border-primary/20'
-                                   }`}>
-                                {isComplete ? 'Ready for Audit' : 'Active Picking'}
+                            <Badge
+                                variant="outline"
+                                className={cn(
+                                    "mb-2 font-black uppercase text-[10px] tracking-widest",
+                                    isComplete ? "text-emerald-500 border-emerald-500/20" : "text-primary border-primary/20"
+                                )}
+                            >
+                                {isComplete ? "Ready for Audit" : "Active Picking"}
                             </Badge>
                             <h3 className="text-xl font-black uppercase tracking-tighter italic group-hover:text-primary transition-colors">
                                 {batch.consolidatorNo}
@@ -49,9 +53,17 @@ export const BatchCard = ({ batch, onClick }: BatchCardProps) => {
                         <motion.div
                             animate={isComplete ? { scale: [1, 1.2, 1] } : {}}
                             transition={{ repeat: Infinity, duration: 2 }}
-                            className={`p-3 rounded-xl ${isComplete ? 'bg-emerald-500/10' : 'bg-primary/10'}`}
+                            className={cn(
+                                "p-3 rounded-xl",
+                                isComplete ? "bg-emerald-500/10" : "bg-primary/10"
+                            )}
                         >
-                            <ArrowRight className={`w-5 h-5 ${isComplete ? 'text-emerald-500' : 'text-primary'}`} />
+                            <ArrowRight
+                                className={cn(
+                                    "w-5 h-5",
+                                    isComplete ? "text-emerald-500" : "text-primary"
+                                )}
+                            />
                         </motion.div>
                     </div>
 
@@ -84,7 +96,10 @@ export const BatchCard = ({ batch, onClick }: BatchCardProps) => {
                             initial={{ width: 0 }}
                             animate={{ width: `${progress}%` }}
                             transition={{ duration: 1, ease: "easeOut" }}
-                            className={`h-full ${isComplete ? 'bg-emerald-500' : 'bg-primary'}`}
+                            className={cn(
+                                "h-full",
+                                isComplete ? "bg-emerald-500" : "bg-primary"
+                            )}
                         />
                     </div>
                 </CardContent>

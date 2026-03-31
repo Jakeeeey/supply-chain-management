@@ -280,19 +280,22 @@ export const stockAdjustmentService = {
         remarks: header.remarks,
         amount: header.amount || items.reduce((acc: number, item: any) => acc + (item.quantity * (item.cost_per_unit || 0)), 0),
         isPosted: 0,
-        created_by: payload.userId, // correctly assign the creating user
+        created_by: payload.userId,
       }),
     });
+    const headerId = headerRes.data.id;
 
     // 2. Create Items
     const itemsPayload = items.map((item: any) => ({
       doc_no: header.doc_no,
+      stock_adjustment_id: headerId,
       product_id: Number(item.product_id),
       branch_id: Number(header.branch_id),
       type: header.type,
       quantity: Number(item.quantity),
       remarks: item.remarks,
-      unit_id: item.unit_id ? Number(item.unit_id) : null
+      unit_id: item.unit_id ? Number(item.unit_id) : null,
+      created_by: payload.userId
     }));
 
     const itemsRes = await directusFetch(`${DIRECTUS_URL}/items/stock_adjustment`, {
@@ -310,6 +313,7 @@ export const stockAdjustmentService = {
           rfidPayload.push({
             rfid_tag: tag,
             stock_adjustment_id: itemId, // This links to items table
+            created_by: payload.userId
           });
         });
       }
@@ -360,12 +364,14 @@ export const stockAdjustmentService = {
     // 3. Recreate Items
     const itemsPayload = payload.items.map((item: any) => ({
       doc_no: payload.header.doc_no,
+      stock_adjustment_id: id,
       product_id: Number(item.product_id),
       branch_id: Number(payload.header.branch_id),
       type: payload.header.type,
       quantity: Number(item.quantity),
       remarks: item.remarks,
-      unit_id: item.unit_id ? Number(item.unit_id) : null
+      unit_id: item.unit_id ? Number(item.unit_id) : null,
+      created_by: payload.userId
     }));
 
     const itemsRes = await directusFetch(`${DIRECTUS_URL}/items/stock_adjustment`, {
@@ -383,6 +389,7 @@ export const stockAdjustmentService = {
           rfidPayload.push({
             rfid_tag: tag,
             stock_adjustment_id: itemId,
+            created_by: payload.userId
           });
         });
       }

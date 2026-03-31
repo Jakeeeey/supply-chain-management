@@ -26,6 +26,9 @@ interface RawHeader {
   remarks?: string;
   supplier_id?: { supplier_name: string };
   branch_id?: { branch_name: string };
+  total_net_amount?: string | number;
+  encoder_id?: number;
+  date_posted?: string;
 }
 
 interface RawItem {
@@ -41,6 +44,7 @@ interface RawItem {
   net_amount?: number;
   gross_amount?: number;
   return_type_id?: number;
+  discount_type_id?: number;
   rts_id?: { id: number } | number | null;
 }
 
@@ -101,7 +105,7 @@ export async function fetchTransactions(): Promise<ReturnToSupplier[]> {
       returnDate: r.transaction_date,
       status: r.is_posted ? "Posted" : "Pending",
       remarks: r.remarks,
-      totalAmount: finalNet,
+      totalAmount: r.total_net_amount ? Number(r.total_net_amount) : finalNet,
       grossAmount: calculatedGross,
       discountAmount: calculatedDiscount,
     } as ReturnToSupplier;
@@ -139,6 +143,7 @@ export async function fetchTransactionDetails(
       total: Number(i.net_amount || 0),
       unitCount: Number(rawUnitCount) > 0 ? Number(rawUnitCount) : 1,
       returnTypeId: i.return_type_id ? Number(i.return_type_id) : undefined,
+      discountTypeId: i.discount_type_id ? Number(i.discount_type_id) : undefined,
     } as RTSItem;
   });
 }
@@ -155,6 +160,8 @@ export async function fetchReferences(): Promise<ReferenceData> {
     discountsJson,
     connectionsJson,
     returnTypesJson,
+    discountTypesJson,
+    linePerDiscountTypeJson,
   ] = await repo.getRawReferences();
 
   const unitMap = new Map<string, string>();
@@ -183,8 +190,22 @@ export async function fetchReferences(): Promise<ReferenceData> {
     products,
     units: (unitsJson.data || []) as unknown as Unit[],
     lineDiscounts: (discountsJson.data || []) as unknown as LineDiscount[],
-    connections: (connectionsJson.data || []) as unknown as ProductSupplier[],
+    connections: (connectionsJson.data || []).map((c) => {
+      const row = c as Record<string, unknown>;
+      const supId = row.supplier_id as any;
+      const prodId = row.product_id as any;
+      const discType = row.discount_type as any;
+      
+      return {
+        id: row.id,
+        supplier_id: typeof supId === "object" ? supId?.id : supId,
+        product_id: typeof prodId === "object" ? (prodId?.product_id || prodId?.id) : prodId,
+        discount_type: typeof discType === "object" ? discType?.id : discType,
+      };
+    }) as ProductSupplier[],
     returnTypes: (returnTypesJson.data || []) as unknown as RTSReturnType[],
+    discountTypes: (discountTypesJson.data || []) as any[],
+    linePerDiscountType: (linePerDiscountTypeJson.data || []) as any[],
   };
 }
 
@@ -290,7 +311,13 @@ export async function createTransaction(dto: CreateReturnDTO) {
   const { rts_items, ...header } = dto;
   const docNo = `RTS-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.floor(Math.random() * 10000).toString().padStart(4, "0")}`;
 
-  const parentJson = await repo.createRtsHeader({ ...header, doc_no: docNo });
+  const calculatedTotalNet = rts_items.reduce((sum, item) => sum + (item.net_amount || 0), 0);
+
+  const parentJson = await repo.createRtsHeader({ 
+    ...header, 
+    doc_no: docNo,
+    total_net_amount: calculatedTotalNet 
+  });
   const parentId = parentJson.data.id;
 
   for (const item of rts_items) {
@@ -307,8 +334,13 @@ export async function createTransaction(dto: CreateReturnDTO) {
 export async function updateTransaction(id: string, dto: CreateReturnDTO) {
   const { rts_items, ...header } = dto;
   
+  const calculatedTotalNet = rts_items.reduce((sum, item) => sum + (item.net_amount || 0), 0);
+
   // 1. Update header
-  await repo.updateRtsHeader(id, header);
+  await repo.updateRtsHeader(id, { 
+    ...header, 
+    total_net_amount: calculatedTotalNet 
+  });
 
   // 2. Cleanup old items
   const { itemIds } = await repo.getExistingRelatedIds(id);

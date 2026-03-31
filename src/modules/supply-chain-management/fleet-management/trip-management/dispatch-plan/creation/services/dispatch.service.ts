@@ -134,14 +134,16 @@ export async function createDispatchPlan(
 
   if (data.invoices && data.invoices.length > 0) {
     data.invoices.forEach((item) => {
-      // 1. All items (invoices, manual, PO) go to 'others' for unified sequence display
-      othersPayloads.push({
-        post_dispatch_plan_id: newPlanId,
-        remarks: item.remarks || item.po_no || item.invoice_no || "Stop", // Modified
-        distance: item.distance || 0,
-        sequence: item.sequence,
-        status: item.status || "Not Fulfilled",
-      });
+      // 1. Only manual stops go to 'others'
+      if (item.isManualStop) {
+        othersPayloads.push({
+          post_dispatch_plan_id: newPlanId,
+          remarks: item.remarks || "Manual Stop",
+          distance: item.distance || 0,
+          sequence: item.sequence,
+          status: item.status || "Not Fulfilled",
+        });
+      }
 
       // 2. Only real invoices go into 'post_dispatch_invoices'
       if (!item.isManualStop && !item.isPoStop && item.invoice_id) { // Modified
@@ -173,13 +175,6 @@ export async function createDispatchPlan(
       invoicePayloads.push({
         post_dispatch_plan_id: newPlanId,
         invoice_id: id,
-        sequence: seq,
-        status: "Not Fulfilled",
-      });
-      othersPayloads.push({
-        post_dispatch_plan_id: newPlanId,
-        remarks: "Invoice", // Will be enriched or replaced by actual invoice mapping later if needed
-        distance: 0,
         sequence: seq,
         status: "Not Fulfilled",
       });
@@ -248,14 +243,16 @@ export async function updateTrip(
     data.invoices.forEach((item, idx) => {
       const seq = item.sequence || idx + 1;
       
-      // All items go to 'others'
-      newOthersPayloads.push({
-        post_dispatch_plan_id: planId,
-        remarks: item.remarks || item.po_no || item.invoice_no || "Stop", // Modified
-        distance: item.distance || 0,
-        sequence: seq,
-        status: item.status || "Not Fulfilled",
-      });
+      // Manual stops only go to 'others'
+      if (item.isManualStop) {
+        newOthersPayloads.push({
+          post_dispatch_plan_id: planId,
+          remarks: item.remarks || "Manual Stop",
+          distance: item.distance || 0,
+          sequence: seq,
+          status: item.status || "Not Fulfilled",
+        });
+      }
 
       // Only real invoices go to 'post_dispatch_invoices'
       if (!item.isManualStop && !item.isPoStop && item.invoice_id) { // Modified
@@ -288,13 +285,6 @@ export async function updateTrip(
       newInvoicePayloads.push({
         post_dispatch_plan_id: planId,
         invoice_id: id,
-        sequence: seq,
-        status: "Not Fulfilled",
-      });
-      newOthersPayloads.push({
-        post_dispatch_plan_id: planId,
-        remarks: "Invoice",
-        distance: 0,
         sequence: seq,
         status: "Not Fulfilled",
       });

@@ -36,6 +36,8 @@ export interface COAOption {
   coa_id: number;
   account_title: string;
   gl_code: string;
+  account_type?: number;
+  is_payment?: number | { type: string; data: number[] };
 }
 
 /** Aggregated master-data payload returned to the client. */

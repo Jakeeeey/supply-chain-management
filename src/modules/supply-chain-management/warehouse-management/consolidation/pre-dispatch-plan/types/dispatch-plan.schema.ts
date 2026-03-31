@@ -79,6 +79,7 @@ export const salesOrderOptionSchema = z.object({
   allocated_amount: z.number().nullable().optional(),
   po_no: z.string().nullable().optional(),
   total_weight: z.number().optional(), // Computed from products.weight via sales_order_details
+  order_status: z.string().optional(),
 });
 export type SalesOrderOption = z.infer<typeof salesOrderOptionSchema>;
 
@@ -124,6 +125,7 @@ export const dispatchPlanDetailSchema = z.object({
   weight: z.number().optional(),
   ordered_quantity: z.number().optional(),
   amount: z.number().optional(),
+  order_status: z.string().optional(),
 });
 export type DispatchPlanDetail = z.infer<typeof dispatchPlanDetailSchema>;
 

@@ -22,24 +22,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         }
 
         const body = await req.json();
-        const { remarks } = body;
-
-        // Note: we might only want to allow updating remarks, so we explicitly map it.
-        const updatePayload = {
-            remarks: remarks
-        };
 
         const url = `${DIRECTUS_BASE}/items/sales_order/${orderId}`;
         
         const response = await fetch(url, {
             method: "PATCH",
             headers: directusHeaders(),
-            body: JSON.stringify(updatePayload)
+            body: JSON.stringify(body)
         });
 
         if (!response.ok) {
             const errorText = await response.text();
-            return NextResponse.json({ error: "Failed to update sales order remarks", details: errorText }, { status: response.status });
+            return NextResponse.json({ error: "Failed to update sales order", details: errorText }, { status: response.status });
         }
 
         const data = await response.json();
