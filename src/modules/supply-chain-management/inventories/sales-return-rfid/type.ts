@@ -78,7 +78,7 @@ export interface Unit {
 
 export interface Product {
   product_id: number;
-  parent_id?: number | null;
+  parent_id?: number | { product_id?: number; id?: number } | null;
   isActive: number;
   product_name: string;
   barcode: string | null;

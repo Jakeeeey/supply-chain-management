@@ -224,8 +224,8 @@ export function ProductLookupModal({
       const rawParentId = product.parent_id;
       let finalParentIdNum: number | null = null;
       
-      if (rawParentId && typeof rawParentId === 'object') {
-        finalParentIdNum = Number((rawParentId as any).product_id || (rawParentId as any).id);
+      if (rawParentId && typeof rawParentId === "object") {
+        finalParentIdNum = Number(rawParentId.product_id || rawParentId.id);
       } else if (rawParentId !== null && rawParentId !== undefined) {
         finalParentIdNum = Number(rawParentId);
       }
