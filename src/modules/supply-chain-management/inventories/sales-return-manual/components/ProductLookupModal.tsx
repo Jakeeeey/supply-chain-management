@@ -654,7 +654,7 @@ export function ProductLookupModal({
                       >
                         <CardHeader className="bg-muted/10 pb-3">
                           <CardTitle
-                            className="text-sm font-bold leading-snug line-clamp-2"
+                            className="text-sm font-bold leading-snug"
                             title={parentData.product_name}
                           >
                             {parentData.product_name}

@@ -222,9 +222,7 @@ export function UpdateSalesReturnModal({
           const key = `price${headerData.priceType}` as keyof SalesReturnItem;
           const basePrice = Number(item[key]) || Number(item.priceA) || Number(item.unitPrice) || 0;
           
-          const newUnitPrice = Math.round((item.unit === "BOX" 
-            ? basePrice * (item.unitMultiplier || 1) 
-            : basePrice) * 100) / 100;
+          const newUnitPrice = basePrice;
           
           const newGross = Math.round(Number(item.quantity) * newUnitPrice * 100) / 100;
           let newDiscountAmt = 0;
@@ -751,7 +749,7 @@ export function UpdateSalesReturnModal({
                               </TableCell>
                               <TableCell className="align-middle">
                                 <div
-                                  className="text-sm text-foreground font-medium truncate max-w-[220px]"
+                                  className="text-sm text-foreground font-medium"
                                   title={item.description}
                                 >
                                   {item.description}
@@ -938,7 +936,7 @@ export function UpdateSalesReturnModal({
                           </TableCell>
                           <TableCell className="align-middle">
                             <div
-                              className="text-sm text-foreground font-medium truncate max-w-[220px]"
+                              className="text-sm text-foreground font-medium"
                               title={group.description}
                             >
                               {group.description}

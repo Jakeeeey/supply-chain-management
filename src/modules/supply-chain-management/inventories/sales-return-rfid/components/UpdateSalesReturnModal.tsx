@@ -232,9 +232,7 @@ export function UpdateSalesReturnModal({
           const key = `price${headerData.priceType}` as string;
           const basePrice = Number(item[key as keyof SalesReturnItem]) || Number(item.priceA) || Number(item.unitPrice) || 0;
           
-          const newUnitPrice = Math.round((item.unit === "BOX" 
-            ? basePrice * (item.unitMultiplier || 1) 
-            : basePrice) * 100) / 100;
+          const newUnitPrice = basePrice;
           
           const newGross = Math.round(Number(item.quantity) * newUnitPrice * 100) / 100;
           let newDiscountAmt = 0;
@@ -908,10 +906,13 @@ export function UpdateSalesReturnModal({
                               </TableCell>
                               <TableCell className="align-middle">
                                 <div
-                                  className="text-sm text-foreground font-medium truncate max-w-[220px]"
+                                  className="text-sm text-foreground font-medium"
                                   title={item.description}
                                 >
                                   {item.description}
+                                </div>
+                                <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                                  {/* Just label, RFID tag moved to sub-row or tooltip if needed, but original had no extra div here */}
                                 </div>
                               </TableCell>
                               <TableCell className="text-sm text-muted-foreground align-middle">
@@ -1094,7 +1095,7 @@ export function UpdateSalesReturnModal({
                               </TableCell>
                               <TableCell className="align-middle">
                                 <div
-                                  className="text-sm text-foreground font-medium truncate max-w-[220px]"
+                                  className="text-sm text-foreground font-medium"
                                   title={group.description}
                                 >
                                   {group.description}
