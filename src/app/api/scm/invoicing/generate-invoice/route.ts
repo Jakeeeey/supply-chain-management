@@ -17,7 +17,7 @@ function directusHeaders() {
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { order, receipts } = body;
+        const { order, receipts, receipt_type_id } = body;
 
         if (!order || !receipts || receipts.length === 0) {
             return NextResponse.json({ error: "Missing order or receipts data" }, { status: 400 });
@@ -59,7 +59,8 @@ export async function POST(req: NextRequest) {
                 headers: directusHeaders(),
                 body: JSON.stringify({
                     order_status: "For Loading",
-                    for_loading_at: now
+                    for_loading_at: now,
+                    receipt_type: receipt_type_id || (order.receipt_type?.id) || null
                 })
             });
             if (!orderUpdateRes.ok) throw new Error(await orderUpdateRes.text());
@@ -110,16 +111,36 @@ export async function POST(req: NextRequest) {
             results.errors.push({ step: "resolve_consolidator_id", error: err.message });
         }
 
+        // 1c. Resolve isOfficial status for the selected receipt type
+        let isOfficial = String(order.receipt_type?.isOfficial ?? 1) === "1";
+        if (receipt_type_id) {
+            try {
+                const rtRes = await fetch(`${DIRECTUS_BASE}/items/sales_invoice_type/${receipt_type_id}?fields=isOfficial`, {
+                    headers: directusHeaders()
+                });
+                if (rtRes.ok) {
+                    const rtData = await rtRes.json();
+                    isOfficial = String(rtData.data?.isOfficial) === "1";
+                }
+            } catch (e) {
+                console.warn("Could not resolve isOfficial for receipt type:", e);
+            }
+        }
+
         // Iterate through each receipt generated
         for (const receipt of receipts) {
+            // ── Skip Void Reference Receipt ──
+            if (receipt.is_void_reference) {
+                continue;
+            }
+
             // Calculate totals for this invoice based on receipt items
             const grossAmount = receipt.items.reduce((sum: number, item: any) => sum + (item.qty * item.unit_price), 0);
             const discountAmount = receipt.items.reduce((sum: number, item: any) => sum + item.discount_amount, 0);
             const netAmount = receipt.items.reduce((sum: number, item: any) => sum + item.net_amount, 0);
-            const totalAmount = grossAmount - discountAmount; // Should match netAmount generally
+            const totalAmount = grossAmount - discountAmount;
 
             // Receipt logic
-            const isOfficial = order.receipt_type?.isOfficial === 1;
             const isReceipt = isOfficial ? 1 : 0;
             const vatAmount = isOfficial ? (netAmount / 1.12) * 0.12 : 0;
 
@@ -128,10 +149,10 @@ export async function POST(req: NextRequest) {
             const dueDate = new Date();
             dueDate.setDate(dueDate.getDate() + paymentDays);
 
-            // 2. Create sales_invoice
-            let createdInvoiceId = null;
+            // 2. Create or Update sales_invoice
+            let targetInvoiceId = null;
             try {
-                const invoicePayload = {
+                const invoicePayload: any = {
                     order_id: order.order_no,
                     customer_code: order.customer_code?.customer_code || null,
                     invoice_no: receipt.receipt_no,
@@ -140,33 +161,54 @@ export async function POST(req: NextRequest) {
                     invoice_date: now,
                     due_date: dueDate.toISOString(),
                     payment_terms: order.payment_terms?.id || null,
-                    transaction_status: "Draft",
+                    transaction_status: "Prepared", 
                     payment_status: "Unpaid",
                     total_amount: totalAmount,
-                    invoice_type: order.receipt_type?.id || null,
+                    invoice_type: receipt_type_id || (order.receipt_type?.id) || null,
                     price_type: order.salesman_id?.price_type || null,
                     gross_amount: grossAmount,
                     discount_amount: discountAmount,
                     net_amount: netAmount,
-                    created_by: createdBy,
-                    created_date: now,
                     isReceipt: isReceipt,
                     vat_amount: vatAmount
                 };
 
-                const invoiceRes = await fetch(`${DIRECTUS_BASE}/items/sales_invoice`, {
-                    method: 'POST',
-                    headers: directusHeaders(),
-                    body: JSON.stringify(invoicePayload)
-                });
+                const targetId = order.void_invoice_id || order.existing_invoice_no;
+
+                if (targetId) {
+                    // ── Update existing invoice (Voided or Recycled) ──
+                    const patchRes = await fetch(`${DIRECTUS_BASE}/items/sales_invoice/${targetId}`, {
+                        method: 'PATCH',
+                        headers: directusHeaders(),
+                        body: JSON.stringify(invoicePayload)
+                    });
+                    if (!patchRes.ok) throw new Error(await patchRes.text());
+                    targetInvoiceId = targetId;
+                    
+                    // Clear old details for this invoice before adding new ones
+                    await fetch(`${DIRECTUS_BASE}/items/sales_invoice_details?filter[invoice_no][_eq]=${targetInvoiceId}`, {
+                        method: 'DELETE',
+                        headers: directusHeaders()
+                    });
+                } else {
+                    // ── Create new invoice ──
+                    invoicePayload.created_by = createdBy;
+                    invoicePayload.created_date = now;
+                    
+                    const invoiceRes = await fetch(`${DIRECTUS_BASE}/items/sales_invoice`, {
+                        method: 'POST',
+                        headers: directusHeaders(),
+                        body: JSON.stringify(invoicePayload)
+                    });
+                    if (!invoiceRes.ok) throw new Error(await invoiceRes.text());
+                    const invoiceData = await invoiceRes.json();
+                    targetInvoiceId = invoiceData.data.invoice_id;
+                }
                 
-                if (!invoiceRes.ok) throw new Error(await invoiceRes.text());
-                const invoiceData = await invoiceRes.json();
-                createdInvoiceId = invoiceData.data.invoice_id; // Using AUTO_INCREMENT id
                 results.invoicesCreated++;
             } catch (err: any) {
-                results.errors.push({ step: "create_sales_invoice", receipt_no: receipt.receipt_no, error: err.message });
-                continue; // Skip details if invoice creation fails
+                results.errors.push({ step: "process_sales_invoice", receipt_no: receipt.receipt_no, error: err.message });
+                continue;
             }
 
             // 3. Process items for this receipt
@@ -196,7 +238,7 @@ export async function POST(req: NextRequest) {
                 }
 
                 // 3b. Create sales_invoice_details
-                if (createdInvoiceId) {
+                if (targetInvoiceId) {
                     try {
                         const grossAmtItem = item.qty * item.unit_price;
                         const totalAmtItem = grossAmtItem - item.discount_amount;
@@ -218,7 +260,7 @@ export async function POST(req: NextRequest) {
 
                         const detailPayload = {
                             order_id: order.order_no,
-                            invoice_no: createdInvoiceId,
+                            invoice_no: targetInvoiceId,
                             discount_type: item.discount_type,
                             product_id: item.product_id,
                             unit: unitOfMeasurement,

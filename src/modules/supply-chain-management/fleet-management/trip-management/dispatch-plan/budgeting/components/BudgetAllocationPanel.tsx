@@ -31,8 +31,7 @@ import {
   Trash2,
   Truck,
   Users,
-  Wallet,
-  X,
+  Wallet
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
@@ -191,20 +190,14 @@ export function BudgetAllocationPanel({
       .watch("budgets")
       ?.reduce((sum, b) => sum + (Number(b.amount) || 0), 0) || 0;
 
-  const isEditable = plan.status === "For Approval" || plan.status === "DRAFT";
+  const isEditable =
+    (plan.status === "For Approval" ||
+      plan.status === "DRAFT" ||
+      plan.status === "FOR APPROVAL") &&
+    (plan.budgetTotal || 0) === 0;
 
   return (
     <div className="flex-1 flex flex-col h-full bg-background overflow-hidden relative">
-      {/* Close */}
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={onClearSelection}
-        className="absolute top-3 right-3 z-10 h-8 w-8 text-muted-foreground hover:text-foreground"
-      >
-        <X className="w-4 h-4" />
-      </Button>
-
       {/* Header */}
       <div className="px-6 pt-4 pb-4 border-b border-border/60 shrink-0">
         <div className="flex items-center gap-2 mb-4">
@@ -274,11 +267,12 @@ export function BudgetAllocationPanel({
                   <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                   <div className="space-y-0.5">
                     <p className="text-xs font-semibold">
-                      Read-Only — Plan is &ldquo;{plan.status}&rdquo;
+                      Read-Only
                     </p>
                     <p className="text-[11px] text-amber-600/80 dark:text-amber-400/80">
-                      Budget can only be edited when the plan is in &ldquo;For
-                      Approval&rdquo; status.
+                      {((plan.budgetTotal || 0) > 0)
+                        ? "Budget has already been allocated for this plan."
+                        : `Budget can only be edited when the plan is in "For Approval" status (Current: ${plan.status}).`}
                     </p>
                   </div>
                 </div>
@@ -328,14 +322,14 @@ export function BudgetAllocationPanel({
                             <Input
                               type="number"
                               placeholder="0.00"
-                              min="0"
+                              min="0.01"
                               step="0.01"
                               className="font-medium tabular-nums h-9"
                               value={field.value || ""}
                               disabled={!isEditable}
                               onChange={(e) => {
-                                const val = parseFloat(e.target.value);
-                                field.onChange(val < 0 ? 0 : val);
+                                const val = e.target.value;
+                                field.onChange(val === "" ? undefined : parseFloat(val));
                               }}
                             />
                           </FormControl>
@@ -550,7 +544,7 @@ export function BudgetAllocationPanel({
                     <thead>
                       <tr className="border-b border-border/40 bg-muted/5">
                         <th className="px-3 py-2 text-[10px] font-bold uppercase text-muted-foreground tracking-wider">
-                          Stop Name
+                          Customer
                         </th>
                         <th className="px-3 py-2 text-[10px] font-bold uppercase text-muted-foreground tracking-wider hidden sm:table-cell">
                           Details / Address

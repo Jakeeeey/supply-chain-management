@@ -20,9 +20,10 @@ import { SalesOrderModal } from "./SalesOrderModal";
 interface CustomerGroupedTableProps {
     groups: CustomerGroup[];
     onUpdateRemarks?: (orderId: number, newRemarks: string) => void;
+    onUpdateReceiptType?: (orderId: number, typeId: number, receiptTypes: any[]) => void;
 }
 
-export const CustomerGroupedTable: React.FC<CustomerGroupedTableProps> = ({ groups, onUpdateRemarks }) => {
+export const CustomerGroupedTable: React.FC<CustomerGroupedTableProps> = ({ groups, onUpdateRemarks, onUpdateReceiptType }) => {
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
     const [selectedOrder, setSelectedOrder] = useState<SalesOrder | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -37,6 +38,14 @@ export const CustomerGroupedTable: React.FC<CustomerGroupedTableProps> = ({ grou
         setExpandedGroups(newExpanded);
     };
 
+    const toggleAll = () => {
+        if (expandedGroups.size === groups.length && groups.length > 0) {
+            setExpandedGroups(new Set());
+        } else {
+            setExpandedGroups(new Set(groups.map(g => g.customer_code)));
+        }
+    };
+
     const handleRowClick = (order: SalesOrder) => {
         setSelectedOrder(order);
         setIsModalOpen(true);
@@ -48,6 +57,19 @@ export const CustomerGroupedTable: React.FC<CustomerGroupedTableProps> = ({ grou
         }
         if (onUpdateRemarks) {
             onUpdateRemarks(orderId, remarks);
+        }
+    };
+
+    const handleReceiptTypeUpdate = (orderId: number, typeId: number, receiptTypes: any[]) => {
+        if (selectedOrder && selectedOrder.order_id === orderId) {
+            const newType = receiptTypes.find(t => t.id === typeId);
+            setSelectedOrder({ 
+                ...selectedOrder, 
+                receipt_type: newType ? { id: newType.id, type: newType.type, isOfficial: newType.isOfficial } : selectedOrder.receipt_type 
+            });
+        }
+        if (onUpdateReceiptType) {
+             onUpdateReceiptType(orderId, typeId, receiptTypes);
         }
     };
 
@@ -69,6 +91,17 @@ export const CustomerGroupedTable: React.FC<CustomerGroupedTableProps> = ({ grou
 
     return (
         <>
+            <div className="mb-4 flex justify-end">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={toggleAll}
+                    disabled={groups.length === 0}
+                    className="rounded-full px-6 h-8 text-[10px] font-black uppercase tracking-widest border-primary/20 hover:bg-primary/5 hover:text-primary transition-all duration-300 shadow-sm"
+                >
+                    {expandedGroups.size === groups.length && groups.length > 0 ? "Close All Accordions" : "Open All Accordions"}
+                </Button>
+            </div>
             <div className="rounded-xl border bg-card/50 backdrop-blur-sm overflow-hidden shadow-xl ring-1 ring-border/50">
                 <Table>
                     <TableHeader className="bg-muted/50">
@@ -157,17 +190,41 @@ export const CustomerGroupedTable: React.FC<CustomerGroupedTableProps> = ({ grou
                                                                 </TableRow>
                                                               </TableHeader>
                                                             <TableBody>
-                                                                {group.orders.map((order) => (
+                                                                {group.orders.map((order) => {
+                                                                    const isRecycled = !!order.not_fulfilled_at && !order.void_invoice_id;
+                                                                    const isVoid = !!order.void_invoice_id;
+                                                                    return (
                                                                     <TableRow 
                                                                         key={order.order_id || order.order_no} 
-                                                                        className="hover:bg-primary/10 border-b last:border-0 transition-colors cursor-pointer"
+                                                                        className={cn(
+                                                                            "border-b last:border-0 transition-colors cursor-pointer",
+                                                                            isVoid
+                                                                                ? "bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-950/50"
+                                                                                : isRecycled
+                                                                                    ? "bg-orange-100 hover:bg-orange-200/50 dark:bg-orange-900/30 dark:hover:bg-orange-900/50"
+                                                                                    : "hover:bg-primary/10"
+                                                                        )}
                                                                         onClick={(e) => {
                                                                             e.stopPropagation();
                                                                             handleRowClick(order);
                                                                         }}
                                                                     >
                                                                         <TableCell className="text-xs py-3"><div className="flex items-center gap-1.5"><Calendar size={12} className="text-muted-foreground" /> {formatDate(order.order_date)}</div></TableCell>
-                                                                        <TableCell className="text-xs font-bold text-primary py-3">{order.order_no}</TableCell>
+                                                                        <TableCell className="text-xs font-bold py-3">
+                                                                            <div className="flex items-center gap-2">
+                                                                                <span className={isVoid ? "text-red-600 dark:text-red-400" : isRecycled ? "text-orange-600 dark:text-orange-400" : "text-primary"}>{order.order_no}</span>
+                                                                                {isVoid && (
+                                                                                    <Badge className="text-[9px] px-1.5 py-0 h-4 bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30 font-bold uppercase tracking-wider">
+                                                                                        Void
+                                                                                    </Badge>
+                                                                                )}
+                                                                                {isRecycled && (
+                                                                                    <Badge className="text-[9px] px-1.5 py-0 h-4 bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/30 font-bold uppercase tracking-wider">
+                                                                                        Recycled
+                                                                                    </Badge>
+                                                                                )}
+                                                                            </div>
+                                                                        </TableCell>
                                                                         <TableCell className="text-xs py-3">{order.po_no || "—"}</TableCell>
                                                                         <TableCell className="text-xs py-3 font-medium text-foreground/80">{order.supplier_id?.supplier_shortcut || "—"}</TableCell>
                                                                         <TableCell className="text-xs py-3">
@@ -184,7 +241,8 @@ export const CustomerGroupedTable: React.FC<CustomerGroupedTableProps> = ({ grou
                                                                             </Badge>
                                                                         </TableCell>
                                                                     </TableRow>
-                                                                ))}
+                                                                    );
+                                                                })}
                                                             </TableBody>
                                                         </Table>
                                                     </div>
@@ -204,6 +262,7 @@ export const CustomerGroupedTable: React.FC<CustomerGroupedTableProps> = ({ grou
                 open={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 onUpdateRemarks={handleRemarksUpdate}
+                onUpdateReceiptType={handleReceiptTypeUpdate}
             />
         </>
     );

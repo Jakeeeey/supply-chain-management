@@ -95,6 +95,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             encoder_id: encoderId,
             isComitted: Number(body.isComitted) === 1 ? 1 : 0,
             isCancelled: Number(body.isCancelled) === 1 ? 1 : 0,
+            committed_at: typeof body.committed_at === "string" ? body.committed_at : null,
+            cancelled_at: typeof body.cancelled_at === "string" ? body.cancelled_at : null,
             total_amount: Number.isFinite(Number(body.total_amount))
                 ? Number(body.total_amount)
                 : 0,

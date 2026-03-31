@@ -113,6 +113,7 @@ export function AddManualStopModal({
                     <Input
                       type="number"
                       placeholder="0"
+                      min="0"
                       {...field}
                       onChange={(e) => field.onChange(Number(e.target.value))}
                     />

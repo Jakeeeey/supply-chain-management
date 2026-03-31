@@ -54,6 +54,15 @@ export interface SalesOrder {
     for_loading_at: string | null;
     for_shipping_at: string | null;
     delivered_at: string | null;
+    not_fulfilled_at: string | null;
+
+    // Recycled order — pre-existing invoice data
+    existing_invoice_no: number | null;           // invoice_id (integer FK for details)
+    existing_invoice_display_no: string | null;   // invoice_no string shown in UI
+
+    // Void re-invoicing — voided invoice that needs replacement
+    void_invoice_id: number | null;               // invoice_id of the voided invoice
+    void_invoice_display_no: string | null;        // invoice_no of the voided invoice
 
     // Relationships (nested from Directus)
     supplier_id: Supplier | null;
@@ -69,14 +78,13 @@ export interface InvoicingFilters {
     salesman?: string;
     supplier?: string;
     branch?: string;
-    fromDate?: string;
-    toDate?: string;
 }
 
 export interface LogisticsData {
     pdp_no: string;
     consolidation_no: string;
     dispatch_no: string;
+    dispatch_date?: string; // Added for sorting and identification
 }
 
 export interface CustomerGroup {
@@ -93,6 +101,8 @@ export interface ConversionItem {
     consolidator_no: string;
     order_no: string;
     ordered_quantity: number;
+    allocated_quantity: number;
+    total_allocated_quantity: number;
     picked_quantity: number;
     applied_quantity: number;
     remaining_quantity: number;
@@ -117,6 +127,8 @@ export interface ConversionData {
         brgy: string;
     };
     payment_name?: string;
+    total_allocated_quantity?: number;
+    total_picked_quantity?: number;
 }
 
 export interface ORFieldConfig {

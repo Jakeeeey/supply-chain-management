@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { SalesReturn } from "../type";
 import { SalesReturnProvider } from "../providers/fetchProviders";
 
@@ -6,6 +6,7 @@ export function useSalesReturnList() {
   const [data, setData] = useState<SalesReturn[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
 
   const [options, setOptions] = useState<{
@@ -29,7 +30,7 @@ export function useSalesReturnList() {
     return str.replace(/\s+/g, "").toUpperCase();
   };
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     setLoading(true);
     try {
       // 1. Determine if we're searching (hybrid strategy)
@@ -41,8 +42,7 @@ export function useSalesReturnList() {
       const [returnsResult, customersList, salesmenList] = await Promise.all([
         SalesReturnProvider.getReturns(
           isSearching ? 1 : page,
-          isSearching ? -1 : 10,
-          "",  // search is no longer passed to the provider
+          isSearching ? -1 : pageSize,
           filters,
         ),
         SalesReturnProvider.getCustomersList(),
@@ -105,7 +105,6 @@ export function useSalesReturnList() {
 
         // Local pagination after filtering
         const totalFiltered = mappedData.length;
-        const pageSize = 10;
         const start = (page - 1) * pageSize;
         const paginatedData = mappedData.slice(start, start + pageSize);
 
@@ -114,14 +113,14 @@ export function useSalesReturnList() {
       } else {
         // Normal server-paginated result
         setData(mappedData);
-        setTotalPages(Math.max(1, Math.ceil(returnsResult.total / 10)));
+        setTotalPages(Math.max(1, Math.ceil(returnsResult.total / pageSize)));
       }
     } catch (err) {
       console.error("Error fetching sales return list:", err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [search, page, pageSize, filters]);
 
   // Reset to page 1 when search or filters change
   useEffect(() => {
@@ -130,14 +129,16 @@ export function useSalesReturnList() {
 
   useEffect(() => {
     refresh();
-  }, [page, search, filters]);
+  }, [refresh]);
 
   return {
     data,
     loading,
     page,
+    pageSize,
     totalPages,
     setPage,
+    setPageSize,
     setSearch,
     setFilters,
     filters,

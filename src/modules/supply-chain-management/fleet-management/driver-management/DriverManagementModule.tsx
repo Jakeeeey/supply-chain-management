@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { useDriverManagement } from "./hooks/useDriverManagement";
 import { DriverTable } from "./components/DriverTable";
 import { DriverModal } from "./components/DriverModal";
-import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
+import { LegacyCombobox as Combobox } from "@/components/ui/legacy-combobox";
+import { ComboboxOption } from "@/components/ui/combobox";
 import { toast } from "sonner";
 import type { DriverWithDetails } from "./types";
 

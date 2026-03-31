@@ -152,7 +152,7 @@ export const getMasterlistColumns = (
       const isActiveVal = sku.isActive;
       const active = isActiveVal === 1 || isActiveVal === true;
       const displayStatus =
-        (sku as any).status || (active ? "ACTIVE" : "INACTIVE");
+        sku.status || (active ? "ACTIVE" : "INACTIVE");
 
       return (
         <Badge
@@ -170,10 +170,10 @@ export const getMasterlistColumns = (
     meta: { label: "Actions" },
     cell: ({ row }) => {
       const sku = row.original;
-      const id = (sku as any).id || (sku as any).product_id;
+      const id = sku.id ?? sku.product_id;
       const active = sku.isActive === 1 || sku.isActive === true;
 
-      if (!onToggleStatus) return null;
+      if (!onToggleStatus || id == null) return null;
 
       return (
         <div className="flex justify-end w-[60px]">

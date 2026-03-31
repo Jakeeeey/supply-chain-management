@@ -44,16 +44,16 @@ import {
 } from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Combobox } from "@/components/ui/combobox";
+import { LegacyCombobox } from "@/components/ui/legacy-combobox";
 
-// ─── Types ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 interface StockAdjustmentFormProps {
   id: number | null;
   onCancel: () => void;
   onSuccess: () => void;
 }
 
-// ─── Memoised item row (renders only when *its own* data changes) ───
+// â”€â”€â”€ Memoised item row (renders only when *its own* data changes) â”€â”€â”€
 interface ItemRowProps {
   index: number;
   control: Control<any>;
@@ -84,7 +84,7 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
   onOpenScanner,
   isReadOnly = false,
 }: ItemRowProps) {
-  // useWatch subscribes to specific fields — only this row re-renders when its own data changes.
+  // useWatch subscribes to specific fields â€” only this row re-renders when its own data changes.
   const productId = useWatch({ control, name: `items.${index}.product_id` });
   const productName = useWatch({ control, name: `items.${index}.product_name` });
   const unitName = useWatch({ control, name: `items.${index}.unit_name` });
@@ -99,7 +99,7 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
 
   const dbId = useWatch({ control, name: `items.${index}.db_id` });
 
-  const totalCost = (quantity || 0) * (costPerUnit || 0);
+  const totalCost = Number(quantity || 0) * Number(costPerUnit || 0);
 
   return (
     <div
@@ -122,10 +122,11 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
           <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
             Product <span className="text-red-500">*</span>
           </Label>
-          <Combobox
+          <LegacyCombobox
             options={productOptions}
             value={String(productId || "")}
-            onValueChange={(val) => {
+            onValueChange={(val: string) => {
+              if (!val) return;
               const product = productOptions.find(
                 (p) => String(p.value) === val
               )?.item;
@@ -149,7 +150,7 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
                       </span>
                       {p.unit_name && (
                         <>
-                          <span className="text-[9px] text-muted-foreground/30">•</span>
+                          <span className="text-[9px] text-muted-foreground/30">â€¢</span>
                           <span className="text-[9px] font-bold text-blue-600 uppercase tracking-tight bg-blue-50 dark:bg-blue-900/20 px-1 rounded">
                             {p.unit_name}
                           </span>
@@ -225,8 +226,7 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
             Cost/Unit
           </Label>
           <Input
-            type="text"
-            value={`₱${(costPerUnit || 0).toFixed(2)}`}
+            value={`₱${Number(costPerUnit || 0).toFixed(2)}`}
             className="h-10 border-input bg-muted/30 rounded-md text-sm"
             readOnly
           />
@@ -239,7 +239,7 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
           </Label>
           <div className="h-10 border border-blue-100/20 dark:border-blue-900/20 bg-blue-50/30 dark:bg-blue-900/10 rounded-md flex items-center px-3 font-bold text-blue-600 text-sm">
             ₱
-            {totalCost.toLocaleString(undefined, {
+            {Number(totalCost || 0).toLocaleString(undefined, {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
             })}
@@ -312,7 +312,7 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
   );
 });
 
-// ─── Summary bar (subscribes only to items array) ────────────────────
+// â”€â”€â”€ Summary bar (subscribes only to items array) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function FormSummary({
   control,
   fieldCount,
@@ -329,8 +329,8 @@ function FormSummary({
     let amt = 0;
     let rfid = 0;
     for (const item of items) {
-      const q = item?.quantity || 0;
-      const c = item?.cost_per_unit || 0;
+      const q = Number(item?.quantity || 0);
+      const c = Number(item?.cost_per_unit || 0);
       qty += q;
       amt += q * c;
       if (item?.has_rfid) rfid++;
@@ -361,7 +361,7 @@ function FormSummary({
           </span>
           <span className="text-xl font-bold text-blue-600 dark:text-blue-400">
             ₱
-            {totalAmount.toLocaleString(undefined, {
+            {Number(totalAmount || 0).toLocaleString(undefined, {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
             })}
@@ -395,7 +395,7 @@ function FormSummary({
   );
 }
 
-// ─── RFID warning banner (subscribes only to items array) ───────────
+// â”€â”€â”€ RFID warning banner (subscribes only to items array) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function RfidBanner({ control }: { control: Control<any> }) {
   const items = useWatch({ control, name: "items" }) || [];
   const rfidItemsCount = useMemo(
@@ -424,7 +424,7 @@ function RfidBanner({ control }: { control: Control<any> }) {
   );
 }
 
-// ─── Main form component ─────────────────────────────────────────────
+// â”€â”€â”€ Main form component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function StockAdjustmentForm({
   id,
   onCancel,
@@ -465,8 +465,10 @@ export function StockAdjustmentForm({
   // --- Memoize product options to prevent expensive re-mapping in every row ---
   const productOptions = useMemo(() => {
     return products.map((p) => ({
-      value: String(p.product_id || p.id),
-      label: p.product_name,
+      // Use record PK (id) for absolute uniqueness, fallback to product_id
+      value: String(p.id || p.product_id),
+      // Include unit in label to prevent CommandItem collision and help user selection
+      label: p.unit_name ? `${p.product_name} (${p.unit_name})` : p.product_name,
       item: p
     }));
   }, [products]);
@@ -488,7 +490,7 @@ export function StockAdjustmentForm({
     name: "items",
   });
 
-  // ── Load data for edit mode ────────────────────────────────────────
+  // â”€â”€ Load data for edit mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     if (id) {
       const loadData = async () => {
@@ -523,8 +525,8 @@ export function StockAdjustmentForm({
             items: data.items.map((item) => ({
               ...item,
               product_id: String(
-                (item.product_id as any)?.product_id ||
-                  (item.product_id as any)?.id ||
+                (item.product_id as any)?.id ||
+                  (item.product_id as any)?.product_id ||
                   item.product_id
               ),
               product_name:
@@ -566,7 +568,7 @@ export function StockAdjustmentForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // ── Stable branch_id watcher (no infinite loop) ───────────────────
+  // â”€â”€ Stable branch_id watcher (no infinite loop) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const watchedBranchId = useWatch({ control: form.control, name: "branch_id" });
   const watchedSupplierId = useWatch({ control: form.control, name: "supplier_id" });
 
@@ -577,7 +579,7 @@ export function StockAdjustmentForm({
     }
   }, [watchedBranchId, fetchBranchRfidData, fetchBranchInventory]);
 
-  // ── Smart Document Numbering Effect ──────────────────────────────
+  // â”€â”€ Smart Document Numbering Effect â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     if (!id) {
       const updateDocNo = async () => {
@@ -589,7 +591,7 @@ export function StockAdjustmentForm({
     }
   }, [id, fetchNextDocNo, form]);
 
-  // ── Watch type change to update doc_no ─────────────────────────────
+  // â”€â”€ Watch type change to update doc_no â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const watchedTypeToUpdateDocNo = useWatch({ control: form.control, name: "type" });
   useEffect(() => {
     if (!id && watchedTypeToUpdateDocNo) {
@@ -601,19 +603,19 @@ export function StockAdjustmentForm({
     }
   }, [id, watchedTypeToUpdateDocNo, fetchNextDocNo, form]);
 
-  // ── Fetch products when supplier changes ───────────────────────────
+  // â”€â”€ Fetch products when supplier changes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     if (watchedSupplierId) {
       fetchProductsBySupplier(Number(watchedSupplierId));
     }
   }, [watchedSupplierId, fetchProductsBySupplier]);
 
-  // ── Form loading state ─────────────────────────────────────────────
+  // â”€â”€ Form loading state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const isFormLoading = id ? loading : false;
   const isPosted = useWatch({ control: form.control, name: "isPosted" });
   const isReadOnly = !!isPosted;
 
-  // ── Post handler ───────────────────────────────────────────────────
+  // â”€â”€ Post handler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handlePost = async () => {
     if (!id) return;
     setShowPostConfirmation(true);
@@ -634,7 +636,7 @@ export function StockAdjustmentForm({
     }
   };
 
-  // ── Submit handler ─────────────────────────────────────────────────
+  // â”€â”€ Submit handler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const onSubmit = useCallback(
     async (values: any) => {
       console.log("!!! SUBMIT TRIGGERED !!!", values);
@@ -660,7 +662,7 @@ export function StockAdjustmentForm({
     [id, createAdjustment, updateAdjustment, onSuccess]
   );
 
-  // ── Add empty item row ─────────────────────────────────────────────
+  // â”€â”€ Add empty item row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleAddProduct = useCallback(() => {
     const supplierId = form.getValues("supplier_id");
     if (!supplierId) {
@@ -691,14 +693,16 @@ export function StockAdjustmentForm({
     }
   }, [scannerContext, form]);
 
-  // ── Product selection (optimistic + background RFID/inventory) ─────
+  // â”€â”€ Product selection (optimistic + background RFID/inventory) â”€â”€â”€â”€â”€
   const handleProductSelect = useCallback(
     async (index: number, product: any) => {
       if (!product) return;
 
-      // ① Optimistically show product info IMMEDIATELY
+      // Store the specific record ID for correct dropdown matching, but keep item properties
+      const selectionId = String(product.id || product.product_id);
       const productId = product.product_id || product.id;
-      form.setValue(`items.${index}.product_id`, productId);
+
+      form.setValue(`items.${index}.product_id`, selectionId);
       form.setValue(`items.${index}.product_name`, product.product_name);
       form.setValue(`items.${index}.product_code`, product.product_code);
       form.setValue(`items.${index}.cost_per_unit`, product.cost_per_unit || product.price_per_unit || 0);
@@ -708,7 +712,7 @@ export function StockAdjustmentForm({
       form.setValue(`items.${index}.description`, product.description || "No description available.");
       form.setValue(`items.${index}.unit_order`, product.unit_of_measurement?.order || 1);
 
-      // ② Use cached inventoryMap for instant current stock lookup
+      // â‘¡ Use cached inventoryMap for instant current stock lookup
       const cachedStock = inventoryMap.get(Number(productId)) ?? 0;
       form.setValue(`items.${index}.current_stock`, cachedStock);
 
@@ -716,7 +720,7 @@ export function StockAdjustmentForm({
       const unitId = product.unit_of_measurement?.unit_id || product.unit_id;
       const hasRfid = rfidProductIds.has(Number(productId));
 
-      // ③ Update RFID status instantly from pre-fetched data
+      // â‘¢ Update RFID status instantly from pre-fetched data
       form.setValue(`items.${index}.has_rfid`, hasRfid);
       form.setValue(`items.${index}.rfid_count`, 0); // Reset count until scanned for order 3
 
@@ -789,7 +793,7 @@ export function StockAdjustmentForm({
     }, 600);
   }, [form]);
 
-  // ── Stable form watcher values ──────────────────────────────────────
+  // â”€â”€ Stable form watcher values â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const watchedBranchIdForSelect = useWatch({ control: form.control, name: "branch_id" });
   const watchedSupplierIdForSelect = useWatch({ control: form.control, name: "supplier_id" });
   const watchedType = useWatch({ control: form.control, name: "type" });
@@ -914,13 +918,13 @@ export function StockAdjustmentForm({
                 <Label htmlFor="branch" className="text-sm font-bold text-muted-foreground">
                   Branch <span className="text-red-500">*</span>
                 </Label>
-                <Combobox
+                <LegacyCombobox
                   options={branches.map(b => ({
                     value: String(b.id),
                     label: `${b.branch_name} (${b.branch_code})`
                   }))}
                   value={watchedBranchIdForSelect ? String(watchedBranchIdForSelect) : ""}
-                  onValueChange={(v) => form.setValue("branch_id", v ? Number(v) : undefined)}
+                  onValueChange={(v: string) => form.setValue("branch_id", v ? Number(v) : undefined)}
                   placeholder="Select Branch"
                   disabled={isReadOnly}
                   className={form.formState.errors.branch_id ? "border-red-500 bg-red-50 dark:bg-red-900/10" : ""}
@@ -936,13 +940,13 @@ export function StockAdjustmentForm({
                 <Label htmlFor="supplier" className="text-sm font-bold text-muted-foreground">
                   Supplier <span className="text-red-500">*</span>
                 </Label>
-                <Combobox
+                <LegacyCombobox
                   options={suppliers.map(s => ({
                     value: String(s.id),
                     label: `${s.supplier_name} ${s.supplier_shortcut ? `(${s.supplier_shortcut})` : ""}`
                   }))}
                   value={watchedSupplierIdForSelect ? String(watchedSupplierIdForSelect) : ""}
-                  onValueChange={(v) => form.setValue("supplier_id", v ? Number(v) : undefined)}
+                  onValueChange={(v: string) => form.setValue("supplier_id", v ? Number(v) : undefined)}
                   placeholder={isSuppliersLoading ? "Loading suppliers..." : "Select Supplier"}
                   disabled={isReadOnly}
                   className={form.formState.errors.supplier_id ? "border-red-500 bg-red-50 dark:bg-red-900/10" : ""}
@@ -1134,7 +1138,7 @@ export function StockAdjustmentForm({
               className="h-10 px-8 font-bold bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-sm rounded-lg"
             >
               {loading ? (
-                <span className="animate-spin mr-2">◌</span>
+                <span className="animate-spin mr-2">â—Œ</span>
               ) : (
                 <Save className="h-4 w-4" />
               )}
@@ -1150,7 +1154,7 @@ export function StockAdjustmentForm({
               className="h-10 px-8 font-bold bg-green-600 hover:bg-green-700 text-white gap-2 shadow-sm rounded-lg animate-in fade-in zoom-in-95 duration-200"
             >
               {loading ? (
-                <span className="animate-spin mr-2">◌</span>
+                <span className="animate-spin mr-2">â—Œ</span>
               ) : (
                 <Send className="h-4 w-4" />
               )}
@@ -1194,7 +1198,7 @@ export function StockAdjustmentForm({
               onClick={() => setShowRFIDWarning(false)}
               className="rounded-full h-8 w-8 text-amber-400 hover:text-amber-600 dark:hover:text-amber-300 hover:bg-amber-100/50 dark:hover:bg-amber-800/20"
             >
-              ✕
+              âœ•
             </Button>
           </div>
 
@@ -1335,3 +1339,4 @@ export function StockAdjustmentForm({
     </div>
   );
 }
+

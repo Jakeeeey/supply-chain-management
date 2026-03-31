@@ -3,6 +3,7 @@ import {
   DispatchPlanDetail,
   DispatchPlanMasterData,
 } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/types/dispatch-plan.schema";
+import { format } from "date-fns";
 import { useCallback, useEffect, useState } from "react";
 import { usePDPFilter } from "../../context/PDPFilterContext";
 
@@ -13,7 +14,8 @@ const API_PATH =
  * Hook for the PDP Planner sub-module.
  */
 export function usePreDispatchPlanner() {
-  const { clusterId, status, search, setSearch, branchId, dispatchDate } = usePDPFilter();
+  const { clusterId, status, search, setSearch, branchId, dateRange } =
+    usePDPFilter();
 
   // ─── Plans State ──────────────────────────────────
   const [plansData, setPlansData] = useState<DispatchPlan[]>([]);
@@ -45,14 +47,20 @@ export function usePreDispatchPlanner() {
       if (clusterId) params.append("cluster_id", String(clusterId));
       if (status) params.append("status", status);
       if (branchId) params.append("branch_id", String(branchId));
-      if (dispatchDate) params.append("dispatch_date", dispatchDate);
+
+      if (dateRange?.from) {
+        params.append("start_date", format(dateRange.from, "yyyy-MM-dd"));
+      }
+      if (dateRange?.to) {
+        params.append("end_date", format(dateRange.to, "yyyy-MM-dd"));
+      }
 
       const [plansRes, masterRes, metricsRes] = await Promise.all([
         fetch(`${API_PATH}?${params.toString()}`).then((r) => r.json()),
         fetch(`${API_PATH}?type=master`).then((r) => r.json()),
-        fetch(
-          `${API_PATH}?type=metrics${clusterId ? `&cluster_id=${clusterId}` : ""}`,
-        ).then((r) => r.json()),
+        fetch(`${API_PATH}?type=metrics&${params.toString()}`).then((r) =>
+          r.json(),
+        ),
       ]);
 
       if (plansRes.error) throw new Error(plansRes.error);
@@ -71,7 +79,7 @@ export function usePreDispatchPlanner() {
     } finally {
       setIsLoading(false);
     }
-  }, [search, clusterId, status, branchId, dispatchDate]);
+  }, [search, clusterId, status, branchId, dateRange]);
 
   useEffect(() => {
     const handler = setTimeout(() => {

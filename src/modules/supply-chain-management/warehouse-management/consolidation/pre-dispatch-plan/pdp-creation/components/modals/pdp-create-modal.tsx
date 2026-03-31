@@ -64,6 +64,8 @@ interface PDPCreateModalProps {
   availableOrders: SalesOrderOption[];
   isLoadingOrders: boolean;
   onFilterChange: (clusterId?: number, branchId?: number) => void;
+  initialClusterId?: number | null;
+  initialBranchId?: number | null;
   editPlan?: DispatchPlan | null;
   editDetails?: DispatchPlanDetail[];
 }
@@ -166,6 +168,8 @@ export function PDPCreateModal({
   availableOrders,
   isLoadingOrders,
   onFilterChange,
+  initialClusterId,
+  initialBranchId,
   editPlan,
   editDetails,
 }: PDPCreateModalProps) {
@@ -248,8 +252,8 @@ export function PDPCreateModal({
         if (cId) onFilterChange(cId, bId || undefined);
       } else {
         setDriverId(null);
-        setClusterId(null);
-        setBranchId(null);
+        setClusterId(initialClusterId || null);
+        setBranchId(initialBranchId || null);
         setDispatchDate(
           new Date(
             new Date().getTime() - new Date().getTimezoneOffset() * 60000,
@@ -261,6 +265,14 @@ export function PDPCreateModal({
         setVehicleId(null);
         setOrderSearch("");
         setManifestOrders([]);
+
+        // Trigger initial filter change if we have initial values
+        if (initialClusterId || initialBranchId) {
+          onFilterChange(
+            initialClusterId || undefined,
+            initialBranchId || undefined,
+          );
+        }
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -308,8 +320,41 @@ export function PDPCreateModal({
     [manifestOrders],
   );
 
+  // In edit mode, the backend excludes orders already assigned to this plan.
+  // We parse them from editDetails so they can reappear in the sidebar
+  // when the user removes them from the manifest.
+  const initialEditOrders = useMemo<SalesOrderOption[]>(() => {
+    if (!editDetails?.length) return [];
+    return editDetails.map((d) => ({
+      order_id: d.sales_order_id,
+      order_no: d.order_no || "",
+      customer_code: "",
+      customer_name: d.customer_name,
+      city: d.city,
+      province: d.province,
+      total_amount: d.amount ?? null,
+      net_amount: d.amount ?? null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      po_no: (d as any).po_no || null,
+      order_status: d.order_status,
+      total_weight: d.weight,
+    }));
+  }, [editDetails]);
+
+  // Merge backend available orders with the initial edit orders (no duplicates)
+  const effectiveAvailableOrders = useMemo(() => {
+    const existingIds = new Set(availableOrders.map((o) => o.order_id));
+    const merged = [...availableOrders];
+    for (const eo of initialEditOrders) {
+      if (!existingIds.has(eo.order_id)) {
+        merged.push(eo);
+      }
+    }
+    return merged;
+  }, [availableOrders, initialEditOrders]);
+
   const filteredAvailable = useMemo(() => {
-    let orders = availableOrders.filter(
+    let orders = effectiveAvailableOrders.filter(
       (o) => !manifestOrderIds.has(o.order_id),
     );
 
@@ -328,18 +373,18 @@ export function PDPCreateModal({
       );
     }
     return orders;
-  }, [availableOrders, manifestOrderIds, orderSearch, statusFilter]);
+  }, [effectiveAvailableOrders, manifestOrderIds, orderSearch, statusFilter]);
 
   const statusCounts = useMemo(() => {
     const counts = { all: 0, consolidation: 0, "not-fulfilled": 0 };
-    availableOrders.forEach((o) => {
+    effectiveAvailableOrders.forEach((o) => {
       if (manifestOrderIds.has(o.order_id)) return;
       counts.all++;
       if (o.order_status === "For Consolidation") counts.consolidation++;
       if (o.order_status === "Not Fulfilled") counts["not-fulfilled"]++;
     });
     return counts;
-  }, [availableOrders, manifestOrderIds]);
+  }, [effectiveAvailableOrders, manifestOrderIds]);
 
   const handleClusterChange = (value: string) => {
     const id = Number(value);

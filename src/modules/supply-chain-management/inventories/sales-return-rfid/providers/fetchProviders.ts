@@ -19,6 +19,7 @@ import type {
   ProductSupplierConnection,
   API_LineDiscount,
   API_SalesReturnType,
+  PriceTypeOption,
 } from "../type";
 
 const API_BASE = "/api/scm/inventories/sales-return-rfid";
@@ -45,8 +46,7 @@ export const SalesReturnProvider = {
   async getReturns(
     page: number = 1,
     limit: number = 10,
-    search: string = "",
-    filters: { salesman?: string; customer?: string; status?: string } = {},
+    filters: { salesman?: string; customer?: string; status?: string; invoiceNo?: string } = {},
   ): Promise<{ data: SalesReturn[]; total: number }> {
     const params = new URLSearchParams({
       action: "list",
@@ -60,6 +60,8 @@ export const SalesReturnProvider = {
       params.set("customer", filters.customer);
     if (filters.status && filters.status !== "All")
       params.set("status", filters.status);
+    if (filters.invoiceNo)
+      params.set("invoiceNo", filters.invoiceNo);
 
     const res = await fetch(`${API_BASE}?${params}`, { cache: "no-store" });
     const json = await res.json();
@@ -104,6 +106,11 @@ export const SalesReturnProvider = {
   async getSalesReturnTypes(): Promise<API_SalesReturnType[]> {
     const refs = await this._getReferences();
     return refs.returnTypes;
+  },
+
+  async getPriceTypes(): Promise<PriceTypeOption[]> {
+    const refs = await this._getReferences();
+    return refs.priceTypes || [];
   },
 
   async getInvoiceReturnList(salesmanId?: string, customerCode?: string): Promise<InvoiceOption[]> {
@@ -173,12 +180,20 @@ export const SalesReturnProvider = {
     return handleResponse(res);
   },
 
-  async updateStatus(id: number | string, status: string): Promise<any> {
+  async updateStatus(
+    id: number | string,
+    status: string,
+    isReceived?: boolean,
+    receivedAt?: string,
+  ): Promise<any> {
     const params = new URLSearchParams({
       action: "status",
       id: String(id),
       status,
     });
+    if (isReceived !== undefined) params.set("isReceived", String(isReceived));
+    if (receivedAt) params.set("receivedAt", receivedAt);
+
     const res = await fetch(`${API_BASE}?${params}`, { method: "PATCH" });
     return handleResponse(res);
   },
@@ -252,6 +267,12 @@ export const SalesReturnProvider = {
   },
 
   // --- 6. RFID LOOKUP ---
+  async checkRfidDuplicate(rfid: string): Promise<{ isDuplicate: boolean; returnNo?: string }> {
+    const params = new URLSearchParams({ action: "check-rfid-duplicate", rfid });
+    const res = await fetch(`${API_BASE}?${params}`, { cache: "no-store" });
+    return handleResponse<{ isDuplicate: boolean; returnNo?: string }>(res);
+  },
+
   async lookupRfid(
     rfidTag: string,
     branchId: number,
@@ -262,6 +283,13 @@ export const SalesReturnProvider = {
     unitPrice: number;
     unitShortcut: string;
     unitOfMeasurementCount: number;
+    // 🟢 Added for price recalculation
+    priceA: number;
+    priceB?: number;
+    priceC?: number;
+    priceD?: number;
+    priceE?: number;
+    unitMultiplier?: number;
   } | null> {
     const params = new URLSearchParams({
       action: "rfid-lookup",
@@ -276,6 +304,12 @@ export const SalesReturnProvider = {
       unitPrice: number;
       unitShortcut: string;
       unitOfMeasurementCount: number;
+      priceA: number;
+      priceB?: number;
+      priceC?: number;
+      priceD?: number;
+      priceE?: number;
+      unitMultiplier?: number;
     } | null>(res);
   },
 

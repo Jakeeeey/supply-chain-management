@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
 import {
-  SKU,
   MasterData,
+  SKU,
 } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
 import { SortingState } from "@tanstack/react-table";
-import { CellHelpers } from "../../sku-creation/utils/sku-helpers";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { CellHelpers } from "../../sku-creation/utils/sku-helpers";
 
 export function useSKUMasterlist() {
   const [data, setData] = useState<SKU[]>([]);
@@ -41,7 +41,8 @@ export function useSKUMasterlist() {
       setData(approvedRes.data || []);
       setTotalCount(approvedRes.meta?.total_count || 0);
       setMasterData(masterRes.data || null);
-    } catch (err: any) {
+    } catch (e: unknown) {
+      const err = e as Error;
       setError(err.message);
     } finally {
       setIsLoading(false);
@@ -63,7 +64,8 @@ export function useSKUMasterlist() {
         `SKU ${isActive ? "activated" : "deactivated"} successfully`,
       );
       await refresh();
-    } catch (err: any) {
+    } catch (e: unknown) {
+      const err = e as Error;
       toast.error(err.message || "Failed to update status");
     } finally {
       setIsUpdating(false);
@@ -89,7 +91,8 @@ export function useSKUMasterlist() {
         `${ids.length} SKUs ${isActive ? "activated" : "deactivated"} successfully`,
       );
       await refresh();
-    } catch (err: any) {
+    } catch (e: unknown) {
+      const err = e as Error;
       toast.error(err.message || "Failed to update status");
     } finally {
       setIsUpdating(false);

@@ -27,8 +27,6 @@ import {
   Plus,
   X,
   Package,
-  ArrowRight,
-  ArrowLeft,
   Loader2,
   Check,
   ChevronsUpDown,
@@ -59,7 +57,7 @@ export function CreateReturnModal({
     isLoading: isLoadingInventory,
   } = useReturnCreationData(isOpen);
 
-  const [step, setStep] = useState<"input" | "review">("input");
+
   const [selection, setSelection] = useState({
     supplierId: "",
     branchId: "",
@@ -106,9 +104,17 @@ export function CreateReturnModal({
     );
 
     const discountMap = new Map<string, (typeof refs.lineDiscounts)[0]>();
-    refs.lineDiscounts.forEach((d) =>
-      discountMap.set(String(d.id), d),
-    );
+    refs.lineDiscounts.forEach((d) => discountMap.set(String(d.id), d));
+
+    const discountTypeMap = new Map<string, any>();
+    refs.discountTypes.forEach((dt) => discountTypeMap.set(String(dt.id), dt));
+
+    const linePerDiscountMap = new Map<string, number[]>();
+    refs.linePerDiscountType.forEach((lpd) => {
+      const typeId = String(lpd.type_id);
+      if (!linePerDiscountMap.has(typeId)) linePerDiscountMap.set(typeId, []);
+      linePerDiscountMap.get(typeId)?.push(Number(lpd.line_id));
+    });
 
     // Build unit order map (unit_name/shortcut -> order) for filtering
     const unitOrderMap = new Map<string, number>();
@@ -126,14 +132,24 @@ export function CreateReturnModal({
 
         let discountLabel: string | undefined;
         let computedDiscount = 0;
+        let currentDiscountTypeId: number | undefined;
 
         if (connection?.discount_type) {
-          const discountObj = discountMap.get(String(connection.discount_type));
-          if (discountObj) {
-            computedDiscount = parseFloat(discountObj.percentage) / 100;
-            discountLabel = discountObj.line_discount;
-          } else {
-            discountLabel = String(connection.discount_type);
+          const discountTypeObj = discountTypeMap.get(String(connection.discount_type));
+          if (discountTypeObj) {
+            currentDiscountTypeId = discountTypeObj.id;
+            discountLabel = discountTypeObj.discount_type_name ||
+              discountTypeObj.discount_type ||
+              discountTypeObj.name;
+            
+            // Resolve to first percentage found in junction
+            const lineIds = linePerDiscountMap.get(String(discountTypeObj.id));
+            if (lineIds && lineIds.length > 0) {
+              const lineDiscountObj = discountMap.get(String(lineIds[0]));
+              if (lineDiscountObj) {
+                computedDiscount = parseFloat(lineDiscountObj.percentage) / 100;
+              }
+            }
           }
         }
 
@@ -142,7 +158,8 @@ export function CreateReturnModal({
         );
 
         return {
-          id: String(item.product_id),
+          id: String(item.product_id), // Search ID (for quantity increment logic)
+          product_id: item.product_id,
           masterId: String(item.familyId),
           code: item.product_code || "N/A",
           name: item.product_name,
@@ -153,6 +170,7 @@ export function CreateReturnModal({
           uom_id: matchedUnit?.unit_id || 0,
           discountType: discountLabel,
           supplierDiscount: computedDiscount,
+          discountTypeId: currentDiscountTypeId,
         };
       })
       // Filter: only products with stock > 0
@@ -170,6 +188,7 @@ export function CreateReturnModal({
       uom_id: number;
       discountType?: string;
       supplierDiscount: number;
+      discountTypeId?: number;
     }
 
     // Group by familyId
@@ -205,6 +224,7 @@ export function CreateReturnModal({
           supplierDiscount:
             v.supplierDiscount || parentDiscount.supplierDiscount,
           discountType: v.discountType || parentDiscount.discountType,
+          discountTypeId: v.discountTypeId || parentDiscount.discountTypeId,
         }));
       }
 
@@ -231,10 +251,10 @@ export function CreateReturnModal({
   const addToCart = useCallback((p_raw: unknown, qty = 1) => {
     const p = p_raw as CartItem;
     setCart((prev) => {
-      const exists = prev.find((i) => i.id === p.id);
+      const exists = prev.find((i) => String(i.id) === String(p.id) && i.uom_id === p.uom_id);
       if (exists)
         return prev.map((i) =>
-          i.id === p.id
+          String(i.id) === String(p.id) && i.uom_id === p.uom_id
             ? { ...i, quantity: i.quantity + qty }
             : i,
         );
@@ -242,9 +262,11 @@ export function CreateReturnModal({
         ...prev,
         {
           ...p,
+          cartId: Math.random().toString(36).substring(2, 15),
           quantity: qty,
           onHand: p.stock ?? 0,
           discount: (p.supplierDiscount || 0),
+          discountTypeId: p.discountTypeId,
           customPrice: p.price,
         } as CartItem,
       ];
@@ -291,9 +313,38 @@ export function CreateReturnModal({
         return;
       }
 
+      const connection = refs.connections.find(
+        (c) => c.product_id === invRecord!.product_id && c.supplier_id === Number(selection.supplierId),
+      );
+
+      let computedDiscount = 0;
+      let currentDiscountTypeId: number | undefined;
+
+      if (connection?.discount_type) {
+        const discountTypeObj = refs.discountTypes.find(
+          (dt) => dt.id === connection.discount_type
+        );
+        if (discountTypeObj) {
+          currentDiscountTypeId = discountTypeObj.id;
+          
+          const junctions = refs.linePerDiscountType.filter(
+            (lpd) => lpd.type_id === discountTypeObj.id
+          );
+          if (junctions.length > 0) {
+            const lineDiscountObj = refs.lineDiscounts.find(
+              (ld) => ld.id === junctions[0].line_id
+            );
+            if (lineDiscountObj) {
+              computedDiscount = parseFloat(lineDiscountObj.percentage) / 100;
+            }
+          }
+        }
+      }
+
       // Add to cart
       addToCart({
-        id: String(invRecord!.product_id),
+        id: String(invRecord!.product_id), // Standard Identity
+        cartId: Math.random().toString(36).substring(2, 15),
         code: invRecord!.product_code,
         name: invRecord!.product_name,
         unit: invRecord!.unit_name,
@@ -301,7 +352,8 @@ export function CreateReturnModal({
         stock: invRecord!.running_inventory,
         price: invRecord!.price,
         uom_id: matchedUnit.unit_id,
-        supplierDiscount: 0,
+        supplierDiscount: computedDiscount,
+        discountTypeId: currentDiscountTypeId,
       }, 1);
 
       toast.success("Barcode Scanned", {
@@ -315,27 +367,42 @@ export function CreateReturnModal({
    * GLOBAL SCAN CAPTURE: Routes barcode scans to the handler.
    */
   useGlobalScanner({
-    enabled: isOpen && step === "input" && !showPicker,
+    enabled: isOpen && !showPicker,
     onScan: (val) => {
       handleBarcodeScan(val);
     }
   });
 
-  const updateCart = (id: string, field: keyof CartItem, val: number) => {
+  const updateCart = (cartId: string, field: keyof CartItem, val: any) => {
     setCart((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, [field]: val } : i)),
+      prev.map((i) => ((i.cartId || i.id) === cartId ? { ...i, [field]: val } : i)),
     );
   };
 
   const handleCloseFull = () => {
     setSelection({ supplierId: "", branchId: "", remarks: "" });
     setCart([]);
-    setStep("input");
     setShowPicker(false);
     onClose();
   };
 
   const handleSubmit = async () => {
+    // Validate: supplier and branch must be selected
+    if (!selection.supplierId || !selection.branchId) {
+      toast.error("Validation Error", {
+        description: "Please select a Supplier and Branch before confirming.",
+      });
+      return;
+    }
+
+    // Validate: cart must not be empty
+    if (cart.length === 0) {
+      toast.error("Validation Error", {
+        description: "Please add at least one product to return.",
+      });
+      return;
+    }
+
     // Validate: all items must have a return type
     const missingReturnType = cart.some((item) => !item.return_type_id);
     if (missingReturnType) {
@@ -351,7 +418,7 @@ export function CreateReturnModal({
       const rts_items = cart.map((item) => {
         const { gross, discountAmount, net } = calculateLineItem(item);
         return {
-          product_id: Number(item.id),
+          product_id: Number(item.product_id), // Clean mapping
           uom_id: item.uom_id || 1,
           quantity: item.quantity * (item.unitCount || 1),
           gross_unit_price: item.customPrice || item.price,
@@ -361,6 +428,7 @@ export function CreateReturnModal({
           net_amount: net,
           item_remarks: "",
           return_type_id: item.return_type_id || null,
+          discount_type_id: item.discountTypeId || null,
         };
       });
 
@@ -406,10 +474,8 @@ export function CreateReturnModal({
                 </div>
                 Add Products
               </>
-            ) : step === "input" ? (
-              "Create Return"
             ) : (
-              "Review Transaction"
+              "Create Return"
             )}
           </DialogTitle>
           <button
@@ -430,205 +496,176 @@ export function CreateReturnModal({
               products={groupedProducts}
               addedProducts={cart}
               onAdd={addToCart}
-              onRemove={(id) => setCart((c) => c.filter((i) => i.id !== id))}
-              onUpdateQty={(id, q) => updateCart(id, "quantity", q)}
+              onRemove={(cartId) => setCart((c) => c.filter((i) => (i.cartId || i.id) !== cartId))}
+              onUpdateQty={(cartId, q) => updateCart(cartId, "quantity", q)}
               onClearAll={() => setCart([])}
               onBarcodeScan={handleBarcodeScan}
               isLoading={isLoadingInventory}
             />
           ) : (
             <div className="space-y-8">
-              {step === "input" ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 bg-card p-6 rounded-xl border shadow-sm">
-                  {/* Supplier Select */}
-                  <div className="space-y-2 flex flex-col">
-                    <Label className="text-xs font-bold uppercase">
-                      Supplier *
-                    </Label>
-                    <Popover
-                      open={openSupplier}
-                      onOpenChange={setOpenSupplier}
-                      modal={true}
-                    >
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          role="combobox"
-                          className="w-full h-11 justify-between bg-muted/50"
-                        >
-                          {selection.supplierId
-                            ? refs.suppliers.find(
-                                (s) => String(s.id) === selection.supplierId,
-                              )?.supplier_name
-                            : "Select Supplier..."}
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[400px] p-0" align="start">
-                        <Command shouldFilter={false}>
-                          <CommandInput
-                            placeholder="Search supplier..."
-                            value={supplierSearch}
-                            onValueChange={setSupplierSearch}
-                          />
-                          <CommandList className="max-h-[200px] overflow-y-auto">
-                            <CommandGroup>
-                              {filteredSuppliers.map((s) => (
-                                <CommandItem
-                                  key={s.id}
-                                  value={String(s.id)}
-                                  onSelect={() => {
-                                    setSelection((prev) => ({
-                                      ...prev,
-                                      supplierId: String(s.id),
-                                    }));
-                                    setCart([]);
-                                    setOpenSupplier(false);
-                                  }}
-                                >
-                                  <Check
-                                    className={cn(
-                                      "mr-2 h-4 w-4",
-                                      selection.supplierId === String(s.id)
-                                        ? "opacity-100"
-                                        : "opacity-0",
-                                    )}
-                                  />
-                                  {s.supplier_name}
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 bg-card p-6 rounded-xl border shadow-sm">
+                {/* Supplier Select */}
+                <div className="space-y-2 flex flex-col">
+                  <Label className="text-xs font-bold uppercase">
+                    Supplier *
+                  </Label>
+                  <Popover
+                    open={openSupplier}
+                    onOpenChange={setOpenSupplier}
+                    modal={true}
+                  >
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        className="w-full h-11 justify-between bg-muted/50"
+                      >
+                        {selection.supplierId
+                          ? refs.suppliers.find(
+                              (s) => String(s.id) === selection.supplierId,
+                            )?.supplier_name
+                          : "Select Supplier..."}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[400px] p-0" align="start">
+                      <Command shouldFilter={false}>
+                        <CommandInput
+                          placeholder="Search supplier..."
+                          value={supplierSearch}
+                          onValueChange={setSupplierSearch}
+                        />
+                        <CommandList className="max-h-[200px] overflow-y-auto">
+                          <CommandGroup>
+                            {filteredSuppliers.map((s) => (
+                              <CommandItem
+                                key={s.id}
+                                value={String(s.id)}
+                                onSelect={() => {
+                                  setSelection((prev) => ({
+                                    ...prev,
+                                    supplierId: String(s.id),
+                                  }));
+                                  setCart([]);
+                                  setOpenSupplier(false);
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    selection.supplierId === String(s.id)
+                                      ? "opacity-100"
+                                      : "opacity-0",
+                                  )}
+                                />
+                                {s.supplier_name}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
 
-                  {/* Branch Select */}
-                  <div className="space-y-2 flex flex-col">
-                    <Label className="text-xs font-bold uppercase">
-                      Branch *
-                    </Label>
-                    <Popover
-                      open={openBranch}
-                      onOpenChange={setOpenBranch}
-                      modal={true}
-                    >
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          role="combobox"
-                          className="w-full h-11 justify-between bg-muted/50"
-                        >
-                          {selection.branchId
-                            ? refs.branches.find(
-                                (b) => String(b.id) === selection.branchId,
-                              )?.branch_name
-                            : "Select Branch..."}
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[400px] p-0" align="start">
-                        <Command shouldFilter={false}>
-                          <CommandInput
-                            placeholder="Search branch..."
-                            value={branchSearch}
-                            onValueChange={setBranchSearch}
-                          />
-                          <CommandList className="max-h-[200px] overflow-y-auto">
-                            <CommandGroup>
-                              {filteredBranches.map((b) => (
-                                <CommandItem
-                                  key={b.id}
-                                  value={String(b.id)}
-                                  onSelect={() => {
-                                    setSelection((prev) => ({
-                                      ...prev,
-                                      branchId: String(b.id),
-                                    }));
-                                    setOpenBranch(false);
-                                  }}
-                                >
-                                  <Check
-                                    className={cn(
-                                      "mr-2 h-4 w-4",
-                                      selection.branchId === String(b.id)
-                                        ? "opacity-100"
-                                        : "opacity-0",
-                                    )}
-                                  />
-                                  {b.branch_name}
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
+                {/* Branch Select */}
+                <div className="space-y-2 flex flex-col">
+                  <Label className="text-xs font-bold uppercase">
+                    Branch *
+                  </Label>
+                  <Popover
+                    open={openBranch}
+                    onOpenChange={setOpenBranch}
+                    modal={true}
+                  >
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        className="w-full h-11 justify-between bg-muted/50"
+                      >
+                        {selection.branchId
+                          ? refs.branches.find(
+                              (b) => String(b.id) === selection.branchId,
+                            )?.branch_name
+                          : "Select Branch..."}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[400px] p-0" align="start">
+                      <Command shouldFilter={false}>
+                        <CommandInput
+                          placeholder="Search branch..."
+                          value={branchSearch}
+                          onValueChange={setBranchSearch}
+                        />
+                        <CommandList className="max-h-[200px] overflow-y-auto">
+                          <CommandGroup>
+                            {filteredBranches.map((b) => (
+                              <CommandItem
+                                key={b.id}
+                                value={String(b.id)}
+                                onSelect={() => {
+                                  setSelection((prev) => ({
+                                    ...prev,
+                                    branchId: String(b.id),
+                                  }));
+                                  setCart([]);
+                                  setOpenBranch(false);
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    selection.branchId === String(b.id)
+                                      ? "opacity-100"
+                                      : "opacity-0",
+                                  )}
+                                />
+                                {b.branch_name}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
-              ) : (
-                <div className="bg-card p-6 rounded-xl border shadow-sm flex gap-8">
-                  <div>
-                    <div className="text-xs text-muted-foreground font-bold uppercase">
-                      Supplier
-                    </div>
-                    <div className="text-lg font-bold">
-                      {
-                        refs.suppliers.find(
-                          (s) => String(s.id) === selection.supplierId,
-                        )?.supplier_name
-                      }
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground font-bold uppercase">
-                      Branch
-                    </div>
-                    <div className="text-lg font-bold">
-                      {
-                        refs.branches.find(
-                          (b) => String(b.id) === selection.branchId,
-                        )?.branch_name
-                      }
-                    </div>
-                  </div>
-                </div>
-              )}
+              </div>
 
               {/* Cart Section */}
               {selection.supplierId && selection.branchId ? (
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <Label className="font-bold flex items-center gap-2">
-                       <Package className="h-4 w-4 text-primary" />{" "}
-                      {step === "input" ? "Items" : "Summary"}
+                       <Package className="h-4 w-4 text-primary" /> Items
                     </Label>
                     <div className="flex items-center gap-2">
-                      {step === "input" && (
-                        <Button
-                          onClick={() => setShowPicker(true)}
-                          className="h-9 text-xs"
-                        >
-                          <Plus className="mr-2 h-3 w-3" /> Add
-                        </Button>
-                      )}
+                      <Button
+                        onClick={() => setShowPicker(true)}
+                        className="h-9 text-xs"
+                      >
+                        <Plus className="mr-2 h-3 w-3" /> Add
+                      </Button>
                     </div>
                   </div>
                   {cart.length > 0 ? (
                     <ReturnReviewPanel
                       items={cart}
                       lineDiscounts={refs.lineDiscounts}
+                      discountTypes={refs.discountTypes}
+                      linePerDiscountType={refs.linePerDiscountType}
                       returnTypes={refs.returnTypes || []}
                       onUpdateItem={updateCart}
-                      onRemoveItem={(id) =>
-                        setCart((c) => c.filter((i) => i.id !== id))
+                      onRemoveItem={(cartId) =>
+                        setCart((c) => c.filter((i) => (i.cartId || i.id) !== cartId))
                       }
                       remarks={selection.remarks}
                       setRemarks={(r) =>
                         setSelection((s) => ({ ...s, remarks: r }))
                       }
-                      readOnly={step === "review"}
+                      readOnly={false}
                     />
                   ) : (
                     <div className="border-2 border-dashed h-32 flex items-center justify-center text-muted-foreground text-sm">
@@ -648,15 +685,6 @@ export function CreateReturnModal({
         {/* Footer */}
         {!showPicker && (
           <DialogFooter className="px-8 py-5 border-t bg-background shrink-0">
-            {step === "review" && (
-              <Button
-                variant="ghost"
-                onClick={() => setStep("input")}
-                className="mr-auto"
-              >
-                <ArrowLeft className="mr-2 h-4 w-4" /> Back
-              </Button>
-            )}
             <Button
               variant="outline"
               onClick={handleCloseFull}
@@ -664,30 +692,22 @@ export function CreateReturnModal({
             >
               Cancel
             </Button>
-            {step === "input" ? (
-              <Button
-                disabled={
-                  !selection.supplierId ||
-                  !selection.branchId ||
-                  cart.length === 0
-                }
-                onClick={() => setStep("review")}
-              >
-                Review <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            ) : (
-              <Button
-                onClick={handleSubmit}
-                disabled={submitting}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground"
-              >
-                {submitting ? (
-                  <Loader2 className="animate-spin mr-2 h-4 w-4" />
-                ) : (
-                  "Confirm Return"
-                )}
-              </Button>
-            )}
+            <Button
+              onClick={handleSubmit}
+              disabled={
+                submitting ||
+                !selection.supplierId ||
+                !selection.branchId ||
+                cart.length === 0
+              }
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
+            >
+              {submitting ? (
+                <Loader2 className="animate-spin mr-2 h-4 w-4" />
+              ) : (
+                "Confirm Return"
+              )}
+            </Button>
           </DialogFooter>
         )}
       </DialogContent>

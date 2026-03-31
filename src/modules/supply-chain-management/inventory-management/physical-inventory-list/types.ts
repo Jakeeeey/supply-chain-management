@@ -32,4 +32,5 @@ export type PhysicalInventoryListFilters = {
     branch_id: number | null;
     supplier_id: number | null;
     status: PhysicalInventoryListStatus | "All";
+    stock_type: "GOOD" | "BAD" | "All";
 };

@@ -29,13 +29,22 @@ import {
     ArrowRightCircle,
     CheckCircle,
     Printer,
-    Settings2
+    Settings2,
+    ChevronDown
 } from "lucide-react";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import Barcode from "react-barcode";
+import { cn } from "@/lib/utils";
 
 interface ConvertToInvoiceModalProps {
     isOpen: boolean;
@@ -47,19 +56,21 @@ interface ReceiptItem {
     product_id: number;
     product_name: string;
     order_no: string;
-    ordered_qty: number;
+    allocated_qty: number;
     qty: number;
     unit_price: number;
     discount_type: number | null;
     discount_amount: number;
     net_amount: number;
     unit_shortcut: string;
+    ordered_qty: number;
 }
 
 interface Receipt {
     id: string;
     receipt_no: string;
     items: ReceiptItem[];
+    is_void_reference?: boolean; // Receipt 1 for void orders — read-only reference
 }
 
 const PRINT_ITEM_ROW_COUNT = 12;
@@ -70,7 +81,7 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
     onClose,
     order
 }) => {
-    const [logistics, setLogistics] = useState<LogisticsData | null>(null);
+    const [logistics, setLogistics] = useState<LogisticsData[]>([]);
     const [conversionData, setConversionData] = useState<ConversionData | null>(null);
     const [discountTypes, setDiscountTypes] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -85,6 +96,10 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
     const [orTemplate, setOrTemplate] = useState<ORTemplate | undefined>(undefined);
     const [isHoldConfirmOpen, setIsHoldConfirmOpen] = useState(false);
     const [isHolding, setIsHolding] = useState(false);
+    const [receiptTypes, setReceiptTypes] = useState<any[]>([]);
+    const [selectedTypeId, setSelectedTypeId] = useState<string>("");
+    const [isUpdatingType, setIsUpdatingType] = useState(false);
+    const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
 
     const componentRef = useRef<HTMLDivElement>(null);
     const barcodeRef = useRef<any>(null);
@@ -98,28 +113,103 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
                 InvoicingService.getLogisticsData(order.order_id),
                 InvoicingService.getConversionDetails(order.order_id),
                 InvoicingService.getDiscountTypes(),
-                typeId ? InvoicingService.getTemplate(typeId).catch(() => null) : Promise.resolve(null)
+                InvoicingService.getReceiptTypes(),
+                typeId ? InvoicingService.getTemplate(typeId).catch(() => null) : Promise.resolve(null),
+                // For recycled or void orders, also fetch the existing invoice details
+                // Ensure we have a valid, non-null ID before fetching
+                (order.void_invoice_id || order.existing_invoice_no)
+                    ? InvoicingService.getInvoiceDetails((order.void_invoice_id || order.existing_invoice_no) as number)
+                        .catch(err => {
+                            console.error("[DEBUG] Failed to fetch invoice details:", err);
+                            return [];
+                        })
+                    : Promise.resolve([])
             ])
-                .then(([logisticsData, convData, discTypes, fetchedTemplate]) => {
-                    setLogistics(logisticsData);
+                .then(([logisticsData, convData, discTypes, rTypes, fetchedTemplate, existingDetails]) => {
+                    setLogistics(Array.isArray(logisticsData) ? logisticsData : [logisticsData]);
                     setConversionData(convData);
                     setDiscountTypes(discTypes);
+                    setReceiptTypes(rTypes);
+                    if (order.receipt_type?.id) {
+                        setSelectedTypeId(order.receipt_type.id.toString());
+                    }
                     if (fetchedTemplate) {
                         setOrTemplate(fetchedTemplate);
                     }
-                    // Auto-distribute items across receipts
-                    autoDistributeAllItems(convData);
+
+                    if (order.void_invoice_id && existingDetails && (existingDetails as any[]).length > 0) {
+                        // ── Void order: dual-receipt setup ──
+                        // Map the existing void invoice items
+                        const voidItems: ReceiptItem[] = (existingDetails as any[]).map((d: any) => ({
+                            product_id: d.product_id,
+                            product_name: d.product_name,
+                            order_no: order.order_no,
+                            allocated_qty: d.quantity,
+                            qty: d.quantity,
+                            unit_price: d.unit_price,
+                            discount_type: d.discount_type ?? null,
+                            discount_amount: d.discount_amount ?? 0,
+                            net_amount: d.total_amount ?? 0,
+                            unit_shortcut: d.unit_shortcut ?? "",
+                            ordered_qty: d.quantity,
+                        }));
+
+                        setReceipts([
+                            {
+                                id: "1",
+                                receipt_no: order.void_invoice_display_no ?? "",
+                                items: voidItems,
+                                is_void_reference: true,  // read-only, red label
+                            },
+                            {
+                                id: "2",
+                                receipt_no: "",             // blank — user inputs new invoice no.
+                                items: [...voidItems],      // same items, editable
+                                is_void_reference: false,
+                            }
+                        ]);
+                        setActiveReceiptId("1");
+                    } else if (order.existing_invoice_no && existingDetails && (existingDetails as any[]).length > 0) {
+                        // ── Recycled order: pre-populate from existing invoice ──
+                        const preItems: ReceiptItem[] = existingDetails.map((d: any) => ({
+                            product_id: d.product_id,
+                            product_name: d.product_name,
+                            order_no: order.order_no,
+                            allocated_qty: d.quantity,
+                            qty: d.quantity,
+                            unit_price: d.unit_price,
+                            discount_type: d.discount_type ?? null,
+                            discount_amount: d.discount_amount ?? 0,
+                            net_amount: d.total_amount ?? 0,
+                            unit_shortcut: d.unit_shortcut ?? "",
+                            ordered_qty: d.quantity,
+                        }));
+                        setReceipts([{
+                            id: "1",
+                            receipt_no: order.existing_invoice_display_no ?? "",
+                            items: preItems
+                        }]);
+                        setActiveReceiptId("1");
+                    } else {
+                        // ── Normal order: auto-distribute ──
+                        autoDistributeAllItems(convData);
+                    }
                 })
-                .catch(err => {
-                    console.error("Error fetching data:", err);
-                    toast.error("Failed to load details");
-                })
-                .finally(() => setLoading(false));
+            .catch(err => {
+                console.error("Error fetching data:", err);
+                toast.error("Failed to load details");
+            })
+            .finally(() => setLoading(false));
         }
     }, [isOpen, order]);
 
     const autoDistributeAllItems = (data: ConversionData) => {
-        const availableItems = data.items.filter(item => item.remaining_quantity > 0);
+        const availableItems = data.items.filter(item => {
+            const isMatched = Number(item.total_allocated_quantity || 0) > 0 && 
+                              Number(item.total_allocated_quantity || 0) === Number(item.picked_quantity || 0);
+            return isMatched && item.remaining_quantity > 0;
+        });
+
         if (availableItems.length === 0) {
             setReceipts([{ id: "1", receipt_no: "", items: [] }]);
             return;
@@ -139,13 +229,14 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
                     product_id: item.product_id,
                     product_name: item.product_name,
                     order_no: item.order_no,
-                    ordered_qty: ordered,
+                    allocated_qty: item.allocated_quantity || 0,
                     qty: autoQty,
                     unit_price: item.unit_price,
                     discount_type: item.discount_type,
                     discount_amount: (item.discount_amount / ordered) * autoQty,
                     net_amount: (item.net_amount / ordered) * autoQty,
-                    unit_shortcut: item.unit_shortcut
+                    unit_shortcut: item.unit_shortcut,
+                    ordered_qty: ordered
                 };
             });
 
@@ -193,7 +284,7 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
         // Use total drafts across ALL receipts EXCEPT potentially the one being edited 
         // to see what's actually left for the order
         const totalOtherApplied = receipts
-            .filter(r => r.id !== receiptId)
+            .filter(r => r.id !== receiptId && !r.is_void_reference)
             .reduce((sum, r) => {
                 const item = r.items.find(i => i.product_id === productId);
                 return sum + (item?.qty || 0);
@@ -202,6 +293,7 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
         // Check if there's any pool available at all across all drafts
         const orderNeeded = Math.max(0, ordered - totalOtherApplied);
         const totalUsedAcrossAll = receipts.reduce((sum, r) => {
+            if (r.is_void_reference) return sum;
             const item = r.items.find(i => i.product_id === productId);
             return sum + (item?.qty || 0);
         }, 0);
@@ -243,10 +335,11 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
                 items: r.items.map(i => i.product_id === productId ? {
                     ...i,
                     qty: finalQty,
-                    ordered_qty: ordered,
+                    allocated_qty: convItem.allocated_quantity || 0,
                     discount_amount: (convItem.discount_amount / ordered) * finalQty,
                     net_amount: (convItem.net_amount / ordered) * finalQty,
-                    unit_shortcut: convItem.unit_shortcut
+                    unit_shortcut: convItem.unit_shortcut,
+                    ordered_qty: ordered
                 } : i)
             } : r));
             return;
@@ -257,13 +350,14 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
             product_id: productId,
             product_name: convItem.product_name,
             order_no: convItem.order_no,
-            ordered_qty: ordered,
+            allocated_qty: convItem.allocated_quantity || 0,
             qty: finalQty,
             unit_price: convItem.unit_price,
             discount_type: convItem.discount_type,
             discount_amount: (convItem.discount_amount / ordered) * finalQty,
             net_amount: (convItem.net_amount / ordered) * finalQty,
-            unit_shortcut: convItem.unit_shortcut
+            unit_shortcut: convItem.unit_shortcut,
+            ordered_qty: ordered
         };
 
         if (targetR && targetR.items.length < maxLen) {
@@ -298,6 +392,23 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
         } : r));
     };
 
+    const handleTypeChange = async (newId: string) => {
+        setSelectedTypeId(newId);
+        setIsUpdatingType(true);
+        try {
+            // Fetch new template immediately
+            const config = await InvoicingService.getTemplate(parseInt(newId));
+            setOrTemplate(config);
+            toast.success("Receipt layout updated");
+        } catch (err) {
+            console.error("Failed to load template for type", newId, err);
+            setOrTemplate(undefined);
+            toast.warning("No template layout found for this type");
+        } finally {
+            setIsUpdatingType(false);
+        }
+    };
+
     const handlePreviewReceipt = async () => {
         // Validate ALL receipts before opening preview
         for (const r of receipts) {
@@ -315,8 +426,9 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
 
         setIsValidating(true);
         try {
-            // Validate uniqueness of ALL receipt numbers
+            // Validate uniqueness of ALL replacement receipts (skip void reference)
             for (const r of receipts) {
+                if (r.is_void_reference) continue; // Skip validation for the void original
                 const exists = await InvoicingService.validateReceiptNo(r.receipt_no);
                 if (exists) {
                     toast.error(`Receipt Number "${r.receipt_no}" already exists!`, {
@@ -328,8 +440,9 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
                 }
             }
 
-            // All valid — open preview showing ALL receipts
-            setReceiptToPreview(receipts[0]); // Keep for backwards compat
+            // All valid — open preview showing the REPLACEMENT receipt (default to first replacement)
+            const firstReplacement = receipts.find(r => !r.is_void_reference);
+            setReceiptToPreview(firstReplacement || receipts[0]);
             setIsPreviewOpen(true);
         } catch (err) {
             toast.error("Error validating receipt number");
@@ -435,8 +548,9 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
 
         setIsValidating(true);
         try {
-            // Validate uniqueness of ALL receipt numbers
+            // Validate uniqueness of ALL replacement receipts (skip void reference)
             for (const r of receipts) {
+                if (r.is_void_reference) continue; // Skip validation for the void original
                 const exists = await InvoicingService.validateReceiptNo(r.receipt_no);
                 if (exists) {
                     toast.error(`Receipt Number "${r.receipt_no}" already exists!`, {
@@ -458,32 +572,33 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
         const storeName = conversionData?.customer?.store_name || fullName;
         const address = `${conversionData?.customer?.province || 'N/A'}, ${conversionData?.customer?.city || 'N/A'}, ${conversionData?.customer?.brgy || 'N/A'}`;
 
-        // Generate barcode programmatically using JsBarcode on an offscreen canvas
-        let barcodeDataUrl;
-        if (isOfficialReceipt && receipts[0]?.receipt_no) {
-            try {
-                const JsBarcode = (await import('jsbarcode')).default;
-                const offscreenCanvas = document.createElement('canvas');
-                JsBarcode(offscreenCanvas, receipts[0].receipt_no, {
-                    format: 'CODE128',
-                    height: 35,
-                    width: 1.2,
-                    fontSize: 10,
-                    margin: 0,
-                    background: 'transparent',
-                    displayValue: true,
-                });
-                barcodeDataUrl = offscreenCanvas.toDataURL('image/png');
-            } catch (err) {
-                console.warn("Failed to generate barcode:", err);
-            }
-        }
-
         try {
-            // Generate a multi-page PDF covering ALL receipts
-            let combinedDoc: any = null;
+            // Generate and download a separate PDF for EACH receipt (skip void references)
             for (let i = 0; i < receipts.length; i++) {
                 const r = receipts[i];
+                if (r.is_void_reference) continue; // Do not print the reference only receipt
+                
+                // Generate unique barcode for this specific receipt
+                let currentBarcodeUrl;
+                if (isOfficialReceipt && r.receipt_no) {
+                    try {
+                        const JsBarcode = (await import('jsbarcode')).default;
+                        const offscreenCanvas = document.createElement('canvas');
+                        JsBarcode(offscreenCanvas, r.receipt_no, {
+                            format: 'CODE128',
+                            height: 35,
+                            width: 1.2,
+                            fontSize: 10,
+                            margin: 0,
+                            background: 'transparent',
+                            displayValue: true,
+                        });
+                        currentBarcodeUrl = offscreenCanvas.toDataURL('image/png');
+                    } catch (err) {
+                        console.warn("Failed to generate barcode:", err);
+                    }
+                }
+
                 const data: ReceiptData = {
                     receipt_no: r.receipt_no,
                     items: r.items,
@@ -496,50 +611,27 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
                     salesman_name: order.salesman_id?.salesman_name || "N/A",
                     is_official: isOfficialReceipt,
                     discountTypes: discountTypes,
-                    barcodeDataUrl: i === 0 ? barcodeDataUrl : undefined,
+                    barcodeDataUrl: currentBarcodeUrl,
                     template: orTemplate
                 };
 
                 const doc = await generateInvoicingPDF(data);
-
-                if (i === 0) {
-                    combinedDoc = doc;
-                } else {
-                    // Add new page to first doc and copy content
-                    const pageCount = doc.getNumberOfPages();
-                    for (let p = 1; p <= pageCount; p++) {
-                        combinedDoc.addPage([orTemplate?.width || 210, orTemplate?.height || 265]);
-                        // Copy page internal data using jsPDF's internal method
-                        // (jsPDF doesn't have native merge, so we re-render data on new page)
-                        const pageData = (doc.internal as any).pages[p];
-                        if (pageData) {
-                            (combinedDoc.internal as any).pages.push(pageData);
-                            // Remove the blank page we just added
-                            const pages = (combinedDoc.internal as any).pages;
-                            pages.splice(pages.length - 2, 1);
-                        }
-                    }
-                }
+                
+                const filename = `${order.order_no}-${r.receipt_no}.pdf`;
+                doc.save(filename);
             }
 
-            if (!combinedDoc) return;
+            toast.success(`Downloaded ${receipts.length} separate PDF receipt${receipts.length > 1 ? 's' : ''}`);
 
-            // New filename format: [Order Number]-[Receipt Number(s)]
-            const receiptString = receipts.map(r => r.receipt_no).join('-');
-            const filename = `${order.order_no}-${receiptString}.pdf`;
-
-            combinedDoc.save(filename);
-
-            toast.success(`PDF downloaded (${receipts.length} receipt${receipts.length > 1 ? 's' : ''})`);
-
-            // Backend Update: Submit ALL receipts to generate-invoice API
+            // Backend Update: Submit ALL receipts to generate-invoice API AND update receipt_type
             try {
                 const updateRes = await fetch(`/api/scm/invoicing/generate-invoice`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         order: order,
-                        receipts: receipts // All receipts
+                        receipts: receipts, // All receipts
+                        receipt_type_id: parseInt(selectedTypeId) // Persistence requirement
                     })
                 });
 
@@ -573,8 +665,22 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
     // Derived: Remaining quantities per product after considering current receipt drafts
     const currentRemaining = useMemo(() => {
         if (!conversionData) return [];
-        return conversionData.items.map(item => {
+
+        let itemsToProcess = conversionData.items;
+        
+        // If this is a void re-invoicing, strictly limit available items to what was in the voided receipt
+        if (order.void_invoice_id) {
+            const voidRef = receipts.find(r => r.is_void_reference);
+            if (voidRef) {
+                const voidPids = new Set(voidRef.items.map(i => i.product_id));
+                itemsToProcess = itemsToProcess.filter(it => voidPids.has(it.product_id));
+            }
+        }
+
+        return itemsToProcess.map(item => {
             const totalAppliedInDrafts = receipts.reduce((sum, r) => {
+                // Ignore items in the void reference receipt when calculating what's "applied" in the new draft
+                if (r.is_void_reference) return sum;
                 const rItem = r.items.find(i => i.product_id === item.product_id);
                 return sum + (rItem?.qty || 0);
             }, 0);
@@ -607,7 +713,12 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
         }).format(amount).replace('PHP', '₱').trim();
     };
 
-    const isOfficialReceipt = String(conversionData?.is_official ?? order.receipt_type?.isOfficial ?? 1) === "1";
+    const isOfficialReceipt = useMemo(() => {
+        const selectedType = receiptTypes.find(t => t.id.toString() === selectedTypeId);
+        if (selectedType) return String(selectedType.isOfficial) === "1";
+        return String(conversionData?.is_official ?? order.receipt_type?.isOfficial ?? 1) === "1";
+    }, [receiptTypes, selectedTypeId, conversionData, order]);
+
     const previewPaperWidth = isOfficialReceipt ? "210mm" : "58mm";
     const thermalPaperWidth = "58mm";
     const thermalContentWidth = "50mm"; // Reverted to 50mm width
@@ -746,6 +857,17 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
         thermalKeyValue("NET AMOUNT:", formatThermalAmount(previewTotals.netTotal)),
         thermalCheckerDivider,
         "",
+        "Received By: ___________________",
+        "Date: __________________________",
+        "Printed Name: __________________",
+        "Position: ______________________",
+        "",
+        ...wrapThermalText("This Delivery Receipt confirms delivery of goods as listed above.", THERMAL_LINE_WIDTH),
+        "",
+        ...wrapThermalText("It is issued for delivery confirmation only and is not valid for claiming input VAT.", THERMAL_LINE_WIDTH),
+        "",
+        thermalCheckerDivider,
+        "",
         thermalCenterText("--- THANK YOU ---"),
         thermalCenterText(format(new Date(), "yyyy-MM-dd HH:mm:ss")),
     ];
@@ -760,14 +882,14 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
                         {/* Consolidated Header Row */}
                         <div className="flex items-center justify-between gap-6">
                             {/* Order Info */}
-                            <div className="flex items-center gap-6">
-                                <div className="space-y-0.5 min-w-[120px]">
+                            <div className="flex flex-col gap-3 min-w-[120px]">
+                                <div className="space-y-0.5">
                                     <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest flex items-center gap-1.5 opacity-70">
                                         <Hash size={10} /> Order No
                                     </p>
                                     <p className="font-black text-xs text-primary">{order.order_no}</p>
                                 </div>
-                                <div className="space-y-0.5 min-w-[120px]">
+                                <div className="space-y-0.5">
                                     <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest flex items-center gap-1.5 opacity-70">
                                         <FileText size={10} /> PO Ref
                                     </p>
@@ -775,26 +897,114 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
                                 </div>
                             </div>
 
-                            {/* Center: Logistics Info */}
-                            <div className="flex-1 flex justify-center">
-                                <div className="flex items-center gap-6 px-4 py-1.5 bg-muted/30 rounded-full border border-primary/5">
-                                    <div className="flex items-center gap-1.5">
-                                        <Truck size={12} className="text-primary/70" />
-                                        <span className="text-[9px] font-black uppercase text-muted-foreground/60 tracking-tighter">DISPATCH:</span>
-                                        <span className="text-[10px] font-black">{logistics?.pdp_no || "..."}</span>
+                            {/* Center Group: Logistics + KPIs */}
+                            <div className="flex-1 flex items-center justify-center gap-8">
+                                {/* Logistics Info */}
+                                <div className="flex flex-col gap-2">
+                                    {/* History Logistics (Optional) - SHOWN ONLY IF RECYCLED */}
+                                    {logistics.length > 1 && (
+                                        <div className="flex flex-row items-center gap-6 px-5 py-1.5 bg-orange-500/5 rounded-2xl border border-orange-500/20 shadow-inner group/history opacity-70">
+                                            {(() => {
+                                                const history = logistics[0];
+                                                return (
+                                                    <>
+                                                        <div className="flex items-center gap-2">
+                                                            <Truck size={10} className="text-orange-500/70" />
+                                                            <div className="flex flex-col">
+                                                                <span className="text-[7px] font-black uppercase text-orange-600/50 tracking-wider leading-tight">OLD DISPATCH</span>
+                                                                <span className="text-[9px] font-black text-orange-700/80">{history.dispatch_no || "—"}</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="w-[1px] h-4 bg-orange-500/10" />
+                                                        <div className="flex items-center gap-2">
+                                                            <PackageSearch size={10} className="text-orange-500/70" />
+                                                            <div className="flex flex-col">
+                                                                <span className="text-[7px] font-black uppercase text-orange-600/50 tracking-wider leading-tight">OLD CONSOL</span>
+                                                                <span className="text-[9px] font-black text-orange-700/80">{history.consolidation_no || "—"}</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="w-[1px] h-4 bg-orange-500/10" />
+                                                        <div className="flex items-center gap-2">
+                                                            <Boxes size={10} className="text-orange-500/70" />
+                                                            <div className="flex flex-col">
+                                                                <span className="text-[7px] font-black uppercase text-orange-600/50 tracking-wider leading-tight">OLD PDP</span>
+                                                                <span className="text-[9px] font-black text-orange-700/80">{history.pdp_no || "—"}</span>
+                                                            </div>
+                                                        </div>
+                                                    </>
+                                                );
+                                            })()}
+                                        </div>
+                                    )}
+
+                                    {/* Latest Logistics (Source of Truth) */}
+                                    <div className="flex flex-row items-center gap-6 px-5 py-2.5 bg-green-500/5 rounded-2xl border border-green-500/20 shadow-inner group">
+                                        {(() => {
+                                            const latest = logistics[logistics.length - 1] || { dispatch_no: "—", consolidation_no: "—", pdp_no: "—" };
+                                            return (
+                                                <>
+                                                    <div className="flex items-center gap-2 transition-all duration-300 hover:translate-x-0.5">
+                                                        <Truck size={12} className="text-green-600/70" />
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[8px] font-black uppercase text-green-600/50 tracking-wider leading-tight">DISPATCH</span>
+                                                            <span className="text-[10px] font-black text-green-700">{latest.dispatch_no}</span>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div className="w-[1px] h-6 bg-green-500/10" />
+
+                                                    <div className="flex items-center gap-2 transition-all duration-300 hover:translate-x-0.5">
+                                                        <PackageSearch size={12} className="text-green-600/70" />
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[8px] font-black uppercase text-green-600/50 tracking-wider leading-tight">CONSOL</span>
+                                                            <span className="text-[10px] font-black text-green-700">{latest.consolidation_no}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="w-[1px] h-6 bg-green-500/10" />
+
+                                                    <div className="flex items-center gap-2 transition-all duration-300 hover:translate-x-0.5">
+                                                        <Boxes size={12} className="text-green-600/70" />
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[8px] font-black uppercase text-green-600/50 tracking-wider leading-tight">PDP</span>
+                                                            <span className="text-[10px] font-black text-green-700">{latest.pdp_no}</span>
+                                                        </div>
+                                                    </div>
+                                                </>
+                                            );
+                                        })()}
                                     </div>
-                                    <div className="w-px h-3 bg-primary/10" />
-                                    <div className="flex items-center gap-1.5">
-                                        <PackageSearch size={12} className="text-primary/70" />
-                                        <span className="text-[9px] font-black uppercase text-muted-foreground/60 tracking-tighter">CONSOL:</span>
-                                        <span className="text-[10px] font-black">{logistics?.consolidation_no || "..."}</span>
-                                    </div>
-                                    <div className="w-px h-3 bg-primary/10" />
-                                    <div className="flex items-center gap-1.5">
-                                        <Boxes size={12} className="text-primary/70" />
-                                        <span className="text-[9px] font-black uppercase text-muted-foreground/60 tracking-tighter">PDP:</span>
-                                        <span className="text-[10px] font-black">{logistics?.dispatch_no || "..."}</span>
-                                    </div>
+                                </div>
+
+                                {/* Dynamic KPI Header Overlay */}
+                                <div className="hidden lg:flex flex-row items-center gap-6 px-5 py-2.5 bg-gradient-to-tr from-primary/10 to-transparent border border-primary/20 rounded-2xl shadow-inner transition-all duration-300">
+                                    {(() => {
+                                        const kpiItem = selectedProductId ? currentRemaining.find(i => i.product_id === selectedProductId) : null;
+                                        const hasItem = !!kpiItem;
+                                        
+                                        return (
+                                            <>
+                                                <div className="flex flex-col items-center">
+                                                    <span className={`text-[8px] font-black uppercase tracking-wider leading-tight transition-colors ${hasItem ? 'text-muted-foreground/50' : 'text-muted-foreground/30'}`}>TOTAL ALLOCATED</span>
+                                                    <span className={`text-[10px] font-black leading-none transition-colors ${hasItem ? 'text-foreground/90' : 'text-muted-foreground/30'}`}>{hasItem ? kpiItem.total_allocated_quantity : '—'}</span>
+                                                </div>
+                                                
+                                                <div className="w-[1px] h-6 bg-primary/10" />
+
+                                                <div className="flex flex-col items-center">
+                                                    <span className={`text-[8px] font-black uppercase tracking-wider leading-tight transition-colors ${hasItem ? 'text-blue-600/50' : 'text-muted-foreground/30'}`}>PICKED</span>
+                                                    <span className={`text-[10px] font-black leading-none transition-colors ${hasItem ? 'text-blue-700' : 'text-muted-foreground/30'}`}>{hasItem ? kpiItem.picked_quantity : '—'}</span>
+                                                </div>
+
+                                                <div className="w-[1px] h-6 bg-primary/10" />
+
+                                                <div className="flex flex-col items-center">
+                                                    <span className={`text-[8px] font-black uppercase tracking-wider leading-tight transition-colors ${hasItem ? 'text-primary/50' : 'text-muted-foreground/30'}`}>REMAINING</span>
+                                                    <span className={`text-[10px] font-black leading-none transition-colors ${hasItem ? 'text-primary' : 'text-muted-foreground/30'}`}>{hasItem ? kpiItem.pool_remaining : '—'}</span>
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
                                 </div>
                             </div>
 
@@ -818,7 +1028,7 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
                             </h4>
                             <Badge variant="outline" className="text-[10px] font-mono">
                                 {currentRemaining.filter(item => {
-                                    const isInDraft = receipts.some(r => r.items.some(i => i.product_id === item.product_id));
+                                    const isInDraft = receipts.some(r => !r.is_void_reference && r.items.some(i => i.product_id === item.product_id));
                                     return !isInDraft && item.order_needed > 0;
                                 }).length} Products
                             </Badge>
@@ -826,8 +1036,8 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
                         <ScrollArea className="flex-1 min-h-0">
                             <div className="p-4 space-y-3">
                                 {currentRemaining.filter(item => {
-                                    // Rule 1: Remove from left column if already added to ANY receipt (regardless of QTY)
-                                    const isInDraft = receipts.some(r => r.items.some(i => i.product_id === item.product_id));
+                                    // Rule 1: Remove from left column if already added to ANY REPLACEMENT receipt (ignore void reference)
+                                    const isInDraft = receipts.some(r => !r.is_void_reference && r.items.some(i => i.product_id === item.product_id));
                                     if (isInDraft) return false;
 
                                     // Rule 2: Also hide if no more order needed (standard logic)
@@ -840,13 +1050,18 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
                                 ) : (
                                     currentRemaining
                                         .filter(item => {
-                                            const isInDraft = receipts.some(r => r.items.some(i => i.product_id === item.product_id));
+                                            const isInDraft = receipts.some(r => !r.is_void_reference && r.items.some(i => i.product_id === item.product_id));
                                             return !isInDraft && item.order_needed > 0;
                                         })
                                         .map((item) => (
                                             <div
                                                 key={item.product_id}
-                                                className="group relative p-4 rounded-2xl border border-primary/10 shadow-sm bg-card hover:shadow-md hover:border-primary/30 transition-all duration-300 overflow-hidden"
+                                                onClick={() => setSelectedProductId(item.product_id)}
+                                                className={`group relative p-4 rounded-2xl border shadow-sm transition-all duration-300 overflow-hidden cursor-pointer ${
+                                                    selectedProductId === item.product_id
+                                                        ? 'bg-primary/5 border-primary/40 ring-2 ring-primary/20 shadow-md'
+                                                        : 'bg-card border-primary/10 hover:shadow-md hover:border-primary/30'
+                                                }`}
                                             >
                                                 {/* Card Background Accent */}
                                                 <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-full -mr-12 -mt-12 transition-transform group-hover:scale-110" />
@@ -871,10 +1086,10 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
                                                 </div>
 
                                                 <div className="relative z-10 grid grid-cols-3 gap-3">
-                                                    {/* KPI: ORDER */}
+                                                    {/* KPI: ALLOCATED */}
                                                     <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-muted/30 border border-transparent group-hover:bg-background group-hover:border-primary/5 transition-colors">
-                                                        <p className="text-[8px] uppercase font-black text-muted-foreground mb-1">Order</p>
-                                                        <p className="text-sm font-black text-foreground">{item.ordered_quantity}</p>
+                                                        <p className="text-[8px] uppercase font-black text-muted-foreground mb-1">Allocated</p>
+                                                        <p className="text-sm font-black text-foreground">{item.allocated_quantity}</p>
                                                     </div>
 
                                                     {/* KPI: PICKED (Prominent) */}
@@ -900,17 +1115,30 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
                     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                         <Tabs value={activeReceiptId} onValueChange={setActiveReceiptId} className="flex flex-col flex-1 min-h-0">
                             <div className="bg-background/80 border-b p-1 flex items-center gap-1 flex-shrink-0">
-                                <ScrollArea className="flex-1 whitespace-nowrap">
-                                    <TabsList className="bg-transparent h-9 p-0 gap-1">
+                                <ScrollArea className="flex-1 min-w-0">
+                                    <TabsList className="bg-transparent h-9 p-0 gap-1 flex w-max">
                                         {receipts.map((r, idx) => (
                                             <TabsTrigger
                                                 key={r.id}
                                                 value={r.id}
-                                                className="rounded-lg h-8 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-md border border-primary/10 text-[10px] font-black px-4 group flex items-center gap-2"
+                                                className={cn(
+                                                    "rounded-lg h-8 data-[state=active]:shadow-md border border-primary/10 text-[10px] font-black px-4 group flex-shrink-0 flex items-center gap-2 transition-all duration-300",
+                                                    r.is_void_reference
+                                                        ? "bg-red-50 text-red-600 border-red-200 data-[state=active]:bg-red-600 data-[state=active]:text-white data-[state=active]:border-red-600"
+                                                        : "data-[state=active]:bg-primary data-[state=active]:text-white"
+                                                )}
                                             >
-                                                <FileText size={12} />
-                                                RECEIPT {idx + 1}
-                                                {receipts.length > 1 && (
+                                                <FileText size={12} className={cn("flex-shrink-0", r.is_void_reference && "animate-pulse")} />
+                                                <span className="truncate max-w-[150px]">
+                                                    {(() => {
+                                                        const displayIdx = receipts.filter((rec, i) => i < idx && !rec.is_void_reference).length + 1;
+                                                        return r.is_void_reference ? `VOID: ${r.receipt_no}` : (r.receipt_no || `RECEIPT ${displayIdx}`);
+                                                    })()}
+                                                </span>
+                                                {r.is_void_reference && (
+                                                    <Badge variant="destructive" className="ml-1 h-3 px-1 text-[7px] font-black uppercase tracking-tighter bg-red-600 text-white border-none">REF ONLY</Badge>
+                                                )}
+                                                {!r.is_void_reference && receipts.length > 1 && (
                                                     <div
                                                         className="ml-2 p-1 rounded-md hover:bg-white/20 transition-colors"
                                                         onClick={(e) => {
@@ -924,6 +1152,7 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
                                             </TabsTrigger>
                                         ))}
                                     </TabsList>
+                                    <ScrollBar orientation="horizontal" />
                                 </ScrollArea>
                                 <Button
                                     variant="ghost"
@@ -937,14 +1166,26 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
 
                             {receipts.map((r) => (
                                 <TabsContent key={r.id} value={r.id} className="flex-1 flex flex-col min-h-0 overflow-hidden m-0 p-0">
-                                    <div className="p-4 bg-muted/30 border-b flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                                    <div className={cn(
+                                        "p-4 border-b flex flex-col md:flex-row justify-between items-start md:items-center gap-4",
+                                        r.is_void_reference ? "bg-red-50/60 dark:bg-red-950/20" : "bg-muted/30"
+                                    )}>
                                         <div className="flex-grow space-y-1 w-full md:w-auto">
-                                            <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Receipt No (Required)</p>
+                                            <p className={cn(
+                                                "text-[10px] font-black uppercase tracking-widest",
+                                                r.is_void_reference ? "text-red-500" : "text-muted-foreground"
+                                            )}>
+                                                {r.is_void_reference ? "Voided Receipt No" : "Receipt No (Required)"}
+                                            </p>
                                             <Input
                                                 placeholder="Enter Receipt Number..."
                                                 value={r.receipt_no}
                                                 onChange={(e) => updateReceiptNo(r.id, e.target.value)}
-                                                className="h-9 rounded-xl border-primary/20 focus-visible:ring-primary/40 bg-white shadow-sm font-black text-sm"
+                                                readOnly={!!r.is_void_reference}
+                                                className={cn(
+                                                    "h-9 rounded-xl border-primary/20 focus-visible:ring-primary/40 bg-white shadow-sm font-black text-sm",
+                                                    r.is_void_reference && "text-red-500 border-red-300 bg-red-50 cursor-default select-none"
+                                                )}
                                             />
                                         </div>
                                         <div className="flex gap-4">
@@ -965,7 +1206,8 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
 
                                     <div className="flex-grow overflow-hidden flex flex-col">
                                         <div className="grid grid-cols-12 gap-2 p-3 bg-muted/10 border-b text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                                            <div className="col-span-5">Product</div>
+                                            <div className="col-span-4">Product</div>
+                                            <div className="col-span-1 text-center">Allocated</div>
                                             <div className="col-span-1 text-center">Unit</div>
                                             <div className="col-span-1 text-center">Qty</div>
                                             <div className="col-span-1 text-right">Price</div>
@@ -982,9 +1224,26 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
                                                     </div>
                                                 ) : (
                                                     r.items.map((item) => (
-                                                        <div key={item.product_id} className="grid grid-cols-12 gap-2 p-2 items-center rounded-lg hover:bg-muted/50 border border-transparent transition-colors">
-                                                            <div className="col-span-5">
+                                                        <div 
+                                                            key={item.product_id} 
+                                                            onClick={() => !r.is_void_reference && setSelectedProductId(item.product_id)}
+                                                            className={cn(
+                                                                "grid grid-cols-12 gap-2 p-2 items-center rounded-lg border transition-all",
+                                                                r.is_void_reference
+                                                                    ? "bg-red-50/40 dark:bg-red-950/10 border-red-200/30 cursor-default opacity-80"
+                                                                    : cn(
+                                                                        "cursor-pointer",
+                                                                        selectedProductId === item.product_id 
+                                                                            ? 'bg-primary/5 border-primary/30 shadow-sm ring-1 ring-primary/20' 
+                                                                            : 'hover:bg-muted/50 border-transparent'
+                                                                    )
+                                                            )}
+                                                        >
+                                                            <div className="col-span-4">
                                                                 <p className="text-xs font-black text-foreground line-clamp-2">{item.product_name}</p>
+                                                            </div>
+                                                            <div className="col-span-1 text-center">
+                                                                <p className="text-xs font-black text-foreground">{item.allocated_qty}</p>
                                                             </div>
                                                             <div className="col-span-1 text-center">
                                                                 <Badge variant="outline" className="text-[9px] font-bold px-1.5 py-0 h-4 min-w-[30px] justify-center bg-primary/5 text-primary border-primary/20">
@@ -996,6 +1255,8 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
                                                                     type="number"
                                                                     value={item.qty}
                                                                     onChange={(e) => updateItemQty(r.id, item.product_id, parseInt(e.target.value) || 0)}
+                                                                    readOnly={!!r.is_void_reference}
+                                                                    disabled={!!r.is_void_reference}
                                                                     className="h-7 w-full rounded-md text-center font-bold text-[10px] p-0"
                                                                 />
                                                             </div>
@@ -1014,14 +1275,16 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
                                                                 <p className="text-[10px] font-black text-primary whitespace-nowrap">{formatCurrency(item.net_amount)}</p>
                                                             </div>
                                                             <div className="col-span-1 flex justify-center">
-                                                                <Button
-                                                                    size="icon"
-                                                                    variant="ghost"
-                                                                    className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                                                                    onClick={() => removeItemFromReceipt(r.id, item.product_id)}
-                                                                >
-                                                                    <Trash2 size={12} />
-                                                                </Button>
+                                                                {!r.is_void_reference && (
+                                                                    <Button
+                                                                        size="icon"
+                                                                        variant="ghost"
+                                                                        className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                                                        onClick={() => removeItemFromReceipt(r.id, item.product_id)}
+                                                                    >
+                                                                        <Trash2 size={12} />
+                                                                    </Button>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     ))
@@ -1076,14 +1339,17 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
 
         {/* RECEIPT PREVIEW MODAL */}
         <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
-                <DialogContent className={`${previewDialogWidthClass} bg-white p-0 border-none shadow-2xl overflow-hidden flex flex-col h-[96vh]`}>
-                    <DialogHeader className="p-4 bg-muted/20 border-b flex flex-row items-center justify-between flex-shrink-0">
-                        <DialogTitle className="text-xs font-black uppercase tracking-widest flex items-center gap-2">
-                            <Eye size={14} className="text-primary" /> Receipt Preview
-                        </DialogTitle>
-                    </DialogHeader>
+            <DialogContent className={`${previewDialogWidthClass} bg-white dark:bg-zinc-950 p-0 border-none shadow-2xl overflow-hidden flex flex-col h-[96vh] ring-1 ring-black/5 dark:ring-white/10`}>
+                <DialogHeader className="p-4 bg-zinc-50 dark:bg-zinc-900/50 border-b border-zinc-200 dark:border-zinc-800 flex flex-row items-center justify-between flex-shrink-0">
+                    <DialogTitle className="text-xs font-black uppercase tracking-widest flex items-center gap-2 text-zinc-800 dark:text-zinc-200">
+                        <div className="p-1.5 bg-primary/10 rounded-lg">
+                            <Eye size={14} className="text-primary" />
+                        </div>
+                        Receipt Preview
+                    </DialogTitle>
+                </DialogHeader>
 
-                    <ScrollArea className="flex-1 min-h-0 bg-zinc-100/80 overflow-y-auto overflow-x-hidden">
+                <ScrollArea className="flex-1 min-h-0 bg-zinc-100/50 dark:bg-zinc-900/30 overflow-y-auto overflow-x-hidden">
                         <style>
                             {`
                                 @page { size: ${isOfficialReceipt ? "210mm 265mm" : "58mm auto"}; margin: 0; }
@@ -1213,7 +1479,13 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
                                 >
                                     {receipts.length > 1 && (
                                         <div className="mb-2 px-3 py-1 bg-primary/10 border border-primary/20 rounded-full text-[10px] font-black uppercase tracking-widest text-primary">
-                                            Receipt {receiptIdx + 1} of {receipts.length} &mdash; {currentReceipt.receipt_no}
+                                            {(() => {
+                                                const replacements = receipts.filter(rec => !rec.is_void_reference);
+                                                const replIdx = replacements.findIndex(rec => rec.id === currentReceipt.id);
+                                                return currentReceipt.is_void_reference 
+                                                    ? `Void Reference — ${currentReceipt.receipt_no}`
+                                                    : `Receipt ${replIdx + 1} of ${replacements.length} — ${currentReceipt.receipt_no}`;
+                                            })()}
                                         </div>
                                     )}
                                 <div 
@@ -1437,11 +1709,11 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
                         </div>
                     </ScrollArea>
 
-                    <DialogFooter className="p-4 bg-muted/10 border-t flex flex-col sm:flex-row gap-3 flex-shrink-0">
+                    <DialogFooter className="p-4 bg-zinc-50 dark:bg-zinc-900/50 border-t border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row gap-3 flex-shrink-0">
                         {isOfficialReceipt && (
                             <Button 
                                 variant="outline" 
-                                className="flex-1 rounded-xl font-black text-[10px] uppercase tracking-widest border-primary/20 text-primary hover:bg-primary/5" 
+                                className="flex-1 h-11 rounded-xl font-black text-[10px] uppercase tracking-[0.15em] border-primary/20 text-primary hover:bg-primary/5 hover:border-primary/40 transition-all duration-200" 
                                 onClick={() => setIsTemplateEditorOpen(true)}
                             >
                                 <Settings2 className="w-4 h-4 mr-2" />
@@ -1449,8 +1721,12 @@ export const ConvertToInvoiceModal: React.FC<ConvertToInvoiceModalProps> = ({
                             </Button>
                         )}
                         <div className="flex flex-1 gap-3">
-                            <Button variant="outline" className="w-full rounded-xl font-black text-[10px] uppercase tracking-widest" onClick={() => setIsPreviewOpen(false)}>
-                                Close
+                            <Button 
+                                variant="secondary" 
+                                className="w-full h-11 rounded-xl font-black text-[10px] uppercase tracking-[0.15em] bg-zinc-200 hover:bg-zinc-300 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-900 dark:text-zinc-100 transition-all duration-200" 
+                                onClick={() => setIsPreviewOpen(false)}
+                            >
+                                Close Preview
                             </Button>
                         </div>
                     </DialogFooter>

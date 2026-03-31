@@ -5,6 +5,7 @@ import {
   DispatchPlanMasterData,
   SalesOrderOption,
 } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/types/dispatch-plan.schema";
+import { format } from "date-fns";
 import { useCallback, useEffect, useState } from "react";
 import { usePDPFilter } from "../../context/PDPFilterContext";
 
@@ -15,7 +16,7 @@ const API_PATH =
  * Hook for the PDP Creation sub-module.
  */
 export function usePreDispatchCreation() {
-  const { clusterId, search, setSearch } = usePDPFilter();
+  const { clusterId, branchId, dateRange, search, setSearch } = usePDPFilter();
 
   // ─── Pending Plans State ──────────────────────────
   const [pendingData, setPendingData] = useState<DispatchPlan[]>([]);
@@ -67,6 +68,14 @@ export function usePreDispatchCreation() {
 
       if (search) params.append("search", search);
       if (clusterId) params.append("cluster_id", String(clusterId));
+      if (branchId) params.append("branch_id", String(branchId));
+
+      if (dateRange?.from) {
+        params.append("start_date", format(dateRange.from, "yyyy-MM-dd"));
+      }
+      if (dateRange?.to) {
+        params.append("end_date", format(dateRange.to, "yyyy-MM-dd"));
+      }
 
       const res = await fetch(`${API_PATH}?${params.toString()}`);
       const plansRes = await res.json();
@@ -75,7 +84,10 @@ export function usePreDispatchCreation() {
 
       setPendingData(plansRes.data || []);
       setPendingTotal(
-        plansRes.meta?.filter_count || plansRes.meta?.total_count || plansRes.data?.length || 0,
+        plansRes.meta?.filter_count ||
+          plansRes.meta?.total_count ||
+          plansRes.data?.length ||
+          0,
       );
     } catch (e: unknown) {
       const err = e as Error;
@@ -83,7 +95,7 @@ export function usePreDispatchCreation() {
     } finally {
       setIsLoading(false);
     }
-  }, [search, clusterId]);
+  }, [search, clusterId, branchId, dateRange]);
 
   useEffect(() => {
     // Debounce the refresh call to avoid rapid refetching
@@ -105,8 +117,10 @@ export function usePreDispatchCreation() {
         const params = new URLSearchParams({ type: "available_orders" });
         // Use the passed ids or the global filter ids
         const activeClusterId = targetClusterId || clusterId;
+        const activeBranchId = targetBranchId || branchId;
+
         if (activeClusterId) params.set("cluster_id", String(activeClusterId));
-        if (targetBranchId) params.set("branch_id", String(targetBranchId));
+        if (activeBranchId) params.set("branch_id", String(activeBranchId));
         if (orderSearch) params.set("search", orderSearch);
 
         const res = await fetch(`${API_PATH}?${params.toString()}`);
@@ -121,7 +135,7 @@ export function usePreDispatchCreation() {
         setIsLoadingOrders(false);
       }
     },
-    [clusterId],
+    [clusterId, branchId],
   );
 
   // ─── Fetch Plan Details ───────────────────────────
@@ -188,6 +202,8 @@ export function usePreDispatchCreation() {
     error,
     search,
     setSearch,
+    clusterId,
+    branchId,
     refresh,
 
     // Mutations

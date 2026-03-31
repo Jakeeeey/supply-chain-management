@@ -203,7 +203,7 @@ export const getColumns = (
     meta: { label: "Actions" },
     cell: ({ row }) => {
       const sku = row.original;
-      const id = (sku as any).id || sku.product_id;
+      const id = sku.id || sku.product_id;
       const status = (sku.status || "Draft").toLowerCase().replace(/_/g, " ");
 
       return (

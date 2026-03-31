@@ -8,7 +8,8 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
+import { LegacyCombobox as Combobox } from "@/components/ui/legacy-combobox";
+import { ComboboxOption } from "@/components/ui/combobox";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";

@@ -71,9 +71,28 @@ export const InvoicingService = {
         return response.json();
     },
 
+    async updateSalesOrderReceiptType(orderId: number, typeId: number): Promise<any> {
+        const url = `/api/scm/invoicing/sales-orders/${orderId}`;
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ receipt_type: typeId })
+        });
+
+        if (!response.ok) {
+            throw new Error("Failed to update receipt type");
+        }
+        return response.json();
+    },
+
     async getLogisticsData(orderId: number): Promise<any> {
         const response = await fetch(`/api/scm/invoicing/logistics/${orderId}`);
-        if (!response.ok) throw new Error("Failed to fetch logistics data");
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(`Failed to fetch logistics data: ${errorData.details || errorData.error || response.statusText}`);
+        }
         return response.json();
     },
 
@@ -93,6 +112,12 @@ export const InvoicingService = {
     async getDiscountTypes(): Promise<any[]> {
         const response = await fetch(`/api/scm/invoicing/discount-types`);
         if (!response.ok) throw new Error("Failed to fetch discount types");
+        return response.json();
+    },
+
+    async getReceiptTypes(): Promise<any[]> {
+        const response = await fetch(`/api/scm/invoicing/receipt-types`);
+        if (!response.ok) throw new Error("Failed to fetch receipt types");
         return response.json();
     },
 
@@ -160,5 +185,23 @@ export const InvoicingService = {
         // Assume UUID / File ID
         const baseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
         return `${baseUrl}/assets/${val}`;
+    },
+
+    async getInvoiceDetails(invoiceId: number | string): Promise<any[]> {
+        if (!invoiceId || invoiceId === "null" || invoiceId === "undefined") {
+            return [];
+        }
+        const response = await fetch(`/api/scm/invoicing/invoice-details/${invoiceId}`);
+        if (!response.ok) {
+            let errorMsg = "Failed to fetch invoice details";
+            try {
+                const data = await response.json();
+                errorMsg += `: ${data.error || data.details || response.statusText}`;
+            } catch (e) {
+                errorMsg += ` (${response.status})`;
+            }
+            throw new Error(errorMsg);
+        }
+        return response.json();
     }
 };

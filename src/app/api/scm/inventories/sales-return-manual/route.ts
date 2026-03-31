@@ -16,8 +16,9 @@ import {
   updateReturn,
   updateStatus,
 } from "@/modules/supply-chain-management/inventories/sales-return-manual/services/sales-return-service";
-
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 function json(res: any, status = 200) {
   return NextResponse.json(res, { status });
@@ -120,7 +121,10 @@ export async function PATCH(req: NextRequest) {
       if (!id || !status) {
         return json({ error: "id and status are required" }, 400);
       }
-      const data = await updateStatus(Number(id), status);
+      const isReceived = url.searchParams.get("isReceived") === "true" ? 1 : undefined;
+      const received_at = url.searchParams.get("receivedAt") || undefined;
+
+      const data = await updateStatus(Number(id), status, isReceived, received_at);
       return json({ data });
     }
 
