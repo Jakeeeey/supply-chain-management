@@ -22,6 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -82,10 +83,12 @@ interface Props {
 const ReadOnlyField = ({
   label,
   value,
+  isLoading = false,
   className = "",
 }: {
   label: string;
   value: string | number | undefined;
+  isLoading?: boolean;
   className?: string;
 }) => (
   <div className={cn("space-y-1", className)} title={String(value || "-")}>
@@ -93,7 +96,11 @@ const ReadOnlyField = ({
       {label}
     </Label>
     <div className="w-full h-9 px-3 flex items-center bg-muted/20 border border-border rounded-md text-sm font-medium text-foreground shadow-sm truncate">
-      <span className="truncate">{value || "-"}</span>
+      {isLoading ? (
+        <Skeleton className="h-4 w-3/4" />
+      ) : (
+        <span className="truncate">{value || "-"}</span>
+      )}
     </div>
   </div>
 );
@@ -600,12 +607,12 @@ export function UpdateSalesReturnModal({
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-4 bg-background p-5 rounded-xl border border-border shadow-sm relative">
             <div className="absolute top-0 left-0 w-1 h-full bg-primary rounded-l-xl"></div>
             
-            <ReadOnlyField label="Salesman" value={getSalesmanName(headerData.salesmanId)} />
-            <ReadOnlyField label="Salesman Code" value={getSalesmanCode(headerData.salesmanId)} />
-            <ReadOnlyField label="Customer" value={getCustomerName(headerData.customerCode)} />
+            <ReadOnlyField label="Salesman" value={getSalesmanName(headerData.salesmanId)} isLoading={loading} />
+            <ReadOnlyField label="Salesman Code" value={getSalesmanCode(headerData.salesmanId)} isLoading={loading} />
+            <ReadOnlyField label="Customer" value={getCustomerName(headerData.customerCode)} isLoading={loading} />
             <ReadOnlyField label="Customer Code" value={headerData.customerCode} />
             
-            <ReadOnlyField label="Branch" value={getSalesmanBranch(headerData.salesmanId)} />
+            <ReadOnlyField label="Branch" value={getSalesmanBranch(headerData.salesmanId)} isLoading={loading} />
             <ReadOnlyField label="Return Date" value={headerData.returnDate} />
             <ReadOnlyField label="Received Date" value={headerData.createdAt} />
             <ReadOnlyField label="Price Type" value={headerData.priceType} />
@@ -703,11 +710,22 @@ export function UpdateSalesReturnModal({
                   </TableHeader>
                   <TableBody>
                     {loading ? (
-                      <TableRow>
-                        <TableCell colSpan={12} className="h-32 text-center">
-                          <Loader2 className="animate-spin text-primary mx-auto" />
-                        </TableCell>
-                      </TableRow>
+                      Array.from({ length: 5 }).map((_, rowIndex) => (
+                        <TableRow key={`skeleton-row-${rowIndex}`} className="border-b border-border">
+                          <TableCell><Skeleton className="h-4 w-[80px]" /></TableCell>
+                          <TableCell><Skeleton className="h-4 w-[180px]" /></TableCell>
+                          <TableCell><Skeleton className="h-4 w-[40px]" /></TableCell>
+                          <TableCell><Skeleton className="h-4 w-[40px] mx-auto" /></TableCell>
+                          <TableCell><Skeleton className="h-4 w-[60px] ml-auto" /></TableCell>
+                          <TableCell><Skeleton className="h-4 w-[60px] ml-auto" /></TableCell>
+                          <TableCell><Skeleton className="h-8 w-[100px]" /></TableCell>
+                          <TableCell><Skeleton className="h-8 w-[80px] ml-auto" /></TableCell>
+                          <TableCell><Skeleton className="h-4 w-[60px] ml-auto" /></TableCell>
+                          <TableCell><Skeleton className="h-8 w-[120px]" /></TableCell>
+                          <TableCell><Skeleton className="h-8 w-[100px]" /></TableCell>
+                          {canEditAll && <TableCell><Skeleton className="h-8 w-8 rounded-md mx-auto" /></TableCell>}
+                        </TableRow>
+                      ))
                     ) : details.length === 0 ? (
                       <TableRow>
                         <TableCell
@@ -1329,35 +1347,44 @@ export function UpdateSalesReturnModal({
                   <span className="text-muted-foreground font-medium">
                     Gross Amount
                   </span>
-                  <span className="font-semibold text-foreground">
-                    ₱
-                    {totalGross.toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                    })}
-                  </span>
+                  <div className="font-semibold text-foreground">
+                    {loading ? (
+                      <Skeleton className="h-5 w-24" />
+                    ) : (
+                      `₱${totalGross.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                      })}`
+                    )}
+                  </div>
                 </div>
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-muted-foreground font-medium">
                     Discount Amount
                   </span>
-                  <span className="font-semibold text-foreground">
-                    ₱
-                    {totalDiscount.toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                    })}
-                  </span>
+                  <div className="font-semibold text-foreground">
+                    {loading ? (
+                      <Skeleton className="h-5 w-24" />
+                    ) : (
+                      `₱${totalDiscount.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                      })}`
+                    )}
+                  </div>
                 </div>
                 <div className="h-px bg-muted my-3"></div>
                 <div className="flex justify-between items-center">
                   <span className="text-foreground font-bold text-base">
                     Net Amount
                   </span>
-                  <span className="font-bold text-primary text-xl">
-                    ₱
-                    {totalNet.toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                    })}
-                  </span>
+                  <div className="font-bold text-primary text-xl">
+                    {loading ? (
+                      <Skeleton className="h-7 w-32" />
+                    ) : (
+                      `₱${totalNet.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                      })}`
+                    )}
+                  </div>
                 </div>
 
                 <div className="h-px bg-muted my-3"></div>
@@ -1367,7 +1394,9 @@ export function UpdateSalesReturnModal({
                       Applied to
                     </span>
                     {/* 🟢 REVISED: Editable if Pending or Received (canEditLimited) */}
-                    {canEditLimited ? (
+                    {loading && !statusCardData ? (
+                      <Skeleton className="h-6 w-28" />
+                    ) : canEditLimited ? (
                       <Button
                         variant="ghost"
                         size="sm"
