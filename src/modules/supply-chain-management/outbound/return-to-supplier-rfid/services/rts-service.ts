@@ -14,7 +14,10 @@ import type {
   RfidLookupResult,
   Supplier,
   Branch,
-  CreateReturnDTO
+  CreateReturnDTO,
+  DiscountType,
+  LinePerDiscountType,
+  InventoryViewRow
 } from "../types/rts.schema";
 
 import * as repo from "../repositories/rts-repository";
@@ -204,9 +207,9 @@ export async function fetchReferences(): Promise<ReferenceData> {
     lineDiscounts: (discountsJson.data || []) as unknown as LineDiscount[],
     connections: (connectionsJson.data || []).map((c) => {
       const row = c as Record<string, unknown>;
-      const supId = row.supplier_id as any;
-      const prodId = row.product_id as any;
-      const discType = row.discount_type as any;
+      const supId = row.supplier_id as { id: number } | number;
+      const prodId = row.product_id as { id?: number; product_id?: number } | number;
+      const discType = row.discount_type as { id: number } | number;
       
       return {
         id: row.id,
@@ -216,8 +219,8 @@ export async function fetchReferences(): Promise<ReferenceData> {
       };
     }) as ProductSupplier[],
     returnTypes: (returnTypesJson.data || []) as unknown as RTSReturnType[],
-    discountTypes: (discountTypesJson.data || []) as any[],
-    linePerDiscountType: (linePerDiscountTypeJson.data || []) as any[],
+    discountTypes: (discountTypesJson.data || []) as unknown as DiscountType[],
+    linePerDiscountType: (linePerDiscountTypeJson.data || []) as unknown as LinePerDiscountType[],
   };
 }
 
@@ -234,7 +237,7 @@ export async function fetchInventory(
     const allRows = await repo.getSpringInventory(branchId, supplierId, token);
     
     // Filter by branch and supplier using camelCase names (Standardized in Repo/Schema)
-    const rawViewRows = allRows.filter((r: any) => 
+    const rawViewRows = allRows.filter((r) => 
       Number(r.branchId) === Number(branchId) && 
       Number(r.supplierId) === Number(supplierId)
     );
@@ -242,21 +245,21 @@ export async function fetchInventory(
     if (rawViewRows.length === 0) return [];
 
     // Aggregate inventory by productId to prevent duplicate batches in UI
-    const aggregatedRowsMap = new Map<number, any>();
-    rawViewRows.forEach((r: any) => {
+    const aggregatedRowsMap = new Map<number, InventoryViewRow>();
+    rawViewRows.forEach((r) => {
       const pId = Number(r.productId);
-      if (aggregatedRowsMap.has(pId)) {
-        const existing = aggregatedRowsMap.get(pId);
+      const existing = aggregatedRowsMap.get(pId);
+      if (existing) {
         existing.runningInventoryUnit = Number(existing.runningInventoryUnit || 0) + Number(r.runningInventoryUnit || 0);
       } else {
         aggregatedRowsMap.set(pId, { ...r, runningInventoryUnit: Number(r.runningInventoryUnit || 0) });
       }
     });
-
+    
     const viewRows = Array.from(aggregatedRowsMap.values());
 
     // Get prices and parents to calculate families
-    const productIds = [...new Set(viewRows.map((r: any) => Number(r.productId)))];
+    const productIds = [...new Set(viewRows.map((r) => Number(r.productId)))];
     const productsJson = await repo.getRawProductsByIds(productIds);
     const productsData = (productsJson.data || []) as unknown as RawProduct[];
 

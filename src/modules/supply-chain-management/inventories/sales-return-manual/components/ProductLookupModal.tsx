@@ -16,6 +16,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
   SalesReturnItem,
   Brand,
@@ -63,7 +65,7 @@ export function ProductLookupModal({
 
   // PAGINATION
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 20;
+  const ITEMS_PER_PAGE = 24;
 
   // DROPDOWN STATES
   const [isSupplierOpen, setIsSupplierOpen] = useState(false);
@@ -207,11 +209,49 @@ export function ProductLookupModal({
     setCurrentPage(1);
   }, [filterName, searchCode, selectedSupplierId, selectedCategoryId, selectedBrandId]);
 
-  const totalPages = Math.ceil(visibleProducts.length / ITEMS_PER_PAGE);
-  const paginatedProducts = visibleProducts.slice(
+  // 1. Group ALL visible products strictly by parent_id or product_id first
+  const allGroupedProducts = useMemo(() => {
+    const groups: Record<string, { parent: Product; variants: Product[] }> = {};
+
+    visibleProducts.forEach((product) => {
+      // Robust grouping key derivation
+      const rawParentId = product.parent_id;
+      let finalParentIdNum: number | null = null;
+      
+      if (rawParentId && typeof rawParentId === 'object') {
+        finalParentIdNum = Number((rawParentId as any).product_id || (rawParentId as any).id);
+      } else if (rawParentId !== null && rawParentId !== undefined) {
+        finalParentIdNum = Number(rawParentId);
+      }
+
+      const groupKey = (finalParentIdNum && finalParentIdNum > 0)
+        ? finalParentIdNum.toString()
+        : product.product_id.toString();
+
+      if (!groups[groupKey]) {
+        groups[groupKey] = {
+          parent: product, 
+          variants: [],
+        };
+      } else if (!finalParentIdNum || finalParentIdNum <= 0) {
+        // If we found the actual base product (no parent), set it as the structural parent for display
+        groups[groupKey].parent = product;
+      }
+      
+      groups[groupKey].variants.push(product);
+    });
+
+    return Object.values(groups);
+  }, [visibleProducts]);
+
+
+  // 2. Paginate over the grouped cards instead of individual products
+  const totalPages = Math.ceil(allGroupedProducts.length / ITEMS_PER_PAGE);
+  const groupedProducts = allGroupedProducts.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE,
   );
+
 
   // --- HANDLERS ---
 
@@ -264,7 +304,7 @@ export function ProductLookupModal({
           discountType: null, // 🟢 Added (default to null)
           discountAmount: 0,
           totalAmount: selectedPrice,
-          returnType: "Good Order",
+          returnType: "", // 🟢 Empty default as requested
           reason: "",
           // 🟢 Store additional price info for recalculation
           priceA: product.priceA,
@@ -603,100 +643,75 @@ export function ProductLookupModal({
                 )}
 
                 {!isLoading &&
-                  paginatedProducts.map((product) => {
-                    const basePrice = resolvePrice(product, priceType);
-                    const safePricePcs = basePrice;
-                    const boxMultiplier =
-                      product.unit_of_measurement_count || 1;
-                    const safePriceBox = safePricePcs * boxMultiplier;
-
-                    const unitObj = unitsList.find(
-                      (u) => u.unit_id === product.unit_of_measurement,
-                    );
-                    const baseUnitName = unitObj ? unitObj.unit_name : "Piece";
-                    const baseUnitShortcut = unitObj
-                      ? unitObj.unit_shortcut
-                      : "pcs";
-
-                    const showBoxOption = boxMultiplier > 1;
+                  groupedProducts.map((group, index) => {
+                    const parentData = group.parent;
+                    const groupKey = parentData.parent_id ? `parent-${parentData.parent_id}` : `group-${index}`;
 
                     return (
-                      <div
-                        key={product.product_id}
-                        className="bg-background rounded-lg border border-border shadow-sm hover:shadow-md transition-all duration-200 flex flex-col overflow-hidden p-5 group"
+                      <Card
+                        key={groupKey}
+                        className="flex flex-col overflow-hidden hover:shadow-md transition-all duration-200"
                       >
-                        {/* --- Card Header: Name & Code --- */}
-                        <div className="mb-3">
-                          <h3
-                            className="font-bold text-foreground text-sm leading-snug mb-1 line-clamp-2"
-                            title={product.product_name}
+                        <CardHeader className="bg-muted/10 pb-3">
+                          <CardTitle
+                            className="text-sm font-bold leading-snug line-clamp-2"
+                            title={parentData.product_name}
                           >
-                            {product.product_name}
-                          </h3>
-                          <div className="text-xs text-muted-foreground font-mono flex justify-between">
-                            <span>
-                              Code:{" "}
-                              <span className="text-foreground">
-                                {product.product_code ||
-                                  product.barcode ||
-                                  "N/A"}
-                              </span>
-                            </span>
-                          </div>
-                        </div>
+                            {parentData.product_name}
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-0 flex flex-col flex-1 divide-y divide-border">
+                          {group.variants.map((product) => {
+                             const safePrice = resolvePrice(product, priceType);
+                             
+                             const unitObj = unitsList.find(
+                               (u) => u.unit_id === product.unit_of_measurement,
+                             );
+                             const baseUnitName = unitObj ? unitObj.unit_name : "Piece";
+                             const baseUnitShortcut = unitObj
+                               ? unitObj.unit_shortcut
+                               : "pcs";
 
-                        {/* --- Option 1: Base Unit (e.g. Bag 1pcs) --- */}
-                        <div className="mt-auto space-y-3">
-                          <div className="flex items-center justify-between">
-                            <div className="flex flex-col">
-                              <span className="font-bold text-foreground text-sm">
-                                ₱
-                                {safePricePcs.toLocaleString(undefined, {
-                                  minimumFractionDigits: 2,
-                                })}
-                              </span>
-                              <span className="text-xs text-muted-foreground">
-                                {baseUnitName} (1 {baseUnitShortcut})
-                              </span>
-                            </div>
-                            <Button
-                              size="sm"
-                              className="h-8 bg-primary hover:bg-primary text-white font-medium px-3 shadow-sm shadow-primary/20"
-                              onClick={() =>
-                                handleAddItem(product, "PCS", safePricePcs)
-                              }
-                            >
-                              <Plus className="h-3.5 w-3.5 mr-1" /> Add
-                            </Button>
-                          </div>
-
-                          {/* --- Option 2: Bulk Unit (e.g. Box 10pcs) - Conditional --- */}
-                          {showBoxOption && (
-                            <div className="flex items-center justify-between border-t border-border pt-3">
-                              <div className="flex flex-col">
-                                <span className="font-bold text-foreground text-sm">
-                                  ₱
-                                  {safePriceBox.toLocaleString(undefined, {
-                                    minimumFractionDigits: 2,
-                                  })}
-                                </span>
-                                <span className="text-xs text-muted-foreground">
-                                  Box ({boxMultiplier} {baseUnitShortcut})
-                                </span>
-                              </div>
-                              <Button
-                                size="sm"
-                                className="h-8 bg-primary hover:bg-primary text-white font-medium px-3 shadow-sm shadow-primary/20"
-                                onClick={() =>
-                                  handleAddItem(product, "BOX", safePriceBox)
-                                }
-                              >
-                                <Plus className="h-3.5 w-3.5 mr-1" /> Add
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                            return (
+                               <div key={product.product_id} className="p-4 flex flex-col gap-3">
+                                  <div className="flex justify-between items-start">
+                                    <div className="flex flex-col">
+                                      <span className="text-xs text-muted-foreground font-mono">
+                                        Code: <span className="text-foreground font-medium">{product.product_code || product.barcode || "N/A"}</span>
+                                      </span>
+                                    </div>
+                                    <Badge variant="outline" className="font-normal text-xs bg-background">
+                                      {baseUnitName}
+                                    </Badge>
+                                  </div>
+                                  
+                                  <div className="flex items-center justify-between mt-auto">
+                                    <div className="flex flex-col">
+                                      <span className="font-bold text-foreground text-sm">
+                                        ₱
+                                        {safePrice.toLocaleString(undefined, {
+                                          minimumFractionDigits: 2,
+                                        })}
+                                      </span>
+                                      <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                                        (1 {baseUnitShortcut})
+                                      </span>
+                                    </div>
+                                    <Button
+                                      size="sm"
+                                      className="h-8 shadow-sm shadow-primary/20"
+                                      onClick={() =>
+                                        handleAddItem(product, baseUnitShortcut.toUpperCase(), safePrice)
+                                      }
+                                    >
+                                      <Plus className="h-3.5 w-3.5 mr-1" /> Add
+                                    </Button>
+                                  </div>
+                               </div>
+                            );
+                          })}
+                        </CardContent>
+                      </Card>
                     );
                   })}
 
@@ -728,7 +743,7 @@ export function ProductLookupModal({
               {!isLoading && totalPages > 1 && (
                 <div className="flex items-center justify-between pt-4 pb-2 border-t border-border mt-2">
                   <p className="text-xs text-muted-foreground">
-                    Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, visibleProducts.length)} of {visibleProducts.length}
+                    Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, allGroupedProducts.length)} of {allGroupedProducts.length}
                   </p>
                   <div className="flex items-center gap-2">
                     <Button

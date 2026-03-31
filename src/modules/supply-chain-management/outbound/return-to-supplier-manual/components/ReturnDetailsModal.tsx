@@ -274,9 +274,7 @@ export function ReturnDetailsModal({
       return group;
     });
   }, [
-    refs.connections,
-    refs.lineDiscounts,
-    refs.units,
+    refs,
     currentSupplierId,
     inventory,
     items,
@@ -377,7 +375,17 @@ export function ReturnDetailsModal({
     }
 
     toast.success("Barcode Added", { description: `Added "${inv.product_name}"` });
-  }, [inventory, isEditable, refs.units, addToCartInternal]);
+  }, [
+    currentSupplierId,
+    inventory,
+    isEditable,
+    refs.units,
+    refs.connections,
+    refs.discountTypes,
+    refs.lineDiscounts,
+    refs.linePerDiscountType,
+    addToCartInternal,
+  ]);
 
   /**
    * GLOBAL SCAN CAPTURE: Routes barcode scans to the handler.

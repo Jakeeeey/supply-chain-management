@@ -275,6 +275,21 @@ export interface RfidOnhand {
   rfid: string;
 }
 
+/** A discount type reference (e.g., Regular, Special). */
+export interface DiscountType {
+  id: number;
+  discount_type_name?: string;
+  discount_type?: string;
+  name?: string;
+}
+
+/** Junction record for discount types and line discounts. */
+export interface LinePerDiscountType {
+  id: number;
+  type_id: number;
+  line_id: number;
+}
+
 // =============================================================================
 // 6. REFERENCE DATA BUNDLE — returned by the references endpoint
 // =============================================================================
@@ -288,8 +303,8 @@ export interface ReferenceData {
   lineDiscounts: LineDiscount[];
   connections: ProductSupplier[];
   returnTypes: RTSReturnType[];
-  discountTypes: any[];
-  linePerDiscountType: any[];
+  discountTypes: DiscountType[];
+  linePerDiscountType: LinePerDiscountType[];
 }
 
 /** Response from the Spring Boot RFID on-hand lookup. */

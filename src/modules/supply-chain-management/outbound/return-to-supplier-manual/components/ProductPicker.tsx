@@ -3,7 +3,6 @@
 import React, { useState, useMemo } from "react";
 import {
   Search,
-  X,
   Plus,
   Minus,
   Trash2,

@@ -20,6 +20,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import {
   SalesReturnItem,
@@ -973,30 +980,28 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide truncate block">
                   Price Type <span className="text-destructive">*</span>
                 </label>
-                <div className="relative">
-                  <select
-                    className="w-full h-9 border border-border rounded-md text-sm px-3 bg-background outline-none focus:ring-2 focus:border-primary appearance-none shadow-sm cursor-pointer"
-                    value={priceType}
-                    onChange={(e) => setPriceType(e.target.value)}
-                  >
+                <Select value={priceType} onValueChange={(val) => setPriceType(val)}>
+                  <SelectTrigger className="w-full h-9 border-border bg-background shadow-sm text-sm">
+                    <SelectValue placeholder="Select Price Type" />
+                  </SelectTrigger>
+                  <SelectContent className="z-[200]">
                     {priceTypeOptions.length > 0 ? (
                       priceTypeOptions.map((pt) => (
-                        <option key={pt.price_type_id} value={pt.price_type_name}>
+                        <SelectItem key={pt.price_type_id} value={pt.price_type_name}>
                           Type {pt.price_type_name}
-                        </option>
+                        </SelectItem>
                       ))
                     ) : (
                       <>
-                        <option value="A">Type A</option>
-                        <option value="B">Type B</option>
-                        <option value="C">Type C</option>
-                        <option value="D">Type D</option>
-                        <option value="E">Type E</option>
+                        <SelectItem value="A">Type A</SelectItem>
+                        <SelectItem value="B">Type B</SelectItem>
+                        <SelectItem value="C">Type C</SelectItem>
+                        <SelectItem value="D">Type D</SelectItem>
+                        <SelectItem value="E">Type E</SelectItem>
                       </>
                     )}
-                  </select>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                </div>
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Third Party Checkbox */}
@@ -1171,18 +1176,22 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                               ₱{(item.grossAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </td>
                             <td className="px-4 py-2">
-                              <select
-                                className="w-full border border-border rounded h-8 text-sm px-1 bg-background focus:border-primary outline-none"
-                                value={item.discountType || ""}
-                                onChange={(e) => handleItemChange(idx, "discountType", e.target.value)}
+                              <Select
+                                value={item.discountType?.toString() || "none"}
+                                onValueChange={(val) => handleItemChange(idx, "discountType", val === "none" ? "" : val)}
                               >
-                                <option value="">None</option>
-                                {lineDiscountOptions.map((opt) => (
-                                  <option key={opt.id} value={opt.id}>
-                                    {opt.discount_type}
-                                  </option>
-                                ))}
-                              </select>
+                                <SelectTrigger className="w-full h-8 px-2 text-sm border-border bg-background focus:ring-1 focus:ring-primary">
+                                  <SelectValue placeholder="None" />
+                                </SelectTrigger>
+                                <SelectContent className="z-[200]">
+                                  <SelectItem value="none">None</SelectItem>
+                                  {lineDiscountOptions.map((opt) => (
+                                    <SelectItem key={opt.id} value={opt.id.toString()}>
+                                      {opt.discount_type}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </td>
                             <td className="px-4 py-2">
                               <input
@@ -1206,26 +1215,33 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                               />
                             </td>
                             <td className="px-3 py-2">
-                              <select
-                                required
-                                className={`w-full border rounded h-8 text-sm px-1 bg-background outline-none focus:border-primary transition-colors ${returnTypeError && (!item.returnType || item.returnType === "") ? "border-destructive ring-1 ring-destructive/30 bg-destructive/5" : "border-border"}`}
+                              <Select
                                 value={item.returnType || ""}
-                                onChange={(e) => { handleItemChange(idx, "returnType", e.target.value); setReturnTypeError(false); }}
+                                onValueChange={(val) => { handleItemChange(idx, "returnType", val); setReturnTypeError(false); }}
                               >
-                                <option value="" disabled>Select an option</option>
-                                {returnTypeOptions.length > 0 ? (
-                                  returnTypeOptions.map((type) => (
-                                    <option key={type.type_id} value={type.type_name}>
-                                      {type.type_name}
-                                    </option>
-                                  ))
-                                ) : (
-                                  <>
-                                    <option value="Good Order">Good Order</option>
-                                    <option value="Bad Order">Bad Order</option>
-                                  </>
-                                )}
-                              </select>
+                                <SelectTrigger
+                                  className={`w-full h-8 px-2 text-sm transition-colors [&>span]:truncate ${returnTypeError && (!item.returnType || item.returnType === "")
+                                      ? "border-destructive ring-1 ring-destructive/30 bg-destructive/5 text-destructive"
+                                      : "border-border bg-background focus:ring-1 focus:ring-primary"
+                                    }`}
+                                >
+                                  <SelectValue placeholder="Select type" />
+                                </SelectTrigger>
+                                <SelectContent className="z-[200]">
+                                  {returnTypeOptions.length > 0 ? (
+                                    returnTypeOptions.map((type) => (
+                                      <SelectItem key={type.type_id} value={type.type_name}>
+                                        {type.type_name}
+                                      </SelectItem>
+                                    ))
+                                  ) : (
+                                    <>
+                                      <SelectItem value="Good Order">Good Order</SelectItem>
+                                      <SelectItem value="Bad Order">Bad Order</SelectItem>
+                                    </>
+                                  )}
+                                </SelectContent>
+                              </Select>
                             </td>
                             <td className="sticky right-0 z-10 px-2 py-2 text-center bg-background border-l border-transparent group-hover:border-primary/20">
                               <button
@@ -1353,18 +1369,22 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                                 ₱{(item.grossAmount || 0).toLocaleString()}
                               </td>
                               <td className="px-4 py-2">
-                                <select
-                                  className="w-full border border-border rounded h-8 text-sm px-1 bg-background focus:border-primary outline-none"
-                                  value={item.discountType || ""}
-                                  onChange={(e) => handleItemChange(idx, "discountType", e.target.value)}
+                                <Select
+                                  value={item.discountType?.toString() || "none"}
+                                  onValueChange={(val) => handleItemChange(idx, "discountType", val === "none" ? "" : val)}
                                 >
-                                  <option value="">None</option>
-                                  {lineDiscountOptions.map((opt) => (
-                                    <option key={opt.id} value={opt.id}>
-                                      {opt.discount_type}
-                                    </option>
-                                  ))}
-                                </select>
+                                  <SelectTrigger className="w-full h-8 px-2 text-sm border-border bg-background focus:ring-1 focus:ring-primary">
+                                    <SelectValue placeholder="None" />
+                                  </SelectTrigger>
+                                  <SelectContent className="z-[200]">
+                                    <SelectItem value="none">None</SelectItem>
+                                    {lineDiscountOptions.map((opt) => (
+                                      <SelectItem key={opt.id} value={opt.id.toString()}>
+                                        {opt.discount_type}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                               </td>
                               <td className="px-4 py-2">
                                 <input
@@ -1388,26 +1408,33 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                                 />
                               </td>
                               <td className="px-4 py-2">
-                                <select
-                                  required
-                                  className="w-full border border-border rounded h-8 text-sm px-1 bg-background outline-none focus:border-primary"
+                                <Select
                                   value={item.returnType || ""}
-                                  onChange={(e) => handleItemChange(idx, "returnType", e.target.value)}
+                                  onValueChange={(val) => { handleItemChange(idx, "returnType", val); setReturnTypeError(false); }}
                                 >
-                                  <option value="" disabled>Select an option</option>
-                                  {returnTypeOptions.length > 0 ? (
-                                    returnTypeOptions.map((type) => (
-                                      <option key={type.type_id} value={type.type_name}>
-                                        {type.type_name}
-                                      </option>
-                                    ))
-                                  ) : (
-                                    <>
-                                      <option value="Good Order">Good Order</option>
-                                      <option value="Bad Order">Bad Order</option>
-                                    </>
-                                  )}
-                                </select>
+                                  <SelectTrigger
+                                    className={`w-full h-8 px-2 text-sm transition-colors [&>span]:truncate ${returnTypeError && (!item.returnType || item.returnType === "")
+                                        ? "border-destructive ring-1 ring-destructive/30 bg-destructive/5 text-destructive"
+                                        : "border-border bg-background focus:ring-1 focus:ring-primary"
+                                      }`}
+                                  >
+                                    <SelectValue placeholder="Select type" />
+                                  </SelectTrigger>
+                                  <SelectContent className="z-[200]">
+                                    {returnTypeOptions.length > 0 ? (
+                                      returnTypeOptions.map((type) => (
+                                        <SelectItem key={type.type_id} value={type.type_name}>
+                                          {type.type_name}
+                                        </SelectItem>
+                                      ))
+                                    ) : (
+                                      <>
+                                        <SelectItem value="Good Order">Good Order</SelectItem>
+                                        <SelectItem value="Bad Order">Bad Order</SelectItem>
+                                      </>
+                                    )}
+                                  </SelectContent>
+                                </Select>
                               </td>
                               <td className="sticky right-0 z-10 px-2 py-2 text-center bg-background border-l border-transparent group-hover:border-primary/20">
                                 <button
