@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Search, ShoppingCart, Loader2, Package, Tag } from 'lucide-react';
+import { Search, ShoppingCart, Loader2, Package, Tag, CheckCircle2, ChevronRight, Minus, Plus, Trash2, X } from 'lucide-react';
 import { SKU } from '@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema';
 
 interface ProductSelectionModalProps {
@@ -21,9 +21,11 @@ interface ProductSelectionModalProps {
   onSelect: (product: SKU) => void;
   sourceBranch?: string;
   selectedProducts?: SKU[];
+  onUpdateQty?: (productId: number, qty: number) => void;
+  onRemoveItem?: (productId: number) => void;
 }
 
-export function ProductSelectionModal({ open, onOpenChange, onSelect, sourceBranch, selectedProducts = [] }: ProductSelectionModalProps) {
+export function ProductSelectionModal({ open, onOpenChange, onSelect, sourceBranch, selectedProducts = [], onUpdateQty, onRemoveItem }: ProductSelectionModalProps) {
   const [products, setProducts] = useState<SKU[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
@@ -75,17 +77,34 @@ export function ProductSelectionModal({ open, onOpenChange, onSelect, sourceBran
                     Select products from the master inventory to include in this stock transfer.
                   </DialogDescription>
                 </div>
+                <Button 
+                  onClick={() => onOpenChange(false)}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-8 h-12 rounded-xl shadow-lg hover:shadow-primary/20 transition-all flex items-center gap-2"
+                >
+                  <CheckCircle2 className="w-5 h-5" />
+                  Done Selection
+                </Button>
               </div>
               
               <div className="mt-6 relative">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground/50" />
                 <Input
                   placeholder="Filter by name, barcode, or brand..."
-                  className="pl-12 h-14 text-lg bg-background border-2 border-muted focus-visible:ring-2 focus-visible:ring-primary/20 transition-all rounded-xl"
+                  className="pl-12 pr-12 h-14 text-lg bg-background border-2 border-muted focus-visible:ring-2 focus-visible:ring-primary/20 transition-all rounded-xl"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   autoFocus
                 />
+                {search && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 h-8 w-8 text-muted-foreground hover:text-foreground"
+                    onClick={() => setSearch('')}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                )}
               </div>
             </DialogHeader>
 
@@ -183,31 +202,68 @@ export function ProductSelectionModal({ open, onOpenChange, onSelect, sourceBran
                     <p className="text-xs font-medium">No products selected yet</p>
                   </div>
                 ) : (
-                  selectedProducts.map((p, idx) => (
-                    <div key={idx} className="bg-background border rounded-lg p-3 shadow-sm hover:border-primary/30 transition-colors">
-                      <div className="flex items-start justify-between gap-2 overflow-hidden mb-1">
-                        <p className="text-xs font-bold line-clamp-2 leading-tight">{p.product_name}</p>
-                        {(p as { quantity?: number }).quantity && (p as { quantity?: number }).quantity! > 1 && (
-                          <Badge variant="outline" className="shrink-0 h-5 px-1.5 text-[10px] font-black bg-primary/5 text-primary border-primary/20">
-                            x{(p as { quantity?: number }).quantity}
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1 text-[10px] text-amber-600/80 mb-1">
-                        <Tag className="w-2.5 h-2.5" />
-                        <span className="font-mono font-bold">ID: {p.product_id || p.id}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1 border-t border-muted/30">
-                        <span className="font-mono">{p.barcode || 'NO-BARCODE'}</span>
-                        <div className="flex flex-col items-end">
-                          <span className="font-bold text-primary">₱{Number((p as { totalAmount?: number }).totalAmount || p.cost_per_unit || 0).toLocaleString()}</span>
-                          {(p as { quantity?: number }).quantity && (p as { quantity?: number }).quantity! > 1 && (
-                            <span className="text-[8px] opacity-60">₱{Number(p.cost_per_unit).toLocaleString()} / ea</span>
-                          )}
+                  selectedProducts.map((p, idx) => {
+                    const pid = p.product_id || p.id;
+                    const uom = typeof p.unit_of_measurement === 'object' && p.unit_of_measurement !== null 
+                      ? (p.unit_of_measurement as { unit_name?: string }).unit_name 
+                      : (p.unit_of_measurement || 'Pieces');
+                    const qty = (p as any).quantity || 1;
+
+                    return (
+                      <div key={idx} className="bg-background border rounded-lg p-3 shadow-sm hover:border-primary/30 transition-colors group/item">
+                        <div className="flex items-start justify-between gap-2 overflow-hidden mb-1">
+                          <p className="text-[11px] font-bold line-clamp-2 leading-tight flex-1">{p.product_name}</p>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-opacity"
+                            onClick={() => onRemoveItem?.(Number(pid))}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </div>
+                        
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="flex items-center gap-1 text-[10px] text-amber-600/80 font-bold">
+                            <Tag className="w-2.5 h-2.5" />
+                            <span className="font-mono">ID: {pid}</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-[10px] text-primary/70 font-bold">
+                            <Package className="w-2.5 h-2.5" />
+                            <span>{uom}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-1 border-t border-muted/30">
+                          <div className="flex items-center bg-muted/30 rounded-md border p-0.5">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 text-muted-foreground hover:text-primary"
+                              onClick={() => onUpdateQty?.(Number(pid), Math.max(1, qty - 1))}
+                            >
+                              <Minus className="w-3 h-3" />
+                            </Button>
+                            <span className="w-6 text-[10px] font-black text-center">{qty}</span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 text-muted-foreground hover:text-primary"
+                              onClick={() => onUpdateQty?.(Number(pid), qty + 1)}
+                            >
+                              <Plus className="w-3 h-3" />
+                            </Button>
+                          </div>
+                          <div className="flex flex-col items-end">
+                            <span className="font-bold text-primary text-xs">₱{Number((p as { totalAmount?: number }).totalAmount || p.cost_per_unit || 0).toLocaleString()}</span>
+                            {qty > 1 && (
+                              <span className="text-[8px] opacity-60">₱{Number(p.cost_per_unit).toLocaleString()} / ea</span>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </ScrollArea>

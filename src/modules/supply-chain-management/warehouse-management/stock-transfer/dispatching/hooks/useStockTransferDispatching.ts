@@ -95,20 +95,22 @@ export function useStockTransferDispatching() {
         };
       }
       
-      const product = typeof st.product_id === 'object' && st.product_id !== null ? st.product_id : null;
+      const product = typeof st.product_id === 'object' && st.product_id !== null ? (st.product_id as any) : null;
       const pid = product ? (product.product_id || product.id) : st.product_id;
       
-      const rfids = scannedItemsState[st.order_no]?.[pid] || [];
-      
-      groups[st.order_no].items.push({
-        ...st,
-        scannedQty: rfids.length,
-        scannedRfids: rfids,
-        qtyAvailable: scannedInventory[pid] ?? (st as any).qtyAvailable ?? 0,
-        // Mark as loose pack if unit is not RFID-tracked (e.g. Unit ID 4 or name contains 'Loose')
-        isLoosePack: product?.unit_of_measurement?.unit_name?.toLowerCase().includes('loose') || product?.unit_of_measurement?.unit_id === 4 
-      });
-      groups[st.order_no].totalAmount += Number(st.amount || 0);
+        const rfids = scannedItemsState[st.order_no]?.[pid] || [];
+        const qty = st.allocated_quantity ?? st.ordered_quantity ?? 0;
+        const unitPrice = st.ordered_quantity > 0 ? (Number(st.amount || 0) / st.ordered_quantity) : 0;
+        
+        groups[st.order_no].items.push({
+          ...st,
+          scannedQty: rfids.length,
+          scannedRfids: rfids,
+          qtyAvailable: scannedInventory[pid] ?? (st as any).qtyAvailable ?? 0,
+          // Mark as loose pack if unit is not RFID-tracked (e.g. Unit ID 4 or name contains 'Loose')
+          isLoosePack: product?.unit_of_measurement?.unit_name?.toLowerCase().includes('loose') || product?.unit_of_measurement?.unit_id === 4 
+        });
+        groups[st.order_no].totalAmount += Number((qty * unitPrice).toFixed(2));
     });
     return Object.values(groups).sort(
       (a, b) => new Date(b.dateEncoded).getTime() - new Date(a.dateEncoded).getTime()
@@ -134,7 +136,7 @@ export function useStockTransferDispatching() {
         const sourceBranchName = getBranchName(sourceBranch);
 
         for (const item of itemsForOrder) {
-          const product = typeof item.product_id === 'object' && item.product_id !== null ? item.product_id : null;
+          const product = typeof item.product_id === 'object' && item.product_id !== null ? (item.product_id as any) : null;
           const pid = product ? (product.product_id || product.id) : item.product_id;
           
           if (!pid || scannedInventory[pid] !== undefined) continue;
@@ -341,7 +343,7 @@ export function useStockTransferDispatching() {
       
       // Check if product is in the current order
       const itemInOrder = selectedGroup.items.find(i => {
-        const itemProduct = typeof i.product_id === 'object' && i.product_id !== null ? i.product_id : null;
+        const itemProduct = typeof i.product_id === 'object' && i.product_id !== null ? (i.product_id as any) : null;
         const itemPid = itemProduct ? (itemProduct.product_id || itemProduct.id) : i.product_id;
         return itemPid === productId;
       });
@@ -385,7 +387,7 @@ export function useStockTransferDispatching() {
         return;
       }
       
-      const targetQty = (itemInOrder as any).allocated_quantity || itemInOrder.ordered_quantity;
+      const targetQty = Math.max(0, itemInOrder.allocated_quantity ?? itemInOrder.ordered_quantity ?? 0);
       
       if (itemInOrder.scannedQty >= targetQty) {
         playErrorSound();
@@ -408,7 +410,7 @@ export function useStockTransferDispatching() {
       });
       
       playSuccessSound();
-      const finalName = (typeof itemInOrder.product_id === 'object' && itemInOrder.product_id?.product_name) 
+      const finalName = (typeof itemInOrder.product_id === 'object' && (itemInOrder.product_id as any)?.product_name) 
         || match.productName 
         || "Product";
       toast.success(`Scanned: ${finalName}`);
@@ -421,14 +423,14 @@ export function useStockTransferDispatching() {
       // ── STATUS TRANSITION: Picked ──
       const allItems = selectedGroup.items;
       const isComplete = allItems.every(item => {
-        const product = typeof item.product_id === 'object' && item.product_id !== null ? item.product_id : null;
+        const product = typeof item.product_id === 'object' && item.product_id !== null ? (item.product_id as any) : null;
         const pid = product ? (product.product_id || product.id) : item.product_id;
         
         const scanCount = (pid === effectiveProductId) 
           ? (scannedItemsState[selectedOrderNo]?.[effectiveProductId]?.length || 0) + 1
           : (scannedItemsState[selectedOrderNo]?.[pid]?.length || 0);
           
-        const targetQty = (item as any).allocated_quantity || item.ordered_quantity;
+        const targetQty = Math.max(0, item.allocated_quantity ?? item.ordered_quantity ?? 0);
         return scanCount >= targetQty;
       });
 

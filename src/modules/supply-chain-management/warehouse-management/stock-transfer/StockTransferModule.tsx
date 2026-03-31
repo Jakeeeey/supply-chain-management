@@ -81,6 +81,8 @@ export default function StockTransferModule() {
       toast.success('Stock Transfer Confirmed', {
         description: `Transfer saved to database with status "requested".`,
       });
+      // Automatically reset to ready for next request
+      reset();
     } catch (err) {
       toast.error('Transfer Failed', {
         description: err instanceof Error ? err.message : 'Could not save to database.',
@@ -262,10 +264,16 @@ export default function StockTransferModule() {
         } as unknown as import('@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema').SKU))}
         onSelect={(p) => {
           handleAddProduct(p);
-          // Optional: don't close modal so user can add more?
-          // For now, let's keep it open as requested ("shopping")
           toast.success(`Added ${p.product_name} to transfer list.`);
         }} 
+        onUpdateQty={(pid, qty) => {
+          const item = scannedItems.find(i => i.productId === pid);
+          if (item) updateQty(item.rfid, qty);
+        }}
+        onRemoveItem={(pid) => {
+          const item = scannedItems.find(i => i.productId === pid);
+          if (item) removeItem(item.rfid);
+        }}
       />
     </>
   );

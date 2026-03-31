@@ -121,16 +121,17 @@ export function generateStockTransferPDF(data: StockTransferPDFData): jsPDF {
     item.unit,
     String(item.qtyAvailable),
     String(item.unitQty),
+    String((item as any).allocated_quantity ?? item.unitQty),
     `PHP ${item.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
   ]);
 
   autoTable(doc, {
     startY: y,
     margin: { left: margin, right: margin },
-    head: [['No.', 'RFID', 'Product Name', 'Description', 'Brand', 'Unit', 'Qty Avail', 'Qty (Ord)', 'Total Amount']],
-    body: rows.length > 0 ? rows : [['', 'No items scanned.', '', '', '', '', '', '', '']],
+    head: [['No.', 'RFID', 'Product Name', 'Description', 'Brand', 'Unit', 'Qty Avail', 'Qty (Ord)', 'Qty (Alloc)', 'Total Amount']],
+    body: rows.length > 0 ? rows : [['', 'No items scanned.', '', '', '', '', '', '', '', '']],
     foot: rows.length > 0
-      ? [['', '', '', '', '', '', '', 'GRAND TOTAL', `PHP ${grandTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`]]
+      ? [['', '', '', '', '', '', '', '', 'GRAND TOTAL', `PHP ${grandTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`]]
       : [],
     styles: {
       fontSize: 7.5,
@@ -154,14 +155,15 @@ export function generateStockTransferPDF(data: StockTransferPDFData): jsPDF {
     },
     columnStyles: {
       0: { cellWidth: 7 },
-      1: { cellWidth: 35, fontStyle: 'bold' },
-      2: { cellWidth: 28 },
-      3: { cellWidth: 25, fontStyle: 'italic', textColor: [80, 80, 80] },
+      1: { cellWidth: 28, fontStyle: 'bold', fontSize: 6.5 },
+      2: { cellWidth: 32 },
+      3: { cellWidth: 25, fontStyle: 'italic', textColor: [80, 80, 80], fontSize: 6.5 },
       4: { cellWidth: 15 },
       5: { cellWidth: 10, halign: 'center' },
-      6: { cellWidth: 15, halign: 'right' },
-      7: { cellWidth: 15, halign: 'right', fontStyle: 'bold' },
-      8: { cellWidth: 20, halign: 'right', fontStyle: 'bold' },
+      6: { cellWidth: 12, halign: 'right' },
+      7: { cellWidth: 12, halign: 'right' },
+      8: { cellWidth: 12, halign: 'right', fontStyle: 'bold' },
+      9: { cellWidth: 25, halign: 'right', fontStyle: 'bold' },
     },
     alternateRowStyles: { fillColor: [250, 250, 252] },
     didParseCell: (data) => {

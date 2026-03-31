@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ClipboardCheck, Loader2, RefreshCcw, ChevronLeft, ChevronRight, ServerCrash } from 'lucide-react';
+import { Search, ClipboardCheck, Loader2, RefreshCcw, ChevronLeft, ChevronRight, ServerCrash, X } from 'lucide-react';
 import { useStockTransferApproval } from './hooks/useStockTransferApproval';
 import {
   AlertDialog,
@@ -56,11 +56,12 @@ export default function StockTransferApprovalModule() {
 
   const [currentPage, setCurrentPage] = React.useState(1);
   const [itemsPerPage, setItemsPerPage] = React.useState(10);
+  const [productSearch, setProductSearch] = React.useState('');
 
-  // Reset page when group changes
+  // Reset page when group or search changes
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [selectedOrderNo]);
+  }, [selectedOrderNo, productSearch]);
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'N/A';
@@ -77,12 +78,37 @@ export default function StockTransferApprovalModule() {
     }
   };
 
-  const totalItems = selectedGroup?.items.length || 0;
+  const filteredItems = React.useMemo(() => {
+    if (!selectedGroup) return [];
+    return selectedGroup.items.filter((item: any) => {
+      const product = typeof item.product_id === 'object' && item.product_id !== null ? item.product_id : null;
+      const productName = product?.product_name || `PRD-${item.product_id}`;
+      const barcode = product?.barcode || '';
+      return (
+        productName.toLowerCase().includes(productSearch.toLowerCase()) ||
+        barcode.toLowerCase().includes(productSearch.toLowerCase()) ||
+        String(item.product_id).includes(productSearch)
+      );
+    });
+  }, [selectedGroup, productSearch]);
+
+  const totalItems = filteredItems.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
-  const paginatedItems = selectedGroup?.items.slice(
+  const paginatedItems = filteredItems.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
-  ) || [];
+  );
+
+  // Dynamic Grand Total based on Allocated Quantities
+  const currentTotalAmount = React.useMemo(() => {
+    if (!selectedGroup) return 0;
+    return selectedGroup.items.reduce((sum: number, item: any) => {
+      const qty = allocatedQtys[item.id] ?? item.ordered_quantity ?? 0;
+      const unitPrice = item.ordered_quantity > 0 ? (Number(item.amount || 0) / item.ordered_quantity) : 0;
+      return sum + (qty * unitPrice);
+    }, 0);
+  }, [selectedGroup, allocatedQtys]);
+
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -165,22 +191,44 @@ export default function StockTransferApprovalModule() {
           {selectedGroup && (
             <div className="space-y-6 border rounded-xl overflow-hidden shadow-sm">
               <div className="bg-muted/30 p-4 border-b">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Source Branch</p>
-                    <p className="font-medium text-sm">{getBranchName(selectedGroup.sourceBranch)}</p>
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 flex-1">
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Source</p>
+                      <p className="font-medium text-sm truncate">{getBranchName(selectedGroup.sourceBranch)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Target</p>
+                      <p className="font-medium text-sm truncate">{getBranchName(selectedGroup.targetBranch)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Lead Date</p>
+                      <p className="font-medium text-sm whitespace-nowrap">{formatDate(selectedGroup.leadDate)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Requested</p>
+                      <p className="font-medium text-sm whitespace-nowrap">{formatDate(selectedGroup.dateRequested)}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Target Branch</p>
-                    <p className="font-medium text-sm">{getBranchName(selectedGroup.targetBranch)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Lead Date</p>
-                    <p className="font-medium text-sm">{formatDate(selectedGroup.leadDate)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Date Requested</p>
-                    <p className="font-medium text-sm">{formatDate(selectedGroup.dateRequested)}</p>
+                  
+                  <div className="w-full md:w-64 relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search products..."
+                      value={productSearch}
+                      onChange={(e) => setProductSearch(e.target.value)}
+                      className="pl-9 h-9 text-xs"
+                    />
+                    {productSearch && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                        onClick={() => setProductSearch('')}
+                      >
+                        <X className="w-3 h-3 text-muted-foreground" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -238,7 +286,9 @@ export default function StockTransferApprovalModule() {
                               min={0}
                             />
                           </TableCell>
-                          <TableCell className="text-right text-sm font-bold">₱{Number(item.amount).toLocaleString('en-PH', {minimumFractionDigits: 2})}</TableCell>
+                          <TableCell className="text-right text-sm font-bold">
+                            ₱{((allocatedQtys[item.id] ?? item.ordered_quantity ?? 0) * (item.ordered_quantity > 0 ? (Number(item.amount || 0) / item.ordered_quantity) : 0)).toLocaleString('en-PH', {minimumFractionDigits: 2})}
+                          </TableCell>
                         </TableRow>
                       );
                     })}
@@ -247,7 +297,7 @@ export default function StockTransferApprovalModule() {
                     <TableRow>
                       <TableCell colSpan={7} className="text-right font-bold text-xs uppercase tracking-wider text-muted-foreground py-4">Grand Total</TableCell>
                       <TableCell className="text-right text-base font-bold text-emerald-600 py-4">
-                        ₱{selectedGroup.items.reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}
+                        ₱{currentTotalAmount.toLocaleString('en-PH', {minimumFractionDigits: 2})}
                       </TableCell>
                     </TableRow>
                   </TableFooter>
@@ -354,11 +404,11 @@ export default function StockTransferApprovalModule() {
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button 
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                        disabled={processing}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/10"
+                        disabled={processing || fetchingAvailable || currentTotalAmount === 0}
                       >
-                        {processing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Approve (For Picking)
+                        {(processing || fetchingAvailable) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {fetchingAvailable ? 'Syncing Stock...' : 'Approve (For Picking)'}
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>

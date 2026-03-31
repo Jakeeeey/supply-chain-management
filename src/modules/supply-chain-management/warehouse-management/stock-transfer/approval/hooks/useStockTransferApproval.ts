@@ -104,7 +104,12 @@ export function useStockTransferApproval() {
         };
       }
       groups[st.order_no].items.push(st);
-      groups[st.order_no].totalAmount += Number(st.amount || 0);
+      
+      // If we have an allocated quantity, use it for the total. 
+      // Otherwise use ordered quantity (default for initial calculation)
+      const qty = st.allocated_quantity ?? st.ordered_quantity ?? 0;
+      const unitPrice = st.ordered_quantity > 0 ? (Number(st.amount || 0) / st.ordered_quantity) : 0;
+      groups[st.order_no].totalAmount += Number((qty * unitPrice).toFixed(2));
     });
     // Convert to array and sort by date encoded descending (absolute newest first)
     return Object.values(groups).sort(
@@ -214,9 +219,12 @@ export function useStockTransferApproval() {
       
       // If approved, validate allocated quantities
       if (status === 'approved') {
+        let totalAllocated = 0;
         for (const item of group.items) {
-          const allocated = allocatedQtys[item.id] || 0;
+          const allocated = allocatedQtys[item.id] ?? item.ordered_quantity ?? 0;
           const available = availableQtys[item.id] || 0;
+          totalAllocated += allocated;
+
           if (allocated > available) {
             toast.error(`Invalid Allocation`, {
               description: `Allocated quantity for ${(item.product_id as any)?.product_name || 'item'} exceeds available stock.`
@@ -224,6 +232,14 @@ export function useStockTransferApproval() {
             setProcessing(false);
             return;
           }
+        }
+
+        if (totalAllocated === 0) {
+          toast.error(`Approval Blocked`, {
+            description: `You cannot approve a transfer with zero total allocated quantity.`
+          });
+          setProcessing(false);
+          return;
         }
       }
 

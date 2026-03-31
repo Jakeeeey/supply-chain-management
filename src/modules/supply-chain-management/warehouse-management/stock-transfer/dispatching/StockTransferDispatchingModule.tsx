@@ -93,7 +93,7 @@ export default function StockTransferDispatchingModule() {
   }, [selectedOrderNo, isScanning]);
 
   const isAllScanned = selectedGroup?.items.every((i: any) => {
-    const targetQty = (i as any).allocated_quantity || i.ordered_quantity;
+    const targetQty = Math.max(0, i.allocated_quantity ?? i.ordered_quantity ?? 0);
     return i.scannedQty >= targetQty;
   });
 
@@ -234,7 +234,7 @@ export default function StockTransferDispatchingModule() {
                     let totalRequired = 0;
                     selectedGroup.items.forEach((i: any) => {
                       totalScanned += (i.scannedQty || 0);
-                      totalRequired += ((i as any).allocated_quantity || i.ordered_quantity || 0);
+                      totalRequired += Math.max(0, i.allocated_quantity ?? i.ordered_quantity ?? 0);
                     });
                     return (
                       <span className={cn("text-lg font-black", totalScanned >= totalRequired ? "text-emerald-600" : "text-foreground")}>
@@ -248,7 +248,7 @@ export default function StockTransferDispatchingModule() {
                   let totalRequired = 0;
                   selectedGroup.items.forEach((i: any) => {
                     totalScanned += (i.scannedQty || 0);
-                    totalRequired += ((i as any).allocated_quantity || i.ordered_quantity || 0);
+                    totalRequired += Math.max(0, i.allocated_quantity ?? i.ordered_quantity ?? 0);
                   });
                   const pct = totalRequired > 0 ? Math.round((totalScanned / totalRequired) * 100) : 0;
                   return (
@@ -309,7 +309,7 @@ export default function StockTransferDispatchingModule() {
                   </TableHeader>
                   <TableBody>
                     {paginatedItems.map((item: any) => {
-                      const targetQty = (item as any).allocated_quantity || item.ordered_quantity;
+                      const targetQty = Math.max(0, item.allocated_quantity ?? item.ordered_quantity ?? 0);
                       const complete = item.scannedQty >= targetQty;
                       const product = typeof item.product_id === 'object' && item.product_id !== null ? item.product_id : null;
                       const originalId = product ? (product.product_id || product.id) : item.product_id;
@@ -355,8 +355,8 @@ export default function StockTransferDispatchingModule() {
                               </span>
                             )}
                           </TableCell>
-                          <TableCell className="text-right text-sm font-semibold text-primary">
-                            ₱{Number(item.amount || 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}
+                          <TableCell className="text-right text-sm font-semibold text-primary font-mono">
+                            ₱{((item.scannedQty || 0) * (item.ordered_quantity > 0 ? (Number(item.amount || 0) / item.ordered_quantity) : 0)).toLocaleString('en-PH', {minimumFractionDigits: 2})}
                           </TableCell>
                           <TableCell className="text-right text-sm print:hidden">
                             {complete ? (
@@ -377,8 +377,11 @@ export default function StockTransferDispatchingModule() {
                   <TableFooter>
                     <TableRow className="print:border-b print:border-black bg-muted/30">
                       <TableCell colSpan={4} className="text-right font-bold text-xs uppercase tracking-wider text-muted-foreground">Total Amount</TableCell>
-                      <TableCell className="text-right text-sm font-bold text-primary">
-                        ₱{selectedGroup.items.reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}
+                      <TableCell className="text-right text-sm font-bold text-primary font-mono">
+                        ₱{selectedGroup.items.reduce((sum: number, item: any) => {
+                          const unitPrice = item.ordered_quantity > 0 ? (Number(item.amount || 0) / item.ordered_quantity) : 0;
+                          return sum + ((item.scannedQty || 0) * unitPrice);
+                        }, 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}
                       </TableCell>
                       <TableCell className="print:hidden" />
                     </TableRow>

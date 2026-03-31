@@ -11,7 +11,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Search, ClipboardList, CheckCircle2, ArrowRight, X } from 'lucide-react';
+import { Search, ClipboardList, CheckCircle2, ArrowRight, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { OrderGroup } from '../types';
 import {
   Dialog as ShadcnDialog,
@@ -46,6 +53,21 @@ export function OrderSelectionModal({
     group.orderNo.toLowerCase().includes(search.toLowerCase()) ||
     getBranchName(group.sourceBranch).toLowerCase().includes(search.toLowerCase()) ||
     getBranchName(group.targetBranch).toLowerCase().includes(search.toLowerCase())
+  );
+  
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  
+  // Reset page when search changes
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
+  
+  const totalItems = filteredGroups.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const paginatedGroups = filteredGroups.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
   );
 
   const handleSelect = (orderNo: string | null) => {
@@ -121,9 +143,9 @@ export function OrderSelectionModal({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredGroups.length === 0 ? (
+              {paginatedGroups.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-64 text-center">
+                  <TableCell colSpan={8} className="h-64 text-center">
                     <div className="flex flex-col items-center justify-center space-y-3 text-muted-foreground">
                       <ClipboardList className="w-12 h-12 opacity-20" />
                       <p className="text-lg font-medium">No requests found</p>
@@ -132,7 +154,7 @@ export function OrderSelectionModal({
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredGroups.map((group) => (
+                paginatedGroups.map((group) => (
                   <TableRow
                     key={group.orderNo}
                     className={`group cursor-pointer transition-colors hover:bg-primary/5 ${
@@ -163,6 +185,7 @@ export function OrderSelectionModal({
                           ${group.status === 'For Picking' ? 'bg-amber-100 text-amber-700 border border-amber-200' : ''}
                           ${group.status === 'Picking' ? 'bg-blue-100 text-blue-700 border border-blue-200' : ''}
                           ${group.status === 'Picked' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : ''}
+                          ${group.status === 'Requested' ? 'bg-muted text-muted-foreground border border-muted' : ''}
                         `}>
                           {group.status}
                         </span>
@@ -198,9 +221,80 @@ export function OrderSelectionModal({
           </Table>
         </div>
 
-        <div className="p-4 border-t bg-muted/10 text-[10px] text-muted-foreground flex justify-between items-center uppercase tracking-widest font-bold">
-          <span>Total Requests: {orderGroups.length}</span>
-          <span>Showing {filteredGroups.length} matching requests</span>
+        <div className="p-4 border-t bg-muted/10 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest whitespace-nowrap">
+              Rows per page
+            </div>
+            <Select
+              value={String(itemsPerPage)}
+              onValueChange={(v) => {
+                setItemsPerPage(Number(v));
+                setCurrentPage(1);
+              }}
+            >
+              <SelectTrigger className="h-8 w-[70px] text-xs font-medium border-muted-foreground/20">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[10, 20, 30, 50, 100].map((v) => (
+                  <SelectItem key={v} value={String(v)} className="text-xs">
+                    {v}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">
+               {totalItems === 0 ? 0 : Math.min(itemsPerPage * (currentPage - 1) + 1, totalItems)} to {Math.min(itemsPerPage * currentPage, totalItems)} of {totalItems} Requests
+            </div>
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(p => p - 1)}
+                className="h-8 px-3"
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" />
+                Previous
+              </Button>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  // Show pages around current page
+                  let p = i + 1;
+                  if (totalPages > 5) {
+                    if (currentPage > 3) p = currentPage - 3 + i;
+                    if (p + 5 > totalPages) p = totalPages - 4 + i;
+                  }
+                  if (p < 1 || p > totalPages) return null;
+                  return (
+                    <Button
+                      key={p}
+                      variant={currentPage === p ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPage(p)}
+                      className={`h-8 w-8 p-0 ${currentPage === p ? 'shadow-sm border-primary/30' : ''}`}
+                    >
+                      {p}
+                    </Button>
+                  );
+                })}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(p => p + 1)}
+                className="h-8 px-3"
+              >
+                Next
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
+          )}
         </div>
       </ShadcnDialogContent>
     </ShadcnDialog>

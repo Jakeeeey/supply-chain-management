@@ -7,6 +7,8 @@ export type StockTransfer = {
   lead_date: string | null;
   ordered_quantity: number;
   received_quantity: number;
+  allocated_quantity?: number;
+  scanned_quantity?: number;
   amount: number;
   status: string;
   remarks: string | null;
