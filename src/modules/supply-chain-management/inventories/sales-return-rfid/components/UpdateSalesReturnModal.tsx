@@ -492,7 +492,7 @@ export function UpdateSalesReturnModal({
           // Add as new row
           updated.push({
             ...item,
-            id: `new-${Date.now()}-${Math.random()}`, // Temp ID for new rows
+            id: `added-${Date.now()}-${Math.random()}`, // Temp ID for new rows
             product_id: item.productId,
             unitPrice: Math.round(Number(item.unitPrice || 0) * 100) / 100,
             grossAmount: Math.round(Number(item.grossAmount || 0) * 100) / 100,

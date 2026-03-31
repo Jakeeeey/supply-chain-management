@@ -372,7 +372,7 @@ export function UpdateSalesReturnModal({
             discountAmount: discAmt,
             totalAmount: Math.round((gross - discAmt) * 100) / 100,
             reason: item.reason || "",
-            returnType: item.returnType || "",
+            returnType: "", // 🟢 Force empty string to trigger validation for new items
           });
         }
       });
@@ -830,11 +830,13 @@ export function UpdateSalesReturnModal({
                                   </span>
                                 )}
                               </TableCell>
-                              {/* Return Type */}
                               <TableCell className="align-middle p-2">
                                 {canEditAll ? (
-                                  <Select value={item.returnType as string} onValueChange={(val) => { handleDetailChange(idx, "returnType", val); setReturnTypeError(false); }}>
-                                    <SelectTrigger className={`h-9 w-full text-xs bg-background ${returnTypeError && (!item.returnType || item.returnType === "") ? "border-destructive ring-1 ring-destructive/30 bg-destructive/5" : "border-border"}`}>
+                                  <Select 
+                                    value={item.returnType || ""} 
+                                    onValueChange={(val) => { handleDetailChange(idx, "returnType", val); setReturnTypeError(false); }}
+                                  >
+                                    <SelectTrigger className={`h-9 w-full text-xs bg-background transition-colors ${returnTypeError && (!item.returnType || item.returnType === "") ? "border-destructive ring-1 ring-destructive/30 bg-destructive/5 text-destructive" : "border-border focus:ring-primary"}`}>
                                       <SelectValue placeholder="Select type" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -1105,12 +1107,13 @@ export function UpdateSalesReturnModal({
                             <TableCell className="align-middle p-2">
                               {canEditAll ? (
                                 <Select
-                                  value={item.returnType as string}
-                                  onValueChange={(val) =>
-                                    handleDetailChange(idx, "returnType", val)
-                                  }
+                                  value={item.returnType || ""}
+                                  onValueChange={(val) => {
+                                    handleDetailChange(idx, "returnType", val);
+                                    setReturnTypeError(false);
+                                  }}
                                 >
-                                  <SelectTrigger className="h-9 w-full text-sm border-border bg-background">
+                                  <SelectTrigger className={`h-9 w-full text-sm bg-background transition-colors ${returnTypeError && (!item.returnType || item.returnType === "") ? "border-destructive ring-1 ring-destructive/30 bg-destructive/5 text-destructive" : "border-border focus:ring-primary"}`}>
                                     <SelectValue placeholder="Select type" />
                                   </SelectTrigger>
                                   <SelectContent>

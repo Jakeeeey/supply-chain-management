@@ -97,6 +97,8 @@ export interface Product {
   priceC?: number;
   priceD?: number;
   priceE?: number;
+  
+  parent_id?: number | null;
 }
 
 // ... rest of the file ...

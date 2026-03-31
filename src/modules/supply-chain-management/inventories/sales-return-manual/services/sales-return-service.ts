@@ -395,7 +395,7 @@ export async function fetchStatusCard(
 /**
  * Creates a new sales return (header + details).
  */
-export async function submitReturn(payload: any): Promise<any> {
+export async function submitReturn(payload: any, userId: number): Promise<any> {
   // Fetch line discounts for discount calculation
   const refsResult = await repo.getRawReferences();
   const returnTypes = (refsResult[4].data || []) as unknown as API_SalesReturnType[];
@@ -429,7 +429,7 @@ export async function submitReturn(payload: any): Promise<any> {
     return_number: generatedReturnNo,
     gross_amount: totalGross,
     discount_amount: totalDiscount,
-    created_by: 205,
+    created_by: userId,
     invoice_no: payload.invoiceNo || "",
     customer_code: payload.customer || payload.customerCode,
     salesman_id: cleanId(payload.salesmanId),
@@ -485,16 +485,19 @@ export async function submitReturn(payload: any): Promise<any> {
 /**
  * Updates an existing sales return (header + details).
  */
-export async function updateReturn(payload: {
-  returnId: number;
-  returnNo: string;
-  items: any[];
-  remarks: string;
-  invoiceNo?: string;
-  orderNo?: string;
-  appliedInvoiceId?: number;
-  isThirdParty?: boolean;
-}): Promise<any> {
+export async function updateReturn(
+  payload: {
+    returnId: number;
+    returnNo: string;
+    items: any[];
+    remarks: string;
+    invoiceNo?: string;
+    orderNo?: string;
+    appliedInvoiceId?: number;
+    isThirdParty?: boolean;
+  },
+  userId: number,
+): Promise<any> {
   // Fetch line discounts
   const refsResult = await repo.getRawReferences();
   const returnTypes = (refsResult[4].data || []) as unknown as API_SalesReturnType[];
@@ -548,13 +551,13 @@ export async function updateReturn(payload: {
         const linkId = existingLinks[0].id;
         await repo.updateJunctionLink(linkId, {
           invoice_no: payload.appliedInvoiceId,
-          linked_by: 205,
+          linked_by: userId,
         });
       } else {
         await repo.createJunctionLink({
           return_no: payload.returnId,
           invoice_no: payload.appliedInvoiceId,
-          linked_by: 205,
+          linked_by: userId,
         });
       }
     } catch {

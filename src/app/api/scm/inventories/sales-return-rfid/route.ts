@@ -19,6 +19,7 @@ import {
   updateReturn,
   updateStatus,
 } from "@/modules/supply-chain-management/inventories/sales-return-rfid/services/sales-return-service";
+import { getUserIdFromToken } from "@/lib/auth-utils";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -138,8 +139,15 @@ export async function GET(req: NextRequest) {
 // =============================================================================
 export async function POST(req: NextRequest) {
   try {
+    const token = req.cookies.get("vos_access_token")?.value;
+    const userId = getUserIdFromToken(token);
+    
+    if (!userId) {
+      return json({ error: "Unauthorized: Invalid or missing session" }, 401);
+    }
+
     const body = await req.json().catch(() => ({}));
-    const data = await submitReturn(body);
+    const data = await submitReturn(body, userId);
     return json({ data }, 201);
   } catch (error: any) {
     console.error("Sales Return RFID API POST Error:", error);
@@ -172,8 +180,15 @@ export async function PATCH(req: NextRequest) {
     }
 
     // Default: full update
+    const token = req.cookies.get("vos_access_token")?.value;
+    const userId = getUserIdFromToken(token);
+    
+    if (!userId) {
+      return json({ error: "Unauthorized: Invalid or missing session" }, 401);
+    }
+
     const body = await req.json().catch(() => ({}));
-    const data = await updateReturn(body);
+    const data = await updateReturn(body, userId);
     return json({ data });
   } catch (error: any) {
     console.error("Sales Return RFID API PATCH Error:", error);
