@@ -64,6 +64,8 @@ interface PDPCreateModalProps {
   availableOrders: SalesOrderOption[];
   isLoadingOrders: boolean;
   onFilterChange: (clusterId?: number, branchId?: number) => void;
+  initialClusterId?: number | null;
+  initialBranchId?: number | null;
   editPlan?: DispatchPlan | null;
   editDetails?: DispatchPlanDetail[];
 }
@@ -166,6 +168,8 @@ export function PDPCreateModal({
   availableOrders,
   isLoadingOrders,
   onFilterChange,
+  initialClusterId,
+  initialBranchId,
   editPlan,
   editDetails,
 }: PDPCreateModalProps) {
@@ -248,8 +252,8 @@ export function PDPCreateModal({
         if (cId) onFilterChange(cId, bId || undefined);
       } else {
         setDriverId(null);
-        setClusterId(null);
-        setBranchId(null);
+        setClusterId(initialClusterId || null);
+        setBranchId(initialBranchId || null);
         setDispatchDate(
           new Date(
             new Date().getTime() - new Date().getTimezoneOffset() * 60000,
@@ -261,6 +265,14 @@ export function PDPCreateModal({
         setVehicleId(null);
         setOrderSearch("");
         setManifestOrders([]);
+
+        // Trigger initial filter change if we have initial values
+        if (initialClusterId || initialBranchId) {
+          onFilterChange(
+            initialClusterId || undefined,
+            initialBranchId || undefined,
+          );
+        }
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -31,6 +31,7 @@ import {
 import { AddManualStopModal } from "./AddManualStopModal";
 import { AddPoStopModal } from "./AddPoStopModal";
 import { PlanDetailItem, GroupedPlanDetailItem } from "./types";
+import { groupPlanDetails } from "./utils";
 
 interface InvoiceItemsSidebarProps {
   selectedPlanIds: number[];
@@ -102,7 +103,7 @@ function DraggableGroupedStop({
                 <MapPin className="w-3 h-3 text-primary shrink-0" />
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span className="text-xs font-semibold text-foreground leading-tight truncate cursor-default">
+                    <span className="text-xs font-semibold text-foreground leading-tight truncate cursor-default" title={stop.remarks}>
                       {stop.remarks}
                     </span>
                   </TooltipTrigger>
@@ -116,7 +117,7 @@ function DraggableGroupedStop({
                 <Package className="w-3 h-3 text-amber-600 shrink-0" />
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span className="text-xs font-semibold text-foreground leading-tight truncate cursor-default">
+                    <span className="text-xs font-semibold text-foreground leading-tight truncate cursor-default" title={stop.po_no}>
                       {stop.po_no}
                     </span>
                   </TooltipTrigger>
@@ -128,7 +129,7 @@ function DraggableGroupedStop({
             ) : (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className="text-xs font-semibold text-foreground leading-tight truncate cursor-default">
+                  <span className="text-xs font-semibold text-foreground leading-tight truncate cursor-default" title={stop.customer_name}>
                     {stop.customer_name}
                   </span>
                 </TooltipTrigger>
@@ -243,45 +244,7 @@ export function InvoiceItemsSidebar({
     }),
   );
 
-  const groupedPlanDetails = useMemo(() => {
-    const grouped: GroupedPlanDetailItem[] = [];
-    const keyToGroup = new Map<string, GroupedPlanDetailItem>();
-
-    planDetails.forEach((item) => {
-      let key: string;
-      if (item.isManualStop || item.isPoStop) {
-        key = String(item.detail_id);
-      } else {
-        key = `${item.customer_name}-${item.city}`;
-      }
-
-      const existing = keyToGroup.get(key);
-      if (existing && !item.isManualStop && !item.isPoStop) {
-        existing.items.push(item);
-        existing.totalAmount += item.amount;
-      } else {
-        const newGroup: GroupedPlanDetailItem = {
-          id: key,
-          items: [item],
-          customer_name: item.customer_name,
-          city: item.city,
-          isManualStop: item.isManualStop,
-          isPoStop: item.isPoStop,
-          remarks: item.remarks,
-          distance: item.distance,
-          po_no: item.po_no,
-          totalAmount: item.amount,
-          status: item.isManualStop || item.isPoStop ? (item.status || "Not Fulfilled") : item.order_status,
-        };
-        grouped.push(newGroup);
-        if (!item.isManualStop && !item.isPoStop) {
-          keyToGroup.set(key, newGroup);
-        }
-      }
-    });
-
-    return grouped;
-  }, [planDetails]);
+  const groupedPlanDetails = useMemo(() => groupPlanDetails(planDetails), [planDetails]);
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;

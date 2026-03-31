@@ -1,12 +1,36 @@
 "use client";
 
-// 🚀 Zero-latency synth tones for warehouse feedback
-const playTone = (freq: number, type: OscillatorType, duration: number) => {
-    try {
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        if (!AudioContextClass) return; // Fail gracefully on unsupported browsers
+let audioCtx: AudioContext | null = null;
 
-        const audioCtx = new AudioContextClass();
+// Function to initialize AudioContext on first user interaction
+const initAudioContext = () => {
+    if (!audioCtx) {
+        try {
+            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+            if (AudioContextClass) {
+                audioCtx = new AudioContextClass();
+            }
+        } catch (e) {
+            console.error("Failed to initialize AudioContext:", e);
+        }
+    }
+};
+
+// Listen for a user interaction to initialize the AudioContext
+if (typeof window !== "undefined") {
+    document.addEventListener("click", initAudioContext, { once: true });
+    document.addEventListener("keydown", initAudioContext, { once: true });
+    document.addEventListener("touchstart", initAudioContext, { once: true });
+}
+
+// Zero-latency synth tones for warehouse feedback
+const playTone = (freq: number, type: OscillatorType, duration: number) => {
+    if (!audioCtx) {
+        initAudioContext(); // Attempt to initialize if not already
+        if (!audioCtx) return; // If still null, audio context is not available
+    }
+
+    try {
         const oscillator = audioCtx.createOscillator();
         const gainNode = audioCtx.createGain();
 
@@ -22,6 +46,7 @@ const playTone = (freq: number, type: OscillatorType, duration: number) => {
         oscillator.start();
         oscillator.stop(audioCtx.currentTime + duration);
     } catch (e) {
+        console.warn("Audio playback error:", e);
         // Ignore audio errors (e.g., if user hasn't interacted with document yet)
     }
 };
