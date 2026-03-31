@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { useDriverManagement } from "./hooks/useDriverManagement";
 import { DriverTable } from "./components/DriverTable";
 import { DriverModal } from "./components/DriverModal";
-<<<<<<< HEAD
 import {
     Select,
     SelectContent,
@@ -16,10 +15,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-=======
-import { LegacyCombobox as Combobox } from "@/components/ui/legacy-combobox";
-import { ComboboxOption } from "@/components/ui/combobox";
->>>>>>> master
 import { toast } from "sonner";
 import type { DriverWithDetails } from "./types";
 
