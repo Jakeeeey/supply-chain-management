@@ -31,7 +31,8 @@ export default function ActivePickingExecution({
     const pickingState = useActivePicking({ batch, currentUserId });
 
     return (
-        <div className="fixed inset-0 z-50 bg-background flex flex-col overflow-hidden animate-in zoom-in-95 duration-300 relative">
+        // 🚀 Sleeker, native-app style entrance animation
+        <div className="fixed inset-0 z-50 bg-background flex flex-col animate-in fade-in zoom-in-[0.98] duration-300">
             <ActivePickingHeader
                 batchNo={batch.consolidatorNo}
                 branchName={batch.branchName}
@@ -44,7 +45,7 @@ export default function ActivePickingExecution({
                 onBatchComplete={onBatchComplete}
             />
 
-            <div className="flex-1 min-h-0 flex overflow-hidden">
+            <div className="flex-1 min-h-0 flex overflow-hidden bg-muted/10">
                 <ActivePickingGroupedList
                     cldtoNo={batch.consolidatorNo}
                     groupedDetails={pickingState.groupedDetails}
@@ -60,23 +61,23 @@ export default function ActivePickingExecution({
                 />
             </div>
 
-            {/* 🚀 MASSIVE FLOATING ACTION BUTTON FOR MANUAL ENTRY */}
+            {/* 🚀 MODERNIZED ENTERPRISE FLOATING ACTION BUTTON */}
             <AnimatePresence>
                 {pickingState.activeDetailId && !pickingState.isBatchComplete && (
                     <motion.div
-                        initial={{ opacity: 0, scale: 0.5, y: 40 }}
+                        initial={{ opacity: 0, scale: 0.8, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.5, y: 40 }}
-                        transition={{ type: "spring", bounce: 0.5, duration: 0.4 }}
-                        // Positioned bottom-right. Adjust 'bottom-24' if it overlaps your global progress footer!
-                        className="fixed bottom-24 right-4 md:bottom-8 md:right-8 z-[60]"
+                        exit={{ opacity: 0, scale: 0.8, y: 20 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                        // 🚀 Perfectly anchors to the split-screen boundary on desktop, hovers above sticky footer on mobile
+                        className="fixed bottom-24 right-6 md:bottom-28 md:right-8 lg:right-[calc(25%+2rem)] xl:right-[calc(25%+2rem)] z-[60]"
                     >
                         <Button
                             size="lg"
                             onClick={() => pickingState.setIsManualModalOpen(true)}
-                            className="h-16 w-16 md:h-16 md:w-auto md:px-8 rounded-full shadow-[0_10px_40px_-10px_rgba(59,130,246,0.7)] bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-3 active:scale-90 transition-transform"
+                            className="h-16 w-16 md:h-16 md:w-auto md:px-8 rounded-full ring-4 ring-background shadow-2xl shadow-blue-500/40 bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-3 transition-all hover:scale-105 active:scale-95"
                         >
-                            <Keyboard className="h-7 w-7 md:h-6 md:w-6" />
+                            <Keyboard className="h-6 w-6 md:h-6 md:w-6" />
                             <span className="hidden md:inline font-black uppercase tracking-widest text-sm">
                                 Manual Entry
                             </span>

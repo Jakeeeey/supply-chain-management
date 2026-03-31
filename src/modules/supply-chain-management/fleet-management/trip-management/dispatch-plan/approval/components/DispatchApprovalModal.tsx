@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from "react"
 import {
     MapPin, Truck, Package, Users, Wallet, FileText,
-    Loader2, Download, AlertTriangle, X, CheckCircle2, Boxes, Receipt
+    Loader2, Download, AlertTriangle, CheckCircle2, Boxes, Receipt
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
