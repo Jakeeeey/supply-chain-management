@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -23,21 +23,24 @@ interface Props {
 export function ManualOverrideModal({
                                         isOpen, onClose, onSubmit, manualQuantity, setManualQuantity, isScanning, activeDetail
                                     }: Props) {
-    const supplier = activeDetail?.supplierName || "UNASSIGNED";
-    const remainingQty = (activeDetail?.orderedQuantity || 0) - (activeDetail?.pickedQuantity || 0);
+    const { supplier, remainingQty } = useMemo(() => {
+        const s = activeDetail?.supplierName || "UNASSIGNED";
+        const r = (activeDetail?.orderedQuantity || 0) - (activeDetail?.pickedQuantity || 0);
+        return { supplier: s, remainingQty: r };
+    }, [activeDetail]);
+
     const isMaxedOut = manualQuantity === remainingQty;
 
-    // Reset input when modal opens
     useEffect(() => {
-        if (isOpen) setManualQuantity("");
+        if (isOpen) {
+            setManualQuantity("");
+        }
     }, [isOpen, setManualQuantity]);
 
-    // Custom Numpad Handlers
     const handleNumPress = (num: number) => {
         const current = manualQuantity === "" ? "" : manualQuantity.toString();
         const nextVal = Number(current + num);
 
-        // Auto-cap at remaining quantity
         if (nextVal > remainingQty) {
             setManualQuantity(remainingQty);
         } else {
@@ -47,8 +50,11 @@ export function ManualOverrideModal({
 
     const handleDelete = () => {
         const current = manualQuantity.toString();
-        if (current.length <= 1) setManualQuantity("");
-        else setManualQuantity(Number(current.slice(0, -1)));
+        if (current.length <= 1) {
+            setManualQuantity("");
+        } else {
+            setManualQuantity(Number(current.slice(0, -1)));
+        }
     };
 
     const handleQuickAdd = (amount: number) => {
@@ -69,7 +75,6 @@ export function ManualOverrideModal({
                     </DialogTitle>
                 </DialogHeader>
 
-                {/* ITEM INFO BANNER */}
                 {activeDetail && (
                     <div className="bg-muted/40 p-3 rounded-xl border border-border/50 flex flex-col gap-1.5 shadow-inner">
                         <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex flex-wrap gap-x-1.5">
@@ -99,11 +104,10 @@ export function ManualOverrideModal({
                 )}
 
                 <div className="flex flex-col gap-4 py-2">
-                    {/* INPUT DISPLAY */}
                     <Input
                         type="number"
                         autoFocus
-                        inputMode="none" // 🚀 MAGIC: Prevents native touch keyboards from popping up!
+                        inputMode="none"
                         disabled={isScanning}
                         placeholder={`Max: ${remainingQty}`}
                         className={cn(
@@ -115,8 +119,9 @@ export function ManualOverrideModal({
                         value={manualQuantity}
                         onChange={(e) => {
                             const val = e.target.value;
-                            if (val === "") setManualQuantity("");
-                            else {
+                            if (val === "") {
+                                setManualQuantity("");
+                            } else {
                                 const num = Number(val);
                                 setManualQuantity(num > remainingQty ? remainingQty : num);
                             }
@@ -124,9 +129,7 @@ export function ManualOverrideModal({
                         onKeyDown={(e) => e.key === 'Enter' && manualQuantity !== "" && onSubmit()}
                     />
 
-                    {/* TOUCH NUMPAD & QUICK ACTIONS */}
                     <div className="flex gap-3">
-                        {/* 1-9 Numpad */}
                         <div className="grid grid-cols-3 gap-2 flex-1">
                             {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
                                 <Button
@@ -165,7 +168,6 @@ export function ManualOverrideModal({
                             </Button>
                         </div>
 
-                        {/* Quick Action Side Column */}
                         <div className="flex flex-col gap-2 w-[80px]">
                             <Button
                                 variant="secondary"

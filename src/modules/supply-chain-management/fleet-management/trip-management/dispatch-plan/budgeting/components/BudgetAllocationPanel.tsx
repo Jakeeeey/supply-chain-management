@@ -31,8 +31,7 @@ import {
   Trash2,
   Truck,
   Users,
-  Wallet,
-  X,
+  Wallet
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
@@ -545,7 +544,7 @@ export function BudgetAllocationPanel({
                     <thead>
                       <tr className="border-b border-border/40 bg-muted/5">
                         <th className="px-3 py-2 text-[10px] font-bold uppercase text-muted-foreground tracking-wider">
-                          Stop Name
+                          Customer
                         </th>
                         <th className="px-3 py-2 text-[10px] font-bold uppercase text-muted-foreground tracking-wider hidden sm:table-cell">
                           Details / Address

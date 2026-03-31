@@ -73,7 +73,7 @@ export function StockAdjustmentList({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40 font-bold border-border">
-              <DropdownMenuItem onClick={() => filters.setSearch("")} className={!filters.search ? "bg-accent text-accent-foreground" : ""}>All Types</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => filters.setType(undefined)} className={!filters.type ? "bg-accent text-accent-foreground" : ""}>All Types</DropdownMenuItem>
               <DropdownMenuItem onClick={() => filters.setType("IN")} className={filters.type === "IN" ? "bg-accent text-accent-foreground" : ""}>Stock In</DropdownMenuItem>
               <DropdownMenuItem onClick={() => filters.setType("OUT")} className={filters.type === "OUT" ? "bg-accent text-accent-foreground" : ""}>Stock Out</DropdownMenuItem>
             </DropdownMenuContent>

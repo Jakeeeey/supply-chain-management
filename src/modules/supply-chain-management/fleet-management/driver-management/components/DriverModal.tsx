@@ -8,10 +8,22 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { LegacyCombobox as Combobox } from "@/components/ui/legacy-combobox";
-import { ComboboxOption } from "@/components/ui/combobox";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command";
 import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
+import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { saveDriver, updateDriver } from "../providers/fetchProvider";
 import type { DriverWithDetails, User, Branch } from "../types";
@@ -40,6 +52,10 @@ export function DriverModal({
     const [selectedGoodBranchId, setSelectedGoodBranchId] = React.useState<string>("");
     const [selectedBadBranchId, setSelectedBadBranchId] = React.useState<string>("");
 
+    const [userOpen, setUserOpen] = React.useState(false);
+    const [goodBranchOpen, setGoodBranchOpen] = React.useState(false);
+    const [badBranchOpen, setBadBranchOpen] = React.useState(false);
+
     // Initialize form with editing driver data
     React.useEffect(() => {
         if (editingDriver) {
@@ -63,8 +79,8 @@ export function DriverModal({
         return branches.filter((b) => b.isReturn === 1 || b.isReturn === true);
     }, [branches]);
 
-    // Memoize user options for combobox - exclude already assigned users unless editing
-    const userOptions = React.useMemo((): ComboboxOption[] => {
+    // Memoize user options - exclude already assigned users unless editing
+    const userOptions = React.useMemo((): { value: string; label: string }[] => {
         const assignedUserIds = new Set(drivers.map((d) => d.user_id));
         return users
             .filter((user) => !assignedUserIds.has(user.user_id) || (editingDriver?.user_id === user.user_id))
@@ -74,16 +90,16 @@ export function DriverModal({
             }));
     }, [users, drivers, editingDriver?.user_id]);
 
-    // Memoize good branch options for combobox
-    const goodBranchOptions = React.useMemo((): ComboboxOption[] => {
+    // Memoize good branch options
+    const goodBranchOptions = React.useMemo((): { value: string; label: string }[] => {
         return goodBranches.map((branch) => ({
             value: branch.id.toString(),
             label: branch.branch_name,
         }));
     }, [goodBranches]);
 
-    // Memoize bad branch options for combobox
-    const badBranchOptions = React.useMemo((): ComboboxOption[] => {
+    // Memoize bad branch options
+    const badBranchOptions = React.useMemo((): { value: string; label: string }[] => {
         return [
             { value: "none", label: "None (Optional)" },
             ...badBranches.map((branch) => ({
@@ -146,14 +162,44 @@ export function DriverModal({
                         <label className="text-sm font-bold uppercase tracking-wider text-foreground/80">
                             Select Driver*
                         </label>
-                        <Combobox
-                            options={userOptions}
-                            value={selectedUserId}
-                            onValueChange={setSelectedUserId}
-                            placeholder="Search drivers..."
-                            emptyMessage="No drivers found."
-                            className="w-full h-10 rounded-lg border-input bg-background text-foreground font-medium focus:ring-2 focus:ring-ring transition-all"
-                        />
+                        <Popover open={userOpen} onOpenChange={setUserOpen}>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    role="combobox"
+                                    aria-expanded={userOpen}
+                                    className="w-full h-10 justify-between rounded-lg border-input bg-background text-foreground font-medium focus:ring-2 focus:ring-ring transition-all"
+                                >
+                                    {selectedUserId
+                                        ? userOptions.find((opt) => opt.value === selectedUserId)?.label
+                                        : "Search drivers..."}
+                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                                <Command>
+                                    <CommandInput placeholder="Search drivers..." />
+                                    <CommandList>
+                                        <CommandEmpty>No drivers found.</CommandEmpty>
+                                        <CommandGroup>
+                                            {userOptions.map((opt) => (
+                                                <CommandItem
+                                                    key={opt.value}
+                                                    value={opt.label}
+                                                    onSelect={() => {
+                                                        setSelectedUserId(opt.value);
+                                                        setUserOpen(false);
+                                                    }}
+                                                >
+                                                    <Check className={cn("mr-2 h-4 w-4", selectedUserId === opt.value ? "opacity-100" : "opacity-0")} />
+                                                    {opt.label}
+                                                </CommandItem>
+                                            ))}
+                                        </CommandGroup>
+                                    </CommandList>
+                                </Command>
+                            </PopoverContent>
+                        </Popover>
                         <p className="text-xs text-muted-foreground/60 font-medium">Select the user to assign as driver</p>
                     </div>
 
@@ -162,14 +208,44 @@ export function DriverModal({
                         <label className="text-sm font-bold uppercase tracking-wider text-foreground/80">
                             Good Branch*
                         </label>
-                        <Combobox
-                            options={goodBranchOptions}
-                            value={selectedGoodBranchId}
-                            onValueChange={setSelectedGoodBranchId}
-                            placeholder="Search branches..."
-                            emptyMessage="No branches found."
-                            className="w-full h-10 rounded-lg border-input bg-background text-foreground font-medium focus:ring-2 focus:ring-ring transition-all"
-                        />
+                        <Popover open={goodBranchOpen} onOpenChange={setGoodBranchOpen}>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    role="combobox"
+                                    aria-expanded={goodBranchOpen}
+                                    className="w-full h-10 justify-between rounded-lg border-input bg-background text-foreground font-medium focus:ring-2 focus:ring-ring transition-all"
+                                >
+                                    {selectedGoodBranchId
+                                        ? goodBranchOptions.find((opt) => opt.value === selectedGoodBranchId)?.label
+                                        : "Search branches..."}
+                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                                <Command>
+                                    <CommandInput placeholder="Search branches..." />
+                                    <CommandList>
+                                        <CommandEmpty>No branches found.</CommandEmpty>
+                                        <CommandGroup>
+                                            {goodBranchOptions.map((opt) => (
+                                                <CommandItem
+                                                    key={opt.value}
+                                                    value={opt.label}
+                                                    onSelect={() => {
+                                                        setSelectedGoodBranchId(opt.value);
+                                                        setGoodBranchOpen(false);
+                                                    }}
+                                                >
+                                                    <Check className={cn("mr-2 h-4 w-4", selectedGoodBranchId === opt.value ? "opacity-100" : "opacity-0")} />
+                                                    {opt.label}
+                                                </CommandItem>
+                                            ))}
+                                        </CommandGroup>
+                                    </CommandList>
+                                </Command>
+                            </PopoverContent>
+                        </Popover>
                         <p className="text-xs text-muted-foreground/60 font-medium">
                             {goodBranches.length} good branch(es) available
                         </p>
@@ -180,14 +256,44 @@ export function DriverModal({
                         <label className="text-sm font-bold uppercase tracking-wider text-foreground/80">
                             Bad Branch
                         </label>
-                        <Combobox
-                            options={badBranchOptions}
-                            value={selectedBadBranchId}
-                            onValueChange={setSelectedBadBranchId}
-                            placeholder="Search branches..."
-                            emptyMessage="No branches found."
-                            className="w-full h-10 rounded-lg border-input bg-background text-foreground font-medium focus:ring-2 focus:ring-ring transition-all"
-                        />
+                        <Popover open={badBranchOpen} onOpenChange={setBadBranchOpen}>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    role="combobox"
+                                    aria-expanded={badBranchOpen}
+                                    className="w-full h-10 justify-between rounded-lg border-input bg-background text-foreground font-medium focus:ring-2 focus:ring-ring transition-all"
+                                >
+                                    {selectedBadBranchId && selectedBadBranchId !== "none"
+                                        ? badBranchOptions.find((opt) => opt.value === selectedBadBranchId)?.label
+                                        : "None (Optional)"}
+                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                                <Command>
+                                    <CommandInput placeholder="Search branches..." />
+                                    <CommandList>
+                                        <CommandEmpty>No branches found.</CommandEmpty>
+                                        <CommandGroup>
+                                            {badBranchOptions.map((opt) => (
+                                                <CommandItem
+                                                    key={opt.value}
+                                                    value={opt.label}
+                                                    onSelect={() => {
+                                                        setSelectedBadBranchId(opt.value);
+                                                        setBadBranchOpen(false);
+                                                    }}
+                                                >
+                                                    <Check className={cn("mr-2 h-4 w-4", selectedBadBranchId === opt.value ? "opacity-100" : "opacity-0")} />
+                                                    {opt.label}
+                                                </CommandItem>
+                                            ))}
+                                        </CommandGroup>
+                                    </CommandList>
+                                </Command>
+                            </PopoverContent>
+                        </Popover>
                         <p className="text-xs text-muted-foreground/60 font-medium">
                             {badBranches.length} bad branch(es) available (Optional)
                         </p>

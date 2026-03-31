@@ -23,7 +23,8 @@ export const dispatchPlanQueryService = {
     search?: string,
     clusterId?: number,
     branchId?: number,
-    dispatchDate?: string,
+    startDate?: string,
+    endDate?: string,
   ): Promise<PaginatedDispatchPlans> {
     const params: Record<string, any> = {
       fields: "*",
@@ -49,8 +50,15 @@ export const dispatchPlanQueryService = {
       params["filter[branch_id][_eq]"] = branchId;
     }
 
-    if (dispatchDate) {
-      params["filter[dispatch_date][_eq]"] = dispatchDate;
+    if (startDate && endDate) {
+      params["filter[dispatch_date][_between]"] = [
+        `${startDate}T00:00:00`,
+        `${endDate}T23:59:59`,
+      ];
+    } else if (startDate) {
+      params["filter[dispatch_date][_gte]"] = `${startDate}T00:00:00`;
+    } else if (endDate) {
+      params["filter[dispatch_date][_lte]"] = `${endDate}T23:59:59`;
     }
 
     const result = await fetchItems<DispatchPlan>(
