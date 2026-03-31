@@ -17,6 +17,13 @@ import {
     PaginationNext,
     PaginationPrevious,
 } from "@/components/ui/pagination";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 type Props = {
     items: TaggablePOListItem[];
@@ -24,7 +31,8 @@ type Props = {
     onTagItems: (id: string) => void;
 };
 
-const PAGE_SIZE = 3;
+// ✅ default to 5 per page
+const DEFAULT_PAGE_SIZE = 5;
 
 function pct(tagged: number, total: number) {
     if (!total) return 0;
@@ -54,10 +62,11 @@ function getPaginationModel(totalPages: number, currentPage: number) {
 
 export default function PurchaseOrderList({ items, loading, onTagItems }: Props) {
     const [page, setPage] = React.useState(1);
+    const [pageSize, setPageSize] = React.useState(DEFAULT_PAGE_SIZE);
 
     const totalPages = React.useMemo(
-        () => Math.max(1, Math.ceil((items?.length ?? 0) / PAGE_SIZE)),
-        [items?.length]
+        () => Math.max(1, Math.ceil((items?.length ?? 0) / pageSize)),
+        [items?.length, pageSize]
     );
 
     React.useEffect(() => {
@@ -65,9 +74,9 @@ export default function PurchaseOrderList({ items, loading, onTagItems }: Props)
     }, [totalPages, items?.length]);
 
     const paginated = React.useMemo(() => {
-        const start = (page - 1) * PAGE_SIZE;
-        return (items ?? []).slice(start, start + PAGE_SIZE);
-    }, [items, page]);
+        const start = (page - 1) * pageSize;
+        return (items ?? []).slice(start, start + pageSize);
+    }, [items, page, pageSize]);
 
     const paginationModel = React.useMemo(
         () => getPaginationModel(totalPages, page),
@@ -86,7 +95,7 @@ export default function PurchaseOrderList({ items, loading, onTagItems }: Props)
         <div className="min-w-0 space-y-3">
             {loading ? (
                 <div className="space-y-3">
-                    {Array.from({ length: PAGE_SIZE }).map((_, i) => (
+                    {Array.from({ length: pageSize }).map((_, i) => (
                         <div
                             key={i}
                             className="rounded-xl border border-border bg-background shadow-sm p-4"
@@ -183,66 +192,99 @@ export default function PurchaseOrderList({ items, loading, onTagItems }: Props)
                         );
                     })}
 
-                    {/* ✅ Pagination */}
-                    {items.length > PAGE_SIZE ? (
-                        <div className="pt-1">
-                            <Pagination>
-                                <PaginationContent>
-                                    <PaginationItem>
-                                        <PaginationPrevious
-                                            href="#"
-                                            aria-disabled={page === 1}
-                                            className={cn(page === 1 ? "pointer-events-none opacity-50" : "")}
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                if (page === 1) return;
-                                                onPrev();
-                                            }}
-                                        />
-                                    </PaginationItem>
+                    {/* ✅ Pagination & Rows per page */}
+                    {items.length > 0 ? (
+                        <div className="pt-4 border-t border-border/40 space-y-4">
+                            <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-black uppercase text-muted-foreground whitespace-nowrap">
+                                        Rows per page
+                                    </span>
+                                    <Select
+                                        value={String(pageSize)}
+                                        onValueChange={(v) => {
+                                            setPageSize(Number(v));
+                                            setPage(1);
+                                        }}
+                                        disabled={loading}
+                                    >
+                                        <SelectTrigger className="h-8 w-[70px] text-[10px] font-bold rounded-xl border-border bg-background">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {[5, 10, 20, 50].map((size) => (
+                                                <SelectItem key={size} value={String(size)} className="text-[10px] font-bold">
+                                                    {size}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
 
-                                    {paginationModel.map((it, idx) => {
-                                        if (it === "ellipsis") {
+                                <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">
+                                    {page} of {totalPages}
+                                </div>
+                            </div>
+
+                            {totalPages > 1 && (
+                                <Pagination>
+                                    <PaginationContent>
+                                        <PaginationItem>
+                                            <PaginationPrevious
+                                                href="#"
+                                                aria-disabled={page === 1}
+                                                className={cn(page === 1 ? "pointer-events-none opacity-50" : "")}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (page === 1) return;
+                                                    onPrev();
+                                                }}
+                                            />
+                                        </PaginationItem>
+
+                                        {paginationModel.map((it, idx) => {
+                                            if (it === "ellipsis") {
+                                                return (
+                                                    <PaginationItem key={`el-${idx}`}>
+                                                        <PaginationEllipsis />
+                                                    </PaginationItem>
+                                                );
+                                            }
+
+                                            const p = it;
+                                            const active = p === page;
+
                                             return (
-                                                <PaginationItem key={`el-${idx}`}>
-                                                    <PaginationEllipsis />
+                                                <PaginationItem key={p}>
+                                                    <PaginationLink
+                                                        href="#"
+                                                        isActive={active}
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            goToPage(p);
+                                                        }}
+                                                    >
+                                                        {p}
+                                                    </PaginationLink>
                                                 </PaginationItem>
                                             );
-                                        }
+                                        })}
 
-                                        const p = it;
-                                        const active = p === page;
-
-                                        return (
-                                            <PaginationItem key={p}>
-                                                <PaginationLink
-                                                    href="#"
-                                                    isActive={active}
-                                                    onClick={(e) => {
-                                                        e.preventDefault();
-                                                        goToPage(p);
-                                                    }}
-                                                >
-                                                    {p}
-                                                </PaginationLink>
-                                            </PaginationItem>
-                                        );
-                                    })}
-
-                                    <PaginationItem>
-                                        <PaginationNext
-                                            href="#"
-                                            aria-disabled={page >= totalPages}
-                                            className={cn(page >= totalPages ? "pointer-events-none opacity-50" : "")}
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                if (page >= totalPages) return;
-                                                onNext();
-                                            }}
-                                        />
-                                    </PaginationItem>
-                                </PaginationContent>
-                            </Pagination>
+                                        <PaginationItem>
+                                            <PaginationNext
+                                                href="#"
+                                                aria-disabled={page >= totalPages}
+                                                className={cn(page >= totalPages ? "pointer-events-none opacity-50" : "")}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (page >= totalPages) return;
+                                                    onNext();
+                                                }}
+                                            />
+                                        </PaginationItem>
+                                    </PaginationContent>
+                                </Pagination>
+                            )}
                         </div>
                     ) : null}
                 </>

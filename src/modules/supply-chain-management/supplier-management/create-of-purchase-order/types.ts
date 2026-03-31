@@ -29,12 +29,12 @@ export type Product = {
     brand: string;
     category: string;
 
-    // ✅ price is now "PRICE PER BOX"
+    // ✅ Price per ORDERING UNIT
     price: number;
     raw?: unknown;
-    // ✅ Always BOX in UI
-    uom: string; // "BOX"
-    uomId?: number; // 11
+    // ✅ Actual product UOM name/shortcut
+    uom: string; 
+    uomId?: number; 
 
     // For audit/debug
     baseUnitPrice?: number; // original price_per_unit
@@ -49,8 +49,8 @@ export type Product = {
 };
 
 export type CartItem = Product & {
-    orderQty: number;      // ✅ qty in BOXES
-    selectedUom: string;   // "BOX"
+    orderQty: number;      // ✅ qty in actual units
+    selectedUom: string;   
     brand: string;
 };
 

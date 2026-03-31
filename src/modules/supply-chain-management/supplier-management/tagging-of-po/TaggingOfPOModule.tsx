@@ -3,6 +3,8 @@
 
 import * as React from "react";
 import { toast } from "sonner";
+import { Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 
 import type { TaggablePOListItem, TaggingPODetail } from "./types";
 import * as provider from "./providers/taggingOfPoProvider";
@@ -65,7 +67,21 @@ export default function TaggingOfPOModule() {
     const [loadingDetail, setLoadingDetail] = React.useState(false);
     const [error, setError] = React.useState("");
 
+    const [searchQuery, setSearchQuery] = React.useState("");
     const [pos, setPos] = React.useState<TaggablePOListItem[]>([]);
+    
+    // ✅ Filtered list based on search
+    const filteredPos = React.useMemo(() => {
+        const q = searchQuery.trim().toLowerCase();
+        if (!q) return pos;
+        return pos.filter((x) => {
+            const poNo = String(x?.poNumber ?? "").toLowerCase();
+            const sid = String(x?.supplierName ?? "").toLowerCase();
+            const stat = String(x?.status ?? "").toLowerCase();
+            return poNo.includes(q) || sid.includes(q) || stat.includes(q);
+        });
+    }, [pos, searchQuery]);
+
     const [selectedId, setSelectedId] = React.useState<string | null>(null);
     const [detail, setDetail] = React.useState<TaggingPODetail | null>(null);
 
@@ -85,7 +101,10 @@ export default function TaggingOfPOModule() {
             const data = await provider.fetchTaggablePOs();
             setPos(data);
         } catch (e: unknown) {
-            setError(String((e as Error)?.message ?? e));
+            const msg = String((e as Error)?.message ?? e);
+            if (msg.trim().toLowerCase() !== "fetch failed") {
+                setError(msg);
+            }
         } finally {
             setLoadingList(false);
         }
@@ -104,7 +123,10 @@ export default function TaggingOfPOModule() {
             setDetail(d);
             detailRef.current = d;
         } catch (e: unknown) {
-            setError(String((e as Error)?.message ?? e));
+            const msg = String((e as Error)?.message ?? e);
+            if (msg.trim().toLowerCase() !== "fetch failed") {
+                setError(msg);
+            }
         } finally {
             setLoadingDetail(false);
         }
@@ -304,14 +326,26 @@ export default function TaggingOfPOModule() {
 
                 {!selectedId ? (
                     <div className="space-y-3">
-                        <div className="space-y-1">
-                            <div className="text-2xl font-black">Tagging Of Purchase Orders</div>
-                            <div className="text-sm text-muted-foreground">
-                                Select a Purchase Order to begin the inbound process.
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div className="space-y-1">
+                                <div className="text-2xl font-black">Tagging Of Purchase Orders</div>
+                                <div className="text-sm text-muted-foreground">
+                                    Select a Purchase Order to begin the inbound process.
+                                </div>
+                            </div>
+
+                            <div className="relative w-full sm:w-[350px]">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search PO#, Supplier, or Status..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="pl-9 h-11 rounded-xl shadow-sm border-border bg-background"
+                                />
                             </div>
                         </div>
 
-                        <PurchaseOrderList items={pos} loading={loadingList} onTagItems={onTagItems} />
+                        <PurchaseOrderList items={filteredPos} loading={loadingList} onTagItems={onTagItems} />
                     </div>
                 ) : (
                     <ProductTaggingPanel

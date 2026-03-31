@@ -425,7 +425,7 @@ export function PurchaseOrderSummary(props: {
                                                 <div className="flex flex-col items-center">
                                                     <span className="text-foreground font-black text-sm tracking-tighter">{item.orderQty}</span>
                                                     <span className="text-[8px] bg-secondary text-secondary-foreground px-1.5 rounded font-black uppercase tracking-widest mt-0.5">
-                                                        {item.selectedUom || "BOX"}
+                                                        {item.uom}
                                                     </span>
                                                 </div>
                                             </td>

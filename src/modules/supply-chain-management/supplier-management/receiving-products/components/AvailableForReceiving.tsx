@@ -9,6 +9,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { RefreshCw, Package, ChevronRight, ChevronLeft } from "lucide-react";
 import { useReceivingProducts } from "../providers/ReceivingProductsProvider";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 function statusBadge(status: string) {
     const s = String(status || "").toUpperCase();
@@ -35,8 +42,8 @@ export function AvailableForReceiving() {
 
     const [q, setQ] = React.useState("");
 
-    // ✅ pagination state (3 or 5 only)
-    const [pageSize, setPageSize] = React.useState<3 | 5>(3);
+    // ✅ pagination state (dynamic)
+    const [pageSize, setPageSize] = React.useState<number>(5);
     const [page, setPage] = React.useState(1);
 
     const filtered = React.useMemo(() => {
@@ -124,29 +131,23 @@ export function AvailableForReceiving() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <div className="text-xs text-muted-foreground">Per page:</div>
-                    <div className="flex items-center gap-1">
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant={pageSize === 3 ? "default" : "outline"}
-                            className="h-8 px-3"
-                            onClick={() => setPageSize(3)}
-                            disabled={listLoading}
-                        >
-                            3
-                        </Button>
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant={pageSize === 5 ? "default" : "outline"}
-                            className="h-8 px-3"
-                            onClick={() => setPageSize(5)}
-                            disabled={listLoading}
-                        >
-                            5
-                        </Button>
-                    </div>
+                    <div className="text-[10px] font-black uppercase text-muted-foreground whitespace-nowrap">Per page:</div>
+                    <Select
+                        value={String(pageSize)}
+                        onValueChange={(v) => setPageSize(Number(v))}
+                        disabled={listLoading}
+                    >
+                        <SelectTrigger className="h-8 w-[70px] text-[10px] font-bold rounded-xl border-border bg-background">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {[5, 10, 20, 50].map((size) => (
+                                <SelectItem key={size} value={String(size)} className="text-[10px] font-bold">
+                                    {size}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 </div>
             </div>
 

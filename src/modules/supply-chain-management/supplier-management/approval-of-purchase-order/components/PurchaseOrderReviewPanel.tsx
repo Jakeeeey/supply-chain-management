@@ -653,42 +653,58 @@ export default function PurchaseOrderReviewPanel(props: {
                                         Payment Term
                                     </div>
 
-                                    <div className="flex items-center gap-2">
-                                        <Select value={paymentTerm} onValueChange={(v) => setPaymentTerm(v as PaymentTerm)}>
-                                            <SelectTrigger className="h-10 w-[220px] rounded-xl">
-                                                <SelectValue placeholder="Select payment term" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="cash_with_order">Cash With Order</SelectItem>
-                                                <SelectItem value="cash_on_delivery">Cash On Delivery</SelectItem>
-                                                <SelectItem value="terms">Terms</SelectItem>
-                                            </SelectContent>
-                                        </Select>
+                                    <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground">
+                                        <div className="flex flex-wrap items-center gap-1.5 bg-muted/40 p-1 rounded-xl border border-border/40">
+                                            {[
+                                                { id: "cash_with_order", label: "Cash With Order" },
+                                                { id: "cash_on_delivery", label: "Cash On Delivery" },
+                                                { id: "terms", label: "Terms" },
+                                            ].map((term) => {
+                                                const active = paymentTerm === term.id;
+                                                return (
+                                                    <button
+                                                        key={term.id}
+                                                        type="button"
+                                                        onClick={() => setPaymentTerm(term.id as PaymentTerm)}
+                                                        className={cn(
+                                                            "px-3 h-8 text-[10px] font-black uppercase tracking-tight rounded-lg transition-all duration-200",
+                                                            active
+                                                                ? "bg-primary text-primary-foreground shadow-sm scale-[1.02]"
+                                                                : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                                                        )}
+                                                    >
+                                                        {term.label}
+                                                    </button>
+                                                );
+                                            })}
 
-                                        {paymentTerm === "terms" ? (
-                                            <div className="flex items-center gap-2">
-                                                <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                                                    Days
+                                            {paymentTerm === "terms" ? (
+                                                <div className="flex items-center gap-2 ml-2 pl-2 border-l border-border/50">
+                                                    <div className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+                                                        Days
+                                                    </div>
+                                                    <Input
+                                                        type="number"
+                                                        min={1}
+                                                        value={String(termsDays)}
+                                                        onChange={(e) => setTermsDays(Math.max(1, toNum(e.target.value)))}
+                                                        className="h-8 w-[80px] rounded-lg text-xs font-bold"
+                                                    />
                                                 </div>
-                                                <Input
-                                                    type="number"
-                                                    min={1}
-                                                    value={String(termsDays)}
-                                                    onChange={(e) => setTermsDays(Math.max(1, toNum(e.target.value)))}
-                                                    className="h-10 w-[110px] rounded-xl"
-                                                />
-                                            </div>
-                                        ) : null}
+                                            ) : null}
+                                        </div>
 
                                         <AlertDialog open={confirmOpen} onOpenChange={(o) => !submitting && setConfirmOpen(o)}>
-                                            <Button
-                                                type="button"
-                                                className="h-10 rounded-xl font-black uppercase tracking-wider"
-                                                disabled={approveDisabled}
-                                                onClick={() => setConfirmOpen(true)}
-                                            >
-                                                {submitting ? "Approving..." : "Approve PO"}
-                                            </Button>
+                                            <AlertDialogTrigger asChild>
+                                                <Button
+                                                    type="button"
+                                                    className="h-10 rounded-xl font-black uppercase tracking-wider"
+                                                    disabled={approveDisabled}
+                                                    onClick={() => setConfirmOpen(true)}
+                                                >
+                                                    {submitting ? "Approving..." : "Approve PO"}
+                                                </Button>
+                                            </AlertDialogTrigger>
 
                                             <AlertDialogContent>
                                                 <AlertDialogHeader>

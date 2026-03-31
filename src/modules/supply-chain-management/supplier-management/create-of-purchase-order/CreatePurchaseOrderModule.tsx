@@ -138,7 +138,10 @@ function normalizeProduct(raw: RawProduct, fixedDiscountTypeId: string): Product
         ) || 0;
 
     const baseUomIdRaw = Number(
-        raw?.unit_of_measurement ?? raw?.uom_id ?? raw?.unit_id
+        raw?.unit_of_measurement?.unit_id ??
+            raw?.unit_of_measurement ??
+            raw?.uom_id ??
+            raw?.unit_id
     );
     const baseUomId = Number.isFinite(baseUomIdRaw) ? baseUomIdRaw : 1;
 
@@ -177,9 +180,28 @@ function normalizeProduct(raw: RawProduct, fixedDiscountTypeId: string): Product
         brand,
         category,
         price: pricePerBox,
-        uom: "BOX",
-        uomId: BOX_UOM_ID,
-        availableUoms: ["BOX"],
+        uom: String(
+            raw?.unit_of_measurement?.unit_shortcut ??
+                raw?.unit_of_measurement?.unit_name ??
+                raw?.uom_name ??
+                raw?.uom?.unit_name ??
+                raw?.unit_name ??
+                "BOX"
+        ).toUpperCase() || "BOX",
+        uomId: Number(
+            raw?.unit_of_measurement?.unit_id ??
+                raw?.unit_of_measurement ??
+                raw?.uom_id ??
+                raw?.unit_id ??
+                BOX_UOM_ID
+        ),
+        availableUoms: [
+            String(
+                raw?.unit_of_measurement?.unit_shortcut ??
+                    raw?.unit_of_measurement?.unit_name ??
+                    "BOX"
+            ).toUpperCase(),
+        ],
 
         baseUnitPrice,
         baseUomId,
@@ -199,8 +221,18 @@ function SupplierSelect(props: {
 
     return (
         <div className="space-y-1.5 w-full min-w-0">
-            <div className="text-xs font-bold uppercase text-muted-foreground tracking-tight">
-                Supplier
+            <div className="flex items-center justify-between gap-2 text-xs font-bold uppercase text-muted-foreground tracking-tight">
+                <span>Supplier</span>
+                {props.value ? (
+                    <button
+                        type="button"
+                        onClick={() => props.onChange(null)}
+                        className="inline-flex items-center gap-1 hover:text-destructive transition-colors lowercase font-normal"
+                        aria-label="Clear supplier"
+                    >
+                        <X className="w-2.5 h-2.5" /> clear filter
+                    </button>
+                ) : null}
             </div>
 
             <Popover open={open} onOpenChange={setOpen}>
@@ -286,18 +318,6 @@ function SupplierSelect(props: {
                 </PopoverContent>
             </Popover>
 
-            {props.value ? (
-                <div className="flex items-center justify-end gap-2 text-[10px] text-muted-foreground">
-                    <button
-                        type="button"
-                        onClick={() => props.onChange(null)}
-                        className="inline-flex items-center gap-1 hover:text-destructive shrink-0"
-                        aria-label="Clear supplier"
-                    >
-                        <X className="w-3 h-3" /> Clear
-                    </button>
-                </div>
-            ) : null}
         </div>
     );
 }
@@ -322,9 +342,32 @@ function BranchMultiSelect(props: {
     }, [props.value, props.branches]);
 
     return (
-        <div className="space-y-1.5 w-full min-w-0">
-            <div className="text-xs font-bold uppercase text-muted-foreground tracking-tight">
-                Delivery Branches
+        <div className="space-y-2 w-full min-w-0">
+            <div className="flex items-center justify-between gap-3 px-1">
+                <div className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
+                    Delivery Branches
+                </div>
+                {props.value.length ? (
+                    <Badge variant="outline" className="text-[9px] font-black uppercase bg-primary/5 text-primary border-primary/20 transition-all animate-in zoom-in-95">
+                        {props.value.length} SELECTED
+                    </Badge>
+                ) : null}
+            </div>
+
+            <div className="flex flex-wrap gap-1.5 empty:hidden mb-2">
+                {props.value.slice(0, 8).map((id) => {
+                    const b = props.branches.find((x) => x.id === id);
+                    return (
+                        <Badge key={id} variant="secondary" className="text-[9px] font-bold h-5 uppercase">
+                            {b?.code ?? id}
+                        </Badge>
+                    );
+                })}
+                {props.value.length > 8 ? (
+                    <Badge variant="outline" className="text-[9px] font-bold h-5">
+                        +{props.value.length - 8} MORE
+                    </Badge>
+                ) : null}
             </div>
 
             <Popover open={open} onOpenChange={setOpen}>
@@ -430,24 +473,6 @@ function BranchMultiSelect(props: {
                     </Command>
                 </PopoverContent>
             </Popover>
-
-            {props.value.length ? (
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                    {props.value.slice(0, 6).map((id) => {
-                        const b = props.branches.find((x) => x.id === id);
-                        return (
-                            <Badge key={id} variant="secondary" className="text-[10px] font-black">
-                                {b?.code ?? id}
-                            </Badge>
-                        );
-                    })}
-                    {props.value.length > 6 ? (
-                        <Badge variant="outline" className="text-[10px] font-black">
-                            +{props.value.length - 6}
-                        </Badge>
-                    ) : null}
-                </div>
-            ) : null}
         </div>
     );
 }
@@ -676,9 +701,9 @@ export default function CreatePurchaseOrderModule() {
                  
                 (branch.items ?? []).map((it: any) => ({
                     ...it,
-                    selectedUom: "BOX",
-                    uom: "BOX",
-                    uomId: BOX_UOM_ID,
+                    selectedUom: it.uom || "BOX",
+                    uom: it.uom || "BOX",
+                    uomId: it.uomId || BOX_UOM_ID,
                     discountTypeId: String(it.discountTypeId || defaultNoDiscountId || FALLBACK_NO_DISCOUNT_ID),
                 }))
             );
@@ -727,9 +752,9 @@ export default function CreatePurchaseOrderModule() {
                 const item: CartItem = {
                     ...(p as any),
                     orderQty: 1,
-                    selectedUom: "BOX",
-                    uom: "BOX",
-                    uomId: BOX_UOM_ID,
+                    selectedUom: p.uom,
+                    uom: p.uom,
+                    uomId: p.uomId,
                     discountTypeId: String((p as any).discountTypeId || defaultNoDiscountId || FALLBACK_NO_DISCOUNT_ID),
                 } as any;
 
@@ -744,7 +769,7 @@ export default function CreatePurchaseOrderModule() {
         setTempCart((prev) =>
              
             prev.map((x: any) =>
-                x.id === productId ? { ...x, selectedUom: "BOX", uom: "BOX", uomId: BOX_UOM_ID } : x
+                x.id === productId ? { ...x, selectedUom: x.uom, uom: x.uom, uomId: x.uomId } : x
             )
         );
     }, []);
@@ -770,9 +795,9 @@ export default function CreatePurchaseOrderModule() {
          
         const normalized = tempCart.map((it: any) => ({
             ...it,
-            selectedUom: "BOX",
-            uom: "BOX",
-            uomId: BOX_UOM_ID,
+            selectedUom: it.uom,
+            uom: it.uom,
+            uomId: it.uomId,
             discountTypeId: String(it.discountTypeId || defaultNoDiscountId || FALLBACK_NO_DISCOUNT_ID),
         }));
 
@@ -890,6 +915,12 @@ export default function CreatePurchaseOrderModule() {
 
             console.log("PO RESPONSE:", json?.data ?? json);
             setIsLocked(true);
+            toast.success("Purchase Order created successfully!", {
+                description: `PO ${poNumber} has been saved. The page will now refresh for the next transaction.`,
+            });
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
             return json;
         } catch (e: unknown) {
             const err = e as Error;

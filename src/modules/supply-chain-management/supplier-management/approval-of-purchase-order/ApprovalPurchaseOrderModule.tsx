@@ -24,7 +24,10 @@ export default function ApprovalPurchaseOrderModule() {
             const data = await provider.fetchPendingApprovalPOs();
             setPending(data);
         } catch (e: unknown) {
-            setError(String(e instanceof Error ? e.message : e));
+            const msg = String(e instanceof Error ? e.message : e);
+            if (msg.trim().toLowerCase() !== "fetch failed") {
+                setError(msg);
+            }
         } finally {
             setLoadingList(false);
         }
@@ -42,7 +45,10 @@ export default function ApprovalPurchaseOrderModule() {
             const d = await provider.fetchPurchaseOrderDetail(id);
             setDetail(d);
         } catch (e: unknown) {
-            setError(String(e instanceof Error ? e.message : e));
+            const msg = String(e instanceof Error ? e.message : e);
+            if (msg.trim().toLowerCase() !== "fetch failed") {
+                setError(msg);
+            }
         } finally {
             setLoadingDetail(false);
         }

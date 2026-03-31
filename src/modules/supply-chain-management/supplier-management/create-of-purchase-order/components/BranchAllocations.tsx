@@ -159,7 +159,7 @@ export function BranchAllocations(props: {
                                                         </td>
                                                         <td className="px-3 py-3 text-center">
                                                             <span className="px-1.5 py-0.5 bg-secondary text-secondary-foreground text-[8px] font-black rounded uppercase">
-                                                                {item.uom || "BOX"}
+                                                                {item.uom}
                                                             </span>
                                                         </td>
                                                         <td className="px-3 py-3">

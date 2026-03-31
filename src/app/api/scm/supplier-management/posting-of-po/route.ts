@@ -609,7 +609,14 @@ export async function GET() {
 
             const taggingOk = isPartiallyTagged(poId, lines, porRows, rfidsByPorId);
             const eligibleByStatus = invStatus === 12 || invStatus === 13;
-            if (!taggingOk && !eligibleByStatus) continue;
+            
+            // ✅ Only show POs that are already partially or fully received/tagged
+            if (!eligibleByStatus) continue;
+            
+            // Double check: if status claims 12/13 but we find absolutely no tagged items, 
+            // it's likely a data inconsistency, but we follow the status primarily.
+            // If the user wants extreme strictness, we can also check taggingOk.
+            if (!taggingOk && invStatus === 12) continue; 
 
             const fully = isFullyReceived(poId, lines, porRows, rfidsByPorId);
 

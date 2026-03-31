@@ -23,6 +23,26 @@ export async function GET(req: NextRequest) {
 
         const headers = buildUpstreamHeaders();
 
+        // 0) Fetch all units for robust mapping
+        const unitsUrl = `${base}/items/units?limit=-1&fields=unit_id,unit_name,unit_shortcut`;
+        const unitsRes = await fetch(unitsUrl, { headers, cache: "no-store" });
+        const unitsJson = await unitsRes.json().catch(() => ({}));
+        const units = unitsJson.data ?? [];
+        const unitsMap = new Map<number, any>();
+        for (const u of units) {
+            const uid = Number(u?.unit_id || u?.id);
+            if (uid) unitsMap.set(uid, u);
+        }
+
+        const resolveUom = (p: any) => {
+            const rawUom = p?.unit_of_measurement;
+            const uomId = Number(typeof rawUom === "object" ? rawUom?.unit_id ?? rawUom?.id : rawUom);
+            if (uomId && unitsMap.has(uomId)) {
+                return unitsMap.get(uomId);
+            }
+            return rawUom; // Fallback to raw if not in map
+        };
+
         // 1) If supplierId provided: fetch product_per_supplier then fetch products
         if (supplierId) {
             const linksUrl =
@@ -79,6 +99,8 @@ export async function GET(req: NextRequest) {
                 const pid = String(p?.product_id ?? p?.id ?? "");
                 return {
                     ...p,
+                    // ✅ Map UOM robustly
+                    unit_of_measurement: resolveUom(p),
                     // ✅ Attach discount_type from product_per_supplier
                     discount_type: discountByProductId.get(pid) ?? null,
                 };
@@ -113,11 +135,16 @@ export async function GET(req: NextRequest) {
                 );
             }
 
-            return NextResponse.json({ data: prodJson.data ?? [] });
+            const rows = (prodJson.data ?? []).map((p: any) => ({
+                ...p,
+                unit_of_measurement: resolveUom(p),
+            }));
+
+            return NextResponse.json({ data: rows });
         }
 
         // 3) fallback: all products
-        const upstream = `${base}/items/products?limit=${encodeURIComponent(limit)}`;
+        const upstream = `${base}/items/products?limit=${encodeURIComponent(limit)}&fields=*,product_category.*,product_brand.*`;
         const res = await fetch(upstream, { headers, cache: "no-store" });
         const json = await res.json().catch(() => ({}));
 
@@ -128,7 +155,12 @@ export async function GET(req: NextRequest) {
             );
         }
 
-        return NextResponse.json({ data: json.data ?? [] });
+        const rows = (json.data ?? []).map((p: any) => ({
+            ...p,
+            unit_of_measurement: resolveUom(p),
+        }));
+
+        return NextResponse.json({ data: rows });
     } catch (err: any) {
         return NextResponse.json(
             { error: "Products route failed", details: String(err?.message ?? err) },

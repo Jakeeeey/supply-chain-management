@@ -14,7 +14,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { RefreshCw, FileCheck2, ChevronRight } from "lucide-react";
+import { RefreshCw, FileCheck2, ChevronRight, ChevronLeft } from "lucide-react";
 import { usePostingOfPo } from "../providers/PostingOfPoProvider";
 
 function statusBadge(status: string) {
@@ -106,46 +106,56 @@ export function PostingPOList() {
                     placeholder="Search PO number or supplier..."
                 />
 
-                <div className="flex items-center justify-between gap-2">
-                    <div className="text-xs text-muted-foreground">
-                        Page {page} / {totalPages}
+                <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black uppercase text-muted-foreground whitespace-nowrap">
+                            Rows per page
+                        </span>
+                        <Select
+                            value={String(pageSize)}
+                            onValueChange={(v) => {
+                                setPageSize(Number(v));
+                                setPage(1);
+                            }}
+                            disabled={listLoading}
+                        >
+                            <SelectTrigger className="h-8 w-[70px] text-[10px] font-bold rounded-xl border-border bg-background">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {[5, 10, 20, 50].map((size) => (
+                                    <SelectItem key={size} value={String(size)} className="text-[10px] font-bold">
+                                        {size}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <Select
-                            value={String(pageSize)}
-                            onValueChange={(v) =>
-                                setPageSize((Number(v) === 3 ? 3 : 5) as 3 | 5)
-                            }
-                        >
-                            <SelectTrigger className="h-8 w-[110px]">
-                                <SelectValue placeholder="Per page" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="3">3 / page</SelectItem>
-                                <SelectItem value="5">5 / page</SelectItem>
-                            </SelectContent>
-                        </Select>
+                        <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight mr-2">
+                            {page} of {totalPages}
+                        </div>
 
                         <Button
                             type="button"
                             variant="outline"
                             size="sm"
-                            className="h-8"
+                            className="h-8 w-8 p-0"
                             disabled={page <= 1}
                             onClick={() => setPage((p) => Math.max(1, p - 1))}
                         >
-                            Prev
+                            <ChevronLeft className="h-4 w-4" />
                         </Button>
                         <Button
                             type="button"
                             variant="outline"
                             size="sm"
-                            className="h-8"
+                            className="h-8 w-8 p-0"
                             disabled={page >= totalPages}
                             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                         >
-                            Next
+                            <ChevronRight className="h-4 w-4" />
                         </Button>
                     </div>
                 </div>

@@ -77,8 +77,10 @@ export function PostingOfPoProvider({ children }: { children: React.ReactNode })
             const data = await asJson(r);
             setList(Array.isArray(data) ? data : []);
         } catch (e: unknown) {
-            const err = e as Error;
-            setListError(String(err?.message ?? err));
+            const msg = String((e as Error)?.message ?? e);
+            if (msg.trim().toLowerCase() !== "fetch failed") {
+                setListError(msg);
+            }
             setList([]);
         } finally {
             setListLoading(false);
@@ -123,8 +125,10 @@ export function PostingOfPoProvider({ children }: { children: React.ReactNode })
                 const data = await asJson(r);
                 setSelectedPO((data ?? null) as PurchaseOrder | null);
             } catch (e: unknown) {
-                const err = e as Error;
-                setListError(String(err?.message ?? err));
+                const msg = String((e as Error)?.message ?? e);
+                if (msg.trim().toLowerCase() !== "fetch failed") {
+                    setListError(msg);
+                }
             }
         },
         [clearSuccess]

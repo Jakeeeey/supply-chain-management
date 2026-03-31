@@ -169,13 +169,13 @@ export function ProductPickerDialog(props: {
                               {money.format(product.price)}
                             </span>
                                                         <span className="text-[10px] font-bold text-muted-foreground uppercase">
-                              / BOX
+                              / {product.uom}
                             </span>
                                                     </div>
 
                                                     {Number((product as any)?.unitsPerBox ?? 1) > 1 ? (
                                                         <div className="text-[10px] text-muted-foreground font-bold">
-                                                            {Number((product as any)?.unitsPerBox)} pcs / BOX
+                                                            {Number((product as any)?.unitsPerBox)} pcs / {product.uom}
                                                         </div>
                                                     ) : null}
                                                 </div>
@@ -252,8 +252,8 @@ export function ProductPickerDialog(props: {
                                                     {item.name}
                                                 </p>
                                                 <div className="flex items-center gap-2 mt-1.5">
-                          <span className="text-[9px] px-1.5 py-0.5 bg-muted text-muted-foreground rounded font-mono font-bold">
-                            BOX
+                          <span className="text-[9px] px-1.5 py-0.5 bg-muted text-muted-foreground rounded font-mono font-bold uppercase">
+                            {item.uom}
                           </span>
                                                     <span className="text-[10px] font-bold text-primary/80">
                             {money.format(item.price)}

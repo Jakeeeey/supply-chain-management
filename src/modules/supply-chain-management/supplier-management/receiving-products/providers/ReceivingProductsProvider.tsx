@@ -235,7 +235,10 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
             const j = await asJson(r);
             setList(Array.isArray(j?.data) ? j.data : []);
         } catch (e: any) {
-            setListError(String(e?.message ?? e));
+            const msg = String(e?.message ?? e);
+            if (msg.trim().toLowerCase() !== "fetch failed") {
+                setListError(msg);
+            }
             setList([]);
         } finally {
             setListLoading(false);
@@ -268,21 +271,28 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
             const id = String(poId ?? "").trim();
             if (!id) return;
 
-            const r = await fetch(API_URL, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action: "open_po", poId: id }),
-            });
-            const j = await asJson(r);
+            try {
+                const r = await fetch(API_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "open_po", poId: id }),
+                });
+                const j = await asJson(r);
 
-            const detail = (j?.data ?? null) as ReceivingPODetail | null;
-            setSelectedPO(detail);
+                const detail = (j?.data ?? null) as ReceivingPODetail | null;
+                setSelectedPO(detail);
 
-            setReceiptDate(todayYMD());
-            setReceiptNo(genReceiptNo());
-            setReceiptType("");
+                setReceiptDate(todayYMD());
+                setReceiptNo(genReceiptNo());
+                setReceiptType("");
 
-            setPoBarcode(detail?.poNumber ?? "");
+                setPoBarcode(detail?.poNumber ?? "");
+            } catch (e: any) {
+                const msg = String(e?.message ?? e);
+                if (msg.trim().toLowerCase() !== "fetch failed") {
+                    setVerifyError(msg);
+                }
+            }
         },
         [resetSession]
     );
@@ -303,21 +313,28 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
                 return;
             }
 
-            const r = await fetch(API_URL, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action: "verify_po", barcode: code }),
-            });
-            const j = await asJson(r);
+            try {
+                const r = await fetch(API_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "verify_po", barcode: code }),
+                });
+                const j = await asJson(r);
 
-            const detail = (j?.data ?? null) as ReceivingPODetail | null;
-            setSelectedPO(detail);
+                const detail = (j?.data ?? null) as ReceivingPODetail | null;
+                setSelectedPO(detail);
 
-            setReceiptDate(todayYMD());
-            setReceiptNo(genReceiptNo());
-            setReceiptType("");
+                setReceiptDate(todayYMD());
+                setReceiptNo(genReceiptNo());
+                setReceiptType("");
 
-            setPoBarcode(code);
+                setPoBarcode(code);
+            } catch (e: any) {
+                const msg = String(e?.message ?? e);
+                if (msg.trim().toLowerCase() !== "fetch failed") {
+                    setVerifyError(msg);
+                }
+            }
         },
         [resetSession]
     );
@@ -479,7 +496,10 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
             setRfid("");
         } catch (e: any) {
             playBeep("error");
-            setScanError(String(e?.message ?? e));
+            const msg = String(e?.message ?? e);
+            if (msg.trim().toLowerCase() !== "fetch failed") {
+                setScanError(msg);
+            }
         }
     }, [selectedPO, rfid, activity]);
 
