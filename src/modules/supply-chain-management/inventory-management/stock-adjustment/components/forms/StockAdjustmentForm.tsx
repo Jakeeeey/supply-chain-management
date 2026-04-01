@@ -44,7 +44,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
-import { LegacyCombobox } from "@/components/ui/legacy-combobox";
+import {
+  Combobox,
+  ComboboxInput,
+  ComboboxContent,
+  ComboboxList,
+  ComboboxItem,
+  ComboboxEmpty,
+} from "@/components/ui/combobox";
 
 // â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 interface StockAdjustmentFormProps {
@@ -84,7 +91,9 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
   onOpenScanner,
   isReadOnly = false,
 }: ItemRowProps) {
-  // useWatch subscribes to specific fields â€” only this row re-renders when its own data changes.
+  const [productSearch, setProductSearch] = useState("");
+  const [productInputValue, setProductInputValue] = useState("");
+  // useWatch subscribes to specific fields — only this row re-renders when its own data changes.
   const productId = useWatch({ control, name: `items.${index}.product_id` });
   const productName = useWatch({ control, name: `items.${index}.product_name` });
   const unitName = useWatch({ control, name: `items.${index}.unit_name` });
@@ -103,9 +112,8 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
 
   return (
     <div
-      className={`border-b last:border-0 p-6 space-y-4 transition-colors duration-200 relative ${
-        hasRfid ? "bg-amber-50/10 dark:bg-amber-900/10 border-amber-200/30 dark:border-amber-800/20" : "border-border/50"
-      }`}
+      className={`border-b last:border-0 p-6 space-y-4 transition-colors duration-200 relative ${hasRfid ? "bg-amber-50/10 dark:bg-amber-900/10 border-amber-200/30 dark:border-amber-800/20" : "border-border/50"
+        }`}
     >
       {/* Per-row loading overlay for RFID/inventory lookup */}
       {isLoadingDetails && (
@@ -122,52 +130,86 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
           <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
             Product <span className="text-red-500">*</span>
           </Label>
-          <LegacyCombobox
-            options={productOptions}
+          <Combobox
             value={String(productId || "")}
-            onValueChange={(val: string) => {
-              if (!val) return;
+            onValueChange={(val: string | null) => {
+              if (!val) {
+                setProductInputValue("");
+                return;
+              }
               const product = productOptions.find(
                 (p) => String(p.value) === val
               )?.item;
-              if (product) onProductSelect(index, product);
+              if (product) {
+                setProductInputValue(product.product_name);
+                onProductSelect(index, product);
+              }
             }}
-            placeholder="Select Product"
-            disabled={isProductsLoading || isReadOnly || !!dbId}
-            renderItem={(option: any) => {
-              const p = option.item;
-              const pId = p.product_id || p.id;
-              const pHasRfid = rfidProductIds.has(Number(pId));
-              return (
-                <div className="flex items-center justify-between w-full gap-4 min-w-[300px]">
-                  <div className="flex flex-col">
-                    <span className="font-medium text-foreground line-clamp-1 text-xs">
-                      {p.product_name}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[9px] text-muted-foreground font-mono">
-                        {p.product_code}
-                      </span>
-                      {p.unit_name && (
-                        <>
-                          <span className="text-[9px] text-muted-foreground/30">â€¢</span>
-                          <span className="text-[9px] font-bold text-blue-600 uppercase tracking-tight bg-blue-50 dark:bg-blue-900/20 px-1 rounded">
-                            {p.unit_name}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  {pHasRfid && (
-                    <div className="bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 px-1 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter flex items-center gap-1 shrink-0">
-                      <Tag className="h-2 w-2 fill-amber-700 dark:fill-amber-400" />
-                      RFID
-                    </div>
-                  )}
-                </div>
-              );
+            inputValue={productInputValue}
+            onInputValueChange={(v: string) => {
+              // base-ui fires this with the raw ID after selection — show the product name instead
+              const matched = productOptions.find(p => String(p.value) === v);
+              if (matched) {
+                setProductInputValue(matched.item.product_name);
+                setProductSearch("");
+              } else {
+                setProductInputValue(v);
+                setProductSearch(v);
+              }
             }}
-          />
+          >
+            <ComboboxInput
+              placeholder="Select Product"
+              disabled={isProductsLoading || isReadOnly || !!dbId}
+              showClear
+            />
+            <ComboboxContent>
+              <ComboboxList>
+                {(() => {
+                  const filtered = productOptions.filter(opt =>
+                    opt.label.toLowerCase().includes(productSearch.toLowerCase()) ||
+                    opt.item.product_code?.toLowerCase().includes(productSearch.toLowerCase())
+                  );
+                  if (filtered.length === 0) return <ComboboxEmpty>No products found.</ComboboxEmpty>;
+                  return filtered.map((option: any) => {
+                    const p = option.item;
+                    const pId = p.product_id || p.id;
+                    const pHasRfid = rfidProductIds.has(Number(pId));
+                    return (
+                      <ComboboxItem key={option.value} value={option.value}>
+                        <div className="flex items-center justify-between w-full gap-4 min-w-[300px]">
+                          <div className="flex flex-col">
+                            <span className="font-medium text-foreground line-clamp-1 text-xs">
+                              {p.product_name}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[9px] text-muted-foreground font-mono">
+                                {p.product_code}
+                              </span>
+                              {p.unit_name && (
+                                <>
+                                  <span className="text-[9px] text-muted-foreground/30">•</span>
+                                  <span className="text-[9px] font-bold text-blue-600 uppercase tracking-tight bg-blue-50 dark:bg-blue-900/20 px-1 rounded">
+                                    {p.unit_name}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          {pHasRfid && (
+                            <div className="bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 px-1 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter flex items-center gap-1 shrink-0">
+                              <Tag className="h-2 w-2 fill-amber-700 dark:fill-amber-400" />
+                              RFID
+                            </div>
+                          )}
+                        </div>
+                      </ComboboxItem>
+                    );
+                  });
+                })()}
+              </ComboboxList>
+            </ComboboxContent>
+          </Combobox>
         </div>
 
         {/* Unit */}
@@ -195,11 +237,10 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
               )
             }
             readOnly={isReadOnly || !!(rfidCount && rfidCount > 0) || unitOrder === 3}
-            className={`h-10 border-input focus:ring-blue-500 rounded-md text-sm ${
-              isReadOnly || (rfidCount && rfidCount > 0) || unitOrder === 3 
-                ? "bg-muted text-muted-foreground cursor-not-allowed font-bold" 
-                : ""
-            }`}
+            className={`h-10 border-input focus:ring-blue-500 rounded-md text-sm ${isReadOnly || (rfidCount && rfidCount > 0) || unitOrder === 3
+              ? "bg-muted text-muted-foreground cursor-not-allowed font-bold"
+              : ""
+              }`}
             min={0}
           />
         </div>
@@ -254,15 +295,14 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
             size="icon"
             onClick={() => onRemove(index)}
             disabled={isReadOnly || !!dbId}
-            className={`shrink-0 self-end mb-0.5 rounded-full transition-all ${
-              isReadOnly ? "hidden" : "hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500 text-muted-foreground/50"
-            } ${!!dbId && !isReadOnly ? "opacity-50 cursor-not-allowed grayscale" : ""}`}
+            className={`shrink-0 self-end mb-0.5 rounded-full transition-all ${isReadOnly ? "hidden" : "hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500 text-muted-foreground/50"
+              } ${!!dbId && !isReadOnly ? "opacity-50 cursor-not-allowed grayscale" : ""}`}
             title={!!dbId && !isReadOnly ? "Existing items cannot be deleted" : "Remove item"}
           >
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
-    </div>
+      </div>
 
       {/* Metadata Section */}
       {productId ? (
@@ -461,6 +501,10 @@ export function StockAdjustmentForm({
   const [scannerContext, setScannerContext] = useState<{ index: number; productName: string } | null>(null);
   const [pendingRFIDProduct, setPendingRFIDProduct] = useState<any>(null);
   const [isScannerPreparing, setIsScannerPreparing] = useState(false);
+  const [branchInputValue, setBranchInputValue] = useState("");
+  const [supplierInputValue, setSupplierInputValue] = useState("");
+  const [branchSearch, setBranchSearch] = useState("");
+  const [supplierSearch, setSupplierSearch] = useState("");
 
   // --- Memoize product options to prevent expensive re-mapping in every row ---
   const productOptions = useMemo(() => {
@@ -497,9 +541,9 @@ export function StockAdjustmentForm({
         setLoading(true);
         try {
           const data = await fetchById(id);
-          
+
           // --- Auto-Infer Supplier ID ---
-          let finalSupplierId = data.supplier_id 
+          let finalSupplierId = data.supplier_id
             ? (typeof data.supplier_id === "object" ? (data.supplier_id as any).id : data.supplier_id)
             : undefined;
 
@@ -526,8 +570,8 @@ export function StockAdjustmentForm({
               ...item,
               product_id: String(
                 (item.product_id as any)?.id ||
-                  (item.product_id as any)?.product_id ||
-                  item.product_id
+                (item.product_id as any)?.product_id ||
+                item.product_id
               ),
               product_name:
                 (item.product_id as any)?.product_name ||
@@ -728,7 +772,7 @@ export function StockAdjustmentForm({
       if (unitOrder === 3) {
         setScannerContext({ index, productName: product.product_name });
         setIsScannerPreparing(true);
-        
+
         toast.info(`RFID Scan Required`, {
           description: `Preparing scanner for ${product.product_name}...`,
           duration: 1500,
@@ -746,14 +790,14 @@ export function StockAdjustmentForm({
       (async () => {
         try {
           const branchId = form.getValues("branch_id");
-          const currentStock = await (cachedStock === 0 
-            ? fetchInventory(productId, branchId) 
+          const currentStock = await (cachedStock === 0
+            ? fetchInventory(productId, branchId)
             : Promise.resolve(cachedStock));
 
           form.setValue(`items.${index}.current_stock`, currentStock);
 
           if (!unitOrder && !hasRfid) {
-              // ...
+            // ...
           } else if (unitOrder !== 3 && hasRfid) {
             setPendingRFIDProduct({
               ...product,
@@ -833,13 +877,12 @@ export function StockAdjustmentForm({
             {id ? "Edit Stock Adjustment" : "New Stock Adjustment"}
           </h1>
           {id && (
-            <Badge 
-              variant="outline" 
-              className={`px-3 py-1 font-bold shadow-sm ${
-                isPosted 
-                  ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800/50 uppercase tracking-wider' 
-                  : 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800/50 uppercase tracking-wider'
-              }`}
+            <Badge
+              variant="outline"
+              className={`px-3 py-1 font-bold shadow-sm ${isPosted
+                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800/50 uppercase tracking-wider'
+                : 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800/50 uppercase tracking-wider'
+                }`}
             >
               {isPosted ? 'Posted' : 'Draft / Unposted'}
             </Badge>
@@ -848,7 +891,7 @@ export function StockAdjustmentForm({
         <p className="text-sm text-muted-foreground">
           Record stock movement and adjust inventory levels
         </p>
-        
+
         {isPosted && (
           <div className="flex items-center gap-6 mt-2 animate-in fade-in slide-in-from-left-2 duration-300">
             <div className="flex items-center gap-2 bg-blue-50/50 dark:bg-blue-900/10 px-3 py-1.5 rounded-lg border border-blue-100 dark:border-blue-800/30">
@@ -913,22 +956,59 @@ export function StockAdjustmentForm({
                   className="bg-muted/50 border-input h-11"
                 />
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="branch" className="text-sm font-bold text-muted-foreground">
                   Branch <span className="text-red-500">*</span>
                 </Label>
-                <LegacyCombobox
-                  options={branches.map(b => ({
-                    value: String(b.id),
-                    label: `${b.branch_name} (${b.branch_code})`
-                  }))}
+                <Combobox
                   value={watchedBranchIdForSelect ? String(watchedBranchIdForSelect) : ""}
-                  onValueChange={(v: string) => form.setValue("branch_id", v ? Number(v) : undefined)}
-                  placeholder="Select Branch"
-                  disabled={isReadOnly}
-                  className={form.formState.errors.branch_id ? "border-red-500 bg-red-50 dark:bg-red-900/10" : ""}
-                />
+                  onValueChange={(v: string | null) => {
+                    if (!v) {
+                      setBranchInputValue("");
+                      form.setValue("branch_id", undefined, { shouldValidate: true });
+                      return;
+                    }
+                    const found = branches.find(b => String(b.id) === v);
+                    if (found) setBranchInputValue(`${found.branch_name} (${found.branch_code})`);
+                    form.setValue("branch_id", Number(v), { shouldValidate: true });
+                  }}
+                  inputValue={branchInputValue}
+                  onInputValueChange={(v: string) => {
+                    // base-ui fires this with the raw ID after selection — show the name instead
+                    const matched = branches.find(b => String(b.id) === v);
+                    if (matched) {
+                      setBranchInputValue(`${matched.branch_name} (${matched.branch_code})`);
+                      setBranchSearch("");
+                    } else {
+                      setBranchInputValue(v);
+                      setBranchSearch(v);
+                    }
+                  }}
+                >
+                  <ComboboxInput
+                    placeholder="Select Branch"
+                    disabled={isReadOnly}
+                    className={form.formState.errors.branch_id ? "border-red-500 bg-red-50 dark:bg-red-900/10" : ""}
+                    showTrigger
+                    showClear
+                  />
+                  <ComboboxContent>
+                    <ComboboxList>
+                      {(() => {
+                        const filtered = branches.filter(b =>
+                          b.branch_name.toLowerCase().includes(branchSearch.toLowerCase()) ||
+                          b.branch_code.toLowerCase().includes(branchSearch.toLowerCase())
+                        );
+                        if (filtered.length === 0) return <ComboboxEmpty>No branches found.</ComboboxEmpty>;
+                        return filtered.map(b => (
+                          <ComboboxItem key={b.id} value={String(b.id)}>
+                            <span className="font-medium">{b.branch_name} ({b.branch_code})</span>
+                          </ComboboxItem>
+                        ));
+                      })()}
+                    </ComboboxList>
+                  </ComboboxContent>
+                </Combobox>
                 {form.formState.errors.branch_id && (
                   <p className="text-xs text-red-500 font-medium">
                     {String(form.formState.errors.branch_id.message)}
@@ -940,17 +1020,63 @@ export function StockAdjustmentForm({
                 <Label htmlFor="supplier" className="text-sm font-bold text-muted-foreground">
                   Supplier <span className="text-red-500">*</span>
                 </Label>
-                <LegacyCombobox
-                  options={suppliers.map(s => ({
-                    value: String(s.id),
-                    label: `${s.supplier_name} ${s.supplier_shortcut ? `(${s.supplier_shortcut})` : ""}`
-                  }))}
+                <Combobox
                   value={watchedSupplierIdForSelect ? String(watchedSupplierIdForSelect) : ""}
-                  onValueChange={(v: string) => form.setValue("supplier_id", v ? Number(v) : undefined)}
-                  placeholder={isSuppliersLoading ? "Loading suppliers..." : "Select Supplier"}
-                  disabled={isReadOnly}
-                  className={form.formState.errors.supplier_id ? "border-red-500 bg-red-50 dark:bg-red-900/10" : ""}
-                />
+                  onValueChange={(v: string | null) => {
+                    if (!v) {
+                      setSupplierInputValue("");
+                      form.setValue("supplier_id", undefined, { shouldValidate: true });
+                      return;
+                    }
+                    const found = suppliers.find(s => String(s.id) === v);
+                    if (found) setSupplierInputValue(`${found.supplier_name}${found.supplier_shortcut ? ` (${found.supplier_shortcut})` : ""}`);
+                    form.setValue("supplier_id", Number(v), { shouldValidate: true });
+                  }}
+                  inputValue={supplierInputValue}
+                  onInputValueChange={(v: string) => {
+                    // base-ui fires this with the raw ID after selection — show the name instead
+                    const matched = suppliers.find(s => String(s.id) === v);
+                    if (matched) {
+                      setSupplierInputValue(`${matched.supplier_name}${matched.supplier_shortcut ? ` (${matched.supplier_shortcut})` : ""}`);
+                      setSupplierSearch("");
+                    } else {
+                      setSupplierInputValue(v);
+                      setSupplierSearch(v);
+                    }
+                  }}
+                >
+                  <ComboboxInput
+                    placeholder={isSuppliersLoading ? "Loading suppliers..." : "Select Supplier"}
+                    disabled={isReadOnly}
+                    className={form.formState.errors.supplier_id ? "border-red-500 bg-red-50 dark:bg-red-900/10" : ""}
+                    showTrigger
+                    showClear
+                  />
+                  <ComboboxContent>
+                    <ComboboxList>
+                      {(() => {
+                        const filtered = suppliers.filter(s =>
+                          s.supplier_name.toLowerCase().includes(supplierSearch.toLowerCase()) ||
+                          (s.supplier_shortcut && s.supplier_shortcut.toLowerCase().includes(supplierSearch.toLowerCase()))
+                        );
+                        if (filtered.length === 0) {
+                          return (
+                            <ComboboxEmpty>
+                              {isSuppliersLoading ? "Fetching supplier list..." : "No suppliers found."}
+                            </ComboboxEmpty>
+                          );
+                        }
+                        return filtered.map(s => (
+                          <ComboboxItem key={s.id} value={String(s.id)}>
+                            <span className="font-medium">
+                              {s.supplier_name} {s.supplier_shortcut ? `(${s.supplier_shortcut})` : ""}
+                            </span>
+                          </ComboboxItem>
+                        ));
+                      })()}
+                    </ComboboxList>
+                  </ComboboxContent>
+                </Combobox>
                 {form.formState.errors.supplier_id && (
                   <p className="text-xs text-red-500 font-medium">
                     {String(form.formState.errors.supplier_id.message)}
@@ -1029,11 +1155,10 @@ export function StockAdjustmentForm({
               type="button"
               onClick={handleAddProduct}
               disabled={!watchedSupplierIdForSelect || isReadOnly}
-              className={`${
-                (!watchedSupplierIdForSelect || isReadOnly)
-                  ? "bg-muted text-muted-foreground border-border" 
-                  : "bg-blue-600 hover:bg-blue-700 text-white"
-              } font-bold h-9 px-4 rounded-lg shadow-sm flex items-center gap-2 text-sm transition-all`}
+              className={`${(!watchedSupplierIdForSelect || isReadOnly)
+                ? "bg-muted text-muted-foreground border-border"
+                : "bg-blue-600 hover:bg-blue-700 text-white"
+                } font-bold h-9 px-4 rounded-lg shadow-sm flex items-center gap-2 text-sm transition-all`}
             >
               <Plus className="h-4 w-4" />
               Add Product
@@ -1059,20 +1184,18 @@ export function StockAdjustmentForm({
                 ) : fields.length === 0 ? (
                   <div className="bg-muted/10 border-2 border-dashed border-border rounded-xl p-16 text-center">
                     <div className="flex justify-center mb-4">
-                      <div className={`p-5 rounded-full border border-dashed ${
-                        watchedSupplierIdForSelect ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800/50" : "bg-muted border-border"
-                      }`}>
-                        <Package className={`h-10 w-10 ${
-                          watchedSupplierIdForSelect ? "text-blue-400" : "text-muted-foreground/30"
-                        }`} />
+                      <div className={`p-5 rounded-full border border-dashed ${watchedSupplierIdForSelect ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800/50" : "bg-muted border-border"
+                        }`}>
+                        <Package className={`h-10 w-10 ${watchedSupplierIdForSelect ? "text-blue-400" : "text-muted-foreground/30"
+                          }`} />
                       </div>
                     </div>
                     <h3 className="text-lg font-bold text-foreground mb-1">
                       {watchedSupplierIdForSelect ? "Ready to add products" : "Supplier required"}
                     </h3>
                     <p className="text-muted-foreground font-medium max-w-xs mx-auto text-sm">
-                      {watchedSupplierIdForSelect 
-                        ? "Click 'Add Product' to start building your adjustment from this supplier." 
+                      {watchedSupplierIdForSelect
+                        ? "Click 'Add Product' to start building your adjustment from this supplier."
                         : "Select a supplier first to see the products linked to them."}
                     </p>
                     {form.formState.errors.items &&
@@ -1083,9 +1206,9 @@ export function StockAdjustmentForm({
                       )}
                     {!watchedSupplierIdForSelect && (
                       <div className="mt-8">
-                         <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest bg-muted px-3 py-1.5 rounded-full border border-border shadow-sm">
-                            Supplier selection filter active
-                         </span>
+                        <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest bg-muted px-3 py-1.5 rounded-full border border-border shadow-sm">
+                          Supplier selection filter active
+                        </span>
                       </div>
                     )}
                   </div>
@@ -1314,8 +1437,8 @@ export function StockAdjustmentForm({
               Confirm Post Adjustment
             </AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground py-4">
-              Are you sure you want to post this adjustment? Once posted, the record will become **READ-ONLY** and inventory levels will be updated across the system. 
-              <br/><br/>
+              Are you sure you want to post this adjustment? Once posted, the record will become **READ-ONLY** and inventory levels will be updated across the system.
+              <br /><br />
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>

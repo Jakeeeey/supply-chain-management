@@ -34,6 +34,8 @@ export type ProductTracingFiltersType = {
 export type ProductFamilyRow = {
     parent_id: number;
     product_name: string; // The base name for the family
+    product_code: string | null;
     category_name?: string;
     brand_name?: string;
+    short_description?: string;
 };

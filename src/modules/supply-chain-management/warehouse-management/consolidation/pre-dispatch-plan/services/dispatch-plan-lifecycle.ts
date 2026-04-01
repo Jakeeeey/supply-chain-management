@@ -2,7 +2,12 @@ import {
   DispatchPlan,
   DispatchPlanFormValues,
 } from "../types/dispatch-plan.schema";
-import { API_BASE_URL, fetchItems, request } from "./dispatch-plan-api";
+import {
+  API_BASE_URL,
+  fetchItems,
+  fetchItemsInChunks,
+  request,
+} from "./dispatch-plan-api";
 import { dispatchPlanDataService } from "./dispatch-plan-data";
 
 export const dispatchPlanLifecycleService = {
@@ -18,18 +23,18 @@ export const dispatchPlanLifecycleService = {
     // Compute total amount from selected sales orders
     let totalAmount = 0;
     if (values.sales_order_ids.length) {
-      const ordersRes = await fetchItems<{
+      const { data: orders } = await fetchItemsInChunks<{
         order_id: number;
         net_amount: number;
         total_amount: number;
         allocated_amount: number | null;
-      }>("/items/sales_order", {
-        "filter[order_id][_in]": values.sales_order_ids.join(","),
+      }>("/items/sales_order", "order_id", values.sales_order_ids, {
         fields: "order_id,net_amount,total_amount,allocated_amount",
         limit: -1,
       });
-      totalAmount = (ordersRes.data || []).reduce(
-        (sum, o) => sum + (o.allocated_amount ?? o.net_amount ?? o.total_amount ?? 0),
+      totalAmount = orders.reduce(
+        (sum, o) =>
+          sum + (o.allocated_amount ?? o.net_amount ?? o.total_amount ?? 0),
         0,
       );
     }
@@ -86,18 +91,18 @@ export const dispatchPlanLifecycleService = {
     // Recompute total amount
     let totalAmount = 0;
     if (values.sales_order_ids.length) {
-      const ordersRes = await fetchItems<{
+      const { data: orders } = await fetchItemsInChunks<{
         order_id: number;
         net_amount: number;
         total_amount: number;
         allocated_amount: number | null;
-      }>("/items/sales_order", {
-        "filter[order_id][_in]": values.sales_order_ids.join(","),
+      }>("/items/sales_order", "order_id", values.sales_order_ids, {
         fields: "order_id,net_amount,total_amount,allocated_amount",
         limit: -1,
       });
-      totalAmount = (ordersRes.data || []).reduce(
-        (sum, o) => sum + (o.allocated_amount ?? o.net_amount ?? o.total_amount ?? 0),
+      totalAmount = orders.reduce(
+        (sum, o) =>
+          sum + (o.allocated_amount ?? o.net_amount ?? o.total_amount ?? 0),
         0,
       );
     }

@@ -10,7 +10,12 @@ import {
   SalesOrderOption,
   VehicleOption,
 } from "../types/dispatch-plan.schema";
-import { API_BASE_URL, fetchItems, request } from "./dispatch-plan-api";
+import {
+  API_BASE_URL,
+  fetchItems,
+  fetchItemsInChunks,
+  request,
+} from "./dispatch-plan-api";
 
 export const dispatchPlanQueryService = {
   /**
@@ -141,15 +146,13 @@ export const dispatchPlanQueryService = {
 
     // Fetch details for all plans to compute outlet counts and weights
     const planIds = plans.map((p) => p.dispatch_id);
-    const detailsRes = await fetchItems<{
+    const { data: details } = await fetchItemsInChunks<{
       dispatch_id: number;
       sales_order_id: number;
-    }>("/items/dispatch_plan_details", {
-      "filter[dispatch_id][_in]": planIds.join(","),
+    }>("/items/dispatch_plan_details", "dispatch_id", planIds, {
       fields: "*",
       limit: -1,
     });
-    const details = detailsRes.data || [];
 
     // Map sales order IDs to plan IDs
     const soToPlanMap = new Map<number, number>();
@@ -162,13 +165,16 @@ export const dispatchPlanQueryService = {
     const soWeightMap = new Map<number, number>();
 
     if (soIds.length) {
-      // Step 1: Fetch all sales order details for these orders
-      const soDetailsRes = await fetchItems<any>("/items/sales_order_details", {
-        "filter[order_id][_in]": soIds.join(","),
-        fields: "order_id,ordered_quantity,allocated_quantity,product_id",
-        limit: -1,
-      });
-      const soDetails = soDetailsRes.data || [];
+      // Step 1: Fetch all sales order details for these orders in chunks
+      const { data: soDetails } = await fetchItemsInChunks<any>(
+        "/items/sales_order_details",
+        "order_id",
+        soIds,
+        {
+          fields: "order_id,ordered_quantity,allocated_quantity,product_id",
+          limit: -1,
+        },
+      );
 
       // Step 2: Extract unique product IDs
       const normalizeId = (val: any) => {
@@ -186,20 +192,19 @@ export const dispatchPlanQueryService = {
         ),
       ];
 
-      // Step 3: Fetch weights for all these products
+      // Step 3: Fetch weights for all these products in chunks
       let prodWeightMap = new Map<string, number>();
       if (productIds.length) {
-        const prodRes = await fetchItems<{
+        const { data: products } = await fetchItemsInChunks<{
           product_id: number;
           weight: number | string | null;
-        }>("/items/products", {
-          "filter[product_id][_in]": productIds.join(","),
+        }>("/items/products", "product_id", productIds, {
           fields: "product_id,weight",
           limit: -1,
         });
 
         prodWeightMap = new Map(
-          (prodRes.data || []).map((p) => [
+          products.map((p) => [
             String(p.product_id),
             typeof p.weight === "number"
               ? p.weight
@@ -324,54 +329,52 @@ export const dispatchPlanQueryService = {
     const enrichedDetails: DispatchPlanDetail[] = [];
     if (rawDetails.length) {
       const soIds = rawDetails.map((d) => d.sales_order_id);
-      const [ordersRes] = await Promise.all([
-        fetchItems<{
-          order_id: number;
-          order_no: string;
-          customer_code: string;
-          total_amount: number;
-          net_amount: number;
-          allocated_amount: number | null;
-          po_no: string | null;
-          order_status: string | null;
-        }>("/items/sales_order", {
-          "filter[order_id][_in]": soIds.join(","),
-          fields:
-            "order_id,order_no,order_status,customer_code,total_amount,net_amount,allocated_amount,po_no",
-          limit: -1,
-        }),
-      ]);
+      const { data: orders } = await fetchItemsInChunks<{
+        order_id: number;
+        order_no: string;
+        customer_code: string;
+        total_amount: number;
+        net_amount: number;
+        allocated_amount: number | null;
+        po_no: string | null;
+        order_status: string | null;
+      }>("/items/sales_order", "order_id", soIds, {
+        fields:
+          "order_id,order_no,order_status,customer_code,total_amount,net_amount,allocated_amount,po_no",
+        limit: -1,
+      });
 
-      const orderMap = new Map(
-        (ordersRes.data || []).map((o) => [o.order_id, o]),
-      );
+      const orderMap = new Map(orders.map((o) => [o.order_id, o]));
 
       // Resolve customer names
       const customerCodes = [
-        ...new Set(
-          (ordersRes.data || []).map((o) => o.customer_code).filter(Boolean),
-        ),
-      ];
+        ...new Set(orders.map((o: any) => o.customer_code).filter(Boolean)),
+      ] as (string | number)[];
 
       let customerMap = new Map<string, CustomerInfo>();
       if (customerCodes.length) {
-        const custRes = await fetchItems<CustomerInfo>("/items/customer", {
-          "filter[customer_code][_in]": customerCodes.join(","),
-          fields: "id,customer_code,customer_name,store_name,city,province",
-          limit: -1,
-        });
-        customerMap = new Map(
-          (custRes.data || []).map((c) => [c.customer_code, c]),
+        const { data: customers } = await fetchItemsInChunks<CustomerInfo>(
+          "/items/customer",
+          "customer_code",
+          customerCodes,
+          {
+            fields: "id,customer_code,customer_name,store_name,city,province",
+            limit: -1,
+          },
         );
+        customerMap = new Map(customers.map((c) => [c.customer_code, c]));
       }
 
       // Compute weight for each Sales Order
-      const soDetailsRes = await fetchItems<any>("/items/sales_order_details", {
-        "filter[order_id][_in]": soIds.join(","),
-        fields: "order_id,ordered_quantity,allocated_quantity,product_id",
-        limit: -1,
-      });
-      const soDetails = soDetailsRes.data || [];
+      const { data: soDetails } = await fetchItemsInChunks<any>(
+        "/items/sales_order_details",
+        "order_id",
+        soIds,
+        {
+          fields: "order_id,ordered_quantity,allocated_quantity,product_id",
+          limit: -1,
+        },
+      );
 
       const normalizeId = (val: any) => {
         if (!val) return "";
@@ -390,17 +393,16 @@ export const dispatchPlanQueryService = {
 
       let prodWeightMap = new Map<string, number>();
       if (productIds.length) {
-        const prodRes = await fetchItems<{
+        const { data: products } = await fetchItemsInChunks<{
           product_id: number;
           weight: number | string | null;
-        }>("/items/products", {
-          "filter[product_id][_in]": productIds.join(","),
+        }>("/items/products", "product_id", productIds, {
           fields: "product_id,weight",
           limit: -1,
         });
 
         prodWeightMap = new Map(
-          (prodRes.data || []).map((p) => [
+          products.map((p) => [
             String(p.product_id),
             typeof p.weight === "number"
               ? p.weight
@@ -536,17 +538,16 @@ export const dispatchPlanQueryService = {
 
     let prodWeightMap = new Map<string, number>();
     if (productIds.length) {
-      const prodRes = await fetchItems<{
+      const { data: products } = await fetchItemsInChunks<{
         product_id: number;
         weight: number | string | null;
-      }>("/items/products", {
-        "filter[product_id][_in]": productIds.join(","),
+      }>("/items/products", "product_id", productIds, {
         fields: "product_id,weight",
         limit: -1,
       });
 
       prodWeightMap = new Map(
-        (prodRes.data || []).map((p) => [
+        products.map((p) => [
           String(p.product_id),
           typeof p.weight === "number"
             ? p.weight
@@ -585,14 +586,16 @@ export const dispatchPlanQueryService = {
     const customerCodes = [...new Set(orderList.map((o) => o.customer_code))];
     let customerMap = new Map<string, CustomerInfo>();
     if (customerCodes.length) {
-      const custRes = await fetchItems<CustomerInfo>("/items/customer", {
-        "filter[customer_code][_in]": customerCodes.join(","),
-        fields: "id,customer_code,customer_name,store_name,brgy,city,province",
-        limit: -1,
-      });
-      customerMap = new Map(
-        (custRes.data || []).map((c) => [c.customer_code, c]),
+      const { data: customers } = await fetchItemsInChunks<CustomerInfo>(
+        "/items/customer",
+        "customer_code",
+        customerCodes,
+        {
+          fields: "id,customer_code,customer_name,store_name,brgy,city,province",
+          limit: -1,
+        },
       );
+      customerMap = new Map(customers.map((c) => [c.customer_code, c]));
     }
 
     // Step 5.5: Filter "Not Fulfilled" by Clearance Status
@@ -603,28 +606,32 @@ export const dispatchPlanQueryService = {
 
     const clearedOrderNos = new Set<string>();
     if (notFulfilledOrderNos.length) {
-      // 1. Fetch invoices matching these order numbers
-      const invoicesRes = await fetchItems<any>("/items/sales_invoice", {
-        "filter[order_id][_in]": notFulfilledOrderNos.join(","),
-        fields: "invoice_id,order_id",
-        limit: -1,
-      });
-      const invoices = invoicesRes.data || [];
+      // 1. Fetch invoices matching these order numbers in chunks
+      const { data: invoices } = await fetchItemsInChunks<any>(
+        "/items/sales_invoice",
+        "order_id",
+        notFulfilledOrderNos,
+        {
+          fields: "invoice_id,order_id",
+          limit: -1,
+        },
+      );
       const invoiceIds = invoices.map((i: any) => i.invoice_id);
 
       if (invoiceIds.length) {
-        // 2. Check which of these invoices are cleared
-        const clearanceRes = await fetchItems<any>(
+        // 2. Check which of these invoices are cleared in chunks
+        const { data: clearanceData } = await fetchItemsInChunks<any>(
           "/items/post_dispatch_invoices",
+          "invoice_id",
+          invoiceIds,
           {
-            "filter[invoice_id][_in]": invoiceIds.join(","),
             "filter[isCleared][_eq]": 1,
             fields: "invoice_id",
             limit: -1,
           },
         );
         const clearedInvoiceIds = new Set(
-          (clearanceRes.data || []).map((c: any) => c.invoice_id),
+          clearanceData.map((c: any) => c.invoice_id),
         );
 
         // 3. Map back to order numbers
@@ -641,19 +648,15 @@ export const dispatchPlanQueryService = {
     let assignedOrderIds = new Set<number>();
     // Step 7: Exclude Already Assigned Orders (Only for non-terminal plans)
     if (allOrderIds.length) {
-      const assignedRes = await fetchItems<{ sales_order_id: number }>(
-        "/items/dispatch_plan_details",
-        {
-          "filter[sales_order_id][_in]": allOrderIds.join(","),
-          "filter[dispatch_id][status][_nin]": "Dispatched,Cancelled,Delivered",
-          "filter[sales_order_id][order_status][_neq]": "Not Fulfilled",
-          fields: "sales_order_id",
-          limit: -1,
-        },
-      );
-      assignedOrderIds = new Set(
-        (assignedRes.data || []).map((d) => d.sales_order_id),
-      );
+      const { data: assignedDetails } = await fetchItemsInChunks<{
+        sales_order_id: number;
+      }>("/items/dispatch_plan_details", "sales_order_id", allOrderIds, {
+        "filter[dispatch_id][status][_nin]": "Dispatched,Cancelled,Delivered",
+        "filter[sales_order_id][order_status][_neq]": "Not Fulfilled",
+        fields: "sales_order_id",
+        limit: -1,
+      });
+      assignedOrderIds = new Set(assignedDetails.map((d) => d.sales_order_id));
     }
 
     // Final construction and filtering
