@@ -182,9 +182,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       setItems((prevItems) =>
         prevItems.map((item) => {
           const basePrice = resolvePrice(item, priceType);
-          const newUnitPrice = Math.round((item.unit === "BOX" 
-            ? basePrice * (item.unitMultiplier || 1) 
-            : basePrice) * 100) / 100;
+          const newUnitPrice = basePrice;
           
           const newGross = Math.round(item.quantity * newUnitPrice * 100) / 100;
           let newDiscountAmt = 0;
@@ -869,7 +867,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                               {item.code}
                             </td>
                             <td className="px-4 py-2 text-foreground">
-                              <div className="text-sm text-foreground font-medium truncate max-w-[220px]" title={item.description}>
+                              <div className="text-sm text-foreground font-medium" title={item.description}>
                                 {item.description}
                               </div>
                             </td>
@@ -1028,7 +1026,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                               </div>
                             </td>
                             <td className="px-4 py-2 text-foreground">
-                              <div className="text-sm text-foreground font-medium truncate max-w-[220px]" title={group.description}>
+                              <div className="text-sm text-foreground font-medium" title={group.description}>
                                 {group.description}
                               </div>
                             </td>

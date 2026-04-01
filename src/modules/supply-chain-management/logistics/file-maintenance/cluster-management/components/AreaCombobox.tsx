@@ -4,13 +4,20 @@ import * as React from "react"
 import { Check, ChevronsUpDown } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 
 export interface AreaComboboxOption {
   value: string
@@ -35,32 +42,67 @@ export function AreaCombobox({
   placeholder = "Select option...",
   emptyMessage = "No option found.",
   className,
-  disabled,
+  disabled = false,
   renderItem
 }: AreaComboboxProps) {
+  const [open, setOpen] = React.useState(false)
+
   const sortedOptions = React.useMemo(() => {
     return [...options].sort((a, b) => a.label.localeCompare(b.label))
   }, [options])
 
+  const selectedLabel = React.useMemo(() => {
+    return sortedOptions.find((option) => option.value === value)?.label
+  }, [sortedOptions, value])
+
   return (
-    <Select value={value} onValueChange={onValueChange} disabled={disabled}>
-      <SelectTrigger className={cn("w-full bg-background border-input", className)}>
-        <SelectValue placeholder={placeholder} />
-      </SelectTrigger>
-      <SelectContent position="popper" className="max-h-[300px] overflow-y-auto">
-        {sortedOptions.length > 0 ? (
-          sortedOptions.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {renderItem ? renderItem(option) : option.label}
-            </SelectItem>
-          ))
-        ) : (
-          <div className="p-2 text-sm text-muted-foreground">{emptyMessage}</div>
-        )}
-      </SelectContent>
-    </Select>
+    <Popover open={open} onOpenChange={setOpen} modal={true}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className={cn("w-full justify-between font-normal h-9 border-input bg-background", className, !selectedLabel && "text-muted-foreground")}
+          disabled={disabled}
+        >
+          <span className="truncate">
+            {selectedLabel || placeholder}
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+        <Command>
+          <CommandInput placeholder={`Search ${placeholder.toLowerCase()}`} className="h-9" />
+          <CommandList>
+            <CommandEmpty>{emptyMessage}</CommandEmpty>
+            <CommandGroup className="max-h-[300px] overflow-y-auto overscroll-contain">
+              {sortedOptions.map((option) => (
+                <CommandItem
+                  key={option.value}
+                  value={option.label}
+                  onSelect={() => {
+                    onValueChange(option.value === value ? "" : option.value)
+                    setOpen(false)
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4 shrink-0",
+                      value === option.value ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  {renderItem ? renderItem(option) : option.label}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   )
 }
+
 
 
 

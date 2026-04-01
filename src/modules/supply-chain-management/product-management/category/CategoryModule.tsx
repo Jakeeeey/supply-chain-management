@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Plus, MoreHorizontal, Pencil } from "lucide-react";
+import { Plus, MoreHorizontal, Pencil, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { ColumnDef } from "@tanstack/react-table";
 
@@ -18,12 +18,16 @@ import ErrorPage from "@/components/shared/ErrorPage";
 import { CategoryApiRow } from "./types";
 import { listCategories } from "./providers/fetchProviders";
 import { CategoryDialog } from "./components/CategoryDialog";
+import { ViewCategoryDialog } from "./components/ViewCategoryDialog";
 
 // =============================================================================
 // COLUMN DEFINITIONS
 // =============================================================================
 
-function buildColumns(onEdit: (row: CategoryApiRow) => void): ColumnDef<CategoryApiRow>[] {
+function buildColumns(
+  onView: (row: CategoryApiRow) => void,
+  onEdit: (row: CategoryApiRow) => void
+): ColumnDef<CategoryApiRow>[] {
   return [
     {
       accessorKey: "category_name",
@@ -52,6 +56,9 @@ function buildColumns(onEdit: (row: CategoryApiRow) => void): ColumnDef<Category
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onView(row.original)}>
+                <Eye className="mr-2 h-4 w-4" /> View
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onEdit(row.original)}>
                 <Pencil className="mr-2 h-4 w-4" /> Edit
               </DropdownMenuItem>
@@ -74,6 +81,7 @@ export default function CategoryModule() {
 
   // Dialog State
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<CategoryApiRow | null>(null);
 
   // Fetch ALL data (client-side pagination)
@@ -97,6 +105,11 @@ export default function CategoryModule() {
     fetchData();
   }, [fetchData]);
 
+  const handleView = (row: CategoryApiRow) => {
+    setSelectedCategory(row);
+    setIsViewDialogOpen(true);
+  };
+
   const handleEdit = (row: CategoryApiRow) => {
     setSelectedCategory(row);
     setIsDialogOpen(true);
@@ -107,7 +120,7 @@ export default function CategoryModule() {
     setIsDialogOpen(true);
   };
 
-  const columns = buildColumns(handleEdit);
+  const columns = buildColumns(handleView, handleEdit);
 
   // Error State
   if (error && !loading) {
@@ -142,6 +155,12 @@ export default function CategoryModule() {
         onOpenChange={setIsDialogOpen}
         selectedCategory={selectedCategory}
         onSuccess={fetchData}
+      />
+
+      <ViewCategoryDialog
+        open={isViewDialogOpen}
+        onOpenChange={setIsViewDialogOpen}
+        selectedCategory={selectedCategory}
       />
     </div>
   );

@@ -149,9 +149,6 @@ export default function ClusterModule() {
   const [selectedCluster, setSelectedCluster] =
     useState<ClusterWithAreas | null>(null);
 
-  // Cluster name filter
-  const [clusterFilter, setClusterFilter] = useState<string>("all");
-
   // ── Data fetching ──────────────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
     try {
@@ -192,20 +189,9 @@ export default function ClusterModule() {
   // ── Derived data ───────────────────────────────────────────────────────────
   const columns = buildColumns(handleEdit, handleView);
 
-  const clusterNames = useMemo(
-    () =>
-      [...new Set(data.map((c) => c.cluster_name))].sort((a, b) =>
-        a.localeCompare(b),
-      ),
+  const sortedData = useMemo(
+    () => [...data].sort((a, b) => b.id - a.id),
     [data],
-  );
-
-  const filteredData = useMemo(
-    () =>
-      clusterFilter === "all"
-        ? data
-        : data.filter((c) => c.cluster_name === clusterFilter),
-    [data, clusterFilter],
   );
 
   // ── Error state ────────────────────────────────────────────────────────────
@@ -225,30 +211,13 @@ export default function ClusterModule() {
     <div className="space-y-4">
       <DataTable
         columns={columns}
-        data={filteredData}
+        data={sortedData}
         searchKey="cluster_name"
         isLoading={loading}
         emptyTitle="No clusters found"
         emptyDescription="Create your first cluster to get started."
         actionComponent={
           <div className="flex items-center gap-2">
-            <Select
-              value={clusterFilter}
-              onValueChange={setClusterFilter}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by cluster" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Clusters</SelectItem>
-                {clusterNames.map((name) => (
-                  <SelectItem key={name} value={name}>
-                    {name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
             <Button onClick={handleCreate}>
               <Plus className="mr-2 h-4 w-4" /> New Cluster
             </Button>
@@ -260,6 +229,7 @@ export default function ClusterModule() {
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
         selectedCluster={selectedCluster}
+        allClusters={data}
         onSuccess={fetchData}
       />
 

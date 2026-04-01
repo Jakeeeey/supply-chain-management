@@ -26,23 +26,86 @@ async function readError(res: Response) {
 /** 
  * Philippine Location APIs (PSGC)
  * Source: https://psgc.gitlab.io/api/
+ *
+ * All PSGC fetches are cached in-memory so repeated selections
+ * (e.g. switching back to a previously-selected province) are instant.
  */
-export async function fetchProvinces(): Promise<{ code: string; name: string }[]> {
+
+type GeoItem = { code: string; name: string };
+
+/** Extended type for barangays that includes parent city/municipality codes */
+export type BarangayItem = GeoItem & {
+  cityCode: string | false;
+  municipalityCode: string | false;
+};
+
+const cache: Record<string, GeoItem[]> = {};
+const brgyCache: Record<string, BarangayItem[]> = {};
+
+export async function fetchProvinces(): Promise<GeoItem[]> {
+  if (cache["provinces"]) return cache["provinces"];
+
   const res = await fetch("https://psgc.gitlab.io/api/provinces");
   if (!res.ok) return [];
-  return res.json();
+  const provinces: GeoItem[] = await res.json();
+
+  // Inject Metro Manila (technically a Region, not a Province)
+  provinces.push({ code: "130000000", name: "Metro Manila" });
+
+  // Sort alphabetically so it's easy to find
+  provinces.sort((a, b) => a.name.localeCompare(b.name));
+
+  cache["provinces"] = provinces;
+  return provinces;
 }
 
-export async function fetchCities(provinceCode: string): Promise<{ code: string; name: string }[]> {
-  const res = await fetch(`https://psgc.gitlab.io/api/provinces/${provinceCode}/cities-municipalities`);
+export async function fetchCities(provinceCode: string): Promise<GeoItem[]> {
+  const key = `cities:${provinceCode}`;
+  if (cache[key]) return cache[key];
+
+  // If "Metro Manila" (NCR) is selected, fetch using the region-level endpoint
+  const url = provinceCode === "130000000"
+    ? `https://psgc.gitlab.io/api/regions/${provinceCode}/cities-municipalities`
+    : `https://psgc.gitlab.io/api/provinces/${provinceCode}/cities-municipalities`;
+
+  const res = await fetch(url);
   if (!res.ok) return [];
-  return res.json();
+  const cities: GeoItem[] = await res.json();
+
+  cache[key] = cities;
+  return cities;
 }
 
-export async function fetchBarangays(cityCode: string): Promise<{ code: string; name: string }[]> {
+/**
+ * Eager-load ALL barangays for a province (or region for Metro Manila).
+ * Returns full barangay objects with cityCode/municipalityCode for local filtering.
+ */
+export async function fetchAllBarangays(provinceCode: string): Promise<BarangayItem[]> {
+  const key = `allBrgys:${provinceCode}`;
+  if (brgyCache[key]) return brgyCache[key];
+
+  const url = provinceCode === "130000000"
+    ? `https://psgc.gitlab.io/api/regions/${provinceCode}/barangays`
+    : `https://psgc.gitlab.io/api/provinces/${provinceCode}/barangays`;
+
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  const barangays: BarangayItem[] = await res.json();
+
+  brgyCache[key] = barangays;
+  return barangays;
+}
+
+export async function fetchBarangays(cityCode: string): Promise<GeoItem[]> {
+  const key = `barangays:${cityCode}`;
+  if (cache[key]) return cache[key];
+
   const res = await fetch(`https://psgc.gitlab.io/api/cities-municipalities/${cityCode}/barangays`);
   if (!res.ok) return [];
-  return res.json();
+  const barangays: GeoItem[] = await res.json();
+
+  cache[key] = barangays;
+  return barangays;
 }
 
 // =============================================================================

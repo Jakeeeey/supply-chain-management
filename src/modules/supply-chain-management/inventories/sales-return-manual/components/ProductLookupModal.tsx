@@ -218,8 +218,8 @@ export function ProductLookupModal({
       const rawParentId = product.parent_id;
       let finalParentIdNum: number | null = null;
       
-      if (rawParentId && typeof rawParentId === 'object') {
-        finalParentIdNum = Number((rawParentId as any).product_id || (rawParentId as any).id);
+      if (rawParentId && typeof rawParentId === "object") {
+        finalParentIdNum = Number(rawParentId.product_id || rawParentId.id);
       } else if (rawParentId !== null && rawParentId !== undefined) {
         finalParentIdNum = Number(rawParentId);
       }
@@ -654,7 +654,7 @@ export function ProductLookupModal({
                       >
                         <CardHeader className="bg-muted/10 pb-3">
                           <CardTitle
-                            className="text-sm font-bold leading-snug line-clamp-2"
+                            className="text-sm font-bold leading-snug"
                             title={parentData.product_name}
                           >
                             {parentData.product_name}

@@ -45,6 +45,65 @@ async function directusFetch(url: string, options?: RequestInit) {
   return data;
 }
 
+/** Normalize a string for safe comparison */
+function norm(s?: string | null): string {
+  return (s || "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+/**
+ * Check if any incoming areas overlap with existing areas from OTHER clusters.
+ * Returns a descriptive error string if overlap is found, or null if clean.
+ */
+async function checkAreaOverlap(
+  incomingAreas: { province?: string; city?: string; baranggay?: string }[],
+  excludeClusterId?: number
+): Promise<string | null> {
+  const allAreas = await directusFetch(
+    `${DIRECTUS_URL}${AREA_ENDPOINT}?limit=-1`
+  );
+  const existingAreas = (allAreas.data ?? []) as Area[];
+
+  for (const incoming of incomingAreas) {
+    if (!incoming.province) continue;
+
+    const inCity = norm(incoming.city);
+    const inBrgy = norm(incoming.baranggay);
+
+    if (!inCity) continue; // No city means nothing to check
+
+    for (const existing of existingAreas) {
+      // Skip areas belonging to the cluster being edited
+      if (excludeClusterId && existing.cluster_id === excludeClusterId) continue;
+
+      const exCity = norm(existing.city);
+      const exBrgy = norm(existing.baranggay);
+
+      if (!exCity) continue;
+
+      // Case 1: Incoming is a "whole city" claim (city + no barangay)
+      if (inCity && !inBrgy) {
+        if (exCity === inCity) {
+          return `"${incoming.city}" is already assigned (fully or partially) to another cluster.`;
+        }
+      }
+
+      // Case 2: Incoming is a specific barangay claim
+      if (inCity && inBrgy) {
+        // Blocked if someone else owns the whole city
+        if (exCity === inCity && !exBrgy) {
+          return `"${incoming.city}" is entirely claimed by another cluster. Cannot assign individual barangays.`;
+        }
+        // Blocked if someone else owns this exact barangay
+        if (exCity === inCity && exBrgy === inBrgy) {
+          return `"${incoming.baranggay}" in "${incoming.city}" is already assigned to another cluster.`;
+        }
+      }
+    }
+  }
+
+  return null; // No overlap
+}
+
 // =============================================================================
 // GET — List all clusters (with areas) or fetch a single cluster by id
 // =============================================================================
@@ -74,7 +133,7 @@ export async function GET(req: NextRequest) {
 
     // ── List: all clusters joined with their areas ─────────────────────
     const clusters = await directusFetch(
-      `${DIRECTUS_URL}${CLUSTER_ENDPOINT}?sort=cluster_name&limit=-1`,
+      `${DIRECTUS_URL}${CLUSTER_ENDPOINT}?sort=-id&limit=-1`,
     );
     const allAreas = await directusFetch(
       `${DIRECTUS_URL}${AREA_ENDPOINT}?sort=id&limit=-1`,
@@ -134,6 +193,16 @@ export async function POST(req: NextRequest) {
 
     const newClusterId = cluster.data.id;
 
+    // 1b. Area overlap check
+    const overlapError = await checkAreaOverlap(areas ?? []);
+    if (overlapError) {
+      // Rollback the cluster we just created
+      await directusFetch(`${DIRECTUS_URL}${CLUSTER_ENDPOINT}/${newClusterId}`, {
+        method: "DELETE",
+      }).catch(() => {});
+      return json({ error: overlapError }, 409);
+    }
+
     try {
       // 2. Create each area linked to this cluster
       const createdAreas = [];
@@ -145,9 +214,9 @@ export async function POST(req: NextRequest) {
             method: "POST",
             body: JSON.stringify({
               cluster_id: newClusterId,
-              province: area.province || null,
-              city: area.city || null,
-              baranggay: area.baranggay || null,
+              province: area.province?.trim() || null,
+              city: area.city?.trim() || null,
+              baranggay: area.baranggay?.trim() || null,
             }),
           },
         );
@@ -167,8 +236,9 @@ export async function POST(req: NextRequest) {
       throw areaErr;
     }
   } catch (err: unknown) {
-    const errorData = err as { data?: { error?: string }; status?: number; message?: string };
-    return json(errorData.data ?? { error: errorData.message }, errorData.status ?? 500);
+    const errorData = err as { data?: { errors?: { message?: string }[]; error?: string }; status?: number; message?: string };
+    const directusMsg = errorData.data?.errors?.[0]?.message || errorData.data?.error || errorData.message;
+    return json({ error: directusMsg || "Failed to create cluster." }, errorData.status ?? 500);
   }
 }
 
@@ -211,65 +281,51 @@ export async function PATCH(req: NextRequest) {
       },
     );
 
-    // 2. Fetch existing existing areas for deletion check
+    // 1b. Area overlap check (exclude the current cluster's own areas)
+    const overlapError = await checkAreaOverlap(areas ?? [], parseInt(id));
+    if (overlapError) {
+      return json({ error: overlapError }, 409);
+    }
+
+    // 2. Delete ALL existing areas for this cluster first
+    //    (avoids unique-constraint collisions during upsert when
+    //     multiple rows share the same city but different barangays)
     const existingAreasRes = await directusFetch(
       `${DIRECTUS_URL}${AREA_ENDPOINT}?filter[cluster_id][_eq]=${id}&limit=-1`
     );
-    const existingAreaIds = (existingAreasRes.data as Area[] | undefined)?.map((a: Area) => a.id) || [];
-    const incomingAreaIds = (areas as { id?: number }[] ?? []).filter((a) => a.id).map((a) => a.id as number);
-    const idsToDelete = existingAreaIds.filter(
-      (existingId: number) => !incomingAreaIds.includes(existingId)
-    );
+    const existingAreaIds = ((existingAreasRes.data ?? []) as Area[]).map((a: Area) => a.id);
 
-    // 3. Delete areas removed from the UI
-    for (const deleteId of idsToDelete) {
+    for (const deleteId of existingAreaIds) {
       await directusFetch(`${DIRECTUS_URL}${AREA_ENDPOINT}/${deleteId}`, {
         method: "DELETE",
       });
     }
 
-    // 4. Upsert remaining areas (update existing, create new)
-    const upsertedAreas = [];
+    // 3. Re-create all areas from the incoming form data
+    const createdAreas = [];
     for (const area of areas ?? []) {
       if (!area.province) continue;
-
-      if (area.id) {
-        // Update existing area
-        const areaRes = await directusFetch(
-          `${DIRECTUS_URL}${AREA_ENDPOINT}/${area.id}`,
-          {
-            method: "PATCH",
-            body: JSON.stringify({
-              province: area.province || null,
-              city: area.city || null,
-              baranggay: area.baranggay || null,
-            }),
-          },
-        );
-        upsertedAreas.push(areaRes.data);
-      } else {
-        // Create new area for this cluster
-        const areaRes = await directusFetch(
-          `${DIRECTUS_URL}${AREA_ENDPOINT}`,
-          {
-            method: "POST",
-            body: JSON.stringify({
-              cluster_id: parseInt(id),
-              province: area.province || null,
-              city: area.city || null,
-              baranggay: area.baranggay || null,
-            }),
-          },
-        );
-        upsertedAreas.push(areaRes.data);
-      }
+      const areaRes = await directusFetch(
+        `${DIRECTUS_URL}${AREA_ENDPOINT}`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            cluster_id: parseInt(id),
+            province: area.province?.trim() || null,
+            city: area.city?.trim() || null,
+            baranggay: area.baranggay?.trim() || null,
+          }),
+        },
+      );
+      createdAreas.push(areaRes.data);
     }
 
     return json({
-      data: { ...cluster.data, areas: upsertedAreas },
+      data: { ...cluster.data, areas: createdAreas },
     });
   } catch (err: unknown) {
-    const errorData = err as { data?: { error?: string }; status?: number; message?: string };
-    return json(errorData.data ?? { error: errorData.message }, errorData.status ?? 500);
+    const errorData = err as { data?: { errors?: { message?: string }[]; error?: string }; status?: number; message?: string };
+    const directusMsg = errorData.data?.errors?.[0]?.message || errorData.data?.error || errorData.message;
+    return json({ error: directusMsg || "Failed to update cluster." }, errorData.status ?? 500);
   }
 }
