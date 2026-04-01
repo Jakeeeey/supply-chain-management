@@ -4,8 +4,9 @@
 import * as React from "react";
 import { ProductTracingFilters } from "./components/ProductTracingFilters";
 import { ProductTracingTable } from "./components/ProductTracingTable";
-import { ProductTracingFiltersType, ProductMovementRow, ProductFamilyRow } from "./types";
+import { PhysicalInventorySummary } from "./components/PhysicalInventorySummary";
 import { fetchBranches, fetchProductFamilies, fetchMovements } from "./providers/fetchProvider";
+import { ProductTracingFiltersType, ProductMovementRow, ProductFamilyRow } from "./types";
 import { Separator } from "@/components/ui/separator";
 import { 
     History as HistoryIcon, 
@@ -66,10 +67,14 @@ export const ProductTracingModule = React.forwardRef<HTMLDivElement, React.HTMLA
         setIsLoading(true);
         setError(null);
         try {
-            const data = await fetchMovements(filters);
-            setMovements(data || []);
+            // Omit startDate to fetch full historical movements up to endDate
+            const fetchFilters = { ...filters, startDate: null };
+            const [movementsData] = await Promise.all([
+                fetchMovements(fetchFilters)
+            ]);
+            setMovements(movementsData || []);
         } catch (err) {
-            setError("Failed to fetch movements. Please try again.");
+            setError("Failed to fetch data. Please try again.");
             console.error(err);
         } finally {
             setIsLoading(false);
@@ -79,20 +84,16 @@ export const ProductTracingModule = React.forwardRef<HTMLDivElement, React.HTMLA
     const stats = React.useMemo(() => {
         if (!movements.length) return { totalIn: 0, totalOut: 0, netChange: 0 };
         
-        // Frontend filtering by timestamp, branch and product family as requested
-        const filtered = movements.filter(row => {
-            // Date filter
+        const start = filters.startDate ? new Date(filters.startDate) : null;
+        const end = filters.endDate ? new Date(filters.endDate) : null;
+        
+        // Base filtering purely for product family, branch, and ending date
+        const validMovements = movements.filter(row => {
             const rowDate = new Date(row.ts);
-            const start = filters.startDate ? new Date(filters.startDate) : null;
-            const end = filters.endDate ? new Date(filters.endDate) : null;
-            if (start && rowDate < start) return false;
             if (end && rowDate > end) return false;
 
-            // Branch filter
             if (filters.branch_id && row.branchId !== filters.branch_id) return false;
 
-            // Product Family filter
-            // We match if the product itself is the parent OR its parent is the selected parent
             if (filters.parent_id) {
                 const matchesParent = row.productId === filters.parent_id || row.parentId === filters.parent_id;
                 if (!matchesParent) return false;
@@ -101,22 +102,38 @@ export const ProductTracingModule = React.forwardRef<HTMLDivElement, React.HTMLA
             return true;
         });
 
-        const divisor = filtered[0]?.familyUnitCount || 1;
+        // Split into "before" (for beginning balance) and "filtered" (for current period stats)
+        const filtered: typeof movements = [];
+
+        validMovements.forEach(row => {
+            const rowDate = new Date(row.ts);
+            if (!start || rowDate >= start) {
+                filtered.push(row);
+            }
+        });
+
+        const divisor = validMovements[0]?.familyUnitCount || 1;
         const totalInBase = filtered.reduce((acc, row) => acc + (row.inBase || 0), 0);
         const totalOutBase = filtered.reduce((acc, row) => acc + (row.outBase || 0), 0);
         const netChangeBase = totalInBase - totalOutBase;
 
         // Breakdown per UOM as requested
-        const breakdown: Record<string, { in: number, out: number }> = {};
-        filtered.forEach(row => {
+        const breakdown: Record<string, { beginning: number, in: number, out: number }> = {};
+        
+        validMovements.forEach(row => {
             const unit = row.unit || "Base";
-            if (!breakdown[unit]) breakdown[unit] = { in: 0, out: 0 };
+            if (!breakdown[unit]) breakdown[unit] = { beginning: 0, in: 0, out: 0 };
             
             const div = row.unitCount && row.unitCount > 0 ? row.unitCount : 1;
-            breakdown[unit].in += (row.inBase || 0) / div;
-            breakdown[unit].out += (row.outBase || 0) / div;
+            
+            if (start && new Date(row.ts) < start) {
+                breakdown[unit].beginning += ((row.inBase || 0) - (row.outBase || 0)) / div;
+            } else {
+                breakdown[unit].in += (row.inBase || 0) / div;
+                breakdown[unit].out += (row.outBase || 0) / div;
+            }
         });
-        
+
         return { 
             totalInBase, 
             totalOutBase, 
@@ -124,9 +141,9 @@ export const ProductTracingModule = React.forwardRef<HTMLDivElement, React.HTMLA
             breakdown,
             filtered, 
             divisor: divisor || 1, 
-            unit: filtered[0]?.familyUnit || filtered[0]?.unit || "Units" 
+            unit: validMovements.find(r => r.unitCount === (divisor || 1))?.unit || validMovements[0]?.familyUnit || "Box" 
         };
-    }, [movements, filters.startDate, filters.endDate]);
+    }, [movements, filters.startDate, filters.endDate, filters.branch_id, filters.parent_id]);
 
     const currentUnit = stats?.unit || "Units";
     const currentDivisor = stats?.divisor || 1;
@@ -165,87 +182,182 @@ export const ProductTracingModule = React.forwardRef<HTMLDivElement, React.HTMLA
 
             {(movements.length > 0 || isLoading) && (
                 <div className="space-y-6">
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 animate-in fade-in duration-500">
-                        <SummaryStatCard 
-                            title="Total In" 
-                            value={
-                                <div className="flex flex-col gap-0.5 mt-1">
-                                    {breakdownEntries.length > 0 ? (
-                                        breakdownEntries.map(([unit, val]) => (
-                                            <div key={unit} className="flex flex-col first:mt-0 mt-2">
-                                                <div className="flex items-baseline justify-between w-full">
-                                                    <span className="text-[10px] font-black text-emerald-600/60 uppercase tracking-widest">{unit}</span>
-                                                    <span className="text-3xl font-black tabular-nums text-emerald-600">
-                                                        {val.in.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                    {stats.filtered && stats.filtered.some(m => m.docNo.toUpperCase().startsWith("PH") || m.docType?.toUpperCase() === "PHYSICAL INVENTORY") && (
+                        <PhysicalInventorySummary 
+                            movements={stats.filtered} 
+                            baseUnitName={currentUnit}
+                            baseUnitDivisor={currentDivisor}
+                        />
+                    )}
+
+                    <Card className="rounded-[2rem] border shadow-sm bg-background overflow-hidden border-border/40 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                        <CardContent className="p-0">
+                            <div className="grid md:grid-cols-[1fr,2.2fr] divide-y md:divide-y-0 md:divide-x divide-border/40">
+                                {/* Left Section: High Level Summary */}
+                                <div className="p-8 flex flex-col justify-center bg-muted/5 relative overflow-hidden group">
+                                    <div className="absolute top-0 right-0 -tr-4 opacity-[0.03] group-hover:opacity-[0.05] transition-opacity pointer-events-none">
+                                        <HistoryIcon className="h-48 w-48 text-primary" />
+                                    </div>
+                                    
+                                    <div className="flex items-center gap-2 mb-6">
+                                        <div className="p-1.5 bg-primary/10 rounded-lg">
+                                            <TrendIcon className="h-4 w-4 text-primary" />
+                                        </div>
+                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">Total Net Movement</span>
+                                    </div>
+
+                                    <div className="flex flex-col gap-1">
+                                        <div className="flex items-baseline gap-3">
+                                            <span className={cn(
+                                                "text-6xl font-black tracking-tighter tabular-nums leading-none",
+                                                (stats?.netChangeBase || 0) >= 0 ? "text-emerald-600" : "text-amber-600"
+                                            )}>
+                                                {(stats?.netChangeBase || 0).toLocaleString()}
+                                            </span>
+                                            <span className="text-sm font-bold text-muted-foreground/60 uppercase tracking-widest">{currentUnit}</span>
+                                        </div>
+                                        <p className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.1em] mt-2">
+                                            Cumulative movement for selected period
+                                        </p>
+                                    </div>
+
+                                    {/* Product Context Section */}
+                                    {filters.parent_id && (
+                                        <div className="mt-8 space-y-4 animate-in fade-in slide-in-from-left-2 duration-500">
+                                            <div className="h-px w-10 bg-border/40" />
+                                            <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                                                <div className="flex flex-col gap-0.5">
+                                                    <span className="text-[8px] font-black text-muted-foreground/40 uppercase tracking-widest">Product Code</span>
+                                                    <span className="text-[11px] font-bold text-foreground/80 tracking-tight">
+                                                        {families.find(f => f.parent_id === filters.parent_id)?.product_code || "N/A"}
+                                                    </span>
+                                                </div>
+                                                <div className="flex flex-col gap-0.5">
+                                                    <span className="text-[8px] font-black text-muted-foreground/40 uppercase tracking-widest">Brand</span>
+                                                    <span className="text-[11px] font-bold text-foreground/80 tracking-tight">
+                                                        {families.find(f => f.parent_id === filters.parent_id)?.brand_name || "N/A"}
+                                                    </span>
+                                                </div>
+                                                <div className="flex flex-col gap-0.5">
+                                                    <span className="text-[8px] font-black text-muted-foreground/40 uppercase tracking-widest">Category</span>
+                                                    <span className="text-[11px] font-bold text-foreground/80 tracking-tight">
+                                                        {families.find(f => f.parent_id === filters.parent_id)?.category_name || "N/A"}
+                                                    </span>
+                                                </div>
+                                                <div className="flex flex-col gap-0.5">
+                                                    <span className="text-[8px] font-black text-muted-foreground/40 uppercase tracking-widest">Short Desc</span>
+                                                    <span className="text-[11px] font-bold text-foreground/80 tracking-tight truncate max-w-[120px]">
+                                                        {families.find(f => f.parent_id === filters.parent_id)?.short_description || "N/A"}
                                                     </span>
                                                 </div>
                                             </div>
-                                        ))
-                                    ) : (
-                                        <span className="text-sm font-bold text-muted-foreground opacity-50 italic">No additions</span>
+                                        </div>
                                     )}
-                                </div>
-                            } 
-                            icon={<InIcon className="h-4 w-4 text-emerald-500" />}
-                            subtitle={<span className="text-xl text-emerald-700/80">TOTAL: {(stats?.totalInBase || 0).toLocaleString()} <span className="text-[10px] opacity-60">PCS</span></span>}
-                        />
-                        <SummaryStatCard 
-                            title="Total Out" 
-                            value={
-                                <div className="flex flex-col gap-0.5 mt-1">
-                                    {breakdownEntries.length > 0 ? (
-                                        breakdownEntries.map(([unit, val]) => (
-                                            <div key={unit} className="flex flex-col first:mt-0 mt-2">
-                                                <div className="flex items-baseline justify-between w-full">
-                                                    <span className="text-[10px] font-black text-amber-600/60 uppercase tracking-widest">{unit}</span>
-                                                    <span className="text-3xl font-black tabular-nums text-amber-600">
-                                                        {val.out.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                                                    </span>
-                                                </div>
+
+                                    <div className="mt-10 pt-8 border-t border-border/40 flex items-center gap-8">
+                                        <div className="flex flex-col gap-1">
+                                            <div className="flex items-center gap-1.5">
+                                                <InIcon className="h-3 w-3 text-emerald-500" />
+                                                <span className="text-[9px] font-black text-muted-foreground/50 uppercase tracking-widest">Total Additions</span>
                                             </div>
-                                        ))
-                                    ) : (
-                                        <span className="text-sm font-bold text-muted-foreground opacity-50 italic">No deductions</span>
-                                    )}
-                                </div>
-                            } 
-                            icon={<OutIcon className="h-4 w-4 text-amber-500" />}
-                            subtitle={<span className="text-xl text-amber-700/80">TOTAL: {(stats?.totalOutBase || 0).toLocaleString()} <span className="text-[10px] opacity-60">PCS</span></span>}
-                        />
-                        <SummaryStatCard 
-                            title="Net Change" 
-                            value={
-                                <div className="flex items-baseline gap-2">
-                                    <span className="text-5xl font-black">{(stats?.netChangeBase || 0).toLocaleString()}</span>
-                                    <span className="text-xs font-bold text-muted-foreground uppercase opacity-50 tracking-widest">Pieces</span>
-                                </div>
-                            } 
-                            icon={<TrendIcon className="h-4 w-4 text-primary" />}
-                            subtitle="Total net movement"
-                            trend={(stats?.netChangeBase || 0) >= 0 ? "positive" : "negative"}
-                        />
-                        <SummaryStatCard 
-                            title="UOM Breakdown" 
-                            value={
-                                <div className="flex flex-col gap-1 mt-1">
-                                    {breakdownEntries.length > 0 ? (
-                                        breakdownEntries.map(([unit, val]) => (
-                                            <div key={unit} className="flex items-baseline justify-between w-full first:mt-0 mt-2">
-                                                <span className="text-[10px] font-black text-muted-foreground/60 uppercase tracking-widest">{unit}</span>
-                                                <span className="text-3xl font-black tabular-nums text-foreground">
-                                                    {(val.in - val.out).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                                                </span>
+                                            <div className="flex items-baseline gap-1">
+                                                <span className="text-xl font-black text-emerald-600 tabular-nums">{(stats?.totalInBase || 0).toLocaleString()}</span>
+                                                <span className="text-[8px] font-bold text-emerald-600/40 uppercase">Pcs</span>
                                             </div>
-                                        ))
-                                    ) : (
-                                        <span className="text-sm font-bold text-muted-foreground opacity-50 italic text-center w-full">No movements</span>
-                                    )}
+                                        </div>
+                                        
+                                        <div className="h-10 w-px bg-border/40" />
+
+                                        <div className="flex flex-col gap-1">
+                                            <div className="flex items-center gap-1.5">
+                                                <OutIcon className="h-3 w-3 text-amber-500" />
+                                                <span className="text-[9px] font-black text-muted-foreground/50 uppercase tracking-widest">Total Deductions</span>
+                                            </div>
+                                            <div className="flex items-baseline gap-1">
+                                                <span className="text-xl font-black text-amber-600 tabular-nums">{(stats?.totalOutBase || 0).toLocaleString()}</span>
+                                                <span className="text-[8px] font-bold text-amber-600/40 uppercase">Pcs</span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                            } 
-                            icon={<ProductIcon className="h-4 w-4 text-muted-foreground" />}
-                            subtitle={`${breakdownEntries.length} Unique UOMs tracked`}
-                        />
-                    </div>
+
+                                {/* Right Section: Detailed UOM Breakdown */}
+                                <div className="p-8 flex flex-col">
+                                    <div className="flex items-center justify-between mb-8">
+                                        <div className="flex items-center gap-2">
+                                            <div className="p-1.5 bg-muted rounded-lg">
+                                                <ProductIcon className="h-4 w-4 text-muted-foreground/60" />
+                                            </div>
+                                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/70">Inventory Unit Breakdown</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest">Tracking</span>
+                                            <span className="text-[10px] font-black px-2 py-1 bg-muted rounded-full text-foreground border border-border/40">
+                                                {breakdownEntries.length} Unique UOMs
+                                            </span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex-1 overflow-x-auto min-h-[200px]">
+                                        {breakdownEntries.length > 0 ? (
+                                            <table className="w-full text-left">
+                                                <thead>
+                                                    <tr className="border-b border-border/40">
+                                                        <th className="pb-4 text-[10px] font-black text-muted-foreground/40 uppercase tracking-[0.2em]">Measurement Unit</th>
+                                                        <th className="pb-4 text-[10px] font-black text-muted-foreground/40 uppercase tracking-[0.2em] text-right">Beginning Balance</th>
+                                                        <th className="pb-4 text-[10px] font-black text-muted-foreground/40 uppercase tracking-[0.2em] text-right">Inflow (+)</th>
+                                                        <th className="pb-4 text-[10px] font-black text-muted-foreground/40 uppercase tracking-[0.2em] text-right">Outflow (-)</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-border/20">
+                                                    {breakdownEntries.map(([unit, val]) => (
+                                                        <tr key={unit} className="group hover:bg-muted/5 transition-colors">
+                                                            <td className="py-4">
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-sm font-black text-foreground uppercase tracking-tight">{unit}</span>
+                                                                    <span className="text-[9px] font-medium text-muted-foreground/50 uppercase tracking-widest group-hover:text-primary/50 transition-colors">Stock Keeping Unit</span>
+                                                                </div>
+                                                            </td>
+                                                            <td className="py-4 text-right">
+                                                                <span className={cn(
+                                                                    "text-sm font-bold tabular-nums",
+                                                                    val.beginning > 0 ? "text-primary/70" : val.beginning < 0 ? "text-destructive" : "text-muted-foreground"
+                                                                )}>
+                                                                    {val.beginning.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                                                </span>
+                                                            </td>
+                                                            <td className="py-4 text-right">
+                                                                <span className="text-sm font-bold text-emerald-600/80 tabular-nums">
+                                                                    {val.in.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                                                </span>
+                                                            </td>
+                                                            <td className="py-4 text-right">
+                                                                <span className="text-sm font-bold text-amber-600/80 tabular-nums">
+                                                                    {val.out.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        ) : (
+                                            <div className="flex flex-col items-center justify-center h-full py-12 text-center">
+                                                <ProductIcon className="h-10 w-10 text-muted-foreground/10 mb-3" />
+                                                <p className="text-[10px] font-black text-muted-foreground/30 uppercase tracking-[0.2em]">
+                                                    Void Summary Dataset
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    <div className="mt-8 pt-6 border-t border-border/40 flex items-center justify-between text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/40">
+                                        <span>Data Integrity Verified</span>
+                                        <span className="text-primary/40 font-bold italic tracking-normal">Product Tracer Core v2.0</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
 
                     <Separator className="opacity-50" />
 
@@ -277,35 +389,3 @@ export const ProductTracingModule = React.forwardRef<HTMLDivElement, React.HTMLA
 });
 
 ProductTracingModule.displayName = "ProductTracingModule";
-
-function SummaryStatCard({ title, value, icon, subtitle, trend }: { 
-    title: string; 
-    value: React.ReactNode; 
-    icon: React.ReactNode; 
-    subtitle?: React.ReactNode;
-    trend?: "positive" | "negative";
-}) {
-    return (
-        <Card className="rounded-3xl border shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden bg-background group border-border/50">
-            <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground opacity-70">{title}</span>
-                    <div className="p-2 bg-muted/20 group-hover:bg-muted/40 transition-colors rounded-xl">
-                        {icon}
-                    </div>
-                </div>
-                <div className="flex flex-col gap-1">
-                    <div className={cn(
-                        "text-3xl font-black tracking-tighter tabular-nums",
-                        trend === "positive" ? "text-emerald-600" : trend === "negative" ? "text-amber-600" : "text-foreground"
-                    )}>{value}</div>
-                </div>
-                {subtitle && (
-                    <div className="mt-4 pt-4 border-t border-border/40">
-                        <p className="text-sm text-foreground uppercase font-black tracking-widest leading-tight">{subtitle}</p>
-                    </div>
-                )}
-            </CardContent>
-        </Card>
-    );
-}

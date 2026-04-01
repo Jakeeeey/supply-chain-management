@@ -1,4 +1,3 @@
-//src/modules/supply-chain-management/traceability-compliance/product-tracing/providers/fetchProvider.ts
 import { ProductMovementRow, ProductTracingFiltersType, ProductFamilyRow } from "../types";
 
 export async function fetchBranches(): Promise<Array<{ id: number; branch_name: string }>> {
@@ -13,22 +12,26 @@ export async function fetchBranches(): Promise<Array<{ id: number; branch_name: 
  */
 export async function fetchProductFamilies(): Promise<ProductFamilyRow[]> {
     // We fetch products and filter for those that are "parents" (parent_id is null or 0)
-    // Or we just get all products and take unique parent_ids.
-    // Usually, parent products have parent_id = 0 or null.
-    const res = await fetch("/api/scm/inventory-management/physical-inventory/directus/products?fields=product_id,parent_id,product_name,product_category.category_name,product_brand.brand_name&filter[parent_id][_null]=true&filter[isActive][_eq]=1&sort=product_name&limit=-1");
-    const json = await res.json();
-    
-    // Also include products where parent_id is 0 if any
-    const res2 = await fetch("/api/scm/inventory-management/physical-inventory/directus/products?fields=product_id,parent_id,product_name,product_category.category_name,product_brand.brand_name&filter[parent_id][_eq]=0&filter[isActive][_eq]=1&sort=product_name&limit=-1");
-    const json2 = await res2.json();
+    // We run these in parallel to improve load speed.
+    const [resNull, resZero] = await Promise.all([
+        fetch("/api/scm/inventory-management/physical-inventory/directus/products?fields=product_id,parent_id,product_name,product_code,short_description,product_category.category_name,product_brand.brand_name&filter[parent_id][_null]=true&filter[isActive][_eq]=1&sort=product_name&limit=-1"),
+        fetch("/api/scm/inventory-management/physical-inventory/directus/products?fields=product_id,parent_id,product_name,product_code,short_description,product_category.category_name,product_brand.brand_name&filter[parent_id][_eq]=0&filter[isActive][_eq]=1&sort=product_name&limit=-1")
+    ]);
 
-    const allParents = [...(json.data || []), ...(json2.data || [])];
+    const [jsonNull, jsonZero] = await Promise.all([
+        resNull.json(),
+        resZero.json()
+    ]);
+
+    const allParents = [...(jsonNull.data || []), ...(jsonZero.data || [])];
     
     return allParents.map(p => ({
         parent_id: p.product_id,
         product_name: p.product_name,
+        product_code: p.product_code,
         category_name: p.product_category?.category_name,
-        brand_name: p.product_brand?.brand_name
+        brand_name: p.product_brand?.brand_name,
+        short_description: p.short_description
     }));
 }
 
