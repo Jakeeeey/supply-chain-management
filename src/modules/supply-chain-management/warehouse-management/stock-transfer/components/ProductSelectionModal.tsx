@@ -244,7 +244,24 @@ export function ProductSelectionModal({ open, onOpenChange, onSelect, sourceBran
                             >
                               <Minus className="w-3 h-3" />
                             </Button>
-                            <span className="w-6 text-[10px] font-black text-center">{qty}</span>
+                            <Input
+                              type="number"
+                              min={1}
+                              defaultValue={qty}
+                              key={`qty-input-${pid}-${qty}`}
+                              className="w-12 h-6 text-[10px] font-black p-0 text-center border-none bg-transparent focus-visible:ring-1 focus-visible:ring-primary/50 hide-arrows"
+                              onBlur={(e) => {
+                                const newQty = parseInt(e.target.value);
+                                if (!isNaN(newQty) && newQty > 0) {
+                                  onUpdateQty?.(Number(pid), newQty);
+                                } else {
+                                  e.target.value = String(qty);
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') e.currentTarget.blur();
+                              }}
+                            />
                             <Button
                               variant="ghost"
                               size="icon"

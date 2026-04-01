@@ -256,6 +256,7 @@ export default function StockTransferModule() {
         onOpenChange={setShowProductModal} 
         sourceBranch={sourceBranch}
         selectedProducts={scannedItems.map(item => ({
+          product_id: item.productId,
           product_name: item.productName,
           barcode: item.description,
           cost_per_unit: item.unitPrice,

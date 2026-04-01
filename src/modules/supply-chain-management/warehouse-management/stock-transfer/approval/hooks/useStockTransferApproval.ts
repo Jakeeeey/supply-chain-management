@@ -182,7 +182,11 @@ export function useStockTransferApproval() {
             // Sum up running_inventory from all unit permutations of this product to avoid picking the "0" row
             const availableCount = inventoryList.reduce((acc: number, inv: any) => acc + Number(inv.runningInventory || 0), 0);
             const unitCount = Number(product?.unit_of_measurement_count || 1) || 1;
-            const finalAvailable = Math.floor(availableCount / unitCount);
+            let finalAvailable = Math.floor(availableCount / unitCount);
+            
+            // Prevent negative availability displaying in front end
+            // and inflating negative allocated totals
+            finalAvailable = Math.max(0, finalAvailable);
 
             newAvailable[item.id] = finalAvailable;
             // Default allocated to ordered quantity, but cap at available
