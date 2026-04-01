@@ -223,7 +223,7 @@ export function StockConversionModal({
                   Requirement Not Met
                 </div>
                 <div className="text-sm font-medium text-destructive leading-tight">
-                  Sorry you did not meet the required uom of a products that needs to be convert
+                  Sorry you cannot convert this product you must meet the required quantity of it to convert.
                 </div>
                 <div className="text-[10px] text-destructive/70 font-bold uppercase">
                   Need {targetFactor} base units, but you only have {totalBaseUnits}

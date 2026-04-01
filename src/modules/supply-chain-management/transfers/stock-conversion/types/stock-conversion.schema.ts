@@ -51,6 +51,7 @@ export const stockConversionPayloadSchema = z.object({
   userId: z.number().min(1, "User ID is required"),
   pricePerUnit: z.number(),
   rfidTags: z.array(rfidTagSchema).default([]),
+  sourceRfidTags: z.array(z.string()).optional(),
 });
 
 export type StockConversionPayload = z.infer<typeof stockConversionPayloadSchema>;

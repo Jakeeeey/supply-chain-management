@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, memo } from "react";
+import { toast } from "sonner";
 import { useStockConversion } from "./hooks/useStockConversion";
 import { StockConversionTable } from "./components/StockConversionTable";
 import { StockConversionModal } from "./components/StockConversionModal";
@@ -62,6 +63,11 @@ export default function StockConversionModule({
     return () => { cancelled = true; };
   }, []);
 
+  // ── Scanner UI State ──────────────────────────────────────────────────────
+  const [isScanning, setIsScanning] = useState(false);
+  const [scannedSourceRfid, setScannedSourceRfid] = useState<string | null>(null);
+  const rfidBuffer = useRef("");
+
   const {
     data,
     totalCount,
@@ -106,8 +112,69 @@ export default function StockConversionModule({
     setIsUnitModalOpen(true);
   }, []);
 
-  const handleCloseUnitModal = useCallback(() => setIsUnitModalOpen(false), []);
-  const handleCloseRfidModal = useCallback(() => setIsRfidModalOpen(false), []);
+  const handleCloseUnitModal = useCallback(() => {
+    setIsUnitModalOpen(false);
+    setScannedSourceRfid(null);
+  }, []);
+  
+  const handleCloseRfidModal = useCallback(() => {
+    setIsRfidModalOpen(false);
+    setScannedSourceRfid(null);
+  }, []);
+
+  // ── Global RFID listener ────────────────────────────────────────────────
+  useEffect(() => {
+    // We bind the listener globally, but exit early if busy.
+    const handleGlobalKey = async (e: globalThis.KeyboardEvent) => {
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      if (e.key === 'Enter') {
+        const val = rfidBuffer.current.trim();
+        rfidBuffer.current = "";
+        
+        // Prevent action if modals are open or we're busy
+        if (!val || isScanning || isSubmitting || isUnitModalOpen || isRfidModalOpen) return;
+
+        setIsScanning(true);
+        try {
+          const branchId = selectedBranchIdRef.current > 0 ? selectedBranchIdRef.current : userRef.current.branchId;
+          const res = await fetch(`/api/scm/warehouse-management/stock-transfer?action=lookup_rfid&rfid=${encodeURIComponent(val)}&branch_id=${branchId}`);
+          
+          if (!res.ok) {
+            toast.error("RFID tags not recognized or not available.");
+            return;
+          }
+          
+          const match = await res.json();
+          const pId = Number(match.productId);
+
+          // Find product in current data table
+          const product = data.find(p => p.productId === pId);
+          if (product) {
+            toast.success(`Scanned: ${product.productName || 'Product'}`, {
+              description: "Select target unit to convert to."
+            });
+            setScannedSourceRfid(val);
+            handleOpenConversion(product);
+          } else {
+            toast.error("Scanned product not loaded in the list.", {
+              description: "Please load the product's inventory first."
+            });
+          }
+        } catch (err) {
+          toast.error("Network error reading RFID.");
+        } finally {
+          setIsScanning(false);
+        }
+      } else if (e.key.length === 1) {
+        rfidBuffer.current += e.key;
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKey);
+    return () => window.removeEventListener('keydown', handleGlobalKey);
+  }, [data, isScanning, isSubmitting, isUnitModalOpen, isRfidModalOpen, handleOpenConversion]);
 
   // ✅ Fix: onBranchChange expects (branchId: number | undefined) => void
   // but setSelectedBranchId is Dispatch<SetStateAction<number>> which rejects undefined.
@@ -169,6 +236,7 @@ export default function StockConversionModule({
       branchId,
       userId: user.id > 0 ? user.id : 24,
       rfidTags: [] as RFIDTag[],
+      sourceRfidTags: scannedSourceRfid ? [scannedSourceRfid] : undefined,
     };
 
     setIsSubmitting(true);
@@ -176,6 +244,7 @@ export default function StockConversionModule({
       await convertStock(payload);
       setSelectedProduct(null);
       setPendingConversion(null);
+      setScannedSourceRfid(null);
     } catch (e) {
       console.error(e);
     } finally {
@@ -205,6 +274,7 @@ export default function StockConversionModule({
       branchId,
       userId: user.id > 0 ? user.id : 24,
       rfidTags: tags,
+      sourceRfidTags: scannedSourceRfid ? [scannedSourceRfid] : undefined,
     };
 
     console.log("[StockConversion] Confirming with payload:", payload);
@@ -215,6 +285,7 @@ export default function StockConversionModule({
       setIsRfidModalOpen(false);
       setSelectedProduct(null);
       setPendingConversion(null);
+      setScannedSourceRfid(null);
     } catch (e) {
       console.error(e);
     } finally {

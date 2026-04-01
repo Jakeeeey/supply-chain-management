@@ -105,7 +105,8 @@ export function useStockConversion(branchId?: number) {
       setData(prev => {
         const next = prev.map(p => {
           const qty = invMap[p.productId];
-          const finalQty = qty !== undefined ? qty : 0;
+          const rawQty = qty !== undefined ? qty : 0;
+          const finalQty = Math.floor(rawQty / (p.conversionFactor || 1));
           return {
               ...p,
               quantity: finalQty,
@@ -170,7 +171,8 @@ export function useStockConversion(branchId?: number) {
         const next = prev.map(p => {
           if (fetchableIds.includes(p.productId)) {
             const qty = invMap[p.productId];
-            const finalQty = qty !== undefined ? qty : 0;
+            const rawQty = qty !== undefined ? qty : 0;
+            const finalQty = Math.floor(rawQty / (p.conversionFactor || 1));
             return {
               ...p,
               quantity: finalQty,

@@ -75,39 +75,6 @@ async function getMasterData(headers: any) {
     return masterCache;
 }
 
-/**
- * Fallback parser to extract multi-pack counts from product descriptions if DB count is 1.
- * Looks for patterns like "X 24", "X24", "X 10 PCS", "12'S", etc.
- */
-function parseMultiplierFromDescription(description: string, dbCount: number): number {
-  if (dbCount > 1) return dbCount;
-  
-  const desc = (description || "").toUpperCase();
-  
-  // Pattern 1: "X 24" or "X24" or "X  24"
-  const xMatch = desc.match(/X\s*(\d+)/);
-  if (xMatch && xMatch[1]) {
-    const val = parseInt(xMatch[1], 10);
-    if (!isNaN(val) && val > 0) return val;
-  }
-  
-  // Pattern 2: "24PCS" or "24 PIECES" or "24 PCS"
-  const pcsMatch = desc.match(/(\d+)\s*(PCS|PIECES)/);
-  if (pcsMatch && pcsMatch[1]) {
-    const val = parseInt(pcsMatch[1], 10);
-    if (!isNaN(val) && val > 0) return val;
-  }
-
-  // Pattern 3: "12'S" (e.g. 12'S or 24'S)
-  const sMatch = desc.match(/(\d+)\s*'S/);
-  if (sMatch && sMatch[1]) {
-    const val = parseInt(sMatch[1], 10);
-    if (!isNaN(val) && val > 0) return val;
-  }
-  
-  return dbCount;
-}
-
 export async function fetchStockList(
   limit: number = 20,
   offset: number = 0,
@@ -164,14 +131,33 @@ export async function fetchStockList(
 
     // 2. Strict Grouping logic to prevent JSON explosion (No more name-based fuzzy grouping)
     // We only group products that are explicitly parts of a parent-child relationship.
+    const normalizeName = (name: string) => {
+        return name
+            .replace(/x\s*\d+\s*(box|pack|tie|pcs|pieces)?/gi, '')
+            .replace(/\s+\d+\s*(box|pack|tie|pcs|pieces)\b/gi, '')
+            .replace(/\s+(box|pack|tie|pcs|pieces)\b/gi, '')
+            .trim();
+    };
+
+    const parentIds = new Set<number>();
+    products.forEach((p: any) => {
+        if (p.parent_id) parentIds.add(Number(p.parent_id));
+    });
+
     const productGroups = new Map<string, any[]>();
     products.forEach((p: any) => {
         const pId = Number(p.product_id);
         const parentId = p.parent_id ? Number(p.parent_id) : undefined;
-        const nameKey = (p.product_name || "").trim().toLowerCase();
+        let nameKey = (p.product_name || "").trim().toLowerCase();
         
-        // Group by Parent ID if available, otherwise by Name
-        const groupKey = parentId ? `ID-${parentId}` : `NAME-${nameKey}`;
+        let groupKey: string;
+        if (parentId) {
+            groupKey = `ID-${parentId}`;
+        } else if (parentIds.has(pId)) {
+            groupKey = `ID-${pId}`;
+        } else {
+            groupKey = `NAME-${normalizeName(nameKey)}`;
+        }
         
         if (!productGroups.has(groupKey)) productGroups.set(groupKey, []);
         productGroups.get(groupKey)!.push(p);
@@ -182,8 +168,15 @@ export async function fetchStockList(
     products.forEach((p: any) => {
       const pId = Number(p.product_id);
       const parentId = p.parent_id ? Number(p.parent_id) : undefined;
-      const nameKey = (p.product_name || "").trim().toLowerCase();
-      const groupKey = parentId ? `ID-${parentId}` : `NAME-${nameKey}`;
+      let nameKey = (p.product_name || "").trim().toLowerCase();
+      let groupKey: string;
+      if (parentId) {
+          groupKey = `ID-${parentId}`;
+      } else if (parentIds.has(pId)) {
+          groupKey = `ID-${pId}`;
+      } else {
+          groupKey = `NAME-${normalizeName(nameKey)}`;
+      }
       const group = productGroups.get(groupKey) || [p];
 
       // Safe extraction of IDs handling both number and object (Directus behavior)
@@ -199,11 +192,16 @@ export async function fetchStockList(
         .map((v: any) => {
             const vUnitId = Number(typeof v.unit_of_measurement === 'object' ? v.unit_of_measurement?.unit_id : v.unit_of_measurement);
             const dbFactor = Number(v.unit_of_measurement_count) || 1;
-            const parsedFactor = parseMultiplierFromDescription(v.description || v.product_name || "", dbFactor);
+            const targetUnitName = unitMap.get(vUnitId) || "Unknown";
+            let parsedFactor = dbFactor;
+            
+            if (targetUnitName.toLowerCase().includes("piece") || targetUnitName.toLowerCase() === "pcs") {
+                parsedFactor = 1;
+            }
             
             return {
                 unitId: vUnitId,
-                name: unitMap.get(vUnitId) || "Unknown",
+                name: targetUnitName,
                 conversionFactor: parsedFactor,
                 targetProductId: Number(v.product_id)
             };
@@ -228,6 +226,13 @@ export async function fetchStockList(
           }
       }
 
+      const currentUnitName = unitMap.get(unitId) || "Unknown";
+      let sourceFactor = Number(p.unit_of_measurement_count) || 1;
+      
+      if (currentUnitName.toLowerCase().includes("piece") || currentUnitName.toLowerCase() === "pcs") {
+          sourceFactor = 1;
+      }
+
       result.push({
         productId: pId,
         supplierId: finalSupplierId ? Number(finalSupplierId) : undefined,
@@ -239,12 +244,12 @@ export async function fetchStockList(
         productName: p.product_name || "",
         productDescription: p.description || p.product_name || "",
         family: `FAM-${parentId}`,
-        currentUnit: unitMap.get(unitId) || "Unknown",
+        currentUnit: currentUnitName,
         currentUnitId: unitId,
         quantity: 0,
         pricePerUnit: Number(p.cost_per_unit || p.price_per_unit || 0),
         totalAmount: 0,
-        conversionFactor: parseMultiplierFromDescription(p.description || p.product_name || "", Number(p.unit_of_measurement_count) || 1),
+        conversionFactor: sourceFactor,
         inventoryLoaded: false,
         availableUnits,
       });
@@ -410,16 +415,28 @@ export async function convertStock(payload: StockConversionPayload) {
          return iRes.json();
      };
 
-     await createAdj("OUT", payload.productId, payload.quantityToConvert);
+     const outData = await createAdj("OUT", payload.productId, payload.quantityToConvert);
      const inData = await createAdj("IN", targetProductId, payload.convertedQuantity);
      
+     const outStockAdjId = outData.data?.id || (Array.isArray(outData.data) ? outData.data[0]?.id : outData.data?.id);
+     
+     if (outStockAdjId && payload.sourceRfidTags?.length) {
+         for (const tag of payload.sourceRfidTags) {
+             await fetch(`${DIRECTUS_API}/items/stock_adjustment_rfid`, {
+                 method: "POST", headers, body: JSON.stringify({
+                     stock_adjustment_id: Number(outStockAdjId), rfid_tag: tag, created_by: payload.userId, scan_type: 'CONVERT_OUT'
+                 })
+             }).catch(e => console.error("Source RFID tag storage failed:", e.message));
+         }
+     }
+
      const newStockAdjId = inData.data?.id || (Array.isArray(inData.data) ? inData.data[0]?.id : inData.data?.id);
 
      if (newStockAdjId && payload.rfidTags?.length) {
          for (const tag of payload.rfidTags) {
              await fetch(`${DIRECTUS_API}/items/stock_adjustment_rfid`, {
                  method: "POST", headers, body: JSON.stringify({
-                     stock_adjustment_id: Number(newStockAdjId), rfid_tag: tag.rfid_tag, created_by: payload.userId
+                     stock_adjustment_id: Number(newStockAdjId), rfid_tag: tag.rfid_tag, created_by: payload.userId, scan_type: 'CONVERT_IN'
                  })
              }).catch(e => console.error("RFID tag storage failed:", e.message));
          }
