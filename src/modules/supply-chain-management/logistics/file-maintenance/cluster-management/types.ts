@@ -27,7 +27,7 @@ export interface ClusterWithAreas {
 const areaSchema = z.object({
   id: z.number().optional(),
   province: z.string().min(1, "Province is required"),
-  city: z.string().optional().default(""),
+  city: z.string().min(1, "City is required"),
   baranggay: z.string().optional().default(""),
 });
 

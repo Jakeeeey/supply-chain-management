@@ -260,6 +260,7 @@ export default function ClusterModule() {
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
         selectedCluster={selectedCluster}
+        allClusters={data}
         onSuccess={fetchData}
       />
 

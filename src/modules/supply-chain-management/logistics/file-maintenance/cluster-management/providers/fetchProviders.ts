@@ -30,11 +30,22 @@ async function readError(res: Response) {
 export async function fetchProvinces(): Promise<{ code: string; name: string }[]> {
   const res = await fetch("https://psgc.gitlab.io/api/provinces");
   if (!res.ok) return [];
-  return res.json();
+  const provinces = await res.json();
+
+  // Inject Metro Manila (technically a Region, not a Province)
+  provinces.push({ code: "130000000", name: "Metro Manila" });
+
+  // Sort alphabetically so it's easy to find
+  return provinces.sort((a: any, b: any) => a.name.localeCompare(b.name));
 }
 
 export async function fetchCities(provinceCode: string): Promise<{ code: string; name: string }[]> {
-  const res = await fetch(`https://psgc.gitlab.io/api/provinces/${provinceCode}/cities-municipalities`);
+  // If "Metro Manila" (NCR) is selected, fetch using the region-level endpoint
+  const url = provinceCode === "130000000"
+    ? `https://psgc.gitlab.io/api/regions/${provinceCode}/cities-municipalities`
+    : `https://psgc.gitlab.io/api/provinces/${provinceCode}/cities-municipalities`;
+
+  const res = await fetch(url);
   if (!res.ok) return [];
   return res.json();
 }

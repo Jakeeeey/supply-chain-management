@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import { AreaCombobox as Combobox } from "./AreaCombobox";
-import { ClusterFormValues } from "../types";
+import { ClusterFormValues, ClusterWithAreas } from "../types";
 import { fetchCities, fetchBarangays } from "../providers/fetchProviders";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +27,8 @@ interface AreaRowProps {
   remove: (index: number) => void;
   canRemove: boolean;
   provinces: { code: string; name: string }[];
+  allClusters: ClusterWithAreas[];
+  currentClusterId?: number;
 }
 
 export function AreaRow({
@@ -35,13 +37,19 @@ export function AreaRow({
   remove,
   canRemove,
   provinces,
+  allClusters,
+  currentClusterId,
 }: AreaRowProps) {
   const [cities, setCities] = useState<{ code: string; name: string }[]>([]);
   const [barangays, setBarangays] = useState<{ code: string; name: string }[]>([]);
 
   // For initial load during Edit - using useWatch for reactivity
-  const currentProvince = useWatch({ control: form.control, name: `areas.${index}.province` });
-  const currentCity = useWatch({ control: form.control, name: `areas.${index}.city` });
+  const currentProvince = useWatch({ control: form.control, name: `areas.${index}.province` }) || "";
+  const currentCity = useWatch({ control: form.control, name: `areas.${index}.city` }) || "";
+  const currentBarangay = useWatch({ control: form.control, name: `areas.${index}.baranggay` }) || "";
+
+  // Watch all areas in form to prevent internal duplicates
+  const allAreasInForm = useWatch({ control: form.control, name: "areas" }) || [];
 
   useEffect(() => {
     let mounted = true;
@@ -104,6 +112,65 @@ export function AreaRow({
     form.setValue(`areas.${index}.baranggay`, brgyName);
   };
 
+  // ── Smart Filtering Logic ──────────────────────────────────────────
+  //
+  // BUSINESS RULES:
+  // 1. If a record has City + NO Barangay → entire city is claimed (all barangays)
+  // 2. If a record has City + specific Barangay → only that barangay is claimed
+  //    The city remains selectable for other clusters/rows to pick OTHER barangays.
+
+  /** Normalize strings for safe comparison (handles nulls, extra spaces, casing) */
+  const norm = (s?: string | null): string =>
+    (s || "").replace(/\s+/g, " ").trim().toLowerCase();
+
+  // Cities that are wholly claimed (city exists with NO barangay)
+  const fullyClaimedCities = new Set<string>();
+  // Specific barangays that are individually claimed (keyed as "city::barangay")
+  const claimedBarangays = new Set<string>();
+
+  // A. Check OTHER clusters in the DB
+  allClusters?.forEach((cluster) => {
+    if (cluster.id === currentClusterId) return;
+
+    cluster.areas.forEach((area) => {
+      const c = norm(area.city);
+      const b = norm(area.baranggay);
+
+      if (c && !b) {
+        fullyClaimedCities.add(c);
+      }
+      if (c && b) {
+        claimedBarangays.add(`${c}::${b}`);
+      }
+    });
+  });
+
+  // B. Check peer rows in THE SAME FORM
+  allAreasInForm.forEach((area, i) => {
+    if (i === index) return;
+
+    const c = norm(area.city);
+    const b = norm(area.baranggay);
+
+    if (c && !b) {
+      fullyClaimedCities.add(c);
+    }
+    if (c && b) {
+      claimedBarangays.add(`${c}::${b}`);
+    }
+  });
+
+  // Filter cities: only hide wholly-claimed cities
+  const availableCities = cities.filter(
+    (c) => !fullyClaimedCities.has(norm(c.name))
+  );
+
+  // Filter barangays: only hide specifically-claimed barangays for the current city
+  const cityKey = norm(currentCity);
+  const availableBarangays = barangays.filter(
+    (b) => !claimedBarangays.has(`${cityKey}::${norm(b.name)}`)
+  );
+
   return (
     <div className="rounded-lg border p-3 space-y-3">
       <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -155,17 +222,19 @@ export function AreaRow({
           name={`areas.${index}.city`}
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-xs">City</FormLabel>
+              <FormLabel className="text-xs">
+                City <span className="text-red-500">*</span>
+              </FormLabel>
               <FormControl>
                 <Combobox
-                  options={cities.map((c) => ({
+                  options={availableCities.map((c) => ({
                     value: c.code,
                     label: c.name,
                   }))}
-                  value={cities.find((c) => c.name.toLowerCase() === String(field.value || "").toLowerCase())?.code}
+                  value={availableCities.find((c) => c.name.toLowerCase() === String(field.value || "").toLowerCase())?.code}
                   onValueChange={(val) => onCityChange(val)}
                   placeholder="Select City"
-                  disabled={!cities.length}
+                  disabled={!availableCities.length}
                   className={cn(selectBase, selectFocus)}
                 />
               </FormControl>
@@ -182,14 +251,14 @@ export function AreaRow({
               <FormLabel className="text-xs">Barangay</FormLabel>
               <FormControl>
                 <Combobox
-                  options={barangays.map((b) => ({
+                  options={availableBarangays.map((b) => ({
                     value: b.code,
                     label: b.name,
                   }))}
-                  value={barangays.find((b) => b.name.toLowerCase() === String(field.value || "").toLowerCase())?.code}
+                  value={availableBarangays.find((b) => b.name.toLowerCase() === String(field.value || "").toLowerCase())?.code}
                   onValueChange={(val) => onBarangayChange(val)}
                   placeholder="Select Barangay"
-                  disabled={!barangays.length}
+                  disabled={!availableBarangays.length}
                   className={cn(selectBase, selectFocus)}
                 />
               </FormControl>

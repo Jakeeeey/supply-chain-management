@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getUserIdFromToken } from "@/lib/auth-utils";
 
 export const runtime = "nodejs";
 
@@ -51,6 +52,19 @@ async function proxyRequest(req: NextRequest, method: string) {
 
   if (["POST", "PATCH"].includes(method)) {
     const body = await req.json().catch(() => ({}));
+    
+    // Inject user ID for audit trails
+    const token = req.cookies.get("vos_access_token")?.value;
+    const userId = getUserIdFromToken(token);
+    
+    if (userId) {
+      if (method === "POST") {
+        body.created_by = userId;
+      } else if (method === "PATCH") {
+        body.updated_by = userId;
+      }
+    }
+
     options.body = JSON.stringify(body);
   }
 

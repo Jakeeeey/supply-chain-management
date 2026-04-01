@@ -38,6 +38,7 @@ interface ClusterDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   selectedCluster: ClusterWithAreas | null;
+  allClusters: ClusterWithAreas[];
   onSuccess: () => void;
 }
 
@@ -49,6 +50,7 @@ export function ClusterDialog({
   open,
   onOpenChange,
   selectedCluster,
+  allClusters,
   onSuccess,
 }: ClusterDialogProps) {
   const isEdit = !!selectedCluster;
@@ -112,17 +114,9 @@ export function ClusterDialog({
       onSuccess();
       onOpenChange(false);
     } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : "";
-      if (
-        msg.toLowerCase().includes("unique") ||
-        msg.toLowerCase().includes("duplicate")
-      ) {
-        toast.error(
-          "This cluster name or area combination already exists.",
-        );
-      } else {
-        toast.error(msg || "Something went wrong");
-      }
+      console.error("Save failed:", error);
+      const msg = error instanceof Error ? error.message : "Failed to save cluster.";
+      toast.error(msg, { duration: 5000 });
     }
   };
 
@@ -220,6 +214,8 @@ export function ClusterDialog({
                   remove={remove}
                   canRemove={fields.length > 1}
                   provinces={provinces}
+                  allClusters={allClusters}
+                  currentClusterId={selectedCluster?.id}
                 />
               ))}
 
