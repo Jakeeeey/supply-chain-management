@@ -138,6 +138,54 @@ export function CategoryDialog({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormItem>
+              <FormLabel>Category Image</FormLabel>
+              <div className="flex flex-col gap-4">
+                {preview ? (
+                  <div className="relative w-full min-h-[200px] max-h-[300px] rounded-lg border bg-muted/30 flex items-center justify-center overflow-hidden transition-all">
+                    <img 
+                      src={preview} 
+                      alt="Category Preview" 
+                      className="max-w-full max-h-[300px] object-contain drop-shadow-sm" 
+                    />
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="icon"
+                      className="absolute top-2 right-2 h-8 w-8 rounded-full shadow-md"
+                      onClick={removeImage}
+                    >
+                      <X className="h-5 w-5" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="w-full">
+                    <div className="flex items-center justify-center w-full">
+                      <label 
+                        className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-muted/5 hover:bg-muted/10 transition-colors border-input"
+                      >
+                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                          <UploadCloud className="w-8 h-8 mb-3 text-muted-foreground" />
+                          <p className="mb-2 text-sm text-muted-foreground">
+                            <span className="font-semibold">Click to upload</span> or drag and drop
+                          </p>
+                          <p className="text-xs text-muted-foreground/60">
+                            SVG, PNG, JPG or GIF (MAX. 800x400px)
+                          </p>
+                        </div>
+                        <Input 
+                          type="file" 
+                          accept="image/*" 
+                          onChange={handleImageChange}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </FormItem>
+
             <FormField
               control={form.control}
               name="category_name"
@@ -167,39 +215,6 @@ export function CategoryDialog({
                 </FormItem>
               )}
             />
-
-            <FormItem>
-              <FormLabel>Category Image</FormLabel>
-              <div className="flex flex-col gap-4">
-                {preview ? (
-                  <div className="relative w-32 h-32 rounded-lg border overflow-hidden">
-                    <img 
-                      src={preview} 
-                      alt="Category Preview" 
-                      className="w-full h-full object-cover" 
-                    />
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="icon"
-                      className="absolute top-1 right-1 h-6 w-6 rounded-full"
-                      onClick={removeImage}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="w-full max-w-sm">
-                    <Input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={handleImageChange}
-                      className="cursor-pointer"
-                    />
-                  </div>
-                )}
-              </div>
-            </FormItem>
 
             <DialogFooter>
               <Button

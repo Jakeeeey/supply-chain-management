@@ -33,6 +33,23 @@ export function ViewCategoryDialog({
         </DialogHeader>
 
         <div className="space-y-6 py-4">
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium text-muted-foreground">Category Image</h4>
+            {selectedCategory.image ? (
+              <div className="relative w-full min-h-[200px] max-h-[300px] rounded-lg border bg-muted/30 flex items-center justify-center overflow-hidden">
+                <img 
+                  src={`${process.env.NEXT_PUBLIC_API_BASE_URL}/assets/${selectedCategory.image}`} 
+                  alt={selectedCategory.category_name} 
+                  className="max-w-full max-h-[300px] object-contain drop-shadow-sm" 
+                />
+              </div>
+            ) : (
+              <div className="w-full h-32 rounded-lg border-2 border-dashed flex items-center justify-center bg-muted/5">
+                <p className="text-sm text-muted-foreground italic">No image uploaded.</p>
+              </div>
+            )}
+          </div>
+
           <div className="space-y-1">
             <h4 className="text-sm font-medium text-muted-foreground">Category Name</h4>
             <p className="text-base font-medium">{selectedCategory.category_name}</p>
@@ -41,21 +58,6 @@ export function ViewCategoryDialog({
           <div className="space-y-1">
             <h4 className="text-sm font-medium text-muted-foreground">SKU Code</h4>
             <p className="text-base font-medium">{selectedCategory.sku_code || "-"}</p>
-          </div>
-
-          <div className="space-y-2">
-            <h4 className="text-sm font-medium text-muted-foreground">Category Image</h4>
-            {selectedCategory.image ? (
-              <div className="w-32 h-32 rounded-lg border overflow-hidden bg-muted flex items-center justify-center">
-                <img 
-                  src={`${process.env.NEXT_PUBLIC_API_BASE_URL}/assets/${selectedCategory.image}`} 
-                  alt={selectedCategory.category_name} 
-                  className="w-full h-full object-cover" 
-                />
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground italic">No image uploaded.</p>
-            )}
           </div>
         </div>
       </DialogContent>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { UseFormReturn, useWatch } from "react-hook-form";
 import { MapPin, Trash2 } from "lucide-react";
 
@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { AreaCombobox as Combobox } from "./AreaCombobox";
 import { ClusterFormValues, ClusterWithAreas } from "../types";
-import { fetchCities, fetchBarangays } from "../providers/fetchProviders";
+import { fetchCities, fetchAllBarangays, BarangayItem } from "../providers/fetchProviders";
 import { cn } from "@/lib/utils";
 
 const selectBase = "h-9 bg-background border-input transition-all";
@@ -41,6 +41,7 @@ export function AreaRow({
   currentClusterId,
 }: AreaRowProps) {
   const [cities, setCities] = useState<{ code: string; name: string }[]>([]);
+  const [allProvincialBarangays, setAllProvincialBarangays] = useState<BarangayItem[]>([]);
   const [barangays, setBarangays] = useState<{ code: string; name: string }[]>([]);
 
   // For initial load during Edit - using useWatch for reactivity
@@ -61,17 +62,23 @@ export function AreaRow({
       const p = provinces.find((x) => x.name.toLowerCase() === currentProvince.toLowerCase());
       if (!p) return;
 
-      // 1. Fetch cities for the initial province
-      const fetchedCities = await fetchCities(p.code);
+      // Eager-load: fetch cities AND all barangays for this province in parallel
+      const [fetchedCities, fetchedAllBrgys] = await Promise.all([
+        fetchCities(p.code),
+        fetchAllBarangays(p.code),
+      ]);
       if (!mounted) return;
       setCities(fetchedCities);
+      setAllProvincialBarangays(fetchedAllBrgys);
 
-      // 2. Fetch barangays immediately if there's an initial city
+      // Filter barangays locally if there's an initial city
       if (currentCity) {
         const c = fetchedCities.find((x) => x.name.toLowerCase() === currentCity.toLowerCase());
         if (c) {
-          const fetchedBarangays = await fetchBarangays(c.code);
-          if (mounted) setBarangays(fetchedBarangays);
+          const filtered = fetchedAllBrgys.filter(
+            (b) => b.cityCode === c.code || b.municipalityCode === c.code
+          );
+          if (mounted) setBarangays(filtered);
         }
       }
     };
@@ -87,23 +94,33 @@ export function AreaRow({
     form.setValue(`areas.${index}.city`, "");
     form.setValue(`areas.${index}.baranggay`, "");
     setCities([]);
+    setAllProvincialBarangays([]);
     setBarangays([]);
 
     if (provinceCode) {
-      const data = await fetchCities(provinceCode);
-      setCities(data);
+      // Eager-load: fetch cities AND all barangays in parallel
+      const [fetchedCities, fetchedAllBrgys] = await Promise.all([
+        fetchCities(provinceCode),
+        fetchAllBarangays(provinceCode),
+      ]);
+      setCities(fetchedCities);
+      setAllProvincialBarangays(fetchedAllBrgys);
     }
   };
 
-  const onCityChange = async (cityCode: string) => {
+  const onCityChange = (cityCode: string) => {
     const cityName = cities.find((c) => c.code === cityCode)?.name || "";
     form.setValue(`areas.${index}.city`, cityName);
     form.setValue(`areas.${index}.baranggay`, "");
-    setBarangays([]);
 
+    // Filter barangays instantly from the pre-loaded provincial list (0ms)
     if (cityCode) {
-      const data = await fetchBarangays(cityCode);
-      setBarangays(data);
+      const filtered = allProvincialBarangays.filter(
+        (b) => b.cityCode === cityCode || b.municipalityCode === cityCode
+      );
+      setBarangays(filtered);
+    } else {
+      setBarangays([]);
     }
   };
 
@@ -112,7 +129,7 @@ export function AreaRow({
     form.setValue(`areas.${index}.baranggay`, brgyName);
   };
 
-  // ── Smart Filtering Logic ──────────────────────────────────────────
+  // ── Smart Filtering Logic (memoized for speed) ─────────────────────
   //
   // BUSINESS RULES:
   // 1. If a record has City + NO Barangay → entire city is claimed (all barangays)
@@ -123,52 +140,57 @@ export function AreaRow({
   const norm = (s?: string | null): string =>
     (s || "").replace(/\s+/g, " ").trim().toLowerCase();
 
-  // Cities that are wholly claimed (city exists with NO barangay)
-  const fullyClaimedCities = new Set<string>();
-  // Specific barangays that are individually claimed (keyed as "city::barangay")
-  const claimedBarangays = new Set<string>();
+  // Memoize the claimed sets so they only recalculate when clusters or form areas change
+  const { fullyClaimedCities, claimedBarangays } = useMemo(() => {
+    const claimed = new Set<string>();
+    const claimedBrgy = new Set<string>();
 
-  // A. Check OTHER clusters in the DB
-  allClusters?.forEach((cluster) => {
-    if (cluster.id === currentClusterId) return;
+    // A. Check OTHER clusters in the DB
+    allClusters?.forEach((cluster) => {
+      if (cluster.id === currentClusterId) return;
+      cluster.areas.forEach((area) => {
+        const c = norm(area.city);
+        const b = norm(area.baranggay);
+        if (c && !b) claimed.add(c);
+        if (c && b) claimedBrgy.add(`${c}::${b}`);
+      });
+    });
 
-    cluster.areas.forEach((area) => {
+    // B. Check peer rows in THE SAME FORM
+    allAreasInForm.forEach((area, i) => {
+      if (i === index) return;
       const c = norm(area.city);
       const b = norm(area.baranggay);
-
-      if (c && !b) {
-        fullyClaimedCities.add(c);
-      }
-      if (c && b) {
-        claimedBarangays.add(`${c}::${b}`);
-      }
+      if (c && !b) claimed.add(c);
+      if (c && b) claimedBrgy.add(`${c}::${b}`);
     });
-  });
 
-  // B. Check peer rows in THE SAME FORM
-  allAreasInForm.forEach((area, i) => {
-    if (i === index) return;
+    return { fullyClaimedCities: claimed, claimedBarangays: claimedBrgy };
+  }, [allClusters, currentClusterId, allAreasInForm, index]);
 
-    const c = norm(area.city);
-    const b = norm(area.baranggay);
-
-    if (c && !b) {
-      fullyClaimedCities.add(c);
-    }
-    if (c && b) {
-      claimedBarangays.add(`${c}::${b}`);
-    }
-  });
-
-  // Filter cities: only hide wholly-claimed cities
-  const availableCities = cities.filter(
-    (c) => !fullyClaimedCities.has(norm(c.name))
+  // Memoize filtered lists so they only recalculate when source data changes
+  const availableCities = useMemo(
+    () => cities.filter((c) => !fullyClaimedCities.has(norm(c.name))),
+    [cities, fullyClaimedCities]
   );
 
-  // Filter barangays: only hide specifically-claimed barangays for the current city
-  const cityKey = norm(currentCity);
-  const availableBarangays = barangays.filter(
-    (b) => !claimedBarangays.has(`${cityKey}::${norm(b.name)}`)
+  const availableBarangays = useMemo(() => {
+    const cityKey = norm(currentCity);
+    return barangays.filter((b) => !claimedBarangays.has(`${cityKey}::${norm(b.name)}`));
+  }, [barangays, currentCity, claimedBarangays]);
+
+  // Pre-build name→code lookup Maps for O(1) value resolution in render
+  const provinceCodeMap = useMemo(
+    () => new Map(provinces.map((p) => [p.name.toLowerCase(), p.code])),
+    [provinces]
+  );
+  const cityCodeMap = useMemo(
+    () => new Map(availableCities.map((c) => [c.name.toLowerCase(), c.code])),
+    [availableCities]
+  );
+  const brgyCodeMap = useMemo(
+    () => new Map(availableBarangays.map((b) => [b.name.toLowerCase(), b.code])),
+    [availableBarangays]
   );
 
   return (
@@ -206,7 +228,7 @@ export function AreaRow({
                     value: p.code,
                     label: p.name,
                   }))}
-                  value={provinces.find((p) => p.name.toLowerCase() === String(field.value || "").toLowerCase())?.code}
+                  value={provinceCodeMap.get(String(field.value || "").toLowerCase()) || ""}
                   onValueChange={(val) => onProvinceChange(val)}
                   placeholder="Select Province"
                   className={cn(selectBase, selectFocus)}
@@ -231,7 +253,7 @@ export function AreaRow({
                     value: c.code,
                     label: c.name,
                   }))}
-                  value={availableCities.find((c) => c.name.toLowerCase() === String(field.value || "").toLowerCase())?.code}
+                  value={cityCodeMap.get(String(field.value || "").toLowerCase()) || ""}
                   onValueChange={(val) => onCityChange(val)}
                   placeholder="Select City"
                   disabled={!availableCities.length}
@@ -255,7 +277,7 @@ export function AreaRow({
                     value: b.code,
                     label: b.name,
                   }))}
-                  value={availableBarangays.find((b) => b.name.toLowerCase() === String(field.value || "").toLowerCase())?.code}
+                  value={brgyCodeMap.get(String(field.value || "").toLowerCase()) || ""}
                   onValueChange={(val) => onBarangayChange(val)}
                   placeholder="Select Barangay"
                   disabled={!availableBarangays.length}
