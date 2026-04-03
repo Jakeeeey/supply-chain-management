@@ -45,11 +45,11 @@ function monthYear(ms: number) {
 function buildUserMap(users: UserApiRow[]) {
   const map = new Map<number, string>();
   for (const u of users || []) {
-    const id = Number((u as any)?.user_id ?? 0);
+    const id = Number(u.user_id ?? 0);
     if (!id) continue;
 
-    const first = String((u as any)?.user_fname ?? "").trim();
-    const last = String((u as any)?.user_lname ?? "").trim();
+    const first = String(u.user_fname ?? "").trim();
+    const last = String(u.user_lname ?? "").trim();
     const name = `${first} ${last}`.trim();
 
     map.set(id, name.length ? name : `User #${id}`);
@@ -115,7 +115,7 @@ export default function DriversTab({ vehicle }: { vehicle: VehicleRow }) {
       const agg = new Map<number, { start: number; end: number; count: number }>();
 
       for (const p of plans || []) {
-        const driverId = Number((p as any)?.driver_id ?? 0);
+        const driverId = Number(p?.driver_id ?? 0);
         if (!driverId) continue;
 
         const ms = toMs(pickPlanDate(p) || undefined);
@@ -146,9 +146,9 @@ export default function DriversTab({ vehicle }: { vehicle: VehicleRow }) {
       summarized.sort((a, b) => b.endMs - a.endMs);
 
       setRows(summarized);
-    } catch (e: any) {
+    } catch (e) {
       toast.error("Failed to load drivers", {
-        description: String(e?.message || e),
+        description: String(e instanceof Error ? e.message : e),
       });
       setRows([]);
     } finally {

@@ -147,7 +147,7 @@ export function StatusCharts({
                   tickLine={false}
                   tickFormatter={(val) => (val >= 1000 ? `${(val / 1000).toFixed(0)}k` : val)}
                 />
-                <Tooltip cursor={{ fill: "transparent" }} formatter={(v: any) => money(Number(v))} />
+                <Tooltip cursor={{ fill: "transparent" }} formatter={(v: number) => money(Number(v))} />
                 <Bar dataKey="amount" radius={[4, 4, 0, 0]} barSize={50}>
                   {barData.map((entry, index) => (
                     <Cell key={`bar-${index}`} fill={entry.fill} />

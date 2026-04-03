@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 
-import type { InvoiceDetailsResponse } from "../types";
+
 import { money } from "../utils/money";
 import { useInvoiceDetails } from "../hooks/useInvoiceDetails";
 

@@ -1,4 +1,4 @@
-import { ConsolidatorDto, BranchDto, PaginatedPickingBatches } from "../types";
+import { BranchDto, PaginatedPickingBatches } from "../types";
 
 const getHeaders = () => ({
     "Content-Type": "application/json",

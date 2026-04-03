@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 
 // Relative imports looking at the files we just created in this folder
 import { fetchConsolidators, fetchActiveBranches, completeAuditBatch } from "./providers/fetchProvider";
-import { ConsolidatorDto } from "./types";
+import { ConsolidatorDto, BranchDto } from "./types";
 import { BranchSelector } from "./components/BranchSelector";
 import { BatchCard } from "./components/BatchCard";
 import ActiveAuditExecutionModule from "./components/ActiveAuditExecutionModule";
@@ -17,7 +17,7 @@ export default function AuditorDashboardModule() {
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
-    const [branches, setBranches] = useState<any[]>([]);
+    const [branches, setBranches] = useState<BranchDto[]>([]);
     const [selectedBranchId, setSelectedBranchId] = useState<number | undefined>(undefined);
     const [activeBatch, setActiveBatch] = useState<ConsolidatorDto | null>(null);
 
@@ -35,7 +35,7 @@ export default function AuditorDashboardModule() {
             }
         };
         loadBranches();
-    }, []);
+    }, [selectedBranchId]);
 
     const loadBatches = useCallback(async () => {
         if (!selectedBranchId) return;
@@ -44,7 +44,7 @@ export default function AuditorDashboardModule() {
             // Asks for "Picked" status
             const response = await fetchConsolidators(selectedBranchId, 0, 50, "Picked", debouncedSearch);
             setBatches(response?.content || []);
-        } catch (error) {
+        } catch (_error) {
             console.error("Failed to load audit batches");
         } finally {
             setLoading(false);

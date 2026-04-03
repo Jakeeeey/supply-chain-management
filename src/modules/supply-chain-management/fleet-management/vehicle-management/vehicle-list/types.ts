@@ -38,6 +38,14 @@ export type VehiclesApiRow = {
   image?: string | null;
   custodian_id?: number | null;
 
+  // legacy fields for compatibility
+  vehicle_name?: string | null;
+  model?: string | null;
+  vehicle_model?: string | null;
+  mileage_km?: number | string | null;
+  mileage?: number | string | null;
+  odometer?: number | string | null;
+
   // existing optional fields
   branch_id?: number | null;
   cbm_length?: string | number | null;

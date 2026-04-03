@@ -19,6 +19,7 @@ import {
     generateConsolidationBatch,
     fetchActiveBranches
 } from "./providers/fetchProvider";
+import { BranchDto, ConsolidationPreviewItem, ConsolidatorDto } from "./types";
 
 interface ConsolidationCreationModuleProps {
     onSuccess?: () => void;
@@ -29,7 +30,7 @@ export default function ConsolidationCreationModule({
                                                         onSuccess,
                                                         branchId: initialBranchId
                                                     }: ConsolidationCreationModuleProps) {
-    const [branches, setBranches] = useState<any[]>([]);
+    const [branches, setBranches] = useState<BranchDto[]>([]);
     const [selectedBranchId, setSelectedBranchId] = useState<number | undefined>(undefined);
 
     const [availablePdps, setAvailablePdps] = useState<any[]>([]);
@@ -37,11 +38,11 @@ export default function ConsolidationCreationModule({
     const [isBranchesLoading, setIsBranchesLoading] = useState(true);
 
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
-    const [previewData, setPreviewData] = useState<any[]>([]);
+    const [previewData, setPreviewData] = useState<ConsolidationPreviewItem[]>([]);
     const [isLoadingPreview, setIsLoadingPreview] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const [successBatch, setSuccessBatch] = useState<any | null>(null);
+    const [successBatch, setSuccessBatch] = useState<ConsolidatorDto | null>(null);
 
     // --- DATA FETCHING EFFECTS ---
     useEffect(() => {
@@ -99,7 +100,7 @@ export default function ConsolidationCreationModule({
     }, [selectedIds]);
 
     const groupedData = useMemo(() => {
-        const groups: any = {};
+        const groups: Record<string, Record<string, Record<string, ConsolidationPreviewItem[]>>> = {};
         previewData.forEach(item => {
             const supplier = item.supplierShortcut || "GENERAL";
             const brand = item.brand || "UNBRANDED";
@@ -270,18 +271,18 @@ export default function ConsolidationCreationModule({
                                     </div>
                                 ) : (
                                     <div className="p-0 animate-in slide-in-from-bottom-4 duration-500">
-                                        {Object.entries(groupedData).map(([supplier, brands]: any) => (
+                                        {Object.entries(groupedData).map(([supplier, brands]) => (
                                             <div key={supplier} className="border-b border-border/50">
                                                 <div className="bg-muted/40 px-4 sm:px-6 py-2 flex items-center gap-2 sticky top-0 z-10 backdrop-blur-md border-b">
                                                     <Badge className="bg-primary hover:bg-primary font-black text-[9px] italic">{supplier}</Badge>
                                                 </div>
-                                                {Object.entries(brands).map(([brand, categories]: any) => (
+                                                {Object.entries(brands).map(([brand, categories]) => (
                                                     <div key={brand} className="pl-2 sm:pl-4">
                                                         <div className="px-4 sm:px-6 py-2 flex items-center gap-2 bg-muted/10 border-b border-border/30">
                                                             <ChevronRight className="w-3 h-3 text-muted-foreground shrink-0" />
                                                             <span className="text-[10px] font-black uppercase text-muted-foreground tracking-tighter italic truncate">BRAND: {brand}</span>
                                                         </div>
-                                                        {Object.entries(categories).map(([category, items]: any) => (
+                                                        {Object.entries(categories).map(([category, items]) => (
                                                             <div key={category} className="pl-2 sm:pl-4">
                                                                 <div className="px-4 sm:px-6 py-2 flex items-center gap-2">
                                                                     <Tags className="w-3 h-3 text-muted-foreground/50 shrink-0" />
@@ -289,7 +290,7 @@ export default function ConsolidationCreationModule({
                                                                 </div>
                                                                 <Table>
                                                                     <TableBody>
-                                                                        {items.map((item: any) => {
+                                                                        {items.map((item) => {
                                                                             const isShortage = (item.runningInventory || 0) < (item.totalAllocated || 0);
                                                                             return (
                                                                                 <TableRow key={item.productId} className={`border-border hover:bg-muted/30 transition-colors ${isShortage ? "bg-destructive/5" : ""}`}>

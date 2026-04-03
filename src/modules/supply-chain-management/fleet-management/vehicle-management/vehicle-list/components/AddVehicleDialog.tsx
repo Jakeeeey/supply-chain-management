@@ -48,7 +48,7 @@ export function AddVehicleDialog({
   fuelOptions: Array<{ id: number; name: string }>;
   engineOptions: Array<{ id: number; name: string }>;
   saving: boolean;
-  onCreate: (payload: Record<string, any>) => Promise<void>;
+  onCreate: (payload: Record<string, unknown>) => Promise<void>;
 }) {
   const [form, setForm] = React.useState<CreateVehicleForm>({
     plateNumber: "",
@@ -179,15 +179,15 @@ export function AddVehicleDialog({
       if (form.imageFile) {
         imageId = await uploadVehicleImage(form.imageFile);
       }
-    } catch (e: any) {
-      toast.error("Image upload failed", { description: String(e?.message || e) });
+    } catch (e) {
+      toast.error("Image upload failed", { description: String(e instanceof Error ? e.message : e) });
       return;
     }
 
     const yearInt = toIntOrNull(form.year);
     const mileageInt = toIntOrNull(String(form.mileageKm || ""));
 
-    const payload: Record<string, any> = {
+    const payload: Record<string, unknown> = {
       vehicle_plate: form.plateNumber.trim(),
       name: form.vehicleName.trim(),
       vehicle_type: form.typeId,
@@ -248,12 +248,12 @@ export function AddVehicleDialog({
 
       setTouched(false);
       onOpenChange(false);
-    } catch (err: any) {
-      const raw =
-        err?.response?.data?.errors?.[0]?.message ||
-        err?.response?.data?.error ||
-        err?.message ||
-        "Please try again.";
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Please try again.";
+      const response = (err as Record<string, unknown>)?.response as Record<string, unknown>;
+      const data = response?.data as Record<string, unknown>;
+      const errors = data?.errors as Record<string, unknown>[];
+      const raw = errors?.[0]?.message || data?.error || msg;
 
       toast.error("Add vehicle failed", { description: String(raw) });
     }

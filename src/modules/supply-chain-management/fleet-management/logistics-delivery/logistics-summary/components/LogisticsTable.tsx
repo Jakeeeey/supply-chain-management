@@ -21,6 +21,38 @@ interface LogisticsTableProps {
     onSort: (key: SortKey) => void
 }
 
+const SortIcon = ({ columnKey, sortConfig }: { columnKey: SortKey, sortConfig: { key: SortKey; direction: SortDirection } | null }) => (
+    <div className={`inline-block ml-2 ${sortConfig?.key === columnKey ? 'text-blue-600' : 'text-gray-300'}`}>
+        <ArrowUpDown className="w-3 h-3" />
+    </div>
+)
+
+const ThSortable = ({
+    label,
+    columnKey,
+    sortConfig,
+    onSort,
+    align = 'left',
+    className = ''
+}: {
+    label: string,
+    columnKey: SortKey,
+    sortConfig: { key: SortKey; direction: SortDirection } | null,
+    onSort: (key: SortKey) => void,
+    align?: 'left' | 'right',
+    className?: string
+}) => (
+    <TableHead
+        className={`text-${align} text-xs font-bold text-muted-foreground uppercase cursor-pointer hover:bg-muted select-none ${className}`}
+        onClick={() => onSort(columnKey)}
+    >
+        <div className={`flex items-center ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
+            {label}
+            <SortIcon columnKey={columnKey} sortConfig={sortConfig} />
+        </div>
+    </TableHead>
+)
+
 export function LogisticsTable({
     data,
     loading,
@@ -29,23 +61,7 @@ export function LogisticsTable({
     onSort
 }: LogisticsTableProps) {
 
-    const SortIcon = ({ columnKey }: { columnKey: SortKey }) => (
-        <div className={`inline-block ml-2 ${sortConfig?.key === columnKey ? 'text-blue-600' : 'text-gray-300'}`}>
-            <ArrowUpDown className="w-3 h-3" />
-        </div>
-    )
 
-    const ThSortable = ({ label, columnKey, align = 'left', className = '' }: { label: string, columnKey: SortKey, align?: 'left' | 'right', className?: string }) => (
-        <TableHead
-            className={`text-${align} text-xs font-bold text-muted-foreground uppercase cursor-pointer hover:bg-muted select-none ${className}`}
-            onClick={() => onSort(columnKey)}
-        >
-            <div className={`flex items-center ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
-                {label}
-                <SortIcon columnKey={columnKey} />
-            </div>
-        </TableHead>
-    )
 
     return (
         <div className="bg-card text-card-foreground border rounded-lg shadow overflow-hidden dark:border-white/60">
@@ -53,15 +69,15 @@ export function LogisticsTable({
                 <Table className="min-w-[1200px]">
                     <TableHeader className="bg-muted/50">
                         <TableRow>
-                            <ThSortable label="Truck Plate" columnKey="truckPlate" className="min-w-[150px]" />
-                            <ThSortable label="Driver" columnKey="driver" className="min-w-[200px]" />
-                            <ThSortable label="Cluster" columnKey="clusterName" className="min-w-[180px]" />
-                            <ThSortable label="Customer Name" columnKey="customerName" className="min-w-[250px]" />
-                            <ThSortable label="Fulfilled" columnKey="fulfilled" align="right" className="min-w-[120px]" />
-                            <ThSortable label="Not Fulfilled" columnKey="notFulfilled" align="right" className="min-w-[120px]" />
-                            <ThSortable label="W/ Returns" columnKey="fulfilledWithReturns" align="right" className="min-w-[120px]" />
-                            <ThSortable label="W/ Concerns" columnKey="fulfilledWithConcerns" align="right" className="min-w-[120px]" />
-                            <ThSortable label="Total" columnKey="total" align="right" className="min-w-[120px]" />
+                            <ThSortable label="Truck Plate" columnKey="truckPlate" sortConfig={sortConfig} onSort={onSort} className="min-w-[150px]" />
+                            <ThSortable label="Driver" columnKey="driver" sortConfig={sortConfig} onSort={onSort} className="min-w-[200px]" />
+                            <ThSortable label="Cluster" columnKey="clusterName" sortConfig={sortConfig} onSort={onSort} className="min-w-[180px]" />
+                            <ThSortable label="Customer Name" columnKey="customerName" sortConfig={sortConfig} onSort={onSort} className="min-w-[250px]" />
+                            <ThSortable label="Fulfilled" columnKey="fulfilled" sortConfig={sortConfig} onSort={onSort} align="right" className="min-w-[120px]" />
+                            <ThSortable label="Not Fulfilled" columnKey="notFulfilled" sortConfig={sortConfig} onSort={onSort} align="right" className="min-w-[120px]" />
+                            <ThSortable label="W/ Returns" columnKey="fulfilledWithReturns" sortConfig={sortConfig} onSort={onSort} align="right" className="min-w-[120px]" />
+                            <ThSortable label="W/ Concerns" columnKey="fulfilledWithConcerns" sortConfig={sortConfig} onSort={onSort} align="right" className="min-w-[120px]" />
+                            <ThSortable label="Total" columnKey="total" sortConfig={sortConfig} onSort={onSort} align="right" className="min-w-[120px]" />
                         </TableRow>
                     </TableHeader>
 

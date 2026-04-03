@@ -80,7 +80,7 @@ export default function DispatchSummaryModule() {
       <Separator className="my-6" />
 
       {/* Charts */}
-      <ChartsPanel loading={s.loading} statusChartData={s.statusChartData as any} weeklyTrendData={s.weeklyTrendData as any} />
+      <ChartsPanel loading={s.loading} statusChartData={s.statusChartData} weeklyTrendData={s.weeklyTrendData} />
 
       <Separator className="my-6" />
 

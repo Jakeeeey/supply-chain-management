@@ -5,7 +5,7 @@ import {format, parseISO} from "date-fns";
 import {
     Box, Truck, Search, Printer,
     CheckCircle, Barcode, Tag, Building2,
-    Clock, Layers, User, Play, ShieldCheck, Loader2
+    Clock, Layers, Play, ShieldCheck, Loader2
 } from "lucide-react";
 import {Sheet, SheetContent, SheetHeader, SheetTitle} from "@/components/ui/sheet";
 import {Tabs, TabsContent, TabsList, TabsTrigger} from "@/components/ui/tabs";
@@ -15,7 +15,7 @@ import {ScrollArea} from "@/components/ui/scroll-area";
 import {Button} from "@/components/ui/button";
 import {Input} from "@/components/ui/input";
 
-import {ConsolidatorDto, ConsolidatorDetailsDto} from "../types";
+import {ConsolidatorDto, ConsolidatorDetailsDto, ConsolidatorDispatchesDto} from "../types";
 import {getStatusBadge} from "./ConsolidatorTable";
 import {StartPickingDialog} from "./StartPickingDialog";
 import { generatePickerPDF } from "./PickerManifestPrint";
@@ -255,7 +255,7 @@ function SKUCard({detail}: SKUCardProps) {
     );
 }
 
-function DispatchCard({disp}: { disp: any }) {
+function DispatchCard({disp}: { disp: ConsolidatorDispatchesDto }) {
     return (
         <div className="group relative border border-border/40 rounded-2xl p-4 bg-card/30 backdrop-blur-sm shadow-sm hover:border-primary/40 transition-all duration-300">
             <div className="flex items-start justify-between mb-3">

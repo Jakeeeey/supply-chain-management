@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 interface StatusSummaryCardsProps {
     globalCounts?: {
-        [key: string]: any;
+        [key: string]: unknown;
         page?: {
             totalElements: number;
             totalPages: number;
@@ -33,9 +33,10 @@ export function StatusSummaryCards({ globalCounts = {}, currentFilter, onFilterC
             {statuses.map((stat) => {
                 const isActive = currentFilter === stat.label;
 
-                const count = stat.label === "All"
+                const rawCount = stat.label === "All"
                     ? (globalCounts.page?.totalElements ?? globalCounts["All"] ?? 0)
                     : (globalCounts[stat.label] ?? 0);
+                const count = typeof rawCount === 'number' ? rawCount : 0;
 
                 return (
                     <Card

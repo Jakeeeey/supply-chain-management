@@ -72,7 +72,7 @@ export default function ActiveAuditExecutionModule({ batch, onClose, onAuditComp
         try {
             const success = await repickBatch(batch.id);
             if (success) onClose();
-        } catch (error) {
+        } catch (_error) {
             alert("Failed to send back to repick.");
         }
     };
@@ -155,7 +155,16 @@ export default function ActiveAuditExecutionModule({ batch, onClose, onAuditComp
 // 2. SUB-COMPONENTS
 // ============================================================================
 
-function AuditHeader({ batch, hasDiscrepancy, discrepancyCount, onClose, onCollapseAll, onExpandAll }: any) {
+interface AuditHeaderProps {
+    batch: ConsolidatorDto;
+    hasDiscrepancy: boolean;
+    discrepancyCount: number;
+    onClose: () => void;
+    onCollapseAll: () => void;
+    onExpandAll: () => void;
+}
+
+function AuditHeader({ batch, hasDiscrepancy, discrepancyCount, onClose, onCollapseAll, onExpandAll }: AuditHeaderProps) {
     return (
         <header className="shrink-0 bg-card/95 backdrop-blur-md border-b border-border/50 p-4 md:px-8 md:py-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between z-20 gap-4">
             <div className="flex items-center gap-4 min-w-0">
@@ -193,7 +202,14 @@ function AuditHeader({ batch, hasDiscrepancy, discrepancyCount, onClose, onColla
     );
 }
 
-function AuditFilters({ showErrorsOnly, setShowErrorsOnly, totalItems, discrepancyCount }: any) {
+interface AuditFiltersProps {
+    showErrorsOnly: boolean;
+    setShowErrorsOnly: (val: boolean) => void;
+    totalItems: number;
+    discrepancyCount: number;
+}
+
+function AuditFilters({ showErrorsOnly, setShowErrorsOnly, totalItems, discrepancyCount }: AuditFiltersProps) {
     return (
         <div className="shrink-0 bg-card border-b border-border/40 p-4 md:px-8 z-10 flex gap-4 shadow-[0_4px_20px_-15px_rgba(0,0,0,0.1)]">
             <Button
@@ -226,7 +242,16 @@ function AuditFilters({ showErrorsOnly, setShowErrorsOnly, totalItems, discrepan
     );
 }
 
-function SupplierGroup({ supplier, brands, stats, isCollapsed, showErrorsOnly, onToggle }: any) {
+interface SupplierGroupProps {
+    supplier: string;
+    brands: Record<string, Record<string, ConsolidatorDetailsDto[]>>;
+    stats: { total: number; errors: number };
+    isCollapsed: boolean;
+    showErrorsOnly: boolean;
+    onToggle: () => void;
+}
+
+function SupplierGroup({ supplier, brands, stats, isCollapsed, showErrorsOnly, onToggle }: SupplierGroupProps) {
     const hasSupplierErrors = stats.errors > 0;
 
     return (
@@ -267,7 +292,7 @@ function SupplierGroup({ supplier, brands, stats, isCollapsed, showErrorsOnly, o
                                         <span className="font-black uppercase tracking-widest text-sm text-foreground">{brand}</span>
                                     </div>
                                     <div className="pl-4 md:pl-8 space-y-8 border-l-[3px] border-border/30 ml-4">
-                                        {Object.entries(categories as Record<string, any[]>).map(([category, items]) => (
+                                        {Object.entries(categories).map(([category, items]) => (
                                             <div key={category} className="space-y-4">
                                                 <div className="flex items-center gap-2">
                                                     <Tags className="w-4 h-4 text-muted-foreground/50" />
@@ -361,7 +386,13 @@ function AuditEmptyState() {
     );
 }
 
-function AuditFooter({ hasDiscrepancy, onRepick, onAuditAttempt }: any) {
+interface AuditFooterProps {
+    hasDiscrepancy: boolean;
+    onRepick: () => void;
+    onAuditAttempt: () => void;
+}
+
+function AuditFooter({ hasDiscrepancy, onRepick, onAuditAttempt }: AuditFooterProps) {
     return (
         <div className="shrink-0 bg-card/95 backdrop-blur-md border-t border-border/50 z-20 flex items-center justify-center p-4 md:p-6 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)]">
             <div className="w-full max-w-[1400px] flex flex-col sm:flex-row gap-4">

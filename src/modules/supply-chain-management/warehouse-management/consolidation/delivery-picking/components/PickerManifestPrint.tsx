@@ -36,8 +36,8 @@ export const generatePickerPDF = (groupedManifest: Record<string, PickerItem[]>,
 
 
         // --- 2. HIERARCHICAL DATA PROCESSING ---
-        const tableRows: any[] = [];
-        const supplierGroups = items.reduce((acc: any, item: PickerItem) => {
+        const tableRows: (string | number | { content: string | number; colSpan?: number; styles?: Record<string, unknown> })[][] = [];
+        const supplierGroups = items.reduce((acc: Record<string, Record<string, PickerItem[]>>, item: PickerItem) => {
             const sKey = (item.supplierName || 'DIRECT').toUpperCase();
             const bKey = (item.brandName || 'NO BRAND').toUpperCase();
             const fullKey = `${sKey} | ${bKey}`;
@@ -50,12 +50,12 @@ export const generatePickerPDF = (groupedManifest: Record<string, PickerItem[]>,
             return acc;
         }, {});
 
-        Object.entries(supplierGroups).forEach(([mainHeader, categories]: [string, any]) => {
+        Object.entries(supplierGroups).forEach(([mainHeader, categories]) => {
             tableRows.push([
                 { content: mainHeader, colSpan: 4, styles: { fillColor: false, textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 7.5, cellPadding: { top: 3, bottom: 1, left: 1, right: 1 } } }
             ]);
 
-            Object.entries(categories).forEach(([catName, catItems]: [string, any]) => {
+            Object.entries(categories).forEach(([catName, catItems]) => {
                 tableRows.push([
                     { content: `   CAT: ${catName}`, colSpan: 4, styles: { fillColor: false, textColor: [50, 50, 50], fontStyle: 'italic', fontSize: 6.5, cellPadding: 1 } }
                 ]);
@@ -87,7 +87,7 @@ export const generatePickerPDF = (groupedManifest: Record<string, PickerItem[]>,
                             content: item.unit || item.unitName || "-",
                             styles: unitStyle // Inject the dynamic style here
                         },
-                        item.quantity || item.orderedQuantity
+                        item.quantity || item.orderedQuantity || 0
                     ]);
                 });
             });
@@ -110,9 +110,9 @@ export const generatePickerPDF = (groupedManifest: Record<string, PickerItem[]>,
             },
             columnStyles: {
                 0: { cellWidth: 8 },
-                1: { cellWidth: 'auto' },
-                2: { cellWidth: 18, halign: 'center' },
-                3: { cellWidth: 12, halign: 'center', fontStyle: 'bold' }
+                1: { cellWidth: 'auto' as const },
+                2: { cellWidth: 18, halign: 'center' as const },
+                3: { cellWidth: 12, halign: 'center' as const, fontStyle: 'bold' as const }
             },
             didDrawCell: (data) => {
                 if (data.column.index === 0 && data.cell.section === 'body' && data.cell.raw === "") {
@@ -129,7 +129,8 @@ export const generatePickerPDF = (groupedManifest: Record<string, PickerItem[]>,
         });
 
         // --- 4. TIGHT FOOTER SIGNATURES ---
-        const finalY = (doc as any).lastAutoTable.finalY + 5;
+        // @ts-expect-error - autoTable attaches lastAutoTable to jsPDF instance
+        const finalY = doc.lastAutoTable.finalY + 5;
         if (finalY > 282) doc.addPage();
 
         doc.setDrawColor(0, 0, 0);

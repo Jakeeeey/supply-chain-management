@@ -15,7 +15,7 @@ export async function fetchUsers(): Promise<User[]> {
     return data.users || [];
 }
 
-export async function saveBranch(branchData: any): Promise<any> {
+export async function saveBranch(branchData: Record<string, unknown>): Promise<unknown> {
     const res = await fetch("/api/scm/inventory-management/branch-management", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -51,7 +51,7 @@ export async function fetchBarangays(cityCode: string): Promise<Barangay[]> {
     return res.json();
 }
 
-export async function updateBranch(id: number, branchData: any): Promise<any> {
+export async function updateBranch(id: number, branchData: Record<string, unknown>): Promise<unknown> {
     const res = await fetch("/api/scm/inventory-management/branch-management", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -64,7 +64,7 @@ export async function updateBranch(id: number, branchData: any): Promise<any> {
     return res.json();
 }
 
-export async function deleteBranch(id: number): Promise<any> {
+export async function deleteBranch(id: number): Promise<unknown> {
     const res = await fetch(`/api/scm/inventory-management/branch-management?id=${id}`, {
         method: "DELETE",
     });
