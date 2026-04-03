@@ -1,4 +1,4 @@
-import { DateRange } from "../types";
+
 
 export const calculateDateRange = (range: string, customStartVal?: string, customEndVal?: string) => {
     const now = new Date();
@@ -48,7 +48,7 @@ export const calculateDateRange = (range: string, customStartVal?: string, custo
     return `${formatDate(start)}${T_START},${formatDate(end)}${T_END}`;
 };
 
-export const parseCurrency = (val: any) => {
+export const parseCurrency = (val: unknown) => {
     if (typeof val === 'number') return val;
     if (!val) return 0;
     const cleanStr = String(val).replace(/[^0-9.-]+/g, "");

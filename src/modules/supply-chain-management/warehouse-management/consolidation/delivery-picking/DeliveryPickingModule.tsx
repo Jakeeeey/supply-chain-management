@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Package, Search, Plus, Loader2, Users, ClipboardList, RefreshCw, Layers, Building2 } from "lucide-react";
+import { Search, Plus, Loader2, Users, ClipboardList, RefreshCw, Layers, Building2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ import {
 
 // Providers & Types
 import { fetchConsolidators, fetchConsolidatorSummary, fetchActiveBranches } from "./providers/fetchProvider";
-import { ConsolidatorDto } from "./types";
+import { ConsolidatorDto, BranchDto } from "./types";
 
 // Extracted Sub-Components
 import { StatusSummaryCards } from "./components/StatusSummaryCards";
@@ -31,13 +31,10 @@ export default function DeliveryPickingModule() {
     // --- DATA STATE ---
     const [data, setData] = useState<ConsolidatorDto[]>([]);
     const [loading, setLoading] = useState(true);
-    const [branches, setBranches] = useState<any[]>([]);
+    const [branches, setBranches] = useState<BranchDto[]>([]);
     const [selectedBranchId, setSelectedBranchId] = useState<number | undefined>(undefined);
 
-    const [globalCounts, setGlobalCounts] = useState<{
-        [key: string]: any;
-        page?: { totalElements: number; totalPages: number; number: number };
-    }>({});
+    const [globalCounts, setGlobalCounts] = useState<Record<string, any>>({});
 
     const [errorStatus, setErrorStatus] = useState<number | null>(null);
 
@@ -65,7 +62,7 @@ export default function DeliveryPickingModule() {
             }
         };
         loadBranches();
-    }, []);
+    }, [selectedBranchId]);
 
     // 🚀 DEBOUNCE SEARCH
     useEffect(() => {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { ClusterGroupRaw, TableRow, DateRange, ClusterFilterValue, SortConfig, SortDirection } from "../types";
+import { ClusterGroupRaw, TableRow, DateRange, ClusterFilterValue, SortConfig } from "../types";
 import { fetchPendingDeliveries } from "../providers/fetchProvider";
 import { toLocalDayKey, statusToBucket, checkDateRange, normalizeClusterFilter } from "../utils";
 
@@ -66,7 +66,7 @@ export const usePendingDeliveries = () => {
 
                     const dateKey = toLocalDayKey(o.order_date);
                     const key = `${customer.customerName}||${customer.salesmanName}||${dateKey}`;
-                    const amt = Number((o.allocated_amount ?? o.total_amount ?? 0) as any);
+                    const amt = Number(o.allocated_amount ?? o.total_amount ?? 0);
                     const bucket = statusToBucket(o.order_status);
 
                     if (!agg.has(key)) {

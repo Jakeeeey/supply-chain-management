@@ -86,3 +86,21 @@ export interface PickerAssignmentDto {
     isActive: boolean;
     assignedAt: string; // ISO Date String
 }
+
+export interface BranchDto {
+    id: number;
+    branchName: string;
+    branchCode: string;
+    city?: string;
+}
+
+export interface ConsolidationPreviewItem {
+    productId: number;
+    productName: string;
+    supplierShortcut?: string;
+    brand?: string;
+    category?: string;
+    unit?: string;
+    totalAllocated: number;
+    runningInventory: number;
+}

@@ -67,7 +67,7 @@ function SectionSkeleton({ rows = 6 }: { rows?: number }) {
 }
 
 export default function DetailsTab({ vehicle }: { vehicle: VehicleRow }) {
-  const raw: any = vehicle?.raw ?? {};
+  const raw = vehicle?.raw ?? {};
 
   // ✅ vehicles.image (path or file id, depending on your implementation)
   const imagePath = String(raw?.image ?? "").trim() || null;
@@ -95,15 +95,7 @@ export default function DetailsTab({ vehicle }: { vehicle: VehicleRow }) {
     "N/A"
   );
 
-  const fuelType = cleanStr(raw?.fuel_type ?? raw?.fuelType, "N/A");
-
-  const lastMaint = raw?.last_maintenance_date
-    ? fmtDateShort(raw?.last_maintenance_date)
-    : "No records";
-
-  const nextMaint = raw?.next_maintenance_date
-    ? fmtDateShort(raw?.next_maintenance_date)
-    : "Not scheduled";
+  const fuelType = cleanStr(raw?.fuel_type, "N/A");
 
   const seats = cleanStr(raw?.seats, "N/A");
   const purchasedDate = raw?.purchased_date ? fmtDateShort(raw?.purchased_date) : "N/A";

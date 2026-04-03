@@ -38,9 +38,9 @@ export function useDispatchSummary() {
     try {
       const data = await fetchDispatchSummary({ limit: -1 });
       setDispatchPlans(data);
-    } catch (e: any) {
+    } catch (e) {
       setDispatchPlans([]);
-      setError(e?.message || "Failed to load dispatch summary");
+      setError(e instanceof Error ? e.message : "Failed to load dispatch summary");
     } finally {
       setLoading(false);
     }
@@ -123,9 +123,9 @@ export function useDispatchSummary() {
 
   const statusChartData = React.useMemo(() => {
     return [
-      { name: "For Dispatch", value: stats.forDispatch, colorKey: "blue" },
-      { name: "For Inbound", value: stats.forInbound, colorKey: "purple" },
-      { name: "For Clearance", value: stats.forClearance, colorKey: "pink" },
+      { name: "For Dispatch", value: stats.forDispatch, colorKey: "blue" as const },
+      { name: "For Inbound", value: stats.forInbound, colorKey: "purple" as const },
+      { name: "For Clearance", value: stats.forClearance, colorKey: "pink" as const },
     ].filter((x) => x.value > 0);
   }, [stats]);
 

@@ -4,7 +4,7 @@ import * as React from "react";
 import { Search, Download } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import type { FiltersState, PendingInvoiceOptions } from "../types";
+import type { FiltersState, PendingInvoiceOptions, PendingStatus } from "../types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export function FiltersBar({
@@ -32,7 +32,7 @@ export function FiltersBar({
 
       <div className="flex items-center gap-2">
         <div className="w-full md:w-[140px]">
-          <Select value={filters.status} onValueChange={(v) => setFilters({ ...filters, status: v as any, page: 1 })}>
+          <Select value={filters.status} onValueChange={(v) => setFilters({ ...filters, status: v as "All" | PendingStatus, page: 1 })}>
             <SelectTrigger>
               <SelectValue placeholder="All Statuses" />
             </SelectTrigger>

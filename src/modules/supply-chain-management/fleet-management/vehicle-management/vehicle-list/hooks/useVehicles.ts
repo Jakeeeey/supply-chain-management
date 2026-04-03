@@ -37,9 +37,9 @@ function buildTypeMap(types: { id: number; type_name: string }[]) {
 function buildNameMap(rows: Array<{ id: number; name?: string | null }>) {
   const map = new Map<number, string>();
   for (const r of rows || []) {
-    const id = Number((r as any)?.id ?? 0);
+    const id = Number(r.id ?? 0);
     if (!id) continue;
-    const name = String((r as any)?.name ?? "").trim();
+    const name = String(r.name ?? "").trim();
     map.set(id, name.length ? name : `#${id}`);
   }
   return map;
@@ -122,14 +122,12 @@ function mapVehicle(
   const typeName =
     typeId && typeMap.has(typeId) ? cleanStr(typeMap.get(typeId), "N/A") : null;
 
-  const anyV: any = v as any;
-
   // ✅ now prioritize vehicles.name
   const name = String(
-    anyV?.name ??
-      anyV?.vehicle_name ??
-      anyV?.model ??
-      anyV?.vehicle_model ??
+    v?.name ??
+      v?.vehicle_name ??
+      v?.model ??
+      v?.vehicle_model ??
       ""
   ).trim();
 
@@ -142,14 +140,14 @@ function mapVehicle(
       : "N/A";
 
   const fuelTypeId =
-    anyV?.fuel_type === null || anyV?.fuel_type === undefined
+    v?.fuel_type === null || v?.fuel_type === undefined
       ? null
-      : Number(anyV.fuel_type);
+      : Number(v.fuel_type);
 
   const engineTypeId =
-    anyV?.engine_type === null || anyV?.engine_type === undefined
+    v?.engine_type === null || v?.engine_type === undefined
       ? null
-      : Number(anyV.engine_type);
+      : Number(v.engine_type);
 
   const fuelTypeName =
     fuelTypeId && fuelMap.has(fuelTypeId) ? cleanStr(fuelMap.get(fuelTypeId), "N/A") : null;
@@ -158,7 +156,7 @@ function mapVehicle(
     engineTypeId && engineMap.has(engineTypeId) ? cleanStr(engineMap.get(engineTypeId), "N/A") : null;
 
   const currentMileage =
-    toNum(anyV?.current_mileage ?? anyV?.mileage_km ?? anyV?.mileage ?? anyV?.odometer) ?? 0;
+    toNum(v?.current_mileage ?? v?.mileage_km ?? v?.mileage ?? v?.odometer) ?? 0;
 
   return {
     id,
@@ -174,7 +172,7 @@ function mapVehicle(
     engineTypeId,
     engineTypeName,
     currentMileage,
-    image: String(anyV?.image ?? "").trim() || null,
+    image: String(v?.image ?? "").trim() || null,
 
     raw: v,
   };
@@ -231,8 +229,8 @@ export function useVehicles() {
       setEngineMap(eMap);
 
       setRows((vehicles || []).map((v) => mapVehicle(v, tMap, uMap, latestDriverByVehicle, fMap, eMap)));
-    } catch (e: any) {
-      setError(String(e?.message || e));
+    } catch (e) {
+      setError(String(e instanceof Error ? e.message : e));
     } finally {
       setLoading(false);
     }
@@ -245,14 +243,14 @@ export function useVehicles() {
   const filtered = React.useMemo(() => filterRows(rows, query), [rows, query]);
 
   const addVehicle = React.useCallback(
-    async (payload: Record<string, any>) => {
+    async (payload: Record<string, unknown>) => {
       setSaving(true);
       setError(null);
       try {
         await createVehicle(payload);
         await refresh();
-      } catch (e: any) {
-        setError(String(e?.message || e));
+      } catch (e) {
+        setError(String(e instanceof Error ? e.message : e));
         throw e;
       } finally {
         setSaving(false);
