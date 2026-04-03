@@ -14,7 +14,6 @@ import {
 import { useBranchManagement } from "./hooks/useBranchManagement";
 import { BranchTable } from "./components/BranchTable";
 import { BranchModal } from "./components/BranchModal";
-import { toast } from "sonner";
 import type { Branch } from "./types";
 
 export default function BranchManagementModule() {
@@ -88,7 +87,7 @@ export default function BranchManagementModule() {
                 </div>
 
                 <div className="flex items-center gap-3 w-full md:w-auto">
-                    <Select value={filterType} onValueChange={(value: any) => setFilterType(value)}>
+                    <Select value={filterType} onValueChange={(value: "All" | "Active" | "Inactive" | "Moving" | "Not Moving" | "Badstock") => setFilterType(value)}>
                         <SelectTrigger className="w-[160px] h-12 bg-background border border-input rounded-xl font-medium focus:ring-2 focus:ring-ring/40 focus:border-ring transition-all outline-none group shadow-sm hover:border-primary/50">
                             <SlidersHorizontal className="mr-2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
                             <SelectValue placeholder="All Status" />
