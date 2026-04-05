@@ -24,24 +24,24 @@ const DIRECTUS_RELATIONS_COLLECTION = "directus_relations";
 // =====================
 // HELPERS
 // =====================
-function ok(data: any, status = 200) {
+function ok(data: unknown, status = 200) {
     return NextResponse.json({ data }, { status });
 }
 function bad(error: string, status = 400) {
     return NextResponse.json({ error }, { status });
 }
-function toStr(v: any, fb = "") {
+function toStr(v: unknown, fb = "") {
     const s = String(v ?? "").trim();
     return s ? s : fb;
 }
-function toNum(v: any) {
+function toNum(v: unknown) {
     const n = Number(String(v ?? "").replace(/,/g, ""));
     return Number.isFinite(n) ? n : 0;
 }
-function uniqNums(arr: any[]) {
+function uniqNums(arr: (number | string | null | undefined)[]) {
     return Array.from(new Set(arr.map((x) => toNum(x)).filter((n) => Number.isFinite(n) && n > 0)));
 }
-function pickNum(obj: any, keys: string[]) {
+function pickNum(obj: Record<string, unknown> | null | undefined, keys: string[]) {
     for (const k of keys) {
         if (obj && obj[k] !== undefined && obj[k] !== null && String(obj[k]).trim() !== "") {
             const n = toNum(obj[k]);
@@ -50,13 +50,7 @@ function pickNum(obj: any, keys: string[]) {
     }
     return 0;
 }
-function pickStr(obj: any, keys: string[], fb = "") {
-    for (const k of keys) {
-        const s = toStr(obj?.[k]);
-        if (s) return s;
-    }
-    return fb;
-}
+
 
 // =====================
 // MAPS
@@ -72,7 +66,7 @@ async function fetchSuppliersMapByIds(base: string, supplierIds: number[]) {
         `&filter[id][_in]=${encodeURIComponent(ids.join(","))}` +
         `&fields=id,supplier_name`;
 
-    const j = await fetchJson(url);
+    const j = await fetchJson(url) as { data: Record<string, unknown>[] };
     for (const s of j?.data ?? []) {
         const id = toNum(s?.id);
         if (!id) continue;
@@ -89,7 +83,7 @@ async function fetchProductsMapByIds(base: string, productIds: number[]) {
             product_name: string;
             barcode: string;
             product_code: string;
-            unit_of_measurement: any;
+            unit_of_measurement: unknown;
             parent_id: number | null;
             category: string;
             brand: string;
@@ -103,7 +97,7 @@ async function fetchProductsMapByIds(base: string, productIds: number[]) {
         `&filter[product_id][_in]=${encodeURIComponent(ids.join(","))}` +
         `&fields=product_id,product_name,barcode,product_code,unit_of_measurement,parent_id,product_category,product_brand`;
 
-    const j = await fetchJson(url);
+    const j = await fetchJson(url) as { data: Record<string, unknown>[] };
     for (const p of j?.data ?? []) {
         const id = toNum(p?.product_id ?? p?.id);
         if (!id) continue;
@@ -114,14 +108,14 @@ async function fetchProductsMapByIds(base: string, productIds: number[]) {
             product_code: toStr(p?.product_code),
             unit_of_measurement: p?.unit_of_measurement,
             parent_id: toNum(p?.parent_id) || null,
-            category: p?.product_category,
-            brand: p?.product_brand,
+            category: toStr(p?.product_category),
+            brand: toStr(p?.product_brand),
         });
     }
     return map;
 }
 
-async function fetchUnitsMapByIds(base: string, unitIds: any[]) {
+async function fetchUnitsMapByIds(base: string, unitIds: (number | string | null | undefined)[]) {
     const map = new Map<number, { id: number; unit_shortcut: string }>();
     const ids = uniqNums(unitIds);
     if (!ids.length) return map;
@@ -131,7 +125,7 @@ async function fetchUnitsMapByIds(base: string, unitIds: any[]) {
         `&filter[unit_id][_in]=${encodeURIComponent(ids.join(","))}` +
         `&fields=unit_id,unit_shortcut,unit_name`;
 
-    const j = await fetchJson(url);
+    const j = await fetchJson(url) as { data: Record<string, unknown>[] };
     for (const u of j?.data ?? []) {
         const id = toNum(u?.unit_id);
         if (!id) continue;
@@ -140,22 +134,22 @@ async function fetchUnitsMapByIds(base: string, unitIds: any[]) {
     return map;
 }
 
-async function fetchCategoriesMap(base: string, catIds: any[]) {
+async function fetchCategoriesMap(base: string, catIds: (number | string | null | undefined)[]) {
     const map = new Map<number, string>();
     const ids = uniqNums(catIds);
     if (!ids.length) return map;
     const url = `${base}/items/categories?limit=-1&filter[category_id][_in]=${encodeURIComponent(ids.join(","))}&fields=category_id,category_name`;
-    const j = await fetchJson(url);
+    const j = await fetchJson(url) as { data: Record<string, unknown>[] };
     for (const c of j?.data ?? []) map.set(toNum(c.category_id), toStr(c.category_name));
     return map;
 }
 
-async function fetchBrandsMap(base: string, brandIds: any[]) {
+async function fetchBrandsMap(base: string, brandIds: (number | string | null | undefined)[]) {
     const map = new Map<number, string>();
     const ids = uniqNums(brandIds);
     if (!ids.length) return map;
     const url = `${base}/items/brand?limit=-1&filter[brand_id][_in]=${encodeURIComponent(ids.join(","))}&fields=brand_id,brand_name`;
-    const j = await fetchJson(url);
+    const j = await fetchJson(url) as { data: Record<string, unknown>[] };
     for (const b of j?.data ?? []) map.set(toNum(b.brand_id), toStr(b.brand_name));
     return map;
 }
@@ -175,7 +169,7 @@ async function discoverBranchCollection(base: string): Promise<string | ""> {
             `&filter[field][_eq]=branch_id` +
             `&fields=related_collection,collection,field`;
 
-        const j = await fetchJson(url);
+        const j = await fetchJson(url) as { data: Record<string, unknown>[] };
         const row = Array.isArray(j?.data) ? j.data[0] : null;
         const rel = toStr(row?.related_collection);
         if (rel) return rel;
@@ -191,14 +185,15 @@ async function tryFetchFieldsMeta(base: string, collection: string) {
     // Directus endpoint: /fields/{collection}
     // If not available in your instance/permissions, it will throw and we fallback.
     const url = `${base}/fields/${encodeURIComponent(collection)}`;
-    const j = await fetchJson(url);
+    const j = await fetchJson(url) as { data: Record<string, unknown>[] };
     return Array.isArray(j?.data) ? j.data : [];
 }
 
-function pickPrimaryKeyField(fieldsMeta: any[]): string {
+function pickPrimaryKeyField(fieldsMeta: Record<string, unknown>[]): string {
     // prefer schema.is_primary_key
     for (const f of fieldsMeta) {
-        if (f?.schema?.is_primary_key) return toStr(f?.field);
+        const schema = f?.schema as Record<string, unknown> | null;
+        if (schema?.is_primary_key) return toStr(f?.field);
     }
     // common fallbacks
     const candidates = ["id", "branch_id", "company_branch_id", "warehouse_id", "location_id"];
@@ -208,7 +203,7 @@ function pickPrimaryKeyField(fieldsMeta: any[]): string {
     return "id";
 }
 
-function pickLabelField(fieldsMeta: any[]): string[] {
+function pickLabelField(fieldsMeta: Record<string, unknown>[]): string[] {
     // Order matters. We return a list of label candidates to try.
     const labelCandidates = [
         "branch_name",
@@ -251,7 +246,7 @@ async function tryFetchBranchesByPk(
         `&filter[${encodeURIComponent(pk)}][_in]=${encodeURIComponent(safeIds.join(","))}` +
         `&fields=${encodeURIComponent(fields)}`;
 
-    const j = await fetchJson(url);
+    const j = await fetchJson(url) as { data: Record<string, unknown>[] };
     const rows = Array.isArray(j?.data) ? j.data : [];
 
     const map = new Map<number, { id: number; name: string }>();
@@ -354,7 +349,7 @@ type PoHeaderRow = {
     purchase_order_no?: string | null;
     date?: string | null;
     date_encoded?: string | null;
-    supplier_name?: any;
+    supplier_name?: unknown;
     is_invoice?: boolean | number | null;
     isInvoice?: boolean | number | null;
     receiving_type?: number | null;
@@ -375,7 +370,7 @@ async function fetchPendingPOs(base: string): Promise<PoHeaderRow[]> {
     ].join(",");
 
     const url = `${base}/items/${PO_COLLECTION}?limit=-1&sort=-date_encoded&fields=${fields}&filter[date_approved][_null]=true&filter[approver_id][_null]=true`;
-    const j = await fetchJson(url);
+    const j = await fetchJson(url) as { data: PoHeaderRow[] };
     return Array.isArray(j?.data) ? j.data : [];
 }
 
@@ -400,7 +395,7 @@ async function fetchPOProductsByPOIds(base: string, poIds: number[]) {
         `&filter[purchase_order_id][_in]=${encodeURIComponent(poIds.join(","))}` +
         `&fields=*,product_id.*,branch_id.*`;
 
-    const j = await fetchJson(url);
+    const j = await fetchJson(url) as { data: PoProductRow[] };
     return (j?.data ?? []) as PoProductRow[];
 }
 
@@ -410,7 +405,7 @@ async function fetchPOProductsByPOId(base: string, poId: number) {
         `&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}` +
         `&fields=*,product_id.*,branch_id.*`;
 
-    const j = await fetchJson(url);
+    const j = await fetchJson(url) as { data: PoProductRow[] };
     return (j?.data ?? []) as PoProductRow[];
 }
 
@@ -418,22 +413,23 @@ async function fetchDiscountTypesMap(base: string) {
     const map = new Map<string, { name: string; pct: number }>();
     try {
         const url = `${base}/items/discount_type?limit=-1&fields=id,discount_type,total_percent`;
-        const j = await fetchJson(url);
-        for (const dt of j?.data ?? []) {
+        const j = await fetchJson(url) as { data: Record<string, unknown>[] };
+        for (const dt of (j?.data ?? [])) {
             const id = String(dt.id);
             map.set(id, {
                 name: String(dt.discount_type || ""),
                 pct: Number(dt.total_percent || 0),
             });
         }
-    } catch (e) {
-        console.error("[approval-po] Failed to fetch discount types:", e);
+    } catch (e: unknown) {
+        const error = e as Error;
+        console.error("[approval-po] Failed to fetch discount types:", error.message);
     }
     return map;
 }
 
 async function fetchProductSupplierLinks(base: string, productIds: number[]) {
-    const map = new Map<number, { supplier_id: number; discount_type: any }>();
+    const map = new Map<number, { supplier_id: number; discount_type: unknown }>();
     const ids = uniqNums(productIds);
     if (!ids.length) return map;
 
@@ -442,7 +438,7 @@ async function fetchProductSupplierLinks(base: string, productIds: number[]) {
         `&filter[product_id][_in]=${encodeURIComponent(ids.join(","))}` +
         `&fields=*`;
 
-    const j = await fetchJson(url);
+    const j = await fetchJson(url) as { data: Record<string, unknown>[] };
     for (const link of j?.data ?? []) {
         const pid = toNum(link?.product_id);
         if (!pid) continue;
@@ -458,15 +454,14 @@ async function fetchProductSupplierLinks(base: string, productIds: number[]) {
 // DETAIL BUILDER
 // =====================
 async function buildPurchaseOrderDetail(base: string, poId: number) {
-    // ✅ Fetch header (no expansion to avoid 500 on weird data)
     const headerUrl = `${base}/items/${PO_COLLECTION}/${encodeURIComponent(String(poId))}?fields=*`;
-    const headerJ = await fetchJson(headerUrl);
-    const header: any = headerJ?.data ?? null;
+    const headerJ = await fetchJson(headerUrl) as { data: Record<string, unknown> };
+    const header = (headerJ?.data as Record<string, unknown>) ?? null;
     if (!header?.purchase_order_id) throw new Error("PO not found.");
 
     const poNumber = toStr(header?.purchase_order_no, String(poId));
     const date = toStr(header?.date ?? header?.date_encoded, "");
-    const currency = (toStr(header?.currency, "PHP") as any) || "PHP";
+    const currency = (toStr(header?.currency, "PHP")) || "PHP";
 
     const supplierId = toNum(header?.supplier_name);
     const suppliersMap = await fetchSuppliersMapByIds(base, supplierId ? [supplierId] : []);
@@ -491,8 +486,8 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
     const brandMap = await fetchBrandsMap(base, productsList.map(p => p.brand));
 
     const unitIds = uniqNums([
-        ...lines.map((l: any) => l.unit_of_measurement),
-        ...Array.from(productsMap.values()).map((p) => p.unit_of_measurement),
+        ...lines.map((l: Record<string, unknown>) => l.unit_of_measurement as (string | number | null | undefined)),
+        ...Array.from(productsMap.values()).map((p) => p.unit_of_measurement as (string | number | null | undefined)),
     ]);
     const unitsMap = await fetchUnitsMapByIds(base, unitIds);
 
@@ -500,16 +495,17 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
     const discountMap = await fetchDiscountTypesMap(base);
 
     // ##### Helper to extract name/percent from expanded or ID lookup #####
-    const getDiscInfo = (dtRaw: any) => {
+    const getDiscInfo = (dtRaw: unknown) => {
         if (!dtRaw) return null;
         
         // 1) If it's an object with discount_type property (Directus expansion)
-        if (typeof dtRaw === "object" && dtRaw.discount_type) {
-            return { name: toStr(dtRaw.discount_type), pct: toNum(dtRaw.total_percent) };
+        if (typeof dtRaw === "object" && dtRaw !== null && "discount_type" in dtRaw) {
+            const dt = dtRaw as Record<string, unknown>;
+            return { name: toStr(dt.discount_type), pct: toNum(dt.total_percent) };
         }
         
         // 2) Try ID lookup (Robust fallback if expansion fails)
-        const id = typeof dtRaw === "object" ? String(dtRaw.id) : String(dtRaw);
+        const id = typeof dtRaw === "object" && dtRaw !== null ? String((dtRaw as { id: unknown }).id) : String(dtRaw);
         const info = discountMap.get(id);
         if (info) return info;
 
@@ -582,14 +578,15 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
 
         const linkData = productLinksMap.get(pid);
         
-        const itemDisc = getDiscInfo((l as any).discount_type);
+        const itemDisc = getDiscInfo((l as Record<string, unknown>).discount_type);
         const linkDisc = getDiscInfo(linkData?.discount_type);
+        const headerDiscPct = pickNum(header, ["discount_percent", "discountPercent", "discount_rate", "discountRate", "discount_percentage", "discountPercentage"]);
 
         const resolvedDiscountType = formatDiscLabel(itemDisc, formatDiscLabel(linkDisc, headerDiscTypeName)) || "—";
         const discountPct = itemDisc?.pct || linkDisc?.pct || headerDiscPct || 0;
 
-        const grossVal = toNum((l as any).gross) || lineTotal;
-        let netVal = toNum(l.total_amount) || toNum((l as any).net) || 0;
+        const grossVal = toNum((l as Record<string, unknown>).gross) || lineTotal;
+        let netVal = toNum(l.total_amount) || toNum((l as Record<string, unknown>).net) || 0;
         
         // Calculate net if missing or if it matches gross (fallback to header discount)
         if ((netVal === 0 || netVal === grossVal) && discountPct > 0) {
@@ -610,9 +607,9 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
             brand: brandMap.get(toNum(p?.brand)) || "—",
             category: catMap.get(toNum(p?.category)) || "—",
             uom:
-                unitsMap.get(toNum((l as any)?.unit_of_measurement))?.unit_shortcut ||
+                unitsMap.get(toNum((l as Record<string, unknown>)?.unit_of_measurement))?.unit_shortcut ||
                 unitsMap.get(toNum(p?.unit_of_measurement))?.unit_shortcut ||
-                toStr((l as any)?.unit_of_measurement) ||
+                toStr((l as Record<string, unknown>)?.unit_of_measurement) ||
                 toStr(p?.unit_of_measurement) ||
                 "—",
 
@@ -641,7 +638,7 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
         };
     });
 
-    const allocationsMap = new Map<number, any>();
+    const allocationsMap = new Map<number, { branch: { id: string; name: string }; items: unknown[] }>();
     for (const it of items) {
         const bid = toNum(it.branch_id);
         if (!bid) continue;
@@ -651,7 +648,7 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
                 items: [],
             });
         }
-        allocationsMap.get(bid).items.push(it);
+        allocationsMap.get(bid)!.items.push(it);
     }
     const allocations = Array.from(allocationsMap.values());
 
@@ -751,7 +748,7 @@ export async function GET(req: NextRequest) {
         for (const set of branchesByPo.values()) for (const bid of set.values()) allBranchIds.push(bid);
         const branchesMap = await fetchBranchesMapByIds(base, allBranchIds);
 
-        const supplierIds = uniqNums(headers.map((h) => h.supplier_name));
+        const supplierIds = uniqNums(headers.map((h) => h.supplier_name as string | number | null | undefined));
         const suppliersMap = await fetchSuppliersMapByIds(base, supplierIds);
 
         const list = headers.map((h) => {
@@ -787,8 +784,9 @@ export async function GET(req: NextRequest) {
         });
 
         return ok(list);
-    } catch (e: any) {
-        return bad(String(e?.message ?? e ?? "Failed to load approval POs"), 500);
+    } catch (e: unknown) {
+        const error = e as Error;
+        return bad(String(error?.message ?? error ?? "Failed to load approval POs"), 500);
     }
 }
 
@@ -803,7 +801,7 @@ export async function POST(req: NextRequest) {
         const poId = toNum(id);
         if (!poId) return bad("Invalid id.", 400);
 
-        const patch: any = { 
+        const patch: Record<string, unknown> = { 
             date_approved: new Date().toISOString(),
             receiving_type: Boolean(body?.markAsInvoice) ? 2 : 3 // Persistent flag for "Mark as Invoice"
         };
@@ -813,7 +811,8 @@ export async function POST(req: NextRequest) {
         await fetchJson(url, { method: "PATCH", body: JSON.stringify(patch) });
 
         return ok({ ok: true });
-    } catch (e: any) {
-        return bad(String(e?.message ?? e ?? "Failed to approve PO"), 400);
+    } catch (e: unknown) {
+        const error = e as Error;
+        return bad(String(error?.message ?? error ?? "Failed to approve PO"), 400);
     }
 }

@@ -2,7 +2,7 @@
  * JWT Utility for decoding payloads without verification
  */
 
-export function decodeJwtPayload(token: string): any | null {
+export function decodeJwtPayload(token: string): Record<string, unknown> | null {
   try {
     const parts = token.split(".");
     if (parts.length < 2) return null;
@@ -52,9 +52,9 @@ export function getUserNameFromToken(token: string | null | undefined): string {
   const payload = decodeJwtPayload(token);
   if (!payload) return "System User";
 
-  const first = (payload.Firstname ?? payload.FirstName ?? payload.firstName ?? payload.firstname ?? payload.first_name ?? "").trim();
-  const last = (payload.LastName ?? payload.Lastname ?? payload.lastName ?? payload.lastname ?? payload.last_name ?? "").trim();
-  const email = (payload.email ?? payload.Email ?? "").trim();
+  const first = String(payload.Firstname ?? payload.FirstName ?? payload.firstName ?? payload.firstname ?? payload.first_name ?? "").trim();
+  const last = String(payload.LastName ?? payload.Lastname ?? payload.lastName ?? payload.lastname ?? payload.last_name ?? "").trim();
+  const email = String(payload.email ?? payload.Email ?? "").trim();
 
   const name = [first, last].filter(Boolean).join(" ") || email || "User";
   return name;

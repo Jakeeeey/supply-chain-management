@@ -14,6 +14,7 @@ import type {
   PostDispatchInvoiceRow,
   PostDispatchOtherRow,
   PostDispatchPurchaseRow,
+  UpdateHeaderPayload,
 } from "../types/dispatch.types";
 import type {
   DispatchCreationFormValues,
@@ -326,7 +327,7 @@ export async function updateTrip(
   }
 
   // 3. Update Header & Staff
-  const headerPayload: any = {
+  const headerPayload: UpdateHeaderPayload = {
     driver_id: data.driver_id,
     vehicle_id: data.vehicle_id,
     starting_point: data.starting_point,

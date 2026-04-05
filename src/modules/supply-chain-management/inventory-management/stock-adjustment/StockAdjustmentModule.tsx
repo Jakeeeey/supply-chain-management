@@ -9,7 +9,7 @@ import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import ErrorPage from "@/components/shared/ErrorPage";
 
 export default function StockAdjustmentModule() {
-  const { data, isLoading, error, refresh, deleteAdjustment, filters } = useStockAdjustment();
+  const { data, isLoading, error, refresh, filters } = useStockAdjustment();
   // Form-specific data is fetched independently inside StockAdjustmentForm
   // via `useStockAdjustmentForm` — no duplicate list fetch.
   const [view, setView] = useState<"list" | "create" | "edit" | "detail">("list");

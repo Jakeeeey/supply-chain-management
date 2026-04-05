@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import {
   Dialog,
   DialogContent,
@@ -37,10 +38,13 @@ export function ViewCategoryDialog({
             <h4 className="text-sm font-medium text-muted-foreground">Category Image</h4>
             {selectedCategory.image ? (
               <div className="relative w-full min-h-[200px] max-h-[300px] rounded-lg border bg-muted/30 flex items-center justify-center overflow-hidden">
-                <img 
+                <Image 
                   src={`${process.env.NEXT_PUBLIC_API_BASE_URL}/assets/${selectedCategory.image}`} 
                   alt={selectedCategory.category_name} 
+                  width={800}
+                  height={400}
                   className="max-w-full max-h-[300px] object-contain drop-shadow-sm" 
+                  unoptimized
                 />
               </div>
             ) : (

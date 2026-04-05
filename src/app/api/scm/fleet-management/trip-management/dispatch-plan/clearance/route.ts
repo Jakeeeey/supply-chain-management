@@ -40,7 +40,7 @@ export async function GET(request: Request) {
             let matchedVehicleIds: number[] = [];
             try {
                 const vehiclesRes = await fetcher(`/vehicles?filter[vehicle_plate][_icontains]=${searchTerm}&fields=vehicle_id`);
-                matchedVehicleIds = (vehiclesRes?.data || []).map((v: any) => v.vehicle_id);
+                matchedVehicleIds = (vehiclesRes?.data || []).map((v: { vehicle_id: number }) => v.vehicle_id);
             } catch (vErr) {
                 console.warn('Search: Vehicle sub-fetch failed', vErr);
             }
@@ -50,7 +50,7 @@ export async function GET(request: Request) {
             let matchedUserIds: number[] = [];
             try {
                 const usersRes = await fetcher(`/user?filter[_or][0][user_fname][_icontains]=${searchTerm}&filter[_or][1][user_lname][_icontains]=${searchTerm}&fields=user_id`);
-                matchedUserIds = (usersRes?.data || []).map((u: any) => u.user_id);
+                matchedUserIds = (usersRes?.data || []).map((u: { user_id: number }) => u.user_id);
             } catch (uErr) {
                 console.warn('Search: User sub-fetch failed', uErr);
             }
@@ -59,7 +59,7 @@ export async function GET(request: Request) {
             if (matchedUserIds.length > 0) {
                 try {
                     const staffRes = await fetcher(`/post_dispatch_plan_staff?filter[user_id][_in]=${matchedUserIds.join(',')}&filter[role][_eq]=Driver&fields=post_dispatch_plan_id`);
-                    matchedPlanIds = (staffRes?.data || []).map((s: any) => s.post_dispatch_plan_id);
+                    matchedPlanIds = (staffRes?.data || []).map((s: { post_dispatch_plan_id: number }) => s.post_dispatch_plan_id);
                 } catch (sErr) {
                     console.warn('Search: Staff sub-fetch failed', sErr);
                 }
@@ -101,8 +101,8 @@ export async function GET(request: Request) {
         }
 
         // Get IDs for related data
-        const planIds = plans.map((p: any) => p.id);
-        const vehicleIds = [...new Set(plans.map((p: any) => p.vehicle_id).filter(Boolean))];
+        const planIds = plans.map((p: { id: number }) => p.id);
+        const vehicleIds = [...new Set(plans.map((p: { vehicle_id: number }) => p.vehicle_id).filter(Boolean))];
 
         // 1. Fetch relations for only the current page's dispatches
         const [staffRes, budgetsRes, invoicesRes, vehiclesRes] = await Promise.all([
@@ -116,10 +116,10 @@ export async function GET(request: Request) {
         const budgets = budgetsRes?.data || [];
         const invoices = invoicesRes?.data || [];
         const vehicles = vehiclesRes?.data || [];
-        const userIds = [...new Set(staff.map((s: any) => s.user_id).filter(Boolean))];
+        const userIds = [...new Set(staff.map((s: { user_id: number }) => s.user_id).filter(Boolean))];
 
         // 2. Extract invoice IDs to fetch ONLY relevant sales invoices
-        const invoiceIds = [...new Set(invoices.map((inv: any) => inv.invoice_id).filter(Boolean))];
+        const invoiceIds = [...new Set(invoices.map((inv: { invoice_id: number }) => inv.invoice_id).filter(Boolean))];
 
         // 3. Fetch Users, Sales Invoices and Customers based on extracted IDs
         const [usersRes, salesInvoicesRes] = await Promise.all([
@@ -131,8 +131,8 @@ export async function GET(request: Request) {
         const salesInvoices = salesInvoicesRes?.data || [];
 
         // 4. Fetch Vehicle Types and Branches
-        const vehicleTypeIds = [...new Set(vehicles.map((v: any) => v.vehicle_type).filter(Boolean))];
-        const branchIds = [...new Set(plans.map((p: any) => p.starting_point).filter(Boolean))];
+        const vehicleTypeIds = [...new Set(vehicles.map((v: { vehicle_type: number }) => v.vehicle_type).filter(Boolean))];
+        const branchIds = [...new Set(plans.map((p: { starting_point: number }) => p.starting_point).filter(Boolean))];
 
         const [typesRes, branchesRes] = await Promise.all([
             vehicleTypeIds.length > 0 ? fetcher(`/vehicle_type?filter[id][_in]=${vehicleTypeIds.join(',')}&limit=-1`) : Promise.resolve({ data: [] }),
@@ -147,20 +147,20 @@ export async function GET(request: Request) {
             fetcher(`/post_dispatch_dispatch_plans?filter[post_dispatch_plan_id][_in]=${planIds.join(',')}&limit=-1`),
         ]);
         const postDispatchPlans = pdpRes?.data || [];
-        const dispatchPlanIds = [...new Set(postDispatchPlans.map((p: any) => p.dispatch_plan_id).filter(Boolean))];
+        const dispatchPlanIds = [...new Set(postDispatchPlans.map((p: { dispatch_plan_id: number }) => p.dispatch_plan_id).filter(Boolean))];
 
         const [dpRes] = await Promise.all([
             dispatchPlanIds.length > 0 ? fetcher(`/dispatch_plan?filter[dispatch_id][_in]=${dispatchPlanIds.join(',')}&limit=-1`) : Promise.resolve({ data: [] }),
         ]);
         const dispatchPlans = dpRes?.data || [];
-        const clusterIds = [...new Set(dispatchPlans.map((d: any) => d.cluster_id).filter(Boolean))];
+        const clusterIds = [...new Set(dispatchPlans.map((d: { cluster_id: number }) => d.cluster_id).filter(Boolean))];
 
         const [clustersRes] = await Promise.all([
             clusterIds.length > 0 ? fetcher(`/cluster?filter[id][_in]=${clusterIds.join(',')}&limit=-1`) : Promise.resolve({ data: [] }),
         ]);
         const clusters = clustersRes?.data || [];
 
-        const customerCodes = [...new Set(salesInvoices.map((si: any) => si.customer_code).filter(Boolean))];
+        const customerCodes = [...new Set(salesInvoices.map((si: { customer_code: string }) => si.customer_code).filter(Boolean))];
 
         // 5. Fetch ONLY relevant customers
         const customersRes = customerCodes.length > 0
@@ -169,7 +169,7 @@ export async function GET(request: Request) {
         const customers = customersRes?.data || [];
 
         const customerMap = new Map<string, string>();
-        customers.forEach((c: any) => {
+        customers.forEach((c: { customer_code: string; customer_name: string }) => {
             if (c.customer_code) {
                 const normalized = c.customer_code.toString().trim().replace(/\s+/g, "");
                 customerMap.set(normalized, c.customer_name || 'Unknown Customer');
@@ -181,32 +181,44 @@ export async function GET(request: Request) {
             invoiceIds.length > 0 ? fetcher(`/unfulfilled_sales_transaction?filter[sales_invoice_id][_in]=${invoiceIds.join(',')}&limit=-1`) : Promise.resolve({ data: [] }),
         ]);
         const transactions = transactionsRes?.data || [];
-        const transactionIds = transactions.map((t: any) => t.id);
+        const transactionIds = transactions.map((t: { id: number }) => t.id);
 
         const [transDetailsRes] = await Promise.all([
             transactionIds.length > 0 ? fetcher(`/unfulfilled_sales_transaction_details?filter[unfulfilled_sales_transaction_id][_in]=${transactionIds.join(',')}&limit=-1`) : Promise.resolve({ data: [] }),
         ]);
         const transDetails = transDetailsRes?.data || [];
-        const transDetailIds = transDetails.map((d: any) => d.id);
+        const transDetailIds = transDetails.map((d: { id: number }) => d.id);
 
         const [transRFIDsRes] = await Promise.all([
             transDetailIds.length > 0 ? fetcher(`/unfulfilled_sales_transaction_rfid?filter[unfulfilled_sales_transaction_detail_id][_in]=${transDetailIds.join(',')}&limit=-1`) : Promise.resolve({ data: [] }),
         ]);
         const transRFIDs = transRFIDsRes?.data || [];
 
-        const joinedData = plans.map((plan: any) => {
-            const planStaff = staff.find((s: any) => s.post_dispatch_plan_id === plan.id && s.role === 'Driver');
-            const driver = planStaff ? users.find((u: any) => u.user_id === planStaff.user_id) : null;
-            const vehicle = vehicles.find((v: any) => v.vehicle_id === plan.vehicle_id);
+        interface Plan {
+            id: number;
+            doc_no: string;
+            driver_id: number;
+            vehicle_id: number;
+            estimated_time_of_dispatch: string;
+            estimated_time_of_arrival: string;
+            amount: string | number;
+            status: string;
+            starting_point: number;
+        }
+
+        const joinedData = plans.map((plan: Plan) => {
+            const planStaff = staff.find((s: { post_dispatch_plan_id: number; role: string; user_id: number }) => s.post_dispatch_plan_id === plan.id && s.role === 'Driver');
+            const driver = planStaff ? users.find((u: { user_id: number; user_fname: string; user_lname: string }) => u.user_id === planStaff.user_id) : null;
+            const vehicle = vehicles.find((v: { vehicle_id: number; vehicle_plate: string; vehicle_type: number }) => v.vehicle_id === plan.vehicle_id);
 
             const budget = budgets
-                .filter((b: any) => b.post_dispatch_plan_id === plan.id)
-                .reduce((sum: number, b: any) => sum + (Number(b.amount) || 0), 0);
+                .filter((b: { post_dispatch_plan_id: number; amount: string | number }) => b.post_dispatch_plan_id === plan.id)
+                .reduce((sum: number, b: { amount: string | number }) => sum + (Number(b.amount) || 0), 0);
 
             const planInvoices = invoices
-                .filter((inv: any) => inv.post_dispatch_plan_id === plan.id)
-                .map((inv: any) => {
-                    const salesInv = salesInvoices.find((s: any) => s.invoice_id === inv.invoice_id);
+                .filter((inv: { post_dispatch_plan_id: number }) => inv.post_dispatch_plan_id === plan.id)
+                .map((inv: { id: number; invoice_id: number; status: string; remarks: string; isCleared: boolean | number }) => {
+                    const salesInv = salesInvoices.find((s: { invoice_id: number; customer_code: string; order_id: string; invoice_no: string; invoice_date: string; total_amount: string | number }) => s.invoice_id === inv.invoice_id);
                     const custCodeRaw = salesInv?.customer_code || "";
                     const custCode = custCodeRaw.toString().trim().replace(/\s+/g, "");
                     const foundName = customerMap.get(custCode);
@@ -216,12 +228,12 @@ export async function GET(request: Request) {
                         id: inv.id,
                         invoiceId: salesInv?.invoice_id || inv.invoice_id || 0,
                         status: (() => {
-                            let s = inv.status;
+                            const s = inv.status;
                             if (s === 'Not Fulfilled') return 'Unfulfilled';
                             if (s === 'Fulfilled With Concerns') return 'Fulfilled with Concerns';
                             if (s === 'Fulfilled With Returns') return 'Fulfilled with Returns';
                             return s || 'Pending';
-                        })() as any,
+                        })(),
                         orderNo: salesInv?.order_id || 'N/A',
                         invoiceNo: salesInv?.invoice_no || 'N/A',
                         invoiceDate: salesInv?.invoice_date || 'N/A',
@@ -232,21 +244,21 @@ export async function GET(request: Request) {
                         isCleared: !!inv.isCleared,
                         // Reconciliation data restoration
                         missingQtys: (() => {
-                            const transaction = transactions.find((t: any) => t.sales_invoice_id === inv.invoice_id);
+                            const transaction = transactions.find((t: { sales_invoice_id: number; id: number }) => t.sales_invoice_id === inv.invoice_id);
                             if (!transaction) return {};
-                            const details = transDetails.filter((d: any) => d.unfulfilled_sales_transaction_id === transaction.id);
+                            const details = transDetails.filter((d: { unfulfilled_sales_transaction_id: number }) => d.unfulfilled_sales_transaction_id === transaction.id);
                             const map: Record<string | number, number> = {};
-                            details.forEach((d: any) => {
+                            details.forEach((d: { sales_invoice_detail_id: number; missing_quantity: number }) => {
                                 map[d.sales_invoice_detail_id] = d.missing_quantity;
                             });
                             return map;
                         })(),
                         scannedQtys: (() => {
-                            const transaction = transactions.find((t: any) => t.sales_invoice_id === inv.invoice_id);
+                            const transaction = transactions.find((t: { sales_invoice_id: number; id: number }) => t.sales_invoice_id === inv.invoice_id);
                             if (!transaction) return {};
-                            const details = transDetails.filter((d: any) => d.unfulfilled_sales_transaction_id === transaction.id);
+                            const details = transDetails.filter((d: { unfulfilled_sales_transaction_id: number }) => d.unfulfilled_sales_transaction_id === transaction.id);
                             const map: Record<string | number, number> = {};
-                            details.forEach((d: any) => {
+                            details.forEach((d: { sales_invoice_detail_id: number; invoice_quantity: number; missing_quantity: number }) => {
                                 // Scanned = Original - Missing
                                 const original = d.invoice_quantity || 0;
                                 const missing = d.missing_quantity || 0;
@@ -255,18 +267,18 @@ export async function GET(request: Request) {
                             return map;
                         })(),
                         scannedRFIDs: (() => {
-                            const transaction = transactions.find((t: any) => t.sales_invoice_id === inv.invoice_id);
+                            const transaction = transactions.find((t: { sales_invoice_id: number; id: number }) => t.sales_invoice_id === inv.invoice_id);
                             if (!transaction) return {};
-                            const details = transDetails.filter((d: any) => {
+                            const details = transDetails.filter((d: { unfulfilled_sales_transaction_id: number; id: number }) => {
                                 const matched = d.unfulfilled_sales_transaction_id === transaction.id;
                                 // Also ensure there are RFIDs for this detail
-                                return matched && transRFIDs.some((r: any) => r.unfulfilled_sales_transaction_detail_id === d.id);
+                                return matched && transRFIDs.some((r: { unfulfilled_sales_transaction_detail_id: number }) => r.unfulfilled_sales_transaction_detail_id === d.id);
                             });
                             const map: Record<string | number, string[]> = {};
-                            details.forEach((d: any) => {
+                            details.forEach((d: { id: number; sales_invoice_detail_id: number }) => {
                                 const matchedRFIDs = transRFIDs
-                                    .filter((r: any) => r.unfulfilled_sales_transaction_detail_id === d.id)
-                                    .map((r: any) => r.rfid_tag);
+                                    .filter((r: { unfulfilled_sales_transaction_detail_id: number; rfid_tag: string }) => r.unfulfilled_sales_transaction_detail_id === d.id)
+                                    .map((r: { rfid_tag: string }) => r.rfid_tag);
                                 if (matchedRFIDs.length > 0) {
                                     map[d.sales_invoice_detail_id] = matchedRFIDs;
                                 }
@@ -286,11 +298,11 @@ export async function GET(request: Request) {
                 tripValue: Number(plan.amount) || 0,
                 budget,
                 status: plan.status,
-                vehicleType: vehicleTypes.find((t: any) => t.id === vehicle?.vehicle_type)?.type_name || 'N/A',
-                branchName: branches.find((b: any) => b.id === plan?.starting_point)?.branch_name || 'N/A',
-                clusterName: clusters.find((c: any) => {
-                    const pdp = postDispatchPlans.find((p: any) => p.post_dispatch_plan_id === plan.id);
-                    const dp = pdp ? dispatchPlans.find((d: any) => d.dispatch_id === pdp.dispatch_plan_id) : null;
+                vehicleType: vehicleTypes.find((t: { id: number; type_name: string }) => t.id === vehicle?.vehicle_type)?.type_name || 'N/A',
+                branchName: branches.find((b: { id: number; branch_name: string }) => b.id === plan?.starting_point)?.branch_name || 'N/A',
+                clusterName: clusters.find((c: { id: number; cluster_name: string }) => {
+                    const pdp = postDispatchPlans.find((p: { post_dispatch_plan_id: number; dispatch_plan_id: number }) => p.post_dispatch_plan_id === plan.id);
+                    const dp = pdp ? dispatchPlans.find((d: { dispatch_id: number; cluster_id: number }) => d.dispatch_id === pdp.dispatch_plan_id) : null;
                     return dp && c.id === dp.cluster_id;
                 })?.cluster_name || 'N/A',
                 invoices: planInvoices
@@ -298,8 +310,9 @@ export async function GET(request: Request) {
         });
 
         return NextResponse.json({ data: joinedData, total });
-    } catch (error: any) {
-        console.error('Dispatch Clearance API Error:', error);
+    } catch (err) {
+        console.error('Dispatch Clearance API Error:', err);
+        const error = err as Error;
         return NextResponse.json({
             error: 'Failed to fetch joined dispatch data',
             details: error.message
@@ -307,7 +320,7 @@ export async function GET(request: Request) {
     }
 }
 
-async function poster(endpoint: string, data: any) {
+async function poster<T = unknown>(endpoint: string, data: unknown): Promise<T> {
     const response = await fetch(`${BASE_URL}${endpoint}`, {
         method: 'POST',
         headers: {
@@ -335,7 +348,7 @@ export async function POST(request: Request) {
         }
 
         // 1. Update post_dispatch_invoices.status
-        const invoiceUpdates = invoices.map((inv: any) => {
+        const invoiceUpdates = invoices.map((inv: { id: number; status: string; remarks?: string }) => {
             let pdiStatus = inv.status;
             if (inv.status === 'Unfulfilled') pdiStatus = 'Not Fulfilled';
             if (inv.status === 'Fulfilled with Concerns') pdiStatus = 'Fulfilled with Concerns';
@@ -380,13 +393,13 @@ export async function POST(request: Request) {
 
         // 3. Update sales_invoice.transaction_status - SKIP if Pre-Save
         if (!isPreSave) {
-            const siUpdates = invoices.map((inv: any) => {
+            const siUpdates = invoices.map((inv: { invoiceId: number; status: string }) => {
                 let siStatus = 'Completed';
                 if (inv.status === 'Unfulfilled') siStatus = 'Not Delivered';
                 if (inv.status === 'Fulfilled with Concerns') siStatus = 'Completed with Concerns';
                 if (inv.status === 'Fulfilled with Returns') siStatus = 'Completed with Returns';
     
-                const update: any = {
+                const update: Record<string, unknown> = {
                     invoice_id: inv.invoiceId,
                     transaction_status: siStatus
                 };
@@ -413,15 +426,15 @@ export async function POST(request: Request) {
             }
     
             // 4. Update sales_order.order_status - SKIP if Pre-Save
-            const orderNos = [...new Set(invoices.map((inv: any) => inv.orderNo).filter((no: string) => no && no !== 'N/A'))];
+            const orderNos = [...new Set(invoices.map((inv: { orderNo: string }) => inv.orderNo).filter((no: string) => no && no !== 'N/A'))];
             if (orderNos.length > 0) {
                 // Encode properly for API query
                 const encodedOrderNos = orderNos.map(no => encodeURIComponent(no)).join(',');
                 const soRes = await fetcher(`/sales_order?filter[order_no][_in]=${encodedOrderNos}&limit=-1&fields=order_id,order_no`);
                 const salesOrders = soRes.data || [];
     
-                const soUpdates = invoices.map((inv: any) => {
-                    const so = salesOrders.find((s: any) => s.order_no === inv.orderNo);
+                const soUpdates = invoices.map((inv: { orderNo: string; status: string }) => {
+                    const so = salesOrders.find((s: { order_no: string; order_id: number }) => s.order_no === inv.orderNo);
                     // If we don't find the sales order, skip it
                     if (!so || !so.order_id) return null;
                     
@@ -458,30 +471,30 @@ export async function POST(request: Request) {
         console.log(`[Clearance POST] Processing ${invoices.length} invoices...`);
 
         // 6. Handle unfulfilled transactions log
-        for (const inv of invoices) {
+        for (const inv of invoices as { invoiceNo: string; id: number; status: string; invoiceId: number; remarks: string; missingQtys: Record<string, number>; scannedRFIDs: Record<string, string[]> }[]) {
             console.log(`[Clearance POST] Checking invoice ${inv.invoiceNo} (id: ${inv.id}, status: ${inv.status})`);
             if (inv.status !== 'Fulfilled' && inv.status !== 'Fulfilled with Returns') {
                 console.log(`[Clearance POST]   -> Creating unfulfilled transaction log for invoice ${inv.invoiceNo}`);
                 // Fetch original detail items to get qty and unit price
                 const detailsRes = await fetcher(`/sales_invoice_details?filter[invoice_no][_eq]=${inv.invoiceId}&limit=-1`);
-                const originalDetails = detailsRes.data || [];
+                const originalDetails = (detailsRes.data || []) as { detail_id?: number; id: number; quantity: number; total_amount: number | string; unit_price: number | string; sales_invoice_detail_id: number }[];
 
                 let varianceAmount = 0;
-                const detailLogs: any[] = [];
+                const detailLogs: { sales_invoice_detail_id: number; missing_quantity: number; invoice_quantity: number; total_amount: number }[] = [];
                 
                 // Collect IDs from both sources to ensure we create records for items with RFIDs even if missingQty is 0
                 // If Unfulfilled AND Final Confirm, we ensure ALL items are included even if missingQtys is empty
                 const detailIdsToLog = new Set([
                     ...Object.keys(inv.missingQtys || {}),
                     ...Object.keys(inv.scannedRFIDs || {}),
-                    ...(!isPreSave && inv.status === 'Unfulfilled' ? originalDetails.map((d: any) => (d.detail_id || d.id).toString()) : [])
+                    ...(!isPreSave && inv.status === 'Unfulfilled' ? originalDetails.map((d) => (d.detail_id || d.id).toString()) : [])
                 ]);
 
                 if (detailIdsToLog.size > 0) {
                     detailIdsToLog.forEach((detailIdStr) => {
                         const detailId = Number(detailIdStr);
                         let missingQty = (inv.missingQtys || {})[detailIdStr] || 0;
-                        const original = originalDetails.find((d: any) => (d.detail_id || d.id) === detailId);
+                        const original = originalDetails.find((d) => (d.detail_id || d.id) === detailId);
 
                         // If Unfulfilled AND Final Confirm and item was NOT interacted with (not in payload), assume full missing qty
                         const wasInteracted = Object.prototype.hasOwnProperty.call(inv.missingQtys || {}, detailIdStr);
@@ -522,7 +535,7 @@ export async function POST(request: Request) {
                 // Make sure to process scannedQtys if they are treated as returns, ensuring they are logged too
                 // For simplicity, we assume missingQtys already captures the differences correctly per frontend logic.
 
-                const payload: any = {
+                const payload: Record<string, unknown> = {
                     sales_invoice_id: inv.invoiceId,
                     nte: inv.remarks || '',
                     isCleared: isPreSave ? 0 : 1, // Correctly set based on isPreSave flag
@@ -563,13 +576,13 @@ export async function POST(request: Request) {
                     try {
                         // 1. Fetch existing details for this transaction
                         const existingDetailsRes = await fetcher(`/unfulfilled_sales_transaction_details?filter[unfulfilled_sales_transaction_id][_eq]=${transactionId}&fields=id`);
-                        const existingDetailIds = (existingDetailsRes.data || []).map((d: any) => d.id);
+                        const existingDetailIds = (existingDetailsRes.data || []).map((d: { id: number }) => d.id);
 
                         if (existingDetailIds.length > 0) {
                             // 2. Delete existing RFIDs associated with these details
                             // First fetch the RFID IDs because bulk delete by filter might not be supported
                             const rfidIdsRes = await fetcher(`/unfulfilled_sales_transaction_rfid?filter[unfulfilled_sales_transaction_detail_id][_in]=${existingDetailIds.join(',')}&fields=id`);
-                            const rfidIds = (rfidIdsRes.data || []).map((r: any) => r.id);
+                            const rfidIds = (rfidIdsRes.data || []).map((r: { id: number }) => r.id);
 
                             if (rfidIds.length > 0) {
                                 await fetch(`${BASE_URL}/unfulfilled_sales_transaction_rfid`, {
@@ -592,13 +605,14 @@ export async function POST(request: Request) {
                                 body: JSON.stringify(existingDetailIds)
                             });
                         }
-                    } catch (delErr: any) {
-                        console.warn('Failed to clear old transaction details/RFIDs:', delErr.message);
+                    } catch (delErr: unknown) {
+                        const err = delErr as Error;
+                        console.error("Failed to delete cleared invoice from Directus:", err?.message || err);
                     }
                 } else {
                     // Create new header
                     payload.date_created = new Date().toISOString();
-                    const transactionRes = await poster('/unfulfilled_sales_transaction', payload);
+                    const transactionRes = await poster<{ data: { id: number } }>('/unfulfilled_sales_transaction', payload);
                     transactionId = transactionRes.data.id;
                 }
 
@@ -610,17 +624,17 @@ export async function POST(request: Request) {
                     }));
 
                     // We could also check and patch existing details here, but typically there are no collision constraints on these details
-                    const detailsResult = await poster('/unfulfilled_sales_transaction_details', finalDetailLogs);
-                    const createdDetails = Array.isArray(detailsResult.data) ? detailsResult.data : [detailsResult.data];
+                    const detailsResult = await poster<{ data: Record<string, unknown>[] | Record<string, unknown> }>('/unfulfilled_sales_transaction_details', finalDetailLogs);
+                    const createdDetails = (Array.isArray(detailsResult.data) ? detailsResult.data : [detailsResult.data]) as { id: number; sales_invoice_detail_id: number | { id: number } }[];
 
                     // Insert RFID tags mapping
                     if (inv.scannedRFIDs && Object.keys(inv.scannedRFIDs).length > 0) {
-                        const rfidPayloads: any[] = [];
+                        const rfidPayloads: Record<string, unknown>[] = [];
                         console.log(`[Clearance POST]   -> Bulk Saving RFIDs for Invoice ${inv.invoiceNo}...`);
                         console.log(`[Clearance POST]   -> Scanned RFID Data:`, JSON.stringify(inv.scannedRFIDs));
                         
                         // We map by matching the sales_invoice_detail_id we sent with the one returned by DB
-                        createdDetails.forEach((createdDetail: any) => {
+                        createdDetails.forEach((createdDetail: { id: number; sales_invoice_detail_id: number | { id: number } }) => {
                             // Extract ID - handle both number and potentially nested object from Directus
                             const dbSalesDetailId = typeof createdDetail.sales_invoice_detail_id === 'object' 
                                 ? createdDetail.sales_invoice_detail_id?.id 
@@ -631,7 +645,7 @@ export async function POST(request: Request) {
                             if (matchedTags && Array.isArray(matchedTags)) {
                                 console.log(`[Clearance POST]     -> Detail ID ${createdDetail.id} matched ${matchedTags.length} tags`);
                                 matchedTags.forEach((tag: string) => {
-                                    const rfidLog: any = {
+                                    const rfidLog: Record<string, unknown> = {
                                         unfulfilled_sales_transaction_detail_id: createdDetail.id,
                                         rfid_tag: tag,
                                         created_at: new Date().toISOString()
@@ -652,11 +666,11 @@ export async function POST(request: Request) {
                             console.log(`[Clearance POST]   -> Final RFID Payload count: ${rfidPayloads.length}`);
                             console.log(`[Clearance POST]   -> Sending to Directus:`, JSON.stringify(rfidPayloads));
                             try {
-                                const rfidResult = await poster('/unfulfilled_sales_transaction_rfid', rfidPayloads);
+                                const rfidResult = await poster<{ data: Record<string, unknown>[] | Record<string, unknown> }>('/unfulfilled_sales_transaction_rfid', rfidPayloads);
                                 console.log(`[Clearance POST]   -> RFID save success. Rows created:`, Array.isArray(rfidResult.data) ? rfidResult.data.length : 1);
-                            } catch (rfidErr: any) {
-                                console.error(`[Clearance POST]   !! Failed to bulk insert RFIDs:`, rfidErr.message);
-                                // We don't throw here to avoid failing entire clearance, but we log it
+                            } catch (rfidErr: unknown) {
+                                const err = rfidErr as Error;
+                                console.error('RFID removal error on cancellation:', err?.message || err);
                             }
                         } else {
                             console.log(`[Clearance POST]   !! No RFIDs were matched to any created transaction details.`);
@@ -669,8 +683,9 @@ export async function POST(request: Request) {
         }
 
         return NextResponse.json({ success: true });
-    } catch (error: any) {
-        console.error('Dispatch Clearance Submission Error:', error);
+    } catch (err) {
+        console.error('Dispatch Clearance Submission Error:', err);
+        const error = err as Error;
         return NextResponse.json({ error: 'Failed to submit clearance data', details: error.message }, { status: 500 });
     }
 }

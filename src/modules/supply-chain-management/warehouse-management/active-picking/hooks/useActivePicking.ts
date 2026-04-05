@@ -79,8 +79,8 @@ export function useActivePicking({ batch, currentUserId }: UseActivePickingProps
         setScanLogs(prev => [newLog, ...prev].slice(0, 50));
     }, []);
 
-    // 🚀 HARDWARE SCANNER LOGIC (Unchanged)
-    const processScan = async (inputString: string) => {
+    // 🚀 HARDWARE SCANNER LOGIC (Memoized to prevent effect re-runs)
+    const processScan = useCallback(async (inputString: string) => {
         const tag = inputString.trim();
         if (!tag) return;
 
@@ -154,15 +154,15 @@ export function useActivePicking({ batch, currentUserId }: UseActivePickingProps
 
                 logScan(transmitTag || tag, "error", result.message || "Server Rejected");
             }
-        } catch (err) {
+        } catch {
             logScan(tag, "error", "Connection Error");
         } finally {
             setIsScanning(false);
             isProcessingRef.current = false;
         }
-    };
+    }, [currentUserId, logScan]);
 
-    // 🚀 HARDWARE LISTENER (Unchanged)
+    // 🚀 HARDWARE LISTENER
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -192,9 +192,9 @@ export function useActivePicking({ batch, currentUserId }: UseActivePickingProps
             window.removeEventListener("keydown", handleKeyDown);
             if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
         };
-    }, [activeDetailId, currentUserId]);
+    }, [processScan]);
 
-    // 🚀 NEW: DEDICATED MANUAL SUBMIT LOGIC
+    // 🚀 MANUAL SUBMIT LOGIC
     const handleManualSubmit = async () => {
         const qty = Number(manualQuantity);
 
@@ -212,7 +212,6 @@ export function useActivePicking({ batch, currentUserId }: UseActivePickingProps
         setIsScanning(true);
 
         try {
-            // Hit your new BFF manual picking route
             await submitManualPick({
                 batchId: batch.id!,
                 productId: activeDetail.productId,
@@ -239,10 +238,11 @@ export function useActivePicking({ batch, currentUserId }: UseActivePickingProps
             setIsManualModalOpen(false);
             setManualQuantity("");
 
-        } catch (error: any) {
-            logScan("MANUAL", "error", error.message);
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : "Manual pick failed";
+            logScan("MANUAL", "error", message);
             soundFX.error();
-            toast.error(error.message);
+            toast.error(message);
         } finally {
             setIsScanning(false);
         }

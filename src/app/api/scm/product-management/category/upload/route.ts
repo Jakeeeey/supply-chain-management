@@ -51,8 +51,9 @@ export async function POST(req: NextRequest) {
         
         return NextResponse.json({ id: data.data.id });
 
-    } catch (err: any) {
-        console.error("[Category Upload API] Catch Error:", err);
-        return NextResponse.json({ error: "Internal Server Error", details: err.message }, { status: 500 });
+    } catch (err: unknown) {
+        const error = err as Error;
+        console.error("[Category Upload API] Catch Error:", error);
+        return NextResponse.json({ error: "Internal Server Error", details: error.message }, { status: 500 });
     }
 }

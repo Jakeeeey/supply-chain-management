@@ -12,7 +12,7 @@ function directusHeaders() {
     return h;
 }
 
-export async function GET(request: NextRequest) {
+export async function GET() {
     try {
         const [driversRes, usersRes, branchesRes] = await Promise.all([
             fetch(`${DIRECTUS_BASE}/items/driver?limit=-1`, {
@@ -51,11 +51,18 @@ export async function GET(request: NextRequest) {
         const branches = branchesData.data || [];
 
         // Map drivers with their related data
-        const driversWithDetails = drivers.map((driver: any) => {
-            const user = users.find((u: any) => u.user_id === driver.user_id);
-            const goodBranch = branches.find((b: any) => b.id === driver.branch_id);
+        interface DriverRaw {
+            user_id: string | number;
+            branch_id: string | number;
+            bad_branch_id?: string | number;
+            [key: string]: unknown;
+        }
+
+        const driversWithDetails = (drivers as DriverRaw[]).map((driver) => {
+            const user = users.find((u: { user_id: string | number }) => u.user_id === driver.user_id);
+            const goodBranch = branches.find((b: { id: string | number }) => b.id === driver.branch_id);
             const badBranch = driver.bad_branch_id
-                ? branches.find((b: any) => b.id === driver.bad_branch_id)
+                ? branches.find((b: { id: string | number }) => b.id === driver.bad_branch_id)
                 : undefined;
 
             return {
@@ -71,10 +78,11 @@ export async function GET(request: NextRequest) {
             users,
             branches,
         });
-    } catch (error: any) {
+    } catch (error) {
         console.error("Error fetching data:", error);
+        const err = error as Error;
         return NextResponse.json(
-            { error: "Internal Server Error", details: error.message || "Failed to fetch data" },
+            { error: "Internal Server Error", details: err.message || "Failed to fetch data" },
             { status: 500 }
         );
     }
@@ -131,9 +139,9 @@ export async function POST(request: NextRequest) {
         const branchesData = await branchesRes.json();
 
         const user = usersData.data?.[0];
-        const goodBranch = branchesData.data?.find((b: any) => b.id === branch_id);
+        const goodBranch = (branchesData.data as { id: string | number }[])?.find((b) => b.id === branch_id);
         const badBranch = bad_branch_id
-            ? branchesData.data?.find((b: any) => b.id === bad_branch_id)
+            ? (branchesData.data as { id: string | number }[])?.find((b) => b.id === bad_branch_id)
             : null;
 
         return NextResponse.json({
@@ -142,10 +150,11 @@ export async function POST(request: NextRequest) {
             good_branch: goodBranch,
             bad_branch: badBranch,
         });
-    } catch (error: any) {
+    } catch (error) {
         console.error("Error creating driver:", error);
+        const err = error as Error;
         return NextResponse.json(
-            { error: "Internal Server Error", details: error.message },
+            { error: "Internal Server Error", details: err.message },
             { status: 500 }
         );
     }
@@ -201,9 +210,9 @@ export async function PATCH(request: NextRequest) {
         const branchesData = await branchesRes.json();
 
         const user = usersData.data?.[0];
-        const goodBranch = branchesData.data?.find((b: any) => b.id === updatedDriver.branch_id);
+        const goodBranch = (branchesData.data as { id: string | number }[])?.find((b) => b.id === updatedDriver.branch_id);
         const badBranch = updatedDriver.bad_branch_id
-            ? branchesData.data?.find((b: any) => b.id === updatedDriver.bad_branch_id)
+            ? (branchesData.data as { id: string | number }[])?.find((b) => b.id === updatedDriver.bad_branch_id)
             : null;
 
         return NextResponse.json({
@@ -212,10 +221,11 @@ export async function PATCH(request: NextRequest) {
             good_branch: goodBranch,
             bad_branch: badBranch,
         });
-    } catch (error: any) {
+    } catch (error) {
         console.error("Error updating driver:", error);
+        const err = error as Error;
         return NextResponse.json(
-            { error: "Internal Server Error", details: error.message },
+            { error: "Internal Server Error", details: err.message },
             { status: 500 }
         );
     }
@@ -251,10 +261,11 @@ export async function DELETE(request: NextRequest) {
             message: "Driver deleted successfully",
             id: parseInt(id),
         });
-    } catch (error: any) {
+    } catch (error) {
         console.error("Error deleting driver:", error);
+        const err = error as Error;
         return NextResponse.json(
-            { error: "Internal Server Error", details: error.message },
+            { error: "Internal Server Error", details: err.message },
             { status: 500 }
         );
     }

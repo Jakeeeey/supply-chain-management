@@ -12,14 +12,11 @@ import {
     X,
     Send,
     Loader2,
-    Hash,
-    Boxes,
-    FileSearch,
     Download,
     Ban,
     ClipboardList,
-    Calendar,
-    MapPin
+    MapPin,
+    Boxes
 } from "lucide-react"
 import {Button} from "@/components/ui/button"
 import {
@@ -54,6 +51,12 @@ interface SuccessModalProps {
     }[]
 }
 
+interface Branch {
+    id: string | number;
+    branch_id?: string | number;
+    branchName?: string;
+}
+
 export function PurchaseRequestSuccessModal({
                                                 isOpen,
                                                 onClose,
@@ -64,13 +67,13 @@ export function PurchaseRequestSuccessModal({
                                             }: SuccessModalProps) {
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [savedPoNumber, setSavedPoNumber] = useState<string | null>(null)
-    const [allBranches, setAllBranches] = useState<any[]>([])
+    const [allBranches, setAllBranches] = useState<Branch[]>([])
     const [targetBranchId, setTargetBranchId] = useState<string>("")
 
     useEffect(() => {
         if (isOpen) {
             fetchBranches()
-                .then((data) => setAllBranches(data))
+                .then((data) => setAllBranches(data as Branch[]))
                 .catch((err) => console.error("Error fetching branches:", err))
         }
     }, [isOpen])
@@ -89,7 +92,7 @@ export function PurchaseRequestSuccessModal({
         if (filteredBranches.length > 0 && !targetBranchId) {
             setTargetBranchId(String(filteredBranches[0].id || filteredBranches[0].branch_id))
         }
-    }, [filteredBranches])
+    }, [filteredBranches, targetBranchId])
 
     const grandTotal = Math.round(items.reduce((sum, item) => sum + item.total, 0) * 100) / 100
     const currentDate = new Date().toLocaleDateString('en-US', {
@@ -155,8 +158,9 @@ export function PurchaseRequestSuccessModal({
             });
             setSavedPoNumber(response.poNumber);
             toast.success(`✅ Success: ${response.poNumber} generated!`);
-        } catch (error: any) {
-            toast.error("❌ Error: " + error.message);
+        } catch (error: unknown) {
+            const m = error instanceof Error ? error.message : String(error)
+            toast.error("❌ Error: " + m);
         } finally {
             setIsSubmitting(false);
         }

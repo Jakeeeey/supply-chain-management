@@ -20,11 +20,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { DriverWithDetails, User } from "../types";
+import type { DriverWithDetails } from "../types";
 
 interface DriverTableProps {
     drivers: DriverWithDetails[];
-    users: User[];
     loading: boolean;
     onEdit: (driver: DriverWithDetails) => void;
     currentPage: number;
@@ -66,7 +65,6 @@ function DriverTableSkeleton() {
 
 export function DriverTable({
     drivers,
-    users,
     loading,
     onEdit,
     currentPage,
@@ -75,11 +73,6 @@ export function DriverTable({
     itemsPerPage,
     onItemsPerPageChange
 }: DriverTableProps) {
-    const userMap = React.useMemo(() => {
-        const map = new Map<number, User>();
-        users.forEach((u) => map.set(u.user_id, u));
-        return map;
-    }, [users]);
 
     if (loading) {
         return <DriverTableSkeleton />;

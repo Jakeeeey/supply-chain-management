@@ -6,7 +6,7 @@ const DIRECTUS_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 const ACCESS_TOKEN = process.env.DIRECTUS_STATIC_TOKEN;
 const ENDPOINT = "/items/brand";
 
-function json(res: any, status = 200) {
+function json(res: unknown, status = 200) {
   return NextResponse.json(res, { status });
 }
 
@@ -63,8 +63,9 @@ async function proxyRequest(req: NextRequest, method: string) {
     }
 
     return json(data, 200);
-  } catch (error: any) {
-    return json({ error: error.message }, 500);
+  } catch (error: unknown) {
+    const err = error as Error;
+    return json({ error: err.message }, 500);
   }
 }
 

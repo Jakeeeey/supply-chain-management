@@ -24,8 +24,9 @@ async function readUpstream(res: Response) {
   return { ct, body };
 }
 
-function isForbiddenFieldsError(body: any) {
-  const msg = String(body?.errors?.[0]?.message || "").toLowerCase();
+function isForbiddenFieldsError(body: Record<string, unknown>) {
+  const errors = body?.errors as Array<{ message?: string }> | undefined;
+  const msg = String(errors?.[0]?.message || "").toLowerCase();
   return msg.includes("don't have permission") || msg.includes("forbidden");
 }
 
@@ -107,7 +108,8 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json(j1.body, { status: r1.status });
-  } catch (e: any) {
-    return NextResponse.json({ error: String(e?.message || e) }, { status: 500 });
+  } catch (e: unknown) {
+    const err = e as Error;
+    return NextResponse.json({ error: String(err?.message || err) }, { status: 500 });
   }
 }

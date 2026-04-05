@@ -14,6 +14,7 @@ import {
     ChevronsRight, Filter, History, Layers, SortAsc, SortDesc, Timer, XCircle,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import {PlanningRow, SimulationTargets} from "../types"
 
 type SortableHeaderProps = {
     title: string
@@ -25,12 +26,12 @@ type SortableHeaderProps = {
     tooltip?: string
     columnWidths: Record<string, number>
     sortConfig: { key: string; direction: "asc" | "desc" | null }
-    setSortConfig: (val: any) => void
-    handleMouseDown: (e: any, key: string) => void
+    setSortConfig: (val: { key: string; direction: "asc" | "desc" | null }) => void
+    handleMouseDown: (e: ReactMouseEvent, key: string) => void
     classFilters: string[]
-    setClassFilters: any
+    setClassFilters: React.Dispatch<React.SetStateAction<string[]>>
     categoryFilters: string[]
-    setCategoryFilters: any
+    setCategoryFilters: React.Dispatch<React.SetStateAction<string[]>>
     uniqueCategories: string[]
     // 🚀 NEW: Sticky Column Props
     isSticky?: boolean
@@ -153,7 +154,11 @@ function SortableHeader({
 }
 
 // Main Table Component
-export default function HistoricalPlanningTable({ data = [], onQuantityChange, simulationTargets = { A: 0, B: 0, C: 0 } }: any) {
+export default function HistoricalPlanningTable({ data = [], onQuantityChange, simulationTargets = { A: 0, B: 0, C: 0 } }: {
+    data: PlanningRow[];
+    onQuantityChange: (id: string, qty: number) => void;
+    simulationTargets: SimulationTargets;
+}) {
     const [currentPage, setCurrentPage] = useState(1)
     const [rowsPerPage, setRowsPerPage] = useState(10)
     const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" | null }>({ key: "abcClass", direction: "asc" })
@@ -164,7 +169,7 @@ export default function HistoricalPlanningTable({ data = [], onQuantityChange, s
     const WORKING_DAYS = 21;
 
     const enhancedData = useMemo(() => {
-        return data.map((item: any) => {
+        return data.map((item: PlanningRow) => {
             const mav = Number(item.mav || 0);
             const currentStock = Number(item.currentStockBoxes || 0);
             const inTransit = Number(item.inTransitBoxes || 0);
@@ -196,7 +201,7 @@ export default function HistoricalPlanningTable({ data = [], onQuantityChange, s
     }, [data, simulationTargets]);
 
     const uniqueCategories = useMemo(() => {
-        const categories = enhancedData.map((item: any) => item.category_name)
+        const categories = enhancedData.map((item) => item.category_name || "OTHERS")
         return Array.from(new Set(categories)).filter(Boolean).sort() as string[]
     }, [enhancedData])
 
@@ -204,19 +209,19 @@ export default function HistoricalPlanningTable({ data = [], onQuantityChange, s
         let items = [...enhancedData]
         const q = searchQuery.trim().toLowerCase()
         if (q) {
-            items = items.filter((item: any) => {
+            items = items.filter((item) => {
                 const name = String(item.productName || item.product_name || "").toLowerCase()
                 const sku = String(item.sku || "").toLowerCase()
                 return name.includes(q) || sku.includes(q)
             })
         }
-        if (classFilters.length > 0) items = items.filter((item: any) => classFilters.includes(item.abcClass))
-        if (categoryFilters.length > 0) items = items.filter((item: any) => categoryFilters.includes(item.category_name))
+        if (classFilters.length > 0) items = items.filter((item) => item.abcClass && classFilters.includes(item.abcClass))
+        if (categoryFilters.length > 0) items = items.filter((item) => item.category_name && categoryFilters.includes(item.category_name))
 
         if (sortConfig.direction !== null) {
-            items.sort((a: any, b: any) => {
-                const aValue = a[sortConfig.key]
-                const bValue = b[sortConfig.key]
+            items.sort((a, b) => {
+                const aValue = a[sortConfig.key as keyof PlanningRow]
+                const bValue = b[sortConfig.key as keyof PlanningRow]
                 if (typeof aValue === "number" && typeof bValue === "number") {
                     return sortConfig.direction === "asc" ? aValue - bValue : bValue - aValue
                 }
@@ -349,9 +354,9 @@ export default function HistoricalPlanningTable({ data = [], onQuantityChange, s
                         </TableHeader>
 
                         <TableBody>
-                            {paginatedData.map((row: any) => {
-                                const rowId = String(row.product_id || row.id || row.keyProductId)
-                                const statusStyles = ({ "BELOW ROP": "bg-red-500/10 text-red-600 border-red-500/20", "NEAR ROP": "bg-orange-500/10 text-orange-600 border-orange-500/20", OK: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" } as any)[row.inventoryStatus as string] || "bg-slate-500/10 text-slate-600 border-slate-500/20"
+                            {paginatedData.map((row) => {
+                                const rowId = String(row.product_id || row.id)
+                                const statusStyles = ({ "BELOW ROP": "bg-red-500/10 text-red-600 border-red-500/20", "NEAR ROP": "bg-orange-500/10 text-orange-600 border-orange-500/20", OK: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" } as Record<string, string>)[row.inventoryStatus as string] || "bg-slate-500/10 text-slate-600 border-slate-500/20"
                                 const StatusIcon = row.inventoryStatus === "OK" ? CheckCircle : row.inventoryStatus === "NEAR ROP" ? Timer : AlertCircle
 
                                 return (

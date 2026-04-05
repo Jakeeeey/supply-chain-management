@@ -3,7 +3,6 @@
 
 import * as React from "react";
 import { ProductMovementRow } from "../types";
-import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { PackageSearch as PHIcon } from "lucide-react";
 

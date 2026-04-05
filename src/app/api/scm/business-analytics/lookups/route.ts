@@ -47,23 +47,38 @@ export async function GET(req: NextRequest) {
         const branchJson = branchRes.ok ? await branchRes.json().catch(() => []) : [];
         const supplierJson = supplierRes.ok ? await supplierRes.json().catch(() => []) : [];
 
+        interface BranchItem {
+            branch_id?: string | number;
+            id?: string | number;
+            branch_name?: string;
+            name?: string;
+        }
+
+        interface SupplierItem {
+            supplier_id?: string | number;
+            id?: string | number;
+            supplier_name?: string;
+            name?: string;
+        }
+
         // Normalize Spring Boot response (assuming they have id/name or branch_id/branch_name)
         // Based on typical patterns in this codebase:
-        const branches = (Array.isArray(branchJson) ? branchJson : branchJson.data ?? []).map((b: any) => ({
+        const branches = (Array.isArray(branchJson) ? (branchJson as BranchItem[]) : ((branchJson as Record<string, unknown>).data as BranchItem[]) ?? []).map((b) => ({
             id: String(b.branch_id || b.id),
             name: String(b.branch_name || b.name),
         }));
 
-        const suppliers = (Array.isArray(supplierJson) ? supplierJson : supplierJson.data ?? []).map((s: any) => ({
+        const suppliers = (Array.isArray(supplierJson) ? (supplierJson as SupplierItem[]) : ((supplierJson as Record<string, unknown>).data as SupplierItem[]) ?? []).map((s) => ({
             id: String(s.supplier_id || s.id),
             name: String(s.supplier_name || s.name),
         }));
 
         return NextResponse.json({ branches, suppliers });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[BIA_LOOKUPS_ERROR]:', error);
+        const err = error as Error;
         return NextResponse.json(
-            { error: error.message || 'Internal Server Error' },
+            { error: err.message || 'Internal Server Error' },
             { status: 500 },
         );
     }

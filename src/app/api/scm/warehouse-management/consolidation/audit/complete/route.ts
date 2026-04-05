@@ -30,12 +30,12 @@ export async function POST(req: NextRequest) {
             try {
                 const errorData = await springRes.json();
                 errorMessage = errorData.message || errorMessage;
-            } catch (e) {}
+            } catch {}
             return NextResponse.json({ ok: false, message: errorMessage }, { status: springRes.status });
         }
 
         return NextResponse.json(await springRes.json());
-    } catch (err) {
+    } catch {
         return NextResponse.json({ ok: false, message: "BFF Network Error" }, { status: 502 });
     }
 }

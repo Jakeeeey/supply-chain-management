@@ -34,7 +34,8 @@ export async function GET(req: NextRequest) {
             const data = await fetchInventoryMap(springToken, branchId, filters);
             console.log("[Stock-Conversion API] Background inventory fetch SUCCESS");
             return NextResponse.json({ data });
-        } catch (err: any) {
+        } catch (e: unknown) {
+            const err = e as Error;
             console.error("[Stock-Conversion API] Background inventory fetch FAILED:", err.message);
             throw err;
         }
@@ -47,7 +48,7 @@ export async function GET(req: NextRequest) {
 
     const data = await fetchStockList(limit, offset, filters);
     return NextResponse.json(data);
-  } catch (error: any) {
+  } catch (error: unknown) {
     return handleApiError(error);
   }
 }
@@ -58,7 +59,7 @@ export async function POST(req: NextRequest) {
     const validated = stockConversionPayloadSchema.parse(body);
     const result = await convertStock(validated);
     return NextResponse.json({ data: result });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return handleApiError(error);
   }
 }

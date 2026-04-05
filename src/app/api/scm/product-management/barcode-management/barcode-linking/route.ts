@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 const DIRECTUS_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 const ACCESS_TOKEN = process.env.DIRECTUS_STATIC_TOKEN;
 
-function json(res: any, status = 200) {
+function json(res: unknown, status = 200) {
   return NextResponse.json(res, { status });
 }
 
@@ -38,7 +38,7 @@ async function fetchDirectus(endpoint: string, params: Record<string, string>) {
 }
 
 // Decode JWT payload without verification (for extracting user_id)
-function decodeJwtPayload(token: string): any | null {
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
   try {
     const parts = token.split(".");
     if (parts.length < 2) return null;
@@ -147,8 +147,9 @@ async function proxyRequest(req: NextRequest, method: string) {
       });
       const data = await res.json();
       return json(data, res.status);
-    } catch (e: any) {
-      return json({ error: e.message }, 500);
+    } catch (e: unknown) {
+      const err = e as Error;
+      return json({ error: err.message }, 500);
     }
   }
 
@@ -202,10 +203,10 @@ async function proxyRequest(req: NextRequest, method: string) {
 
       // Build lookup map for barcode types
       const btMap = new Map<number, { id: number; name: string }>();
-      barcodeTypes.forEach((bt: any) => btMap.set(bt.id, { id: bt.id, name: bt.name }));
+      barcodeTypes.forEach((bt: { id: number; name: string }) => btMap.set(bt.id, { id: bt.id, name: bt.name }));
 
       // Manually resolve barcode_type_id integers to objects
-      const resolved = bundles.map((b: any) => ({
+      const resolved = bundles.map((b: { barcode_type_id: number | { id: number; name: string } | null }) => ({
         ...b,
         barcode_type_id:
           typeof b.barcode_type_id === "number"
@@ -236,9 +237,9 @@ async function proxyRequest(req: NextRequest, method: string) {
       ]);
 
       // 3. Manual Merge: Attach Suppliers to Products
-      const supplierMap = new Map<number, any[]>();
+      const supplierMap = new Map<number, { supplier_id: { id: number; supplier_name: string; supplier_shortcut?: string } }[]>();
 
-      junction.forEach((item: any) => {
+      junction.forEach((item: { product_id: number; supplier_id: number | { id: number; supplier_name: string; supplier_shortcut?: string } }) => {
         if (!item.product_id || !item.supplier_id) return;
 
         // Handle case where supplier_id is expanded (Object) vs not (Number)
@@ -256,16 +257,17 @@ async function proxyRequest(req: NextRequest, method: string) {
         supplierMap.get(pid)?.push({ supplier_id: supplierObj });
       });
 
-      const mergedData = products.map((p: any) => ({
+      const mergedData = products.map((p: { product_id: number }) => ({
         ...p,
         product_per_supplier: supplierMap.get(p.product_id) || [],
       }));
 
       return json({ data: mergedData });
     }
-  } catch (error: any) {
-    console.error("Proxy Error:", error);
-    return json({ error: error.message }, 500);
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("Proxy Error:", err);
+    return json({ error: err.message }, 500);
   }
 }
 

@@ -10,17 +10,18 @@ import {
   FileText,
   BadgeCheck,
   Package,
-  DollarSign,
   ArrowUpCircle,
   ArrowDownCircle,
-  History,
   Clock,
   UserCheck
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useStockAdjustmentForm } from "../hooks/useStockAdjustmentForm";
-import { StockAdjustmentDetail as DetailType } from "../types/stock-adjustment.schema";
+import { 
+  StockAdjustmentDetail as DetailType,
+  StockAdjustmentProduct 
+} from "../types/stock-adjustment.schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -72,7 +73,7 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
 
   if (!data) return <div className="p-12 text-center font-bold">Record not found.</div>;
 
-  const isPosted = data.isPosted === true || (typeof data.isPosted === 'object' && data.isPosted?.data?.[0] === 1);
+  const isPosted = !!data.isPosted;
 
   const generatePDF = () => {
     if (!data) return;
@@ -125,7 +126,7 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
 
     // --- Product Table ---
     const tableRows = data.items?.map((item, index) => {
-      const product = (item.product_id as any) || {};
+      const product = (item.product_id as unknown as StockAdjustmentProduct) || {};
       return [
         index + 1,
         `${product.product_name || "Unknown"}\n(${product.product_code || "N/A"})`,
@@ -154,7 +155,7 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
       styles: { cellPadding: 1.5 } // Tightened padding
     });
 
-    const finalY = (doc as any).lastAutoTable.finalY + 8;
+    const finalY = ((doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 100) + 8;
 
     // --- Totals & Remarks Section ---
     doc.setFontSize(9);
@@ -389,7 +390,7 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
             </TableHeader>
             <TableBody>
               {data.items?.map((item, idx) => {
-                const product = (item.product_id as any) || {};
+                const product = (item.product_id as unknown as StockAdjustmentProduct) || {};
                 const qty = item.quantity || 0;
                 const cost = item.cost_per_unit || product.price_per_unit || 0;
                 const total = qty * cost;

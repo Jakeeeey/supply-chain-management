@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { ConsolidatorDto } from "../types";
+import { ConsolidatorDto, BranchDto } from "../types";
 import { fetchConsolidators, fetchActiveBranches, completePickingBatch } from "../providers/fetchProvider";
 
 export function usePickerDashboard() {
@@ -7,7 +7,7 @@ export function usePickerDashboard() {
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
-    const [branches, setBranches] = useState<any[]>([]);
+    const [branches, setBranches] = useState<BranchDto[]>([]);
     const [selectedBranchId, setSelectedBranchId] = useState<number | undefined>(undefined);
     const [activeBatch, setActiveBatch] = useState<ConsolidatorDto | null>(null);
 
@@ -27,7 +27,7 @@ export function usePickerDashboard() {
             }
         };
         loadBranches();
-    }, []);
+    }, [selectedBranchId]);
 
     const loadBatches = useCallback(async () => {
         if (!selectedBranchId) return;
@@ -35,7 +35,7 @@ export function usePickerDashboard() {
         try {
             const response = await fetchConsolidators(selectedBranchId, 0, 50, "Picking", debouncedSearch);
             setBatches(response?.content || []);
-        } catch (error) {
+        } catch {
             console.error("Failed to load picking batches");
         } finally {
             setLoading(false);

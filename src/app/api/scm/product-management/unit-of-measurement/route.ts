@@ -7,7 +7,7 @@ const ACCESS_TOKEN = process.env.DIRECTUS_STATIC_TOKEN;
 // ✅ Correct endpoint matches folder name
 const ENDPOINT = "/items/units";
 
-function json(res: any, status = 200) {
+function json(res: Record<string, unknown> | unknown[] | { error: string }, status = 200) {
   return NextResponse.json(res, { status });
 }
 
@@ -65,8 +65,9 @@ async function proxyRequest(req: NextRequest, method: string) {
     }
 
     return json(data, 200);
-  } catch (error: any) {
-    return json({ error: error.message }, 500);
+  } catch (error: unknown) {
+    const err = error as Error;
+    return json({ error: err.message }, 500);
   }
 }
 

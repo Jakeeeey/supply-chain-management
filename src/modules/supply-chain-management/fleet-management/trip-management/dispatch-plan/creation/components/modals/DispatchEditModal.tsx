@@ -16,7 +16,7 @@ import {
 } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/creation/types/dispatch.schema";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Truck } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { DispatchModalSkeleton } from "./DispatchSkeleton";
@@ -24,6 +24,7 @@ import { InvoiceItemsSidebar } from "./parts/InvoiceItemsSidebar";
 import { PdpListSidebar } from "./parts/PdpListSidebar";
 import { TripConfigurationForm } from "./parts/TripConfigurationForm";
 import { PlanDetailItem } from "./parts/types";
+import { EnrichedApprovedPlan } from "../../types/dispatch.types";
 
 interface DispatchEditModalProps {
   open: boolean;
@@ -44,7 +45,7 @@ export function DispatchEditModal({
   const [isSaving, setIsSaving] = useState(false);
   const isInitialLoadRef = useRef(false);
 
-  const [approvedPlans, setApprovedPlans] = useState<any[]>([]);
+  const [approvedPlans, setApprovedPlans] = useState<EnrichedApprovedPlan[]>([]);
   const [isLoadingPlans, setIsLoadingPlans] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [planDetails, setPlanDetails] = useState<PlanDetailItem[]>([]);
@@ -72,19 +73,8 @@ export function DispatchEditModal({
   });
 
   const selectedBranch = form.watch("starting_point");
-  const selectedPlanIds = form.watch("pre_dispatch_plan_ids");
 
-  useEffect(() => {
-    // Skip during initial load — the fetch effect handles the first call
-    if (isInitialLoadRef.current) return;
-    if (selectedBranch && selectedBranch > 0) {
-      loadApprovedPlans(selectedBranch, form.getValues("pre_dispatch_plan_ids"));
-    } else {
-      setApprovedPlans([]);
-    }
-  }, [selectedBranch]); // Only depend on selectedBranch to prevent PDP vanishing when deselected
-
-  const loadApprovedPlans = async (
+  const loadApprovedPlans = useCallback(async (
     branchId: number,
     currentPdpIds?: number[],
   ) => {
@@ -109,7 +99,17 @@ export function DispatchEditModal({
     } finally {
       setIsLoadingPlans(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    // Skip during initial load — the fetch effect handles the first call
+    if (isInitialLoadRef.current) return;
+    if (selectedBranch && selectedBranch > 0) {
+      loadApprovedPlans(selectedBranch, form.getValues("pre_dispatch_plan_ids"));
+    } else {
+      setApprovedPlans([]);
+    }
+  }, [selectedBranch, loadApprovedPlans, form]);
 
   const handlePlanSelect = async (pdpIdStr: string) => {
     const selectedPdpId = Number(pdpIdStr);
@@ -169,7 +169,7 @@ export function DispatchEditModal({
       const fetchedItems = result.data || [];
       // Filter out manual/PO stops from the API response because we already have them in retainedStops
       // (and retainedStops might have unsaved local edits or sequence changes).
-      const fetchedInvoices = fetchedItems.filter((i: any) => !i.isManualStop && !i.isPoStop);
+      const fetchedInvoices = fetchedItems.filter((i: { isManualStop?: boolean; isPoStop?: boolean }) => !i.isManualStop && !i.isPoStop);
       
       const combined = [...fetchedInvoices, ...retainedStops];
       
@@ -243,8 +243,8 @@ export function DispatchEditModal({
             // so the left sidebar highlights the linked PDPs
             await loadApprovedPlans(branchId, loadedIds);
           }
-        } catch (error: any) {
-          toast.error(error.message || "Could not load plan details");
+        } catch (error: unknown) {
+          toast.error(error instanceof Error ? error.message : "Could not load plan details");
         } finally {
           setIsLoading(false);
           // Allow the branch-change effect to work again after initial load
@@ -260,7 +260,7 @@ export function DispatchEditModal({
       setPlanDetails([]);
       setApprovedPlans([]);
     }
-  }, [open, planId, form]);
+  }, [open, planId, form, loadApprovedPlans]);
 
   /** Synch form amount with actual planDetails (invoices) sum */
   useEffect(() => {
@@ -293,8 +293,8 @@ export function DispatchEditModal({
       toast.success("Dispatch trip updated successfully.");
       onOpenChange(false);
       onSuccess?.();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to update dispatch trip");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to update dispatch trip");
     } finally {
       setIsSaving(false);
     }

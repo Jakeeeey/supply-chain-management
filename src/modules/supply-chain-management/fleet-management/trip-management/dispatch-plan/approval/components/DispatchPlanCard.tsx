@@ -1,7 +1,7 @@
 "use client"
 
 import React from "react"
-import { MapPin, CalendarClock, Users } from "lucide-react"
+import { MapPin, CalendarClock } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { PostDispatchApprovalDto } from "../types"
 

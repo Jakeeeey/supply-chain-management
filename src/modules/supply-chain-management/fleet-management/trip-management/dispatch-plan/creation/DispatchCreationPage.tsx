@@ -20,7 +20,7 @@ export default function DispatchCreationPage() {
   );
   const [sorting, setSorting] = useState<SortingState>([]);
 
-  const { dispatchSummary, isLoadingSummary, refreshSummary, masterData } =
+  const { dispatchSummary, isLoadingSummary, refreshSummary } =
     useDispatchCreation();
 
   const handleEdit = useCallback((plan: DispatchPlanSummary) => {

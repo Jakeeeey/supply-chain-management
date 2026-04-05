@@ -35,15 +35,19 @@ export async function GET(request: Request) {
         ]);
 
         const invoice = invoiceRes.data?.[0];
-        const lines = linesRes.data || [];
-
-        if (!invoice) {
-            return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
-        }
-
         // 2. Fetch Customer, Products, Units, Salesman, and Branch info for joining
-        const productIds = [...new Set(lines.map((l: any) => l.product_id).filter(Boolean))];
-        const unitIds = [...new Set(lines.map((l: any) => l.unit).filter(Boolean))];
+        interface Line {
+            id?: number;
+            detail_id?: number;
+            product_id: number;
+            unit: number;
+            quantity: number;
+            unit_price: number;
+            total_amount: number;
+        }
+        const lines = (linesRes.data || []) as Line[];
+        const productIds = [...new Set(lines.map((l) => l.product_id).filter(Boolean))];
+        const unitIds = [...new Set(lines.map((l) => l.unit).filter(Boolean))];
 
         const [customerRes, productsRes, unitsRes, salesmanRes, branchRes] = await Promise.all([
             fetcher(`/customer?filter[customer_code][_eq]=${invoice.customer_code}&limit=1`),
@@ -62,19 +66,29 @@ export async function GET(request: Request) {
         ]);
 
         const customer = customerRes.data?.[0];
-        const products = productsRes.data || [];
-        const units = unitsRes.data || [];
+        interface Product {
+            product_id: number;
+            product_name: string;
+            product_code: string;
+        }
+        interface Unit {
+            unit_id: number;
+            unit_shortcut?: string;
+            unit_name?: string;
+        }
+        const products = (productsRes.data || []) as Product[];
+        const units = (unitsRes.data || []) as Unit[];
         const salesman = salesmanRes.data?.[0];
         const branch = branchRes.data?.[0];
 
         // 3. Create maps for efficient joining
-        const productMap = new Map(products.map((p: any) => [p.product_id, p]));
-        const unitMap = new Map(units.map((u: any) => [u.unit_id, u]));
+        const productMap = new Map(products.map((p) => [p.product_id, p]));
+        const unitMap = new Map(units.map((u) => [u.unit_id, u]));
 
         // 4. Transform data into InvoiceDetail structure
-        const enrichedLines = lines.map((l: any) => {
-            const product = productMap.get(l.product_id) as any;
-            const unit = unitMap.get(l.unit) as any;
+        const enrichedLines = lines.map((l) => {
+            const product = productMap.get(l.product_id);
+            const unit = unitMap.get(l.unit);
             return {
                 id: l.detail_id || l.id,
                 product_id: l.product_id,

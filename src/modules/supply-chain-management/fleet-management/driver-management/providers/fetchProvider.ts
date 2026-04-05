@@ -10,7 +10,7 @@ export async function fetchDriversWithDetails(): Promise<{
     return res.json();
 }
 
-export async function saveDriver(driverData: any): Promise<any> {
+export async function saveDriver(driverData: Partial<Driver>): Promise<unknown> {
     const res = await fetch("/api/scm/fleet-management/driver-management", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -23,7 +23,7 @@ export async function saveDriver(driverData: any): Promise<any> {
     return res.json();
 }
 
-export async function updateDriver(id: number, driverData: any): Promise<any> {
+export async function updateDriver(id: number, driverData: Partial<Driver>): Promise<unknown> {
     const res = await fetch("/api/scm/fleet-management/driver-management", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -36,7 +36,7 @@ export async function updateDriver(id: number, driverData: any): Promise<any> {
     return res.json();
 }
 
-export async function deleteDriver(id: number): Promise<any> {
+export async function deleteDriver(id: number): Promise<unknown> {
     const res = await fetch(`/api/scm/fleet-management/driver-management?id=${id}`, {
         method: "DELETE",
     });

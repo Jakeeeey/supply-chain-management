@@ -1,7 +1,8 @@
-import { ConsolidatorDto, BranchDto, PaginatedPickingBatches } from "../types";
+import { BranchDto, PaginatedPickingBatches, ConsolidatorDto } from "../types";
 import {
     PaginatedConsolidators
 } from "@/modules/supply-chain-management/warehouse-management/consolidation/delivery-picking/providers/fetchProvider";
+import { ConsolidatorDto as DeliveryConsolidatorDto } from "@/modules/supply-chain-management/warehouse-management/consolidation/delivery-picking/types";
 
 const HEADERS = {
     "Content-Type": "application/json",
@@ -52,16 +53,17 @@ export const fetchActivePickingBatches = async (
         }
 
         const response = await fetch(url.toString(), { headers: HEADERS, cache: "no-store" });
-        const data = await handleResponse<any>(response);
+        const data = await handleResponse<unknown>(response);
 
         if (!data) return null;
 
-        const content = Array.isArray(data) ? data : (data.content || []);
+        const d = data as { content?: ConsolidatorDto[]; totalPages?: number; totalElements?: number; number?: number };
+        const content = (Array.isArray(d) ? d : (d.content || [])) as ConsolidatorDto[];
         return {
             content,
-            totalPages: Number(data.totalPages ?? 1),
-            totalElements: Number(data.totalElements ?? content.length),
-            number: Number(data.number ?? 0),
+            totalPages: Number(d.totalPages ?? 1),
+            totalElements: Number(d.totalElements ?? content.length),
+            number: Number(d.number ?? 0),
         };
     } catch (error) {
         console.error("Batch Fetch Error:", error);
@@ -107,7 +109,7 @@ export const transmitItemScan = async (payload: {
         }
 
         return { success: true };
-    } catch (error) {
+    } catch {
         return { success: false, message: "Network transmission failed." };
     }
 };
@@ -169,21 +171,23 @@ export const fetchConsolidators = async (
             cache: "no-store"
         });
 
-        const data = await handleResponse<any>(response);
+        const data = await handleResponse<unknown>(response);
 
         if (!data) {
             return { content: [], totalPages: 0, totalElements: 0, number: 0 };
         }
 
+        const d = data as { content?: DeliveryConsolidatorDto[]; page?: { totalPages?: number; totalElements?: number; number?: number }; totalPages?: number; totalElements?: number; number?: number };
         return {
-            content: Array.isArray(data.content) ? data.content : [],
-            totalPages: Number(data.page?.totalPages ?? data.totalPages ?? 0),
-            totalElements: Number(data.page?.totalElements ?? data.totalElements ?? 0),
-            number: Number(data.page?.number ?? data.number ?? 0)
+            content: Array.isArray(d.content) ? (d.content as DeliveryConsolidatorDto[]) : [],
+            totalPages: Number(d.page?.totalPages ?? d.totalPages ?? 0),
+            totalElements: Number(d.page?.totalElements ?? d.totalElements ?? 0),
+            number: Number(d.page?.number ?? d.number ?? 0)
         };
 
-    } catch (error: any) {
-        console.error("Consolidator Fetch Error:", error.message);
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Unknown error";
+        console.error("Consolidator Fetch Error:", message);
         return { content: [], totalPages: 0, totalElements: 0, number: 0 };
     }
 };

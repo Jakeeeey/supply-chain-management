@@ -73,7 +73,6 @@ export const completeAuditBatch = async (batchId: number): Promise<boolean> => {
 };
 
 // --- 🔄 REPICK BATCH (Status Rollback) ---
-// 🚀 ADD THIS TO YOUR FILE
 export const repickBatch = async (batchId: number): Promise<boolean> => {
     try {
         const url = `/api/scm/warehouse-management/consolidation/audit/repick`;
@@ -85,6 +84,39 @@ export const repickBatch = async (batchId: number): Promise<boolean> => {
         return response.ok;
     } catch (error) {
         console.error("Repick API Error:", error);
+        return false;
+    }
+};
+
+// --- 🏷️ RFID LOOKUP ---
+export const lookupRfidTag = async (rfidTag: string): Promise<number | null> => {
+   try {
+       const url = `/api/scm/warehouse-management/consolidation/picking/lookup?rfid=${rfidTag}`;
+       const response = await fetch(url);
+       if (!response.ok) return null;
+       const data = await response.json();
+       return data?.productId || null;
+   } catch {
+       return null;
+   }
+};
+
+// --- 📤 TRANSMIT AUDIT LOG ---
+export const transmitAuditLog = async (payload: {
+    consolidatorDetailId: number;
+    tag: string;
+    auditedBy: number;
+    status: "Success" | "Failure";
+}): Promise<boolean> => {
+    try {
+        const url = `/api/scm/warehouse-management/consolidation/audit/log`;
+        const response = await fetch(url, {
+            method: "POST",
+            headers: getHeaders(),
+            body: JSON.stringify(payload),
+        });
+        return response.ok;
+    } catch {
         return false;
     }
 };

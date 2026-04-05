@@ -23,8 +23,9 @@ export default function ForConsolidationMonitoringModule() {
         try {
             const data = await fetchForConsolidationQueue();
             setOrders(data);
-        } catch (error: any) {
-            setErrorMsg(error.message || "Network error communicating with the server.");
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : "Network error communicating with the server.";
+            setErrorMsg(message);
         } finally {
             setIsLoading(false);
         }

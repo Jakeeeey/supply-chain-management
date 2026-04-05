@@ -15,7 +15,7 @@ import {
 } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/creation/types/dispatch.schema";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Truck } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { DispatchModalSkeleton } from "./DispatchSkeleton";
@@ -24,6 +24,7 @@ import { PdpListSidebar } from "./parts/PdpListSidebar";
 import { TripConfigurationForm } from "./parts/TripConfigurationForm";
 import { PlanDetailItem } from "./parts/types";
 import { DispatchConfirmationModal } from "./parts/DispatchConfirmationModal";
+import { EnrichedApprovedPlan } from "../../types/dispatch.types";
 
 interface DispatchCreationModalProps {
   open: boolean;
@@ -38,13 +39,13 @@ export function DispatchCreationModal({
 }: DispatchCreationModalProps) {
   const { masterData, isLoadingMasterData, createTrip, isSubmitting } =
     useDispatchCreation();
-  const [approvedPlans, setApprovedPlans] = useState<any[]>([]);
+  const [approvedPlans, setApprovedPlans] = useState<EnrichedApprovedPlan[]>([]);
   const [isLoadingPlans, setIsLoadingPlans] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [planDetails, setPlanDetails] = useState<PlanDetailItem[]>([]);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
-  const [pendingPayload, setPendingPayload] = useState<any>(null);
+  const [pendingPayload, setPendingPayload] = useState<unknown>(null);
 
   const form = useForm<DispatchCreationFormValues>({
     resolver: zodResolver(DispatchCreationFormSchema),
@@ -61,11 +62,7 @@ export function DispatchCreationModal({
     },
   });
 
-  const {
-    fields: helperFields,
-    append,
-    remove,
-  } = useFieldArray({
+  useFieldArray({
     control: form.control,
     name: "helpers",
   });
@@ -83,19 +80,9 @@ export function DispatchCreationModal({
     }
   }, [open, form]);
 
-  // Load plans when branch changes
-  useEffect(() => {
-    if (selectedBranch && selectedBranch > 0) {
-      loadApprovedPlans(selectedBranch);
-    } else {
-      setApprovedPlans([]);
-    }
-  }, [selectedBranch]);
-
-  const loadApprovedPlans = async (branchId: number) => {
+  const loadApprovedPlans = useCallback(async (branchId: number) => {
     setIsLoadingPlans(true);
     setApprovedPlans([]);
-    // Clear any previously selected plan
     form.setValue("pre_dispatch_plan_ids", []);
     form.setValue("amount", 0);
     setPlanDetails([]);
@@ -112,7 +99,16 @@ export function DispatchCreationModal({
     } finally {
       setIsLoadingPlans(false);
     }
-  };
+  }, [form]);
+
+  // Load plans when branch changes
+  useEffect(() => {
+    if (selectedBranch && selectedBranch > 0) {
+      loadApprovedPlans(selectedBranch);
+    } else {
+      setApprovedPlans([]);
+    }
+  }, [selectedBranch, loadApprovedPlans]);
 
   const handlePlanSelect = async (pdpIdStr: string) => {
     const selectedPdpId = Number(pdpIdStr);
@@ -222,13 +218,13 @@ export function DispatchCreationModal({
   const handleConfirmCreate = async () => {
     if (!pendingPayload) return;
     try {
-      await createTrip(pendingPayload);
+      await createTrip(pendingPayload as DispatchCreationFormValues);
       toast.success("Dispatch trip created successfully.");
       setIsConfirming(false);
       onOpenChange(false);
       onSuccess?.();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to create dispatch trip");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to create dispatch trip");
     }
   };
 
@@ -351,7 +347,7 @@ export function DispatchCreationModal({
           onOpenChange={setIsConfirming}
           onConfirm={handleConfirmCreate}
           isSubmitting={isSubmitting}
-          payload={pendingPayload}
+          payload={pendingPayload as DispatchCreationFormValues}
           masterData={masterData}
           planDetails={planDetails}
           approvedPlans={approvedPlans}

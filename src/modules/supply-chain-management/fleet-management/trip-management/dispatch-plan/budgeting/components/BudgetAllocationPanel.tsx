@@ -49,9 +49,14 @@ interface BudgetAllocationPanelProps {
   onSave: (
     budgets: { coa_id: number; amount: number; remarks?: string }[],
   ) => Promise<void>;
-  isSubmitting: boolean;
-  fetchPlanBudgets: (planId: number) => Promise<any[]>;
-  onClearSelection: () => void;
+    isSubmitting: boolean;
+    fetchPlanBudgets: (planId: number) => Promise<unknown[]>;
+}
+
+interface Budget {
+  coa_id: number;
+  amount: string | number;
+  remarks?: string;
 }
 
 export function BudgetAllocationPanel({
@@ -60,7 +65,6 @@ export function BudgetAllocationPanel({
   onSave,
   isSubmitting,
   fetchPlanBudgets,
-  onClearSelection,
 }: BudgetAllocationPanelProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -87,7 +91,7 @@ export function BudgetAllocationPanel({
         const budgets = await fetchPlanBudgets(Number(plan.id));
         if (budgets.length > 0) {
           form.reset({
-            budgets: budgets.map((b: any) => ({
+            budgets: (budgets as Budget[]).map((b) => ({
               coa_id: b.coa_id,
               amount: Number(b.amount),
               remarks: b.remarks || "",
@@ -96,7 +100,7 @@ export function BudgetAllocationPanel({
         } else {
           form.reset({ budgets: [{ coa_id: 0, amount: 0, remarks: "" }] });
         }
-      } catch (err: any) {
+      } catch {
         toast.error("Failed to fetch existing budgets");
         form.reset({ budgets: [{ coa_id: 0, amount: 0, remarks: "" }] });
       } finally {
@@ -112,7 +116,8 @@ export function BudgetAllocationPanel({
     try {
       await onSave(data.budgets || []);
       toast.success("Budgets successfully updated.");
-    } catch (err) {
+    } catch (err: unknown) {
+      console.error("Failed to save budget allocation:", err instanceof Error ? err.message : String(err));
       toast.error("Failed to save budget allocation.");
     }
   };

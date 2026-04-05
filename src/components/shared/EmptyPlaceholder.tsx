@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Search, PlusCircle, Database } from "lucide-react";
+import { PlusCircle, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface EmptyPlaceholderProps {

@@ -28,7 +28,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { NavMain } from "./nav-main";
+import { NavMain, type NavNode } from "./nav-main";
 
 const data = {
     navMain: [
@@ -458,7 +458,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         if (!searchQuery.trim()) return data.navMain;
         const lowerQuery = searchQuery.toLowerCase();
 
-        const filterItems = (items: any[]) => {
+        const filterItems = (items: NavNode[]) => {
             return items.reduce((acc, item) => {
                 // Check if current item matches
                 const isMatch = item.title.toLowerCase().includes(lowerQuery);
@@ -475,7 +475,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 }
 
                 return acc;
-            }, []);
+            }, [] as NavNode[]);
         };
 
         return filterItems(data.navMain);

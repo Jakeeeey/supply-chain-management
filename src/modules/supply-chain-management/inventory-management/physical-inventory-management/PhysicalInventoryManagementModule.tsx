@@ -582,7 +582,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
         } finally {
             setIsSavingDetailBatch(false);
         }
-    }, [detailRows, filters, header, onRecordChange, rebuildGroupedRows]);
+    }, [detailRows, filters, header, onRecordChange, rebuildGroupedRows, setHydratedHeader]);
 
     const applyLocalRfidSavedPayload = React.useCallback(
         (payload: LocalRfidSavedPayload) => {
@@ -630,7 +630,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
                 nextRfidCountByDetailId,
             });
         },
-        [detailRows, filters, header, onRecordChange, rebuildGroupedRows, rfidCountByDetailId],
+        [detailRows, filters, header, onRecordChange, rebuildGroupedRows, rfidCountByDetailId, setHydratedHeader],
     );
 
     React.useEffect(() => {
@@ -783,6 +783,8 @@ export function PhysicalInventoryManagementModule(props: Props) {
                     supplier_id: null,
                     category_id: null,
                     encoder_id: null,
+                    committed_at: null,
+                    cancelled_at: null,
                 };
 
                 if (cancelled) return;
@@ -815,7 +817,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
         return () => {
             cancelled = true;
         };
-    }, [initialHeaderId]);
+    }, [initialHeaderId, setHydratedHeader]);
 
     React.useEffect(() => {
         async function syncStartingDate() {
@@ -845,7 +847,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
         }
 
         void syncStartingDate();
-    }, [filters.branch_id, hasLoadedDetails, header?.id]);
+    }, [filters.branch_id, hasLoadedDetails, header?.id, setHydratedHeader]);
 
     React.useEffect(() => {
         if (!lookupBundle || !filters.supplier_id) {
@@ -997,7 +999,9 @@ export function PhysicalInventoryManagementModule(props: Props) {
         filters.supplier_id,
         header,
         onRecordChange,
+        setHydratedHeader,
         totalAmount,
+        currentUser?.id,
     ]);
 
 
@@ -1136,6 +1140,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
         onRecordChange,
         rebuildGroupedRows,
         suppliers,
+        setHydratedHeader,
     ]);
 
     const handlePhysicalCountChange = React.useCallback(
@@ -1300,7 +1305,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
         } finally {
             setIsCancelling(false);
         }
-    }, [canEdit, detailRows, filters, header?.id, onRecordChange, rebuildGroupedRows]);
+    }, [canEdit, detailRows, filters, header?.id, onRecordChange, rebuildGroupedRows, setHydratedHeader]);
 
     const canCancelAction =
         Boolean(header?.id) &&

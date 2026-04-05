@@ -10,10 +10,9 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Trash2, Smartphone, ScanLine, Tag, Wifi, Loader2 } from "lucide-react";
+import { Trash2, ScanLine, Tag, Wifi, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface RFIDScannerModalProps {
@@ -31,9 +30,17 @@ export function RFIDScannerModal({
   productName,
   onSave,
   initialTags = [],
-  type,
 }: RFIDScannerModalProps) {
   const [tags, setTags] = useState<string[]>(initialTags);
+  const [prevOpen, setPrevOpen] = useState(open);
+
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) {
+      setTags(initialTags);
+    }
+  }
+
   const [currentInput, setCurrentInput] = useState("");
   const [lastScanned, setLastScanned] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -41,13 +48,12 @@ export function RFIDScannerModal({
 
   useEffect(() => {
     if (open) {
-      setTags(initialTags);
       // Focus input when modal opens with a very short delay
       requestAnimationFrame(() => {
         inputRef.current?.focus();
       });
     }
-  }, [open, initialTags]);
+  }, [open]);
 
   const handleAddTag = (tag: string) => {
     let rawTag = tag.trim();

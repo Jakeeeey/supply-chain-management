@@ -49,8 +49,8 @@ export async function request<T>(
 
 export async function fetchItems<T>(
   endpoint: string,
-  params: Record<string, any> = {},
-): Promise<{ data: T[]; meta?: any }> {
+  params: Record<string, unknown> = {},
+): Promise<{ data: T[]; meta?: unknown }> {
   const baseUrl = API_BASE_URL?.replace(/\/$/, "");
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
 
@@ -63,5 +63,5 @@ export async function fetchItems<T>(
 
   const queryString = new URLSearchParams(cleanParams).toString();
   const url = `${baseUrl}${cleanEndpoint}${queryString ? `?${queryString}` : ""}`;
-  return request<{ data: T[]; meta?: any }>(url);
+  return request<{ data: T[]; meta?: unknown }>(url);
 }

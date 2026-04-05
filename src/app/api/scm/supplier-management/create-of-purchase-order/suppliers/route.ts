@@ -39,7 +39,8 @@ export async function GET(req: NextRequest) {
 
         // Return the active trade and non-trade suppliers
         return NextResponse.json({ data: json.data ?? [] });
-    } catch (err: any) {
+    } catch (e: unknown) {
+        const err = e as Error;
         return NextResponse.json(
             { error: "Suppliers route failed", details: String(err?.message ?? err) },
             { status: 500 }

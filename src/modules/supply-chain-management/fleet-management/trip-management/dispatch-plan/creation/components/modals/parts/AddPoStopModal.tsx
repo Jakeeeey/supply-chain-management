@@ -73,7 +73,6 @@ export function AddPoStopModal({
 }: AddPoStopModalProps) {
   const [purchaseOrders, setPurchaseOrders] = useState<POOption[]>([]);
   const [isLoadingPOs, setIsLoadingPOs] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [poOpen, setPoOpen] = useState(false);
 
   const form = useForm<PoStopValues>({
@@ -173,7 +172,6 @@ export function AddPoStopModal({
                         <CommandInput
                           placeholder="Search PO number..."
                           onValueChange={(val) => {
-                            setSearchQuery(val);
                             loadPurchaseOrders(val);
                           }}
                         />

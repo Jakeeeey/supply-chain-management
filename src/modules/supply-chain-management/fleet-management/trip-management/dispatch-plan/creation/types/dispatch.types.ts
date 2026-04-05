@@ -147,10 +147,20 @@ export interface PostDispatchOtherRow {
 export interface PostDispatchPurchaseRow {
   id?: number;
   post_dispatch_plan_id: number;
-  po_id: number;
+  po_id: number | { purchase_order_id: number; purchase_order_no: string };
   distance?: number;
   sequence: number;
   status: string;
+}
+
+/** Row from the `purchase_order` collection. */
+export interface PurchaseOrderRow {
+  purchase_order_id: number;
+  purchase_order_no: string;
+  date: string;
+  supplier_name: string;
+  total_amount: number;
+  inventory_status: string;
 }
 
 /** Row from the `cluster` collection. */
@@ -172,6 +182,15 @@ export interface CustomerRow {
   customer_name: string;
   store_name: string;
   city: string;
+}
+
+/** Row from the `post_dispatch_plan_others` collection for fetch. */
+export interface PostDispatchOtherRowDetail {
+  id: number;
+  remarks: string;
+  distance: number;
+  sequence: number;
+  status: string;
 }
 
 // ─── Enriched / Composed Return Shapes ──────────────────────
@@ -256,7 +275,10 @@ export interface PostDispatchPlanDetails {
 /** Standard Directus collection response shape. */
 export interface DirectusResponse<T> {
   data: T[];
-  meta?: any;
+  meta?: {
+    total_count?: number;
+    filter_count?: number;
+  };
 }
 
 /** Directus single-item response shape. */

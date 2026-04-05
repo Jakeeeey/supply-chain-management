@@ -652,6 +652,8 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                     supplier_id: null,
                     category_id: null,
                     encoder_id: null,
+                    committed_at: null,
+                    cancelled_at: null,
                 };
 
                 if (cancelled) return;

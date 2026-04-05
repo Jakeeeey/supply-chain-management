@@ -5,6 +5,7 @@ import {
 import {
   DispatchCreationMasterData,
 } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/creation/types/dispatch.types";
+import type { DispatchPlanSummary } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/creation/components/data-table";
 import { useCallback, useEffect, useState } from "react";
 
 export function useDispatchCreation() {
@@ -26,14 +27,14 @@ export function useDispatchCreation() {
       const result = await res.json();
       if (result.error) throw new Error(result.error);
       setMasterData(result.data);
-    } catch (err: any) {
-      setErrorMasterData(err.message || "Failed to load master data");
+    } catch (err: unknown) {
+      setErrorMasterData(err instanceof Error ? err.message : "Failed to load master data");
     } finally {
       setIsLoadingMasterData(false);
     }
   }, []);
 
-  const [dispatchSummary, setDispatchSummary] = useState<any[]>([]);
+  const [dispatchSummary, setDispatchSummary] = useState<DispatchPlanSummary[]>([]);
   const [isLoadingSummary, setIsLoadingSummary] = useState(false);
 
   const fetchSummary = useCallback(async () => {
@@ -57,14 +58,19 @@ export function useDispatchCreation() {
         const budgets = budgetResult.data || [];
 
         const budgetMap = new Map<string, number>();
-        budgets.forEach((b: any) => {
+        budgets.forEach((b: { post_dispatch_plan_id: number; amount: number }) => {
           const pid = String(b.post_dispatch_plan_id);
           budgetMap.set(pid, (budgetMap.get(pid) || 0) + Number(b.amount || 0));
         });
 
-        const enriched = rawData.map((p: any) => {
+        interface RawPlan {
+          id: number | string;
+          customerTransactions?: { amount?: number | string }[];
+        }
+
+        const enriched = (rawData as RawPlan[]).map((p) => {
           const totalValue = (p.customerTransactions || []).reduce(
-            (acc: number, t: any) => acc + Number(t.amount || 0),
+            (acc: number, t: { amount?: number | string }) => acc + Number(t.amount || 0),
             0,
           );
           return {
@@ -74,13 +80,13 @@ export function useDispatchCreation() {
           };
         });
 
-        setDispatchSummary(enriched);
+        setDispatchSummary(enriched as unknown as DispatchPlanSummary[]);
       } catch (budgetErr) {
         console.error("Failed to enrich budget data:", budgetErr);
         setDispatchSummary(rawData); // Fallback to raw data
       }
-    } catch (err: any) {
-      console.error("Failed to load dispatch summary:", err.message);
+    } catch (err: unknown) {
+      console.error("Failed to load dispatch summary:", err instanceof Error ? err.message : "An error occurred");
     } finally {
       setIsLoadingSummary(false);
     }
@@ -95,13 +101,11 @@ export function useDispatchCreation() {
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      const response =
-        await dispatchCreationLifecycleService.createTrip(values);
+      await dispatchCreationLifecycleService.createTrip(values);
       fetchSummary(); // Refresh summary after creation
-      return response;
-    } catch (err: any) {
+    } catch (err: unknown) {
       setSubmitError(
-        err.message || "An unexpected error occurred during trip creation.",
+        err instanceof Error ? err.message : "An unexpected error occurred during trip creation.",
       );
       throw err;
     } finally {

@@ -135,8 +135,9 @@ export function DriverModal({
 
             onSuccess();
             onClose();
-        } catch (error: any) {
-            toast.error(error.message || "An error occurred");
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : "An error occurred";
+            toast.error(msg);
         } finally {
             setLoading(false);
         }

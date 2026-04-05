@@ -2,13 +2,14 @@
 
 import { forwardRef, useImperativeHandle, useRef } from "react"
 import HistoricalPlanningTable from "./historical-planning-table"
-import { ForecastPlanningTable } from "./forecast-planning-table"
+import { ForecastPlanningTable, ForecastPlanningTableHandle, ForecastItem } from "./forecast-planning-table"
+import { PlanningRow } from "../types"
 import { cn } from "@/lib/utils"
 import { Link2Off, DatabaseZap, BrainCircuit, History, Layers } from "lucide-react"
 
 interface PlanningContainerProps {
     mode: "historical" | "forecast"
-    data: any[]
+    data: PlanningRow[]
     simulationTargets: { A: number; B: number; C: number }
     selectedMonths: string[]
     onQuantityChange: (id: string, newQty: number) => void
@@ -16,12 +17,12 @@ interface PlanningContainerProps {
 
 export interface PlanningContainerHandle {
     clearAllQuantities: () => void;
-    getCurrentData: () => any[];
+    getCurrentData: () => PlanningRow[];
 }
 
 export const PlanningContainer = forwardRef<PlanningContainerHandle, PlanningContainerProps>(
     ({ mode, data, simulationTargets, selectedMonths, onQuantityChange }, ref) => {
-        const forecastRef = useRef<any>(null);
+        const forecastRef = useRef<ForecastPlanningTableHandle>(null);
 
         // Calculate linked status for the footer badges
         // We now check if category_name is not "OTHERS" to confirm it was successfully mapped
@@ -37,12 +38,12 @@ export const PlanningContainer = forwardRef<PlanningContainerHandle, PlanningCon
         useImperativeHandle(ref, () => ({
             clearAllQuantities: () => {
                 data.forEach(row => {
-                    const rowId = String(row.product_id || row.id || row.keyProductId);
+                    const rowId = String(row.product_id || row.id);
                     onQuantityChange(rowId, 0);
                 });
             },
             getCurrentData: () => {
-                if (isForecast) return forecastRef.current?.getCalculatedData() || [];
+                if (isForecast) return (forecastRef.current?.getCalculatedData() || []) as unknown as PlanningRow[];
                 return data;
             }
         }));
@@ -54,7 +55,7 @@ export const PlanningContainer = forwardRef<PlanningContainerHandle, PlanningCon
                     {isForecast ? (
                         <ForecastPlanningTable
                             ref={forecastRef}
-                            data={data} // Passes category_name mapped in page.tsx
+                            data={data as unknown as ForecastItem[]} // Passes category_name mapped in page.tsx
                             selectedMonths={selectedMonths}
                             onQuantityChange={onQuantityChange}
                         />

@@ -19,11 +19,12 @@ export class AppError extends Error {
  * Centralized API Error Handler
  * Translates service-level exceptions into standardized HTTP responses.
  */
-export const handleApiError = (error: any) => {
+export const handleApiError = (error: unknown) => {
+  const err = error as Error & { code?: string; stack?: string };
   console.error("[API Error Trace]:", {
-    message: error.message,
-    stack: error.stack,
-    code: error.code || "UNKNOWN",
+    message: err.message,
+    stack: err.stack,
+    code: err.code || "UNKNOWN",
   });
 
   // 1. Handle Custom AppErrors
@@ -36,8 +37,8 @@ export const handleApiError = (error: any) => {
 
   // 2. Handle DB Not Found
   if (
-    error.message?.includes("DB_NOT_FOUND") ||
-    error.message?.includes("not found")
+    err.message?.includes("DB_NOT_FOUND") ||
+    err.message?.includes("not found")
   ) {
     return NextResponse.json(
       {
@@ -50,8 +51,8 @@ export const handleApiError = (error: any) => {
 
   // 3. Handle Validation Failures
   if (
-    error.message?.includes("VALIDATION_FAILED") ||
-    error.name === "ZodError"
+    err.message?.includes("VALIDATION_FAILED") ||
+    (error as Error).name === "ZodError"
   ) {
     return NextResponse.json(
       {

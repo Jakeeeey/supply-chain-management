@@ -56,7 +56,7 @@ export const dispatchCreationLifecycleService = {
   /**
    * Updates budgets for an existing dispatch plan.
    */
-  async updateBudget(planId: number, budgets: any[]) {
+  async updateBudget(planId: number, budgets: unknown[]) {
     const response = await fetch(
       `/api/scm/fleet-management/trip-management/dispatch-plan/creation?plan_id=${planId}`,
       {

@@ -147,7 +147,6 @@ export const ProductTracingModule = React.forwardRef<HTMLDivElement, React.HTMLA
 
     const currentUnit = stats?.unit || "Units";
     const currentDivisor = stats?.divisor || 1;
-    const currentBrand = (movements[0]?.brand || "Product tracing base") + (currentDivisor > 1 ? ` (x${currentDivisor})` : "");
     const breakdownEntries = Object.entries(stats?.breakdown || {});
 
     return (

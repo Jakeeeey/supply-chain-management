@@ -9,6 +9,8 @@ import {SimulationPanel} from "./components/simulation-panel"
 import {PlanningContainer, type PlanningContainerHandle} from "./components/planning-container"
 import {PlanningFooter} from "./components/planning-footer"
 import {InTransitModal} from "./components/in-transit-modal"
+import {PlanningRow, PendingSelection, SimulationTargets, PurchaseOrder} from "./types"
+import {useCallback} from "react"
 
 import {fetchHistoricalData, fetchForecastData} from "./services/purchase-planning-api"
 
@@ -18,10 +20,10 @@ export function PurchasePlanningModule() {
     const [dataLoaded, setDataLoaded] = useState(false)
     const [isTableLoading, setIsTableLoading] = useState(false)
     const [viewMode, setViewMode] = useState<"historical" | "forecast">("historical")
-    const [planningData, setPlanningData] = useState<any[]>([])
+    const [planningData, setPlanningData] = useState<PlanningRow[]>([])
     const [error, setError] = useState<string | null>(null)
-    const [targets, setTargets] = useState({A: 0, B: 0, C: 0})
-    const [pendingSelection, setPendingSelection] = useState<any>(null)
+    const [targets, setTargets] = useState<SimulationTargets>({A: 0, B: 0, C: 0})
+    const [pendingSelection, setPendingSelection] = useState<PendingSelection | null>(null)
 
     // 🚀 NEW: Source of truth for selected branches (shared between Header & Footer)
     const [activeBranches, setActiveBranches] = useState<string[]>([])
@@ -29,16 +31,16 @@ export function PurchasePlanningModule() {
     const tableRef = useRef<PlanningContainerHandle>(null)
 
     // 🚀 UNIVERSAL DYNAMIC HYDRATION ENGINE
-    const applySimulationMath = (rawData: any[], currentTargets: any, mode: string, monthsCount: number) => {
+    const applySimulationMath = useCallback((rawData: PlanningRow[], currentTargets: SimulationTargets, mode: string, monthsCount: number) => {
         return rawData.map((row) => {
-            const targetDays = currentTargets[row.abcClass as keyof typeof currentTargets] || 15;
+            const targetDays = currentTargets[row.abcClass as keyof SimulationTargets] || 15;
 
             let dau = 0;
             let expectedSellout = 0;
 
             if (mode === "forecast") {
                 const forecastValues = Object.values(row.monthlyForecast || {});
-                const totalForecastBoxes = forecastValues.reduce((sum: any, val: any) => sum + Number(val), 0) as number;
+                const totalForecastBoxes = forecastValues.reduce((sum: number, val: number) => sum + Number(val), 0);
                 const activeMonths = Math.max(1, monthsCount);
                 dau = totalForecastBoxes / (activeMonths * 21);
                 expectedSellout = 0;
@@ -62,14 +64,14 @@ export function PurchasePlanningModule() {
                 totalValue: finalOrderQty * (row.computedPricePerBox || 0)
             };
         });
-    };
+    }, []);
 
     useEffect(() => {
-        if (dataLoaded && planningData.length > 0) {
-            const monthsCount = pendingSelection?.months?.length || 3;
+        if (dataLoaded && planningData.length > 0 && pendingSelection) {
+            const monthsCount = pendingSelection.months?.length || 3;
             setPlanningData((prevData) => applySimulationMath(prevData, targets, viewMode, monthsCount));
         }
-    }, [targets]);
+    }, [targets, dataLoaded, planningData.length, pendingSelection, viewMode, applySimulationMath]);
 
     const handleInitialLoad = (months: string[], mode: "historical" | "forecast", year: string, supplierId: string, selectedBranches: string[]) => {
         setPendingSelection({months, mode, year, supplierId, selectedBranches})
@@ -78,7 +80,8 @@ export function PurchasePlanningModule() {
         setIsModalOpen(true)
     }
 
-    const handleConfirmLoad = async (selectedPOs: any[] = []) => {
+    const handleConfirmLoad = async (selectedPOs: PurchaseOrder[] = []) => {
+        if (!pendingSelection) return
         setIsModalOpen(false)
         setIsTableLoading(true)
         setError(null)
@@ -87,9 +90,9 @@ export function PurchasePlanningModule() {
             const poIds: number[] = selectedPOs.map(po => parseInt(po.id, 10))
             const supplierIdNum = parseInt(pendingSelection.supplierId, 10)
             const branchIdsNum: number[] = (pendingSelection.selectedBranches || []).map((id: string) => parseInt(id, 10))
-            const selectedYearNum = parseInt(pendingSelection.year, 10) || new Date().getFullYear()
+            const selectedYearNum = parseInt(pendingSelection?.year || "", 10) || new Date().getFullYear()
 
-            const mappedMonths: number[] = (pendingSelection.months || []).map((m: any): number => {
+            const mappedMonths: number[] = (pendingSelection?.months || []).map((m: string): number => {
                 const str = String(m).trim();
                 if (str.includes("-")) {
                     const parts = str.split("-");
@@ -105,7 +108,7 @@ export function PurchasePlanningModule() {
             const uniqueMappedMonths = Array.from(new Set(mappedMonths)) as number[];
             const monthsCount = uniqueMappedMonths.length > 0 ? uniqueMappedMonths.length : 3;
 
-            let rawData;
+            let rawData: PlanningRow[] = [];
 
             if (pendingSelection?.mode === "forecast") {
                 rawData = await fetchForecastData({
@@ -123,15 +126,16 @@ export function PurchasePlanningModule() {
                 });
             }
 
-            const finalData = applySimulationMath(rawData, targets, pendingSelection?.mode, monthsCount);
+            const finalData = applySimulationMath(rawData, targets, pendingSelection?.mode || "historical", monthsCount);
 
             setPlanningData(finalData)
             setViewMode(pendingSelection?.mode || "historical")
             setDataLoaded(true)
 
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("❌ Failed to load planning dashboard:", err)
-            setError(err.message || "Failed to synthesize market intelligence.")
+            const message = err instanceof Error ? err.message : "Failed to synthesize market intelligence."
+            setError(message)
         } finally {
             setIsTableLoading(false)
         }
@@ -156,12 +160,15 @@ export function PurchasePlanningModule() {
     }
 
     const handleResetSuggested = () => {
-        setPlanningData((prev) => prev.map((row) => ({
-            ...row,
-            isManual: false,
-            orderQty: row.suggestedQty,
-            totalValue: row.suggestedQty * (row.computedPricePerBox || 0)
-        })))
+        setPlanningData((prev) => prev.map((row) => {
+            const suggested = row.suggestedQty || 0;
+            return {
+                ...row,
+                isManual: false,
+                orderQty: suggested,
+                totalValue: suggested * (row.computedPricePerBox || 0)
+            }
+        }))
     }
 
     return (

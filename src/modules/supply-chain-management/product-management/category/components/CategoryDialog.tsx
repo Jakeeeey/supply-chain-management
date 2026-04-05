@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -143,10 +144,13 @@ export function CategoryDialog({
               <div className="flex flex-col gap-4">
                 {preview ? (
                   <div className="relative w-full min-h-[200px] max-h-[300px] rounded-lg border bg-muted/30 flex items-center justify-center overflow-hidden transition-all">
-                    <img 
+                    <Image 
                       src={preview} 
                       alt="Category Preview" 
+                      width={800}
+                      height={400}
                       className="max-w-full max-h-[300px] object-contain drop-shadow-sm" 
+                      unoptimized
                     />
                     <Button
                       type="button"

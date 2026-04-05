@@ -26,6 +26,9 @@ import type {
   RawSalesOrder,
   UpdateHeaderPayload,
   PostDispatchInvoiceRow,
+  PostDispatchOtherRowDetail,
+  PostDispatchPurchaseRow,
+  PurchaseOrderRow,
 } from "../types/dispatch.types";
 import { fetchItems } from "./api";
 import { directusHeaders, getDirectusBaseUrl } from "./dispatch.helpers";
@@ -480,18 +483,12 @@ export async function fetchPlanDetails(
           fields: "invoice_id,sequence,status",
           limit: -1,
         }),
-        fetchItems<{
-          remarks: string;
-          distance: number;
-          sequence: number;
-          id: number;
-          status: string;
-        }>("/items/post_dispatch_plan_others", {
+        fetchItems<PostDispatchOtherRowDetail>("/items/post_dispatch_plan_others", {
           "filter[post_dispatch_plan_id][_eq]": tripId,
           fields: "id,remarks,distance,sequence,status",
           limit: -1,
         }),
-        fetchItems<any>("/items/post_dispatch_purchases", {
+        fetchItems<PostDispatchPurchaseRow>("/items/post_dispatch_purchases", {
           "filter[post_dispatch_plan_id][_eq]": tripId,
           fields:
             "id,po_id.purchase_order_id,po_id.purchase_order_no,distance,sequence,status",
@@ -499,12 +496,12 @@ export async function fetchPlanDetails(
         }),
       ]);
 
-    const poStops = (tripPurchasesRes.data || []).map((po: any) => ({
+    const poStops = (tripPurchasesRes.data || []).map((po) => ({
       detail_id: `po-${po.id}`,
       amount: 0,
       isPoStop: true,
-      po_id: po.po_id?.purchase_order_id,
-      po_no: po.po_id?.purchase_order_no || "—",
+      po_id: typeof po.po_id === "object" ? po.po_id.purchase_order_id : undefined,
+      po_no: typeof po.po_id === "object" ? po.po_id.purchase_order_no : "—",
       distance: po.distance,
       sequence: po.sequence,
       status: po.status,
@@ -554,7 +551,7 @@ export async function fetchPlanDetails(
 
   // 4. Fetch invoices
   const orderNos = orders.map((o) => o.order_no).filter(Boolean);
-  let invoiceMap = new Map<string, RawSalesInvoice>();
+  const invoiceMap = new Map<string, RawSalesInvoice>();
   if (orderNos.length) {
     const invoicesRes = await fetchItems<RawSalesInvoice>(
       "/items/sales_invoice",
@@ -573,7 +570,7 @@ export async function fetchPlanDetails(
   const customerCodes = [
     ...new Set(orders.map((o) => o.customer_code).filter(Boolean)),
   ] as string[];
-  let customerMap = new Map<string, CustomerRow>();
+  const customerMap = new Map<string, CustomerRow>();
   if (customerCodes.length) {
     const custRes = await fetchItems<CustomerRow>("/items/customer", {
       "filter[customer_code][_in]": customerCodes.join(","),
@@ -663,20 +660,19 @@ export async function fetchPlanDetails(
     );
 
     // Also fetch PO sequence data for re-sequencing during updates
-    const tripPOSequencesRes = await fetchItems<{
-      po_id: any;
-      sequence: number;
-      status: string;
-    }>("/items/post_dispatch_purchases", {
-      "filter[post_dispatch_plan_id][_eq]": tripId,
-      fields: "po_id,sequence,status",
-      limit: -1,
-    });
-    const poDataMap = new Map(
-      (tripPOSequencesRes.data || []).map((r) => [
-        Number(r.po_id),
-        { seq: r.sequence, status: r.status },
-      ]),
+    const tripPOSequencesRes = await fetchItems<PostDispatchPurchaseRow>(
+      "/items/post_dispatch_purchases",
+      {
+        "filter[post_dispatch_plan_id][_eq]": tripId,
+        fields: "po_id,sequence,status",
+        limit: -1,
+      },
+    );
+    const poDataMap = new Map<number, { seq: number; status: string }>(
+      (tripPOSequencesRes.data || []).map((r) => {
+          const poId = typeof r.po_id === "object" ? r.po_id.purchase_order_id : Number(r.po_id);
+          return [poId, { seq: r.sequence, status: r.status }];
+      }),
     );
 
     result.forEach((item) => {
@@ -705,7 +701,7 @@ export async function fetchPlanDetails(
       }
     });
 
-    result.sort((a: any, b: any) => (a.sequence || 0) - (b.sequence || 0));
+    result.sort((a: { sequence?: number }, b: { sequence?: number }) => (a.sequence || 0) - (b.sequence || 0));
   }
 
   return { data: result };
@@ -714,16 +710,22 @@ export async function fetchPlanDetails(
 /**
  * Fetches available purchase orders for selection in route stops.
  */
-export async function fetchPurchaseOrders(query?: string): Promise<any[]> {
-  const params: any = {
-    fields: "purchase_order_id,purchase_order_no,date,supplier_name,total_amount,inventory_status",
+export async function fetchPurchaseOrders(
+  query?: string,
+): Promise<PurchaseOrderRow[]> {
+  const params: Record<string, string | number> = {
+    fields:
+      "purchase_order_id,purchase_order_no,date,supplier_name,total_amount,inventory_status",
     limit: -1,
     sort: "-date",
   };
   if (query) {
     params["filter[purchase_order_no][_contains]"] = query;
   }
-  const res = await fetchItems<any>("/items/purchase_order", params);
+  const res = await fetchItems<PurchaseOrderRow>(
+    "/items/purchase_order",
+    params,
+  );
   return res.data || [];
 }
 

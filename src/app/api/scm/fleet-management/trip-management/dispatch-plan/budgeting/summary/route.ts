@@ -15,7 +15,7 @@ function directusHeaders() {
   return h;
 }
 
-async function fetchDirectus<T = any>(path: string) {
+async function fetchDirectus<T = unknown>(path: string) {
   const url = `${DIRECTUS_BASE}${path}`;
   const res = await fetch(url, {
     cache: "no-store",
@@ -116,68 +116,111 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    interface Plan {
+        id: number;
+        doc_no: string;
+        driver_id: string | number;
+        vehicle_id: string | number;
+        starting_point: string;
+        time_of_dispatch: string | null;
+        time_of_arrival: string | null;
+        estimated_time_of_dispatch: string;
+        estimated_time_of_arrival: string;
+        status: string;
+        date_encoded: string;
+    }
+    interface Staff {
+        post_dispatch_plan_id: number;
+        user_id: string | number;
+        role: string;
+    }
+    interface DispatchInvoice {
+        id: number;
+        post_dispatch_plan_id: number;
+        invoice_id: number;
+        status: string;
+    }
+    interface SalesInvoice {
+        invoice_id: number;
+        total_amount: string | number;
+        customer_code: string;
+        salesman_id: number;
+    }
+
+    interface Vehicle { vehicle_id: number; vehicle_plate: string; }
+    interface User { user_id: number | string; user_fname: string; user_lname: string; }
+    interface Customer { customer_code: string; customer_name: string; city: string; province: string; }
+    interface Salesman { id: number; salesman_name: string; }
+    interface PlanOther { id: number; post_dispatch_plan_id: number; remarks: string; distance: number; status: string; }
+    interface PlanPurchase {
+        id: number;
+        post_dispatch_plan_id: number;
+        po_id: { purchase_order_id: number; purchase_order_no: string; };
+        status: string;
+    }
+
     // Extract data
-    const rawPlans = (plansRes as any).json?.data ?? [];
-    const staff = (staffRes as any).json?.data ?? [];
-    const dispatchInvoices = (invRes as any).json?.data ?? [];
-    const salesInvoices = (salesInvRes as any).json?.data ?? [];
-    const vehicles = (vehiclesRes as any).json?.data ?? [];
-    const users = (usersRes as any).json?.data ?? [];
-    const customers = (customersRes as any).json?.data ?? [];
-    const salesmen = (salesmenRes as any).json?.data ?? [];
-    const planOthers = (othersRes as any).json?.data ?? [];
-    const planPurchases = (purchasesRes as any).json?.data ?? [];
+    const rawPlans = ((plansRes as { ok: true, json: { data: Plan[] } }).json?.data ?? []) as Plan[];
+    const staff = ((staffRes as { ok: true, json: { data: Staff[] } }).json?.data ?? []) as Staff[];
+    const dispatchInvoices = ((invRes as { ok: true, json: { data: DispatchInvoice[] } }).json?.data ?? []) as DispatchInvoice[];
+    const salesInvoices = ((salesInvRes as { ok: true, json: { data: SalesInvoice[] } }).json?.data ?? []) as SalesInvoice[];
+    const vehicles = ((vehiclesRes as { ok: true, json: { data: Vehicle[] } }).json?.data ?? []) as Vehicle[];
+    const users = ((usersRes as { ok: true, json: { data: User[] } }).json?.data ?? []) as User[];
+    const customers = ((customersRes as { ok: true, json: { data: Customer[] } }).json?.data ?? []) as Customer[];
+    const salesmen = ((salesmenRes as { ok: true, json: { data: Salesman[] } }).json?.data ?? []) as Salesman[];
+    const planOthers = ((othersRes as { ok: true, json: { data: PlanOther[] } }).json?.data ?? []) as PlanOther[];
+    const planPurchases = ((purchasesRes as { ok: true, json: { data: PlanPurchase[] } }).json?.data ?? []) as PlanPurchase[];
 
     if (!rawPlans.length) return NextResponse.json({ data: [] });
 
     // Build maps
     const userMap = new Map<string, string>(
-      users.map((u: any) => [
+      users.map((u) => [
         String(u.user_id),
         `${u.user_fname ?? ""} ${u.user_lname ?? ""}`.trim(),
       ]),
     );
 
     const vehicleMap = new Map<string, string>(
-      vehicles.map((v: any) => [
+      vehicles.map((v) => [
         String(v.vehicle_id),
         String(v.vehicle_plate ?? ""),
       ]),
     );
 
     const salesmanMap = new Map<string, string>(
-      salesmen.map((s: any) => [String(s.id), String(s.salesman_name ?? "")]),
+      salesmen.map((s) => [String(s.id), String(s.salesman_name ?? "")]),
     );
 
-    const salesInvoiceMap = new Map<string, any>(
-      salesInvoices.map((si: any) => [String(si.invoice_id), si]),
+    const salesInvoiceMap = new Map<string, SalesInvoice>(
+      salesInvoices.map((si) => [String(si.invoice_id), si]),
     );
 
-    const customerMap = new Map<string, any>();
-    customers.forEach((c: any) => {
+    const customerMap = new Map<string, Customer>();
+    customers.forEach((c) => {
       if (c.customer_code)
         customerMap.set(normalizeCode(String(c.customer_code)), c);
     });
 
     // Group invoices by plan id
-    const invoicesByPlan = new Map<string, any[]>();
-    dispatchInvoices.forEach((inv: any) => {
+    const invoicesByPlan = new Map<string, DispatchInvoice[]>();
+    dispatchInvoices.forEach((inv) => {
       if (!inv.post_dispatch_plan_id) return;
       const pId = String(inv.post_dispatch_plan_id);
       if (!invoicesByPlan.has(pId)) invoicesByPlan.set(pId, []);
       invoicesByPlan.get(pId)!.push(inv);
     });
 
-    const othersByPlan = new Map<string, any[]>();
-    planOthers.forEach((o: any) => {
+    const othersByPlan = new Map<string, PlanOther[]>();
+    planOthers.forEach((o) => {
       if (!o.post_dispatch_plan_id) return;
       const pId = String(o.post_dispatch_plan_id);
       if (!othersByPlan.has(pId)) othersByPlan.set(pId, []);
       othersByPlan.get(pId)!.push(o);
     });
 
-    const purchasesByPlan = new Map<string, any[]>();
-    planPurchases.forEach((p: any) => {
+    const purchasesByPlan = new Map<string, PlanPurchase[]>();
+    planPurchases.forEach((p) => {
       if (!p.post_dispatch_plan_id) return;
       const pId = String(p.post_dispatch_plan_id);
       if (!purchasesByPlan.has(pId)) purchasesByPlan.set(pId, []);
@@ -187,7 +230,7 @@ export async function GET(req: NextRequest) {
     // Driver & Helpers per plan (from staff table)
     const driverByPlan = new Map<string, string>();
     const helpersByPlan = new Map<string, string[]>();
-    staff.forEach((s: any) => {
+    staff.forEach((s) => {
       const pId = String(s.post_dispatch_plan_id);
       if (String(s.role).toLowerCase() === "driver") {
         driverByPlan.set(pId, String(s.user_id));
@@ -199,7 +242,7 @@ export async function GET(req: NextRequest) {
     });
 
     // Assemble
-    const mappedPlans = rawPlans.map((plan: any) => {
+    const mappedPlans = rawPlans.map((plan) => {
       const planIdStr = String(plan.id);
 
       const driverUserId =
@@ -217,7 +260,7 @@ export async function GET(req: NextRequest) {
       let foundSalesmanName = "Unknown Salesman";
       let foundSalesmanId = "N/A";
 
-      const representativeInvoice = planInvoices.find((inv: any) => {
+      const representativeInvoice = planInvoices.find((inv) => {
         const si = salesInvoiceMap.get(String(inv.invoice_id));
         return si && si.salesman_id;
       });
@@ -226,12 +269,12 @@ export async function GET(req: NextRequest) {
         const si = salesInvoiceMap.get(
           String(representativeInvoice.invoice_id),
         );
-        const sIdStr = String(si.salesman_id);
+        const sIdStr = String(si?.salesman_id ?? "");
         foundSalesmanName = salesmanMap.get(sIdStr) || "Unknown Salesman";
         foundSalesmanId = sIdStr;
       }
 
-      const customerTransactions = planInvoices.map((inv: any) => {
+      const customerTransactions = planInvoices.map((inv) => {
         const si = salesInvoiceMap.get(String(inv.invoice_id));
         let customerName = "Unknown Customer";
         let address = "N/A";
@@ -262,7 +305,7 @@ export async function GET(req: NextRequest) {
         };
       });
 
-      planOthersList.forEach((o: any) => {
+      planOthersList.forEach((o) => {
         customerTransactions.push({
           id: `other-${o.id}`,
           customerName: String(o.remarks || "Manual Route Stop").trim(),
@@ -273,7 +316,7 @@ export async function GET(req: NextRequest) {
         });
       });
 
-      planPurchasesList.forEach((p: any) => {
+      planPurchasesList.forEach((p) => {
         const poNo = p.po_id?.purchase_order_no || p.po_id?.purchase_order_id || "";
         customerTransactions.push({
           id: `po-${p.id}`,
@@ -308,11 +351,12 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({ data: mappedPlans });
-  } catch (err: any) {
+  } catch (err) {
+    const error = err as Error;
     return NextResponse.json(
       {
         error: "Failed to load dispatch summary data",
-        details: String(err?.message || err),
+        details: String(error?.message || error),
       },
       { status: 500 },
     );

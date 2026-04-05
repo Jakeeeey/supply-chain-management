@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { DispatchPlanSummary } from "../creation/components/data-table/index";
 import { BudgetAllocationPanel } from "./components/BudgetAllocationPanel";
 import { DispatchListSidebar } from "./components/DispatchListSidebar";
@@ -14,19 +14,11 @@ export default function DispatchBudgetingPage() {
     updateBudget,
     isSubmitting,
     fetchPlanBudgets,
-    refreshSummary,
   } = useDispatchBudgeting();
 
-  const [selectedPlan, setSelectedPlan] = useState<DispatchPlanSummary | null>(
-    null,
-  );
+  const [selectedPlanOverride, setSelectedPlanOverride] = useState<DispatchPlanSummary | null>(null);
 
-  // Auto-select first plan on load
-  useEffect(() => {
-    if (dispatchSummary.length > 0 && !selectedPlan) {
-      setSelectedPlan(dispatchSummary[0]);
-    }
-  }, [dispatchSummary, selectedPlan]);
+  const selectedPlan = selectedPlanOverride || (dispatchSummary.length > 0 ? dispatchSummary[0] : null);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -35,7 +27,7 @@ export default function DispatchBudgetingPage() {
           plans={dispatchSummary}
           isLoading={isLoadingSummary}
           selectedPlanId={selectedPlan?.id}
-          onSelectPlan={setSelectedPlan}
+          onSelectPlan={setSelectedPlanOverride}
         />
         <BudgetAllocationPanel
           plan={selectedPlan}
@@ -46,7 +38,6 @@ export default function DispatchBudgetingPage() {
           }}
           isSubmitting={isSubmitting}
           fetchPlanBudgets={fetchPlanBudgets}
-          onClearSelection={() => setSelectedPlan(null)}
         />
       </div>
     </div>

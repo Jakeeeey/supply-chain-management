@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic"; // Prevent caching
 const DIRECTUS_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 const ACCESS_TOKEN = process.env.DIRECTUS_STATIC_TOKEN;
 
-function json(res: any, status = 200) {
+function json(res: unknown, status = 200) {
   return NextResponse.json(res, { status });
 }
 
@@ -35,7 +35,7 @@ async function fetchDirectus(endpoint: string, params: Record<string, string>) {
   return json.data;
 }
 
-async function updateDirectus(id: string, body: any) {
+async function updateDirectus(id: string, body: Record<string, unknown>) {
   const res = await fetch(`${DIRECTUS_URL}/items/products/${id}`, {
     method: "PATCH",
     headers: {
@@ -135,10 +135,10 @@ export async function GET(req: NextRequest) {
 
       // Build lookup map for barcode types
       const btMap = new Map<number, { id: number; name: string }>();
-      barcodeTypes.forEach((bt: any) => btMap.set(bt.id, { id: bt.id, name: bt.name }));
+      barcodeTypes.forEach((bt: { id: number; name: string }) => btMap.set(bt.id, { id: bt.id, name: bt.name }));
 
       // Manually resolve barcode_type_id integers to objects
-      const resolved = bundles.map((b: any) => ({
+      const resolved = bundles.map((b: { barcode_type_id: number | { id: number; name: string } | null }) => ({
         ...b,
         barcode_type_id:
           typeof b.barcode_type_id === "number"
@@ -179,10 +179,10 @@ export async function GET(req: NextRequest) {
 
       // Build a barcode type lookup map for resolving plain int IDs (bundles)
       const barcodeTypeMap = new Map<number, string>();
-      barcodeTypes.forEach((bt: any) => barcodeTypeMap.set(bt.id, bt.name));
+      barcodeTypes.forEach((bt: { id: number; name: string }) => barcodeTypeMap.set(bt.id, bt.name));
 
       // Helper: normalize barcode_type_id to { id, name } object
-      const resolveBarcodeType = (raw: any) => {
+      const resolveBarcodeType = (raw: number | { id: number; name: string } | null) => {
         if (raw && typeof raw === "object" && raw.id) return raw; // already resolved (products)
         if (typeof raw === "number" && barcodeTypeMap.has(raw)) {
           return { id: raw, name: barcodeTypeMap.get(raw) };
@@ -191,7 +191,7 @@ export async function GET(req: NextRequest) {
       };
 
       // Normalize both into a unified shape
-      const normalizedBundles = bundles.map((b: any) => ({
+      const normalizedBundles = bundles.map((b: { id: number; bundle_sku: string; bundle_name: string; barcode_value: string; barcode_type_id: number | { id: number; name: string } | null; barcode_date: string; updated_by: number; updated_at: string }) => ({
         id: `bundle-${b.id}`,
         sku_code: b.bundle_sku,
         name: b.bundle_name,
@@ -203,7 +203,7 @@ export async function GET(req: NextRequest) {
         record_type: "Bundle",
       }));
 
-      const normalizedProducts = products.map((p: any) => ({
+      const normalizedProducts = products.map((p: { product_id: number; product_code: string; product_name: string; barcode: string; barcode_type_id: number | { id: number; name: string } | null; barcode_date: string; updated_by: number; updated_at: string }) => ({
         id: `product-${p.product_id}`,
         sku_code: p.product_code,
         name: p.product_name,
@@ -224,7 +224,7 @@ export async function GET(req: NextRequest) {
 
       // Collect unique user IDs and resolve names from the user table
       const userIds = [...new Set(merged.map((r) => r.updated_by).filter(Boolean))] as number[];
-      let userMap = new Map<number, { first_name: string; last_name: string }>();
+      const userMap = new Map<number, { first_name: string; last_name: string }>();
 
       if (userIds.length > 0) {
         try {
@@ -233,7 +233,7 @@ export async function GET(req: NextRequest) {
             "filter[user_id][_in]": userIds.join(","),
             limit: "-1",
           });
-          users.forEach((u: any) => userMap.set(u.user_id, {
+          users.forEach((u: { user_id: number; user_fname: string; user_lname: string }) => userMap.set(u.user_id, {
             first_name: u.user_fname || "",
             last_name: u.user_lname || "",
           }));
@@ -314,8 +314,8 @@ export async function GET(req: NextRequest) {
         junctionPromise,
       ]);
 
-      const supplierMap = new Map<number, any[]>();
-      junction.forEach((item: any) => {
+      const supplierMap = new Map<number, { supplier_id: { id: number; supplier_name: string; supplier_shortcut?: string } }[]>();
+      junction.forEach((item: { product_id: number; supplier_id: number | { id: number; supplier_name: string; supplier_shortcut?: string } }) => {
         if (!item.product_id || !item.supplier_id) return;
         const supplierObj =
           typeof item.supplier_id === "object"
@@ -326,7 +326,7 @@ export async function GET(req: NextRequest) {
         supplierMap.get(pid)?.push({ supplier_id: supplierObj });
       });
 
-      const mergedData = products.map((p: any) => ({
+      const mergedData = products.map((p: { product_id: number }) => ({
         ...p,
         product_per_supplier: supplierMap.get(p.product_id) || [],
       }));
@@ -336,9 +336,10 @@ export async function GET(req: NextRequest) {
 
     // If scope is unknown, return error (Don't default to products!)
     return json({ error: `Invalid scope: ${scope}` }, 400);
-  } catch (error: any) {
-    console.error("Linking API Error:", error);
-    return json({ error: error.message }, 500);
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("Linking API Error:", err);
+    return json({ error: err.message }, 500);
   }
 }
 
@@ -353,7 +354,8 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json();
     const result = await updateDirectus(id, body);
     return json({ data: result });
-  } catch (e: any) {
-    return json({ error: e.message }, 500);
+  } catch (e: unknown) {
+    const err = e as Error;
+    return json({ error: err.message }, 500);
   }
 }

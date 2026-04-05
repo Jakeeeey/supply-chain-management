@@ -1,6 +1,6 @@
 "use client"
 
-import {useState, useEffect, useMemo, useRef} from "react"
+import {useState, useEffect, useMemo, useRef, useCallback} from "react"
 import {createPortal} from "react-dom"
 import {Button} from "@/components/ui/button"
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "@/components/ui/select"
@@ -15,7 +15,6 @@ import {
     Check,
     ChevronDown,
     History,
-    Info,
 } from "lucide-react"
 import {cn} from "@/lib/utils"
 
@@ -105,8 +104,8 @@ export function PlanningToolbar({onLoad, onBranchChange}: PlanningToolbarProps) 
                     fetchSuppliers("TRADE"),
                     fetchBranches()
                 ])
-                setSuppliers(supResult)
-                setBranches(brResult)
+                setSuppliers(supResult as Supplier[])
+                setBranches(brResult as Branch[])
             } catch (error) {
                 console.error("❌ Toolbar Sync Error:", error)
             } finally {
@@ -171,8 +170,8 @@ export function PlanningToolbar({onLoad, onBranchChange}: PlanningToolbarProps) 
         return {top, left, width, placement}
     }
 
-    const syncSupplierPos = () => setSupplierPopoverPos(computePopoverPos(supplierTriggerRef.current))
-    const syncBranchPos = () => setBranchPopoverPos(computePopoverPos(branchTriggerRef.current))
+    const syncSupplierPos = useCallback(() => setSupplierPopoverPos(computePopoverPos(supplierTriggerRef.current)), [])
+    const syncBranchPos = useCallback(() => setBranchPopoverPos(computePopoverPos(branchTriggerRef.current)), [])
 
     useEffect(() => {
         if (!mounted) return
@@ -186,7 +185,7 @@ export function PlanningToolbar({onLoad, onBranchChange}: PlanningToolbarProps) 
             window.removeEventListener("resize", onRelayout)
             window.removeEventListener("scroll", onRelayout, true)
         }
-    }, [mounted, isSupplierOpen, isBranchOpen])
+    }, [mounted, isSupplierOpen, isBranchOpen, syncSupplierPos, syncBranchPos])
 
     const openSupplier = () => {
         const next = !isSupplierOpen

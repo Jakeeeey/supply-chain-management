@@ -47,10 +47,9 @@ export function AreaRow({
   // For initial load during Edit - using useWatch for reactivity
   const currentProvince = useWatch({ control: form.control, name: `areas.${index}.province` }) || "";
   const currentCity = useWatch({ control: form.control, name: `areas.${index}.city` }) || "";
-  const currentBarangay = useWatch({ control: form.control, name: `areas.${index}.baranggay` }) || "";
 
   // Watch all areas in form to prevent internal duplicates
-  const allAreasInForm = useWatch({ control: form.control, name: "areas" }) || [];
+  const allAreasInForm = useWatch({ control: form.control, name: "areas" });
 
   useEffect(() => {
     let mounted = true;
@@ -157,7 +156,7 @@ export function AreaRow({
     });
 
     // B. Check peer rows in THE SAME FORM
-    allAreasInForm.forEach((area, i) => {
+    (allAreasInForm || []).forEach((area, i) => {
       if (i === index) return;
       const c = norm(area.city);
       const b = norm(area.baranggay);

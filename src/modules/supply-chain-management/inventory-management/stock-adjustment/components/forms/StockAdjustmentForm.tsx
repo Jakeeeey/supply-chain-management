@@ -19,6 +19,8 @@ import { RFIDScannerModal } from "../modals/RFIDScannerModal";
 import {
   StockAdjustmentFormSchema,
   StockAdjustmentFormValues,
+  StockAdjustmentProduct,
+  StockAdjustmentItem,
 } from "../../types/stock-adjustment.schema";
 import { useStockAdjustmentForm } from "../../hooks/useStockAdjustmentForm";
 import { Button } from "@/components/ui/button";
@@ -27,13 +29,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -53,26 +48,25 @@ import {
   ComboboxEmpty,
 } from "@/components/ui/combobox";
 
-// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ——————————————————————————————————————————————————————————————————————————————
 interface StockAdjustmentFormProps {
   id: number | null;
   onCancel: () => void;
   onSuccess: () => void;
 }
 
-// â”€â”€â”€ Memoised item row (renders only when *its own* data changes) â”€â”€â”€
+// ——————————————————————————————————————————————————————————————————————————————
+// Memoised item row (renders only when *its own* data changes)
 interface ItemRowProps {
   index: number;
-  control: Control<any>;
-  productOptions: any[];
+  control: Control<StockAdjustmentFormValues>;
+  productOptions: { value: string; label: string; item: StockAdjustmentProduct }[];
   rfidProductIds: Set<number>;
   isProductsLoading: boolean;
-  isRfidLoading: boolean;
   isLoadingDetails: boolean;
-  unitOrder?: number;
-  onProductSelect: (index: number, product: any) => void;
+  onProductSelect: (index: number, product: StockAdjustmentProduct) => void;
   onRemove: (index: number) => void;
-  setValue: UseFormSetValue<any>;
+  setValue: UseFormSetValue<StockAdjustmentFormValues>;
   onOpenScanner: (index: number) => void;
   isReadOnly?: boolean;
 }
@@ -83,7 +77,6 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
   productOptions,
   rfidProductIds,
   isProductsLoading,
-  isRfidLoading,
   isLoadingDetails,
   onProductSelect,
   onRemove,
@@ -95,7 +88,6 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
   const [productInputValue, setProductInputValue] = useState("");
   // useWatch subscribes to specific fields — only this row re-renders when its own data changes.
   const productId = useWatch({ control, name: `items.${index}.product_id` });
-  const productName = useWatch({ control, name: `items.${index}.product_name` });
   const unitName = useWatch({ control, name: `items.${index}.unit_name` });
   const quantity = useWatch({ control, name: `items.${index}.quantity` });
   const costPerUnit = useWatch({ control, name: `items.${index}.cost_per_unit` });
@@ -171,7 +163,7 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
                     opt.item.product_code?.toLowerCase().includes(productSearch.toLowerCase())
                   );
                   if (filtered.length === 0) return <ComboboxEmpty>No products found.</ComboboxEmpty>;
-                  return filtered.map((option: any) => {
+                  return filtered.map((option) => {
                     const p = option.item;
                     const pId = p.product_id || p.id;
                     const pHasRfid = rfidProductIds.has(Number(pId));
@@ -352,23 +344,24 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
   );
 });
 
-// â”€â”€â”€ Summary bar (subscribes only to items array) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ——————————————————————————————————————————————————————————————————————————————
 function FormSummary({
   control,
   fieldCount,
   isRfidLoading,
 }: {
-  control: Control<any>;
+  control: Control<StockAdjustmentFormValues>;
   fieldCount: number;
   isRfidLoading: boolean;
 }) {
-  const items = useWatch({ control, name: "items" }) || [];
+  const items = useWatch({ control, name: "items" });
 
   const { totalQuantity, totalAmount, rfidItemsCount } = useMemo(() => {
+    const currentItems = items || [];
     let qty = 0;
     let amt = 0;
     let rfid = 0;
-    for (const item of items) {
+    for (const item of currentItems) {
       const q = Number(item?.quantity || 0);
       const c = Number(item?.cost_per_unit || 0);
       qty += q;
@@ -435,13 +428,13 @@ function FormSummary({
   );
 }
 
-// â”€â”€â”€ RFID warning banner (subscribes only to items array) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function RfidBanner({ control }: { control: Control<any> }) {
-  const items = useWatch({ control, name: "items" }) || [];
-  const rfidItemsCount = useMemo(
-    () => items.filter((item: any) => item?.has_rfid).length,
-    [items]
-  );
+// ——————————————————————————————————————————————————————————————————————————————
+function RfidBanner({ control }: { control: Control<StockAdjustmentFormValues> }) {
+  const items = useWatch({ control, name: "items" });
+  const rfidItemsCount = useMemo(() => {
+    const currentItems = (items || []) as StockAdjustmentItem[];
+    return currentItems.filter((item) => item?.has_rfid).length;
+  }, [items]);
 
   if (rfidItemsCount === 0) return null;
 
@@ -454,17 +447,16 @@ function RfidBanner({ control }: { control: Control<any> }) {
         <h4 className="font-bold text-amber-900 dark:text-amber-400">
           RFID Tracked Items Detected
         </h4>
-        <p className="text-sm text-amber-800 dark:text-amber-300 opacity-90">
+        <p className="text-sm text-amber-800 dark:text-amber-300 opacity-90 text-[11px] font-medium mt-1">
           {rfidItemsCount} item(s) in this adjustment have RFID tags in
-          inventory. Please ensure proper RFID tag management during stock
-          adjustment.
+          inventory. Please ensure proper RFID tag management.
         </p>
       </div>
     </div>
   );
 }
 
-// â”€â”€â”€ Main form component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ——————————————————————————————————————————————————————————————————————————————
 export function StockAdjustmentForm({
   id,
   onCancel,
@@ -474,15 +466,12 @@ export function StockAdjustmentForm({
     fetchById,
     createAdjustment,
     updateAdjustment,
-    checkRFID,
-    fetchProducts,
     fetchProductsBySupplier,
     products = [],
     suppliers = [],
     isProductsLoading,
     isSuppliersLoading,
     isRfidLoading,
-    isInventoryLoading,
     branches,
     fetchInventory,
     fetchBranchRfidData,
@@ -499,7 +488,7 @@ export function StockAdjustmentForm({
   const [showRFIDScanner, setShowRFIDScanner] = useState(false);
   const [showPostConfirmation, setShowPostConfirmation] = useState(false);
   const [scannerContext, setScannerContext] = useState<{ index: number; productName: string } | null>(null);
-  const [pendingRFIDProduct, setPendingRFIDProduct] = useState<any>(null);
+  const [pendingRFIDProduct, setPendingRFIDProduct] = useState<StockAdjustmentProduct | null>(null);
   const [isScannerPreparing, setIsScannerPreparing] = useState(false);
   const [branchInputValue, setBranchInputValue] = useState("");
   const [supplierInputValue, setSupplierInputValue] = useState("");
@@ -517,15 +506,16 @@ export function StockAdjustmentForm({
     }));
   }, [products]);
 
-  const form = useForm<any>({
+  const form = useForm<StockAdjustmentFormValues>({
     resolver: zodResolver(StockAdjustmentFormSchema),
     defaultValues: {
       doc_no: "", // Will be fetched via effect
-      branch_id: undefined,
-      supplier_id: undefined,
+      branch_id: 0,
+      supplier_id: 0,
       type: "IN",
       remarks: "",
       items: [],
+      isPosted: false,
     },
   });
 
@@ -534,7 +524,7 @@ export function StockAdjustmentForm({
     name: "items",
   });
 
-  // â”€â”€ Load data for edit mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——————————————————————————————————————————————————————————————————————————————
   useEffect(() => {
     if (id) {
       const loadData = async () => {
@@ -544,15 +534,15 @@ export function StockAdjustmentForm({
 
           // --- Auto-Infer Supplier ID ---
           let finalSupplierId = data.supplier_id
-            ? (typeof data.supplier_id === "object" ? (data.supplier_id as any).id : data.supplier_id)
-            : undefined;
+            ? (typeof data.supplier_id === "object" ? (data.supplier_id as { id: number }).id : data.supplier_id)
+            : 0;
 
           // If header supplier is missing, try to get it from the first item with an inferred supplier
+          // If header supplier is missing, try to get it from the first item with an inferred supplier
           if (!finalSupplierId && data.items && data.items.length > 0) {
-            const firstWithInferred = data.items.find((item: any) => item.inferred_supplier_id);
+            const firstWithInferred = data.items.find((item) => (item as StockAdjustmentItem).inferred_supplier_id);
             if (firstWithInferred) {
-              finalSupplierId = firstWithInferred.inferred_supplier_id;
-              console.log("[FORM] Inferred supplier_id from items:", finalSupplierId);
+              finalSupplierId = (firstWithInferred as StockAdjustmentItem).inferred_supplier_id || 0;
             }
           }
 
@@ -561,41 +551,41 @@ export function StockAdjustmentForm({
             branch_id:
               typeof data.branch_id === "object"
                 ? data.branch_id?.id
-                : data.branch_id,
+                : (data.branch_id || 0),
             supplier_id: finalSupplierId,
             type: data.type,
             remarks: data.remarks || "",
-            isPosted: data.isPosted === true || (typeof data.isPosted === 'object' && (data.isPosted as any)?.data?.[0] === 1),
+            isPosted: !!data.isPosted,
             items: data.items.map((item) => ({
               ...item,
               product_id: String(
-                (item.product_id as any)?.id ||
-                (item.product_id as any)?.product_id ||
+                (item.product_id as { id?: number; product_id?: number })?.id ||
+                (item.product_id as { id?: number; product_id?: number })?.product_id ||
                 item.product_id
               ),
               product_name:
-                (item.product_id as any)?.product_name ||
+                (item.product_id as { product_name?: string })?.product_name ||
                 item.product_name ||
                 "Unknown Product",
               product_code:
-                (item.product_id as any)?.product_code ||
+                (item.product_id as { product_code?: string })?.product_code ||
                 item.product_code ||
                 "",
               cost_per_unit:
-                (item.product_id as any)?.cost_per_unit ||
-                (item.product_id as any)?.price_per_unit ||
+                (item.product_id as { cost_per_unit?: number; price_per_unit?: number })?.cost_per_unit ||
+                (item.product_id as { cost_per_unit?: number; price_per_unit?: number })?.price_per_unit ||
                 item.cost_per_unit ||
                 0,
               current_stock: item.current_stock || 0,
               unit_name:
                 item.unit_name ||
-                (item.product_id as any)?.unit_name ||
+                (item.product_id as { unit_name?: string })?.unit_name ||
                 "pcs",
-              unit_order: (item.product_id as any)?.unit_of_measurement?.order || 1,
+              unit_order: (item.product_id as { unit_of_measurement?: { order: number } })?.unit_of_measurement?.order || 1,
               rfid_tags: item.rfid_tags || [],
               rfid_count: item.rfid_count || 0,
               db_id: item.id,
-              has_rfid: (item.rfid_tags && item.rfid_tags.length > 0) || rfidProductIds.has(Number((item.product_id as any)?.product_id || (item.product_id as any)?.id || item.product_id)),
+              has_rfid: (item.rfid_tags && item.rfid_tags.length > 0) || rfidProductIds.has(Number((item.product_id as { id?: number; product_id?: number })?.product_id || (item.product_id as { id?: number; product_id?: number })?.id || item.product_id)),
             })),
             posted_by: data.posted_by,
             postedAt: data.postedAt,
@@ -612,7 +602,7 @@ export function StockAdjustmentForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // â”€â”€ Stable branch_id watcher (no infinite loop) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——————————————————————————————————————————————————————————————————————————————
   const watchedBranchId = useWatch({ control: form.control, name: "branch_id" });
   const watchedSupplierId = useWatch({ control: form.control, name: "supplier_id" });
 
@@ -623,7 +613,7 @@ export function StockAdjustmentForm({
     }
   }, [watchedBranchId, fetchBranchRfidData, fetchBranchInventory]);
 
-  // â”€â”€ Smart Document Numbering Effect â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——————————————————————————————————————————————————————————————————————————————
   useEffect(() => {
     if (!id) {
       const updateDocNo = async () => {
@@ -635,7 +625,7 @@ export function StockAdjustmentForm({
     }
   }, [id, fetchNextDocNo, form]);
 
-  // â”€â”€ Watch type change to update doc_no â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——————————————————————————————————————————————————————————————————————————————
   const watchedTypeToUpdateDocNo = useWatch({ control: form.control, name: "type" });
   useEffect(() => {
     if (!id && watchedTypeToUpdateDocNo) {
@@ -647,19 +637,19 @@ export function StockAdjustmentForm({
     }
   }, [id, watchedTypeToUpdateDocNo, fetchNextDocNo, form]);
 
-  // â”€â”€ Fetch products when supplier changes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——————————————————————————————————————————————————————————————————————————————
   useEffect(() => {
     if (watchedSupplierId) {
       fetchProductsBySupplier(Number(watchedSupplierId));
     }
   }, [watchedSupplierId, fetchProductsBySupplier]);
 
-  // â”€â”€ Form loading state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——————————————————————————————————————————————————————————————————————————————
   const isFormLoading = id ? loading : false;
   const isPosted = useWatch({ control: form.control, name: "isPosted" });
   const isReadOnly = !!isPosted;
 
-  // â”€â”€ Post handler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——————————————————————————————————————————————————————————————————————————————
   const handlePost = async () => {
     if (!id) return;
     setShowPostConfirmation(true);
@@ -673,32 +663,29 @@ export function StockAdjustmentForm({
       await postAdjustment(id);
       toast.success("Adjustment Posted Successfully");
       onSuccess();
-    } catch (error: any) {
-      toast.error(error.message || "Failed to post adjustment");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to post adjustment");
     } finally {
       setLoading(false);
     }
   };
 
-  // â”€â”€ Submit handler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——————————————————————————————————————————————————————————————————————————————
   const onSubmit = useCallback(
-    async (values: any) => {
-      console.log("!!! SUBMIT TRIGGERED !!!", values);
+    async (values: StockAdjustmentFormValues) => {
       setLoading(true);
       try {
         if (id) {
-          console.log("Updating adjustment:", id);
           await updateAdjustment(id, values);
           toast.success("Adjustment Updated Successfully");
         } else {
-          console.log("Creating adjustment...");
           await createAdjustment(values);
           toast.success("Adjustment Created Successfully");
         }
         onSuccess();
-      } catch (error: any) {
-        console.error("SUBMIT ERROR:", error);
-        toast.error(error.message || "Failed to save adjustment");
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Failed to save adjustment";
+        toast.error(message);
       } finally {
         setLoading(false);
       }
@@ -706,7 +693,7 @@ export function StockAdjustmentForm({
     [id, createAdjustment, updateAdjustment, onSuccess]
   );
 
-  // â”€â”€ Add empty item row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——————————————————————————————————————————————————————————————————————————————
   const handleAddProduct = useCallback(() => {
     const supplierId = form.getValues("supplier_id");
     if (!supplierId) {
@@ -737,12 +724,11 @@ export function StockAdjustmentForm({
     }
   }, [scannerContext, form]);
 
-  // â”€â”€ Product selection (optimistic + background RFID/inventory) â”€â”€â”€â”€â”€
+  // ——————————————————————————————————————————————————————————————————————————————
   const handleProductSelect = useCallback(
-    async (index: number, product: any) => {
+    async (index: number, product: StockAdjustmentProduct) => {
       if (!product) return;
 
-      // Store the specific record ID for correct dropdown matching, but keep item properties
       const selectionId = String(product.id || product.product_id);
       const productId = product.product_id || product.id;
 
@@ -756,19 +742,15 @@ export function StockAdjustmentForm({
       form.setValue(`items.${index}.description`, product.description || "No description available.");
       form.setValue(`items.${index}.unit_order`, product.unit_of_measurement?.order || 1);
 
-      // â‘¡ Use cached inventoryMap for instant current stock lookup
       const cachedStock = inventoryMap.get(Number(productId)) ?? 0;
       form.setValue(`items.${index}.current_stock`, cachedStock);
 
       const unitOrder = product.unit_of_measurement?.order;
-      const unitId = product.unit_of_measurement?.unit_id || product.unit_id;
       const hasRfid = rfidProductIds.has(Number(productId));
 
-      // â‘¢ Update RFID status instantly from pre-fetched data
       form.setValue(`items.${index}.has_rfid`, hasRfid);
-      form.setValue(`items.${index}.rfid_count`, 0); // Reset count until scanned for order 3
+      form.setValue(`items.${index}.rfid_count`, 0);
 
-      // --- Optimization: Trigger scanner logic before awaiting anything ---
       if (unitOrder === 3) {
         setScannerContext({ index, productName: product.product_name });
         setIsScannerPreparing(true);
@@ -779,14 +761,12 @@ export function StockAdjustmentForm({
           icon: <Tag className="h-4 w-4 text-blue-500" />,
         });
 
-        // Reduced delay for faster response
         setTimeout(() => {
           setIsScannerPreparing(false);
           setShowRFIDScanner(true);
         }, 300);
       }
 
-      // Background data fetching (non-blocking for the scanner)
       (async () => {
         try {
           const branchId = form.getValues("branch_id");
@@ -796,9 +776,7 @@ export function StockAdjustmentForm({
 
           form.setValue(`items.${index}.current_stock`, currentStock);
 
-          if (!unitOrder && !hasRfid) {
-            // ...
-          } else if (unitOrder !== 3 && hasRfid) {
+          if (unitOrder !== 3 && hasRfid) {
             setPendingRFIDProduct({
               ...product,
               rfidData: { quantity: 1 },
@@ -818,11 +796,11 @@ export function StockAdjustmentForm({
         }
       })();
     },
-    [fetchInventory, form, inventoryMap]
+    [fetchInventory, form, inventoryMap, rfidProductIds]
   );
 
   const handleOpenScanner = useCallback((index: number) => {
-    const productName = form.getValues(`items.${index}.product_name`);
+    const productName = form.getValues(`items.${index}.product_name`) ?? "Product";
     setScannerContext({ index, productName });
 
     setIsScannerPreparing(true);
@@ -837,14 +815,12 @@ export function StockAdjustmentForm({
     }, 600);
   }, [form]);
 
-  // â”€â”€ Stable form watcher values â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const watchedBranchIdForSelect = useWatch({ control: form.control, name: "branch_id" });
   const watchedSupplierIdForSelect = useWatch({ control: form.control, name: "supplier_id" });
   const watchedType = useWatch({ control: form.control, name: "type" });
 
   return (
     <div className="flex flex-col gap-6 p-8 max-w-7xl mx-auto w-full overflow-y-auto bg-background min-h-screen">
-      {/* Module Header */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-3">
           <div className="bg-blue-600 p-2 rounded-lg shadow-sm">
@@ -880,8 +856,8 @@ export function StockAdjustmentForm({
             <Badge
               variant="outline"
               className={`px-3 py-1 font-bold shadow-sm ${isPosted
-                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800/50 uppercase tracking-wider'
-                : 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800/50 uppercase tracking-wider'
+                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:blue-400 border-blue-200 dark:border-blue-800/50 uppercase tracking-wider'
+                : 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:amber-400 border-amber-200 dark:border-amber-800/50 uppercase tracking-wider'
                 }`}
             >
               {isPosted ? 'Posted' : 'Draft / Unposted'}
@@ -897,7 +873,7 @@ export function StockAdjustmentForm({
             <div className="flex items-center gap-2 bg-blue-50/50 dark:bg-blue-900/10 px-3 py-1.5 rounded-lg border border-blue-100 dark:border-blue-800/30">
               <span className="text-[10px] uppercase font-black text-blue-400">Posted At:</span>
               <span className="text-xs font-bold text-blue-700 dark:text-blue-300">
-                {form.getValues("postedAt") ? format(new Date(form.getValues("postedAt")), "MMMM d, yyyy, hh:mm a") : "-"}
+                {form.getValues().postedAt ? format(new Date(form.getValues().postedAt as string), "MMMM d, yyyy, hh:mm a") : "-"}
               </span>
             </div>
             <div className="flex items-center gap-2 bg-blue-50/50 dark:bg-blue-900/10 px-3 py-1.5 rounded-lg border border-blue-100 dark:border-blue-800/30">
@@ -915,7 +891,6 @@ export function StockAdjustmentForm({
 
       <RfidBanner control={form.control} />
 
-      {/* RFID Scanner Preparation Overlay */}
       {isScannerPreparing && (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-[2px] z-[100] flex items-center justify-center animate-in fade-in duration-300">
           <Card className="w-full max-w-sm border-none shadow-2xl bg-card overflow-hidden p-0">
@@ -965,7 +940,7 @@ export function StockAdjustmentForm({
                   onValueChange={(v: string | null) => {
                     if (!v) {
                       setBranchInputValue("");
-                      form.setValue("branch_id", undefined, { shouldValidate: true });
+                      form.setValue("branch_id", 0, { shouldValidate: true });
                       return;
                     }
                     const found = branches.find(b => String(b.id) === v);
@@ -974,7 +949,6 @@ export function StockAdjustmentForm({
                   }}
                   inputValue={branchInputValue}
                   onInputValueChange={(v: string) => {
-                    // base-ui fires this with the raw ID after selection — show the name instead
                     const matched = branches.find(b => String(b.id) === v);
                     if (matched) {
                       setBranchInputValue(`${matched.branch_name} (${matched.branch_code})`);
@@ -996,15 +970,23 @@ export function StockAdjustmentForm({
                     <ComboboxList>
                       {(() => {
                         const filtered = branches.filter(b =>
-                          b.branch_name.toLowerCase().includes(branchSearch.toLowerCase()) ||
-                          b.branch_code.toLowerCase().includes(branchSearch.toLowerCase())
+                           b.branch_name.toLowerCase().includes(branchSearch.toLowerCase()) ||
+                           (b.branch_code ?? "").toLowerCase().includes(branchSearch.toLowerCase())
                         );
                         if (filtered.length === 0) return <ComboboxEmpty>No branches found.</ComboboxEmpty>;
-                        return filtered.map(b => (
-                          <ComboboxItem key={b.id} value={String(b.id)}>
-                            <span className="font-medium">{b.branch_name} ({b.branch_code})</span>
-                          </ComboboxItem>
-                        ));
+                        return filtered.map(b => {
+                          const bCode = b.branch_code ?? "";
+                          return (
+                            <ComboboxItem key={b.id} value={String(b.id)}>
+                              <div className="flex items-center justify-between w-full">
+                                <span className="font-medium">{b.branch_name}</span>
+                                <span className="text-[10px] font-bold text-muted-foreground/40 font-mono">
+                                  {bCode}
+                                </span>
+                              </div>
+                            </ComboboxItem>
+                          );
+                        });
                       })()}
                     </ComboboxList>
                   </ComboboxContent>
@@ -1025,7 +1007,7 @@ export function StockAdjustmentForm({
                   onValueChange={(v: string | null) => {
                     if (!v) {
                       setSupplierInputValue("");
-                      form.setValue("supplier_id", undefined, { shouldValidate: true });
+                      form.setValue("supplier_id", 0, { shouldValidate: true });
                       return;
                     }
                     const found = suppliers.find(s => String(s.id) === v);
@@ -1034,7 +1016,6 @@ export function StockAdjustmentForm({
                   }}
                   inputValue={supplierInputValue}
                   onInputValueChange={(v: string) => {
-                    // base-ui fires this with the raw ID after selection — show the name instead
                     const matched = suppliers.find(s => String(s.id) === v);
                     if (matched) {
                       setSupplierInputValue(`${matched.supplier_name}${matched.supplier_shortcut ? ` (${matched.supplier_shortcut})` : ""}`);
@@ -1057,7 +1038,7 @@ export function StockAdjustmentForm({
                       {(() => {
                         const filtered = suppliers.filter(s =>
                           s.supplier_name.toLowerCase().includes(supplierSearch.toLowerCase()) ||
-                          (s.supplier_shortcut && s.supplier_shortcut.toLowerCase().includes(supplierSearch.toLowerCase()))
+                          (s.supplier_shortcut ?? "").toLowerCase().includes(supplierSearch.toLowerCase())
                         );
                         if (filtered.length === 0) {
                           return (
@@ -1068,8 +1049,9 @@ export function StockAdjustmentForm({
                         }
                         return filtered.map(s => (
                           <ComboboxItem key={s.id} value={String(s.id)}>
-                            <span className="font-medium">
-                              {s.supplier_name} {s.supplier_shortcut ? `(${s.supplier_shortcut})` : ""}
+                            <span className="font-medium">{s.supplier_name}</span>
+                            <span className="text-[10px] font-bold text-muted-foreground/40 font-mono italic ml-2">
+                              {s.supplier_shortcut || ""}
                             </span>
                           </ComboboxItem>
                         ));
@@ -1082,14 +1064,6 @@ export function StockAdjustmentForm({
                     {String(form.formState.errors.supplier_id.message)}
                   </p>
                 )}
-                {id && !watchedSupplierIdForSelect && (
-                  <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/30 rounded-lg p-3 flex items-start gap-2 mt-2">
-                    <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5" />
-                    <p className="text-xs text-amber-700 dark:text-amber-300 font-medium">
-                      Supplier information is missing for this record. Please select the correct supplier to unlock product management.
-                    </p>
-                  </div>
-                )}
               </div>
             </div>
 
@@ -1099,7 +1073,7 @@ export function StockAdjustmentForm({
               </Label>
               <RadioGroup
                 value={watchedType}
-                onValueChange={(v) => form.setValue("type", v)}
+                onValueChange={(v) => form.setValue("type", v as "IN" | "OUT")}
                 className="flex gap-4 pt-1"
                 disabled={isReadOnly}
               >
@@ -1199,18 +1173,11 @@ export function StockAdjustmentForm({
                         : "Select a supplier first to see the products linked to them."}
                     </p>
                     {form.formState.errors.items &&
-                      (form.formState.errors.items as any).message && (
+                      form.formState.errors.items.message && (
                         <p className="text-sm text-red-500 font-bold mt-4">
-                          {(form.formState.errors.items as any).message}
+                          {form.formState.errors.items.message}
                         </p>
                       )}
-                    {!watchedSupplierIdForSelect && (
-                      <div className="mt-8">
-                        <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest bg-muted px-3 py-1.5 rounded-full border border-border shadow-sm">
-                          Supplier selection filter active
-                        </span>
-                      </div>
-                    )}
                   </div>
                 ) : (
                   <div className="p-0">
@@ -1222,7 +1189,6 @@ export function StockAdjustmentForm({
                         productOptions={productOptions}
                         rfidProductIds={rfidProductIds}
                         isProductsLoading={isProductsLoading}
-                        isRfidLoading={isRfidLoading}
                         isLoadingDetails={loadingRows.has(index)}
                         onProductSelect={handleProductSelect}
                         onRemove={remove}

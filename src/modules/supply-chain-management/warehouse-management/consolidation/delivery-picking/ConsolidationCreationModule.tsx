@@ -33,7 +33,7 @@ export default function ConsolidationCreationModule({
     const [branches, setBranches] = useState<BranchDto[]>([]);
     const [selectedBranchId, setSelectedBranchId] = useState<number | undefined>(undefined);
 
-    const [availablePdps, setAvailablePdps] = useState<any[]>([]);
+    const [availablePdps, setAvailablePdps] = useState<unknown[]>([]);
     const [isLoadingPdps, setIsLoadingPdps] = useState(false);
     const [isBranchesLoading, setIsBranchesLoading] = useState(true);
 
@@ -149,10 +149,10 @@ export default function ConsolidationCreationModule({
 
     return (
         <TooltipProvider>
-            {/* 🚀 FIX: Absolute positioning and strict flex boundaries to prevent overflow */}
+            {/* Absolute positioning and strict flex boundaries to prevent overflow */}
             <div className="absolute inset-0 flex flex-col bg-background text-foreground p-4 md:p-6 gap-4 animate-in fade-in duration-300">
 
-                {/* 📌 HEADER */}
+                {/* HEADER */}
                 <header className="flex-none flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-card p-4 rounded-xl shadow-sm border border-border shrink-0 z-10">
                     <div className="flex items-center gap-4">
                         <div className="bg-primary p-2 sm:p-2.5 rounded-lg text-primary-foreground shadow-lg shadow-primary/20">
@@ -179,17 +179,17 @@ export default function ConsolidationCreationModule({
                     </div>
                 </header>
 
-                {/* 📌 MAIN LAYOUT: Switches to column on small screens, flex-row on desktop */}
+                {/* MAIN LAYOUT: Switches to column on small screens, flex-row on desktop */}
                 <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0 overflow-y-auto lg:overflow-hidden pb-4 lg:pb-0">
 
-                    {/* 🚚 LEFT COLUMN: Pending Plans */}
+                    {/* LEFT COLUMN: Pending Plans */}
                     <div className="flex flex-col w-full lg:w-[35%] xl:w-[30%] shrink-0 bg-card border border-border rounded-xl shadow-sm overflow-hidden min-h-[400px] lg:min-h-0">
                         <div className="flex-none p-4 border-b bg-muted/20 flex items-center justify-between">
                             <h2 className="font-bold text-xs uppercase tracking-wider italic">Pending Plans</h2>
                             <Badge variant="outline" className="font-bold text-primary border-primary/20">{availablePdps.length}</Badge>
                         </div>
 
-                        {/* 🚀 FIX: Bulletproof ScrollArea container */}
+                        {/* Bulletproof ScrollArea container */}
                         <div className="flex-1 relative min-h-0">
                             <ScrollArea className="absolute inset-0 h-full">
                                 <div className="p-3">
@@ -211,29 +211,32 @@ export default function ConsolidationCreationModule({
                                     ) : (
                                         <Table>
                                             <TableBody>
-                                                {availablePdps.map(pdp => (
-                                                    <TableRow
-                                                        key={pdp.dispatchId}
-                                                        className={`cursor-pointer border-border hover:bg-muted/50 transition-colors ${selectedIds.includes(pdp.dispatchId) ? "bg-accent/50 border-l-2 border-l-primary" : "border-l-2 border-l-transparent"}`}
-                                                        onClick={() => toggleSelection(pdp.dispatchId)}
-                                                    >
-                                                        <TableCell className="w-10">
-                                                            <Checkbox
-                                                                checked={selectedIds.includes(pdp.dispatchId)}
-                                                                onCheckedChange={() => toggleSelection(pdp.dispatchId)}
-                                                            />
-                                                        </TableCell>
-                                                        <TableCell className="py-3">
-                                                            <div className="font-bold text-xs sm:text-sm">{pdp.dispatchNo}</div>
-                                                            <div className="text-[9px] sm:text-[10px] text-muted-foreground mt-1 line-clamp-1">
-                                                                📍 {pdp.cluster?.clusterName} | 👤 {pdp.driver?.firstName}
-                                                            </div>
-                                                        </TableCell>
-                                                        <TableCell className="text-right font-black text-[10px] sm:text-xs">
-                                                            ₱{pdp.totalAmount?.toLocaleString()}
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))}
+                                                {availablePdps.map((item) => {
+                                                    const pdp = item as Record<string, unknown>;
+                                                    return (
+                                                        <TableRow
+                                                            key={String(pdp['dispatchId'])}
+                                                            className={`cursor-pointer border-border hover:bg-muted/50 transition-colors ${selectedIds.includes(Number(pdp['dispatchId'])) ? "bg-accent/50 border-l-2 border-l-primary" : "border-l-2 border-l-transparent"}`}
+                                                            onClick={() => toggleSelection(Number(pdp['dispatchId']))}
+                                                        >
+                                                            <TableCell className="w-10">
+                                                                <Checkbox
+                                                                    checked={selectedIds.includes(Number(pdp['dispatchId']))}
+                                                                    onCheckedChange={() => toggleSelection(Number(pdp['dispatchId']))}
+                                                                />
+                                                            </TableCell>
+                                                            <TableCell className="py-3">
+                                                                <div className="font-bold text-xs sm:text-sm">{String(pdp['dispatchNo'])}</div>
+                                                                <div className="text-[9px] sm:text-[10px] text-muted-foreground mt-1 line-clamp-1">
+                                                                    📍 {(pdp['cluster'] as Record<string, unknown>)?.['clusterName'] as string} | 👤 {(pdp['driver'] as Record<string, unknown>)?.['firstName'] as string}
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell className="text-right font-black text-[10px] sm:text-xs">
+                                                                ₱{Number(pdp['totalAmount']).toLocaleString()}
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    );
+                                                })}
                                             </TableBody>
                                         </Table>
                                     )}
@@ -242,7 +245,7 @@ export default function ConsolidationCreationModule({
                         </div>
                     </div>
 
-                    {/* 📦 RIGHT COLUMN: Aggregation Preview */}
+                    {/* RIGHT COLUMN: Aggregation Preview */}
                     <div className="flex flex-col flex-1 bg-card border border-border rounded-xl shadow-sm overflow-hidden min-h-[500px] lg:min-h-0 relative">
                         <div className="flex-none p-4 border-b bg-muted/20 flex items-center justify-between">
                             <div className="flex items-center gap-2">
@@ -256,7 +259,7 @@ export default function ConsolidationCreationModule({
                             )}
                         </div>
 
-                        {/* 🚀 FIX: Bulletproof ScrollArea container */}
+                        {/* Bulletproof ScrollArea container */}
                         <div className="flex-1 relative min-h-0">
                             <ScrollArea className="absolute inset-0 h-full">
                                 {isLoadingPreview ? (
@@ -337,7 +340,7 @@ export default function ConsolidationCreationModule({
                             </ScrollArea>
                         </div>
 
-                        {/* 📌 FOOTER */}
+                        {/* FOOTER */}
                         <footer className="flex-none p-4 border-t border-border bg-card z-10">
                             <Button
                                 onClick={handleGenerateBatch}

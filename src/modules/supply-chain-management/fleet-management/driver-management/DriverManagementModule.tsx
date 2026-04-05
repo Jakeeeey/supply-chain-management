@@ -15,7 +15,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { toast } from "sonner";
 import type { DriverWithDetails } from "./types";
 
 type ComboboxOption = { value: string; label: string };
@@ -172,7 +171,6 @@ export default function DriverManagementModule() {
                 ) : (
                     <DriverTable
                         drivers={slicedDrivers}
-                        users={users}
                         loading={loading}
                         onEdit={handleEdit}
                         currentPage={currentPage}

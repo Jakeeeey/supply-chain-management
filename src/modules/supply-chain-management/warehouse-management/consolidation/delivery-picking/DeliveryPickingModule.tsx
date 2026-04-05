@@ -34,7 +34,7 @@ export default function DeliveryPickingModule() {
     const [branches, setBranches] = useState<BranchDto[]>([]);
     const [selectedBranchId, setSelectedBranchId] = useState<number | undefined>(undefined);
 
-    const [globalCounts, setGlobalCounts] = useState<Record<string, any>>({});
+    const [globalCounts, setGlobalCounts] = useState<Record<string, number>>({});
 
     const [errorStatus, setErrorStatus] = useState<number | null>(null);
 
@@ -52,19 +52,23 @@ export default function DeliveryPickingModule() {
     const [totalPages, setTotalPages] = useState(0);
     const [totalElements, setTotalElements] = useState(0);
 
-    // 🚀 INITIALIZE BRANCHES
+    // INITIALIZE BRANCHES
     useEffect(() => {
         const loadBranches = async () => {
             const activeBranches = await fetchActiveBranches();
-            setBranches(activeBranches);
-            if (activeBranches.length > 0 && !selectedBranchId) {
-                setSelectedBranchId(activeBranches[0].id);
+            if (activeBranches) {
+                setBranches(activeBranches);
+                if (activeBranches.length > 0 && !selectedBranchId) {
+                    setSelectedBranchId(activeBranches[0].id);
+                }
+            } else {
+                setBranches([]);
             }
         };
         loadBranches();
     }, [selectedBranchId]);
 
-    // 🚀 DEBOUNCE SEARCH
+    // DEBOUNCE SEARCH
     useEffect(() => {
         const handler = setTimeout(() => {
             setDebouncedSearch(searchQuery);
@@ -75,7 +79,7 @@ export default function DeliveryPickingModule() {
 
     const loadSummary = useCallback(async () => {
         const summary = await fetchConsolidatorSummary();
-        if (summary) setGlobalCounts(summary);
+        if (summary) setGlobalCounts(summary as Record<string, number>);
     }, []);
 
     const loadTableData = useCallback(async () => {
@@ -130,7 +134,7 @@ export default function DeliveryPickingModule() {
     return (
         <div className="p-3 sm:p-6 md:p-8 space-y-6 md:space-y-8 bg-background text-foreground min-h-screen pb-20 transition-all duration-500 ease-in-out">
 
-            {/* --- 💎 MODERN RESPONSIVE HEADER --- */}
+            {/* --- MODERN RESPONSIVE HEADER --- */}
             <div className="flex flex-col xl:flex-row justify-between xl:items-center gap-4 xl:gap-6 sticky top-0 z-30 py-2 sm:py-4 bg-background/90 backdrop-blur-md border-b border-border/40 xl:border-transparent transition-all">
 
                 {/* Title & Branch Section */}
@@ -172,7 +176,7 @@ export default function DeliveryPickingModule() {
 
                     {/* Buttons Row (Mobile: Side-by-side, Desktop: Inline) */}
                     <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
-                        {/* Secondary Action (Moved to left on mobile for hierarchy) */}
+                        {/* Secondary Action */}
                         <Button
                             variant="outline"
                             className="flex-1 sm:flex-none h-10 sm:h-12 gap-1.5 sm:gap-2 shadow-sm font-black uppercase text-[9px] sm:text-[10px] tracking-widest border-border/60 bg-card hover:bg-accent rounded-xl px-3 sm:px-5"
@@ -218,7 +222,7 @@ export default function DeliveryPickingModule() {
                 </div>
             </div>
 
-            {/* --- 📊 ANALYTICS OVERVIEW --- */}
+            {/* --- ANALYTICS OVERVIEW --- */}
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 delay-150">
                 <StatusSummaryCards
                     globalCounts={globalCounts}
@@ -227,7 +231,7 @@ export default function DeliveryPickingModule() {
                 />
             </div>
 
-            {/* --- 📦 MAIN DATA GRID --- */}
+            {/* --- MAIN DATA GRID --- */}
             <Card className="border-border/30 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.1)] sm:shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] overflow-hidden bg-card/20 backdrop-blur-sm transition-all rounded-xl sm:rounded-[2rem] animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300">
                 <CardContent className="p-0">
                     {!selectedBranchId ? (
@@ -268,7 +272,7 @@ export default function DeliveryPickingModule() {
                 </CardContent>
             </Card>
 
-            {/* --- 🛠️ SLIDE-OUT INTERFACES --- */}
+            {/* --- SLIDE-OUT INTERFACES --- */}
             <ConsolidatorDetailSheet
                 consolidator={selectedConsolidator}
                 isOpen={!!selectedConsolidator}

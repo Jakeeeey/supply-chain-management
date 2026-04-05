@@ -18,7 +18,7 @@ import { decodeJwtPayload } from "@/lib/auth-utils";
 
 export const runtime = "nodejs";
 
-function json(res: any, status = 200) {
+function json(res: unknown, status = 200) {
   return NextResponse.json(res, { status });
 }
 
@@ -103,9 +103,10 @@ export async function GET(req: NextRequest) {
       default:
         return json({ error: `Unknown action: ${action}` }, 400);
     }
-  } catch (error: any) {
-    console.error("RTS API GET Error:", error);
-    return json({ error: error.message || "Internal server error" }, 500);
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("RTS API GET Error:", err);
+    return json({ error: err.message || "Internal server error" }, 500);
   }
 }
 
@@ -138,11 +139,12 @@ export async function POST(req: NextRequest) {
       encoder_id: userId ? Number(userId) : undefined,
     };
 
-    const data = await createTransaction(payloadWithAudit as any);
+    const data = await createTransaction(payloadWithAudit as Parameters<typeof createTransaction>[0]);
     return json({ data }, 201);
-  } catch (error: any) {
-    console.error("RTS API POST Error:", error);
-    return json({ error: error.message || "Failed to create transaction" }, 500);
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("RTS API POST Error:", err);
+    return json({ error: err.message || "Failed to create transaction" }, 500);
   }
 }
 
@@ -177,12 +179,13 @@ export async function PATCH(req: NextRequest) {
       ...(parsed.data.is_posted === 1 ? { date_posted: new Date().toISOString() } : {}),
     };
 
-    await updateTransaction(id, payloadWithAudit as any);
+    await updateTransaction(id, payloadWithAudit as Parameters<typeof updateTransaction>[1]);
     return json({ data: { success: true } });
-  } catch (error: any) {
-    console.error("RTS API PATCH Error:", error);
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("RTS API PATCH Error:", err);
     return json(
-      { error: error.message || "Failed to update transaction" },
+      { error: err.message || "Failed to update transaction" },
       500,
     );
   }

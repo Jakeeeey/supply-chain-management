@@ -10,7 +10,7 @@ interface SummaryCardProps extends BiaSummaryCard {
     gradient: string;
 }
 
-export function SummaryCard({ title, value, description, trend, type, className, gradient }: SummaryCardProps) {
+export function SummaryCard({ title, value, description, trend, className, gradient }: SummaryCardProps) {
     const isPositive = trend && trend > 0;
 
     return (

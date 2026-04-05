@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
 export const runtime = "nodejs";
 
-export async function GET(req: NextRequest) {
+export async function GET() {
     const cookieStore = await cookies();
     const token = cookieStore.get("vos_access_token")?.value;
 
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
 
         const data = await springRes.json();
         return NextResponse.json(data);
-    } catch (err) {
+    } catch {
         return NextResponse.json({ ok: false, message: "BFF Network Error" }, { status: 502 });
     }
 }

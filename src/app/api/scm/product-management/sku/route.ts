@@ -53,9 +53,10 @@ export async function GET(req: NextRequest) {
       `API Route [approved]: Returning ${paginated.data.length} items, total: ${paginated.meta.total_count}`,
     );
     return NextResponse.json(paginated);
-  } catch (error: any) {
-    console.error("SKU GET Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("SKU GET Error:", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 
@@ -77,12 +78,12 @@ export async function POST(req: NextRequest) {
 
     // Prune ID fields if they are not positive numbers (creating new)
     if (!sanitizedBody.id || typeof sanitizedBody.id !== "number")
-      delete (sanitizedBody as any).id;
+      delete (sanitizedBody as { id?: number }).id;
     if (
       !sanitizedBody.product_id ||
       typeof sanitizedBody.product_id !== "number"
     )
-      delete (sanitizedBody as any).product_id;
+      delete (sanitizedBody as { product_id?: number }).product_id;
 
     // Prune empty strings for fields that Zod might expect as numbers or nullable
     [
@@ -93,20 +94,22 @@ export async function POST(req: NextRequest) {
       "product_shelf_life",
       "product_weight",
     ].forEach((key) => {
-      if ((sanitizedBody as any)[key] === "")
-        (sanitizedBody as any)[key] = null;
+      const b = sanitizedBody as Record<string, unknown>;
+      if (b[key] === "")
+        b[key] = null;
     });
 
     const validated = skuSchema.parse(sanitizedBody);
     const data = await skuService.createDraft(validated);
     return NextResponse.json({ data });
-  } catch (error: any) {
-    console.error("SKU POST error:", error);
+  } catch (error: unknown) {
+    const err = error as Error & { details?: unknown[]; errors?: unknown[] };
+    console.error("SKU POST error:", err);
     return NextResponse.json(
       {
-        error: error.message,
-        details: error.details || error.errors || [],
-        fullError: error,
+        error: err.message,
+        details: err.details || err.errors || [],
+        fullError: err,
       },
       { status: 400 },
     );
@@ -131,8 +134,9 @@ export async function PATCH(req: NextRequest) {
 
     await skuService.bulkUpdateProductStatus(ids, isActive);
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    console.error("SKU PATCH Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("SKU PATCH Error:", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

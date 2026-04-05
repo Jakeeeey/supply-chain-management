@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useEffect } from "react";
@@ -46,7 +45,7 @@ export function UnitDialog({
 
   const form = useForm<UnitFormValues>({
     // 🔴 THE NUCLEAR FIX: Casting resolver to 'any' stops the type conflict
-    resolver: zodResolver(unitSchema),
+    resolver: zodResolver(unitSchema) as any,
     defaultValues: {
       unit_name: "",
       unit_shortcut: "",

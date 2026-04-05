@@ -44,7 +44,7 @@ export default function AuditorDashboardModule() {
             // Asks for "Picked" status
             const response = await fetchConsolidators(selectedBranchId, 0, 50, "Picked", debouncedSearch);
             setBatches(response?.content || []);
-        } catch (_error) {
+        } catch {
             console.error("Failed to load audit batches");
         } finally {
             setLoading(false);
@@ -61,7 +61,7 @@ export default function AuditorDashboardModule() {
                 batch={activeBatch}
                 onClose={() => {
                     setActiveBatch(null);
-                    loadBatches(); // 🚀 ADD THIS: Refresh list whenever the modal closes (Repick or Back)
+                    loadBatches(); // Refresh list whenever the modal closes (Repick or Back)
                 }}
                 onAuditComplete={async () => {
                     const success = await completeAuditBatch(activeBatch.id);

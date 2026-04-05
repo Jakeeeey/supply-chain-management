@@ -5,9 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { Check, Search } from "lucide-react";
+import { EnrichedApprovedPlan } from "../../../types/dispatch.types";
 
-interface PdpListSidebarProps {
-  approvedPlans: any[];
+interface PdpListSidebarProps {
+  approvedPlans: EnrichedApprovedPlan[];
   isLoadingPlans: boolean;
   searchQuery: string;
   onSearchChange: (val: string) => void;
@@ -67,7 +68,7 @@ export function PdpListSidebar({
           </div>
         ) : (
           filteredPlans.map((p) => {
-            const pId = Number(p.dispatch_id || p.id);
+            const pId = Number(p.dispatch_id);
             const isSelected = selectedPlanIds.includes(pId);
             return (
               <button

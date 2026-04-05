@@ -4,6 +4,22 @@ import { PostDispatchApprovalDto } from "../types"
 
 const formatPDFCurrency = (val: number) => `PHP ${(val || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+type AutoTableCell = string | { 
+    content: string; 
+    styles?: Record<string, unknown>; 
+    colSpan?: number; 
+    rowSpan?: number;
+    halign?: 'left' | 'center' | 'right';
+    valign?: 'top' | 'middle' | 'bottom';
+    fontStyle?: string;
+    fontSize?: number;
+    textColor?: number | number[];
+    fillColor?: number | number[] | boolean;
+    lineWidth?: number | { top?: number; bottom?: number; left?: number; right?: number };
+    cellPadding?: number | { top?: number; bottom?: number; left?: number; right?: number };
+};
+type AutoTableRow = AutoTableCell[];
+
 export const exportDispatchManifestPDF = (plan: PostDispatchApprovalDto) => {
     if (!plan) return;
 
@@ -33,11 +49,11 @@ export const exportDispatchManifestPDF = (plan: PostDispatchApprovalDto) => {
     let currentY = 26;
 
     // --- 2. ROUTE & CARGO TABLE ---
-    const routeBody: any[] = [];
+    const routeBody: AutoTableRow[] = [];
 
     // Aggregation variables for the footer
     const supplierSummary: Record<string, Record<string, number>> = {};
-    const invoiceSummary: any[] = [];
+    const invoiceSummary: AutoTableRow[] = [];
 
     plan.stops?.forEach((stop) => {
         // Build Summaries
@@ -104,11 +120,10 @@ export const exportDispatchManifestPDF = (plan: PostDispatchApprovalDto) => {
         styles: { font: "helvetica" }
     });
 
-    currentY = (doc as any).lastAutoTable.finalY + 8;
+    currentY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
 
-    // --- 3. FOOTER SUMMARIES (Side-by-Side to save paper) ---
     // Flatten Supplier Summary
-    const suppBody: any[] = [];
+    const suppBody: AutoTableRow[] = [];
     Object.entries(supplierSummary).sort(([a], [b]) => a.localeCompare(b)).forEach(([sup, units]) => {
         Object.entries(units).forEach(([unit, qty]) => {
             suppBody.push([{ content: sup, styles: { cellPadding: 1 } }, { content: `${qty} ${unit}`, styles: { halign: "right", cellPadding: 1 } }]);
@@ -116,7 +131,7 @@ export const exportDispatchManifestPDF = (plan: PostDispatchApprovalDto) => {
     });
 
     // Flatten Budget
-    const budgetBody: any[] = plan.budgets && plan.budgets.length > 0
+    const budgetBody: AutoTableRow[] = (plan.budgets && plan.budgets.length > 0)
         ? plan.budgets.map(b => [{ content: b.remarks || 'Budget', styles: { cellPadding: 1 } }, { content: formatPDFCurrency(b.amount), styles: { halign: "right", cellPadding: 1 } }])
         : [[{ content: "No budget requested.", colSpan: 2, styles: { fontStyle: "italic", cellPadding: 1 } }]];
 
@@ -142,7 +157,7 @@ export const exportDispatchManifestPDF = (plan: PostDispatchApprovalDto) => {
         styles: { fontSize: 7, textColor: 0 }
     });
 
-    const suppTableY = (doc as any).lastAutoTable.finalY;
+    const suppTableY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
 
     // B. Budget Summary (Right Column)
     autoTable(doc, {
@@ -155,7 +170,7 @@ export const exportDispatchManifestPDF = (plan: PostDispatchApprovalDto) => {
         styles: { fontSize: 7, textColor: 0 }
     });
 
-    const budgetTableY = (doc as any).lastAutoTable.finalY;
+    const budgetTableY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
 
     // C. Invoice/Receipts Summary (Spans full width below)
     currentY = Math.max(suppTableY, budgetTableY) + 6;
@@ -180,7 +195,7 @@ export const exportDispatchManifestPDF = (plan: PostDispatchApprovalDto) => {
     });
 
     // --- 4. END OF TRIP SIGN-OFF ---
-    currentY = (doc as any).lastAutoTable.finalY + 12;
+    currentY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
     if (currentY > pageHeight - 20) {
         doc.addPage();
         currentY = 20;
@@ -194,7 +209,7 @@ export const exportDispatchManifestPDF = (plan: PostDispatchApprovalDto) => {
     doc.text("Dispatcher: ___________________________", pageWidth / 2, currentY + 8);
 
     // --- 5. PAGINATION ---
-    const pageCount = (doc as any).internal.getNumberOfPages();
+    const pageCount = doc.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
         doc.setFontSize(7);

@@ -4,7 +4,7 @@ import { jsPDF } from "jspdf"
 // 🚀 FIXED: Import autoTable directly
 import autoTable from "jspdf-autotable"
 import { Button } from "@/components/ui/button"
-import { CheckCircle2, Download, Printer, X } from "lucide-react"
+import { CheckCircle2, Download } from "lucide-react"
 import {
     Dialog,
     DialogContent,
@@ -12,11 +12,13 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog"
 
+import { PlanningRow } from "../types"
+
 interface SuccessModalProps {
     isOpen: boolean
     onClose: () => void
     prNumber: string
-    data?: any[]
+    data?: PlanningRow[]
 }
 
 export function PurchaseRequestSuccessModal({isOpen, onClose, prNumber, data = []}: SuccessModalProps) {
@@ -34,16 +36,16 @@ export function PurchaseRequestSuccessModal({isOpen, onClose, prNumber, data = [
 
         // Define Table Columns
         const tableColumn = ["Brand", "Product", "Qty", "Price", "Total"]
-        const tableRows: any[] = []
+        const tableRows: (string | number)[][] = []
 
         // Filter items that were actually ordered
         data.filter(item => item.orderQty > 0).forEach(item => {
             const rowData = [
-                item.brand,
-                item.product,
+                item.brandName || "",
+                item.product_name || item.productName || "",
                 item.orderQty,
-                `P${item.price.toLocaleString()}`,
-                `P${item.totalAmount.toLocaleString()}`
+                `P${(item.computedPricePerBox || 0).toLocaleString()}`,
+                `P${(item.totalValue || 0).toLocaleString()}`
             ]
             tableRows.push(rowData)
         })

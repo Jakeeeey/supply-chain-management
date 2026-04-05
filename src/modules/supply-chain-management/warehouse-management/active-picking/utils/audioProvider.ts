@@ -6,7 +6,7 @@ let audioCtx: AudioContext | null = null;
 const initAudioContext = () => {
     if (!audioCtx) {
         try {
-            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+            const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
             if (AudioContextClass) {
                 audioCtx = new AudioContextClass();
             }

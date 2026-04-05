@@ -12,7 +12,7 @@ function directusHeaders() {
     return h;
 }
 
-export async function GET(req: NextRequest) {
+export async function GET() {
     try {
         const [branchesRes, usersRes] = await Promise.all([
             fetch(`${DIRECTUS_BASE}/items/branches?limit=-1`, {
@@ -41,8 +41,9 @@ export async function GET(req: NextRequest) {
             branches: branchesData.data || [],
             users: usersData.data || []
         });
-    } catch (err: any) {
-        return NextResponse.json({ error: "Internal Server Error", details: err.message }, { status: 500 });
+    } catch (err: unknown) {
+        const error = err as Error;
+        return NextResponse.json({ error: "Internal Server Error", details: error.message }, { status: 500 });
     }
 }
 
@@ -125,8 +126,9 @@ export async function POST(req: NextRequest) {
         }
 
         return NextResponse.json({ success: true, message: "Branch and Bad Stock branch created successfully" });
-    } catch (err: any) {
-        return NextResponse.json({ error: "Internal Server Error", details: err.message }, { status: 500 });
+    } catch (err: unknown) {
+        const error = err as Error;
+        return NextResponse.json({ error: "Internal Server Error", details: error.message }, { status: 500 });
     }
 }
 export async function PATCH(req: NextRequest) {
@@ -182,7 +184,7 @@ export async function PATCH(req: NextRequest) {
                 if (bsData.data && bsData.data.length > 0) {
                     const badStockId = bsData.data[0].id;
 
-                    const bsUpdate: any = { ...updateData };
+                    const bsUpdate: Record<string, unknown> = { ...updateData };
                     if (updateData.branch_name) bsUpdate.branch_name = `${updateData.branch_name} - Bad Stock`;
                     if (updateData.branch_code) bsUpdate.branch_code = `${updateData.branch_code}-BS`;
                     if (updateData.branch_description) bsUpdate.branch_description = `Bad Stock for ${updateData.branch_description}`;
@@ -198,8 +200,9 @@ export async function PATCH(req: NextRequest) {
 
         const data = await res.json();
         return NextResponse.json({ success: true, data: data.data });
-    } catch (err: any) {
-        return NextResponse.json({ error: "Internal Server Error", details: err.message }, { status: 500 });
+    } catch (err: unknown) {
+        const error = err as Error;
+        return NextResponse.json({ error: "Internal Server Error", details: error.message }, { status: 500 });
     }
 }
 
@@ -253,7 +256,8 @@ export async function DELETE(req: NextRequest) {
         }
 
         return NextResponse.json({ success: true, message: "Branch(es) deleted successfully" });
-    } catch (err: any) {
-        return NextResponse.json({ error: "Internal Server Error", details: err.message }, { status: 500 });
+    } catch (err: unknown) {
+        const error = err as Error;
+        return NextResponse.json({ error: "Internal Server Error", details: error.message }, { status: 500 });
     }
 }

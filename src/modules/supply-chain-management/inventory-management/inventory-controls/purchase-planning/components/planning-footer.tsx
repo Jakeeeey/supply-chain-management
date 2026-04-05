@@ -5,16 +5,23 @@ import {Button} from "@/components/ui/button"
 import {Calculator, TrendingUp, History, Download} from "lucide-react"
 import {cn} from "@/lib/utils"
 import {PurchaseRequestSuccessModal} from "./purchase-request-success-modal"
+import {PlanningRow} from "../types"
 
 // jsPDF and autoTable
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 
 interface PlanningFooterProps {
-    data: any[]
+    data: PlanningRow[]
     supplierId: string
     branchIds: string[]
     mode?: "historical" | "forecast"
+}
+
+interface JsPDFWithAutoTable extends jsPDF {
+    lastAutoTable: {
+        finalY: number;
+    };
 }
 
 // 💰 Helper function for professional currency formatting
@@ -46,7 +53,7 @@ export function PlanningFooter({
         let totalBValue = 0, totalBQty = 0
         let totalCValue = 0, totalCQty = 0
 
-        safeData.forEach((row) => {
+        safeData.forEach((row: PlanningRow) => {
             const pricePerBox = Number(row.computedPricePerBox || 0)
             const orderQty = Number(row.orderQty || 0)
             const suggestedQty = Number(row.suggestedQty || 0)
@@ -109,7 +116,7 @@ export function PlanningFooter({
             doc.text(`Logic Mode: ${isForecast ? "Forecast" : "Historical"}`, 14, 42)
 
             const tableColumns = ["SKU", "Product Name", "ABC", "SOH", "MAV", "Suggested", "Order Qty", "Total Value"]
-            const tableRows = data.map((row) => {
+            const tableRows = (data as PlanningRow[]).map((row: PlanningRow) => {
                 const price = Number(row.computedPricePerBox || 0)
                 const orderQty = Number(row.orderQty || 0)
                 const rowTotal = price * orderQty
@@ -135,7 +142,7 @@ export function PlanningFooter({
                 columnStyles: { 6: {fontStyle: 'bold', textColor: [15, 23, 42]}, 7: {halign: 'right'} }
             })
 
-            const finalY = (doc as any).lastAutoTable.finalY || 50
+            const finalY = (doc as unknown as JsPDFWithAutoTable).lastAutoTable.finalY || 50
 
             doc.setFontSize(10)
             doc.setTextColor(100, 116, 139)
@@ -294,10 +301,10 @@ export function PlanningFooter({
                 supplierId={supplierId}
                 branchIds={branchIds}
                 prNumber="DRAFT"
-                items={stats.itemsToOrder.map((item) => ({
-                    product_id: item.product_id || item.id,
+                items={stats.itemsToOrder.map((item: PlanningRow) => ({
+                    product_id: String(item.product_id || item.id),
                     brand: item.brandName || "N/A",
-                    product_name: item.productName || item.description || "Product",
+                    product_name: String(item.productName || item.product_name || item.description || "Product"),
                     orderQty: Number(item.orderQty),
                     suggestedOrderBox: Number(item.suggestedQty || 0),
                     lastCost: Number(item.lastCost || 0),

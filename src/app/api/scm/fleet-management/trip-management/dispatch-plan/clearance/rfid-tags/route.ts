@@ -27,9 +27,16 @@ export async function GET() {
         const rfidItems = rfidRes.data || [];
 
         // Transform to the expected RFIDMapping structure
-        const mappings = rfidItems
-            .filter((item: any) => item.detail_id?.product_id) // ensure we only map correctly assigned RFIDs
-            .map((item: any) => ({
+        interface RfidItem {
+            id: number | string;
+            rfid_tag_epc: string;
+            detail_id: {
+                product_id: number;
+            };
+        }
+        const mappings = (rfidItems as RfidItem[])
+            .filter((item) => item.detail_id?.product_id) // ensure we only map correctly assigned RFIDs
+            .map((item) => ({
                 id: item.id,
                 product_id: item.detail_id.product_id,
                 dispatch_id: 0, // Ignored by UI per instruction
@@ -37,8 +44,8 @@ export async function GET() {
             }));
 
         return NextResponse.json(mappings);
-    } catch (error) {
-        console.error('RFID Tags API Error:', error);
+    } catch (err) {
+        console.error('RFID Tags API Error:', err);
         return NextResponse.json({ error: 'Failed to fetch RFID tags' }, { status: 500 });
     }
 }

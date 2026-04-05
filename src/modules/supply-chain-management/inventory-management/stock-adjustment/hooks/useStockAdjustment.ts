@@ -47,8 +47,8 @@ export function useStockAdjustment() {
 
       if (result.error) throw new Error(result.error);
       setData(result.data || []);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An unknown error occurred");
       toast.error("Failed to load stock adjustments");
     } finally {
       setIsLoading(false);
@@ -69,8 +69,8 @@ export function useStockAdjustment() {
       if (result.error) throw new Error(result.error);
       toast.success("Adjustment deleted successfully");
       await refresh();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to delete adjustment");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete adjustment");
       throw err;
     }
   };

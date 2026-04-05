@@ -12,16 +12,18 @@ import { ArrowRight, Loader2 } from "lucide-react";
 import { DispatchCreationMasterData } from "../../../types/dispatch.types";
 import { PlanDetailItem } from "./types";
 import { computeDeliveryDays, groupPlanDetails } from "./utils";
+import { EnrichedApprovedPlan } from "../../../types/dispatch.types";
+import { DispatchCreationFormValues } from "../../../types/dispatch.schema";
 
 interface DispatchConfirmationModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
   isSubmitting: boolean;
-  payload: any;
+  payload: DispatchCreationFormValues;
   masterData: DispatchCreationMasterData;
   planDetails: PlanDetailItem[];
-  approvedPlans: any[];
+  approvedPlans: EnrichedApprovedPlan[];
 }
 
 export function DispatchConfirmationModal({

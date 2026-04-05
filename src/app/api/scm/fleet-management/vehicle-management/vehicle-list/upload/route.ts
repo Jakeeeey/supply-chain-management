@@ -65,9 +65,10 @@ export async function POST(req: NextRequest) {
     const publicPath = `/uploads/vehicles/${name}`;
 
     return NextResponse.json({ data: { path: publicPath } }, { status: 200 });
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const err = e as Error;
     return NextResponse.json(
-      { error: String(e?.message || e) },
+      { error: String(err?.message || err) },
       { status: 500 }
     );
   }

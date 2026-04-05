@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { UnitApiRow, UnitFormValues } from "../types";
 
 // ✅ Updated Response Type

@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 export const runtime = "nodejs";
 
 export async function GET(
-    req: NextRequest,
+    _: NextRequest,
     { params }: { params: Promise<{ id: string }> } // Awaiting params for Next 15+
 ) {
     const { id } = await params;
@@ -30,7 +30,7 @@ export async function GET(
 
         const data = await springRes.json();
         return NextResponse.json(data);
-    } catch (err) {
+    } catch {
         return NextResponse.json({ ok: false, message: "BFF Network Error" }, { status: 502 });
     }
 }

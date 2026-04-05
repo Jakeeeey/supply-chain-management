@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 export const runtime = "nodejs";
 
 export async function PUT(
-    req: NextRequest,
+    _: NextRequest,
     { params }: { params: Promise<{ id: string, action: string }> }
 ) {
     const { id, action } = await params;
@@ -39,7 +39,7 @@ export async function PUT(
         }
 
         return NextResponse.json({ ok: true });
-    } catch (err) {
+    } catch {
         return NextResponse.json({ ok: false, message: "BFF Network Error" }, { status: 502 });
     }
 }

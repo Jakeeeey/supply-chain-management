@@ -106,7 +106,7 @@ export function StockAdjustmentList({
           </div>
         ) : (
           data.map((item) => {
-            const isPosted = item.isPosted === true || (typeof item.isPosted === 'object' && item.isPosted?.data?.[0] === 1);
+            const isPosted = !!item.isPosted;
             
             return (
               <Card key={item.id} className="group overflow-hidden border-border/60 shadow-sm hover:shadow-md transition-all bg-card">
@@ -141,9 +141,14 @@ export function StockAdjustmentList({
                           </div>
                           <div className="flex flex-col">
                             <span className="text-[10px] font-bold text-muted-foreground/60 mb-0.5">Items</span>
-                            <span className="font-bold text-blue-600 dark:text-blue-400">
-                              {(Array.isArray(item.items) ? item.items.length : (Array.isArray((item as any).stock_adjustment) ? (item as any).stock_adjustment.length : 0))} products
-                            </span>
+                             <span className="font-bold text-blue-600 dark:text-blue-400">
+                               {(() => {
+                                 if (Array.isArray(item.items)) return item.items.length;
+                                 const raw = item as Record<string, unknown>;
+                                 if (Array.isArray(raw.stock_adjustment)) return raw.stock_adjustment.length;
+                                 return 0;
+                               })()} products
+                             </span>
                           </div>
                           <div className="flex flex-col">
                             <span className="text-[10px] uppercase font-bold text-muted-foreground/60">Created At</span>
