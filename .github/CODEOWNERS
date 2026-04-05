@@ -1,0 +1,31 @@
+/.github/ @Jakeeeey @ECuerdo
+
+/src/app/(supply-chain-management)/scm/_components/ @Jakeeeey @ECuerdo
+
+/src/app/(supply-chain-management)/layout.tsx @Jakeeeey @ECuerdo
+
+/src/app/api/auth/@Jakeeeey @ECuerdo
+
+/src/app/(public)/ @Jakeeeey @ECuerdo
+
+/src/app/globals.css @Jakeeeey @ECuerdo
+
+/src/app/layout.tsx @Jakeeeey @ECuerdo
+
+/src/components/ui/ @Jakeeeey @ECuerdo
+
+/src/hooks/ @Jakeeeey @ECuerdo
+
+/src/lib @Jakeeeey @ECuerdo
+
+/components.json @Jakeeeey @ECuerdo
+
+/eslint.config.mjs @Jakeeeey @ECuerdo
+
+/next.config.ts @Jakeeeey @ECuerdo
+
+/next-env.d.ts @Jakeeeey @ECuerdo
+
+/postcss.config.mjs @Jakeeeey @ECuerdo
+
+/tsconfig.json @Jakeeeey @ECuerdo
