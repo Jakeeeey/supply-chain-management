@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useForm, SubmitHandler } from "react-hook-form"; // ✅ Added SubmitHandler
+import { useForm, SubmitHandler, Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
@@ -44,8 +44,7 @@ export function UnitDialog({
   const isEdit = !!selectedUnit;
 
   const form = useForm<UnitFormValues>({
-    // 🔴 THE NUCLEAR FIX: Casting resolver to 'any' stops the type conflict
-    resolver: zodResolver(unitSchema) as any,
+    resolver: zodResolver(unitSchema) as unknown as Resolver<UnitFormValues>,
     defaultValues: {
       unit_name: "",
       unit_shortcut: "",
