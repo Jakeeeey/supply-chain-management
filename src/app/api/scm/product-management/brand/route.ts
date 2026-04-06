@@ -27,7 +27,7 @@ async function proxyRequest(req: NextRequest, method: string) {
   if (id) {
     upstreamUrl += `/${id}`;
   } else if (method === "GET") {
-    upstreamUrl += `?sort=brand_name&page=${page}&limit=${limit}&meta=filter_count`;
+    upstreamUrl += `?sort=-brand_id&page=${page}&limit=${limit}&meta=filter_count`;
 
     // ✅ Apply Directus Filter if search exists
     // Logic: brand_name CONTAINS search OR sku_code CONTAINS search

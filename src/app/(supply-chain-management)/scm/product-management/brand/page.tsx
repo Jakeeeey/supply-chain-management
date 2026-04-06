@@ -65,7 +65,10 @@ function buildHeaderUserFromToken(token: string | null | undefined) {
 
   const name = [first, last].filter(Boolean).join(" ") || email || "User";
 
+  const id = pickString(payload, ["id", "ID", "user_id", "sub"]);
+
   return {
+    id,
     name,
     email: email || "",
     avatar: "/avatars/shadcn.jpg",
@@ -116,7 +119,7 @@ export default async function Page() {
 
       {/* ✅ Only content scrolls inside RIGHT column */}
       <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-2 sm:p-4">
-        <Brand />
+        <Brand currentUser={headerUser} />
       </main>
     </div>
   );

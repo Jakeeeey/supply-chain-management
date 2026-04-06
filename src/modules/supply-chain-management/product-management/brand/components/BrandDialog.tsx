@@ -1,10 +1,9 @@
-"use client";
-
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import Image from "next/image";
 import { useForm, SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, UploadCloud, X } from "lucide-react";
 
 import {
   Dialog,
@@ -33,6 +32,7 @@ interface BrandDialogProps {
   onOpenChange: (open: boolean) => void;
   selectedBrand: BrandApiRow | null;
   onSuccess: () => void;
+  currentUser?: { id: string; name: string; email: string };
 }
 
 export function BrandDialog({
@@ -40,14 +40,17 @@ export function BrandDialog({
   onOpenChange,
   selectedBrand,
   onSuccess,
+  currentUser,
 }: BrandDialogProps) {
   const isEdit = !!selectedBrand;
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
 
   const form = useForm<BrandFormValues>({
     resolver: zodResolver(brandSchema),
     defaultValues: {
       brand_name: "",
-      sku_code: "", // ✅ Default value
+      sku_code: "",
     },
   });
 
@@ -55,18 +58,65 @@ export function BrandDialog({
     if (open) {
       form.reset({
         brand_name: selectedBrand?.brand_name || "",
-        sku_code: selectedBrand?.sku_code || "", // ✅ Load existing value
+        sku_code: selectedBrand?.sku_code || "",
       });
+      setFile(null);
+      if (selectedBrand?.image) {
+        setPreview(`${process.env.NEXT_PUBLIC_API_BASE_URL}/assets/${selectedBrand.image}`);
+      } else {
+        setPreview(null);
+      }
     }
   }, [open, selectedBrand, form]);
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const selected = e.target.files[0];
+      setFile(selected);
+      setPreview(URL.createObjectURL(selected));
+    }
+  };
+
+  const removeImage = () => {
+    setFile(null);
+    setPreview(null);
+    form.setValue("image", null);
+  };
+
   const onSubmit: SubmitHandler<BrandFormValues> = async (values) => {
     try {
+      let imageId = selectedBrand?.image || null;
+
+      if (file) {
+        const formData = new FormData();
+        formData.append("file", file);
+        
+        const uploadRes = await fetch("/api/scm/product-management/brand/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!uploadRes.ok) throw new Error("Image upload failed");
+        const uploadData = await uploadRes.json();
+        imageId = uploadData.id;
+      } else if (!preview) {
+        // user removed the image
+        imageId = null;
+      }
+
+      const payload = { ...values, image: imageId };
+
       if (isEdit && selectedBrand) {
-        await updateBrand(selectedBrand.brand_id, values);
+        await updateBrand(selectedBrand.brand_id, {
+          ...payload,
+          updated_by: currentUser?.id || undefined,
+        });
         toast.success("Brand updated successfully");
       } else {
-        await createBrand(values);
+        await createBrand({
+          ...payload,
+          created_by: currentUser?.id || undefined,
+        });
         toast.success("Brand created successfully");
       }
       onSuccess();
@@ -95,6 +145,57 @@ export function BrandDialog({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormItem>
+              <FormLabel>Brand Image</FormLabel>
+              <div className="flex flex-col gap-4">
+                {preview ? (
+                  <div className="relative w-full min-h-[200px] max-h-[300px] rounded-lg border bg-muted/30 flex items-center justify-center overflow-hidden transition-all">
+                    <Image 
+                      src={preview} 
+                      alt="Brand Preview" 
+                      width={800}
+                      height={400}
+                      className="max-w-full max-h-[300px] object-contain drop-shadow-sm" 
+                      unoptimized
+                    />
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="icon"
+                      className="absolute top-2 right-2 h-8 w-8 rounded-full shadow-md"
+                      onClick={removeImage}
+                    >
+                      <X className="h-5 w-5" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="w-full">
+                    <div className="flex items-center justify-center w-full">
+                      <label 
+                        className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer bg-muted/5 hover:bg-muted/10 transition-colors border-input"
+                      >
+                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                          <UploadCloud className="w-8 h-8 mb-3 text-muted-foreground" />
+                          <p className="mb-2 text-sm text-muted-foreground">
+                            <span className="font-semibold">Click to upload</span> or drag and drop
+                          </p>
+                          <p className="text-xs text-muted-foreground/60">
+                            SVG, PNG, JPG or GIF (MAX. 800x400px)
+                          </p>
+                        </div>
+                        <Input 
+                          type="file" 
+                          accept="image/*" 
+                          onChange={handleImageChange}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </FormItem>
+
             <FormField
               control={form.control}
               name="brand_name"
@@ -111,7 +212,6 @@ export function BrandDialog({
               )}
             />
 
-            {/* ✅ Added SKU Code Field */}
             <FormField
               control={form.control}
               name="sku_code"

@@ -65,7 +65,7 @@ export async function createBrand(
 }
 
 export async function updateBrand(
-  id: string,
+  id: number,
   payload: BrandFormValues,
 ): Promise<BrandApiRow> {
   const res = await fetch(`${API_BASE}?id=${id}`, {
