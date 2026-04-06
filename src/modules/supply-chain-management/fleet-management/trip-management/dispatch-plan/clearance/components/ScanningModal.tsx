@@ -166,6 +166,14 @@ const ScanningModal: React.FC<ScanningModalProps> = ({
             if (tags.length < 5) toast.success(`Scanned: ${item.product_name}`);
             playSound('success');
         });
+
+        // Check if all items are scanned after the entire batch of tags is processed
+        const totalRequired = items.reduce((acc, i) => acc + i.qty, 0);
+        const totalScannedNow = Object.values(scannedQtysRef.current).reduce((acc, q) => acc + q, 0);
+        if (totalScannedNow >= totalRequired && isScanning) {
+            setIsScanning(false);
+            toast.success("Manifest completed!");
+        }
     };
 
     // Global Keydown Listener for Hardware Scanners
@@ -199,61 +207,6 @@ const ScanningModal: React.FC<ScanningModalProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, isScanning, rfidTags, items, scannedQtys, scannedTags]);
 
-    // Internal simulation for RFID scan - Updated to use real RFID tags
-    const simulateScan = () => {
-        // 1. If we have real RFID tags from the database, use them
-        if (rfidTags && rfidTags.length > 0) {
-            // Available tags are those whose product_id is in this invoice and item not fully scanned
-            const availableTags = rfidTags.filter(tag => {
-                const item = items.find(i => Number(i.product_id) === Number(tag.product_id));
-                return item && (scannedQtysRef.current[item.id] || 0) < item.qty;
-            });
-
-            if (availableTags.length === 0) {
-                setIsScanning(false);
-                toast.info("No more valid unscanned tags found in data.");
-                return;
-            }
-
-            const randomIndex = Math.floor(Math.random() * availableTags.length);
-            const tagToScan = availableTags[randomIndex];
-            
-            if (tagToScan && tagToScan.rfid) {
-                handleRFIDScan(tagToScan.rfid);
-            }
-            return;
-        }
-
-        // Fallback to original simulation if no rfidTags provided or if rfidTags is empty
-        const remainingItems = items.filter(item => (scannedQtysRef.current[item.id] || 0) < item.qty);
-        if (remainingItems.length === 0) {
-            setIsScanning(false);
-            toast.info("All items already scanned.");
-            return;
-        }
-        const randomIndex = Math.floor(Math.random() * remainingItems.length);
-        const item = remainingItems[randomIndex];
-        const newQty = (scannedQtysRef.current[item.id] || 0) + 1;
-        
-        scannedQtysRef.current = { ...scannedQtysRef.current, [item.id]: newQty };
-        setScannedQtys(scannedQtysRef.current);
-
-        // Map dummy/generated simulation tag if no real tags are supplied, to prevent API payload errors
-        const previousTags = scannedRFIDsRef.current[item.id] || [];
-        const simTag = `SIMULATED-${item.id}-${newQty}`.padEnd(24, '0').substring(0, 24);
-        scannedRFIDsRef.current = { ...scannedRFIDsRef.current, [item.id]: [...previousTags, simTag] };
-
-        setLastScanned(item);
-        toast.success(`Simulated scan for: ${item.product_name}`);
-        
-        // Check if all items are scanned after this simulation
-        const totalRequired = items.reduce((acc, i) => acc + i.qty, 0);
-        const totalScannedNow = Object.values(scannedQtysRef.current).reduce((acc, q) => acc + q, 0);
-        if (totalScannedNow >= totalRequired) {
-            setIsScanning(false);
-            toast.success("Manifest completed!");
-        }
-    };
 
     const handleConfirm = () => {
         // Ensure ALL items have a value (at least 0) to distinguish from "not yet reconciled"
