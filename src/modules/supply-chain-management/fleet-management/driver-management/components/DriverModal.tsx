@@ -57,6 +57,40 @@ export function DriverModal({
     const [goodBranchOpen, setGoodBranchOpen] = React.useState(false);
     const [badBranchOpen, setBadBranchOpen] = React.useState(false);
 
+    // Filter branches: good branches have isReturn = 0
+    const goodBranches = React.useMemo(() => {
+        return branches.filter((b) => b.isReturn === 0 || b.isReturn === false);
+    }, [branches]);
+
+    // Filter branches: bad branches have isReturn = 1
+    const badBranches = React.useMemo(() => {
+        return branches.filter((b) => b.isReturn === 1 || b.isReturn === true);
+    }, [branches]);
+
+    // Handle good branch selection change
+    const onGoodBranchChange = (value: string) => {
+        setSelectedGoodBranchId(value);
+        setGoodBranchOpen(false);
+
+        // Find the selected good branch details
+        const selectedGoodBranch = goodBranches.find(b => b.id.toString() === value);
+        if (selectedGoodBranch) {
+            const goodName = selectedGoodBranch.branch_name.toLowerCase();
+            
+            // Try to find a bad branch with a similar name
+            const suggestion = badBranches.find(bb => {
+                const badName = bb.branch_name.toLowerCase();
+                return badName.includes(goodName) || goodName.includes(badName);
+            });
+
+            if (suggestion) {
+                setSelectedBadBranchId(suggestion.id.toString());
+            } else {
+                setSelectedBadBranchId("none");
+            }
+        }
+    };
+
     // Initialize form with editing driver data
     React.useEffect(() => {
         if (editingDriver) {
@@ -69,16 +103,6 @@ export function DriverModal({
             setSelectedBadBranchId("none");
         }
     }, [editingDriver, isOpen]);
-
-    // Filter branches: good branches have isReturn = 0
-    const goodBranches = React.useMemo(() => {
-        return branches.filter((b) => b.isReturn === 0 || b.isReturn === false);
-    }, [branches]);
-
-    // Filter branches: bad branches have isReturn = 1
-    const badBranches = React.useMemo(() => {
-        return branches.filter((b) => b.isReturn === 1 || b.isReturn === true);
-    }, [branches]);
 
     // Memoize user options - exclude already assigned users unless editing
     const userOptions = React.useMemo((): { value: string; label: string }[] => {
@@ -235,10 +259,7 @@ export function DriverModal({
                                                     <CommandItem
                                                         key={opt.value}
                                                         value={opt.label}
-                                                        onSelect={() => {
-                                                            setSelectedGoodBranchId(opt.value);
-                                                            setGoodBranchOpen(false);
-                                                        }}
+                                                        onSelect={() => onGoodBranchChange(opt.value)}
                                                     >
                                                         <Check className={cn("mr-2 h-4 w-4", selectedGoodBranchId === opt.value ? "opacity-100" : "opacity-0")} />
                                                         {opt.label}
