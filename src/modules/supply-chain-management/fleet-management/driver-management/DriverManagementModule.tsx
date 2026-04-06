@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Plus, Users, RotateCw } from "lucide-react";
+import { Plus, Users, RotateCw, Check, ChevronsUpDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -9,12 +9,19 @@ import { useDriverManagement } from "./hooks/useDriverManagement";
 import { DriverTable } from "./components/DriverTable";
 import { DriverModal } from "./components/DriverModal";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import type { DriverWithDetails } from "./types";
 
 type ComboboxOption = { value: string; label: string };
@@ -72,6 +79,9 @@ export default function DriverManagementModule() {
     const [isModalOpen, setIsModalOpen] = React.useState(false);
     const [editingDriver, setEditingDriver] = React.useState<DriverWithDetails | null>(null);
 
+    const [openGood, setOpenGood] = React.useState(false);
+    const [openBad, setOpenBad] = React.useState(false);
+
     const handleAdd = () => {
         setEditingDriver(null);
         setIsModalOpen(true);
@@ -126,31 +136,93 @@ export default function DriverManagementModule() {
                 </div>
 
                 <div className="flex items-center gap-3 w-full md:w-auto">
-                    <Select value={filterGoodBranch} onValueChange={setFilterGoodBranch}>
-                        <SelectTrigger className="w-[220px] h-12 bg-background border border-input rounded-xl font-medium focus:ring-2 focus:ring-ring/40 focus:border-ring transition-all outline-none shadow-sm hover:border-primary/50">
-                            <SelectValue placeholder="All Good Branches" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {goodBranchOptions.map((opt) => (
-                                <SelectItem key={opt.value} value={opt.value}>
-                                    {opt.label}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                    <Popover open={openGood} onOpenChange={setOpenGood}>
+                        <PopoverTrigger asChild>
+                            <Button
+                                variant="outline"
+                                role="combobox"
+                                aria-expanded={openGood}
+                                className="w-[220px] h-12 bg-background border border-input rounded-xl font-medium justify-between shadow-sm hover:border-primary/50"
+                            >
+                                {filterGoodBranch !== "all"
+                                    ? goodBranchOptions.find((opt) => opt.value === filterGoodBranch)?.label
+                                    : "All Good Branches"}
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[220px] p-0">
+                            <Command>
+                                <CommandInput placeholder="Search Good Branch..." />
+                                <CommandList>
+                                    <CommandEmpty>No branch found.</CommandEmpty>
+                                    <CommandGroup>
+                                        {goodBranchOptions.map((opt) => (
+                                            <CommandItem
+                                                key={opt.value}
+                                                value={opt.value}
+                                                onSelect={(currentValue) => {
+                                                    setFilterGoodBranch(currentValue === filterGoodBranch ? "all" : currentValue);
+                                                    setOpenGood(false);
+                                                }}
+                                            >
+                                                <Check
+                                                    className={cn(
+                                                        "mr-2 h-4 w-4",
+                                                        filterGoodBranch === opt.value ? "opacity-100" : "opacity-0"
+                                                    )}
+                                                />
+                                                {opt.label}
+                                            </CommandItem>
+                                        ))}
+                                    </CommandGroup>
+                                </CommandList>
+                            </Command>
+                        </PopoverContent>
+                    </Popover>
 
-                    <Select value={filterBadBranch} onValueChange={setFilterBadBranch}>
-                        <SelectTrigger className="w-[220px] h-12 bg-background border border-input rounded-xl font-medium focus:ring-2 focus:ring-ring/40 focus:border-ring transition-all outline-none shadow-sm hover:border-primary/50">
-                            <SelectValue placeholder="All Bad Branches" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {badBranchOptions.map((opt) => (
-                                <SelectItem key={opt.value} value={opt.value}>
-                                    {opt.label}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                    <Popover open={openBad} onOpenChange={setOpenBad}>
+                        <PopoverTrigger asChild>
+                            <Button
+                                variant="outline"
+                                role="combobox"
+                                aria-expanded={openBad}
+                                className="w-[220px] h-12 bg-background border border-input rounded-xl font-medium justify-between shadow-sm hover:border-primary/50"
+                            >
+                                {filterBadBranch !== "all"
+                                    ? badBranchOptions.find((opt) => opt.value === filterBadBranch)?.label
+                                    : "All Bad Branches"}
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[220px] p-0">
+                            <Command>
+                                <CommandInput placeholder="Search Bad Branch..." />
+                                <CommandList>
+                                    <CommandEmpty>No branch found.</CommandEmpty>
+                                    <CommandGroup>
+                                        {badBranchOptions.map((opt) => (
+                                            <CommandItem
+                                                key={opt.value}
+                                                value={opt.value}
+                                                onSelect={(currentValue) => {
+                                                    setFilterBadBranch(currentValue === filterBadBranch ? "all" : currentValue);
+                                                    setOpenBad(false);
+                                                }}
+                                            >
+                                                <Check
+                                                    className={cn(
+                                                        "mr-2 h-4 w-4",
+                                                        filterBadBranch === opt.value ? "opacity-100" : "opacity-0"
+                                                    )}
+                                                />
+                                                {opt.label}
+                                            </CommandItem>
+                                        ))}
+                                    </CommandGroup>
+                                </CommandList>
+                            </Command>
+                        </PopoverContent>
+                    </Popover>
                 </div>
             </div>
 
