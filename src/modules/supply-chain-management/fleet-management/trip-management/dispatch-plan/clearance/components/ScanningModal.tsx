@@ -290,21 +290,6 @@ const ScanningModal: React.FC<ScanningModalProps> = ({
                                 </p>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                            {isScanning && (
-                                <>
-                                    {/* Manual Input Removed for Security/Scanner-only Constraint */}
-                                    <Button
-                                        variant="secondary"
-                                        size="sm"
-                                        onClick={simulateScan}
-                                        className="bg-primary/10 text-primary hover:bg-primary/20 rounded-lg text-[9px] md:text-[10px] font-bold uppercase tracking-wider h-7 md:h-8 px-2 md:px-3 whitespace-nowrap"
-                                    >
-                                        Simulate Scan
-                                    </Button>
-                                </>
-                            )}
-                        </div>
                     </div>
                 </DialogHeader>
 
