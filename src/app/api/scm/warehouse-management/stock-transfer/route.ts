@@ -292,7 +292,7 @@ export async function GET(request: NextRequest) {
       : '';
       
     const stockUrl = statusFilter 
-      ? `${baseUrl}/items/stock_transfer?limit=-1&filter[status][_in]=${encodedStatusFilter},For%20Approval,Requested&${relationalFields}`
+      ? `${baseUrl}/items/stock_transfer?limit=-1&filter[status][_in]=${encodedStatusFilter}&${relationalFields}`
       : `${baseUrl}/items/stock_transfer?limit=-1&${relationalFields}`;
 
     console.log(`[API] Fetching from Directus: ${stockUrl}`);

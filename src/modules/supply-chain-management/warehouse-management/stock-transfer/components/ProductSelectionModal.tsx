@@ -63,7 +63,7 @@ export function ProductSelectionModal({ open, onOpenChange, onSelect, sourceBran
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!sm:max-w-none sm:max-w-[95vw] 2xl:max-w-[1600px] h-[90vh] flex flex-col p-0 gap-0 overflow-hidden bg-background border-none shadow-2xl">
+      <DialogContent showCloseButton={false} className="!sm:max-w-none sm:max-w-[95vw] 2xl:max-w-[1600px] h-[90vh] flex flex-col p-0 gap-0 overflow-hidden bg-background border-none shadow-2xl">
         <div className="flex flex-1 overflow-hidden">
           <div className="flex-1 flex flex-col min-w-0">
             <DialogHeader className="p-8 pb-6 border-b bg-muted/5">
