@@ -544,13 +544,11 @@ export async function GET() {
         const candJ = await fetchJson(porCandidateUrl);
         const porCandidates = Array.isArray(candJ?.data) ? candJ.data : [];
 
-        // STRATEGY 2: POs by inventory_status 12 (PARTIAL) or 13 (PARTIAL_POSTED / RECEIVED).
-        // This keeps POs visible AFTER a partial post — even when all current POR rows
-        // are isPosted=1 but the PO is not yet fully received (inventory_status stays 13).
+        // STRATEGY 2: POs by inventory_status 6 (RECEIVED) or 9 (PARTIALLY RECEIVED).
         const statusCandidateUrl =
             `${base}/items/${PO_COLLECTION}?limit=-1` +
-            `&filter[_or][0][inventory_status][_eq]=12` +
-            `&filter[_or][1][inventory_status][_eq]=13` +
+            `&filter[_or][0][inventory_status][_eq]=6` +
+            `&filter[_or][1][inventory_status][_eq]=9` +
             `&fields=purchase_order_id`;
         const statusCandJ = await fetchJson(statusCandidateUrl);
         const statusCandidatePoIds: number[] = Array.isArray(statusCandJ?.data)
@@ -608,15 +606,22 @@ export async function GET() {
             const lines = linesByPo.get(poId) ?? [];
 
             const taggingOk = isPartiallyTagged(poId, lines, porRows, rfidsByPorId);
-            const eligibleByStatus = invStatus === 12 || invStatus === 13;
+            // ✅ Check for new statuses (6=Received, 9=Partially Received) AND legacy (12, 13)
+            const eligibleByStatus = invStatus === 6 || invStatus === 9 || invStatus === 12 || invStatus === 13;
             
-            // ✅ Only show POs that are already partially or fully received/tagged
-            if (!eligibleByStatus) continue;
+            // ✅ Also check if there are unposted POR rows with receipt activity
+            // This catches POs whose inventory_status was never updated but DO have received items
+            const hasUnpostedReceipts = porRows.some((r: any) => 
+                toNum(r?.isPosted) === 0 && (
+                    toStr(r?.receipt_no) || toStr(r?.receipt_date) || toStr(r?.received_date) || toNum(r?.received_quantity) > 0
+                )
+            );
             
-            // Double check: if status claims 12/13 but we find absolutely no tagged items, 
-            // it's likely a data inconsistency, but we follow the status primarily.
-            // If the user wants extreme strictness, we can also check taggingOk.
-            if (!taggingOk && invStatus === 12) continue; 
+            // Show PO if it has the right status OR has unposted receipt activity
+            if (!eligibleByStatus && !hasUnpostedReceipts) continue;
+            
+            // If status is 12 (En Route) and nothing is tagged, skip
+            if (!taggingOk && !hasUnpostedReceipts && invStatus === 12) continue;
 
             const fully = isFullyReceived(poId, lines, porRows, rfidsByPorId);
 
@@ -896,10 +901,12 @@ export async function POST(req: NextRequest) {
                     // Check if ALL receipts are now posted after this operation
                     const rs = buildReceiptSummary(updatedPorRows);
                     const allNowPosted = rs.receiptsCount > 0 && rs.unpostedReceiptsCount === 0;
-                    poUpdate.inventory_status = fully && allNowPosted ? 14 : 13;
+                    // If fully received and all posted, we keep status 6 (Received)
+                    // The front-end will know it is "Closed" if unpostedReceiptsCount === 0
+                    poUpdate.inventory_status = 6;
                 } else {
-                    // Not fully received — mark as PARTIAL_POSTED (stays at 13)
-                    poUpdate.inventory_status = 13;
+                    // Not fully received — mark as Partially Received
+                    poUpdate.inventory_status = 9;
                 }
                 await patchPO(base, poId, poUpdate);
             } catch {}
@@ -967,10 +974,11 @@ export async function POST(req: NextRequest) {
                     const remainingUnposted = porRows
                         .filter((r: any) => toNum(r?.isPosted) !== 1)
                         .filter((r: any) => !toPost.find((p) => p.porId === toNum(r?.purchase_order_product_id)));
-                    poUpdate.inventory_status = remainingUnposted.length === 0 ? 14 : 13;
+                    // Keep at status 6 (Received)
+                    poUpdate.inventory_status = 6;
                 } else {
-                    // Partial post: keep at 13 so PO stays in the list
-                    poUpdate.inventory_status = 13;
+                    // Partial post: keep at 9 (Partially Received)
+                    poUpdate.inventory_status = 9;
                 }
                 await patchPO(base, poId, poUpdate);
             } catch {}

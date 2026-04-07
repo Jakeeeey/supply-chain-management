@@ -154,10 +154,18 @@ async function fetchApprovedNotReceivedPOs(base: string) {
         "limit=-1",
         "sort=-date_encoded",
         "fields=purchase_order_id,purchase_order_no,date,date_encoded,approver_id,date_approved,payment_status,inventory_status,date_received,supplier_name,total_amount",
-        "filter[_or][0][date_approved][_nnull]=true",
-        "filter[_or][1][approver_id][_nnull]=true",
-        "filter[_or][2][payment_status][_eq]=2",
+        // Status 3 (For Receiving), 9 (Partially Received), 11 (For Pickup), 12 (En Route)
+        "filter[_or][0][inventory_status][_eq]=3",
+        "filter[_or][1][inventory_status][_eq]=9",
+        "filter[_or][2][inventory_status][_eq]=11",
+        "filter[_or][3][inventory_status][_eq]=12",
+        // Fallback for legacy POs that might only have these fields set but not status
+        "filter[_or][4][date_approved][_nnull]=true",
+        "filter[_or][5][approver_id][_nnull]=true",
+        "filter[_or][6][payment_status][_eq]=2",
+        // Still must not be fully received (date_received or status 6)
         "filter[date_received][_null]=true",
+        "filter[inventory_status][_neq]=6",
     ].join("&");
 
     const url = `${base}/items/${PO_COLLECTION}?${qs}`;
@@ -904,9 +912,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
                 const receivingItems = await fetchReceivingItemsByLinkIds(base, [...porIds, ...popIds]);
                 const { taggedCountByKey } = buildTagMapsForScopes({ poLines: lines, porRows, receivingItems });
 
-                if (isFullyReceived(poId, lines, porRows, taggedCountByKey)) {
-                    await patchPO(base, poId, { date_received: nowISO() });
+                const fully = isFullyReceived(poId, lines, porRows, taggedCountByKey);
+                const patch: any = {};
+                
+                if (fully) {
+                    patch.date_received = nowISO();
+                    patch.inventory_status = 6; // Received
+                } else {
+                    patch.inventory_status = 9; // Partially Received
                 }
+                
+                await patchPO(base, poId, patch);
             } catch {}
 
             // return updated detail

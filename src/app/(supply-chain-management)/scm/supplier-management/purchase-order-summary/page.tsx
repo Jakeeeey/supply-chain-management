@@ -69,23 +69,69 @@ async function getData() {
         const base = getDirectusBase();
         const headers = directusHeaders();
 
-        const [poRes, supRes, payRes, transRes] = await Promise.all([
+        const [poRes, supRes, payRes, transRes, porRes, popRes] = await Promise.all([
             fetch(`${base}/items/purchase_order?limit=-1`, { cache: "no-store", headers }),
             fetch(`${base}/items/suppliers?limit=-1`, { cache: "no-store", headers }),
             fetch(`${base}/items/payment_status?limit=-1`, { cache: "no-store", headers }),
-            fetch(`${base}/items/transaction_status?limit=-1`, { cache: "no-store", headers })
+            fetch(`${base}/items/transaction_status?limit=-1`, { cache: "no-store", headers }),
+            fetch(`${base}/items/purchase_order_receiving?limit=-1&fields=purchase_order_product_id,purchase_order_id,received_quantity,isPosted,receipt_no`, { cache: "no-store", headers }),
+            fetch(`${base}/items/purchase_order_product?limit=-1&fields=purchase_order_product_id,purchase_order_id,quantity`, { cache: "no-store", headers }),
         ]);
 
         const pos = await poRes.json();
         const sups = await supRes.json();
         const pays = await payRes.json();
         const trans = await transRes.json();
+        const porData = await porRes.json();
+        const popData = await popRes.json();
 
-        // Use all suppliers so that both Trade and Non-Trade POs can map their supplier names
         const allSuppliers = sups.data || [];
+        const porRows: any[] = porData.data || [];
+        const popRows: any[] = popData.data || [];
+
+        // Build maps: PO → total ordered qty, PO → total received qty, PO → has receipts
+        const orderedByPo = new Map<number, number>();
+        for (const p of popRows) {
+            const poId = Number(p.purchase_order_id);
+            orderedByPo.set(poId, (orderedByPo.get(poId) || 0) + Number(p.quantity || 0));
+        }
+
+        const receivedByPo = new Map<number, number>();
+        const hasReceiptByPo = new Map<number, boolean>();
+        for (const r of porRows) {
+            const poId = Number(r.purchase_order_id);
+            receivedByPo.set(poId, (receivedByPo.get(poId) || 0) + Number(r.received_quantity || 0));
+            if (r.receipt_no || Number(r.received_quantity) > 0) {
+                hasReceiptByPo.set(poId, true);
+            }
+        }
+
+        // Derive accurate inventory_status for each PO
+        const poList = (pos.data || []).map((po: any) => {
+            const poId = Number(po.purchase_order_id);
+            const dbStatus = Number(po.inventory_status || 0);
+            const hasReceipt = hasReceiptByPo.get(poId) || false;
+            const totalOrdered = orderedByPo.get(poId) || 0;
+            const totalReceived = receivedByPo.get(poId) || 0;
+            const isApproved = po.date_approved || po.approver_id;
+
+            let effectiveStatus = dbStatus;
+            // Only override if status is stale (still 1="For Approval" but activity proves otherwise)
+            if (dbStatus === 1) {
+                if (hasReceipt && totalOrdered > 0 && totalReceived >= totalOrdered) {
+                    effectiveStatus = 6; // Received
+                } else if (hasReceipt) {
+                    effectiveStatus = 9; // Partially Received
+                } else if (isApproved) {
+                    effectiveStatus = 3; // For Receiving (approved but no receipts)
+                }
+            }
+
+            return { ...po, inventory_status: effectiveStatus };
+        });
 
         return { 
-            poData: pos.data || [], 
+            poData: poList, 
             suppliers: allSuppliers,
             paymentStatuses: pays.data || [],
             transactionStatuses: trans.data || []

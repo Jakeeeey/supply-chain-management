@@ -130,6 +130,7 @@ function normalizeProduct(raw: RawProduct, fixedDiscountTypeId: string): Product
 
     const baseUnitPrice =
         Number(
+            raw?.cost_price_unit ??
             raw?.priceA ??
             raw?.price_per_unit ??
             raw?.cost_per_unit ??
@@ -166,10 +167,16 @@ function normalizeProduct(raw: RawProduct, fixedDiscountTypeId: string): Product
         piecesPerBox = Math.max(1, piecesPerBaseUnit || piecesPerBoxParsed || 1);
         baseUnitsPerBox = 1;
     } else {
-        piecesPerBox = Math.max(1, piecesPerBoxParsed || 0);
-        baseUnitsPerBox = piecesPerBox > 0 ? piecesPerBox / piecesPerBaseUnit : 1;
+        // priceA / price_per_unit is already per-UOM (per TIE, per PCS, etc.)
+        // deriveUnitsPerBoxFromText returns 1 as fallback when nothing meaningful is parsed.
+        // Only scale the price if the parser found a real pack count (> 1).
+        const parsedMeaningful = piecesPerBoxParsed > 1 ? piecesPerBoxParsed : 0;
+        piecesPerBox = Math.max(1, parsedMeaningful || piecesPerBaseUnit || 1);
+        baseUnitsPerBox = piecesPerBox / piecesPerBaseUnit;
+
         if (!Number.isFinite(baseUnitsPerBox) || baseUnitsPerBox <= 0)
             baseUnitsPerBox = 1;
+
         pricePerBox = baseUnitPrice * baseUnitsPerBox;
     }
 

@@ -805,7 +805,8 @@ export async function POST(req: NextRequest) {
 
         const patch: any = { 
             date_approved: new Date().toISOString(),
-            receiving_type: Boolean(body?.markAsInvoice) ? 2 : 3 // Persistent flag for "Mark as Invoice"
+            receiving_type: Boolean(body?.markAsInvoice) ? 2 : 3, // Persistent flag for "Mark as Invoice"
+            inventory_status: 3 // ✅ For Receiving
         };
         if (Boolean(body?.markAsInvoice)) patch.payment_status = 2;
 

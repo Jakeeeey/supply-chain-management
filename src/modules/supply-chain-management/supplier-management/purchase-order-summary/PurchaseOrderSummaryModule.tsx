@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   Table,
   TableBody,
@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ChevronRight, ChevronLeft, FilterX, ListFilter, Printer, Calendar } from "lucide-react";
+import { ChevronRight, ChevronLeft, FilterX, ListFilter, Printer, Calendar, Search, ChevronDown, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -61,8 +61,12 @@ export default function PurchaseOrderSummaryModule({
   const getInventoryStatusColor = (status: string) => {
     const s = status?.toLowerCase() || "";
     if (s.includes("approval")) return "bg-orange-500/15 text-orange-600 border-orange-500/30 dark:text-orange-400";
-    if (s.includes("received")) return "bg-green-500/15 text-green-600 border-green-500/30 dark:text-green-400";
-    if (s.includes("transit")) return "bg-blue-500/15 text-blue-600 border-blue-500/30 dark:text-blue-400";
+    if (s === "received") return "bg-green-500/15 text-green-600 border-green-500/30 dark:text-green-400";
+    if (s.includes("partially")) return "bg-cyan-500/15 text-cyan-600 border-cyan-500/30 dark:text-cyan-400";
+    if (s.includes("receiving")) return "bg-blue-500/15 text-blue-600 border-blue-500/30 dark:text-blue-400";
+    if (s.includes("pickup")) return "bg-indigo-500/15 text-indigo-600 border-indigo-500/30 dark:text-indigo-400";
+    if (s.includes("route") || s.includes("transit")) return "bg-violet-500/15 text-violet-600 border-violet-500/30 dark:text-violet-400";
+    if (s.includes("cancel")) return "bg-red-500/15 text-red-600 border-red-500/30 dark:text-red-400";
     if (s.includes("pending")) return "bg-yellow-500/15 text-yellow-600 border-yellow-500/30 dark:text-yellow-400";
     return "bg-slate-500/15 text-slate-600 border-slate-500/30 dark:text-slate-400";
   };
@@ -131,6 +135,107 @@ export default function PurchaseOrderSummaryModule({
     setCurrentPage(1);
   };
 
+  // ── Searchable Filter Dropdown Component ──
+  function SearchableFilter({ 
+    label, value, onChange, options, allLabel 
+  }: { 
+    label: string; 
+    value: string; 
+    onChange: (v: string) => void; 
+    options: { id: string; label: string }[]; 
+    allLabel: string;
+  }) {
+    const [open, setOpen] = useState(false);
+    const [query, setQuery] = useState("");
+    const ref = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+      function handleClickOutside(e: MouseEvent) {
+        if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      }
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    const filtered = options.filter(o => 
+      o.label.toLowerCase().includes(query.toLowerCase())
+    );
+
+    const selectedLabel = value === "all" 
+      ? allLabel 
+      : options.find(o => o.id === value)?.label || allLabel;
+
+    return (
+      <div className="space-y-1.5">
+        <span className="text-[9px] font-bold uppercase text-muted-foreground/70 ml-1">{label}</span>
+        <div className="relative" ref={ref}>
+          <button
+            type="button"
+            onClick={() => { setOpen(!open); setQuery(""); }}
+            className="flex items-center justify-between w-full h-10 px-3 text-xs bg-background border border-border rounded-md hover:bg-muted/50 transition-colors text-left"
+          >
+            <span className="truncate">{selectedLabel}</span>
+            <div className="flex items-center gap-1 shrink-0 ml-2">
+              {value !== "all" && (
+                <span 
+                  onClick={(e) => { e.stopPropagation(); onChange("all"); setCurrentPage(1); }}
+                  className="p-0.5 rounded hover:bg-destructive/10 hover:text-destructive transition-colors cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </span>
+              )}
+              <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`} />
+            </div>
+          </button>
+
+          {open && (
+            <div className="absolute z-50 mt-1 w-full bg-popover border border-border rounded-lg shadow-xl overflow-hidden animate-in fade-in-0 zoom-in-95 slide-in-from-top-2 duration-150">
+              <div className="p-2 border-b border-border">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <input
+                    type="text"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Type to search..."
+                    className="w-full h-8 pl-8 pr-3 text-xs bg-muted/30 border border-border rounded-md outline-none focus:ring-1 focus:ring-primary/50 placeholder:text-muted-foreground/50"
+                    autoFocus
+                  />
+                </div>
+              </div>
+              <div className="max-h-[200px] overflow-y-auto p-1">
+                <button
+                  type="button"
+                  onClick={() => { onChange("all"); setCurrentPage(1); setOpen(false); }}
+                  className={`w-full text-left px-3 py-2 text-xs rounded-md transition-colors ${value === "all" ? "bg-primary/10 text-primary font-bold" : "hover:bg-muted/50 text-foreground"}`}
+                >
+                  {allLabel}
+                </button>
+                {filtered.map(o => (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() => { onChange(o.id); setCurrentPage(1); setOpen(false); }}
+                    className={`w-full text-left px-3 py-2 text-xs rounded-md transition-colors ${value === o.id ? "bg-primary/10 text-primary font-bold" : "hover:bg-muted/50 text-foreground"}`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+                {filtered.length === 0 && (
+                  <div className="px-3 py-4 text-xs text-muted-foreground text-center italic">No matches found</div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const supplierOptions = useMemo(() => suppliers.map(s => ({ id: s.id.toString(), label: s.supplier_name })), [suppliers]);
+  const invStatusOptions = useMemo(() => transactionStatuses.map(s => ({ id: s.id.toString(), label: s.status })), [transactionStatuses]);
+  const payStatusOptions = useMemo(() => paymentStatuses.map(s => ({ id: s.id.toString(), label: s.status })), [paymentStatuses]);
+
   return (
     <div className="space-y-6">
       {/* FILTER PANEL - MATCHED UI WITH image_45f077.png */}
@@ -177,19 +282,14 @@ export default function PurchaseOrderSummaryModule({
           <div className="pt-4 border-t border-border/50">
             <label className="text-[10px] font-bold uppercase text-muted-foreground mb-3 block">Filter By</label>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Supplier */}
-              <div className="space-y-1.5">
-                <span className="text-[9px] font-bold uppercase text-muted-foreground/70 ml-1">Supplier</span>
-                <Select value={filterSupplier} onValueChange={(v) => { setFilterSupplier(v); setCurrentPage(1); }}>
-                  <SelectTrigger className="h-10 text-xs bg-background border-border">
-                    <SelectValue placeholder="All Suppliers" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Suppliers</SelectItem>
-                    {suppliers.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.supplier_name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Supplier - Searchable */}
+              <SearchableFilter
+                label="Supplier"
+                value={filterSupplier}
+                onChange={setFilterSupplier}
+                options={supplierOptions}
+                allLabel="All Suppliers"
+              />
 
               {/* Transaction Type */}
               <div className="space-y-1.5">
@@ -206,33 +306,23 @@ export default function PurchaseOrderSummaryModule({
                 </Select>
               </div>
 
-              {/* Inventory Status */}
-              <div className="space-y-1.5">
-                <span className="text-[9px] font-bold uppercase text-muted-foreground/70 ml-1">Inventory Status</span>
-                <Select value={filterInvStatus} onValueChange={(v) => { setFilterInvStatus(v); setCurrentPage(1); }}>
-                  <SelectTrigger className="h-10 text-xs bg-background border-border">
-                    <SelectValue placeholder="All Statuses" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    {transactionStatuses.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.status}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Inventory Status - Searchable */}
+              <SearchableFilter
+                label="Inventory Status"
+                value={filterInvStatus}
+                onChange={setFilterInvStatus}
+                options={invStatusOptions}
+                allLabel="All Statuses"
+              />
 
-              {/* Payment Status */}
-              <div className="space-y-1.5">
-                <span className="text-[9px] font-bold uppercase text-muted-foreground/70 ml-1">Payment Status</span>
-                <Select value={filterPayStatus} onValueChange={(v) => { setFilterPayStatus(v); setCurrentPage(1); }}>
-                  <SelectTrigger className="h-10 text-xs bg-background border-border">
-                    <SelectValue placeholder="All Statuses" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    {paymentStatuses.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.status}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Payment Status - Searchable */}
+              <SearchableFilter
+                label="Payment Status"
+                value={filterPayStatus}
+                onChange={setFilterPayStatus}
+                options={payStatusOptions}
+                allLabel="All Statuses"
+              />
 
               {/* Date Requested Range */}
               <div className="space-y-1.5 lg:col-span-2">

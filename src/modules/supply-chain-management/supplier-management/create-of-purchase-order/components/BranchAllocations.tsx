@@ -148,7 +148,7 @@ export function BranchAllocations(props: {
                                                         </td>
                                                         <td className="px-3 py-3">
                                                             <div className="flex flex-col gap-0.5">
-                                                                <span className="font-black text-foreground tracking-tight uppercase group-hover:text-primary transition-colors text-[10px] truncate max-w-[180px]">{item.name}</span>
+                                                                <span className="font-black text-foreground tracking-tight uppercase group-hover:text-primary transition-colors text-[10px]">{item.name}</span>
                                                                 <span className="text-[8px] text-muted-foreground font-mono">
                                                                     ID: {item.id}
                                                                 </span>

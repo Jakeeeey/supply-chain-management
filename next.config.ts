@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
     "msi-eulysis",
     "100.78.113.125",
     "100.75.111.6",
+    "169.254.83.107",
   ],
 };
 
