@@ -131,8 +131,10 @@ export function RFIDManagementModal({
           <div className="space-y-2">
              <div className="flex items-center justify-between text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
                 <span>Assigned RFID Tags ({assignedTags.length})</span>
-                {assignedTags.length > 0 && (
-                   <span className="text-xs text-blue-500 font-bold">Target: {conversionDetails.convertedQuantity} Unit(S)</span>
+                {assignedTags.length !== conversionDetails.convertedQuantity ? (
+                   <span className="text-xs text-orange-500 font-bold">Required: {conversionDetails.convertedQuantity} Tag(s)</span>
+                ) : (
+                   <span className="text-xs text-emerald-500 font-bold">Passed</span>
                 )}
              </div>
              
@@ -195,8 +197,8 @@ export function RFIDManagementModal({
             </Button>
             <Button 
                onClick={handleSubmit} 
-               disabled={isSubmitting || assignedTags.length === 0}
-               className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-md font-bold text-xs uppercase tracking-widest px-6 gap-2 flex-1 sm:flex-initial shadow-md shadow-emerald-500/20"
+               disabled={isSubmitting || assignedTags.length !== conversionDetails.convertedQuantity}
+               className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-md font-bold text-xs uppercase tracking-widest px-6 gap-2 flex-1 sm:flex-initial shadow-md shadow-emerald-500/20 disabled:bg-muted disabled:text-muted-foreground"
             >
               {isSubmitting && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
               Confirm Conversion
