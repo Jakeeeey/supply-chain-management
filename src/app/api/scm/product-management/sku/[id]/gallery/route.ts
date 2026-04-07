@@ -15,10 +15,14 @@ export async function GET(req: NextRequest, { params }: { params: Params }) {
       {
         headers: { Authorization: `Bearer ${DIRECTUS_TOKEN}` },
 <<<<<<< HEAD
+<<<<<<< HEAD
       },
 =======
       }
 >>>>>>> 1b6130b (feat(sku): add multi-image gallery support and modal)
+=======
+      },
+>>>>>>> 3243111 (style: fix remaining lint issues)
     );
 
     const result = await response.json();
@@ -27,24 +31,34 @@ export async function GET(req: NextRequest, { params }: { params: Params }) {
       return NextResponse.json(
         { error: result.errors?.[0]?.message || "Failed to fetch gallery" },
 <<<<<<< HEAD
+<<<<<<< HEAD
         { status: response.status },
 =======
         { status: response.status }
 >>>>>>> 1b6130b (feat(sku): add multi-image gallery support and modal)
+=======
+        { status: response.status },
+>>>>>>> 3243111 (style: fix remaining lint issues)
       );
     }
 
     return NextResponse.json(result);
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 3243111 (style: fix remaining lint issues)
   } catch (error: unknown) {
     return NextResponse.json(
       { error: (error as Error).message },
       { status: 500 },
     );
+<<<<<<< HEAD
 =======
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
 >>>>>>> 1b6130b (feat(sku): add multi-image gallery support and modal)
+=======
+>>>>>>> 3243111 (style: fix remaining lint issues)
   }
 }
 
@@ -74,23 +88,33 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
       return NextResponse.json(
         { error: result.errors?.[0]?.message || "Failed to add to gallery" },
 <<<<<<< HEAD
+<<<<<<< HEAD
         { status: response.status },
 =======
         { status: response.status }
 >>>>>>> 1b6130b (feat(sku): add multi-image gallery support and modal)
+=======
+        { status: response.status },
+>>>>>>> 3243111 (style: fix remaining lint issues)
       );
     }
 
     return NextResponse.json(result);
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 3243111 (style: fix remaining lint issues)
   } catch (error: unknown) {
     return NextResponse.json(
       { error: (error as Error).message },
       { status: 500 },
     );
+<<<<<<< HEAD
 =======
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
 >>>>>>> 1b6130b (feat(sku): add multi-image gallery support and modal)
+=======
+>>>>>>> 3243111 (style: fix remaining lint issues)
   }
 }
