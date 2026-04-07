@@ -28,6 +28,9 @@ interface MasterlistTableProps {
   onSearch?: (value: string) => void;
   onSelectionChange?: (selectedRows: SKU[]) => void;
   onToggleStatus?: (id: number | string, current: boolean) => void;
+  onEdit?: (sku: SKU) => void;
+  onUpdateImage?: (sku: SKU) => void;
+  onViewGallery?: (sku: SKU) => void;
   actionComponent?: React.ReactNode;
   emptyTitle?: string;
   emptyDescription?: string;
@@ -49,13 +52,23 @@ export function MasterlistTable({
   onSearch,
   onSelectionChange,
   onToggleStatus,
+  onEdit,
+  onUpdateImage,
+  onViewGallery,
   actionComponent,
   emptyTitle,
   emptyDescription,
 }: MasterlistTableProps) {
   const columns = React.useMemo(
-    () => getMasterlistColumns(masterData, onToggleStatus),
-    [masterData, onToggleStatus],
+    () =>
+      getMasterlistColumns(
+        masterData,
+        onToggleStatus,
+        onEdit,
+        onUpdateImage,
+        onViewGallery,
+      ),
+    [masterData, onToggleStatus, onEdit, onUpdateImage, onViewGallery],
   );
 
   // We don't unmount the table during loading anymore
