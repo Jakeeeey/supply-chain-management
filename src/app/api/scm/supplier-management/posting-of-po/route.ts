@@ -283,7 +283,7 @@ function buildPorIdsByKey(porRows: any[]) {
     return map;
 }
 
-function isPartiallyTagged(
+function isPartiallyReceivedOrTagged(
     poId: number,
     lines: PoProductRow[],
     porRows: any[],
@@ -291,6 +291,13 @@ function isPartiallyTagged(
 ) {
     if (!lines.length) return false;
     const porIdsByKey = buildPorIdsByKey(porRows);
+
+    const recByPor = new Map<number, number>();
+    for (const r of porRows) {
+        const porId = toNum(r?.purchase_order_product_id);
+        if (!porId) continue;
+        recByPor.set(porId, effectiveReceivedQty(r));
+    }
 
     for (const ln of lines) {
         const pid = toNum(ln.product_id);
@@ -303,6 +310,9 @@ function isPartiallyTagged(
 
         const taggedQty = porIds.reduce((sum, id) => sum + (rfidsByPorId.get(id) ?? []).length, 0);
         if (taggedQty > 0) return true;
+        
+        const receivedQty = porIds.reduce((sum, id) => sum + (recByPor.get(id) ?? 0), 0);
+        if (receivedQty > 0) return true;
     }
     return false;
 }
@@ -331,9 +341,6 @@ function isFullyReceived(
 
         const porIds = porIdsByKey.get(keyLine(poId, pid, bid)) ?? [];
         if (!porIds.length) return false;
-
-        const taggedQty = porIds.reduce((sum, id) => sum + (rfidsByPorId.get(id) ?? []).length, 0);
-        if (taggedQty < expected) return false;
 
         const receivedQty = porIds.reduce((sum, id) => sum + (recByPor.get(id) ?? 0), 0);
         if (receivedQty < expected) return false;
@@ -605,7 +612,7 @@ export async function GET() {
             const porRows = porByPo.get(poId) ?? [];
             const lines = linesByPo.get(poId) ?? [];
 
-            const taggingOk = isPartiallyTagged(poId, lines, porRows, rfidsByPorId);
+            const taggingOk = isPartiallyReceivedOrTagged(poId, lines, porRows, rfidsByPorId);
             // ✅ Check for new statuses (6=Received, 9=Partially Received) AND legacy (12, 13)
             const eligibleByStatus = invStatus === 6 || invStatus === 9 || invStatus === 12 || invStatus === 13;
             
@@ -705,12 +712,12 @@ export async function POST(req: NextRequest) {
             const receivingItems = porIds.length ? await fetchReceivingItems(base, porIds) : [];
             const rfidsByPorId = groupRfidsByPorId(receivingItems);
 
-            const taggingOk = isPartiallyTagged(poId, lines, porRows, rfidsByPorId);
+            const receivingOk = isPartiallyReceivedOrTagged(poId, lines, porRows, rfidsByPorId);
             // Also allow opening POs that already had a partial post (inventory_status=13)
             const invStatus = toNum(po?.inventory_status);
             const hasAnyPosted = porRows.some((r: any) => toNum(r?.isPosted) === 1);
-            if (!taggingOk && !hasAnyPosted && invStatus !== 13) {
-                return bad("PO is not ready for posting. Please tag at least one item first.", 409);
+            if (!receivingOk && !hasAnyPosted && invStatus !== 13) {
+                return bad("PO is not ready for posting. Please receive at least one item first.", 409);
             }
 
             const fully = isFullyReceived(poId, lines, porRows, rfidsByPorId);
@@ -863,10 +870,10 @@ export async function POST(req: NextRequest) {
             const receivingItems = porIds.length ? await fetchReceivingItems(base, porIds) : [];
             const rfidsByPorId = groupRfidsByPorId(receivingItems);
 
-            const taggingOk = isPartiallyTagged(poId, lines, porRows, rfidsByPorId);
+            const taggingOk = isPartiallyReceivedOrTagged(poId, lines, porRows, rfidsByPorId);
             const hasAnyPosted = porRows.some((r: any) => toNum(r?.isPosted) === 1);
             if (!taggingOk && !hasAnyPosted) {
-                return bad("Cannot post. Complete RFID tagging first.", 409);
+                return bad("Cannot post. Complete RFID or manual receiving first.", 409);
             }
 
             const target = porRows.filter((r: any) => toStr(r?.receipt_no) === receiptNo);
@@ -937,7 +944,7 @@ export async function POST(req: NextRequest) {
             const receivingItems = porIds.length ? await fetchReceivingItems(base, porIds) : [];
             const rfidsByPorId = groupRfidsByPorId(receivingItems);
 
-            const taggingOk = isPartiallyTagged(poId, lines, porRows, rfidsByPorId);
+            const taggingOk = isPartiallyReceivedOrTagged(poId, lines, porRows, rfidsByPorId);
             const hasAnyActivity = porRows.some(
                 (r: any) => effectiveReceivedQty(r) > 0 || hasReceiptEvidence(r)
             );

@@ -150,27 +150,36 @@ const POR_SAFE_FIELDS =
     "purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted,lot_no,expiry_date";
 
 async function fetchApprovedNotReceivedPOs(base: string) {
+    // ✅ MANUAL MODULE: Broader filter — fetch ANY approved PO that isn't fully received.
+    // inventory_status values:
+    //   1 = Draft, 2 = For Approval, 3 = Approved/For Receiving,
+    //   6 = Fully Received, 9 = Partially Received,
+    //   11 = For Pickup, 12 = En Route, 13 = Partial Posted, 14 = Fully Posted
     const qs = [
         "limit=-1",
         "sort=-date_encoded",
         "fields=purchase_order_id,purchase_order_no,date,date_encoded,approver_id,date_approved,payment_status,inventory_status,date_received,supplier_name,total_amount",
-        // Status 3 (For Receiving), 9 (Partially Received), 11 (For Pickup), 12 (En Route)
+        // Include any PO that has been approved (status 3+) but not fully received/posted
         "filter[_or][0][inventory_status][_eq]=3",
         "filter[_or][1][inventory_status][_eq]=9",
         "filter[_or][2][inventory_status][_eq]=11",
         "filter[_or][3][inventory_status][_eq]=12",
-        // Fallback for legacy POs that might only have these fields set but not status
-        "filter[_or][4][date_approved][_nnull]=true",
-        "filter[_or][5][approver_id][_nnull]=true",
-        "filter[_or][6][payment_status][_eq]=2",
-        // Still must not be fully received (date_received or status 6)
-        "filter[date_received][_null]=true",
-        "filter[inventory_status][_neq]=6",
+        "filter[_or][4][inventory_status][_eq]=13",
+        // Fallback: any PO that was approved but has a weird/missing status
+        "filter[_or][5][date_approved][_nnull]=true",
     ].join("&");
 
     const url = `${base}/items/${PO_COLLECTION}?${qs}`;
     const j = await fetchJson(url);
-    return Array.isArray(j?.data) ? j.data : [];
+    const rows = Array.isArray(j?.data) ? j.data : [];
+
+    // Post-filter: exclude fully received (status 6) and fully posted (14) on the JS side
+    // This avoids complex nested AND+OR in Directus which can cause filtering bugs
+    return rows.filter((po: any) => {
+        const status = toNum(po?.inventory_status);
+        if (status === 6 || status === 14) return false; // fully received or fully posted
+        return true;
+    });
 }
 
 async function fetchReceivingItemsByLinkIds(base: string, linkIds: number[]) {
@@ -205,11 +214,15 @@ async function fetchPORByPOIds(base: string, poIds: number[]) {
 }
 
 async function fetchPORById(base: string, porId: number) {
-    const url =
-        `${base}/items/${POR_COLLECTION}/${encodeURIComponent(String(porId))}` +
-        `?fields=${encodeURIComponent(POR_SAFE_FIELDS)}`;
-    const j = await fetchJson(url);
-    return j?.data ?? null;
+    try {
+        const url =
+            `${base}/items/${POR_COLLECTION}/${encodeURIComponent(String(porId))}` +
+            `?fields=${encodeURIComponent(POR_SAFE_FIELDS)}`;
+        const j = await fetchJson(url);
+        return j?.data ?? null;
+    } catch {
+        return null;
+    }
 }
 
 async function fetchPOProductsByPOIds(base: string, poIds: number[]) {
@@ -245,6 +258,16 @@ async function fetchSinglePOLineByKey(base: string, poId: number, productId: num
     const j = await fetchJson(url);
     const row = Array.isArray(j?.data) ? j.data[0] : null;
     return row ?? null;
+}
+
+async function fetchPOPById(base: string, popId: number) {
+    try {
+        const url = `${base}/items/${PO_PRODUCTS_COLLECTION}/${encodeURIComponent(String(popId))}?fields=*`;
+        const j = await fetchJson(url);
+        return j?.data ?? null;
+    } catch {
+        return null;
+    }
 }
 
 async function fetchSupplierNames(base: string, supplierIds: number[]) {
@@ -525,9 +548,8 @@ export async function GET() {
             const porRows = porByPo.get(poId) ?? [];
             const lines = linesByPo.get(poId) ?? [];
 
-            // ✅ PO will show up in list as long as it's partially tagged
-            const isTagged = isPartiallyTagged(poId, lines, taggedCountByKey);
-            if (!isTagged) continue;
+            // ✅ MANUAL MODULE: No RFID tagging required — show all approved POs
+            // (isPartiallyTagged check removed for manual flow)
 
             // ✅ exclude fully received (for posting page na)
             const fully = isFullyReceived(poId, lines, porRows, taggedCountByKey);
@@ -595,8 +617,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             const receivingItems = await fetchReceivingItemsByLinkIds(base, [...porIds, ...popIds]);
             const { taggedCountByKey, rfidsByKey } = buildTagMapsForScopes({ poLines: lines, porRows, receivingItems });
 
-            const ready = isPartiallyTagged(poId, lines, taggedCountByKey);
-            if (!ready) return bad("PO is not ready for receiving. Please tag at least one item first.", 409);
+            // ✅ MANUAL MODULE: No RFID tagging required — skip tag check
+            // (isPartiallyTagged check removed for manual flow)
 
             // We allow opening even if fully received, so that save_receipt can get the final state for printing.
             // scan_rfid already has checks to prevent double-receiving.
@@ -657,7 +679,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
                 const k = keyLine(poId, pid, bid);
 
                 const porIdsForLine = porIdsByKey.get(k) ?? [];
-                if (!porIdsForLine.length) continue;
+                // ✅ MANUAL MODULE: Don't skip items without POR rows — they just haven't been received yet
+                // Use the POP id (purchase_order_product_id) as fallback identifier
+                const popId = toNum((ln as any).purchase_order_product_id);
 
                 const p = productsMap.get(pid) ?? null;
 
@@ -667,22 +691,23 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
                 const receivedQty = porIdsForLine.reduce((sum, id) => sum + (recByPor.get(id) ?? 0), 0);
                 const isReceived = receivedQty >= ordered;
 
-                // Pick a stable POR id for UI (first is ok)
-                const primaryPorId = porIdsForLine[0];
+                // Pick a stable id for UI: prefer POR id, fallback to POP id
+                const primaryId = porIdsForLine.length > 0 ? porIdsForLine[0] : popId;
+                if (!primaryId) continue; // safety: skip if neither exists
 
                 const unitPrice = toNum((ln as any)?.unit_price);
                 const unitDiscount = unitPrice * (discountPercent / 100);
 
                 const item: any = {
-                    id: String(primaryPorId),
-                    porId: String(primaryPorId),
+                    id: String(primaryId),
+                    porId: porIdsForLine.length > 0 ? String(porIdsForLine[0]) : String(popId),
                     productId: String(pid),
                     name: toStr(p?.product_name, `Product #${pid}`),
                     barcode: productDisplayCode(p, pid),
                     uom: "—",
                     expectedQty: ordered,
                     receivedQty,
-                    requiresRfid: true,
+                    requiresRfid: false, // Manual module — no RFID required
                     taggedQty,
                     rfids,
                     isReceived,
@@ -768,42 +793,81 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             for (const it of entries) {
                 if (!it.porId || it.qty <= 0) continue;
 
-                const por = await fetchPORById(base, it.porId);
-                if (!por) return bad("Some scanned items do not belong to this PO.", 400);
+                let por = await fetchPORById(base, it.porId);
+                let productId, branchId, currentReceived = 0, isPosted = false;
+                let actualPopId = 0;
 
-                const ownerPoId = toNum(por?.purchase_order_id);
-                if (!ownerPoId || ownerPoId !== poId) return bad("Some scanned items do not belong to this PO.", 400);
+                if (!por) {
+                    // Try to find if this is a POP id (meaning no POR row exists yet)
+                    const pop = await fetchPOPById(base, it.porId);
+                    if (!pop || toNum(pop.purchase_order_id) !== poId) {
+                        return bad("Some scanned items do not belong to this PO.", 400);
+                    }
+                    productId = toNum(pop.product_id);
+                    branchId = toNum(pop.branch_id);
+                    actualPopId = it.porId; // it.porId is actually the POP ID
+                } else {
+                    const ownerPoId = toNum(por?.purchase_order_id);
+                    if (!ownerPoId || ownerPoId !== poId) return bad("Some scanned items do not belong to this PO.", 400);
 
-                const isPosted = toNum(por?.isPosted) === 1;
+                    isPosted = toNum(por?.isPosted) === 1;
+                    productId = toNum(por?.product_id);
+                    branchId = toNum(por?.branch_id);
+                    currentReceived = effectiveReceivedQty(por);
+                    actualPopId = toNum(por?.purchase_order_product_id);
+                }
+
                 if (isPosted) continue;
 
-                const productId = toNum(por?.product_id);
-                const branchId = toNum(por?.branch_id);
-
-                // expected qty + popId
+                // expected qty
                 const line = await fetchSinglePOLineByKey(base, poId, productId, branchId);
                 const expectedQty = Math.max(0, toNum(line?.ordered_quantity));
+                const unitPrice = toNum((line as any)?.unit_price);
                 
-                const currentReceived = effectiveReceivedQty(por);
                 const nextReceived = Math.min(expectedQty, currentReceived + it.qty);
 
                 const metadata = porMetaData[String(it.porId)] || {};
                 const lotNo = toStr(metadata.lotNo);
                 const expiry = ymdToIsoDate(toStr(metadata.expiryDate));
 
-                const patchUrl = `${base}/items/${POR_COLLECTION}/${encodeURIComponent(String(it.porId))}`;
-                await fetchJson(patchUrl, {
-                    method: "PATCH",
-                    body: JSON.stringify({
-                        receipt_no: receiptNo,
-                        receipt_date: ymdToIsoDate(receiptDate),
-                        received_date: nowISO(),
-                        received_quantity: nextReceived,
-                        isPosted: 0,
-                        ...(lotNo ? { lot_no: lotNo } : {}),
-                        ...(expiry ? { expiry_date: expiry } : {}),
-                    }),
-                });
+                if (!por) {
+                    // CREATE new POR record (Do not pass primary key purchase_order_product_id)
+                    await fetchJson(`${base}/items/${POR_COLLECTION}`, {
+                        method: "POST",
+                        body: JSON.stringify({
+                            purchase_order_id: poId,
+                            product_id: productId,
+                            branch_id: branchId,
+                            receipt_no: receiptNo,
+                            receipt_date: ymdToIsoDate(receiptDate),
+                            received_date: nowISO(),
+                            received_quantity: nextReceived,
+                            isPosted: 0,
+                            unit_price: unitPrice || 0,
+                            discounted_amount: 0,
+                            vat_amount: 0,
+                            withholding_amount: 0,
+                            total_amount: 0,
+                            ...(lotNo ? { lot_no: lotNo } : {}),
+                            ...(expiry ? { expiry_date: expiry } : {}),
+                        }),
+                    });
+                } else {
+                    // UPDATE existing POR record
+                    const patchUrl = `${base}/items/${POR_COLLECTION}/${encodeURIComponent(String(it.porId))}`;
+                    await fetchJson(patchUrl, {
+                        method: "PATCH",
+                        body: JSON.stringify({
+                            receipt_no: receiptNo,
+                            receipt_date: ymdToIsoDate(receiptDate),
+                            received_date: nowISO(),
+                            received_quantity: nextReceived,
+                            isPosted: 0,
+                            ...(lotNo ? { lot_no: lotNo } : {}),
+                            ...(expiry ? { expiry_date: expiry } : {}),
+                        }),
+                    });
+                }
             }
 
             // ✅ if fully received now, set PO date_received (best effort)
@@ -850,6 +914,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
         return bad("Unknown action.", 400);
     } catch (e: any) {
+        console.error("Manual Receiving API Error:", e);
         return bad(String(e?.message ?? e ?? "Failed request"), 500);
     }
 }
