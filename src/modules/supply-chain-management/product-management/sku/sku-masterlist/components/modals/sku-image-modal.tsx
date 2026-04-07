@@ -10,7 +10,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { SKU } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
+<<<<<<< HEAD
 import { useState } from "react";
+=======
+import { useEffect, useState } from "react";
+>>>>>>> 1b6130b (feat(sku): add multi-image gallery support and modal)
 import { ImageUpload } from "../../../sku-creation/components/ImageUpload";
 import { skuService } from "../../../sku-creation/services/sku";
 
@@ -30,6 +34,7 @@ export function SKUImageModal({
   isLoading,
 }: SKUImageModalProps) {
   const [productImage, setProductImage] = useState<string | null>(null);
+<<<<<<< HEAD
   const [prevSkuId, setPrevSkuId] = useState<string | number | undefined>(undefined);
   const [prevIsOpen, setPrevIsOpen] = useState<boolean>(false);
 
@@ -45,6 +50,14 @@ export function SKUImageModal({
       setProductImage(null);
     }
   }
+=======
+
+  useEffect(() => {
+    if (sku && isOpen)
+      setProductImage(sku.main_image || sku.product_images || null);
+    else if (!isOpen) setProductImage(null);
+  }, [sku, isOpen]);
+>>>>>>> 1b6130b (feat(sku): add multi-image gallery support and modal)
 
   const handleSave = async () => {
     if (!sku) return;

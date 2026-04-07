@@ -14,7 +14,11 @@ export async function GET(req: NextRequest, { params }: { params: Params }) {
       `${DIRECTUS_URL}/items/product_images?filter[product_id][_eq]=${id}&sort=sort_order&fields=image_id,image,sort_order,isActive`,
       {
         headers: { Authorization: `Bearer ${DIRECTUS_TOKEN}` },
+<<<<<<< HEAD
       },
+=======
+      }
+>>>>>>> 1b6130b (feat(sku): add multi-image gallery support and modal)
     );
 
     const result = await response.json();
@@ -22,16 +26,25 @@ export async function GET(req: NextRequest, { params }: { params: Params }) {
     if (!response.ok) {
       return NextResponse.json(
         { error: result.errors?.[0]?.message || "Failed to fetch gallery" },
+<<<<<<< HEAD
         { status: response.status },
+=======
+        { status: response.status }
+>>>>>>> 1b6130b (feat(sku): add multi-image gallery support and modal)
       );
     }
 
     return NextResponse.json(result);
+<<<<<<< HEAD
   } catch (error: unknown) {
     return NextResponse.json(
       { error: (error as Error).message },
       { status: 500 },
     );
+=======
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+>>>>>>> 1b6130b (feat(sku): add multi-image gallery support and modal)
   }
 }
 
@@ -60,15 +73,24 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
     if (!response.ok) {
       return NextResponse.json(
         { error: result.errors?.[0]?.message || "Failed to add to gallery" },
+<<<<<<< HEAD
         { status: response.status },
+=======
+        { status: response.status }
+>>>>>>> 1b6130b (feat(sku): add multi-image gallery support and modal)
       );
     }
 
     return NextResponse.json(result);
+<<<<<<< HEAD
   } catch (error: unknown) {
     return NextResponse.json(
       { error: (error as Error).message },
       { status: 500 },
     );
+=======
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+>>>>>>> 1b6130b (feat(sku): add multi-image gallery support and modal)
   }
 }

@@ -1,10 +1,18 @@
 "use client";
 
+<<<<<<< HEAD
 import { Button } from "@/components/ui/button";
 import { Loader2, Upload, X } from "lucide-react";
 import Image from "next/image";
 import React, { useRef, useState } from "react";
 import { toast } from "sonner";
+=======
+import React, { useState, useRef } from "react";
+import { Button } from "@/components/ui/button";
+import { Upload, X, ImageIcon, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import Image from "next/image";
+>>>>>>> 1b6130b (feat(sku): add multi-image gallery support and modal)
 
 interface ImageUploadProps {
   value?: string | null;
@@ -17,7 +25,11 @@ export function ImageUpload({
   value,
   onChange,
   onUpload,
+<<<<<<< HEAD
   disabled,
+=======
+  disabled
+>>>>>>> 1b6130b (feat(sku): add multi-image gallery support and modal)
 }: ImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -50,10 +62,16 @@ export function ImageUpload({
         const result = await onUpload(formData);
         onChange(result.id);
         toast.success("Image uploaded successfully");
+<<<<<<< HEAD
       } catch (error: unknown) {
         toast.error("Upload failed", {
           description:
             error instanceof Error ? error.message : "Could not upload image",
+=======
+      } catch (error: any) {
+        toast.error("Upload failed", {
+          description: error.message || "Could not upload image",
+>>>>>>> 1b6130b (feat(sku): add multi-image gallery support and modal)
         });
       } finally {
         setIsUploading(false);
@@ -81,9 +99,13 @@ export function ImageUpload({
             ? "border-muted bg-muted/20 h-48"
             : "border-muted-foreground/25 hover:border-primary/50 hover:bg-primary/[0.02] h-40"
         } ${disabled || isUploading ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+<<<<<<< HEAD
         onClick={() =>
           !disabled && !isUploading && fileInputRef.current?.click()
         }
+=======
+        onClick={() => !disabled && !isUploading && fileInputRef.current?.click()}
+>>>>>>> 1b6130b (feat(sku): add multi-image gallery support and modal)
       >
         <input
           type="file"

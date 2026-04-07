@@ -47,11 +47,16 @@ export function SKUGalleryModal({
       const result = await res.json();
       if (res.ok) setGallery(result.data || []);
       else throw new Error(result.error || "Failed to fetch gallery");
+<<<<<<< HEAD
     } catch (error: unknown) {
       toast.error("Error", {
         description:
           error instanceof Error ? error.message : "Failed to fetch gallery",
       });
+=======
+    } catch (error: any) {
+      toast.error("Error", { description: error.message });
+>>>>>>> 1b6130b (feat(sku): add multi-image gallery support and modal)
     } finally {
       setIsLoading(false);
     }
@@ -95,11 +100,16 @@ export function SKUGalleryModal({
         const err = await res.json();
         throw new Error(err.error || "Failed to delete image");
       }
+<<<<<<< HEAD
     } catch (error: unknown) {
       toast.error("Error", {
         description:
           error instanceof Error ? error.message : "Failed to delete image",
       });
+=======
+    } catch (error: any) {
+      toast.error("Error", { description: error.message });
+>>>>>>> 1b6130b (feat(sku): add multi-image gallery support and modal)
     } finally {
       setIsDeleting(null);
     }
