@@ -74,3 +74,23 @@ export async function updateUnit(
   const json = (await res.json()) as DirectusItemResponse<UnitApiRow>;
   return json?.data;
 }
+
+export async function checkUnitUniqueness(
+  field: "unit_name" | "unit_shortcut" | "sku_code",
+  value: string,
+  excludeId?: string
+): Promise<boolean> {
+  const filter: any = {
+    [field]: { _eq: value },
+  };
+
+  if (excludeId) {
+    filter.unit_id = { _neq: excludeId };
+  }
+
+  const res = await fetch(`${API_BASE}?limit=1&filter=${encodeURIComponent(JSON.stringify(filter))}`);
+  if (!res.ok) return true; // Fail safe
+
+  const json = await res.json();
+  return (json?.data?.length ?? 0) === 0;
+}

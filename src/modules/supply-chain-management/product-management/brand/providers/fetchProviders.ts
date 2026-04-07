@@ -78,3 +78,23 @@ export async function updateBrand(
   const json = (await res.json()) as DirectusItemResponse<BrandApiRow>;
   return json?.data;
 }
+
+export async function checkBrandUniqueness(
+  field: "brand_name" | "sku_code",
+  value: string,
+  excludeId?: number
+): Promise<boolean> {
+  const filter: any = {
+    [field]: { _eq: value },
+  };
+
+  if (excludeId) {
+    filter.brand_id = { _neq: excludeId };
+  }
+
+  const res = await fetch(`${API_BASE}?limit=1&filter=${encodeURIComponent(JSON.stringify(filter))}`);
+  if (!res.ok) return true; // Fail safe
+
+  const json = await res.json();
+  return (json?.data?.length ?? 0) === 0;
+}

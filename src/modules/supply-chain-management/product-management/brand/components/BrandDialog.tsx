@@ -25,7 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
 import { brandSchema, BrandFormValues, BrandApiRow } from "../types";
-import { createBrand, updateBrand } from "../providers/fetchProviders";
+import { createBrand, updateBrand, checkBrandUniqueness } from "../providers/fetchProviders";
 
 interface BrandDialogProps {
   open: boolean;
@@ -85,6 +85,21 @@ export function BrandDialog({
 
   const onSubmit: SubmitHandler<BrandFormValues> = async (values) => {
     try {
+      // 🛡️ Strict Uniqueness Checker
+      const nameUnique = await checkBrandUniqueness("brand_name", values.brand_name, selectedBrand?.brand_id);
+      if (!nameUnique) {
+        toast.error(`The Brand Name "${values.brand_name}" is already in use.`);
+        return;
+      }
+
+      if (values.sku_code) {
+        const skuUnique = await checkBrandUniqueness("sku_code", values.sku_code, selectedBrand?.brand_id);
+        if (!skuUnique) {
+          toast.error(`The SKU Code "${values.sku_code}" is already in use by another brand.`);
+          return;
+        }
+      }
+
       let imageId = selectedBrand?.image || null;
 
       if (file) {

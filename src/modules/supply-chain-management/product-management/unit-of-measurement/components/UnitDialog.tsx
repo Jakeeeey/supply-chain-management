@@ -26,7 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
 import { unitSchema, UnitFormValues, UnitApiRow } from "../types";
-import { createUnit, updateUnit } from "../providers/fetchProviders";
+import { createUnit, updateUnit, checkUnitUniqueness } from "../providers/fetchProviders";
 
 interface UnitDialogProps {
   open: boolean;
@@ -67,6 +67,29 @@ export function UnitDialog({
   // ✅ Explicitly typed SubmitHandler
   const onSubmit: SubmitHandler<UnitFormValues> = async (values) => {
     try {
+      // 🛡️ Strict Uniqueness Checker
+      const nameUnique = await checkUnitUniqueness("unit_name", values.unit_name, selectedUnit?.unit_id);
+      if (!nameUnique) {
+        toast.error(`The Unit Name "${values.unit_name}" is already in use.`);
+        return;
+      }
+
+      if (values.unit_shortcut) {
+        const shortcutUnique = await checkUnitUniqueness("unit_shortcut", values.unit_shortcut, selectedUnit?.unit_id);
+        if (!shortcutUnique) {
+          toast.error(`The Unit Shortcut "${values.unit_shortcut}" is already in use.`);
+          return;
+        }
+      }
+
+      if (values.sku_code) {
+        const skuUnique = await checkUnitUniqueness("sku_code", values.sku_code, selectedUnit?.unit_id);
+        if (!skuUnique) {
+          toast.error(`The SKU Code "${values.sku_code}" is already in use by another unit.`);
+          return;
+        }
+      }
+
       if (isEdit && selectedUnit) {
         await updateUnit(selectedUnit.unit_id, values);
         toast.success("Unit updated");
@@ -78,11 +101,7 @@ export function UnitDialog({
       onOpenChange(false);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Operation failed";
-      if (message.includes("unique")) {
-        toast.error("This Unit Name or Shortcut already exists.");
-      } else {
-        toast.error(message);
-      }
+      toast.error(message);
     }
   };
 

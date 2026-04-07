@@ -21,6 +21,7 @@ async function proxyRequest(req: NextRequest, method: string) {
   const limit = url.searchParams.get("limit") ?? "12";
   // ✅ Capture Search Param
   const search = url.searchParams.get("search") ?? "";
+  const filterParam = url.searchParams.get("filter") ?? "";
 
   let upstreamUrl = `${DIRECTUS_URL}${ENDPOINT}`;
 
@@ -29,9 +30,10 @@ async function proxyRequest(req: NextRequest, method: string) {
   } else if (method === "GET") {
     upstreamUrl += `?sort=-brand_id&page=${page}&limit=${limit}&meta=filter_count`;
 
-    // ✅ Apply Directus Filter if search exists
-    // Logic: brand_name CONTAINS search OR sku_code CONTAINS search
-    if (search) {
+    // ✅ Apply filter directly if provided, otherwise fallback to search logic
+    if (filterParam) {
+      upstreamUrl += `&filter=${encodeURIComponent(filterParam)}`;
+    } else if (search) {
       const filter = {
         _or: [
           { brand_name: { _icontains: search } }, // Case-insensitive search
