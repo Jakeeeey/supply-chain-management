@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Upload, X, ImageIcon, Loader2 } from "lucide-react";
-import { toast } from "sonner";
+import { Loader2, Upload, X } from "lucide-react";
 import Image from "next/image";
+import React, { useRef, useState } from "react";
+import { toast } from "sonner";
 
 interface ImageUploadProps {
   value?: string | null;
@@ -17,7 +17,7 @@ export function ImageUpload({
   value,
   onChange,
   onUpload,
-  disabled
+  disabled,
 }: ImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -50,9 +50,10 @@ export function ImageUpload({
         const result = await onUpload(formData);
         onChange(result.id);
         toast.success("Image uploaded successfully");
-      } catch (error: any) {
+      } catch (error: unknown) {
         toast.error("Upload failed", {
-          description: error.message || "Could not upload image",
+          description:
+            error instanceof Error ? error.message : "Could not upload image",
         });
       } finally {
         setIsUploading(false);
@@ -80,7 +81,9 @@ export function ImageUpload({
             ? "border-muted bg-muted/20 h-48"
             : "border-muted-foreground/25 hover:border-primary/50 hover:bg-primary/[0.02] h-40"
         } ${disabled || isUploading ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
-        onClick={() => !disabled && !isUploading && fileInputRef.current?.click()}
+        onClick={() =>
+          !disabled && !isUploading && fileInputRef.current?.click()
+        }
       >
         <input
           type="file"

@@ -47,8 +47,11 @@ export function SKUGalleryModal({
       const result = await res.json();
       if (res.ok) setGallery(result.data || []);
       else throw new Error(result.error || "Failed to fetch gallery");
-    } catch (error: any) {
-      toast.error("Error", { description: error.message });
+    } catch (error: unknown) {
+      toast.error("Error", {
+        description:
+          error instanceof Error ? error.message : "Failed to fetch gallery",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -92,8 +95,11 @@ export function SKUGalleryModal({
         const err = await res.json();
         throw new Error(err.error || "Failed to delete image");
       }
-    } catch (error: any) {
-      toast.error("Error", { description: error.message });
+    } catch (error: unknown) {
+      toast.error("Error", {
+        description:
+          error instanceof Error ? error.message : "Failed to delete image",
+      });
     } finally {
       setIsDeleting(null);
     }

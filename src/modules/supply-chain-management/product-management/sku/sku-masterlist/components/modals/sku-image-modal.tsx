@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { SKU } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ImageUpload } from "../../../sku-creation/components/ImageUpload";
 import { skuService } from "../../../sku-creation/services/sku";
 
@@ -30,12 +30,21 @@ export function SKUImageModal({
   isLoading,
 }: SKUImageModalProps) {
   const [productImage, setProductImage] = useState<string | null>(null);
+  const [prevSkuId, setPrevSkuId] = useState<string | number | undefined>(undefined);
+  const [prevIsOpen, setPrevIsOpen] = useState<boolean>(false);
 
-  useEffect(() => {
-    if (sku && isOpen)
+  const currentSkuId = sku ? (sku.id || sku.product_id) : undefined;
+
+  if (currentSkuId !== prevSkuId || isOpen !== prevIsOpen) {
+    setPrevSkuId(currentSkuId);
+    setPrevIsOpen(isOpen);
+    
+    if (isOpen && sku) {
       setProductImage(sku.main_image || sku.product_images || null);
-    else if (!isOpen) setProductImage(null);
-  }, [sku, isOpen]);
+    } else if (!isOpen) {
+      setProductImage(null);
+    }
+  }
 
   const handleSave = async () => {
     if (!sku) return;
