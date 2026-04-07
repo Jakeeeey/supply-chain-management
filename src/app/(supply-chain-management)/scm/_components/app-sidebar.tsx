@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
-import {useState, useMemo} from "react";
+import { useState, useMemo } from "react";
 
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input"; // Make sure you have the shadcn Input component installed!
@@ -28,7 +28,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import {NavMain} from "./nav-main";
+import { NavMain } from "./nav-main";
 
 const data = {
     navMain: [
@@ -139,6 +139,10 @@ const data = {
                 {
                     title: "Receiving Products",
                     url: "/scm/supplier-management/receiving-products",
+                },
+                {
+                    title: "Receiving Products Manual",
+                    url: "/scm/supplier-management/receiving-products-manual",
                 },
                 {
                     title: "Posting Of Purchase Order",
@@ -440,7 +444,7 @@ const data = {
     ],
 };
 
-export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
+export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const [searchQuery, setSearchQuery] = useState("");
 
     const filteredNavMain = useMemo(() => {
@@ -460,7 +464,7 @@ export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
                 }
                 // If a child matches, show the parent but ONLY the matching children
                 else if (childMatches.length > 0) {
-                    acc.push({...item, items: childMatches});
+                    acc.push({ ...item, items: childMatches });
                 }
 
                 return acc;
@@ -479,7 +483,7 @@ export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
                             <Link href="/main-dashboard">
                                 <div
                                     className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                                    <Command className="size-4"/>
+                                    <Command className="size-4" />
                                 </div>
                                 <div className="grid flex-1 text-left text-sm leading-tight">
                                     <span className="truncate font-medium">VOS Web</span>
@@ -494,7 +498,7 @@ export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
 
                 <div className="px-4 py-2">
                     <div className="relative">
-                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input
                             type="search"
                             placeholder="Search modules..."
@@ -506,7 +510,7 @@ export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
                 </div>
             </SidebarHeader>
 
-            <Separator/>
+            <Separator />
 
             <SidebarContent>
                 <div className="px-4 pt-3 pb-2 text-xs font-medium text-muted-foreground">
@@ -517,7 +521,7 @@ export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
             </SidebarContent>
 
             <SidebarFooter className="p-0">
-                <Separator/>
+                <Separator />
                 <div className="py-3 text-center text-xs text-muted-foreground">
                     VOS Web v2.0
                 </div>

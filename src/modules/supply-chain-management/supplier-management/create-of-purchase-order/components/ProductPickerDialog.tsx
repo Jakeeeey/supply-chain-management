@@ -175,7 +175,7 @@ export function ProductPickerDialog(props: {
 
                                                     {Number((product as any)?.unitsPerBox ?? 1) > 1 ? (
                                                         <div className="text-[10px] text-muted-foreground font-bold">
-                                                            {Number((product as any)?.unitsPerBox)} pcs / {product.uom}
+                                                            Packed as {Number((product as any)?.unitsPerBox)} pcs/box
                                                         </div>
                                                     ) : null}
                                                 </div>

@@ -158,27 +158,20 @@ function normalizeProduct(raw: RawProduct, fixedDiscountTypeId: string): Product
         baseUomId === BOX_UOM_ID ? piecesPerBaseUnit : 0
     );
 
-    let pricePerBox = baseUnitPrice;
-    let piecesPerBox = 1;
-    let baseUnitsPerBox = 1;
-
-    if (baseUomId === BOX_UOM_ID) {
-        pricePerBox = baseUnitPrice;
-        piecesPerBox = Math.max(1, piecesPerBaseUnit || piecesPerBoxParsed || 1);
+    const parsedMeaningful = piecesPerBoxParsed > 1 ? piecesPerBoxParsed : 0;
+    const piecesPerBox = Math.max(1, parsedMeaningful || piecesPerBaseUnit || 1);
+    
+    // Calculate how many times the base UOM fits into the full Box/Pack size
+    let baseUnitsPerBox = piecesPerBox / piecesPerBaseUnit;
+    if (!Number.isFinite(baseUnitsPerBox) || baseUnitsPerBox <= 0) {
         baseUnitsPerBox = 1;
-    } else {
-        // priceA / price_per_unit is already per-UOM (per TIE, per PCS, etc.)
-        // deriveUnitsPerBoxFromText returns 1 as fallback when nothing meaningful is parsed.
-        // Only scale the price if the parser found a real pack count (> 1).
-        const parsedMeaningful = piecesPerBoxParsed > 1 ? piecesPerBoxParsed : 0;
-        piecesPerBox = Math.max(1, parsedMeaningful || piecesPerBaseUnit || 1);
-        baseUnitsPerBox = piecesPerBox / piecesPerBaseUnit;
-
-        if (!Number.isFinite(baseUnitsPerBox) || baseUnitsPerBox <= 0)
-            baseUnitsPerBox = 1;
-
-        pricePerBox = baseUnitPrice * baseUnitsPerBox;
     }
+
+    // The price provided by the API (cost_price_unit, priceA, price_per_unit, etc.) 
+    // IS EXACTLY the price for the product's defined Unit of Measurement.
+    // If the UOM is PCS, this represents 1 PC. If UOM is BOX, it represents 1 BOX.
+    // If UOM is TIE, it represents 1 TIE. We should NOT attempt to scale it up or down.
+    const pricePerUom = baseUnitPrice;
 
     return {
         id,
@@ -186,7 +179,7 @@ function normalizeProduct(raw: RawProduct, fixedDiscountTypeId: string): Product
         sku,
         brand,
         category,
-        price: pricePerBox,
+        price: pricePerUom,
         uom: String(
             raw?.unit_of_measurement?.unit_shortcut ??
                 raw?.unit_of_measurement?.unit_name ??
