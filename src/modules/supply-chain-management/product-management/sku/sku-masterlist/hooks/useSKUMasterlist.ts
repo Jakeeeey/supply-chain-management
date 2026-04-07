@@ -117,6 +117,7 @@ export function useSKUMasterlist() {
     masterData,
     isLoading,
     isUpdating,
+    setIsUpdating,
     error,
     refresh,
     toggleStatus,
