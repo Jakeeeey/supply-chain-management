@@ -38,12 +38,20 @@ export function SKUGalleryModal({
   const [isLoading, setIsLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState<number | null>(null);
 
+  const isChild = !!sku?.parent_id;
+  const parentId =
+    typeof sku?.parent_id === "object" && sku?.parent_id !== null
+      ? (sku.parent_id as any).id || (sku.parent_id as any).product_id
+      : sku?.parent_id;
+
   const fetchGallery = useCallback(async () => {
     if (!sku) return;
     setIsLoading(true);
     try {
-      const id = sku.id || sku.product_id;
-      const res = await fetch(`/api/scm/product-management/sku/${id}/gallery`);
+      const targetId = parentId || sku.id || sku.product_id;
+      const res = await fetch(
+        `/api/scm/product-management/sku/${targetId}/gallery`,
+      );
       const result = await res.json();
       if (res.ok) setGallery(result.data || []);
       else throw new Error(result.error || "Failed to fetch gallery");
@@ -66,7 +74,7 @@ export function SKUGalleryModal({
     } finally {
       setIsLoading(false);
     }
-  }, [sku]);
+  }, [sku, parentId]);
 
   useEffect(() => {
     if (isOpen && sku) fetchGallery();
@@ -132,7 +140,14 @@ export function SKUGalleryModal({
       <DialogContent className="sm:max-w-[560px] max-h-[90vh] flex flex-col gap-0 p-0">
         <DialogHeader className="px-6 py-4 border-b">
           <DialogTitle>Product Gallery</DialogTitle>
-          <DialogDescription>{sku?.product_name}</DialogDescription>
+          <DialogDescription>
+            {sku?.product_name}
+            {isChild && (
+              <span className="ml-2 text-[10px] uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                Inherited from Parent
+              </span>
+            )}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
@@ -143,9 +158,11 @@ export function SKUGalleryModal({
               <Badge variant="secondary">Primary</Badge>
             </div>
             <div className="relative aspect-video w-full rounded-md border bg-muted overflow-hidden flex items-center justify-center">
-              {sku?.main_image ? (
+              {(sku?.main_image ||
+                (typeof sku?.parent_id === "object" &&
+                  (sku?.parent_id as any)?.main_image)) ? (
                 <Image
-                  src={`${process.env.NEXT_PUBLIC_API_BASE_URL}/assets/${sku.main_image}?width=500&height=300&fit=contain`}
+                  src={`${process.env.NEXT_PUBLIC_API_BASE_URL}/assets/${sku.main_image || (sku?.parent_id as any)?.main_image}?width=500&height=300&fit=contain`}
                   alt="Primary product image"
                   fill
                   className="object-contain p-4"
@@ -174,13 +191,15 @@ export function SKUGalleryModal({
             </div>
 
             <div className="grid grid-cols-3 gap-3">
-              <div className="aspect-square">
-                <ImageUpload
-                  value={null}
-                  onChange={() => {}}
-                  onUpload={handleUpload}
-                />
-              </div>
+              {!isChild && (
+                <div className="aspect-square">
+                  <ImageUpload
+                    value={null}
+                    onChange={() => {}}
+                    onUpload={handleUpload}
+                  />
+                </div>
+              )}
 
               {isLoading &&
                 Array.from({ length: 2 }).map((_, i) => (
@@ -200,21 +219,23 @@ export function SKUGalleryModal({
                       className="object-cover"
                       unoptimized
                     />
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <Button
-                        variant="destructive"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => handleDelete(img.image_id)}
-                        disabled={isDeleting === img.image_id}
-                      >
-                        {isDeleting === img.image_id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-3.5 w-3.5" />
-                        )}
-                      </Button>
-                    </div>
+                    {!isChild && (
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <Button
+                          variant="destructive"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => handleDelete(img.image_id)}
+                          disabled={isDeleting === img.image_id}
+                        >
+                          {isDeleting === img.image_id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ))}
             </div>

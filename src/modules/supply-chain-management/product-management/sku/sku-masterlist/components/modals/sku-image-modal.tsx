@@ -43,14 +43,19 @@ export function SKUImageModal({
   const [prevSkuId, setPrevSkuId] = useState<string | number | undefined>(undefined);
   const [prevIsOpen, setPrevIsOpen] = useState<boolean>(false);
 
-  const currentSkuId = sku ? (sku.id || sku.product_id) : undefined;
+  const isChild = !!sku?.parent_id;
+  const currentSkuId = sku ? sku.id || sku.product_id : undefined;
 
   if (currentSkuId !== prevSkuId || isOpen !== prevIsOpen) {
     setPrevSkuId(currentSkuId);
     setPrevIsOpen(isOpen);
-    
+
     if (isOpen && sku) {
-      setProductImage(sku.main_image || sku.product_images || null);
+      const parentImage =
+        typeof sku.parent_id === "object" && sku.parent_id !== null
+          ? (sku.parent_id as any).main_image
+          : null;
+      setProductImage(sku.main_image || parentImage || null);
     } else if (!isOpen) {
       setProductImage(null);
     }
@@ -94,6 +99,11 @@ export function SKUImageModal({
           <DialogDescription>
             {sku?.product_name}
             {sku?.product_code ? ` · ${sku.product_code}` : ""}
+            {isChild && (
+              <span className="ml-2 text-[10px] uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                Inherited from Parent
+              </span>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -102,7 +112,7 @@ export function SKUImageModal({
             value={productImage}
             onChange={setProductImage}
             onUpload={(fd) => skuService.uploadImage(fd, "main")}
-            disabled={isLoading}
+            disabled={isLoading || isChild}
           />
         </div>
 
@@ -110,7 +120,11 @@ export function SKUImageModal({
           <Button variant="ghost" onClick={onClose} disabled={isLoading}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={isLoading}>
+          <Button
+            onClick={handleSave}
+            disabled={isLoading || isChild}
+            className={isChild ? "hidden" : ""}
+          >
             {isLoading ? "Saving..." : "Save Image"}
           </Button>
         </DialogFooter>

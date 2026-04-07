@@ -25,6 +25,7 @@ export default function SKUMasterlistModule() {
     sorting,
     setSorting,
     masterData,
+    parentImages,
     isLoading,
     isUpdating,
     error,
@@ -217,6 +218,7 @@ export default function SKUMasterlistModule() {
         sorting={sorting}
         onSortingChange={setSorting}
         masterData={masterData}
+        parentImages={parentImages}
         isLoading={isLoading}
         onSearch={handleSearch}
         onSelectionChange={setSelectedRows}
