@@ -5,7 +5,6 @@ import { StockConversionProduct, RFIDTag } from "../types";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { ScanLine, X, AlertCircle } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 
@@ -42,8 +41,17 @@ export function RFIDManagementModal({
 
   if (!product || !conversionDetails) return null;
 
+  const maxTags = conversionDetails?.convertedQuantity ?? 0;
+  const isLimitReached = assignedTags.length >= maxTags;
+
   const handleAddTag = () => {
     if (!rfidInput.trim()) return;
+
+    // Block if limit already reached
+    if (isLimitReached) {
+      setRfidInput("");
+      return;
+    }
     
     // Check for duplicates
     if (assignedTags.some(t => t.rfid_tag === rfidInput.trim())) {
@@ -74,7 +82,7 @@ export function RFIDManagementModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl text-primary">
             <div className="p-1.5 bg-blue-500/10 rounded-md">
@@ -102,15 +110,17 @@ export function RFIDManagementModal({
           </div>
         </div>
 
-        <div className="space-y-4 py-2">
-          <div className="space-y-2">
+        <div className="flex-1 flex flex-col gap-4 py-2 overflow-hidden min-h-0">
+          {/* Scan input — always visible at top */}
+          <div className="space-y-2 shrink-0">
              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Scan or Enter RFID Tag</label>
              <div className="flex flex-col sm:flex-row gap-2">
                  <Input 
                    value={rfidInput}
                    onChange={e => setRfidInput(e.target.value)}
-                   placeholder="Enter RFID tag number"
-                   className="flex-1 bg-background border-input focus-visible:ring-blue-500 font-medium"
+                   placeholder={isLimitReached ? `Maximum ${maxTags} tag(s) reached` : "Enter RFID tag number"}
+                   disabled={isLimitReached}
+                   className="flex-1 bg-background border-input focus-visible:ring-blue-500 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                    onKeyDown={e => {
                      if (e.key === "Enter") {
                        e.preventDefault();
@@ -119,71 +129,77 @@ export function RFIDManagementModal({
                    }}
                  />
                  <Button 
-                   onClick={handleAddTag} 
-                   className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-widest px-4 gap-2 w-full sm:w-auto"
+                   onClick={handleAddTag}
+                   disabled={isLimitReached}
+                   className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-widest px-4 gap-2 w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
                  >
                    <ScanLine className="w-4 h-4" />
-                   Add Tag
+                   {isLimitReached ? "Limit Reached" : "Add Tag"}
                  </Button>
              </div>
+             {isLimitReached && (
+               <div className="text-[10px] font-bold text-orange-500 uppercase tracking-wider animate-in fade-in">
+                 Maximum of {maxTags} RFID tag(s) reached. Remove a tag to add a different one.
+               </div>
+             )}
           </div>
 
-          <div className="space-y-2">
-             <div className="flex items-center justify-between text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                <span>Assigned RFID Tags ({assignedTags.length})</span>
-                {assignedTags.length !== conversionDetails.convertedQuantity ? (
-                   <span className="text-xs text-orange-500 font-bold">Required: {conversionDetails.convertedQuantity} Tag(s)</span>
-                ) : (
-                   <span className="text-xs text-emerald-500 font-bold">Passed</span>
-                )}
-             </div>
-             
-             <div className="border border-border rounded-lg min-h-[140px] bg-muted/20 shadow-inner">
-                {assignedTags.length === 0 ? (
-                   <div className="h-full flex flex-col items-center justify-center text-muted-foreground py-10 animate-in fade-in duration-500">
-                      <div className="w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center mb-4 border border-border/50">
-                         <AlertCircle className="w-6 h-6 text-muted-foreground/50" />
-                      </div>
-                      <p className="font-bold text-primary tracking-tight">No RFID tags assigned</p>
-                      <p className="text-[11px] font-medium opacity-70">Scan tags to get started</p>
+          {/* Tag list header */}
+          <div className="flex items-center justify-between text-[10px] font-bold text-muted-foreground uppercase tracking-widest shrink-0">
+             <span>Assigned RFID Tags ({assignedTags.length} / {maxTags})</span>
+             {assignedTags.length !== conversionDetails.convertedQuantity ? (
+                <span className="text-xs text-orange-500 font-bold">Required: {conversionDetails.convertedQuantity} Tag(s)</span>
+             ) : (
+                <span className="text-xs text-emerald-500 font-bold">✓ Complete</span>
+             )}
+          </div>
+
+          {/* Scrollable tag list */}
+          <div className="border border-border rounded-lg bg-muted/20 shadow-inner" style={{ height: "280px" }}>
+             {assignedTags.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-muted-foreground animate-in fade-in duration-500">
+                   <div className="w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center mb-4 border border-border/50">
+                      <AlertCircle className="w-6 h-6 text-muted-foreground/50" />
                    </div>
-                ) : (
-                   <ScrollArea className="max-h-[360px]">
-                     <div className="p-2 space-y-2">
-                       {assignedTags.map((tag, index) => (
-                         <div key={tag.id} className="flex items-center justify-between bg-card p-3 rounded-md border border-border shadow-sm hover:border-blue-500/30 transition-all animate-in fade-in slide-in-from-bottom-2 duration-300">
-                            <div className="flex items-center gap-3">
-                               <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400 font-black text-xs border border-blue-500/20">
-                                  {index + 1}
-                               </div>
-                               <div>
-                                  <div className="font-bold text-foreground text-sm tracking-tight">{tag.rfid_tag}</div>
-                                  <div className="text-[10px] text-muted-foreground font-medium">Assigned: {tag.assignedDate}</div>
-                               </div>
+                   <p className="font-bold text-primary tracking-tight">No RFID tags assigned</p>
+                   <p className="text-[11px] font-medium opacity-70">Scan tags to get started</p>
+                </div>
+             ) : (
+                <div className="h-full overflow-y-auto p-2 space-y-2">
+                    {assignedTags.map((tag, index) => (
+                      <div key={tag.id} className="flex items-center justify-between bg-card p-3 rounded-md border border-border shadow-sm hover:border-blue-500/30 transition-all">
+                         <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-8 h-8 shrink-0 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400 font-black text-xs border border-blue-500/20">
+                               {index + 1}
                             </div>
-                            <div className="flex items-center gap-2">
-                               <span className="hidden sm:inline-block px-2 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-black rounded uppercase tracking-widest border border-emerald-500/20">
-                                  Active
-                               </span>
-                               <button onClick={() => handleRemoveTag(tag.id as string)} className="text-destructive/60 hover:text-destructive p-1.5 rounded-full hover:bg-destructive/10 transition-colors">
-                                  <X className="w-4 h-4" />
-                               </button>
+                            <div className="min-w-0">
+                               <div className="font-bold text-foreground text-sm tracking-tight truncate">{tag.rfid_tag}</div>
+                               <div className="text-[10px] text-muted-foreground font-medium">Assigned: {tag.assignedDate}</div>
                             </div>
                          </div>
-                       ))}
-                     </div>
-                   </ScrollArea>
-                )}
-             </div>
+                         <div className="flex items-center gap-2 shrink-0">
+                            <span className="hidden sm:inline-block px-2 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-black rounded uppercase tracking-widest border border-emerald-500/20">
+                               Active
+                            </span>
+                            <button onClick={() => handleRemoveTag(tag.id as string)} className="text-destructive/60 hover:text-destructive p-1.5 rounded-full hover:bg-destructive/10 transition-colors">
+                               <X className="w-4 h-4" />
+                            </button>
+                         </div>
+                      </div>
+                    ))}
+                </div>
+             )}
           </div>
 
-          <div className="bg-blue-500/5 border border-blue-500/10 rounded-lg p-3 text-sm flex gap-3 items-start text-blue-700 dark:text-blue-400">
+          {/* Guidelines — always visible at bottom */}
+          <div className="bg-blue-500/5 border border-blue-500/10 rounded-lg p-3 text-sm flex gap-3 items-start text-blue-700 dark:text-blue-400 shrink-0">
              <AlertCircle className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
              <div className="space-y-1">
                 <div className="text-[10px] font-black text-blue-600 dark:text-blue-300 uppercase tracking-widest">RFID Setup Guidelines</div>
                 <ul className="list-disc pl-4 text-[11px] font-bold opacity-80 space-y-1 uppercase tracking-tighter">
-                   <li>Multiple RFID tags can be tracked per product variant</li>
+                   <li>Each converted unit requires exactly 1 RFID tag</li>
                    <li>Tags must be unique and registered in the system</li>
+                   <li>Maximum {maxTags} tag(s) allowed for this conversion</li>
                 </ul>
              </div>
           </div>
