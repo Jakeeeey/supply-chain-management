@@ -48,15 +48,21 @@ export function SKUGalleryModal({
       if (res.ok) setGallery(result.data || []);
       else throw new Error(result.error || "Failed to fetch gallery");
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 3d63756 (cleared run eslint issue)
     } catch (error: unknown) {
       toast.error("Error", {
         description:
           error instanceof Error ? error.message : "Failed to fetch gallery",
       });
+<<<<<<< HEAD
 =======
     } catch (error: any) {
       toast.error("Error", { description: error.message });
 >>>>>>> 1b6130b (feat(sku): add multi-image gallery support and modal)
+=======
+>>>>>>> 3d63756 (cleared run eslint issue)
     } finally {
       setIsLoading(false);
     }
@@ -101,15 +107,21 @@ export function SKUGalleryModal({
         throw new Error(err.error || "Failed to delete image");
       }
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 3d63756 (cleared run eslint issue)
     } catch (error: unknown) {
       toast.error("Error", {
         description:
           error instanceof Error ? error.message : "Failed to delete image",
       });
+<<<<<<< HEAD
 =======
     } catch (error: any) {
       toast.error("Error", { description: error.message });
 >>>>>>> 1b6130b (feat(sku): add multi-image gallery support and modal)
+=======
+>>>>>>> 3d63756 (cleared run eslint issue)
     } finally {
       setIsDeleting(null);
     }
