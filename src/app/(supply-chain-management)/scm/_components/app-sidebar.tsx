@@ -137,7 +137,7 @@ const data = {
                     url: "/scm/supplier-management/tagging-of-po",
                 },
                 {
-                    title: "Receiving Products",
+                    title: "Receiving Products RFID",
                     url: "/scm/supplier-management/receiving-products",
                 },
                 {
