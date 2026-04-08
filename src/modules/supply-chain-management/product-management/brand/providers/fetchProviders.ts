@@ -84,7 +84,7 @@ export async function checkBrandUniqueness(
   value: string,
   excludeId?: number
 ): Promise<boolean> {
-  const filter: any = {
+  const filter: Record<string, { _eq: string } | { _neq: number }> = {
     [field]: { _eq: value },
   };
 

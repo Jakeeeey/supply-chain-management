@@ -80,7 +80,7 @@ export async function checkUnitUniqueness(
   value: string,
   excludeId?: string
 ): Promise<boolean> {
-  const filter: any = {
+  const filter: Record<string, { _eq: string } | { _neq: string }> = {
     [field]: { _eq: value },
   };
 
