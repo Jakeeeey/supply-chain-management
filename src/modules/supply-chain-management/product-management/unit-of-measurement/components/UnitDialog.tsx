@@ -180,6 +180,9 @@ export function UnitDialog({
                       onChange={(e) => field.onChange(Number(e.target.value))}
                     />
                   </FormControl>
+                  <p className="text-[11px] text-muted-foreground leading-snug bg-muted/20 p-2 rounded border-l-2 border-primary/30">
+                    <b>Guide:</b> 1 (Small: pc, g) • 2 (Med: pack, kg) • 3 (Big: box, case)
+                  </p>
                   <FormMessage />
                 </FormItem>
               )}
