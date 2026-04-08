@@ -96,7 +96,15 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
   const brandName = useWatch({ control, name: `items.${index}.brand_name` });
   const barcode = useWatch({ control, name: `items.${index}.barcode` });
   const description = useWatch({ control, name: `items.${index}.description` });
+  const product_name = useWatch({ control, name: `items.${index}.product_name` });
   const unitOrder = useWatch({ control, name: `items.${index}.unit_order` });
+
+  // Initialize and synchronize input value (e.g. for Edit mode)
+  useEffect(() => {
+    if (product_name && !productInputValue && !productSearch) {
+      setProductInputValue(product_name);
+    }
+  }, [product_name, productInputValue, productSearch]);
 
   const dbId = useWatch({ control, name: `items.${index}.db_id` });
 
@@ -526,6 +534,22 @@ export function StockAdjustmentForm({
 
   // ——————————————————————————————————————————————————————————————————————————————
   useEffect(() => {
+    const unlock = () => {
+      if (document.body.style.overflow === 'hidden') {
+        document.body.style.setProperty('overflow', 'auto', 'important');
+        document.body.style.removeProperty('pointer-events');
+      }
+    };
+    unlock();
+    const timer = setTimeout(unlock, 1000);
+    const timer2 = setTimeout(unlock, 3000);
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(timer2);
+    };
+  }, [loading]);
+
+  useEffect(() => {
     if (id) {
       const loadData = async () => {
         setLoading(true);
@@ -546,6 +570,14 @@ export function StockAdjustmentForm({
             }
           }
 
+            // Directus may return isPosted as a Buffer {type:'Buffer',data:[0|1]},
+            // a number (0 or 1), or a boolean. Normalise to a real boolean:
+            const rawPosted = data.isPosted as unknown;
+            const resolvedIsPosted =
+              rawPosted && typeof rawPosted === 'object' && 'data' in rawPosted
+                ? (rawPosted as { data: number[] }).data?.[0] === 1
+                : Number(rawPosted) === 1;
+
           form.reset({
             doc_no: data.doc_no,
             branch_id:
@@ -555,7 +587,7 @@ export function StockAdjustmentForm({
             supplier_id: finalSupplierId,
             type: data.type,
             remarks: data.remarks || "",
-            isPosted: !!data.isPosted,
+            isPosted: resolvedIsPosted,
             items: data.items.map((item) => ({
               ...item,
               product_id: String(
@@ -603,8 +635,24 @@ export function StockAdjustmentForm({
   }, [id]);
 
   // ——————————————————————————————————————————————————————————————————————————————
+  // Auto-populate combobox display labels when editing (branch & supplier)
+  // Runs whenever branches/suppliers load OR when the form values change.
   const watchedBranchId = useWatch({ control: form.control, name: "branch_id" });
   const watchedSupplierId = useWatch({ control: form.control, name: "supplier_id" });
+
+  useEffect(() => {
+    if (watchedBranchId && branches.length > 0) {
+      const found = branches.find(b => b.id === Number(watchedBranchId));
+      if (found) setBranchInputValue(`${found.branch_name} (${found.branch_code ?? ""})`);
+    }
+  }, [watchedBranchId, branches]);
+
+  useEffect(() => {
+    if (watchedSupplierId && suppliers.length > 0) {
+      const found = suppliers.find(s => s.id === Number(watchedSupplierId));
+      if (found) setSupplierInputValue(`${found.supplier_name}${found.supplier_shortcut ? ` (${found.supplier_shortcut})` : ""}`);
+    }
+  }, [watchedSupplierId, suppliers]);
 
   useEffect(() => {
     if (watchedBranchId) {
@@ -732,6 +780,9 @@ export function StockAdjustmentForm({
       const selectionId = String(product.id || product.product_id);
       const productId = product.product_id || product.id;
 
+      const currentProductId = form.getValues(`items.${index}.product_id`);
+      const isNewSelection = String(currentProductId) !== String(selectionId);
+
       form.setValue(`items.${index}.product_id`, selectionId);
       form.setValue(`items.${index}.product_name`, product.product_name);
       form.setValue(`items.${index}.product_code`, product.product_code);
@@ -751,7 +802,8 @@ export function StockAdjustmentForm({
       form.setValue(`items.${index}.has_rfid`, hasRfid);
       form.setValue(`items.${index}.rfid_count`, 0);
 
-      if (unitOrder === 3) {
+      // --- Scanner Logic (Only for new user selections, NOT initial load) ---
+      if (unitOrder === 3 && isNewSelection && !loading) {
         setScannerContext({ index, productName: product.product_name });
         setIsScannerPreparing(true);
 
@@ -761,10 +813,11 @@ export function StockAdjustmentForm({
           icon: <Tag className="h-4 w-4 text-blue-500" />,
         });
 
-        setTimeout(() => {
+        const timer = setTimeout(() => {
           setIsScannerPreparing(false);
           setShowRFIDScanner(true);
         }, 300);
+        return () => clearTimeout(timer);
       }
 
       (async () => {
@@ -776,7 +829,7 @@ export function StockAdjustmentForm({
 
           form.setValue(`items.${index}.current_stock`, currentStock);
 
-          if (unitOrder !== 3 && hasRfid) {
+          if (unitOrder !== 3 && hasRfid && isNewSelection && !loading) {
             setPendingRFIDProduct({
               ...product,
               rfidData: { quantity: 1 },
@@ -820,7 +873,7 @@ export function StockAdjustmentForm({
   const watchedType = useWatch({ control: form.control, name: "type" });
 
   return (
-    <div className="flex flex-col gap-6 p-8 max-w-7xl mx-auto w-full overflow-y-auto bg-background min-h-screen">
+    <div className="flex flex-col gap-6 p-8 max-w-7xl mx-auto w-full bg-background">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-3">
           <div className="bg-blue-600 p-2 rounded-lg shadow-sm">
@@ -892,8 +945,8 @@ export function StockAdjustmentForm({
       <RfidBanner control={form.control} />
 
       {isScannerPreparing && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-[2px] z-[100] flex items-center justify-center animate-in fade-in duration-300">
-          <Card className="w-full max-w-sm border-none shadow-2xl bg-card overflow-hidden p-0">
+        <div className="fixed inset-0 bg-background/40 backdrop-blur-[1px] z-[100] flex items-center justify-center animate-in fade-in duration-300">
+          <Card className="w-full max-w-sm border-none shadow-2xl bg-card/90 overflow-hidden p-0 backdrop-blur-md">
             <div className="bg-blue-600 h-1.5 w-full">
               <div className="bg-blue-400 h-full animate-[loading_1.5s_infinite_linear]" style={{ width: '40%' }} />
             </div>
@@ -961,10 +1014,10 @@ export function StockAdjustmentForm({
                 >
                   <ComboboxInput
                     placeholder="Select Branch"
-                    disabled={isReadOnly}
+                    disabled={isReadOnly || !!id}
                     className={form.formState.errors.branch_id ? "border-red-500 bg-red-50 dark:bg-red-900/10" : ""}
-                    showTrigger
-                    showClear
+                    showTrigger={!id}
+                    showClear={!id && !isReadOnly}
                   />
                   <ComboboxContent>
                     <ComboboxList>
@@ -1028,10 +1081,10 @@ export function StockAdjustmentForm({
                 >
                   <ComboboxInput
                     placeholder={isSuppliersLoading ? "Loading suppliers..." : "Select Supplier"}
-                    disabled={isReadOnly}
+                    disabled={isReadOnly || !!id}
                     className={form.formState.errors.supplier_id ? "border-red-500 bg-red-50 dark:bg-red-900/10" : ""}
-                    showTrigger
-                    showClear
+                    showTrigger={!id}
+                    showClear={!id && !isReadOnly}
                   />
                   <ComboboxContent>
                     <ComboboxList>
