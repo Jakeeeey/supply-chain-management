@@ -9,6 +9,10 @@ import { RFIDManagementModal } from "./components/RFIDManagementModal";
 import { StockConversionProduct, RFIDTag } from "./types";
 import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import ErrorPage from "@/components/shared/ErrorPage";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { ScanLine } from "lucide-react";
 
 const MemoizedStockConversionTable = memo(StockConversionTable);
 
@@ -81,11 +85,16 @@ export default function StockConversionModule({
     loadInventory,
     loadProductsInventory,
     convertStock,
+    checkProductRfids,
+    validateDuplicateTag,
   } = useStockConversion(selectedBranchId > 0 ? selectedBranchId : undefined);
 
   const [selectedProduct, setSelectedProduct] = useState<StockConversionProduct | null>(null);
   const [isUnitModalOpen, setIsUnitModalOpen] = useState(false);
   const [isRfidModalOpen, setIsRfidModalOpen] = useState(false);
+  const [isSourceRfidModalOpen, setIsSourceRfidModalOpen] = useState(false);
+  const [manualSourceRfid, setManualSourceRfid] = useState("");
+  const [pendingSourceProduct, setPendingSourceProduct] = useState<StockConversionProduct | null>(null);
   const [pendingConversion, setPendingConversion] = useState<{
     qtyToConvert: number;
     targetUnitId: number;
@@ -106,11 +115,78 @@ export default function StockConversionModule({
 
   // ── Stable callbacks ──────────────────────────────────────────────────────
 
-  const handleOpenConversion = useCallback((product: StockConversionProduct) => {
+  const handleOpenConversion = useCallback(async (product: StockConversionProduct, preScannedRfid?: string) => {
+    // 1. If we already scanned a source RFID or it's provided, proceed to open conversion modal
+    if (preScannedRfid) {
+       setSelectedProduct(product);
+       setPendingConversion(null);
+       setIsUnitModalOpen(true);
+       return;
+    }
+
+    const branchId = selectedBranchIdRef.current > 0 ? selectedBranchIdRef.current : userRef.current.branchId;
+
+    // 2. Determine if it's a Box to Pieces conversion (source unit is Box)
+    const isBoxSource = product.currentUnit?.toLowerCase().includes("box");
+
+    if (isBoxSource) {
+       // Demand source RFID for Box
+       setPendingSourceProduct(product);
+       setManualSourceRfid("");
+       setIsSourceRfidModalOpen(true);
+       return;
+    }
+
+    // 3. General Validation: Ensure the product has AT LEAST ONE RFID in the warehouse
+    setIsSubmitting(true);
+    try {
+      const hasRfid = await checkProductRfids(product.productId, branchId);
+      if (!hasRfid) {
+        toast.error("Validation Failed", {
+          description: "Cannot convert: No existing RFID tags detected for this product in this branch. Inventory mismatch."
+        });
+        return;
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+
     setSelectedProduct(product);
     setPendingConversion(null);
     setIsUnitModalOpen(true);
-  }, []);
+  }, [checkProductRfids]);
+
+  const handleManualSourceRfidSubmit = async () => {
+     if (!manualSourceRfid.trim() || !pendingSourceProduct) return;
+     
+     setIsSubmitting(true);
+     try {
+       const branchId = selectedBranchIdRef.current > 0 ? selectedBranchIdRef.current : userRef.current.branchId;
+       const res = await fetch(`/api/scm/warehouse-management/stock-transfer?action=lookup_rfid&rfid=${encodeURIComponent(manualSourceRfid.trim())}&branch_id=${branchId}`);
+       
+       if (!res.ok) {
+         toast.error("Invalid Source RFID", { description: "The scanned Box RFID does not exist in the warehouse." });
+         return;
+       }
+       
+       const match = await res.json();
+       if (Number(match.productId) !== pendingSourceProduct.productId) {
+         toast.error("Product Mismatch", { description: "The scanned Box RFID belongs to a different product." });
+         return;
+       }
+
+       // Success: proceed
+       setScannedSourceRfid(manualSourceRfid.trim());
+       setIsSourceRfidModalOpen(false);
+       setSelectedProduct(pendingSourceProduct);
+       setPendingConversion(null);
+       setIsUnitModalOpen(true);
+     } catch (e) {
+       toast.error("Error validating source RFID");
+     } finally {
+       setIsSubmitting(false);
+     }
+  };
 
   const handleCloseUnitModal = useCallback(() => {
     setIsUnitModalOpen(false);
@@ -156,7 +232,7 @@ export default function StockConversionModule({
               description: "Select target unit to convert to."
             });
             setScannedSourceRfid(val);
-            handleOpenConversion(product);
+            handleOpenConversion(product, val);
           } else {
             toast.error("Scanned product not loaded in the list.", {
               description: "Please load the product's inventory first."
@@ -343,7 +419,47 @@ export default function StockConversionModule({
         onClose={handleCloseRfidModal}
         onSubmit={handleConfirmRFID}
         isSubmitting={isSubmitting}
+        validateTag={validateDuplicateTag}
       />
+
+      <Dialog open={isSourceRfidModalOpen} onOpenChange={setIsSourceRfidModalOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ScanLine className="w-5 h-5 text-blue-500" />
+              Scan Source Box RFID
+            </DialogTitle>
+            <DialogDescription>
+              You are converting a Box into pieces. Please scan or enter the specific RFID of the box you wish to convert.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+             <div className="text-sm font-semibold p-3 bg-muted rounded-md border text-center">
+                {pendingSourceProduct?.productName}
+             </div>
+             <Input 
+                value={manualSourceRfid}
+                onChange={e => setManualSourceRfid(e.target.value)}
+                placeholder="Scan or type Box RFID..."
+                disabled={isSubmitting}
+                className="w-full text-center font-bold tracking-widest text-lg"
+                autoFocus
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleManualSourceRfidSubmit();
+                  }
+                }}
+             />
+          </div>
+          <DialogFooter>
+             <Button variant="outline" onClick={() => setIsSourceRfidModalOpen(false)} disabled={isSubmitting}>Cancel</Button>
+             <Button onClick={handleManualSourceRfidSubmit} disabled={!manualSourceRfid.trim() || isSubmitting} className="bg-blue-600 hover:bg-blue-700">
+               {isSubmitting ? "Validating..." : "Confirm"}
+             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

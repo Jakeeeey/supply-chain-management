@@ -257,6 +257,28 @@ export function useStockConversion(branchId?: number) {
     refresh();
   }, [refresh]);
 
+  const checkProductRfids = async (productId: number, activeBranchId: number): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/scm/transfers/stock-conversion/validate-rfid?action=check_product_rfids&branchId=${activeBranchId}&productId=${productId}`);
+      if (!res.ok) return false;
+      const data = await res.json();
+      return data.hasRfids || false;
+    } catch {
+      return false;
+    }
+  };
+
+  const validateDuplicateTag = async (rfid: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/scm/transfers/stock-conversion/validate-rfid?action=validate_tag&rfid=${encodeURIComponent(rfid)}`);
+      if (!res.ok) return false;
+      const data = await res.json();
+      return data.exists || false;
+    } catch {
+      return false;
+    }
+  };
+
   useEffect(() => {
     if (hasBeganGlobalFetch && branchId !== undefined) {
       loadInventory();
@@ -277,5 +299,7 @@ export function useStockConversion(branchId?: number) {
     loadInventory,
     loadProductsInventory,
     convertStock: convertStockAction,
+    checkProductRfids,
+    validateDuplicateTag,
   };
 }

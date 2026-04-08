@@ -15,6 +15,7 @@ interface RFIDManagementModalProps {
   onClose: () => void;
   onSubmit: (tags: RFIDTag[]) => void;
   isSubmitting: boolean;
+  validateTag?: (tag: string) => Promise<boolean>;
 }
 
 export function RFIDManagementModal({ 
@@ -23,10 +24,12 @@ export function RFIDManagementModal({
   isOpen, 
   onClose, 
   onSubmit, 
-  isSubmitting 
+  isSubmitting,
+  validateTag
 }: RFIDManagementModalProps) {
   const [rfidInput, setRfidInput] = useState("");
   const [assignedTags, setAssignedTags] = useState<RFIDTag[]>([]);
+  const [isValidating, setIsValidating] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -44,8 +47,8 @@ export function RFIDManagementModal({
   const maxTags = conversionDetails?.convertedQuantity ?? 0;
   const isLimitReached = assignedTags.length >= maxTags;
 
-  const handleAddTag = () => {
-    if (!rfidInput.trim()) return;
+  const handleAddTag = async () => {
+    if (!rfidInput.trim() || isValidating) return;
 
     // Block if limit already reached
     if (isLimitReached) {
@@ -53,21 +56,36 @@ export function RFIDManagementModal({
       return;
     }
     
-    // Check for duplicates
+    // Check for duplicates in current list
     if (assignedTags.some(t => t.rfid_tag === rfidInput.trim())) {
       setRfidInput("");
       return;
     }
 
-    const newTag: RFIDTag = {
-      id: uuidv4(),
-      rfid_tag: rfidInput.trim(),
-      status: "active",
-      assignedDate: new Date().toISOString().split("T")[0],
-    };
+    setIsValidating(true);
+    try {
+      // Validate with database
+      if (validateTag) {
+        const exists = await validateTag(rfidInput.trim());
+        if (exists) {
+          alert(`RFID ${rfidInput.trim()} already exists in the warehouse. Duplicates are not allowed.`);
+          setRfidInput("");
+          return;
+        }
+      }
 
-    setAssignedTags(prev => [...prev, newTag]);
-    setRfidInput("");
+      const newTag: RFIDTag = {
+        id: uuidv4(),
+        rfid_tag: rfidInput.trim(),
+        status: "active",
+        assignedDate: new Date().toISOString().split("T")[0],
+      };
+
+      setAssignedTags(prev => [...prev, newTag]);
+      setRfidInput("");
+    } finally {
+      setIsValidating(false);
+    }
   };
 
 
@@ -119,7 +137,7 @@ export function RFIDManagementModal({
                    value={rfidInput}
                    onChange={e => setRfidInput(e.target.value)}
                    placeholder={isLimitReached ? `Maximum ${maxTags} tag(s) reached` : "Enter RFID tag number"}
-                   disabled={isLimitReached}
+                   disabled={isLimitReached || isValidating}
                    className="flex-1 bg-background border-input focus-visible:ring-blue-500 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                    onKeyDown={e => {
                      if (e.key === "Enter") {
@@ -130,11 +148,15 @@ export function RFIDManagementModal({
                  />
                  <Button 
                    onClick={handleAddTag}
-                   disabled={isLimitReached}
+                   disabled={isLimitReached || isValidating}
                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-widest px-4 gap-2 w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
                  >
-                   <ScanLine className="w-4 h-4" />
-                   {isLimitReached ? "Limit Reached" : "Add Tag"}
+                   {isValidating ? (
+                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                   ) : (
+                     <ScanLine className="w-4 h-4" />
+                   )}
+                   {isLimitReached ? "Limit Reached" : (isValidating ? "Checking..." : "Add Tag")}
                  </Button>
              </div>
              {isLimitReached && (
