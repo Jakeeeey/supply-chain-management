@@ -99,12 +99,15 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
   const product_name = useWatch({ control, name: `items.${index}.product_name` });
   const unitOrder = useWatch({ control, name: `items.${index}.unit_order` });
 
-  // Initialize and synchronize input value (e.g. for Edit mode)
-  useEffect(() => {
-    if (product_name && !productInputValue && !productSearch) {
-      setProductInputValue(product_name);
+  // Synchronize input value (e.g. for Edit mode) during render if name changed
+  // This avoids the 'cascading renders' lint error from useEffect
+  const [prevProductName, setPrevProductName] = useState(product_name);
+  if (product_name !== prevProductName) {
+    setPrevProductName(product_name);
+    if (!productInputValue && !productSearch) {
+      setProductInputValue(product_name || "");
     }
-  }, [product_name, productInputValue, productSearch]);
+  }
 
   const dbId = useWatch({ control, name: `items.${index}.db_id` });
 
@@ -849,7 +852,7 @@ export function StockAdjustmentForm({
         }
       })();
     },
-    [fetchInventory, form, inventoryMap, rfidProductIds]
+    [fetchInventory, form, inventoryMap, rfidProductIds, loading]
   );
 
   const handleOpenScanner = useCallback((index: number) => {

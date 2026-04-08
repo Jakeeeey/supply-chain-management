@@ -73,7 +73,14 @@ function buildHeaderUserFromToken(token: string | null | undefined) {
     };
 }
 
-export default async function Page() {
+export default async function Page(props: {
+    params: Promise<Record<string, string | string[] | undefined>>;
+    searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+    // Await params and searchParams even if unused to satisfy Next.js 15+ rules
+    await props.params;
+    await props.searchParams;
+
     // ✅ Next.js 16: cookies() is async
     const cookieStore = await cookies();
     const token = cookieStore.get(COOKIE_NAME)?.value ?? null;

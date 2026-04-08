@@ -68,7 +68,7 @@ export const stockAdjustmentService = {
   async fetchAllHeaders(params?: { search?: string; branchId?: number; type?: string; status?: string }) {
     let query = `fields=*,branch_id.branch_name,branch_id.id,supplier_id.id,supplier_id.supplier_name,created_by.user_fname,created_by.user_lname,created_by.user_id,posted_by.user_fname,posted_by.user_lname,items.id,stock_adjustment.id&sort=-created_at`;
     
-    const filters: any = {};
+    const filters: Record<string, unknown> = {};
     
     if (params?.branchId) filters.branch_id = { _eq: params.branchId };
     if (params?.type) filters.type = { _eq: params.type };
