@@ -395,9 +395,6 @@ export function useStockTransferReceive() {
     handleScanRFID,
     getBranchName,
     refresh: fetchTransfers,
-    manualMode,
-    setManualMode,
-    updateManualQty,
     verifyAll,
   };
 }

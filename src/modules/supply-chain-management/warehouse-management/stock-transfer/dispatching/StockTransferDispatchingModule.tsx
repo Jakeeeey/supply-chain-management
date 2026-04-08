@@ -24,8 +24,6 @@ import {
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
 
 export default function StockTransferDispatchingModule() {
   const {
@@ -39,9 +37,7 @@ export default function StockTransferDispatchingModule() {
     dispatchOrder,
     handleScanRFID,
     getBranchName,
-    updateManualQty,
-    manualMode,
-    setManualMode,
+    markAsPicked,
     refresh,
   } = useStockTransferDispatching();
 
@@ -267,20 +263,7 @@ export default function StockTransferDispatchingModule() {
               </div>
             </div>
 
-            {/* Manual Mode Toggle */}
-            <div className="flex items-center justify-end h-full pt-6">
-              <div className="flex items-center space-x-2 bg-muted/30 px-4 py-2 rounded-xl border border-dashed border-muted-foreground/20">
-                <Switch 
-                  id="manual-mode" 
-                  checked={manualMode} 
-                  onCheckedChange={setManualMode}
-                />
-                <Label htmlFor="manual-mode" className="text-xs font-bold uppercase tracking-tight cursor-pointer">
-                  Manual Entry Mode
-                </Label>
-              </div>
-            </div>
-          </div>
+           </div>
           )}
 
           <div className="hidden print:block mb-6 text-center">
@@ -358,20 +341,9 @@ export default function StockTransferDispatchingModule() {
                             {item.qtyAvailable ?? '—'}
                           </TableCell>
                           <TableCell className="text-sm font-bold">
-                            {item.isLoosePack || manualMode ? (
-                              <Input
-                                type="number"
-                                className="h-8 w-20 text-center"
-                                value={item.scannedQty}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateManualQty((originalId as number), Number(e.target.value))}
-                                max={targetQty}
-                                min={0}
-                              />
-                            ) : (
                               <span className={complete ? 'text-emerald-600' : 'text-amber-600'}>
                                 {item.scannedQty}
                               </span>
-                            )}
                           </TableCell>
                           <TableCell className="text-right text-sm font-semibold text-primary font-mono">
                             ₱{((item.scannedQty || 0) * (item.ordered_quantity > 0 ? (Number(item.amount || 0) / item.ordered_quantity) : 0)).toLocaleString('en-PH', {minimumFractionDigits: 2})}
@@ -480,18 +452,28 @@ export default function StockTransferDispatchingModule() {
                       <span className="text-amber-600 font-medium">Please scan all required items before withdrawing.</span>
                     )}
                   </div>
-                  
-                  <Button 
-                    className={cn(
-                      "w-full sm:w-auto",
-                      selectedGroup.status === 'Picked' ? "bg-emerald-600 hover:bg-emerald-700" : "bg-primary"
+                  <div className="flex gap-2 w-full sm:w-auto">
+                    {selectedGroup.status === 'Picking' && !isAllScanned && (
+                      <Button
+                        variant="secondary"
+                        disabled={processing}
+                        onClick={() => markAsPicked(selectedGroup.orderNo)}
+                      >
+                        Force Done Picking
+                      </Button>
                     )}
-                    disabled={processing || selectedGroup.status !== 'Picked'}
-                    onClick={() => dispatchOrder(selectedGroup.orderNo)}
-                  >
-                    {processing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {selectedGroup.status === 'Picked' ? 'Confirm Dispatch (For Loading)' : 'Picking in Progress...'}
-                  </Button>
+                    <Button 
+                      className={cn(
+                        "w-full sm:w-auto",
+                        selectedGroup.status === 'Picked' ? "bg-emerald-600 hover:bg-emerald-700" : "bg-primary"
+                      )}
+                      disabled={processing || selectedGroup.status !== 'Picked'}
+                      onClick={() => dispatchOrder(selectedGroup.orderNo)}
+                    >
+                      {processing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      {selectedGroup.status === 'Picked' ? 'Confirm Dispatch (For Loading)' : 'Picking in Progress...'}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>

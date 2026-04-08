@@ -261,7 +261,8 @@ export default function StockTransferModule() {
           barcode: item.description,
           cost_per_unit: item.unitPrice,
           quantity: item.unitQty,
-          totalAmount: item.totalAmount
+          totalAmount: item.totalAmount,
+          unit_of_measurement: { unit_name: item.unit }
         } as unknown as import('@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema').SKU))}
         onSelect={(p) => {
           handleAddProduct(p);

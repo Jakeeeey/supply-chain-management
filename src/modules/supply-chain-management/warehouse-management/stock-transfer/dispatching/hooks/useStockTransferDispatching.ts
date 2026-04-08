@@ -447,7 +447,18 @@ export function useStockTransferDispatching() {
     }
   };
 
-  const [manualMode, setManualMode] = useState(false);
+  const markAsPicked = async (orderNo: string) => {
+    if (!orderGroups.find((g) => g.orderNo === orderNo)) return;
+    setProcessing(true);
+    try {
+      await updateOrderStatus(orderNo, 'Picked');
+      toast.success(`Successfully marked as Done Picking.`);
+    } catch (err) {
+      toast.error('Failed to update status to Picked');
+    } finally {
+      setProcessing(false);
+    }
+  };
 
   const getBranchName = useCallback(
     (id: number | null) => {
@@ -458,21 +469,7 @@ export function useStockTransferDispatching() {
     [branches]
   );
 
-  const updateManualQty = useCallback((productId: number, qty: number) => {
-    if (!selectedOrderNo) return;
-    setScannedItemsState(prev => {
-      const orderState = prev[selectedOrderNo] || {};
-      // Use pseudo RFIDs for manual/loose packs
-      const pseudoRfids = Array.from({ length: qty }, (_, i) => `MANU-${productId}-${i}-${Date.now()}`);
-      return {
-        ...prev,
-        [selectedOrderNo]: {
-          ...orderState,
-          [productId]: pseudoRfids
-        }
-      };
-    });
-  }, [selectedOrderNo]);
+
 
   return {
     orderGroups,
@@ -486,9 +483,6 @@ export function useStockTransferDispatching() {
     getBranchName,
     fetchError,
     refresh: fetchTransfers,
-    manualMode,
-    setManualMode,
-    updateManualQty,
-    updateLoosePackQty: updateManualQty, // Keep for backward compatibility if needed
+    markAsPicked,
   };
 }

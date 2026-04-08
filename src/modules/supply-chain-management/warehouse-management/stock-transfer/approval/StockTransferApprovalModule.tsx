@@ -281,8 +281,11 @@ export default function StockTransferApprovalModule() {
                               type="number"
                               className="h-8 w-20 text-center mx-auto"
                               value={allocatedQtys[item.id] ?? item.ordered_quantity}
-                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateAllocatedQty(item.id, Number(e.target.value))}
-                              max={availableQtys[item.id] || 0}
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                const maxAllowed = Math.min(item.ordered_quantity || 0, availableQtys[item.id] || 0);
+                                updateAllocatedQty(item.id, Number(e.target.value), maxAllowed);
+                              }}
+                              max={Math.min(item.ordered_quantity || 0, availableQtys[item.id] || 0)}
                               min={0}
                             />
                           </TableCell>

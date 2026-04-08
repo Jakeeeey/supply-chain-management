@@ -209,8 +209,10 @@ export function useStockTransferApproval() {
     fetchAvailable();
   }, [selectedGroup, getBranchName]);
 
-  const updateAllocatedQty = (itemId: number, qty: number) => {
-    setAllocatedQtys(prev => ({ ...prev, [itemId]: qty }));
+  const updateAllocatedQty = (itemId: number, qty: number, maxAllowed: number) => {
+    // bound the qty between 0 and maxAllowed, fallback to 0 if NaN
+    const boundedQty = Math.max(0, Math.min(isNaN(qty) ? 0 : qty, maxAllowed));
+    setAllocatedQtys(prev => ({ ...prev, [itemId]: boundedQty }));
   };
 
   const updateStatus = async (orderNo: string, status: 'approved' | 'rejected') => {
@@ -227,11 +229,12 @@ export function useStockTransferApproval() {
         for (const item of group.items) {
           const allocated = allocatedQtys[item.id] ?? item.ordered_quantity ?? 0;
           const available = availableQtys[item.id] || 0;
+          const maxAllowed = Math.min(item.ordered_quantity || 0, available);
           totalAllocated += allocated;
 
-          if (allocated > available) {
+          if (allocated > maxAllowed) {
             toast.error(`Invalid Allocation`, {
-              description: `Allocated quantity for ${(item.product_id as any)?.product_name || 'item'} exceeds available stock.`
+              description: `Allocated quantity for ${(item.product_id as any)?.product_name || 'item'} exceeds ordered quantity or available stock.`
             });
             setProcessing(false);
             return;
