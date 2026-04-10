@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { UseFormReturn, useWatch } from "react-hook-form";
 import { MapPin, Trash2 } from "lucide-react";
 
@@ -43,6 +43,7 @@ export function AreaRow({
   const [cities, setCities] = useState<{ code: string; name: string }[]>([]);
   const [allProvincialBarangays, setAllProvincialBarangays] = useState<BarangayItem[]>([]);
   const [barangays, setBarangays] = useState<{ code: string; name: string }[]>([]);
+  const initializedProvince = useRef<string | null>(null);
 
   // For initial load during Edit - using useWatch for reactivity
   const currentProvince = useWatch({ control: form.control, name: `areas.${index}.province` }) || "";
@@ -55,8 +56,11 @@ export function AreaRow({
     let mounted = true;
 
     const initializeAreas = async () => {
-      // Only initialize if we have provinces and an initial province set, but cities aren't loaded yet.
-      if (provinces.length === 0 || !currentProvince || cities.length > 0) return;
+      // Skip if no provinces loaded or no province selected
+      if (provinces.length === 0 || !currentProvince) return;
+
+      // Skip if we already initialized for this exact province
+      if (initializedProvince.current === currentProvince.toLowerCase()) return;
 
       const p = provinces.find((x) => x.name.toLowerCase() === currentProvince.toLowerCase());
       if (!p) return;
@@ -67,6 +71,8 @@ export function AreaRow({
         fetchAllBarangays(p.code),
       ]);
       if (!mounted) return;
+
+      initializedProvince.current = currentProvince.toLowerCase();
       setCities(fetchedCities);
       setAllProvincialBarangays(fetchedAllBrgys);
 
@@ -85,13 +91,15 @@ export function AreaRow({
     initializeAreas();
 
     return () => { mounted = false; };
-  }, [provinces, currentProvince, currentCity, cities.length]);
+  }, [provinces, currentProvince, currentCity]);
 
   const onProvinceChange = async (provinceCode: string) => {
     const provinceName = provinces.find((p) => p.code === provinceCode)?.name || "";
     form.setValue(`areas.${index}.province`, provinceName);
     form.setValue(`areas.${index}.city`, "");
     form.setValue(`areas.${index}.baranggay`, "");
+    form.clearErrors("areas");
+    initializedProvince.current = null; // Reset so the effect can re-run for the new province
     setCities([]);
     setAllProvincialBarangays([]);
     setBarangays([]);
@@ -111,6 +119,7 @@ export function AreaRow({
     const cityName = cities.find((c) => c.code === cityCode)?.name || "";
     form.setValue(`areas.${index}.city`, cityName);
     form.setValue(`areas.${index}.baranggay`, "");
+    form.clearErrors("areas");
 
     // Filter barangays instantly from the pre-loaded provincial list (0ms)
     if (cityCode) {
@@ -126,6 +135,7 @@ export function AreaRow({
   const onBarangayChange = (barangayCode: string) => {
     const brgyName = barangays.find((b) => b.code === barangayCode)?.name || "";
     form.setValue(`areas.${index}.baranggay`, brgyName);
+    form.clearErrors("areas");
   };
 
   // ── Smart Filtering Logic (memoized for speed) ─────────────────────
@@ -168,28 +178,41 @@ export function AreaRow({
   }, [allClusters, currentClusterId, allAreasInForm, index]);
 
   // Memoize filtered lists so they only recalculate when source data changes
-  const availableCities = useMemo(
-    () => cities.filter((c) => !fullyClaimedCities.has(norm(c.name))),
-    [cities, fullyClaimedCities]
-  );
+  // IMPORTANT: Always include this row's own current selection so the combobox
+  // can resolve its value and never shows "Select City" for an existing selection.
+  const availableCities = useMemo(() => {
+    const currentCityNorm = norm(currentCity);
+    return cities.filter(
+      (c) => !fullyClaimedCities.has(norm(c.name)) || norm(c.name) === currentCityNorm
+    );
+  }, [cities, fullyClaimedCities, currentCity]);
 
   const availableBarangays = useMemo(() => {
     const cityKey = norm(currentCity);
-    return barangays.filter((b) => !claimedBarangays.has(`${cityKey}::${norm(b.name)}`));
-  }, [barangays, currentCity, claimedBarangays]);
+    const currentBrgyNorm = norm(
+      form.getValues(`areas.${index}.baranggay`) || ""
+    );
+    return barangays.filter(
+      (b) =>
+        !claimedBarangays.has(`${cityKey}::${norm(b.name)}`) ||
+        norm(b.name) === currentBrgyNorm
+    );
+  }, [barangays, currentCity, claimedBarangays, form, index]);
 
   // Pre-build name→code lookup Maps for O(1) value resolution in render
+  // Use the FULL cities/barangays lists for lookups so existing selections
+  // always resolve, even if they are filtered out of the dropdown options.
   const provinceCodeMap = useMemo(
     () => new Map(provinces.map((p) => [p.name.toLowerCase(), p.code])),
     [provinces]
   );
   const cityCodeMap = useMemo(
-    () => new Map(availableCities.map((c) => [c.name.toLowerCase(), c.code])),
-    [availableCities]
+    () => new Map(cities.map((c) => [c.name.toLowerCase(), c.code])),
+    [cities]
   );
   const brgyCodeMap = useMemo(
-    () => new Map(availableBarangays.map((b) => [b.name.toLowerCase(), b.code])),
-    [availableBarangays]
+    () => new Map(barangays.map((b) => [b.name.toLowerCase(), b.code])),
+    [barangays]
   );
 
   return (
@@ -231,6 +254,7 @@ export function AreaRow({
                   onValueChange={(val) => onProvinceChange(val)}
                   placeholder="Select Province"
                   className={cn(selectBase, selectFocus)}
+                  error={!!form.formState.errors.areas?.[index]?.province}
                 />
               </FormControl>
               <FormMessage />
@@ -257,6 +281,7 @@ export function AreaRow({
                   placeholder="Select City"
                   disabled={!availableCities.length}
                   className={cn(selectBase, selectFocus)}
+                  error={!!form.formState.errors.areas?.[index]?.city}
                 />
               </FormControl>
               <FormMessage />
@@ -281,6 +306,7 @@ export function AreaRow({
                   placeholder="Select Barangay"
                   disabled={!availableBarangays.length}
                   className={cn(selectBase, selectFocus)}
+                  error={!!form.formState.errors.areas?.[index]?.baranggay}
                 />
               </FormControl>
               <FormMessage />
