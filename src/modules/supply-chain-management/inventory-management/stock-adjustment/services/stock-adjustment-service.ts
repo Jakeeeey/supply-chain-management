@@ -69,11 +69,16 @@ export const stockAdjustmentService = {
     let query = `fields=*,branch_id.branch_name,branch_id.id,supplier_id.id,supplier_id.supplier_name,created_by.user_fname,created_by.user_lname,created_by.user_id,posted_by.user_fname,posted_by.user_lname,items.id,stock_adjustment.id&sort=-created_at`;
     
     const filters: Record<string, unknown> = {};
+    
     if (params?.branchId) filters.branch_id = { _eq: params.branchId };
     if (params?.type) filters.type = { _eq: params.type };
+    
     if (params?.status) {
-        if (params.status === "Posted") filters.isPosted = { _eq: true };
-        if (params.status === "Unposted") filters.isPosted = { _neq: true };
+        if (params.status === "Posted") {
+            filters.isPosted = { _eq: true };
+        } else if (params.status === "Unposted") {
+            filters.isPosted = { _neq: true };
+        }
     }
     
     if (params?.search) {
@@ -84,7 +89,7 @@ export const stockAdjustmentService = {
     }
 
     if (Object.keys(filters).length > 0) {
-        query += `&filter=${JSON.stringify(filters)}`;
+        query += `&filter=${encodeURIComponent(JSON.stringify(filters))}`;
     }
 
     const res = await directusFetch<{ data: StockAdjustmentHeader[] }>(`${DIRECTUS_URL}/items/stock_adjustment_header?${query}`);
