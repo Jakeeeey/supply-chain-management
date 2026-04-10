@@ -648,12 +648,12 @@ export function PhysicalInventoryManualManagementModule(props: Props) {
                     remarks: "",
                     isComitted: 0,
                     isCancelled: 0,
+                    committed_at: null,
+                    cancelled_at: null,
                     total_amount: 0,
                     supplier_id: null,
                     category_id: null,
                     encoder_id: null,
-                    committed_at: null,
-                    cancelled_at: null,
                 };
 
                 if (cancelled) return;
