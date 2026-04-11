@@ -299,6 +299,25 @@ export const stockAdjustmentService = {
     }
   },
 
+  async checkRFIDExists(rfid: string, branchId: number, token: string): Promise<boolean> {
+    try {
+      const url = `${SPRING_API_URL}/api/view-rfid-onhand?rfid=${rfid}&branchId=${branchId}`;
+      const res = await fetch(url, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!res.ok) return false;
+      const data = await res.json();
+      
+      // If data is an array and has items, or if it's an object with productId, it exists.
+      if (Array.isArray(data)) return data.length > 0;
+      if (data && typeof data === 'object' && ('productId' in data || 'id' in data)) return true;
+      return false;
+    } catch (error) {
+      console.error("Failed to check RFID availability:", error);
+      return false;
+    }
+  },
+
   /**
    * Create a new Stock Adjustment (Header + Items)
    */

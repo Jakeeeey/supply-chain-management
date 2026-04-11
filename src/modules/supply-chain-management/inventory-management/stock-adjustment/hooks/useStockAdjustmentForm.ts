@@ -169,6 +169,20 @@ export function useStockAdjustmentForm() {
     }
   }, []);
 
+  const validateRFIDAvailability = useCallback(async (rfid: string, branchId: number): Promise<boolean> => {
+    try {
+      const response = await fetch(
+        `/api/scm/inventory-management/stock-adjustment/check-available-rfid?rfid=${rfid}&branchId=${branchId}`
+      );
+      if (!response.ok) return false;
+      const result = await response.json();
+      return !!result.exists;
+    } catch (err) {
+      console.error("Failed to validate RFID availability:", err);
+      return false;
+    }
+  }, []);
+
   const fetchNextDocNo = useCallback(async (type: "IN" | "OUT"): Promise<string> => {
     try {
       const response = await fetch(`/api/scm/inventory-management/stock-adjustment/next-doc-no?type=${type}`);
@@ -265,6 +279,7 @@ export function useStockAdjustmentForm() {
     fetchBranchInventory,
     fetchInventory,
     checkRFID,
+    validateRFIDAvailability,
     fetchNextDocNo,
     createAdjustment,
     updateAdjustment,

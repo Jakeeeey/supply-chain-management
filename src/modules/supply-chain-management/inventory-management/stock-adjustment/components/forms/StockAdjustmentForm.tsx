@@ -492,6 +492,7 @@ export function StockAdjustmentForm({
     inventoryMap,
     fetchNextDocNo,
     postAdjustment,
+    validateRFIDAvailability,
   } = useStockAdjustmentForm();
 
   const [loading, setLoading] = useState(false);
@@ -1318,6 +1319,8 @@ export function StockAdjustmentForm({
           onSave={handleRFIDSave}
           type={form.getValues("type")}
           initialTags={form.getValues(`items.${scannerContext.index}.rfid_tags`) || []}
+          branchId={Number(form.getValues("branch_id"))}
+          validateRFID={validateRFIDAvailability}
         />
       )}
 
