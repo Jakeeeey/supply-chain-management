@@ -22,6 +22,8 @@ interface RFIDScannerModalProps {
   onSave: (tags: string[]) => void;
   initialTags?: string[];
   type: "IN" | "OUT";
+  branchId?: number;
+  validateRFID?: (rfid: string, branchId: number) => Promise<boolean>;
 }
 
 export function RFIDScannerModal({
@@ -30,6 +32,9 @@ export function RFIDScannerModal({
   productName,
   onSave,
   initialTags = [],
+  type,
+  branchId,
+  validateRFID,
 }: RFIDScannerModalProps) {
   const [tags, setTags] = useState<string[]>(initialTags);
   const [prevOpen, setPrevOpen] = useState(open);
@@ -44,6 +49,7 @@ export function RFIDScannerModal({
   const [currentInput, setCurrentInput] = useState("");
   const [lastScanned, setLastScanned] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -55,13 +61,11 @@ export function RFIDScannerModal({
     }
   }, [open]);
 
-  const handleAddTag = (tag: string) => {
+  const handleAddTag = async (tag: string) => {
     let rawTag = tag.trim();
     if (!rawTag) return;
 
     // --- Pattern Detection for Concatenated Scans ---
-    // If the string appears to be the same ID repeated (e.g., IDID or IDIDID), extract only one ID.
-    // We check for repeats of lengths from 8 up to half the string length.
     if (rawTag.length >= 16) {
       for (let len = 8; len <= rawTag.length / 2; len++) {
         if (rawTag.length % len === 0) {
@@ -76,8 +80,28 @@ export function RFIDScannerModal({
     }
 
     if (tags.includes(rawTag)) {
-      toast.error("RFID tag already added");
+      toast.error("RFID tag already added in this session");
       return;
+    }
+
+    // --- Backend Validation for EXISTING tags during Stock In ---
+    if (type === "IN" && validateRFID && branchId) {
+      setIsValidating(true);
+      try {
+        const alreadyExists = await validateRFID(rawTag, branchId);
+        if (alreadyExists) {
+          toast.error("Process Blocked", {
+            description: `RFID tag ${rawTag} is already on hand in inventory.`,
+            duration: 4000,
+          });
+          setCurrentInput("");
+          return;
+        }
+      } catch (err) {
+        console.error("RFID Validation failed:", err);
+      } finally {
+        setIsValidating(false);
+      }
     }
 
     setTags((prev) => [...prev, rawTag]);
@@ -103,6 +127,7 @@ export function RFIDScannerModal({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (isValidating) return; // Block input while validating
     if (e.key === "Enter") {
       e.preventDefault();
       const val = currentInput;
