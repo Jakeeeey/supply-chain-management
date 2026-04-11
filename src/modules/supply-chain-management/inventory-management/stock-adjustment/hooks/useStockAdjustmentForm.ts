@@ -169,17 +169,21 @@ export function useStockAdjustmentForm() {
     }
   }, []);
 
-  const validateRFIDAvailability = useCallback(async (rfid: string, branchId: number): Promise<boolean> => {
+  const validateRFIDAvailability = useCallback(async (rfid: string, branchId?: number): Promise<{ exists: boolean; location?: string }> => {
     try {
+      const params = new URLSearchParams();
+      params.set("rfid", rfid);
+      if (branchId) params.set("branchId", String(branchId));
+
       const response = await fetch(
-        `/api/scm/inventory-management/stock-adjustment/check-available-rfid?rfid=${rfid}&branchId=${branchId}`
+        `/api/scm/inventory-management/stock-adjustment/check-available-rfid?${params.toString()}`
       );
-      if (!response.ok) return false;
+      if (!response.ok) return { exists: false };
       const result = await response.json();
-      return !!result.exists;
+      return { exists: !!result.exists, location: result.location };
     } catch (err) {
       console.error("Failed to validate RFID availability:", err);
-      return false;
+      return { exists: false };
     }
   }, []);
 

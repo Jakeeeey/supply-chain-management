@@ -23,7 +23,7 @@ interface RFIDScannerModalProps {
   initialTags?: string[];
   type: "IN" | "OUT";
   branchId?: number;
-  validateRFID?: (rfid: string, branchId: number) => Promise<boolean>;
+  validateRFID?: (rfid: string, branchId?: number) => Promise<{ exists: boolean; location?: string }>;
 }
 
 export function RFIDScannerModal({
@@ -85,14 +85,14 @@ export function RFIDScannerModal({
     }
 
     // --- Backend Validation for EXISTING tags during Stock In ---
-    if (type === "IN" && validateRFID && branchId) {
+    if (type === "IN" && validateRFID) {
       setIsValidating(true);
       try {
-        const alreadyExists = await validateRFID(rawTag, branchId);
-        if (alreadyExists) {
+        const { exists, location } = await validateRFID(rawTag, branchId);
+        if (exists) {
           toast.error("Process Blocked", {
-            description: `RFID tag ${rawTag} is already on hand in inventory.`,
-            duration: 4000,
+            description: `RFID tag ${rawTag} already exists (${location || "Unknown Location"}).`,
+            duration: 5000,
           });
           setCurrentInput("");
           return;

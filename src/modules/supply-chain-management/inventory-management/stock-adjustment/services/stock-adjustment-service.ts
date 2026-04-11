@@ -299,22 +299,56 @@ export const stockAdjustmentService = {
     }
   },
 
-  async checkRFIDExists(rfid: string, branchId: number, token: string): Promise<boolean> {
+  async checkRFIDExists(rfid: string, token: string, branchId?: number): Promise<{ exists: boolean; location?: string }> {
     try {
-      const url = `${SPRING_API_URL}/api/view-rfid-onhand?rfid=${rfid}&branchId=${branchId}`;
-      const res = await fetch(url, {
+      // 1. Check Spring API (Inventory On Hand)
+      const springUrl = new URL(`${SPRING_API_URL}/api/view-rfid-onhand`);
+      springUrl.searchParams.set("rfid", rfid);
+      if (branchId) springUrl.searchParams.set("branchId", String(branchId));
+
+      const springRes = await fetch(springUrl.toString(), {
         headers: { "Authorization": `Bearer ${token}` }
       });
-      if (!res.ok) return false;
-      const data = await res.json();
       
-      // If data is an array and has items, or if it's an object with productId, it exists.
-      if (Array.isArray(data)) return data.length > 0;
-      if (data && typeof data === 'object' && ('productId' in data || 'id' in data)) return true;
-      return false;
+      if (springRes.ok) {
+        const data = await springRes.json();
+        const hasInventory = Array.isArray(data) ? data.length > 0 : (data && typeof data === 'object' && ('productId' in data || 'id' in data));
+        if (hasInventory) {
+          const locationName = Array.isArray(data) && data[0]?.branch_name ? data[0].branch_name : "Inventory";
+          return { exists: true, location: locationName };
+        }
+      }
+
+      // 2. Check Directus Historical Records (Cross-Module)
+      const collections = [
+        { name: "stock_adjustment_rfid", label: "Stock Adjustment" },
+        { name: "rts_item_rfid", label: "Return to Supplier" },
+        { name: "sales_return_rfid", label: "Sales Return" }
+      ];
+
+      const historicalChecks = await Promise.all(
+        collections.map(async (coll) => {
+          try {
+            const res = await directusFetch<{ data: unknown[] }>(
+              `${DIRECTUS_URL}/items/${coll.name}?filter={"rfid_tag":{"_eq":"${rfid}"}}&fields=id&limit=1`
+            );
+            return { name: coll.label, exists: res.data && res.data.length > 0 };
+          } catch (e) {
+            console.warn(`Failed to check historical RFID in ${coll.name}:`, e);
+            return { name: coll.label, exists: false };
+          }
+        })
+      );
+
+      const found = historicalChecks.find(c => c.exists);
+      if (found) {
+        return { exists: true, location: `Registered in ${found.name}` };
+      }
+
+      return { exists: false };
     } catch (error) {
       console.error("Failed to check RFID availability:", error);
-      return false;
+      return { exists: false };
     }
   },
 
