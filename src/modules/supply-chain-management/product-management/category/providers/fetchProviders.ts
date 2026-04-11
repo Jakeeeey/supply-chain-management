@@ -78,3 +78,23 @@ export async function updateCategory(
   const json = (await res.json()) as DirectusItemResponse<CategoryApiRow>;
   return json?.data;
 }
+
+export async function checkCategoryUniqueness(
+  field: "category_name" | "sku_code",
+  value: string,
+  excludeId?: string
+): Promise<boolean> {
+  const filter: Record<string, { _eq: string } | { _neq: string }> = {
+    [field]: { _eq: value },
+  };
+
+  if (excludeId) {
+    filter.category_id = { _neq: excludeId };
+  }
+
+  const res = await fetch(`${API_BASE}?limit=1&filter=${encodeURIComponent(JSON.stringify(filter))}`);
+  if (!res.ok) return true; // Fail safe
+
+  const json = await res.json();
+  return (json?.data?.length ?? 0) === 0;
+}

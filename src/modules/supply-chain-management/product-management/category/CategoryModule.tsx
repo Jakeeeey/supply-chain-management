@@ -39,7 +39,7 @@ function buildColumns(
     },
     {
       accessorKey: "sku_code",
-      header: "SKU Code",
+      header: "Category Code",
       cell: ({ row }) => row.original.sku_code || "-",
       meta: { label: "SKU Code" },
     },

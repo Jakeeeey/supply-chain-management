@@ -106,7 +106,16 @@ export function StockAdjustmentList({
           </div>
         ) : (
           data.map((item) => {
-            const isPosted = !!item.isPosted;
+            // Directus may return isPosted as a Buffer {type:'Buffer',data:[0|1]},
+            // a number (0 or 1), or a boolean. Normalise all cases:
+            const rawPosted = item.isPosted as unknown;
+            let isPosted: boolean;
+            if (rawPosted && typeof rawPosted === 'object' && 'data' in rawPosted) {
+              // MySQL Buffer: { type: 'Buffer', data: [0] } or [1]
+              isPosted = (rawPosted as { data: number[] }).data?.[0] === 1;
+            } else {
+              isPosted = Number(rawPosted) === 1;
+            }
             
             return (
               <Card key={item.id} className="group overflow-hidden border-border/60 shadow-sm hover:shadow-md transition-all bg-card">

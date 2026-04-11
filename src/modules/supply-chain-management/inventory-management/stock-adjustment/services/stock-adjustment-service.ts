@@ -69,11 +69,16 @@ export const stockAdjustmentService = {
     let query = `fields=*,branch_id.branch_name,branch_id.id,supplier_id.id,supplier_id.supplier_name,created_by.user_fname,created_by.user_lname,created_by.user_id,posted_by.user_fname,posted_by.user_lname,items.id,stock_adjustment.id&sort=-created_at`;
     
     const filters: Record<string, unknown> = {};
+    
     if (params?.branchId) filters.branch_id = { _eq: params.branchId };
     if (params?.type) filters.type = { _eq: params.type };
+    
     if (params?.status) {
-        if (params.status === "Posted") filters.isPosted = { _eq: true };
-        if (params.status === "Unposted") filters.isPosted = { _neq: true };
+        if (params.status === "Posted") {
+            filters.isPosted = { _eq: true };
+        } else if (params.status === "Unposted") {
+            filters.isPosted = { _neq: true };
+        }
     }
     
     if (params?.search) {
@@ -84,7 +89,7 @@ export const stockAdjustmentService = {
     }
 
     if (Object.keys(filters).length > 0) {
-        query += `&filter=${JSON.stringify(filters)}`;
+        query += `&filter=${encodeURIComponent(JSON.stringify(filters))}`;
     }
 
     const res = await directusFetch<{ data: StockAdjustmentHeader[] }>(`${DIRECTUS_URL}/items/stock_adjustment_header?${query}`);
@@ -291,6 +296,59 @@ export const stockAdjustmentService = {
     } catch (error) {
       console.error("Failed to check RFID status:", error);
       return null;
+    }
+  },
+
+  async checkRFIDExists(rfid: string, token: string, branchId?: number): Promise<{ exists: boolean; location?: string }> {
+    try {
+      // 1. Check Spring API (Inventory On Hand)
+      const springUrl = new URL(`${SPRING_API_URL}/api/view-rfid-onhand`);
+      springUrl.searchParams.set("rfid", rfid);
+      if (branchId) springUrl.searchParams.set("branchId", String(branchId));
+
+      const springRes = await fetch(springUrl.toString(), {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      
+      if (springRes.ok) {
+        const data = await springRes.json();
+        const hasInventory = Array.isArray(data) ? data.length > 0 : (data && typeof data === 'object' && ('productId' in data || 'id' in data));
+        if (hasInventory) {
+          const locationName = Array.isArray(data) && data[0]?.branch_name ? data[0].branch_name : "Inventory";
+          return { exists: true, location: locationName };
+        }
+      }
+
+      // 2. Check Directus Historical Records (Cross-Module)
+      const collections = [
+        { name: "stock_adjustment_rfid", label: "Stock Adjustment" },
+        { name: "rts_item_rfid", label: "Return to Supplier" },
+        { name: "sales_return_rfid", label: "Sales Return" }
+      ];
+
+      const historicalChecks = await Promise.all(
+        collections.map(async (coll) => {
+          try {
+            const res = await directusFetch<{ data: unknown[] }>(
+              `${DIRECTUS_URL}/items/${coll.name}?filter={"rfid_tag":{"_eq":"${rfid}"}}&fields=id&limit=1`
+            );
+            return { name: coll.label, exists: res.data && res.data.length > 0 };
+          } catch (e) {
+            console.warn(`Failed to check historical RFID in ${coll.name}:`, e);
+            return { name: coll.label, exists: false };
+          }
+        })
+      );
+
+      const found = historicalChecks.find(c => c.exists);
+      if (found) {
+        return { exists: true, location: `Registered in ${found.name}` };
+      }
+
+      return { exists: false };
+    } catch (error) {
+      console.error("Failed to check RFID availability:", error);
+      return { exists: false };
     }
   },
 

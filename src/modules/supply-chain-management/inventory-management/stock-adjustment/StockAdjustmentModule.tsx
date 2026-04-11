@@ -51,7 +51,7 @@ export default function StockAdjustmentModule() {
   };
 
   return (
-    <div className="stock-adjustment-module h-full flex flex-col pt-0">
+    <div className="stock-adjustment-module">
       {view === "list" && (
         <StockAdjustmentList
           data={data}
