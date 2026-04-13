@@ -29,6 +29,7 @@ export function useStockTransferDispatching() {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [fetchingAvailable, setFetchingAvailable] = useState(false);
   const [scannedInventory, setScannedInventory] = useState<Record<number, number>>({});
 
   const [selectedOrderNo, setSelectedOrderNo] = useState<string | null>(null);
@@ -102,13 +103,20 @@ export function useStockTransferDispatching() {
         const qty = st.allocated_quantity ?? st.ordered_quantity ?? 0;
         const unitPrice = st.ordered_quantity > 0 ? (Number(st.amount || 0) / st.ordered_quantity) : 0;
         
+        const unitName = (product?.unit_of_measurement?.unit_name || '').toLowerCase();
+        const unitId = Number(product?.unit_of_measurement?.unit_id || 0);
+        // Mark as loose pack if unit is pieces, tie, pcs, or loose (these don't need RFID scanning)
+        const loosePack = unitName.includes('loose') || unitName.includes('pieces') || unitName.includes('pcs') || unitName.includes('tie') || unitId === 4;
+        // For loose packs, auto-complete scannedQty since they don't need RFID scanning
+        const targetQty = Math.max(0, qty);
+        const rawAvailable = scannedInventory[pid] ?? (st as any).qtyAvailable ?? 0;
+
         groups[st.order_no].items.push({
           ...st,
-          scannedQty: rfids.length,
+          scannedQty: loosePack ? targetQty : rfids.length,
           scannedRfids: rfids,
-          qtyAvailable: scannedInventory[pid] ?? (st as any).qtyAvailable ?? 0,
-          // Mark as loose pack if unit is not RFID-tracked (e.g. Unit ID 4 or name contains 'Loose')
-          isLoosePack: product?.unit_of_measurement?.unit_name?.toLowerCase().includes('loose') || product?.unit_of_measurement?.unit_id === 4 
+          qtyAvailable: Math.max(0, rawAvailable),
+          isLoosePack: loosePack,
         });
         groups[st.order_no].totalAmount += Number((qty * unitPrice).toFixed(2));
     });
@@ -129,6 +137,7 @@ export function useStockTransferDispatching() {
     if (itemsForOrder.length === 0) return;
 
     const fetchInitialInventory = async () => {
+      setFetchingAvailable(true);
       try {
         const newAvailable: Record<number, number> = { ...scannedInventory };
         let hasChanges = false;
@@ -169,7 +178,7 @@ export function useStockTransferDispatching() {
             );
             const availableCount = inventoryList.reduce((acc: number, inv: any) => acc + Number(inv.runningInventory || 0), 0);
             const unitCount = Number(product?.unit_of_measurement_count || 1) || 1;
-            const finalAvailable = Math.floor(availableCount / unitCount);
+            const finalAvailable = Math.max(0, Math.floor(availableCount / unitCount));
 
             newAvailable[pid] = finalAvailable;
             hasChanges = true;
@@ -184,6 +193,8 @@ export function useStockTransferDispatching() {
         }
       } catch (err) {
         console.error('Failed to fetch initial available quantities:', err);
+      } finally {
+        setFetchingAvailable(false);
       }
     };
 
@@ -423,6 +434,9 @@ export function useStockTransferDispatching() {
       // ── STATUS TRANSITION: Picked ──
       const allItems = selectedGroup.items;
       const isComplete = allItems.every(item => {
+        // Loose packs are always auto-completed (no RFID needed)
+        if (item.isLoosePack) return true;
+
         const product = typeof item.product_id === 'object' && item.product_id !== null ? (item.product_id as any) : null;
         const pid = product ? (product.product_id || product.id) : item.product_id;
         
@@ -482,6 +496,7 @@ export function useStockTransferDispatching() {
     handleScanRFID,
     getBranchName,
     fetchError,
+    fetchingAvailable,
     refresh: fetchTransfers,
     markAsPicked,
   };

@@ -172,20 +172,28 @@ const data = {
                     url: "/scm/warehouse-management/stock-transfer",
                     items: [
                         {
-                            title: "Request",
+                            title: "Request Transfer",
                             url: "/scm/warehouse-management/stock-transfer/request"
                         },
                         {
-                            title: "Approval",
+                            title: "Approval Transfer",
                             url: "/scm/warehouse-management/stock-transfer/approval"
                         },
                         {
-                            title: "Dispatching",
+                            title: "Withdrawal RFID Transfer",
                             url: "/scm/warehouse-management/stock-transfer/dispatching"
                         },
                         {
-                            title: "Receive",
+                            title: "Withdrawal Manual",
+                            url: "/scm/warehouse-management/stock-transfer/dispatching-manual"
+                        },
+                        {
+                            title: "Receive RFID Transfer",
                             url: "/scm/warehouse-management/stock-transfer/receive"
+                        },
+                        {
+                            title: "Receive Manual",
+                            url: "/scm/warehouse-management/stock-transfer/receive-manual"
                         }
                     ]
                 },

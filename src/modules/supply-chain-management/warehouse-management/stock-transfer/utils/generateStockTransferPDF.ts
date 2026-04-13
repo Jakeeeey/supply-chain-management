@@ -25,7 +25,7 @@ export function generateStockTransferPDF(data: StockTransferPDFData): jsPDF {
     scannedItems,
   } = data;
 
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'legal' });
 
   const pageW = doc.internal.pageSize.getWidth();
   const margin = 14;
@@ -114,7 +114,7 @@ export function generateStockTransferPDF(data: StockTransferPDFData): jsPDF {
   const grandTotal = scannedItems.reduce((sum, i) => sum + i.totalAmount, 0);
   const rows = scannedItems.map((item, i) => [
     String(i + 1),
-    item.rfid,
+    item.rfid || 'N/A',
     item.productName,
     item.description,
     item.brandName || 'N/A',
@@ -138,6 +138,7 @@ export function generateStockTransferPDF(data: StockTransferPDFData): jsPDF {
       cellPadding: 2,
       textColor: [0, 0, 0],
       lineColor: [220, 220, 220],
+      overflow: 'linebreak', // Allow text to wrap instead of overlap/ellipsize
     },
     headStyles: {
       fillColor: [243, 244, 246],
@@ -156,14 +157,14 @@ export function generateStockTransferPDF(data: StockTransferPDFData): jsPDF {
     columnStyles: {
       0: { cellWidth: 7 },
       1: { cellWidth: 28, fontStyle: 'bold', fontSize: 6.5 },
-      2: { cellWidth: 32 },
-      3: { cellWidth: 25, fontStyle: 'italic', textColor: [80, 80, 80], fontSize: 6.5 },
+      2: { cellWidth: 40 }, // Increased from 32
+      3: { cellWidth: 30, fontStyle: 'italic', textColor: [80, 80, 80], fontSize: 6.5 }, // Increased from 25
       4: { cellWidth: 15 },
       5: { cellWidth: 10, halign: 'center' },
       6: { cellWidth: 12, halign: 'right' },
       7: { cellWidth: 12, halign: 'right' },
       8: { cellWidth: 12, halign: 'right', fontStyle: 'bold' },
-      9: { cellWidth: 25, halign: 'right', fontStyle: 'bold' },
+      9: { cellWidth: 20, halign: 'right', fontStyle: 'bold' }, // Slightly reduced to fit wider product columns
     },
     alternateRowStyles: { fillColor: [250, 250, 252] },
     didParseCell: (data) => {
