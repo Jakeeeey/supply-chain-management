@@ -27,7 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
 import { categorySchema, CategoryFormValues, CategoryApiRow } from "../types";
-import { createCategory, updateCategory } from "../providers/fetchProviders";
+import { createCategory, updateCategory, checkCategoryUniqueness } from "../providers/fetchProviders";
 
 interface CategoryDialogProps {
   open: boolean;
@@ -85,6 +85,21 @@ export function CategoryDialog({
 
   const onSubmit = async (values: CategoryFormValues) => {
     try {
+      // 🛡️ Strict Uniqueness Checker
+      const nameUnique = await checkCategoryUniqueness("category_name", values.category_name, selectedCategory?.category_id);
+      if (!nameUnique) {
+        toast.error(`The Category Name "${values.category_name}" is already in use.`);
+        return;
+      }
+
+      if (values.sku_code) {
+        const skuUnique = await checkCategoryUniqueness("sku_code", values.sku_code, selectedCategory?.category_id);
+        if (!skuUnique) {
+          toast.error(`The SKU Code "${values.sku_code}" is already in use by another category.`);
+          return;
+        }
+      }
+
       let imageId = selectedCategory?.image || null;
 
       if (file) {

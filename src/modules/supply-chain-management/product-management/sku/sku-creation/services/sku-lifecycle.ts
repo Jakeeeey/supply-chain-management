@@ -220,4 +220,19 @@ export const skuLifecycleService = {
     });
     return true;
   },
+
+  async uploadImage(
+    formData: FormData,
+    folderName?: string,
+  ): Promise<{ id: string }> {
+    if (folderName) formData.append("folder_name", folderName);
+
+    const res = await fetch("/api/scm/product-management/sku/upload", {
+      method: "POST",
+      body: formData,
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || "Upload failed");
+    return result.data;
+  },
 };

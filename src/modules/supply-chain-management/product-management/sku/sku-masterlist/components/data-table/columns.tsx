@@ -1,28 +1,37 @@
 "use client";
 
-import { ColumnDef } from "@tanstack/react-table";
-import {
-  SKU,
-  MasterData,
-} from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
 import { Badge } from "@/components/ui/badge";
-import { DataTableColumnHeader } from "./table-column-header";
-import { CellHelpers } from "../../../sku-creation/utils/sku-helpers";
-import { CheckCircle, XCircle, MoreHorizontal } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
+import {
+  MasterData,
+  SKU,
+} from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
+import { ColumnDef } from "@tanstack/react-table";
+import {
+  CheckCircle,
+  ImageIcon,
+  Images,
+  MoreHorizontal,
+  XCircle,
+} from "lucide-react";
+import Image from "next/image";
+import { CellHelpers } from "../../../sku-creation/utils/sku-helpers";
+import { DataTableColumnHeader } from "./table-column-header";
 
 export const getMasterlistColumns = (
   masterData: MasterData | null,
   onToggleStatus?: (id: number | string, current: boolean) => void,
+  onEdit?: (sku: SKU) => void,
+  onUpdateImage?: (sku: SKU) => void,
+  onViewGallery?: (sku: SKU) => void,
 ): ColumnDef<SKU>[] => [
   {
     id: "select",
@@ -35,7 +44,7 @@ export const getMasterlistColumns = (
           }
           onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
           aria-label="Select all"
-          className="translate-y-1"
+          className="translate-y-0.5"
         />
       </div>
     ),
@@ -45,12 +54,42 @@ export const getMasterlistColumns = (
           checked={row.getIsSelected()}
           onCheckedChange={(value) => row.toggleSelected(!!value)}
           aria-label="Select row"
-          className="translate-y-1"
+          className="translate-y-0.5"
         />
       </div>
     ),
     enableSorting: false,
     enableHiding: false,
+  },
+  {
+    accessorKey: "main_image",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Image" />
+    ),
+    meta: { label: "Image" },
+    cell: ({ row }) => {
+      const imageId = row.original.main_image;
+      const imageUrl = imageId
+        ? `${process.env.NEXT_PUBLIC_API_BASE_URL}/assets/${imageId}?width=40&height=40&fit=cover`
+        : null;
+
+      return (
+        <div className="flex items-center justify-center w-9 h-9 rounded-md border bg-muted overflow-hidden shrink-0">
+          {imageUrl ? (
+            <Image
+              src={imageUrl}
+              alt={row.original.product_name || "Product"}
+              width={36}
+              height={36}
+              className="object-cover"
+              unoptimized
+            />
+          ) : (
+            <ImageIcon className="h-3.5 w-3.5 text-muted-foreground/40" />
+          )}
+        </div>
+      );
+    },
   },
   {
     accessorKey: "product_code",
@@ -59,19 +98,14 @@ export const getMasterlistColumns = (
       <DataTableColumnHeader column={column} label="SKU Code" />
     ),
     meta: { label: "SKU Code" },
-    cell: ({ row }) => (
-      <div className="w-fit">
-        {row.original.product_code ? (
-          <code className="px-1 py-0.5 bg-muted rounded text-xs font-mono font-medium">
-            {row.original.product_code}
-          </code>
-        ) : (
-          <span className="text-muted-foreground/50 text-xs italic">
-            Unassigned
-          </span>
-        )}
-      </div>
-    ),
+    cell: ({ row }) =>
+      row.original.product_code ? (
+        <code className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">
+          {row.original.product_code}
+        </code>
+      ) : (
+        <span className="text-xs text-muted-foreground italic">Unassigned</span>
+      ),
   },
   {
     accessorKey: "product_name",
@@ -81,7 +115,7 @@ export const getMasterlistColumns = (
     ),
     meta: { label: "Product Name" },
     cell: ({ row }) => (
-      <span className="font-medium">
+      <span className="text-sm font-medium">
         {row.original.product_name || "Unnamed Product"}
       </span>
     ),
@@ -94,14 +128,12 @@ export const getMasterlistColumns = (
     ),
     meta: { label: "Category" },
     cell: ({ row }) => (
-      <div className="w-full truncate">
-        <span className="text-xs">
-          {CellHelpers.renderMasterText(
-            row.original.product_category,
-            masterData?.categories,
-          )}
-        </span>
-      </div>
+      <span className="text-sm text-muted-foreground">
+        {CellHelpers.renderMasterText(
+          row.original.product_category,
+          masterData?.categories,
+        )}
+      </span>
     ),
   },
   {
@@ -113,10 +145,7 @@ export const getMasterlistColumns = (
     cell: ({ row }) => {
       const type = CellHelpers.detectInventoryType(row.original);
       return (
-        <Badge
-          variant="outline"
-          className={`font-medium ${type === "Variant" ? "border-primary text-primary bg-primary/5" : ""}`}
-        >
+        <Badge variant={type === "Variant" ? "default" : "outline"}>
           {type}
         </Badge>
       );
@@ -130,14 +159,12 @@ export const getMasterlistColumns = (
     ),
     meta: { label: "Brand" },
     cell: ({ row }) => (
-      <div className="w-full truncate">
-        <span className="text-xs">
-          {CellHelpers.renderMasterText(
-            row.original.product_brand,
-            masterData?.brands,
-          )}
-        </span>
-      </div>
+      <span className="text-sm text-muted-foreground">
+        {CellHelpers.renderMasterText(
+          row.original.product_brand,
+          masterData?.brands,
+        )}
+      </span>
     ),
   },
   {
@@ -149,17 +176,10 @@ export const getMasterlistColumns = (
     meta: { label: "Status" },
     cell: ({ row }) => {
       const sku = row.original;
-      const isActiveVal = sku.isActive;
-      const active = isActiveVal === 1 || isActiveVal === true;
-      const displayStatus =
-        sku.status || (active ? "ACTIVE" : "INACTIVE");
-
+      const active = sku.isActive === 1 || sku.isActive === true;
       return (
-        <Badge
-          variant={active ? "default" : "destructive"}
-          className={`text-xs`}
-        >
-          {displayStatus.toUpperCase()}
+        <Badge variant={active ? "default" : "secondary"}>
+          {active ? "Active" : "Inactive"}
         </Badge>
       );
     },
@@ -172,37 +192,51 @@ export const getMasterlistColumns = (
       const sku = row.original;
       const id = sku.id ?? sku.product_id;
       const active = sku.isActive === 1 || sku.isActive === true;
+      const isRegular = CellHelpers.detectInventoryType(sku) === "Regular";
 
       if (!onToggleStatus || id == null) return null;
 
       return (
-        <div className="flex justify-end w-[60px]">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Quick Actions</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => onToggleStatus(id, active)}
-                className={active ? "text-destructive" : "text-primary"}
-              >
-                {active ? (
-                  <>
-                    <XCircle className="h-4 w-4 mr-2" /> Deactivate
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="h-4 w-4 mr-2" /> Activate
-                  </>
-                )}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {isRegular && onUpdateImage && (
+              <DropdownMenuItem onClick={() => onUpdateImage(sku)}>
+                <ImageIcon className="h-4 w-4 mr-2" />
+                Update Image
               </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+            )}
+            {isRegular && onViewGallery && (
+              <DropdownMenuItem onClick={() => onViewGallery(sku)}>
+                <Images className="h-4 w-4 mr-2" />
+                View Gallery
+              </DropdownMenuItem>
+            )}
+            {isRegular && (onUpdateImage || onViewGallery) && (
+              <DropdownMenuSeparator />
+            )}
+            <DropdownMenuItem
+              variant={active ? "destructive" : undefined}
+              onClick={() => onToggleStatus(id, active)}
+            >
+              {active ? (
+                <>
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Deactivate
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Activate
+                </>
+              )}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       );
     },
   },

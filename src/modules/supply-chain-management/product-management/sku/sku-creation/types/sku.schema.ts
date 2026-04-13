@@ -31,6 +31,8 @@ export const skuSchema = z
     product_name: z.string().min(1, "Product name is required"),
     product_code: z.string().optional(), // System generated
     barcode: z.string().nullable().optional(),
+    product_images: z.string().nullable().optional(),
+    main_image: z.string().nullable().optional(),
 
     product_brand: z.number().int().min(1, "Brand is required"),
     product_category: z.number().int().min(1, "Category is required"),
@@ -107,6 +109,13 @@ export const skuSchema = z
   });
 
 export type SKU = z.infer<typeof skuSchema>;
+
+export interface GalleryImage {
+  image_id: number;
+  image: string;
+  sort_order: number;
+  isActive: number | boolean;
+}
 
 export interface SKUUnit {
   id: number;

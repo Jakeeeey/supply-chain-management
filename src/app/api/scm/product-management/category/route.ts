@@ -22,6 +22,7 @@ async function proxyRequest(req: NextRequest, method: string) {
   const page = url.searchParams.get("page") ?? "1";
   const limit = url.searchParams.get("limit") ?? "12";
   const search = url.searchParams.get("search") ?? "";
+  const filterParam = url.searchParams.get("filter") ?? "";
 
   let upstreamUrl = `${DIRECTUS_URL}${ENDPOINT}`;
 
@@ -31,8 +32,10 @@ async function proxyRequest(req: NextRequest, method: string) {
     // ✅ Include params and request meta count
     upstreamUrl += `?sort=category_name&page=${page}&limit=${limit}&meta=filter_count`;
 
-    // ✅ Server-side Filter: Matches Name OR SKU Code
-    if (search) {
+    // ✅ Apply filter directly if provided, otherwise fallback to search logic
+    if (filterParam) {
+      upstreamUrl += `&filter=${encodeURIComponent(filterParam)}`;
+    } else if (search) {
       const filter = {
         _or: [
           { category_name: { _icontains: search } },
