@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useBundles } from "../hooks/useBundles";
 import { BundleApprovalTable } from "./components/data-table";
 import { BundleViewModal } from "../components/modals/bundle-view-modal";
@@ -101,7 +101,16 @@ export default function BundleApprovalPage() {
     setSelectedRows(rows);
   }, []);
 
-  if (isLoading && !pendingData.length) return <ModuleSkeleton />;
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setMounted(true);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!mounted) return <ModuleSkeleton />;
   if (error) return <ErrorPage message={error} reset={refresh} />;
 
   const actionComponent = (

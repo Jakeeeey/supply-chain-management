@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useStockConversion } from "./hooks/useStockConversion";
 import { StockConversionTable } from "./components/StockConversionTable";
 import { StockConversionModal } from "./components/StockConversionModal";
@@ -98,7 +98,16 @@ export default function StockConversionModule({ user }: StockConversionModulePro
     }
   };
 
-  if (isLoading && !data.length) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setMounted(true);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!mounted) {
     return <ModuleSkeleton hasActions={false} rowCount={8} />;
   }
 
