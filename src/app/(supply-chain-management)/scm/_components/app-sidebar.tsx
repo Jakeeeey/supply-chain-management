@@ -451,22 +451,21 @@ const data = {
         },
       ],
     },
-
     {
-            title: "File Management",
-            url: "#",
-            icon: ClipboardList,
-            items: [
-                {
-                    title: "Sales Return Type",
-                    url: "/scm/file-management/sales-return-type",
-                },
-                {
-                    title: "Return Supplier Type",
-                    url: "/scm/file-management/return-supplier-type",
-                },
-            ],
+      title: "File Management",
+      url: "#",
+      icon: ClipboardList,
+      items: [
+        {
+          title: "Sales Return Type",
+          url: "/scm/file-management/sales-return-type",
         },
+        {
+          title: "Return Supplier Type",
+          url: "/scm/file-management/return-supplier-type",
+        },
+      ],
+    },
   ],
 };
 

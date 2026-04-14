@@ -29,7 +29,7 @@ export async function GET(req: NextRequest, { params }: { params: Params }) {
     return NextResponse.json(result);
   } catch (error: unknown) {
     return NextResponse.json(
-      { error: (error as Error).message },
+      { error: error instanceof Error ? error.message : "Internal Server Error" },
       { status: 500 },
     );
   }
@@ -67,8 +67,9 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
     return NextResponse.json(result);
   } catch (error: unknown) {
     return NextResponse.json(
-      { error: (error as Error).message },
+      { error: error instanceof Error ? error.message : "Internal Server Error" },
       { status: 500 },
     );
   }
 }
+
