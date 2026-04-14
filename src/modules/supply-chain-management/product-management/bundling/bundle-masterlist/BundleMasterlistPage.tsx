@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { BundleViewModal } from "../components/modals/bundle-view-modal";
 
 export default function BundleMasterlistPage() {
@@ -57,7 +57,16 @@ export default function BundleMasterlistPage() {
     return result.data;
   };
 
-  if (isLoading && !approvedData.length) return <ModuleSkeleton />;
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setMounted(true);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!mounted) return <ModuleSkeleton />;
   if (error) return <ErrorPage message={error} reset={refresh} />;
 
   return (

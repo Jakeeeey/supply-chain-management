@@ -191,7 +191,7 @@ export default function SKUMasterlistModule() {
       </div>
     ) : null;
 
-  if (!mounted || (isLoading && !data.length)) {
+  if (!mounted) {
     return <ModuleSkeleton hasActions={false} rowCount={8} />;
   }
 
