@@ -1,25 +1,10 @@
 "use client";
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-import { Button } from "@/components/ui/button";
-import { Loader2, Upload, X } from "lucide-react";
-import Image from "next/image";
-import React, { useRef, useState } from "react";
-import { toast } from "sonner";
-=======
 import React, { useState, useRef } from "react";
-=======
->>>>>>> 3d63756 (cleared run eslint issue)
 import { Button } from "@/components/ui/button";
-import { Loader2, Upload, X } from "lucide-react";
-import Image from "next/image";
-<<<<<<< HEAD
->>>>>>> 1b6130b (feat(sku): add multi-image gallery support and modal)
-=======
-import React, { useRef, useState } from "react";
+import { Upload, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
->>>>>>> 3d63756 (cleared run eslint issue)
+import Image from "next/image";
 
 interface ImageUploadProps {
   value?: string | null;
@@ -32,15 +17,7 @@ export function ImageUpload({
   value,
   onChange,
   onUpload,
-<<<<<<< HEAD
-<<<<<<< HEAD
-  disabled,
-=======
   disabled
->>>>>>> 1b6130b (feat(sku): add multi-image gallery support and modal)
-=======
-  disabled,
->>>>>>> 3d63756 (cleared run eslint issue)
 }: ImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -73,23 +50,10 @@ export function ImageUpload({
         const result = await onUpload(formData);
         onChange(result.id);
         toast.success("Image uploaded successfully");
-<<<<<<< HEAD
-<<<<<<< HEAD
       } catch (error: unknown) {
         toast.error("Upload failed", {
           description:
             error instanceof Error ? error.message : "Could not upload image",
-=======
-      } catch (error: any) {
-        toast.error("Upload failed", {
-          description: error.message || "Could not upload image",
->>>>>>> 1b6130b (feat(sku): add multi-image gallery support and modal)
-=======
-      } catch (error: unknown) {
-        toast.error("Upload failed", {
-          description:
-            error instanceof Error ? error.message : "Could not upload image",
->>>>>>> 3d63756 (cleared run eslint issue)
         });
       } finally {
         setIsUploading(false);
@@ -117,19 +81,9 @@ export function ImageUpload({
             ? "border-muted bg-muted/20 h-48"
             : "border-muted-foreground/25 hover:border-primary/50 hover:bg-primary/[0.02] h-40"
         } ${disabled || isUploading ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
-<<<<<<< HEAD
-<<<<<<< HEAD
         onClick={() =>
           !disabled && !isUploading && fileInputRef.current?.click()
         }
-=======
-        onClick={() => !disabled && !isUploading && fileInputRef.current?.click()}
->>>>>>> 1b6130b (feat(sku): add multi-image gallery support and modal)
-=======
-        onClick={() =>
-          !disabled && !isUploading && fileInputRef.current?.click()
-        }
->>>>>>> 3d63756 (cleared run eslint issue)
       >
         <input
           type="file"

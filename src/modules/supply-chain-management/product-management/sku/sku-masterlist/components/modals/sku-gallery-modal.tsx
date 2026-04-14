@@ -29,6 +29,16 @@ interface SKUGalleryModalProps {
   onClose: () => void;
 }
 
+interface ParentRef {
+  id?: number;
+  product_id?: number;
+  main_image?: string | null;
+}
+
+function isParentRef(value: unknown): value is ParentRef {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 export function SKUGalleryModal({
   sku,
   isOpen,
@@ -38,11 +48,11 @@ export function SKUGalleryModal({
   const [isLoading, setIsLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState<number | null>(null);
 
+  const parentRef = isParentRef(sku?.parent_id) ? sku.parent_id : null;
   const isChild = !!sku?.parent_id;
-  const parentId =
-    typeof sku?.parent_id === "object" && sku?.parent_id !== null
-      ? (sku.parent_id as any).id || (sku.parent_id as any).product_id
-      : sku?.parent_id;
+  const parentId = parentRef
+    ? parentRef.id ?? parentRef.product_id
+    : sku?.parent_id;
 
   const fetchGallery = useCallback(async () => {
     if (!sku) return;
@@ -55,22 +65,11 @@ export function SKUGalleryModal({
       const result = await res.json();
       if (res.ok) setGallery(result.data || []);
       else throw new Error(result.error || "Failed to fetch gallery");
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 3d63756 (cleared run eslint issue)
     } catch (error: unknown) {
       toast.error("Error", {
         description:
           error instanceof Error ? error.message : "Failed to fetch gallery",
       });
-<<<<<<< HEAD
-=======
-    } catch (error: any) {
-      toast.error("Error", { description: error.message });
->>>>>>> 1b6130b (feat(sku): add multi-image gallery support and modal)
-=======
->>>>>>> 3d63756 (cleared run eslint issue)
     } finally {
       setIsLoading(false);
     }
@@ -114,26 +113,17 @@ export function SKUGalleryModal({
         const err = await res.json();
         throw new Error(err.error || "Failed to delete image");
       }
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 3d63756 (cleared run eslint issue)
     } catch (error: unknown) {
       toast.error("Error", {
         description:
           error instanceof Error ? error.message : "Failed to delete image",
       });
-<<<<<<< HEAD
-=======
-    } catch (error: any) {
-      toast.error("Error", { description: error.message });
->>>>>>> 1b6130b (feat(sku): add multi-image gallery support and modal)
-=======
->>>>>>> 3d63756 (cleared run eslint issue)
     } finally {
       setIsDeleting(null);
     }
   };
+
+  const displayMainImage = sku?.main_image || parentRef?.main_image || null;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -158,11 +148,9 @@ export function SKUGalleryModal({
               <Badge variant="secondary">Primary</Badge>
             </div>
             <div className="relative aspect-video w-full rounded-md border bg-muted overflow-hidden flex items-center justify-center">
-              {(sku?.main_image ||
-                (typeof sku?.parent_id === "object" &&
-                  (sku?.parent_id as any)?.main_image)) ? (
+              {displayMainImage ? (
                 <Image
-                  src={`${process.env.NEXT_PUBLIC_API_BASE_URL}/assets/${sku.main_image || (sku?.parent_id as any)?.main_image}?width=500&height=300&fit=contain`}
+                  src={`${process.env.NEXT_PUBLIC_API_BASE_URL}/assets/${displayMainImage}?width=500&height=300&fit=contain`}
                   alt="Primary product image"
                   fill
                   className="object-contain p-4"
@@ -257,3 +245,4 @@ export function SKUGalleryModal({
     </Dialog>
   );
 }
+

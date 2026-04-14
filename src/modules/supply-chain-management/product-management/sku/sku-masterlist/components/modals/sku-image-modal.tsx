@@ -10,15 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { SKU } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
-<<<<<<< HEAD
-<<<<<<< HEAD
 import { useState } from "react";
-=======
-import { useEffect, useState } from "react";
->>>>>>> 1b6130b (feat(sku): add multi-image gallery support and modal)
-=======
-import { useState } from "react";
->>>>>>> 3d63756 (cleared run eslint issue)
 import { ImageUpload } from "../../../sku-creation/components/ImageUpload";
 import { skuService } from "../../../sku-creation/services/sku";
 
@@ -38,33 +30,8 @@ export function SKUImageModal({
   isLoading,
 }: SKUImageModalProps) {
   const [productImage, setProductImage] = useState<string | null>(null);
-<<<<<<< HEAD
-<<<<<<< HEAD
   const [prevSkuId, setPrevSkuId] = useState<string | number | undefined>(undefined);
   const [prevIsOpen, setPrevIsOpen] = useState<boolean>(false);
-
-  const isChild = !!sku?.parent_id;
-  const currentSkuId = sku ? sku.id || sku.product_id : undefined;
-
-  if (currentSkuId !== prevSkuId || isOpen !== prevIsOpen) {
-    setPrevSkuId(currentSkuId);
-    setPrevIsOpen(isOpen);
-
-    if (isOpen && sku) {
-      const parentImage =
-        typeof sku.parent_id === "object" && sku.parent_id !== null
-          ? (sku.parent_id as any).main_image
-          : null;
-      setProductImage(sku.main_image || parentImage || null);
-    } else if (!isOpen) {
-      setProductImage(null);
-    }
-  }
-=======
-=======
-  const [prevSkuId, setPrevSkuId] = useState<string | number | undefined>(undefined);
-  const [prevIsOpen, setPrevIsOpen] = useState<boolean>(false);
->>>>>>> 3d63756 (cleared run eslint issue)
 
   const currentSkuId = sku ? (sku.id || sku.product_id) : undefined;
 
@@ -74,16 +41,10 @@ export function SKUImageModal({
     
     if (isOpen && sku) {
       setProductImage(sku.main_image || sku.product_images || null);
-<<<<<<< HEAD
-    else if (!isOpen) setProductImage(null);
-  }, [sku, isOpen]);
->>>>>>> 1b6130b (feat(sku): add multi-image gallery support and modal)
-=======
     } else if (!isOpen) {
       setProductImage(null);
     }
   }
->>>>>>> 3d63756 (cleared run eslint issue)
 
   const handleSave = async () => {
     if (!sku) return;
@@ -99,11 +60,6 @@ export function SKUImageModal({
           <DialogDescription>
             {sku?.product_name}
             {sku?.product_code ? ` · ${sku.product_code}` : ""}
-            {isChild && (
-              <span className="ml-2 text-[10px] uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                Inherited from Parent
-              </span>
-            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -112,7 +68,7 @@ export function SKUImageModal({
             value={productImage}
             onChange={setProductImage}
             onUpload={(fd) => skuService.uploadImage(fd, "main")}
-            disabled={isLoading || isChild}
+            disabled={isLoading}
           />
         </div>
 
@@ -120,11 +76,7 @@ export function SKUImageModal({
           <Button variant="ghost" onClick={onClose} disabled={isLoading}>
             Cancel
           </Button>
-          <Button
-            onClick={handleSave}
-            disabled={isLoading || isChild}
-            className={isChild ? "hidden" : ""}
-          >
+          <Button onClick={handleSave} disabled={isLoading}>
             {isLoading ? "Saving..." : "Save Image"}
           </Button>
         </DialogFooter>

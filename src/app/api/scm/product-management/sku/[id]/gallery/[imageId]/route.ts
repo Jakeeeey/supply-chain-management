@@ -24,17 +24,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Params }) {
     }
 
     return NextResponse.json({ success: true });
-<<<<<<< HEAD
-<<<<<<< HEAD
   } catch (error: unknown) {
-    return NextResponse.json({ error: (error as Error).message }, { status: 500 });
-=======
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
->>>>>>> 1b6130b (feat(sku): add multi-image gallery support and modal)
-=======
-  } catch (error: unknown) {
-    return NextResponse.json({ error: (error as Error).message }, { status: 500 });
->>>>>>> 3243111 (style: fix remaining lint issues)
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }
+

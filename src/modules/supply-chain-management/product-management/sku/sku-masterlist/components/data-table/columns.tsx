@@ -26,6 +26,17 @@ import Image from "next/image";
 import { CellHelpers } from "../../../sku-creation/utils/sku-helpers";
 import { DataTableColumnHeader } from "./table-column-header";
 
+/** Shape returned by Directus when parent_id is expanded as a relational object. */
+interface ParentRef {
+  id?: number;
+  product_id?: number;
+  main_image?: string | null;
+}
+
+function isParentRef(value: unknown): value is ParentRef {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 export const getMasterlistColumns = (
   masterData: MasterData | null,
   parentImages: Record<number, string | null> = {},
@@ -71,16 +82,13 @@ export const getMasterlistColumns = (
     cell: ({ row }) => {
       const sku = row.original;
       // Inherit image from parent if current SKU has no image
-      const parentId =
-        typeof sku.parent_id === "object" && sku.parent_id !== null
-          ? (sku.parent_id as any).id || (sku.parent_id as any).product_id
-          : sku.parent_id;
+      const parentRef = isParentRef(sku.parent_id) ? sku.parent_id : null;
+      const parentId = parentRef
+        ? parentRef.id ?? parentRef.product_id
+        : sku.parent_id;
 
       const parentImageFromMap = parentId ? parentImages[Number(parentId)] : null;
-      const parentImageFromObject =
-        typeof sku.parent_id === "object" && sku.parent_id !== null
-          ? (sku.parent_id as any).main_image
-          : null;
+      const parentImageFromObject = parentRef?.main_image ?? null;
 
       const imageId = sku.main_image || parentImageFromMap || parentImageFromObject;
 
