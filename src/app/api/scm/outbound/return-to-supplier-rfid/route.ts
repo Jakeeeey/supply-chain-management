@@ -14,7 +14,35 @@ import {
   createTransaction,
   updateTransaction,
 } from "@/modules/supply-chain-management/outbound/return-to-supplier-rfid/services/rts-service";
-import { decodeJwtPayload } from "@/lib/auth-utils";
+/**
+ * Decodes the base64url payload of a JWT without verifying the signature.
+ * @param token The JWT string.
+ * @returns The parsed JSON payload, or null if invalid.
+ */
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const base64Url = parts[1];
+    if (!base64Url) return null;
+
+    let base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    while (base64.length % 4) {
+      base64 += "=";
+    }
+
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join(""),
+    );
+    return JSON.parse(jsonPayload);
+  } catch (error) {
+    console.error("Failed to decode JWT payload:", error);
+    return null;
+  }
+}
 
 export const runtime = "nodejs";
 
