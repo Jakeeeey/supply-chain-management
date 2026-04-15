@@ -16,6 +16,8 @@ import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/new-data-table";
 import ErrorPage from "@/components/shared/ErrorPage";
 
+import { formatDate } from "./lib/utils";
+
 import { RTSReturnType } from "./types";
 import { listRTSReturnTypes } from "./providers/fetchProviders";
 import { RTSReturnTypeDialog } from "./components/RTSReturnTypeDialog";
@@ -86,15 +88,7 @@ function buildColumns(
     {
       accessorKey: "created_at",
       header: "Created At",
-      cell: ({ row }) => {
-        const val = row.original.created_at;
-        if (!val) return "-";
-        const dateStr = val.endsWith("Z") || val.includes("+") ? val : `${val.replace(" ", "T")}Z`;
-        return new Date(dateStr).toLocaleString(undefined, {
-          dateStyle: "medium",
-          timeStyle: "short",
-        });
-      },
+      cell: ({ row }) => formatDate(row.original.created_at),
       meta: { label: "Created At" },
     },
     {
@@ -106,15 +100,7 @@ function buildColumns(
     {
       accessorKey: "updated_at",
       header: "Updated at",
-      cell: ({ row }) => {
-        const val = row.original.updated_at;
-        if (!val) return "-";
-        const dateStr = val.endsWith("Z") || val.includes("+") ? val : `${val.replace(" ", "T")}Z`;
-        return new Date(dateStr).toLocaleString(undefined, {
-          dateStyle: "medium",
-          timeStyle: "short",
-        });
-      },
+      cell: ({ row }) => formatDate(row.original.updated_at),
       meta: { label: "Updated at" },
     },
     {
