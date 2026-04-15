@@ -16,7 +16,7 @@ import {
 } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/creation/types/dispatch.schema";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Truck } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { DispatchModalSkeleton } from "./DispatchSkeleton";
@@ -50,6 +50,9 @@ export function DispatchEditModal({
   const [searchQuery, setSearchQuery] = useState("");
   const [planDetails, setPlanDetails] = useState<PlanDetailItem[]>([]);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
 
   useEffect(() => {
     if (open && !masterData) {
@@ -268,6 +271,19 @@ export function DispatchEditModal({
     form.setValue("amount", total);
   }, [planDetails, form]);
 
+  /** Calculate total weight of selected items */
+  const totalWeight = useMemo(() => {
+    return planDetails.reduce((sum, d) => sum + (d.weight || 0), 0);
+  }, [planDetails]);
+
+  /** Find selected vehicle and its capacity */
+  const selectedVehicleId = form.watch("vehicle_id");
+  const vehicleCapacity = useMemo(() => {
+    if (!masterData?.vehicles || !selectedVehicleId) return 0;
+    const v = masterData.vehicles.find((v) => v.vehicle_id === selectedVehicleId);
+    return Number(v?.maximum_weight || 0);
+  }, [masterData, selectedVehicleId]);
+
   const onSubmit = async (values: DispatchCreationFormValues) => {
     if (!planId) return;
 
@@ -334,13 +350,23 @@ export function DispatchEditModal({
                   approvedPlans={approvedPlans}
                   isLoadingPlans={isLoadingPlans}
                   searchQuery={searchQuery}
-                  onSearchChange={setSearchQuery}
+                  onSearchChange={(val) => {
+                    setSearchQuery(val);
+                    setPage(1);
+                  }}
+                  onLoadMore={() => setPage(p => p + 1)}
+                  hasMore={hasMore}
                   selectedPlanIds={form.watch("pre_dispatch_plan_ids") || []}
                   onPlanSelect={handlePlanSelect}
                   selectedBranch={selectedBranch}
+                  currentTotalWeight={totalWeight}
+                  vehicleCapacity={vehicleCapacity}
                 />
 
-                <TripConfigurationForm masterData={masterData} />
+                <TripConfigurationForm 
+                  masterData={masterData} 
+                  vehicleCapacity={vehicleCapacity}
+                />
 
                 <InvoiceItemsSidebar
                   selectedPlanIds={form.watch("pre_dispatch_plan_ids") || []}
@@ -348,6 +374,9 @@ export function DispatchEditModal({
                   isLoadingDetails={isLoadingDetails}
                   onReorder={setPlanDetails}
                   selectedAmount={form.watch("amount") || 0}
+                  totalWeight={totalWeight}
+                  vehicleCapacity={vehicleCapacity}
+                  selectedBranch={selectedBranch}
                 />
               </div>
 

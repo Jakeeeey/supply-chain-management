@@ -43,6 +43,7 @@ interface InvoiceItemsSidebarProps {
   selectedAmount: number;
   totalWeight?: number;
   vehicleCapacity?: number;
+  selectedBranch?: number;
 }
 
 function DraggableGroupedStop({
@@ -243,6 +244,7 @@ export function InvoiceItemsSidebar({
   selectedAmount,
   totalWeight,
   vehicleCapacity,
+  selectedBranch,
 }: InvoiceItemsSidebarProps) {
   const [isAddingStop, setIsAddingStop] = useState(false);
   const [isAddingPo, setIsAddingPo] = useState(false);
@@ -464,6 +466,7 @@ export function InvoiceItemsSidebar({
         onOpenChange={setIsAddingPo}
         onAdd={handleAddPoStop}
         existingPoIds={planDetails.filter(p => p.isPoStop && p.po_id).map(p => p.po_id as number)}
+        selectedBranch={selectedBranch}
       />
       </div>
     </TooltipProvider>
