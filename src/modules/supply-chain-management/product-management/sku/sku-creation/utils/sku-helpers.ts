@@ -182,12 +182,15 @@ export const CellHelpers = {
   /**
    * Intelligently detects inventory type from SKU properties
    */
-  detectInventoryType: (sku: SKU): "Regular" | "Variant" => {
-    // If inventory_type is explicitly set, use it
-    if (sku.inventory_type) return sku.inventory_type;
+  detectInventoryType: (sku: SKU): "Regular" | "Variant" | "Bundle" | "Promo" => {
+    // Priority 1: Check item_type for special classifications
+    if (sku.item_type === "bundle") return "Bundle";
+    if (sku.item_type === "promo") return "Promo";
 
-    // Only consider it a variant if it has actual variant properties
-    // (not just parent_id, which is used for UOM relationships)
+    // Priority 2: If inventory_type is explicitly set, use it
+    if (sku.inventory_type) return sku.inventory_type as "Regular" | "Variant";
+
+    // Priority 3: Detect variant based on attributes
     return sku.flavor || sku.size || sku.color || sku.volume
       ? "Variant"
       : "Regular";

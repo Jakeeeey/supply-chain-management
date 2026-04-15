@@ -27,7 +27,7 @@ export const skuQueryService = {
     const { data, meta } = await fetchItems<SKU>("/items/products", {
       limit,
       offset,
-      fields: "*.*",
+      fields: "*,parent_id.*",
       meta: "filter_count",
       sort: sort || "-created_at,-product_id",
       ...(Object.keys(filter).length > 0
@@ -71,7 +71,7 @@ export const skuQueryService = {
     const { data, meta } = await fetchItems<SKU>("/items/product_draft", {
       limit,
       offset,
-      fields: "*.*",
+      fields: "*,parent_id.*",
       meta: "filter_count",
       sort: sort || "-last_updated,-product_id",
       filter: JSON.stringify(filter),

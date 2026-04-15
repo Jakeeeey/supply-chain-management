@@ -32,6 +32,7 @@ interface AreaComboboxProps {
   emptyMessage?: string
   className?: string
   disabled?: boolean
+  error?: boolean
   renderItem?: (option: AreaComboboxOption) => React.ReactNode
 }
 
@@ -43,6 +44,7 @@ export function AreaCombobox({
   emptyMessage = "No option found.",
   className,
   disabled = false,
+  error = false,
   renderItem
 }: AreaComboboxProps) {
   const [open, setOpen] = React.useState(false)
@@ -62,7 +64,7 @@ export function AreaCombobox({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className={cn("w-full justify-between font-normal h-9 border-input bg-background", className, !selectedLabel && "text-muted-foreground")}
+          className={cn("w-full justify-between font-normal h-9 border-input bg-background", className, !selectedLabel && "text-muted-foreground", error && "border-destructive ring-1 ring-destructive")}
           disabled={disabled}
         >
           <span className="truncate">

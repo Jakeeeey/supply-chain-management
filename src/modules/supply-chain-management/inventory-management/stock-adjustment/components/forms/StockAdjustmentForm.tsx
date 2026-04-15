@@ -84,9 +84,8 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
   onOpenScanner,
   isReadOnly = false,
 }: ItemRowProps) {
-  const [productSearch, setProductSearch] = useState("");
-  const [productInputValue, setProductInputValue] = useState("");
   // useWatch subscribes to specific fields — only this row re-renders when its own data changes.
+  const product_name = useWatch({ control, name: `items.${index}.product_name` });
   const productId = useWatch({ control, name: `items.${index}.product_id` });
   const unitName = useWatch({ control, name: `items.${index}.unit_name` });
   const quantity = useWatch({ control, name: `items.${index}.quantity` });
@@ -96,15 +95,17 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
   const brandName = useWatch({ control, name: `items.${index}.brand_name` });
   const barcode = useWatch({ control, name: `items.${index}.barcode` });
   const description = useWatch({ control, name: `items.${index}.description` });
-  const product_name = useWatch({ control, name: `items.${index}.product_name` });
   const unitOrder = useWatch({ control, name: `items.${index}.unit_order` });
+
+  const [productSearch, setProductSearch] = useState("");
+  const [productInputValue, setProductInputValue] = useState(product_name || "");
 
   // Synchronize input value (e.g. for Edit mode) during render if name changed
   // This avoids the 'cascading renders' lint error from useEffect
   const [prevProductName, setPrevProductName] = useState(product_name);
   if (product_name !== prevProductName) {
     setPrevProductName(product_name);
-    if (!productInputValue && !productSearch) {
+    if (!productSearch) {
       setProductInputValue(product_name || "");
     }
   }
@@ -491,6 +492,7 @@ export function StockAdjustmentForm({
     inventoryMap,
     fetchNextDocNo,
     postAdjustment,
+    validateRFIDAvailability,
   } = useStockAdjustmentForm();
 
   const [loading, setLoading] = useState(false);
@@ -1317,6 +1319,8 @@ export function StockAdjustmentForm({
           onSave={handleRFIDSave}
           type={form.getValues("type")}
           initialTags={form.getValues(`items.${scannerContext.index}.rfid_tags`) || []}
+          branchId={Number(form.getValues("branch_id"))}
+          validateRFID={validateRFIDAvailability}
         />
       )}
 

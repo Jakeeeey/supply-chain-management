@@ -64,7 +64,7 @@ export function ClusterDialog({
     },
   });
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields, prepend, remove } = useFieldArray({
     control: form.control,
     name: "areas",
   });
@@ -120,9 +120,13 @@ export function ClusterDialog({
     }
   };
 
+  const onInvalid = () => {
+    toast.error("Please fix the highlighted fields before saving.", { duration: 4000 });
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[600px] max-h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>
             {isEdit ? "Edit Cluster" : "Create Cluster"}
@@ -136,9 +140,11 @@ export function ClusterDialog({
 
         <Form {...form}>
           <form
-            onSubmit={form.handleSubmit(onSubmit)}
-            className="space-y-4"
+            onSubmit={form.handleSubmit(onSubmit, onInvalid)}
+            className="flex flex-col min-h-0 flex-1 gap-4"
           >
+            {/* ── Scrollable body ──────────────────────────────────────── */}
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1">
             {/* ── Cluster Name ────────────────────────────────────────── */}
             <FormField<ClusterFormValues>
               control={form.control}
@@ -154,6 +160,10 @@ export function ClusterDialog({
                       placeholder="e.g. NCR Metro, Cebu Cluster"
                       {...field}
                       value={(field.value as string) ?? ""}
+                      onChange={(e) => {
+                        field.onChange(e);
+                        form.clearErrors("cluster_name");
+                      }}
                     />
                   </FormControl>
                   <FormMessage />
@@ -177,7 +187,10 @@ export function ClusterDialog({
                       step="any"
                       placeholder="e.g. 5000"
                       {...field}
-                      onChange={(e) => field.onChange(e.target.valueAsNumber || 0)}
+                      onChange={(e) => {
+                        field.onChange(e.target.valueAsNumber || 0);
+                        form.clearErrors("minimum_amount");
+                      }}
                       value={(field.value as number) ?? 0}
                     />
                   </FormControl>
@@ -199,7 +212,7 @@ export function ClusterDialog({
                   variant="outline"
                   size="sm"
                   onClick={() =>
-                    append({ province: "", city: "", baranggay: "" })
+                    prepend({ province: "", city: "", baranggay: "" })
                   }
                 >
                   <Plus className="mr-1 h-3 w-3" /> Add Area
@@ -227,8 +240,10 @@ export function ClusterDialog({
               )}
             </div>
 
-            {/* ── Footer ──────────────────────────────────────────────── */}
-            <DialogFooter>
+            </div>
+
+            {/* ── Sticky footer ────────────────────────────────────────── */}
+            <DialogFooter className="shrink-0 border-t pt-4">
               <Button
                 type="button"
                 variant="outline"
