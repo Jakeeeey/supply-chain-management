@@ -35,6 +35,8 @@ export const productOptionSchema = z.object({
   product_code: z.string(),
   isActive: z.number(),
   unit_name: z.string().optional(),
+  brand_name: z.string().optional(),
+  category_name: z.string().optional(),
 });
 export type ProductOption = z.infer<typeof productOptionSchema>;
 
@@ -94,7 +96,7 @@ export type BundleMasterData = z.infer<typeof bundleMasterDataSchema>;
 
 // --- Pagination ---
 export interface PaginatedBundles {
-  data: BundleDraft[] | Bundle[];
+  data: (BundleDraft | Bundle)[];
   meta: {
     total_count: number;
     filter_count: number;
