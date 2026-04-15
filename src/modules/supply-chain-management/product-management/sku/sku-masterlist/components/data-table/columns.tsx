@@ -26,8 +26,20 @@ import Image from "next/image";
 import { CellHelpers } from "../../../sku-creation/utils/sku-helpers";
 import { DataTableColumnHeader } from "./table-column-header";
 
+/** Shape returned by Directus when parent_id is expanded as a relational object. */
+interface ParentRef {
+  id?: number;
+  product_id?: number;
+  main_image?: string | null;
+}
+
+function isParentRef(value: unknown): value is ParentRef {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 export const getMasterlistColumns = (
   masterData: MasterData | null,
+  parentImages: Record<number, string | null> = {},
   onToggleStatus?: (id: number | string, current: boolean) => void,
   onEdit?: (sku: SKU) => void,
   onUpdateImage?: (sku: SKU) => void,
@@ -68,7 +80,18 @@ export const getMasterlistColumns = (
     ),
     meta: { label: "Image" },
     cell: ({ row }) => {
-      const imageId = row.original.main_image;
+      const sku = row.original;
+      // Inherit image from parent if current SKU has no image
+      const parentRef = isParentRef(sku.parent_id) ? sku.parent_id : null;
+      const parentId = parentRef
+        ? parentRef.id ?? parentRef.product_id
+        : sku.parent_id;
+
+      const parentImageFromMap = parentId ? parentImages[Number(parentId)] : null;
+      const parentImageFromObject = parentRef?.main_image ?? null;
+
+      const imageId = sku.main_image || parentImageFromMap || parentImageFromObject;
+
       const imageUrl = imageId
         ? `${process.env.NEXT_PUBLIC_API_BASE_URL}/assets/${imageId}?width=40&height=40&fit=cover`
         : null;
@@ -78,7 +101,7 @@ export const getMasterlistColumns = (
           {imageUrl ? (
             <Image
               src={imageUrl}
-              alt={row.original.product_name || "Product"}
+              alt={sku.product_name || "Product"}
               width={36}
               height={36}
               className="object-cover"
@@ -192,7 +215,7 @@ export const getMasterlistColumns = (
       const sku = row.original;
       const id = sku.id ?? sku.product_id;
       const active = sku.isActive === 1 || sku.isActive === true;
-      const isRegular = CellHelpers.detectInventoryType(sku) === "Regular";
+      const isParent = !sku.parent_id;
 
       if (!onToggleStatus || id == null) return null;
 
@@ -204,19 +227,19 @@ export const getMasterlistColumns = (
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {isRegular && onUpdateImage && (
+            {isParent && onUpdateImage && (
               <DropdownMenuItem onClick={() => onUpdateImage(sku)}>
                 <ImageIcon className="h-4 w-4 mr-2" />
                 Update Image
               </DropdownMenuItem>
             )}
-            {isRegular && onViewGallery && (
+            {isParent && onViewGallery && (
               <DropdownMenuItem onClick={() => onViewGallery(sku)}>
                 <Images className="h-4 w-4 mr-2" />
                 View Gallery
               </DropdownMenuItem>
             )}
-            {isRegular && (onUpdateImage || onViewGallery) && (
+            {isParent && (onUpdateImage || onViewGallery) && (
               <DropdownMenuSeparator />
             )}
             <DropdownMenuItem
