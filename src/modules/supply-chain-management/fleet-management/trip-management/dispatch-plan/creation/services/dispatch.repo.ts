@@ -796,6 +796,7 @@ export async function fetchPlanDetails(
  */
 export async function fetchPurchaseOrders(
   query?: string,
+  branchId?: number
 ): Promise<PurchaseOrderRow[]> {
   const params: Record<string, string | number> = {
     fields:
@@ -807,6 +808,9 @@ export async function fetchPurchaseOrders(
   };
   if (query) {
     params["filter[_and][2][purchase_order_no][_contains]"] = query;
+  }
+  if (branchId) {
+    params["filter[_and][3][branch_id][_eq]"] = branchId;
   }
   const res = await fetchItems<PurchaseOrderRow & { inventory_status: number }>(
     "/items/purchase_order",

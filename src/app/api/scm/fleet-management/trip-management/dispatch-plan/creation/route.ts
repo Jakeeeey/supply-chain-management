@@ -99,7 +99,11 @@ export async function GET(req: NextRequest) {
 
     if (type === "purchase_orders") {
       const query = searchParams.get("query");
-      const data = await dispatchService.getPurchaseOrders(query || undefined);
+      const branchIdRaw = searchParams.get("branch_id");
+      const data = await dispatchService.getPurchaseOrders(
+        query || undefined, 
+        branchIdRaw ? Number(branchIdRaw) : undefined
+      );
       return NextResponse.json({ data });
     }
 

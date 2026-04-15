@@ -330,6 +330,7 @@ export function DispatchCreationModal({
                   selectedAmount={form.watch("amount") || 0}
                   totalWeight={totalWeight}
                   vehicleCapacity={vehicleCapacity}
+                  selectedBranch={selectedBranch}
                 />
               </div>
 

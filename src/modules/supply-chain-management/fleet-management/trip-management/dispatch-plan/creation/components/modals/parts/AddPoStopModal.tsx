@@ -49,6 +49,7 @@ interface AddPoStopModalProps {
   onOpenChange: (open: boolean) => void;
   onAdd: (stop: { po_id: number; po_no: string; distance: number }) => void;
   existingPoIds?: number[];
+  selectedBranch?: number;
 }
 
 interface POOption {
@@ -67,6 +68,7 @@ export function AddPoStopModal({
   onOpenChange,
   onAdd,
   existingPoIds = [],
+  selectedBranch,
 }: AddPoStopModalProps) {
   const [purchaseOrders, setPurchaseOrders] = useState<POOption[]>([]);
   const [isLoadingPOs, setIsLoadingPOs] = useState(false);
@@ -83,8 +85,9 @@ export function AddPoStopModal({
   const loadPurchaseOrders = useCallback(async (query = "") => {
     setIsLoadingPOs(true);
     try {
+      const branchParam = selectedBranch ? `&branch_id=${selectedBranch}` : "";
       const res = await fetch(
-        `/api/scm/fleet-management/trip-management/dispatch-plan/creation?type=purchase_orders&query=${encodeURIComponent(query)}`,
+        `/api/scm/fleet-management/trip-management/dispatch-plan/creation?type=purchase_orders&query=${encodeURIComponent(query)}${branchParam}`,
       );
       const result = await res.json();
       const loaded = result.data || [];
@@ -94,7 +97,7 @@ export function AddPoStopModal({
     } finally {
       setIsLoadingPOs(false);
     }
-  }, [existingPoIds]);
+  }, [existingPoIds, selectedBranch]);
 
   useEffect(() => {
     if (open) {
