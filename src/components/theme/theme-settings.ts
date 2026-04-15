@@ -18,6 +18,9 @@ export type ThemeSettings = {
 
 export const THEME_SETTINGS_STORAGE_KEY = "vos_theme_settings_v1";
 
+// ✅ NEW: event name so same-tab UIs can react instantly
+export const THEME_SETTINGS_EVENT = "vos_theme_settings_changed";
+
 export const DEFAULT_THEME_SETTINGS: ThemeSettings = {
     accent: "blue",
     radiusRem: 0.75,
@@ -82,7 +85,7 @@ export function safeParseSettings(raw: string | null): ThemeSettings | null {
 
         return {
             accent,
-            radiusRem: clamp(radiusRem, 0.4, 1.25), // ~6.4px..20px
+            radiusRem: clamp(radiusRem, 0.4, 1.25),
             density,
         };
     } catch {
@@ -99,4 +102,7 @@ export function loadSettingsFromStorage(): ThemeSettings {
 export function saveSettingsToStorage(settings: ThemeSettings) {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(THEME_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+
+    // ✅ NEW: notify same-tab listeners (storage event won't fire same tab)
+    window.dispatchEvent(new CustomEvent(THEME_SETTINGS_EVENT, { detail: settings }));
 }
