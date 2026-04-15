@@ -12,19 +12,17 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@/components/ui/dialog";
-import {
   Form,
   FormControl,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
+  Input,
+  Textarea,
+  Button,
+  Switch,
+} from "../lib/ui";
 import { Loader2, Boxes } from "lucide-react";
 
 import { RTSReturnType } from "../types";

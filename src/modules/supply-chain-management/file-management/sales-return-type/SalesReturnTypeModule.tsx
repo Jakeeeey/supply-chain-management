@@ -5,15 +5,15 @@ import { Plus, MoreHorizontal, Pencil, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { ColumnDef } from "@tanstack/react-table";
 
-import { Button } from "@/components/ui/button";
 import {
+  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { DataTable } from "@/components/ui/new-data-table";
-import ErrorPage from "@/components/shared/ErrorPage";
+  DataTable,
+  ErrorPage,
+} from "./lib/ui";
 
 import { formatDate } from "./lib/utils";
 import { SalesReturnType } from "./types";
