@@ -21,6 +21,8 @@ export default function PDPPlannerPage() {
   const {
     plansData,
     plansTotal,
+    pagination,
+    setPagination,
     masterData,
     metrics,
     isLoading,
@@ -79,6 +81,8 @@ export default function PDPPlannerPage() {
       <PDPPlannerTable
         data={plansData}
         totalCount={plansTotal}
+        pagination={pagination}
+        onPaginationChange={setPagination}
         isLoading={isLoading}
         onView={handleView}
         onApprove={handleApproveClick}
