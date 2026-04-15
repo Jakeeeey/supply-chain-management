@@ -110,9 +110,10 @@ export const bundleService = {
           meta: "filter_count",
         }),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        fetchItems<any>("/items/product_bundles", {
+        fetchItems<any>("/items/products", {
           limit: 0,
           meta: "filter_count",
+          "filter[item_type][_eq]": "bundle",
         }),
       ]);
       totalCount =
@@ -137,8 +138,8 @@ export const bundleService = {
           limit: 1,
         }),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        fetchItems<any>("/items/product_bundles", {
-          filter: JSON.stringify({ bundle_sku: { _eq: finalCode } }),
+        fetchItems<any>("/items/products", {
+          filter: JSON.stringify({ product_code: { _eq: finalCode } }),
           limit: 1,
         }),
       ]);
@@ -241,14 +242,20 @@ export const bundleService = {
     const draftFilter: any = { _and: [{ draft_status: { _eq: "REJECTED" } }] };
 
     if (search) {
-      const searchFilter = {
+      // Master (products table) uses product_name / product_code
+      masterFilter._and.push({
+        _or: [
+          { product_name: { _icontains: search } },
+          { product_code: { _icontains: search } },
+        ],
+      });
+      // Drafts still use bundle_name / bundle_sku
+      draftFilter._and.push({
         _or: [
           { bundle_name: { _icontains: search } },
           { bundle_sku: { _icontains: search } },
         ],
-      };
-      masterFilter._and.push(searchFilter);
-      draftFilter._and.push(searchFilter);
+      });
     }
 
     if (typeId) {
@@ -268,16 +275,18 @@ export const bundleService = {
     let totalCount = 0;
 
     const masterRes = fetchMaster
-      ? await fetchItems<Bundle>("/items/product_bundles", {
+      ? await fetchItems<Bundle>("/items/products", {
           limit: 200, // Fetch a larger pool from both tables
           offset: 0, // Always fetch from the beginning to ensure correct merging
           fields: "*.*",
           meta: "filter_count",
-          sort: "-id",
-          filter:
-            masterFilter._and.length > 0
-              ? JSON.stringify(masterFilter)
-              : undefined,
+          sort: "-product_id",
+          filter: JSON.stringify({
+            _and: [
+              ...(masterFilter._and.length > 0 ? masterFilter._and : []),
+              { item_type: { _eq: "bundle" } },
+            ],
+          }),
         })
       : { data: [], meta: { filter_count: 0 } };
 
@@ -292,8 +301,17 @@ export const bundleService = {
         })
       : { data: [], meta: { filter_count: 0 } };
 
-    // Merge results
-    results = [...(draftRes.data || []), ...(masterRes.data || [])];
+    // Merge results and normalize field names for the UI
+    results = [
+      ...(draftRes.data || []),
+      ...(masterRes.data || []).map((p: any) => ({
+        ...p,
+        id: p.product_id,
+        bundle_sku: p.product_code,
+        bundle_name: p.product_name,
+        status: "APPROVED",
+      })),
+    ];
     totalCount =
       (masterRes.meta?.filter_count || 0) + (draftRes.meta?.filter_count || 0);
 
@@ -344,9 +362,9 @@ export const bundleService = {
         limit: 1,
       }),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      fetchItems<any>("/items/product_bundles", {
+      fetchItems<any>("/items/products", {
         filter: JSON.stringify({
-          bundle_name: { _eq: values.bundle_name.trim() },
+          product_name: { _eq: values.bundle_name.trim() },
         }),
         limit: 1,
       }),
@@ -436,9 +454,9 @@ export const bundleService = {
         limit: 1,
       }),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      fetchItems<any>("/items/product_bundles", {
+      fetchItems<any>("/items/products", {
         filter: JSON.stringify({
-          bundle_name: { _eq: values.bundle_name.trim() },
+          product_name: { _eq: values.bundle_name.trim() },
         }),
         limit: 1,
       }),
@@ -609,25 +627,36 @@ export const bundleService = {
       );
     }
 
-    // Create master record in product_bundles
+    // Fetch first valid unit_id for the required FK field
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: validUnits } = await fetchItems<any>("/items/units", {
+      limit: 1,
+      fields: "unit_id",
+    });
+    const defaultUnitId = validUnits?.[0]?.unit_id ?? 1;
+
+    // Create master record in products
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: masterBundle } = await request<{ data: any }>(
-      `${API_BASE_URL}/items/product_bundles`,
+      `${API_BASE_URL}/items/products`,
       {
         method: "POST",
         body: JSON.stringify({
-          bundle_sku: draft.bundle_sku,
-          bundle_name: draft.bundle_name,
+          product_code: draft.bundle_sku,
+          product_name: draft.bundle_name,
           bundle_type_id:
             typeof draft.bundle_type_id === "object"
               ? draft.bundle_type_id?.id
               : draft.bundle_type_id,
-          status: "APPROVED",
+          item_type: "bundle",
+          status: "Approved",
+          isActive: 1,
+          unit_of_measurement: defaultUnitId,
         }),
       },
     );
 
-    const masterId = masterBundle.id;
+    const masterId = masterBundle.product_id;
 
     // Get draft items
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -723,8 +752,18 @@ export const bundleService = {
   async fetchBundleById(id: number | string) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: bundle } = await request<{ data: any }>(
-      `${API_BASE_URL}/items/product_bundles/${id}?fields=*.*`,
+      `${API_BASE_URL}/items/products/${id}?fields=*.*`,
     );
+
+    const normalizedBundle = bundle
+      ? {
+          ...bundle,
+          id: bundle.product_id,
+          bundle_sku: bundle.product_code,
+          bundle_name: bundle.product_name,
+          status: "APPROVED",
+        }
+      : null;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: items } = await fetchItems<any>(
@@ -737,7 +776,7 @@ export const bundleService = {
     );
 
     return {
-      ...bundle,
+      ...normalizedBundle,
       items: items || [],
     };
   },
