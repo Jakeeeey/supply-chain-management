@@ -18,10 +18,12 @@ export const skuQueryService = {
     search?: string,
     sort?: string,
   ): Promise<PaginatedSKU> {
-    const filter: Record<string, unknown> = {};
+    const filter: Record<string, any> = {
+      _and: [{ item_type: { _neq: "bundle" } }],
+    };
     const searchFilter = CellHelpers.buildSearchFilter(search);
     if (searchFilter) {
-      filter._and = [searchFilter];
+      filter._and.push(searchFilter);
     }
 
     const { data, meta } = await fetchItems<SKU>("/items/products", {
