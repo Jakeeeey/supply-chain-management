@@ -23,6 +23,7 @@ interface MasterlistTableProps {
   onSortingChange?: (sorting: SortingState) => void;
   manualSorting?: boolean;
   masterData: MasterData | null;
+  parentImages?: Record<number, string | null>;
   isLoading: boolean;
   title: string;
   onSearch?: (value: string) => void;
@@ -46,6 +47,7 @@ export function MasterlistTable({
   onSortingChange,
   manualSorting = true,
   masterData,
+  parentImages = {},
   isLoading,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   title,
@@ -63,12 +65,20 @@ export function MasterlistTable({
     () =>
       getMasterlistColumns(
         masterData,
+        parentImages,
         onToggleStatus,
         onEdit,
         onUpdateImage,
         onViewGallery,
       ),
-    [masterData, onToggleStatus, onEdit, onUpdateImage, onViewGallery],
+    [
+      masterData,
+      parentImages,
+      onToggleStatus,
+      onEdit,
+      onUpdateImage,
+      onViewGallery,
+    ],
   );
 
   // We don't unmount the table during loading anymore
