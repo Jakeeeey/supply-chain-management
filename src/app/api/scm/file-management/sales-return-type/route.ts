@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserIdFromToken } from "@/lib/auth-utils";
+import { getUserIdFromToken } from "../../../../../modules/supply-chain-management/file-management/sales-return-type/lib/auth-utils";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
