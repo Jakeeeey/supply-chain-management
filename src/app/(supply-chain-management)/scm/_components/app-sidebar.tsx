@@ -274,6 +274,10 @@ const data = {
                   url: "/scm/fleet-management/trip-management/dispatch-plan/clearance",
                 },
                 {
+                  title: "Clearance Manual",
+                  url: "/scm/fleet-management/trip-management/dispatch-plan/clearance-manual",
+                },
+                {
                   title: "Inbound",
                   url: "/scm/fleet-management/trip-management/dispatch-plan/inbound",
                 },
