@@ -21,6 +21,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ChevronDown, ChevronUp, GripVertical, MapPin, Package, Plus, ShoppingCart, Trash2 } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 import { useState, useMemo } from "react";
 import {
   Tooltip,
@@ -28,6 +29,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Progress } from "@/components/ui/progress";
 import { AddManualStopModal } from "./AddManualStopModal";
 import { AddPoStopModal } from "./AddPoStopModal";
 import { PlanDetailItem, GroupedPlanDetailItem } from "./types";
@@ -39,6 +41,8 @@ interface InvoiceItemsSidebarProps {
   isLoadingDetails: boolean;
   onReorder: (newItems: PlanDetailItem[]) => void;
   selectedAmount: number;
+  totalWeight?: number;
+  vehicleCapacity?: number;
 }
 
 function DraggableGroupedStop({
@@ -213,8 +217,11 @@ function DraggableGroupedStop({
             <div key={item.detail_id} className="flex items-center justify-between text-[11px]">
               <span className="text-muted-foreground font-medium">{item.order_no}</span>
               <div className="flex items-center gap-2">
-                <Badge variant="outline" className="text-[8px] h-3 px-1">
-                  {item.order_status}
+                <Badge 
+                  variant="secondary" 
+                  className="text-[8px] h-3 px-1 bg-muted-foreground/10 text-muted-foreground leading-none"
+                >
+                  {item.invoice_status || item.order_status}
                 </Badge>
                 <span className="text-foreground font-semibold">
                   ₱{Number(item.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -234,6 +241,8 @@ export function InvoiceItemsSidebar({
   isLoadingDetails,
   onReorder,
   selectedAmount,
+  totalWeight,
+  vehicleCapacity,
 }: InvoiceItemsSidebarProps) {
   const [isAddingStop, setIsAddingStop] = useState(false);
   const [isAddingPo, setIsAddingPo] = useState(false);
@@ -384,21 +393,62 @@ export function InvoiceItemsSidebar({
 
       {/* Footer */}
       {(selectedPlanIds.length > 0 || planDetails.length > 0) && (
-        <div className="px-4 py-3 border-t border-border/50 bg-muted/5 shrink-0">
-          <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-1">
-            Selected Route Value
-          </p>
-          <div className="flex items-center justify-between">
-            <p className="text-xl font-bold text-foreground tabular-nums">
-              ₱
-              {(selectedAmount || 0).toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
+        <div className="px-4 py-3 border-t border-border/50 bg-muted/5 shrink-0 space-y-3">
+          <div className="space-y-2 pt-2">
+            <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-tight">
+              <span className="text-muted-foreground">Vehicle Capacity</span>
+              <span className={cn(
+                "font-mono text-xs",
+                (totalWeight || 0) > (vehicleCapacity || 0) ? "text-destructive" : "text-muted-foreground"
+              )}>
+                {(totalWeight || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / {Number(vehicleCapacity || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg
+              </span>
+            </div>
+            
+            <div className="relative pt-1 pb-4">
+              <Progress 
+                value={vehicleCapacity && vehicleCapacity > 0 ? Math.min(((totalWeight || 0) / vehicleCapacity) * 100, 100) : 0} 
+                className={cn(
+                  "h-1.5 bg-primary/20",
+                  (vehicleCapacity && (totalWeight || 0) > vehicleCapacity) ? "[&>div]:bg-destructive" : "[&>div]:bg-primary"
+                )}
+              />
+                
+              <div className="mt-2 flex items-center gap-2">
+                <div className="w-5 h-5 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
+                  {vehicleCapacity && vehicleCapacity > 0 ? (((totalWeight || 0) / vehicleCapacity) * 100).toFixed(0) : "0"}%
+                </div>
+                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                  used
+                </span>
+              </div>
+
+              {Number(vehicleCapacity || 0) > 0 && (totalWeight || 0) > Number(vehicleCapacity || 0) && (
+                <p className="absolute -bottom-1 left-0 text-[10px] text-destructive font-semibold flex items-center gap-1">
+                  ⚠ Over capacity by {((totalWeight || 0) - Number(vehicleCapacity || 0)).toLocaleString()} kg
+                </p>
+              )}
+            </div>
+          </div>
+
+          <Separator className="bg-border/40" />
+
+          <div>
+            <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-1">
+              Selected Route Value
             </p>
-            <Badge variant="secondary" className="text-[10px] h-5">
-              {planDetails.filter(i => !i.isManualStop).length} Invoice(s)
-            </Badge>
+            <div className="flex items-center justify-between">
+              <p className="text-xl font-bold text-foreground tabular-nums">
+                ₱
+                {(selectedAmount || 0).toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </p>
+              <Badge variant="secondary" className="text-[10px] h-5">
+                {planDetails.filter(i => !i.isManualStop).length} Invoice(s)
+              </Badge>
+            </div>
           </div>
         </div>
       )}

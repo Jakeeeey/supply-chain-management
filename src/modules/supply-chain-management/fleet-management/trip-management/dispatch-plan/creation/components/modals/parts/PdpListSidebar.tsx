@@ -15,6 +15,8 @@ interface PdpListSidebarProps {
   selectedPlanIds: number[];
   onPlanSelect: (planId: string) => void;
   selectedBranch: number;
+  currentTotalWeight: number;
+  vehicleCapacity: number;
 }
 
 export function PdpListSidebar({
@@ -25,6 +27,8 @@ export function PdpListSidebar({
   selectedPlanIds,
   onPlanSelect,
   selectedBranch,
+  currentTotalWeight,
+  vehicleCapacity,
 }: PdpListSidebarProps) {
   const filteredPlans = approvedPlans.filter(
     (p) =>
@@ -70,28 +74,43 @@ export function PdpListSidebar({
           filteredPlans.map((p) => {
             const pId = Number(p.dispatch_id);
             const isSelected = selectedPlanIds.includes(pId);
+            const planWeight = Number(p.total_weight || 0);
+            const wouldExceed =
+              !isSelected &&
+              vehicleCapacity > 0 &&
+              currentTotalWeight + planWeight > vehicleCapacity;
+
             return (
               <button
                 type="button"
                 key={pId}
-                onClick={() => onPlanSelect(String(pId))}
+                onClick={() => !wouldExceed && onPlanSelect(String(pId))}
+                disabled={wouldExceed}
                 className={cn(
                   "w-full text-left p-3 rounded-lg border text-sm transition-all duration-150",
                   isSelected
                     ? "border-primary bg-primary/5 shadow-sm"
-                    : "border-border/50 bg-background hover:border-border hover:bg-muted/30",
+                    : wouldExceed
+                      ? "border-border/40 bg-muted/20 opacity-60 cursor-not-allowed"
+                      : "border-border/50 bg-background hover:border-border hover:bg-muted/30",
                 )}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <Badge
-                        variant="default"
-                        className="text-[9px] font-medium tracking-wide px-1.5 py-0 h-4 rounded-full"
+                        variant={wouldExceed ? "outline" : "default"}
+                        className={cn(
+                          "text-[9px] font-medium tracking-wide px-1.5 py-0 h-4 rounded-full",
+                          wouldExceed && "border-destructive/30 text-destructive/70"
+                        )}
                       >
-                        {p.status}
+                        {wouldExceed ? "Limit Reached" : p.status}
                       </Badge>
-                      <p className="font-semibold text-foreground text-xs truncate">
+                      <p className={cn(
+                        "font-semibold text-xs truncate",
+                        wouldExceed ? "text-muted-foreground" : "text-foreground"
+                      )}>
                         {p.dispatch_no}
                       </p>
                     </div>
@@ -106,16 +125,30 @@ export function PdpListSidebar({
                         <Check className="w-2.5 h-2.5 text-primary-foreground" />
                       </div>
                     ) : (
-                      <div className="w-4 h-4 rounded-full border-2 border-border" />
+                      <div className={cn(
+                        "w-4 h-4 rounded-full border-2",
+                        wouldExceed ? "border-muted/30" : "border-border"
+                      )} />
                     )}
                   </div>
                 </div>
-                <p className="text-xs font-semibold text-foreground mt-2">
-                  ₱
-                  {Number(p.total_amount || 0).toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                  })}
-                </p>
+                <div className="flex items-center justify-between mt-2">
+                  <p className={cn(
+                    "text-xs font-semibold",
+                    wouldExceed ? "text-muted-foreground" : "text-foreground"
+                  )}>
+                    ₱
+                    {Number(p.total_amount || 0).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                    })}
+                  </p>
+                  <p className={cn(
+                    "text-[10px] font-medium",
+                    wouldExceed ? "text-destructive/60" : "text-muted-foreground"
+                  )}>
+                    {planWeight.toLocaleString(undefined, { maximumFractionDigits: 2 })} kg
+                  </p>
+                </div>
               </button>
             );
           })

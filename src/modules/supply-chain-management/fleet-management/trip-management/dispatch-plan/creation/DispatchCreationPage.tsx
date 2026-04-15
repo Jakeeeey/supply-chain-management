@@ -30,16 +30,6 @@ export default function DispatchCreationPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center">
-        <Button
-          onClick={() => setIsModalOpen(true)}
-          variant="default"
-          className="px-6"
-        >
-          <Plus className="w-4 h-4" /> Create Dispatch Plan
-        </Button>
-      </div>
-
       <div className="flex flex-col space-y-4">
         <DispatchPlanTable
           data={dispatchSummary || []}
@@ -47,6 +37,11 @@ export default function DispatchCreationPage() {
           sorting={sorting}
           onSortingChange={setSorting}
           onEdit={handleEdit}
+          actionComponent={
+            <Button onClick={() => setIsModalOpen(true)}>
+              <Plus className="w-4 h-4" /> Create 
+            </Button>
+          }
           emptyTitle="No Dispatch Plans Found"
           emptyDescription="Click 'Create Dispatch' to convert an approved Pre-Dispatch Plan into an active trip."
         />

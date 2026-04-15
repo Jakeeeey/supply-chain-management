@@ -18,7 +18,7 @@ export const skuQueryService = {
     search?: string,
     sort?: string,
   ): Promise<PaginatedSKU> {
-    const filter: Record<string, any> = {
+    const filter: { _and: (Record<string, object> | { _or: Record<string, object>[] })[] } = {
       _and: [{ item_type: { _neq: "bundle" } }],
     };
     const searchFilter = CellHelpers.buildSearchFilter(search);
