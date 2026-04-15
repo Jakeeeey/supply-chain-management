@@ -7,9 +7,9 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
+  Button,
+  Separator,
+} from "../lib/ui";
 import { 
   ClipboardList, 
   AlignLeft, 

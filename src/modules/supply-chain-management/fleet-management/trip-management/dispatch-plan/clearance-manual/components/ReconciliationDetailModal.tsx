@@ -535,7 +535,7 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                 <div className="flex flex-col md:flex-row justify-end items-center gap-3 pt-4 border-t border-border mt-auto">
                     {reconciliation.status !== 'Fulfilled' && (
                         <div className="flex items-center gap-2 w-full md:w-auto md:mr-auto">
-                            {true && (
+                            {false && (
                             <Button
                                 variant="outline"
                                 onClick={() => setIsScanningOpen(true)}
@@ -546,7 +546,7 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                             </Button>
                             )}
                             
-                            {false && (
+                            {true && (
                                 <Button
                                     variant="outline"
                                     onClick={() => setIsManualInputOpen(true)}
