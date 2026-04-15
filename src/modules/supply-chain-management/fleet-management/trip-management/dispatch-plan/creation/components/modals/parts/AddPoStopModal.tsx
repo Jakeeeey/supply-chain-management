@@ -32,7 +32,7 @@ import {
 import { cn } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Check, ChevronsUpDown, Loader2, Package } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -48,6 +48,7 @@ interface AddPoStopModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAdd: (stop: { po_id: number; po_no: string; distance: number }) => void;
+  existingPoIds?: number[];
 }
 
 interface POOption {
@@ -56,20 +57,16 @@ interface POOption {
   date?: string;
   supplier_name?: number | string;
   total_amount?: number | null;
-  inventory_status?: number;
+  inventory_status?: string | number;
 }
 
-const inventoryStatusLabel: Record<number, string> = {
-  1: "Pending",
-  2: "Partial",
-  3: "Received",
-  4: "Cancelled",
-};
+// Removed unused inventoryStatusLabel map
 
 export function AddPoStopModal({
   open,
   onOpenChange,
   onAdd,
+  existingPoIds = [],
 }: AddPoStopModalProps) {
   const [purchaseOrders, setPurchaseOrders] = useState<POOption[]>([]);
   const [isLoadingPOs, setIsLoadingPOs] = useState(false);
@@ -83,6 +80,22 @@ export function AddPoStopModal({
     },
   });
 
+  const loadPurchaseOrders = useCallback(async (query = "") => {
+    setIsLoadingPOs(true);
+    try {
+      const res = await fetch(
+        `/api/scm/fleet-management/trip-management/dispatch-plan/creation?type=purchase_orders&query=${encodeURIComponent(query)}`,
+      );
+      const result = await res.json();
+      const loaded = result.data || [];
+      setPurchaseOrders(loaded.filter((po: POOption) => !existingPoIds.includes(po.purchase_order_id)));
+    } catch {
+      toast.error("Failed to load purchase orders");
+    } finally {
+      setIsLoadingPOs(false);
+    }
+  }, [existingPoIds]);
+
   useEffect(() => {
     if (open) {
       loadPurchaseOrders();
@@ -91,22 +104,7 @@ export function AddPoStopModal({
         distance: 0,
       });
     }
-  }, [open, form]);
-
-  const loadPurchaseOrders = async (query = "") => {
-    setIsLoadingPOs(true);
-    try {
-      const res = await fetch(
-        `/api/scm/fleet-management/trip-management/dispatch-plan/creation?type=purchase_orders&query=${encodeURIComponent(query)}`,
-      );
-      const result = await res.json();
-      setPurchaseOrders(result.data || []);
-    } catch {
-      toast.error("Failed to load purchase orders");
-    } finally {
-      setIsLoadingPOs(false);
-    }
-  };
+  }, [open, form, loadPurchaseOrders]);
 
   const onSubmit = (values: PoStopValues) => {
     const selectedPo = purchaseOrders.find(
@@ -212,7 +210,7 @@ export function AddPoStopModal({
                                     )}
                                     {po.inventory_status !== undefined && (
                                       <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded font-medium">
-                                        {inventoryStatusLabel[po.inventory_status] ?? `Status ${po.inventory_status}`}
+                                        {typeof po.inventory_status === "string" ? po.inventory_status : `Status ${po.inventory_status}`}
                                       </span>
                                     )}
                                     {po.total_amount != null && (

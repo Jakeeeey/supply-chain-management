@@ -36,9 +36,16 @@ export async function GET(req: NextRequest) {
           currentPlanId = Number(currentPlanIdRaw);
         }
       }
+      const limit = Number(searchParams.get("limit")) || 25;
+      const offset = Number(searchParams.get("offset")) || 0;
+      const search = searchParams.get("search") || undefined;
+      
       const result = await dispatchService.getApprovedPlans(
         branchId ? Number(branchId) : undefined,
         currentPlanId,
+        limit,
+        offset,
+        search
       );
       return NextResponse.json(result);
     }
