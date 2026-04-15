@@ -8,16 +8,11 @@ import { getPDPPlannerColumns } from "./columns";
 interface PDPPlannerTableProps {
   data: DispatchPlan[];
   totalCount: number;
-  pageIndex: number;
-  pageSize: number;
-  onPaginationChange: (pagination: {
-    pageIndex: number;
-    pageSize: number;
-  }) => void;
   isLoading: boolean;
   onView: (plan: DispatchPlan) => void;
   onApprove: (plan: DispatchPlan) => void;
   onSearch: (value: string) => void;
+  actionComponent?: React.ReactNode;
 }
 
 /**
@@ -25,14 +20,13 @@ interface PDPPlannerTableProps {
  */
 export function PDPPlannerTable({
   data,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   totalCount,
-  pageIndex,
-  pageSize,
-  onPaginationChange,
   isLoading,
   onView,
   onApprove,
   onSearch,
+  actionComponent,
 }: PDPPlannerTableProps) {
   const columns = React.useMemo(
     () => getPDPPlannerColumns({ onView, onApprove }),
@@ -45,11 +39,8 @@ export function PDPPlannerTable({
       data={data}
       searchKey="dispatch_no"
       isLoading={isLoading}
-      manualPagination
-      pageCount={Math.ceil(totalCount / pageSize)}
-      pagination={{ pageIndex, pageSize }}
-      onPaginationChange={onPaginationChange}
       onSearch={onSearch}
+      actionComponent={actionComponent}
       emptyTitle="No Dispatch Plans"
       emptyDescription="No dispatch plans have been created yet."
     />

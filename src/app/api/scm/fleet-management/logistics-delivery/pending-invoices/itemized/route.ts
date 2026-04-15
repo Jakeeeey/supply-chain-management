@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { fetchItemizedReplica } from "../logic";
+import { type PendingStatus, fetchItemizedReplica } from "../logic";
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -11,14 +11,19 @@ export async function GET(req: Request) {
   const dateFrom = url.searchParams.get("dateFrom") ?? "";
   const dateTo = url.searchParams.get("dateTo") ?? "";
 
-  const rows = await fetchItemizedReplica({
-    q,
-    status: status as any,
-    salesmanId,
-    customerCode,
-    dateFrom: dateFrom || undefined,
-    dateTo: dateTo || undefined,
-  });
+  try {
+    const rows = await fetchItemizedReplica({
+      q,
+      status: status as PendingStatus | "All",
+      salesmanId,
+      customerCode,
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined,
+    });
 
-  return NextResponse.json({ rows });
+    return NextResponse.json({ rows });
+  } catch (err) {
+    console.error("Pending Deliveries API Error:", err);
+    return NextResponse.json({ error: "Failed to load pending deliveries" }, { status: 500 });
+  }
 }

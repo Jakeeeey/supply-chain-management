@@ -1,14 +1,14 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { toast } from "sonner";
-import { Product, Supplier, RefData, UpdateBarcodeDTO } from "../types";
+import { Product, RefData, UpdateBarcodeDTO } from "../types";
 
 export function useBarcodeScanner() {
   const [allProducts, setAllProducts] = useState<Product[]>([]);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [supplierFilter, setSupplierFilter] = useState("all");
   const [productFilter, setProductFilter] = useState("all");
+  const [recordTypeFilter, setRecordTypeFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -23,82 +23,113 @@ export function useBarcodeScanner() {
     { product_id: string; barcode: string; product_name: string }[]
   >([]);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      try {
-        const [productsRes, suppliersRes, btRes, wuRes, cuRes] =
-          await Promise.all([
-            fetch(
-              "/api/scm/product-management/barcode-management/barcode-linking",
-            ),
-            fetch(
-              "/api/scm/product-management/barcode-management/barcode-linking?scope=suppliers",
-            ),
-            fetch(
-              "/api/scm/product-management/barcode-management/barcode-linking?scope=barcode_type",
-            ),
-            fetch(
-              "/api/scm/product-management/barcode-management/barcode-linking?scope=weight_unit",
-            ),
-            fetch(
-              "/api/scm/product-management/barcode-management/barcode-linking?scope=cbm_unit",
-            ),
-          ]);
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [productsRes, btRes, wuRes, cuRes, bundlesRes] =
+        await Promise.all([
+          fetch(
+            "/api/scm/product-management/barcode-management/barcode-linking",
+          ),
+          fetch(
+            "/api/scm/product-management/barcode-management/barcode-linking?scope=barcode_type",
+          ),
+          fetch(
+            "/api/scm/product-management/barcode-management/barcode-linking?scope=weight_unit",
+          ),
+          fetch(
+            "/api/scm/product-management/barcode-management/barcode-linking?scope=cbm_unit",
+          ),
+          fetch(
+            "/api/scm/product-management/barcode-management/barcode-linking?scope=bundles",
+          ),
+        ]);
 
-        if (!productsRes.ok || !suppliersRes.ok)
-          throw new Error("Failed to fetch data");
+      if (!productsRes.ok)
+        throw new Error("Failed to fetch data");
 
-        const productsData = await productsRes.json();
-        const suppliersData = await suppliersRes.json();
+      const productsData = await productsRes.json();
 
-        const allProductsRaw: Product[] = productsData.data || [];
+      const allProductsRaw: Product[] = productsData.data || [];
 
-        // Extract ALL existing barcodes for duplicate checking
-        const existingBarcodes = allProductsRaw
-          .filter((p: Product) => p.barcode && p.barcode.trim() !== "")
-          .map((p: Product) => ({
-            product_id: String(p.product_id),
-            barcode: p.barcode!,
-            product_name: p.product_name || p.description || "Unknown",
-          }));
-        setAllBarcodes(existingBarcodes);
+      // Extract ALL existing barcodes for duplicate checking
+      const existingBarcodes = allProductsRaw
+        .filter((p: Product) => p.barcode && p.barcode.trim() !== "")
+        .map((p: Product) => ({
+          product_id: String(p.product_id),
+          barcode: p.barcode!,
+          product_name: p.product_name || p.description || "Unknown",
+        }));
+      setAllBarcodes(existingBarcodes);
 
-        // STRICT FILTER: Must have SKU, Must NOT have Barcode
-        const eligibleProducts = allProductsRaw.filter((p: Product) => {
+      // STRICT FILTER: Must have SKU, Must NOT have Barcode
+      const eligibleProducts: Product[] = allProductsRaw
+        .filter((p: Product) => {
           const hasSku =
             p.product_code &&
             p.product_code.trim() !== "" &&
             p.product_code !== "-";
           const hasBarcode = p.barcode && p.barcode.trim() !== "";
           return hasSku && !hasBarcode;
-        });
+        })
+        .map((p) => ({ ...p, record_type: "product" as const }));
 
-        setAllProducts(eligibleProducts);
-        setSuppliers(suppliersData.data || []);
-
-        // Parse reference data
-        if (btRes.ok) {
-          const data = await btRes.json();
-          setBarcodeTypes(Array.isArray(data.data) ? data.data : []);
-        }
-        if (wuRes.ok) {
-          const data = await wuRes.json();
-          setWeightUnits(Array.isArray(data.data) ? data.data : []);
-        }
-        if (cuRes.ok) {
-          const data = await cuRes.json();
-          setCbmUnits(Array.isArray(data.data) ? data.data : []);
-        }
-      } catch (error) {
-        console.error("Fetch error", error);
-        toast.error("Failed to load data.");
-      } finally {
-        setIsLoading(false);
+      // Normalize bundles to Product shape
+      let eligibleBundles: Product[] = [];
+      if (bundlesRes.ok) {
+        const bundlesData = await bundlesRes.json();
+        eligibleBundles = (bundlesData.data || []).map((b: {
+          id: number;
+          bundle_sku?: string;
+          bundle_name?: string;
+          barcode_value?: string;
+          barcode_date?: string;
+          barcode_type_id?: { id: number; name: string };
+          bundle_type_id?: { id: number; name: string };
+        }) => ({
+          product_id: String(b.id),
+          product_code: b.bundle_sku || "",
+          product_name: b.bundle_name || "",
+          description: b.bundle_name || "",
+          barcode: b.barcode_value || null,
+          barcode_date: b.barcode_date || null,
+          barcode_type_id: b.barcode_type_id || null,
+          product_category: b.bundle_type_id?.name || "Bundle",
+          unit_of_measurement: null,
+          product_per_supplier: [],
+          record_type: "bundle" as const,
+        }));
       }
-    };
-    fetchData();
+
+      setAllProducts([...eligibleProducts, ...eligibleBundles]);
+
+      // Parse reference data
+      if (btRes.ok) {
+        const data = await btRes.json();
+        setBarcodeTypes(Array.isArray(data.data) ? data.data : []);
+      }
+      if (wuRes.ok) {
+        const data = await wuRes.json();
+        setWeightUnits(Array.isArray(data.data) ? data.data : []);
+      }
+      if (cuRes.ok) {
+        const data = await cuRes.json();
+        setCbmUnits(Array.isArray(data.data) ? data.data : []);
+      }
+    } catch (err: unknown) {
+      console.error("Fetch error", err);
+      const message = err instanceof Error ? err.message : "Failed to load barcode linking data.";
+      setError(message);
+      toast.error("Failed to load data.");
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const filteredProducts = useMemo(() => {
     return allProducts.filter((product) => {
@@ -109,20 +140,16 @@ export function useBarcodeScanner() {
         (product.product_name || "").toLowerCase().includes(searchLower) ||
         (product.product_code || "").toLowerCase().includes(searchLower);
 
-      const matchesSupplier =
-        supplierFilter === "all" ||
-        product.product_per_supplier?.some(
-          (j) =>
-            typeof j.supplier_id === "object" &&
-            String(j.supplier_id.id) === supplierFilter,
-        );
 
       const matchesProduct =
         productFilter === "all" || String(product.product_id) === productFilter;
 
-      return matchesSearch && matchesSupplier && matchesProduct;
+      const matchesRecordType =
+        recordTypeFilter === "all" || product.record_type === recordTypeFilter;
+
+      return matchesSearch && matchesProduct && matchesRecordType;
     });
-  }, [allProducts, searchQuery, supplierFilter, productFilter]);
+  }, [allProducts, searchQuery, productFilter, recordTypeFilter]);
 
   const totalItems = filteredProducts.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
@@ -133,11 +160,13 @@ export function useBarcodeScanner() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, supplierFilter, productFilter]);
+  }, [searchQuery, productFilter, recordTypeFilter]);
 
-  // ✅ FIXED: Correct URL and DTO Payload
+  // ✅ FIXED: Correct URL and DTO Payload — now bundle-aware
   const handleUpdateBarcode = async (payload: UpdateBarcodeDTO) => {
     if (!selectedProduct) return;
+
+    const isBundle = selectedProduct.record_type === "bundle";
 
     // Optimistic Update
     const updatedList = allProducts.filter(
@@ -146,20 +175,37 @@ export function useBarcodeScanner() {
     setAllProducts(updatedList);
 
     try {
-      // FIX: Use the correct barcode-linking path or correct ID query
-      const response = await fetch(
-        `/api/scm/product-management/barcode-management/barcode-linking?id=${selectedProduct.product_id}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        },
-      );
+      // Build the correct URL with record_type for bundles
+      const patchUrl = isBundle
+        ? `/api/scm/product-management/barcode-management/barcode-linking?id=${selectedProduct.product_id}&record_type=bundle`
+        : `/api/scm/product-management/barcode-management/barcode-linking?id=${selectedProduct.product_id}`;
+
+      // For bundles, use barcode_value instead of barcode
+      const patchBody = isBundle
+        ? {
+          barcode_value: payload.barcode,
+          barcode_type_id: payload.barcode_type_id,
+          barcode_date: payload.barcode_date,
+          weight: payload.weight,
+          weight_unit_id: payload.weight_unit_id,
+          ...(payload.cbm_length !== undefined && {
+            cbm_length: payload.cbm_length,
+            cbm_width: payload.cbm_width,
+            cbm_height: payload.cbm_height,
+            cbm_unit_id: payload.cbm_unit_id,
+          }),
+        }
+        : payload;
+
+      const response = await fetch(patchUrl, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patchBody),
+      });
 
       if (!response.ok) {
         const errData = await response.json();
         if (response.status === 409) {
-          // Server-side duplicate detected
           toast.error("Duplicate Barcode!", {
             description: errData.error || "This barcode is already in use.",
           });
@@ -183,10 +229,11 @@ export function useBarcodeScanner() {
         "Barcode & Logistics linked successfully! Moved to Masterlist.",
       );
       setSelectedProduct(null);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Update failed", error);
+      const message = error instanceof Error ? error.message : "Please try again.";
       toast.error("Failed to update barcode", {
-        description: error.message || "Please try again.",
+        description: message,
       });
       setAllProducts((prev) => [...prev, selectedProduct]);
     }
@@ -195,7 +242,6 @@ export function useBarcodeScanner() {
   return {
     products,
     allProducts,
-    suppliers,
     isLoading,
     selectedProduct,
     setSelectedProduct,
@@ -206,13 +252,15 @@ export function useBarcodeScanner() {
     totalItems,
     searchQuery,
     setSearchQuery,
-    supplierFilter,
-    setSupplierFilter,
     productFilter,
     setProductFilter,
+    recordTypeFilter,
+    setRecordTypeFilter,
     barcodeTypes,
     weightUnits,
     cbmUnits,
     allBarcodes,
+    error,
+    refresh: fetchData,
   };
 }

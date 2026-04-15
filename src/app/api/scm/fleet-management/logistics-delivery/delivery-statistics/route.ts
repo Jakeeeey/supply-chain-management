@@ -30,7 +30,7 @@ async function fetchDirectusJson(req: NextRequest, url: string) {
   });
 
   const text = await res.text().catch(() => "");
-  let json: any = null;
+  let json: unknown = null;
   try {
     json = text ? JSON.parse(text) : null;
   } catch {
@@ -117,7 +117,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const salesItems: ApiSalesItem[] = salesRes.body?.data || [];
+    const salesItems: ApiSalesItem[] = (salesRes.body as { data?: ApiSalesItem[] })?.data || [];
 
     if (!salesItems.length) {
       return NextResponse.json({
@@ -146,7 +146,7 @@ export async function GET(req: NextRequest) {
 
           const r = await fetchDirectusJson(req, url);
           if (!r.ok) return [];
-          return (r.body?.data || []) as ApiDeliveryItem[];
+          return ((r.body as { data?: ApiDeliveryItem[] })?.data || []) as ApiDeliveryItem[];
         })
       );
 
@@ -207,7 +207,9 @@ export async function GET(req: NextRequest) {
       }
 
       const entry = groupMap.get(key)!;
-      if ((entry as any)[status] !== undefined) (entry as any)[status]++;
+      if (status in entry && typeof (entry as unknown as Record<string, unknown>)[status] === "number") {
+          (entry as unknown as Record<string, number>)[status]++;
+      }
       entry.sales += netAmount;
     });
 
@@ -225,15 +227,20 @@ export async function GET(req: NextRequest) {
     const avgSales = totalDeliveries > 0 ? totalSales / totalDeliveries : 0;
 
     return NextResponse.json({
-      chartData: sortedChartData.map(({ sortIndex, ...rest }) => rest),
+      chartData: sortedChartData.map((item) => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { sortIndex, ...rest } = item;
+        return rest;
+      }),
       deliveryStatusCounts,
       totalSales,
       avgSales,
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error("Delivery Statistics API Error:", err);
+    const error = err as Error;
     return NextResponse.json(
-      { error: err?.message || "Server error" },
+      { error: error?.message || "Server error" },
       { status: 500 }
     );
   }

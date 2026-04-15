@@ -68,8 +68,8 @@ export function useBundles() {
       setApprovedTotal(res.approved?.meta?.total_count || 0);
 
       setMasterData(res.master || null);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsLoading(false);
     }
@@ -93,6 +93,21 @@ export function useBundles() {
   const createDraft = async (values: BundleDraftFormValues) => {
     const response = await fetch("/api/scm/product-management/bundling", {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(values),
+    });
+    const result = await response.json();
+    if (result.error) throw new Error(result.error);
+    await refresh();
+    return result.data;
+  };
+
+  const updateDraft = async (
+    id: number | string,
+    values: BundleDraftFormValues,
+  ) => {
+    const response = await fetch(`/api/scm/product-management/bundling/${id}`, {
+      method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(values),
     });
@@ -136,11 +151,16 @@ export function useBundles() {
 
   const bulkSubmitForApproval = async (ids: (number | string)[]) => {
     for (const id of ids) {
-      await fetch(`/api/scm/product-management/bundling/${id}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "submit" }),
-      });
+      const response = await fetch(
+        `/api/scm/product-management/bundling/${id}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "submit" }),
+        },
+      );
+      const result = await response.json();
+      if (result.error) throw new Error(result.error);
     }
     await refresh();
   };
@@ -206,6 +226,7 @@ export function useBundles() {
     setSearch,
     refresh,
     createDraft,
+    updateDraft,
     deleteDraft,
     bulkDeleteDrafts,
     submitForApproval,

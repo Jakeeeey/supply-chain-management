@@ -7,7 +7,9 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { generatePurchaseOrderPdf } from "../utils/generatePoPdf";
+import { Printer } from "lucide-react";
+
 import {
     Select,
     SelectContent,
@@ -38,8 +40,7 @@ import { cn } from "@/lib/utils";
 
 import type { PurchaseOrderDetail, PaymentTerm } from "../types";
 
-// ✅ Local toast (no layout.tsx changes needed)
-import { Toaster as SonnerToaster, toast } from "sonner";
+import { toast } from "sonner";
 
 function money() {
     try {
@@ -53,7 +54,7 @@ function money() {
     }
 }
 
-function toNum(v: any): number {
+function toNum(v: unknown): number {
     if (v === null || v === undefined) return 0;
     const s = String(v).trim();
     if (!s) return 0;
@@ -61,39 +62,37 @@ function toNum(v: any): number {
     return Number.isFinite(n) ? n : 0;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function unwrap(po: any) {
     return po?.data ?? po;
 }
 
-function safeStr(v: any, fallback = "—") {
+function safeStr(v: unknown, fallback = "—") {
     const s = String(v ?? "").trim();
     return s ? s : fallback;
 }
 
-function isNumericString(v: any) {
+function isNumericString(v: unknown) {
     const s = String(v ?? "").trim();
     if (!s) return false;
     return /^[0-9]+$/.test(s);
 }
 
-function pickText(v: any): string {
-    // ✅ never stringify objects into "[object Object]"
+function pickText(v: unknown): string {
     if (v === null || v === undefined) return "";
     if (typeof v === "string") return v.trim();
     if (typeof v === "number") return String(v);
     if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
-    // objects/arrays/functions -> ignore
     return "";
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function formatBranchOne(raw: any): string {
     if (!raw) return "";
 
-    // allocation style: { branchId, branchName }
     const allocName = pickText(raw?.branchName ?? raw?.branch_name_text ?? raw?.branchNameText ?? "");
     const allocCode = pickText(raw?.branchCode ?? raw?.branch_code_text ?? raw?.branchCodeText ?? "");
 
-    // expanded branch object
     const code = pickText(raw?.branch_code ?? raw?.code ?? allocCode);
     const name = pickText(raw?.branch_name ?? raw?.name ?? raw?.branch_description ?? allocName);
 
@@ -101,7 +100,6 @@ function formatBranchOne(raw: any): string {
     if (name) return name;
     if (code) return code;
 
-    // primitive fallback (avoid numeric id)
     if (typeof raw === "string" || typeof raw === "number") {
         const s = String(raw).trim();
         if (!s || isNumericString(s)) return "";
@@ -111,8 +109,8 @@ function formatBranchOne(raw: any): string {
     return "";
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function formatBranches(raw: any): string {
-    // 1) Array form
     if (Array.isArray(raw)) {
         const labels = raw
             .map((b) => formatBranchOne(b))
@@ -124,7 +122,6 @@ function formatBranches(raw: any): string {
         return `${labels.slice(0, 2).join(", ")} +${labels.length - 2} more`;
     }
 
-    // 2) Single object or primitive
     const one = formatBranchOne(raw);
     return one ? one : "—";
 }
@@ -144,8 +141,10 @@ type NormalizedLine = {
     total: number;
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function normalizeLines(rawItems: any[]): NormalizedLine[] {
     if (!Array.isArray(rawItems)) return [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return rawItems.map((it: any, idx: number) => {
         const key = String(it?.po_item_id ?? it?.id ?? idx);
         const name = safeStr(it?.item_name ?? it?.name ?? it?.product_name ?? `Item ${idx + 1}`);
@@ -182,36 +181,23 @@ export default function PurchaseOrderReviewPanel(props: {
     const [confirmOpen, setConfirmOpen] = React.useState(false);
     const [submitting, setSubmitting] = React.useState(false);
 
-    // ✅ Pagination state
     const [currentPage, setCurrentPage] = React.useState(1);
     const [pageSize, setPageSize] = React.useState(10);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const poAny: any = React.useMemo(() => unwrap(props.po), [props.po]);
 
     React.useEffect(() => {
-        setMarkAsInvoice(!!(poAny?.is_invoice ?? false));
+        setMarkAsInvoice(!!(poAny?.is_invoice ?? poAny?.isInvoice ?? false));
         setPaymentTerm("cash_on_delivery");
         setTermsDays(30);
 
-        // reset confirm state when switching PO
         setConfirmOpen(false);
         setSubmitting(false);
-
-        // Reset pagination
         setCurrentPage(1);
-    }, [poAny?.purchase_order_id ?? poAny?.id ?? null]);
+    }, [poAny?.purchase_order_id, poAny?.id, poAny?.is_invoice, poAny?.isInvoice]);
 
-    /**
-     * ✅ FIX: Branch label resolver
-     * Handles:
-     * - helper strings: branch_name_text / branch_code_text
-     * - expanded object: branch_id {branch_code, branch_name}
-     * - allocations array: allocations [{branchName,...}]
-     * - branch_id array
-     * Prevents "[object Object]"
-     */
     const branchLabel = React.useMemo(() => {
-        // 0) prefer helper fields from API
         const helperName = pickText(poAny?.branch_name_text ?? poAny?.branchNameText ?? poAny?.branchName ?? "");
         const helperCode = pickText(poAny?.branch_code_text ?? poAny?.branchCodeText ?? poAny?.branchCode ?? "");
 
@@ -219,28 +205,23 @@ export default function PurchaseOrderReviewPanel(props: {
             return helperCode ? `${helperCode} — ${helperName}` : helperName;
         }
 
-        // 1) if allocations exist (create PO uses allocations)
         if (Array.isArray(poAny?.allocations) && poAny.allocations.length) {
             return formatBranches(poAny.allocations);
         }
 
-        // 2) if API returns branch_id expanded or array
         if (poAny?.branch_id !== undefined) {
             return formatBranches(poAny.branch_id);
         }
 
-        // 3) other possible keys
         if (poAny?.branches !== undefined) return formatBranches(poAny.branches);
         if (poAny?.branch !== undefined) return formatBranches(poAny.branch);
 
-        // 4) last resort but avoid numeric id
         const raw = poAny?.branch_id_value ?? poAny?.branchId ?? "";
         if (raw && !isNumericString(raw)) return String(raw).trim();
 
         return "—";
     }, [poAny]);
 
-    // ✅ Supplier name ONLY (no numeric fallback)
     const supplierName = React.useMemo(() => {
         return safeStr(
             poAny?.supplier_name?.supplier_name ??
@@ -248,10 +229,6 @@ export default function PurchaseOrderReviewPanel(props: {
             poAny?.supplier ??
             "—"
         );
-    }, [poAny]);
-
-    const apBalance = React.useMemo(() => {
-        return toNum(poAny?.supplier_name?.ap_balance ?? poAny?.apBalance ?? 0);
     }, [poAny]);
 
     const lines = React.useMemo(() => normalizeLines(poAny?.items ?? []), [poAny]);
@@ -319,9 +296,9 @@ export default function PurchaseOrderReviewPanel(props: {
             });
 
             setConfirmOpen(false);
-        } catch (e: any) {
+        } catch (e: unknown) {
             toast.error("Failed to approve Purchase Order", {
-                description: String(e?.message ?? e ?? "Unknown error"),
+                description: String(e instanceof Error ? e.message : e || "Unknown error"),
             });
             setConfirmOpen(false);
             throw e;
@@ -332,8 +309,6 @@ export default function PurchaseOrderReviewPanel(props: {
 
     return (
         <>
-            {/*<SonnerToaster richColors position="top-right" closeButton />*/}
-
             <div
                 className={cn(
                     "min-w-0 border border-border rounded-xl bg-background shadow-sm overflow-hidden",
@@ -430,41 +405,40 @@ export default function PurchaseOrderReviewPanel(props: {
                                         <div className="overflow-auto max-h-[400px]">
                                             <table className="w-full text-left text-xs border-separate border-spacing-0">
                                                 <thead className="sticky top-0 z-10 bg-muted/90 backdrop-blur-sm shadow-sm">
-                                                    <tr>
-                                                        <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground border-b border-border">Brand</th>
-                                                        <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground border-b border-border">Category</th>
-                                                        <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground border-b border-border">Product Name</th>
-                                                        <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground text-right border-b border-border">Price</th>
-                                                        <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground border-b border-border">UOM</th>
-                                                        <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground text-right border-b border-border">Qty</th>
-                                                        <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground text-right border-b border-border">Gross</th>
-                                                        <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground border-b border-border">Discount Type</th>
-                                                        <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground text-right border-b border-border">Discount</th>
-                                                        <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground text-right border-b border-border">Net</th>
-                                                    </tr>
+                                                <tr>
+                                                    <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground border-b border-border">Brand</th>
+                                                    <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground border-b border-border">Category</th>
+                                                    <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground border-b border-border">Product Name</th>
+                                                    <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground text-right border-b border-border">Price</th>
+                                                    <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground border-b border-border">UOM</th>
+                                                    <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground text-right border-b border-border">Qty</th>
+                                                    <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground text-right border-b border-border">Gross</th>
+                                                    <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground border-b border-border">Discount Type</th>
+                                                    <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground text-right border-b border-border">Discount</th>
+                                                    <th className="px-3 py-2 font-black uppercase tracking-tight text-muted-foreground text-right border-b border-border">Net</th>
+                                                </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-border/50">
-                                                    {currentLines.map((l) => (
-                                                        <tr key={l.key} className="hover:bg-muted/30 transition-colors">
-                                                            <td className="px-3 py-2 text-muted-foreground border-b border-border/10">{l.brand}</td>
-                                                            <td className="px-3 py-2 text-muted-foreground border-b border-border/10">{l.category}</td>
-                                                            <td className="px-3 py-2 font-bold text-foreground border-b border-border/10">{l.name}</td>
-                                                            <td className="px-3 py-2 text-right tabular-nums border-b border-border/10">{fmt.format(l.price)}</td>
-                                                            <td className="px-3 py-2 text-muted-foreground border-b border-border/10">{l.uom}</td>
-                                                            <td className="px-3 py-2 text-right tabular-nums font-medium border-b border-border/10">{l.qty}</td>
-                                                            <td className="px-3 py-2 text-right tabular-nums font-medium border-b border-border/10">{fmt.format(l.gross)}</td>
-                                                            <td className="px-3 py-2 text-muted-foreground uppercase border-b border-border/10">{l.discountType}</td>
-                                                            <td className="px-3 py-2 text-right tabular-nums font-medium text-emerald-600 dark:text-emerald-400 border-b border-border/10">
-                                                                {fmt.format(l.discountAmount)}
-                                                            </td>
-                                                            <td className="px-3 py-2 text-right tabular-nums font-black text-foreground border-b border-border/10">{fmt.format(l.net)}</td>
-                                                        </tr>
-                                                    ))}
+                                                {currentLines.map((l) => (
+                                                    <tr key={l.key} className="hover:bg-muted/30 transition-colors">
+                                                        <td className="px-3 py-2 text-muted-foreground border-b border-border/10">{l.brand}</td>
+                                                        <td className="px-3 py-2 text-muted-foreground border-b border-border/10">{l.category}</td>
+                                                        <td className="px-3 py-2 font-bold text-foreground border-b border-border/10">{l.name}</td>
+                                                        <td className="px-3 py-2 text-right tabular-nums border-b border-border/10">{fmt.format(l.price)}</td>
+                                                        <td className="px-3 py-2 text-muted-foreground border-b border-border/10">{l.uom}</td>
+                                                        <td className="px-3 py-2 text-right tabular-nums font-medium border-b border-border/10">{l.qty}</td>
+                                                        <td className="px-3 py-2 text-right tabular-nums font-medium border-b border-border/10">{fmt.format(l.gross)}</td>
+                                                        <td className="px-3 py-2 text-muted-foreground uppercase border-b border-border/10">{l.discountType}</td>
+                                                        <td className="px-3 py-2 text-right tabular-nums font-medium text-emerald-600 dark:text-emerald-400 border-b border-border/10">
+                                                            {fmt.format(l.discountAmount)}
+                                                        </td>
+                                                        <td className="px-3 py-2 text-right tabular-nums font-black text-foreground border-b border-border/10">{fmt.format(l.net)}</td>
+                                                    </tr>
+                                                ))}
                                                 </tbody>
                                             </table>
                                         </div>
 
-                                        {/* ✅ Pagination Controls */}
                                         <div className="border-t border-border p-3 flex flex-col sm:flex-row items-center justify-between gap-4 bg-muted/20">
                                             <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                                 <span>Rows per page:</span>
@@ -509,7 +483,7 @@ export default function PurchaseOrderReviewPanel(props: {
                                                                 )}
                                                             />
                                                         </PaginationItem>
-                                                        
+
                                                         <div className="flex items-center gap-1">
                                                             {Array.from({ length: totalPages }, (_, i) => i + 1)
                                                                 .filter(p => {
@@ -598,8 +572,8 @@ export default function PurchaseOrderReviewPanel(props: {
                                             <span className="font-bold text-destructive">-{fmt.format(ewtGoods)}</span>
                                         </div>
 
-                                        <div className="rounded-md bg-background/60 border border-border/60 px-3 py-2 text-[11px] text-muted-foreground italic">
-                                            Note: VAT and EWT are shown for receipt/invoice display purposes only
+                                        <div className="rounded-md bg-background/60 border border-border/60 px-3 py-2 text-[11px] text-amber-600 dark:text-amber-400 font-bold italic">
+                                            Note: VAT and EWT are shown for receipt/invoice display purposes only. EWT is not yet deducted.
                                         </div>
                                     </>
                                 ) : null}
@@ -628,14 +602,13 @@ export default function PurchaseOrderReviewPanel(props: {
 
                             <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
                                 <div className="flex items-center gap-3">
-                                    <Switch 
-                                        checked={markAsInvoice} 
-                                        onCheckedChange={setMarkAsInvoice} 
-                                        id="markAsInvoice" 
-                                        disabled={!!poAny?.is_invoice}
+                                    <Switch
+                                        checked={markAsInvoice}
+                                        onCheckedChange={setMarkAsInvoice}
+                                        id="markAsInvoice"
                                     />
-                                    <Label htmlFor="markAsInvoice" className={cn("text-sm font-bold", !!poAny?.is_invoice && "opacity-70")}>
-                                        Mark as Invoice {!!poAny?.is_invoice && "(Locked)"}
+                                    <Label htmlFor="markAsInvoice" className="text-sm font-bold">
+                                        Mark as Invoice
                                     </Label>
                                 </div>
 
@@ -670,6 +643,18 @@ export default function PurchaseOrderReviewPanel(props: {
                                                 />
                                             </div>
                                         ) : null}
+
+                                        {/* Added the Print button here */}
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            className="h-10 rounded-xl font-black uppercase tracking-wider"
+                                            disabled={!poAny?.purchase_order_id}
+                                            onClick={() => generatePurchaseOrderPdf(poAny, branchLabel, supplierName)}
+                                        >
+                                            <Printer className="mr-2 h-4 w-4" />
+                                            Print PO
+                                        </Button>
 
                                         <AlertDialog open={confirmOpen} onOpenChange={(o) => !submitting && setConfirmOpen(o)}>
                                             <Button

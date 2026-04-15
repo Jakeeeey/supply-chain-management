@@ -5,11 +5,12 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { UploadCloud } from "lucide-react";
 import { usePostingOfPo } from "../providers/PostingOfPoProvider";
 import { money } from "../utils/format";
 import { ProductsReceivingStatusCard } from "./cards/ProductsReceivingStatusCard";
 import { ReceiptsCard } from "./cards/ReceiptsCard";
+import { PODetailsBreakdownCard } from "./cards/PODetailsBreakdownCard";
+import { PostingPOPrintAction } from "./PostingPOPrintAction";
 
 function statusBadge(status: string) {
     const s = String(status || "").toUpperCase();
@@ -19,7 +20,7 @@ function statusBadge(status: string) {
 }
 
 export function PostingPODetail() {
-    const { selectedPO, posting, postError, successMsg, clearSuccess } = usePostingOfPo();
+    const { selectedPO, postError, successMsg, clearSuccess } = usePostingOfPo();
 
     if (!selectedPO) {
         return (
@@ -37,7 +38,6 @@ export function PostingPODetail() {
     }
 
     const unposted = (selectedPO.receipts ?? []).filter((r) => !r.isPosted);
-    const canPostAll = unposted.length > 0;
 
     return (
         <Card className="p-4 min-w-0">
@@ -62,6 +62,10 @@ export function PostingPODetail() {
             </span>
                     </div>
                 </div>
+                
+                <div className="shrink-0 pt-1">
+                    <PostingPOPrintAction />
+                </div>
             </div>
 
             {successMsg ? (
@@ -84,6 +88,10 @@ export function PostingPODetail() {
             <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
                 <ProductsReceivingStatusCard />
                 <ReceiptsCard />
+            </div>
+
+            <div className="mt-4">
+                <PODetailsBreakdownCard />
             </div>
         </Card>
     );

@@ -50,7 +50,7 @@ export function directusHeaders(): Record<string, string> {
  * Fetches a Directus URL with JSON response handling.
  * Throws a descriptive Error on non-2xx responses.
  */
-export async function directusFetch(url: string, init?: RequestInit): Promise<any> {
+export async function directusFetch<T = unknown>(url: string, init?: RequestInit): Promise<T> {
     const res = await fetch(url, {
         ...init,
         headers: {
@@ -60,13 +60,14 @@ export async function directusFetch(url: string, init?: RequestInit): Promise<an
         cache: "no-store",
     });
 
-    const json = await res.json().catch(() => ({}));
+    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) {
+        const errors = json?.errors as Array<{ message: string }> | undefined;
         const msg =
-            json?.errors?.[0]?.message ||
-            json?.error ||
+            errors?.[0]?.message ||
+            (json?.error as string) ||
             `Directus responded ${res.status} ${res.statusText}`;
         throw new Error(msg);
     }
-    return json;
+    return json as T;
 }

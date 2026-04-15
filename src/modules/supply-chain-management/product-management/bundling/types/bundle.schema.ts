@@ -34,12 +34,16 @@ export const productOptionSchema = z.object({
   product_name: z.string(),
   product_code: z.string(),
   isActive: z.number(),
+  unit_name: z.string().optional(),
+  brand_name: z.string().optional(),
+  category_name: z.string().optional(),
 });
 export type ProductOption = z.infer<typeof productOptionSchema>;
 
 // --- Draft Bundle Schema (for creation form validation) ---
 export const bundleDraftSchema = z
   .object({
+    id: z.number().optional(),
     bundle_name: z.string().min(1, "Bundle name is required"),
     bundle_type_id: z.number().min(1, "Bundle type is required"),
     items: z.array(bundleItemSchema).min(1, "At least one product is required"),
@@ -92,7 +96,7 @@ export type BundleMasterData = z.infer<typeof bundleMasterDataSchema>;
 
 // --- Pagination ---
 export interface PaginatedBundles {
-  data: BundleDraft[] | Bundle[];
+  data: (BundleDraft | Bundle)[];
   meta: {
     total_count: number;
     filter_count: number;

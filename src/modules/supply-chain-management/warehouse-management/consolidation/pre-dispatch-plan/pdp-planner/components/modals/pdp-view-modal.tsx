@@ -14,13 +14,10 @@ import {
   DispatchPlanDetail,
 } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/types/dispatch-plan.schema";
 import {
-  Calendar,
-  Clock,
-  MapPin,
-  MessageSquare,
-  Package,
-  Truck,
-} from "lucide-react";
+  formatNumber,
+  formatPeso,
+} from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/utils/format";
+import { Calendar, MapPin, MessageSquare, Package, Truck } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface PDPViewModalProps {
@@ -49,17 +46,21 @@ export function PDPViewModal({
 
   useEffect(() => {
     if (open && plan) {
-      setIsLoading(true);
+      queueMicrotask(() => setIsLoading(true));
       fetchDetails(plan.dispatch_id)
         .then((result) => {
           setEnrichedPlan(result.plan);
           setDetails(result.details);
         })
         .catch(console.error)
-        .finally(() => setIsLoading(false));
+        .finally(() => {
+          setIsLoading(false);
+        });
     } else {
-      setDetails([]);
-      setEnrichedPlan(null);
+      queueMicrotask(() => {
+        setDetails([]);
+        setEnrichedPlan(null);
+      });
     }
   }, [open, plan, fetchDetails]);
 
@@ -67,6 +68,7 @@ export function PDPViewModal({
   if (!displayPlan) return null;
 
   const totalAmount = details.reduce((sum, d) => sum + (d.amount || 0), 0);
+  const totalWeight = details.reduce((sum, d) => sum + (d.weight || 0), 0);
 
   const formattedDate = displayPlan.dispatch_date
     ? new Date(displayPlan.dispatch_date).toLocaleDateString("en-US", {
@@ -76,22 +78,6 @@ export function PDPViewModal({
         day: "numeric",
       })
     : "—";
-
-  const createdDate = displayPlan.created_at
-    ? new Date(displayPlan.created_at).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "numeric",
-        day: "numeric",
-      })
-    : "—";
-
-  const createdTime = displayPlan.created_at
-    ? new Date(displayPlan.created_at).toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true,
-      })
-    : "";
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -122,12 +108,12 @@ export function PDPViewModal({
         <ScrollArea className="flex-1 bg-muted/5">
           <div className="px-6 space-y-6">
             {/* Trip Information Cards - Responsive Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <div className="bg-background border rounded-lg p-3">
                 <div className="flex items-center gap-2 text-muted-foreground mb-1.5">
                   <Calendar className="h-3.5 w-3.5" />
                   <span className="text-[10px] font-semibold uppercase tracking-wider">
-                    Date
+                    Dispatch Date
                   </span>
                 </div>
                 <p className="text-sm font-medium text-foreground truncate">
@@ -184,27 +170,7 @@ export function PDPViewModal({
                     {details.length} order(s)
                   </p>
                   <p className="text-[10px] text-muted-foreground font-medium">
-                    {(displayPlan.total_weight || 0).toLocaleString("en-US", {
-                      maximumFractionDigits: 0,
-                    })}{" "}
-                    kg
-                  </p>
-                </div>
-              </div>
-
-              <div className="bg-background border rounded-lg p-3">
-                <div className="flex items-center gap-2 text-muted-foreground mb-1.5">
-                  <Clock className="h-3.5 w-3.5" />
-                  <span className="text-[10px] font-semibold uppercase tracking-wider">
-                    Created
-                  </span>
-                </div>
-                <div className="flex flex-col">
-                  <p className="text-sm font-medium text-foreground">
-                    {createdDate}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground font-medium">
-                    {createdTime}
+                    {formatNumber(displayPlan.total_weight || 0)} kg
                   </p>
                 </div>
               </div>
@@ -234,8 +200,8 @@ export function PDPViewModal({
                     Vehicle Capacity
                   </span>
                   <span className="text-[xs] font-bold text-foreground">
-                    {displayPlan.total_weight?.toLocaleString() || 0} /{" "}
-                    {(displayPlan.maximum_weight || 0).toLocaleString()} kg
+                    {formatNumber(displayPlan.total_weight || 0)} /{" "}
+                    {formatNumber(displayPlan.maximum_weight || 0)} kg
                   </span>
                 </div>
               </div>
@@ -264,7 +230,7 @@ export function PDPViewModal({
                     Current Load
                   </span>
                   <span className="text-lg font-semibold text-foreground">
-                    {displayPlan.total_weight?.toLocaleString() || 0} kg
+                    {formatNumber(displayPlan.total_weight || 0)} kg
                   </span>
                 </div>
 
@@ -273,10 +239,10 @@ export function PDPViewModal({
                     Capacity Remaining
                   </span>
                   <span className="text-lg font-semibold text-foreground">
-                    {(
+                    {formatNumber(
                       (displayPlan.maximum_weight || 0) -
-                      (displayPlan.total_weight || 0)
-                    ).toLocaleString()}{" "}
+                        (displayPlan.total_weight || 0),
+                    )}{" "}
                     kg
                   </span>
                 </div>
@@ -286,10 +252,7 @@ export function PDPViewModal({
                     Total Value
                   </span>
                   <span className="text-lg font-semibold text-foreground">
-                    ₱
-                    {totalAmount.toLocaleString("en-PH", {
-                      maximumFractionDigits: 0,
-                    })}
+                    {formatPeso(totalAmount)}
                   </span>
                 </div>
               </div>
@@ -325,10 +288,13 @@ export function PDPViewModal({
                           SO Number
                         </th>
                         <th className="h-10 px-2 text-left align-middle font-bold text-[10px] uppercase tracking-wider text-foreground border-b">
-                          Customer
+                          Customer / Outlet
                         </th>
                         <th className="h-10 px-2 text-left align-middle font-bold text-[10px] uppercase tracking-wider text-foreground border-b">
                           Destination
+                        </th>
+                        <th className="h-10 px-2 text-right align-middle font-bold text-[10px] uppercase tracking-wider text-foreground border-b">
+                          Weight (kg)
                         </th>
                         <th className="h-10 px-2 text-right align-middle font-bold text-[10px] uppercase tracking-wider text-foreground pr-4 border-b">
                           Amount (₱)
@@ -339,7 +305,7 @@ export function PDPViewModal({
                       {details.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={5}
+                            colSpan={6}
                             className="text-center py-16 text-muted-foreground italic"
                           >
                             This dispatch plan has no sales orders attached.
@@ -365,10 +331,11 @@ export function PDPViewModal({
                                 .filter(Boolean)
                                 .join(", ") || "—"}
                             </td>
+                            <td className="p-2 align-middle text-right text-xs tabular-nums border-b">
+                              {formatNumber(detail.weight || 0)}
+                            </td>
                             <td className="p-2 align-middle text-right text-xs font-semibold tabular-nums pr-4 border-b">
-                              {(detail.amount || 0).toLocaleString("en-PH", {
-                                minimumFractionDigits: 2,
-                              })}
+                              {formatPeso(detail.amount || 0)}
                             </td>
                           </tr>
                         ))
@@ -390,16 +357,23 @@ export function PDPViewModal({
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Total Amount
-            </span>
-            <span className="text-lg font-bold tracking-tight text-primary">
-              ₱
-              {totalAmount.toLocaleString("en-PH", {
-                minimumFractionDigits: 2,
-              })}
-            </span>
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Total Weight
+              </span>
+              <span className="text-sm font-bold tracking-tight text-foreground">
+                {formatNumber(totalWeight)} kg
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Total Amount
+              </span>
+              <span className="text-lg font-bold tracking-tight text-primary">
+                {formatPeso(totalAmount)}
+              </span>
+            </div>
           </div>
         </div>
       </DialogContent>

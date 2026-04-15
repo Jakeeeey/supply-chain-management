@@ -36,8 +36,8 @@ export function useSupplierReliability(filters: GlobalFilter) {
                 toast.success('Supplier reliability data loaded');
             }
             isFirstLoad.current = false;
-        } catch (err: any) {
-            const msg = err.message || 'An error occurred';
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : 'An error occurred';
             setError(msg);
             toast.error(`Supplier Reliability Error: ${msg}`);
         } finally {

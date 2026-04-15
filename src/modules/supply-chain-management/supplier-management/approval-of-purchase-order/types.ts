@@ -10,7 +10,7 @@ export type PendingApprovalPO = {
     createdAt?: string;
     total?: number;
 
-    raw?: any;
+    raw?: unknown;
 
     // directus fields
     purchase_order_id?: number | string;
@@ -18,48 +18,51 @@ export type PendingApprovalPO = {
     date?: string;
     date_encoded?: string;
 
-    gross_amount?: any;
-    discounted_amount?: any;
-    vat_amount?: any;
-    withholding_tax_amount?: any;
-    total_amount?: any;
+    gross_amount?: unknown;
+    discounted_amount?: unknown;
+    vat_amount?: unknown;
+    withholding_tax_amount?: unknown;
+    total_amount?: unknown;
 
-    supplier_name?: any; // number OR expanded object
-    supplier_name_value?: any;
+    supplier_name?: unknown; // number OR expanded object
+    supplier_name_value?: unknown;
     supplier_name_text?: string;
 
-    branch_id?: any; // number OR expanded object
-    branch_id_value?: any;
+    branch_id?: unknown; // number OR expanded object
+    branch_id_value?: unknown;
     branch_summary?: string;
+
+    is_invoice?: boolean | number;
+    isInvoice?: boolean | number;
 };
 
 export type PurchaseOrderItem = {
     // directus purchase_order_items fields (optional)
-    po_item_id?: any;
-    purchase_order_id?: any;
-    line_no?: any;
+    po_item_id?: unknown;
+    purchase_order_id?: unknown;
+    line_no?: unknown;
     item_name?: string;
-    item_description?: any;
+    item_description?: unknown;
     uom?: string;
-    qty?: any;
-    unit_price?: any;
-    line_subtotal?: any;
-    tax_rate?: any;
-    tax_amount?: any;
-    discount_amount?: any;
-    line_total?: any;
-    expected_date?: any;
-    notes?: any;
-    supplier_id?: any;
-    currency?: any;
-    created_at?: any;
-    updated_at?: any;
+    qty?: unknown;
+    unit_price?: unknown;
+    line_subtotal?: unknown;
+    tax_rate?: unknown;
+    tax_amount?: unknown;
+    discount_amount?: unknown;
+    line_total?: unknown;
+    expected_date?: unknown;
+    notes?: unknown;
+    supplier_id?: unknown;
+    currency?: unknown;
+    created_at?: unknown;
+    updated_at?: unknown;
 
     // compatibility (optional)
     name?: string;
-    quantity?: any;
-    price?: any;
-    total?: any;
+    quantity?: unknown;
+    price?: unknown;
+    total?: unknown;
 };
 
 export type PurchaseOrderDetail = {
@@ -69,7 +72,7 @@ export type PurchaseOrderDetail = {
     supplierName?: string;
     apBalance?: number;
     items?: PurchaseOrderItem[];
-    raw?: any;
+    raw?: unknown;
 
     // directus purchase_order fields
     purchase_order_id?: number | string;
@@ -77,45 +80,48 @@ export type PurchaseOrderDetail = {
     date?: string;
     date_encoded?: string;
 
-    supplier_name?: any; // expanded {supplier_name, ap_balance} or number
-    supplier_name_value?: any;
+    supplier_name?: unknown; // expanded {supplier_name, ap_balance} or number
+    supplier_name_value?: unknown;
     supplier_name_text?: string;
 
-    branch_id?: any; // expanded branch object or number
-    branch_id_value?: any;
+    branch_id?: unknown; // expanded branch object or number
+    branch_id_value?: unknown;
     branch_summary?: string;
 
-    lead_time_payment?: any;
-    payment_type?: any;
-    payment_status?: any;
-    receipt_required?: any;
+    lead_time_payment?: unknown;
+    payment_type?: unknown;
+    payment_status?: unknown;
+    receipt_required?: unknown;
 
-    gross_amount?: any;
-    discounted_amount?: any;
-    vat_amount?: any;
-    withholding_tax_amount?: any;
-    total_amount?: any;
+    gross_amount?: unknown;
+    discounted_amount?: unknown;
+    vat_amount?: unknown;
+    withholding_tax_amount?: unknown;
+    total_amount?: unknown;
 
     // optional convenience duplicates
-    grossAmount?: any;
-    discountAmount?: any;
-    vatAmount?: any;
-    ewtGoods?: any;
-    total?: any;
+    grossAmount?: unknown;
+    discountAmount?: unknown;
+    vatAmount?: unknown;
+    ewtGoods?: unknown;
+    total?: unknown;
+
+    is_invoice?: boolean | number;
+    isInvoice?: boolean | number;
 };
 export type Supplier = {
     id: string;
     name: string;
     terms?: string | null;
     apBalance?: number;
-    raw?: any;
+    raw?: unknown;
 };
 
 export type Branch = {
     id: number;
     name: string;
     code?: string;
-    raw?: any;
+    raw?: unknown;
 };
 
 export type Product = {
@@ -127,7 +133,7 @@ export type Product = {
     price: number;
     uom: string;
     availableUoms?: string[];
-    raw?: any;
+    raw?: unknown;
 };
 
 export type CartItem = Product & {

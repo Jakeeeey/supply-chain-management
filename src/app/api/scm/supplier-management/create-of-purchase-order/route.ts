@@ -5,6 +5,19 @@ import { getDirectusBase, getDirectusToken } from "@/lib/directus";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+interface DirectusError {
+    extensions?: {
+        code?: string;
+    };
+    message?: string;
+}
+
+interface DirectusResponse {
+    data?: unknown;
+    errors?: DirectusError[];
+    error?: string;
+}
+
 function getServerToken() {
     return getDirectusToken();
 }
@@ -13,21 +26,21 @@ function now() {
     return new Date();
 }
 
-function isoDateOnlyFrom(value?: any) {
+function isoDateOnlyFrom(value?: string | Date | number | null) {
     if (!value) return now().toISOString().slice(0, 10);
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return now().toISOString().slice(0, 10);
     return d.toISOString().slice(0, 10);
 }
 
-function isoDateTimeFrom(value?: any) {
+function isoDateTimeFrom(value?: string | Date | number | null) {
     if (!value) return now().toISOString();
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return now().toISOString();
     return d.toISOString();
 }
 
-function timeHHMMSSFrom(value?: any) {
+function timeHHMMSSFrom(value?: string | Date | number | null) {
     const d = value ? new Date(value) : now();
     const hh = String(d.getHours()).padStart(2, "0");
     const mm = String(d.getMinutes()).padStart(2, "0");
@@ -35,34 +48,47 @@ function timeHHMMSSFrom(value?: any) {
     return `${hh}:${mm}:${ss}`;
 }
 
-function numOrZero(v: any) {
+function numOrZero(v: unknown) {
     const n = Number(v);
     return Number.isFinite(n) ? n : 0;
 }
 
-function intOrDefault(v: any, dflt: number) {
+function intOrDefault(v: unknown, dflt: number) {
     const n = Number(v);
     return Number.isFinite(n) ? Math.trunc(n) : dflt;
 }
 
-function strOrDefault(v: any, dflt: string) {
+function strOrDefault(v: unknown, dflt: string) {
     const s = v === undefined || v === null ? "" : String(v).trim();
     return s.length ? s : dflt;
 }
 
-function pickSupplierId(input: any): number | null {
+interface SupplierPayload {
+    supplier_name?: string | number;
+    supplierId?: string | number;
+    supplier_id?: string | number;
+    supplier?: { id: string | number } | string | number;
+}
+
+function pickSupplierId(input: SupplierPayload): number | null {
     const v =
         input?.supplier_name ??
         input?.supplierId ??
         input?.supplier_id ??
-        input?.supplier ??
-        input?.supplier?.id;
+        (typeof input?.supplier === 'object' ? input?.supplier?.id : input?.supplier);
 
     const n = Number(v);
     return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-function pickPoNumber(input: any): string | null {
+interface PoPayload {
+    purchase_order_no?: string;
+    poNumber?: string;
+    po_number?: string;
+    poNo?: string;
+}
+
+function pickPoNumber(input: PoPayload): string | null {
     const v =
         input?.purchase_order_no ??
         input?.poNumber ??
@@ -74,12 +100,12 @@ function pickPoNumber(input: any): string | null {
     return s.length ? s : null;
 }
 
-function isNotUniqueDirectusError(json: any) {
-    const errs: any[] = Array.isArray(json?.errors) ? json.errors : [];
+function isNotUniqueDirectusError(json: DirectusResponse) {
+    const errs = Array.isArray(json?.errors) ? json.errors : [];
     return errs.some((e) => e?.extensions?.code === "RECORD_NOT_UNIQUE");
 }
 
-function toFixedMoney(v: any) {
+function toFixedMoney(v: unknown) {
     const n = Number(v);
     const safe = Number.isFinite(n) ? n : 0;
     return safe.toFixed(2);
@@ -112,7 +138,7 @@ async function safeJson(res: Response) {
         } catch {
             return { raw: text };
         }
-    })();
+    })() as DirectusResponse;
     return { text, json };
 }
 
@@ -128,15 +154,36 @@ async function findExistingByPoNumber(base: string, poNumber: string) {
     return row ?? null;
 }
 
-function extractPoId(row: any): number | null {
-    const v = row?.purchase_order_id ?? row?.id;
+function extractPoId(row: Record<string, unknown> | null): number | null {
+    if (!row) return null;
+    const v = row.purchase_order_id ?? row.id;
     const n = Number(v);
     return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-function buildPoProductLines(input: any, poId: number) {
+interface AllocationItem {
+    id?: string | number;
+    productId?: string | number;
+    product_id?: string | number;
+    orderQty?: string | number;
+    qtyBoxes?: string | number;
+    qty?: string | number;
+    price?: string | number;
+    pricePerBox?: string | number;
+    unit_price?: string | number;
+    discountTypeId?: string | number;
+}
+
+interface Allocation {
+    branchId?: string | number;
+    branch_id?: string | number;
+    id?: string | number;
+    items?: AllocationItem[];
+}
+
+function buildPoProductLines(input: { allocations?: Allocation[] }, poId: number) {
     const allocations = Array.isArray(input?.allocations) ? input.allocations : [];
-    const lines: any[] = [];
+    const lines: Record<string, unknown>[] = [];
 
     for (const a of allocations) {
         const branchIdRaw = a?.branchId ?? a?.branch_id ?? a?.id ?? null;
@@ -149,7 +196,6 @@ function buildPoProductLines(input: any, poId: number) {
             const productIdNum = Number(productIdRaw);
             if (!Number.isFinite(productIdNum) || productIdNum <= 0) continue;
 
-            // qtyBoxes/orderQty required (fallback to 1)
             const qtyRaw = it?.orderQty ?? it?.qtyBoxes ?? it?.qty ?? 0;
             const qtyNum = Number(qtyRaw);
             const ordered_quantity = Number.isFinite(qtyNum) && qtyNum > 0 ? qtyNum : 1;
@@ -158,7 +204,6 @@ function buildPoProductLines(input: any, poId: number) {
             const lineTotal = ordered_quantity * unitPrice;
 
             if (!branch_id) {
-                // If your schema requires branch_id, fail early with a clear message
                 throw new Error(
                     `Missing branch_id for product_id=${productIdNum}. Check allocations[].branchId in payload.`
                 );
@@ -168,7 +213,7 @@ function buildPoProductLines(input: any, poId: number) {
                 purchase_order_id: poId,
                 branch_id,
                 product_id: productIdNum,
-                ordered_quantity, // ✅ required
+                ordered_quantity,
                 unit_price: toFixedMoney(unitPrice),
                 total_amount: toFixedMoney(lineTotal),
                 vat_amount: null,
@@ -196,22 +241,14 @@ async function poProductsAlreadyExist(base: string, poId: number) {
     return Array.isArray(json?.data) && json.data.length > 0;
 }
 
-/**
- * ✅ Robust create-many:
- * Some Directus versions accept ARRAY body: [ {...}, {...} ]
- * Others accept WRAPPED body: { data: [ ... ] }
- * We'll try array first, then fallback to wrapped if needed.
- */
-async function createManyPurchaseOrderProducts(base: string, lines: any[]) {
+async function createManyPurchaseOrderProducts(base: string, lines: Record<string, unknown>[]) {
     const url = `${base}/items/purchase_order_products`;
 
-    // try array body
     let r = await directusFetch(url, { method: "POST", body: JSON.stringify(lines) });
     let parsed = await safeJson(r);
 
     if (r.ok) return { ok: true, json: parsed.json };
 
-    // fallback wrapped body
     r = await directusFetch(url, { method: "POST", body: JSON.stringify({ data: lines }) });
     parsed = await safeJson(r);
 
@@ -225,7 +262,7 @@ async function createManyPurchaseOrderProducts(base: string, lines: any[]) {
     return { ok: false, json: parsed.json, message: msg, status: r.status };
 }
 
-async function ensurePoProducts(base: string, poId: number, input: any) {
+async function ensurePoProducts(base: string, poId: number, input: Record<string, unknown>) {
     const lines = buildPoProductLines(input, poId);
 
     if (!lines.length) {
@@ -243,8 +280,7 @@ async function ensurePoProducts(base: string, poId: number, input: any) {
         );
     }
 
-    // Directus may return { data: [...] } or the created array directly
-    const data = (result.json as any)?.data;
+    const data = result.json?.data;
     const createdCount = Array.isArray(data) ? data.length : lines.length;
 
     return { created: createdCount, skipped: false };
@@ -260,13 +296,12 @@ async function deletePurchaseOrderHeader(base: string, poId: number) {
     }
 }
 
-/** ---------------- ROUTE ---------------- */
 export async function POST(req: NextRequest) {
     try {
         const base = getDirectusBase();
 
         const body = await req.json().catch(() => null);
-        const input = (body?.data ?? body?.payload ?? body) as any;
+        const input = (body?.data ?? body?.payload ?? body) || {};
 
         const supplierId = pickSupplierId(input);
         const poNumber = pickPoNumber(input);
@@ -283,7 +318,6 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // ✅ If already exists: try to ensure lines.
         const existing = await findExistingByPoNumber(base, poNumber);
         if (existing) {
             const existingPoId = extractPoId(existing);
@@ -295,12 +329,12 @@ export async function POST(req: NextRequest) {
                         data: existing,
                         meta: { alreadyExists: true, purchase_order_no: poNumber, po_products: linesMeta },
                     });
-                } catch (e: any) {
-                    // ✅ IMPORTANT: do NOT hide error (this is why you see "already exists" kahit walang lines)
+                } catch (e: unknown) {
+                    const error = e as Error;
                     return NextResponse.json(
                         {
                             error: "PO exists but failed to create missing PO product lines",
-                            details: String(e?.message ?? e),
+                            details: error.message,
                             meta: { alreadyExists: true, purchase_order_no: poNumber, purchase_order_id: existingPoId },
                         },
                         { status: 500 }
@@ -314,7 +348,6 @@ export async function POST(req: NextRequest) {
             });
         }
 
-        // amounts
         const gross_amount = numOrZero(input?.gross_amount ?? input?.grossAmount ?? input?.subtotal);
         const discounted_amount = numOrZero(input?.discounted_amount ?? input?.discountAmount ?? input?.discount);
         const vat_amount = numOrZero(input?.vat_amount ?? input?.vatAmount ?? input?.vat ?? input?.tax);
@@ -323,22 +356,29 @@ export async function POST(req: NextRequest) {
             input?.withholding_tax_amount ?? input?.ewtGoods ?? input?.ewt_goods
         );
 
-        // dates
         const date = isoDateOnlyFrom(input?.date ?? input?.poDateISO ?? input?.poDate);
         const date_encoded = isoDateTimeFrom(input?.date_encoded ?? input?.dateEncoded ?? now());
         const datetime = isoDateTimeFrom(input?.datetime ?? input?.dateTime ?? now());
         const time = String(input?.time ?? timeHHMMSSFrom(now()));
 
-        // defaults
         const payment_type = intOrDefault(input?.payment_type ?? input?.paymentType, 0);
         const payment_status = intOrDefault(input?.payment_status ?? input?.paymentStatus, 2);
         const transaction_type = intOrDefault(input?.transaction_type ?? input?.transactionType, 1);
-        const receiving_type = intOrDefault(input?.receiving_type ?? input?.receivingType, 3);
+        
+        const isInvoiceFlag = 
+            String(input?.is_invoice || "").toLowerCase() === "true" ||
+            String(input?.isInvoice || "").toLowerCase() === "true" ||
+            input?.is_invoice === true ||
+            input?.isInvoice === true ||
+            input?.receiving_type === 2 ||
+            input?.receivingType === 2;
+
+        const receiving_type = isInvoiceFlag ? 2 : 3;
         const receipt_required = intOrDefault(input?.receipt_required ?? input?.receiptRequired, 1);
         const price_type = strOrDefault(input?.price_type ?? input?.priceType, "General Receive Price");
         const inventory_status = intOrDefault(input?.inventory_status ?? input?.inventoryStatus, 1);
 
-        const payload: any = {
+        const payload: Record<string, unknown> = {
             purchase_order_no: poNumber,
             supplier_name: supplierId,
 
@@ -364,10 +404,8 @@ export async function POST(req: NextRequest) {
             reference: input?.reference ?? null,
             remark: input?.remark ?? null,
 
-            // header branch_id is single only; keep nullable (branches derived from purchase_order_products)
             branch_id: input?.branch_id ?? input?.branchId ?? null,
             price_type_id: input?.price_type_id ?? null,
-            is_invoice: input?.is_invoice ?? input?.isInvoice ?? false,
         };
 
         for (const k of Object.keys(payload)) {
@@ -401,9 +439,8 @@ export async function POST(req: NextRequest) {
         }
 
         const created = parsed.json?.data ?? parsed.json;
-        const createdPoId = extractPoId(created);
+        const createdPoId = extractPoId(created as Record<string, unknown>);
 
-        // ✅ Create lines; if fails rollback header to avoid “existing with no lines”
         if (createdPoId) {
             try {
                 const linesMeta = await ensurePoProducts(base, createdPoId, input);
@@ -412,7 +449,8 @@ export async function POST(req: NextRequest) {
                     data: created,
                     meta: { alreadyExists: false, purchase_order_no: poNumber, po_products: linesMeta },
                 });
-            } catch (e: any) {
+            } catch (e: unknown) {
+                const error = e as Error;
                 let rolledBack = false;
                 try {
                     await deletePurchaseOrderHeader(base, createdPoId);
@@ -424,7 +462,7 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json(
                     {
                         error: "PO header created but failed to create PO product lines",
-                        details: String(e?.message ?? e),
+                        details: error.message,
                         meta: {
                             purchase_order_no: poNumber,
                             purchase_order_id: createdPoId,
@@ -440,9 +478,10 @@ export async function POST(req: NextRequest) {
             data: created,
             meta: { alreadyExists: false, purchase_order_no: poNumber, po_products: { created: 0, skipped: true } },
         });
-    } catch (e: any) {
+    } catch (e: unknown) {
+        const error = e as Error;
         return NextResponse.json(
-            { error: "Failed to save purchase order", details: String(e?.message ?? e) },
+            { error: "Failed to save purchase order", details: error.message },
             { status: 500 }
         );
     }

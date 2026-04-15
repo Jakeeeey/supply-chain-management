@@ -1,8 +1,9 @@
 // src/modules/supply-chain-management/supplier-management/create-of-purchase-order/CreatePurchaseOrderModule.tsx
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import * as React from "react";
-import { Check, ChevronDown, Search, X } from "lucide-react";
+import { Check, ChevronDown, X } from "lucide-react";
 
 import type {
     BranchAllocation,
@@ -43,20 +44,27 @@ import { Separator } from "@/components/ui/separator";
 
 // ✅ NEW: shadcn snippets
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Item, ItemContent, ItemMedia, ItemTitle } from "@/components/ui/item";
 import { Spinner } from "@/components/ui/spinner";
 
 const ProductPickerDialog =
+     
     (ProductPickerDialogModule as any).ProductPickerDialog ??
+     
     (ProductPickerDialogModule as any).default;
 
 const PurchaseOrderSummary =
+     
     (PurchaseOrderSummaryModule as any).PurchaseOrderSummary ??
+     
     (PurchaseOrderSummaryModule as any).default;
 
+ 
 type RawSupplier = any;
+ 
 type RawBranch = any;
+ 
 type RawProduct = any;
+ 
 type RawDiscountType = any;
 
 const BOX_UOM_ID = 11;
@@ -188,7 +196,6 @@ function SupplierSelect(props: {
     disabled?: boolean;
 }) {
     const [open, setOpen] = React.useState(false);
-    const popoverId = React.useId();
 
     return (
         <div className="space-y-1.5 w-full min-w-0">
@@ -233,11 +240,11 @@ function SupplierSelect(props: {
 
                             <ScrollArea className="h-72">
                                 <CommandGroup heading="Suppliers" className="p-2">
-                                    {props.suppliers.map((s, idx) => {
+                                    {props.suppliers.map((s) => {
                                         const selected = props.value?.id === s.id;
                                         return (
-                                            <React.Fragment key={s.id}>
                                                 <CommandItem
+                                                    key={s.id}
                                                     value={`${s.name} ${s.id}`}
                                                     onSelect={() => {
                                                         props.onChange(selected ? null : s);
@@ -270,11 +277,6 @@ function SupplierSelect(props: {
                                                         </Badge>
                                                     </div>
                                                 </CommandItem>
-
-                                                {idx < props.suppliers.length - 1 ? (
-                                                    <Separator className="my-2" />
-                                                ) : null}
-                                            </React.Fragment>
                                         );
                                     })}
                                 </CommandGroup>
@@ -307,7 +309,6 @@ function BranchMultiSelect(props: {
     disabled?: boolean;
 }) {
     const [open, setOpen] = React.useState(false);
-    const popoverId = React.useId();
 
     const selected = React.useMemo(() => new Set(props.value), [props.value]);
 
@@ -386,11 +387,11 @@ function BranchMultiSelect(props: {
 
                             <ScrollArea className="h-72">
                                 <CommandGroup heading="Branches" className="p-2">
-                                    {props.branches.map((b, idx) => {
+                                    {props.branches.map((b) => {
                                         const isOn = selected.has(b.id);
                                         return (
-                                            <React.Fragment key={b.id}>
                                                 <CommandItem
+                                                    key={b.id}
                                                     value={`${b.code} ${b.name}`}
                                                     onSelect={() => {
                                                         const next = new Set(selected);
@@ -421,11 +422,6 @@ function BranchMultiSelect(props: {
                                                         </div>
                                                     </div>
                                                 </CommandItem>
-
-                                                {idx < props.branches.length - 1 ? (
-                                                    <Separator className="my-2" />
-                                                ) : null}
-                                            </React.Fragment>
                                         );
                                     })}
                                 </CommandGroup>
@@ -483,6 +479,7 @@ export default function CreatePurchaseOrderModule() {
     const [tempCart, setTempCart] = React.useState<CartItem[]>([]);
     const [isInvoice, setIsInvoice] = React.useState(false);
 
+     
     const meta = React.useMemo(() => (makePoMeta() as any), []);
     const poNumber = String(meta?.poNumber ?? "DRAFT-PO");
     const poDate = String(meta?.poDate ?? "");
@@ -532,9 +529,10 @@ export default function CreatePurchaseOrderModule() {
                     setDiscountTypes([]);
                     console.warn("Discount types failed:", results[2].reason);
                 }
-            } catch (e: any) {
+            } catch (e: unknown) {
                 if (!alive) return;
-                setError(String(e?.message ?? e));
+                const err = e as Error;
+                setError(String(err?.message ?? err));
             } finally {
                 if (!alive) return;
                 setIsLoading(false);
@@ -572,8 +570,10 @@ export default function CreatePurchaseOrderModule() {
 
                 const discountByProductId = new Map<string, string>();
                 for (const row of links ?? []) {
-                    const pid = String(row?.product_id ?? "");
-                    const dtid = String(row?.discount_type ?? "");
+                     
+                    const r: any = row;
+                    const pid = String(r?.product_id ?? "");
+                    const dtid = String(r?.discount_type ?? "");
                     if (pid) discountByProductId.set(pid, dtid);
                 }
 
@@ -582,6 +582,7 @@ export default function CreatePurchaseOrderModule() {
                 let debugCount = 0;
 
                 setAllProducts(
+                     
                     (rawProducts ?? []).map((rp: any) => {
                         const pid = String(rp?.product_id ?? rp?.id ?? "");
                         const fixedDiscountTypeId =
@@ -608,9 +609,10 @@ export default function CreatePurchaseOrderModule() {
                     })
                 );
                 setIsInvoice(false);
-            } catch (e: any) {
+            } catch (e: unknown) {
                 if (!alive) return;
-                setError(String(e?.message ?? e));
+                const err = e as Error;
+                setError(String(err?.message ?? err));
             }
         })();
 
@@ -670,6 +672,7 @@ export default function CreatePurchaseOrderModule() {
             setPickerBranchId(branchId);
 
             setTempCart(
+                 
                 (branch.items ?? []).map((it: any) => ({
                     ...it,
                     selectedUom: "BOX",
@@ -694,6 +697,7 @@ export default function CreatePurchaseOrderModule() {
                 if (b.branchId !== branchId) return b;
                 return {
                     ...b,
+                     
                     items: b.items.map((it: any) =>
                         it.id === productId ? { ...it, orderQty: Math.max(1, qty) } : it
                     ),
@@ -706,6 +710,7 @@ export default function CreatePurchaseOrderModule() {
         setAllocations((prev) =>
             prev.map((b) => {
                 if (b.branchId !== branchId) return b;
+                 
                 return { ...b, items: b.items.filter((it: any) => it.id !== productId) };
             })
         );
@@ -733,8 +738,10 @@ export default function CreatePurchaseOrderModule() {
         [defaultNoDiscountId]
     );
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const updateTempUom = React.useCallback((productId: string, _uom: string) => {
         setTempCart((prev) =>
+             
             prev.map((x: any) =>
                 x.id === productId ? { ...x, selectedUom: "BOX", uom: "BOX", uomId: BOX_UOM_ID } : x
             )
@@ -743,6 +750,7 @@ export default function CreatePurchaseOrderModule() {
 
     const updateTempQty = React.useCallback((productId: string, qty: number) => {
         setTempCart((prev) =>
+             
             prev.map((x: any) => (x.id === productId ? { ...x, orderQty: Math.max(1, qty) } : x))
         );
     }, []);
@@ -758,6 +766,7 @@ export default function CreatePurchaseOrderModule() {
             return;
         }
 
+         
         const normalized = tempCart.map((it: any) => ({
             ...it,
             selectedUom: "BOX",
@@ -767,6 +776,7 @@ export default function CreatePurchaseOrderModule() {
         }));
 
         setAllocations((prev) =>
+             
             prev.map((b) => (b.branchId === branchId ? { ...b, items: normalized as any } : b))
         );
 
@@ -799,6 +809,7 @@ export default function CreatePurchaseOrderModule() {
 
     const discountAmount = React.useMemo(() => {
         return allItemsFlat.reduce((sum, x) => {
+             
             const item: any = x.item;
             const gross = Number(item.price || 0) * Number(item.orderQty || 0);
 
@@ -827,6 +838,7 @@ export default function CreatePurchaseOrderModule() {
             const nowISO = new Date().toISOString();
             const dateOnly = nowISO.slice(0, 10);
 
+             
             const payload: any = {
                 purchase_order_no: poNumber,
                 supplier_name: Number(selectedSupplier.id),
@@ -877,14 +889,15 @@ export default function CreatePurchaseOrderModule() {
 
             console.log("PO RESPONSE:", json?.data ?? json);
             return json;
-        } catch (e: any) {
-            const msg = String(e?.message ?? e);
+        } catch (e: unknown) {
+            const err = e as Error;
+            const msg = String(err?.message ?? err);
             setError(msg);
             throw new Error(msg);
         } finally {
             setIsSaving(false);
         }
-    }, [selectedSupplier, allItemsFlat, poNumber, poDate, poDateISO, allocations, financials]);
+    }, [selectedSupplier, allItemsFlat, poNumber, poDate, poDateISO, allocations, financials, isInvoice]);
 
     const pickerBranchLabel = React.useMemo(() => {
         const b = allocations.find((x) => x.branchId === pickerBranchId);
@@ -903,9 +916,10 @@ export default function CreatePurchaseOrderModule() {
         setAllocPage((p) => Math.min(Math.max(1, p), allocTotalPages));
     }, [allocTotalPages, allocations?.length]);
 
+    const selectedBranchIdsJoined = selectedBranchIds.join("|");
     React.useEffect(() => {
         setAllocPage(1);
-    }, [selectedSupplier?.id, selectedBranchIds.join("|")]);
+    }, [selectedSupplier?.id, selectedBranchIdsJoined]);
 
     const paginatedAllocations = React.useMemo(() => {
         const start = (allocPage - 1) * allocPerPage;
@@ -965,6 +979,7 @@ export default function CreatePurchaseOrderModule() {
                                     key={type}
                                     type="button"
                                     onClick={() => {
+                                         
                                         setSelectedSupplierType(type as any);
                                         if (selectedSupplier && type !== "ALL" && selectedSupplier.supplierType !== type) {
                                             setSelectedSupplier(null);

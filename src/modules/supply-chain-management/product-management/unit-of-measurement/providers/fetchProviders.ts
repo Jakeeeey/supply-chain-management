@@ -47,7 +47,7 @@ export async function listUnits(
 
 export async function createUnit(payload: UnitFormValues): Promise<UnitApiRow> {
   const cleanPayload = { ...payload };
-  if ("unit_id" in cleanPayload) delete (cleanPayload as any).unit_id;
+  if ("unit_id" in cleanPayload) delete (cleanPayload as Record<string, unknown>).unit_id;
 
   const res = await fetch(API_BASE, {
     method: "POST",
@@ -73,4 +73,24 @@ export async function updateUnit(
   if (!res.ok) throw new Error(await readError(res));
   const json = (await res.json()) as DirectusItemResponse<UnitApiRow>;
   return json?.data;
+}
+
+export async function checkUnitUniqueness(
+  field: "unit_name" | "unit_shortcut" | "sku_code",
+  value: string,
+  excludeId?: string
+): Promise<boolean> {
+  const filter: Record<string, { _eq: string } | { _neq: string }> = {
+    [field]: { _eq: value },
+  };
+
+  if (excludeId) {
+    filter.unit_id = { _neq: excludeId };
+  }
+
+  const res = await fetch(`${API_BASE}?limit=1&filter=${encodeURIComponent(JSON.stringify(filter))}`);
+  if (!res.ok) return true; // Fail safe
+
+  const json = await res.json();
+  return (json?.data?.length ?? 0) === 0;
 }

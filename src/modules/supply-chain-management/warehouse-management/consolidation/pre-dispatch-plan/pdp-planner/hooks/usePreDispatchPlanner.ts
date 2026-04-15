@@ -3,6 +3,7 @@ import {
   DispatchPlanDetail,
   DispatchPlanMasterData,
 } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/types/dispatch-plan.schema";
+import { format } from "date-fns";
 import { useCallback, useEffect, useState } from "react";
 import { usePDPFilter } from "../../context/PDPFilterContext";
 
@@ -13,13 +14,12 @@ const API_PATH =
  * Hook for the PDP Planner sub-module.
  */
 export function usePreDispatchPlanner() {
-  const { clusterId, status, search, setSearch } = usePDPFilter();
+  const { clusterId, status, search, setSearch, branchId, dateRange } =
+    usePDPFilter();
 
   // ─── Plans State ──────────────────────────────────
   const [plansData, setPlansData] = useState<DispatchPlan[]>([]);
   const [plansTotal, setPlansTotal] = useState(0);
-  const [plansPage, setPlansPage] = useState(0);
-  const [plansLimit, setPlansLimit] = useState(10);
 
   // ─── Master Data (for filters) ───────────────────
   const [masterData, setMasterData] = useState<DispatchPlanMasterData | null>(
@@ -27,6 +27,7 @@ export function usePreDispatchPlanner() {
   );
 
   // ─── Metrics State ────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [metrics, setMetrics] = useState<any>(null);
 
   // ─── Shared State ─────────────────────────────────
@@ -39,20 +40,27 @@ export function usePreDispatchPlanner() {
     setError(null);
     try {
       const params = new URLSearchParams({
-        limit: String(plansLimit),
-        offset: String(plansPage * plansLimit),
+        limit: "-1",
         search: search,
       });
 
       if (clusterId) params.append("cluster_id", String(clusterId));
       if (status) params.append("status", status);
+      if (branchId) params.append("branch_id", String(branchId));
+
+      if (dateRange?.from) {
+        params.append("start_date", format(dateRange.from, "yyyy-MM-dd"));
+      }
+      if (dateRange?.to) {
+        params.append("end_date", format(dateRange.to, "yyyy-MM-dd"));
+      }
 
       const [plansRes, masterRes, metricsRes] = await Promise.all([
         fetch(`${API_PATH}?${params.toString()}`).then((r) => r.json()),
         fetch(`${API_PATH}?type=master`).then((r) => r.json()),
-        fetch(
-          `${API_PATH}?type=metrics${clusterId ? `&cluster_id=${clusterId}` : ""}`,
-        ).then((r) => r.json()),
+        fetch(`${API_PATH}?type=metrics&${params.toString()}`).then((r) =>
+          r.json(),
+        ),
       ]);
 
       if (plansRes.error) throw new Error(plansRes.error);
@@ -65,15 +73,19 @@ export function usePreDispatchPlanner() {
       );
       setMasterData(masterRes.data || null);
       setMetrics(metricsRes.data || null);
-    } catch (err: any) {
+    } catch (e: unknown) {
+      const err = e as Error;
       setError(err.message);
     } finally {
-      setIsLoading(false);   
+      setIsLoading(false);
     }
-  }, [plansLimit, plansPage, search, clusterId, status]);
+  }, [search, clusterId, status, branchId, dateRange]);
 
   useEffect(() => {
-    refresh();
+    const handler = setTimeout(() => {
+      refresh();
+    }, 300);
+    return () => clearTimeout(handler);
   }, [refresh]);
 
   // ─── Fetch Plan Details ───────────────────────────
@@ -106,10 +118,6 @@ export function usePreDispatchPlanner() {
   return {
     plansData,
     plansTotal,
-    plansPage,
-    setPlansPage,
-    plansLimit,
-    setPlansLimit,
 
     masterData,
     metrics,

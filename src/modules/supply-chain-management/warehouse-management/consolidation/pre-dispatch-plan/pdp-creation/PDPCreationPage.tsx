@@ -9,7 +9,7 @@ import {
   DispatchPlanFormValues,
 } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/types/dispatch-plan.schema";
 import { Plus } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { toast } from "sonner";
 import { PDPGlobalFilter } from "../pdp-planner/components/PDPGlobalFilter";
 import { PDPCreationTable } from "./components/data-table";
@@ -23,10 +23,6 @@ export default function PDPCreationPage() {
   const {
     pendingData,
     pendingTotal,
-    pendingPage,
-    setPendingPage,
-    pendingLimit,
-    setPendingLimit,
     masterData,
     availableOrders,
     isLoadingOrders,
@@ -34,6 +30,8 @@ export default function PDPCreationPage() {
     isLoading,
     error,
     setSearch,
+    clusterId,
+    branchId,
     refresh,
     createPlan,
     updatePlan,
@@ -55,7 +53,8 @@ export default function PDPCreationPage() {
         setEditPlan(result.plan);
         setEditDetails(result.details);
         setIsCreateOpen(true);
-      } catch (err: any) {
+      } catch (e: unknown) {
+        const err = e as Error;
         toast.error(err.message || "Failed to load plan details.");
       } finally {
         setIsEditLoading(false);
@@ -87,29 +86,32 @@ export default function PDPCreationPage() {
     [fetchAvailableOrders],
   );
 
-  if (isLoading && !pendingData.length) return <ModuleSkeleton />;
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setMounted(true);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!mounted) return <ModuleSkeleton />;
   if (error) return <ErrorPage message={error} reset={refresh} />;
 
   return (
     <div className="space-y-0">
-      <PDPGlobalFilter masterData={masterData} />
+      <PDPGlobalFilter masterData={masterData} showStatus={false} />
 
       <PDPCreationTable
         data={pendingData}
         totalCount={pendingTotal}
-        pageIndex={pendingPage}
-        pageSize={pendingLimit}
-        onPaginationChange={(p: { pageIndex: number; pageSize: number }) => {
-          setPendingPage(p.pageIndex);
-          setPendingLimit(p.pageSize);
-        }}
         isLoading={isLoading || isEditLoading}
         onEdit={handleEdit}
         onSearch={(v: string) => setSearch(v)}
         actionComponent={
           <Button onClick={() => setIsCreateOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Create PDP
+            <Plus className="h-4 w-4" />
+            Create
           </Button>
         }
       />
@@ -123,6 +125,8 @@ export default function PDPCreationPage() {
         availableOrders={availableOrders}
         isLoadingOrders={isLoadingOrders}
         onFilterChange={handleFilterChange}
+        initialClusterId={clusterId}
+        initialBranchId={branchId}
         editPlan={editPlan}
         editDetails={editDetails}
       />

@@ -28,9 +28,9 @@ export async function generateSKUCode(
     const uomId = sku.base_unit || sku.unit_of_measurement;
     const uom = masterData.units.find((u) => u.id == uomId);
     const uomName = (
-      (uom as any)?.name ||
-      (uom as any)?.unit ||
-      (uom as any)?.title ||
+      (uom as { id: number; name: string; unit?: string; title?: string } | undefined)?.name ||
+      (uom as { id: number; name: string; unit?: string; title?: string } | undefined)?.unit ||
+      (uom as { id: number; name: string; unit?: string; title?: string } | undefined)?.title ||
       ""
     )
       .toLowerCase()
@@ -44,11 +44,11 @@ export async function generateSKUCode(
     if (sku.parent_id) {
       try {
         const [prodParent, draftParent] = await Promise.all([
-          fetchItems<any>("/items/products", {
+          fetchItems<SKU>("/items/products", {
             filter: JSON.stringify({ product_id: { _eq: sku.parent_id } }),
             fields: "product_code",
           }),
-          fetchItems<any>("/items/product_draft", {
+          fetchItems<SKU>("/items/product_draft", {
             filter: JSON.stringify({ id: { _eq: sku.parent_id } }),
             fields: "product_code",
           }),
@@ -70,19 +70,19 @@ export async function generateSKUCode(
             );
           }
         }
-      } catch (e) {
-        console.warn("Sequence inheritance skipped:", e);
+      } catch {
+        console.warn("Sequence inheritance skipped");
       }
     }
 
     // B. Otherwise, calculate new sequence
-    const commonFilters: any = {
+    const commonFilters: Record<string, string | number | boolean> = {
       "filter[product_category][_eq]": sku.product_category,
       "filter[product_brand][_eq]": sku.product_brand,
       "filter[parent_id][_null]": "true",
     };
 
-    const myId = sku.id || (sku as any).product_id;
+    const myId = sku.id || sku.product_id;
 
     // Create collection-aware count function
     const countItems = async (
@@ -90,7 +90,7 @@ export async function generateSKUCode(
       pKey: string,
     ): Promise<number> => {
       try {
-        const params: any = {
+        const params: Record<string, string | number | boolean> = {
           ...commonFilters,
           limit: 0,
           meta: "filter_count",
@@ -98,9 +98,9 @@ export async function generateSKUCode(
         if (myId) {
           params[`filter[${pKey}][_neq]`] = myId;
         }
-        const res = await fetchItems<any>(endpoint, params);
+        const res = await fetchItems<Record<string, unknown>>(endpoint, params);
         return res.meta?.filter_count || 0;
-      } catch (e) {
+      } catch {
         return 0;
       }
     };

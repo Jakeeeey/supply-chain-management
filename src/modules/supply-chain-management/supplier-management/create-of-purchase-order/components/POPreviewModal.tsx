@@ -10,15 +10,15 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Printer, Download, Package, MapPin } from "lucide-react";
+
+import { Printer, Download, Package } from "lucide-react";
 import { generatePurchaseOrderPDF } from "../../receiving-products/utils/printUtils";
 import { cn, buildMoneyFormatter } from "../utils/calculations";
 
 interface POPreviewModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onConfirmSave?: () => void | Promise<any>;
+    onConfirmSave?: () => void | Promise<unknown>;
     isSubmitting?: boolean;
     locked?: boolean;
     isInvoice?: boolean;
@@ -58,10 +58,6 @@ export function POPreviewModal({
     data 
 }: POPreviewModalProps) {
     const money = React.useMemo(() => buildMoneyFormatter(), []);
-
-    const handleDownloadOnly = () => {
-        generatePurchaseOrderPDF({ ...data, isInvoice: !!isInvoice });
-    };
 
     const handleSaveAndDownload = async () => {
         if (onConfirmSave) {
@@ -173,17 +169,14 @@ export function POPreviewModal({
                                 className="flex-1 overflow-auto custom-scrollbar"
                             >
                                 <table className="w-full border-collapse">
-                                    <thead className="sticky top-0 z-10 bg-muted border-b border-border">
-                                        <tr className="text-[9px] font-black uppercase tracking-wider text-muted-foreground">
+                                    <thead className="sticky top-0 z-10 bg-blue-600 border-b border-border">
+                                        <tr className="text-[9px] font-black uppercase tracking-wider text-white">
                                             <th className="px-4 py-3 text-left font-black">Brand</th>
                                             <th className="px-4 py-3 text-left font-black">Category</th>
                                             <th className="px-4 py-3 text-left font-black">Product Name</th>
                                             <th className="px-4 py-3 text-right font-black">Price</th>
                                             <th className="px-4 py-3 text-center font-black">UOM</th>
                                             <th className="px-4 py-3 text-center font-black">Qty</th>
-                                            <th className="px-4 py-3 text-right font-black">Gross</th>
-                                            <th className="px-4 py-3 text-center font-black">Disc (Type/Amt)</th>
-                                            <th className="px-4 py-3 text-right font-black">Net</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-border/50">
@@ -209,18 +202,6 @@ export function POPreviewModal({
                                                 <td className="px-4 py-3 text-[9px] text-center font-black whitespace-nowrap">
                                                     {item.orderQty}
                                                 </td>
-                                                <td className="px-4 py-3 text-[9px] text-right font-bold text-muted-foreground whitespace-nowrap">
-                                                    {money.format(item.grossAmount).replace("PHP", "").trim()}
-                                                </td>
-                                                <td className="px-4 py-3 text-center">
-                                                    <div className="flex flex-col leading-tight">
-                                                        <span className="text-[7px] font-black text-emerald-600 dark:text-emerald-400 truncate max-w-[70px] mx-auto">{item.discountType}</span>
-                                                        <span className="text-[8px] font-bold text-emerald-600/70">{money.format(item.discountAmount).replace("PHP", "").trim()}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-3 text-[9px] text-right font-black text-primary whitespace-nowrap">
-                                                    {money.format(item.netAmount).replace("PHP", "").trim()}
-                                                </td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -232,50 +213,7 @@ export function POPreviewModal({
 
                 {/* STICKY FOOTER SECTION */}
                 <div className="shrink-0 bg-background border-t border-border shadow-[0_-10px_30px_rgba(0,0,0,0.04)]">
-                    <div className="px-6 py-4 flex flex-col md:flex-row justify-end items-center gap-8 md:gap-16 bg-muted/5">
-                        <div className="space-y-1.5 text-right min-w-[160px]">
-                            <div className="flex justify-between items-center text-xs uppercase font-bold text-muted-foreground gap-10">
-                                <span>Gross Amount:</span>
-                                <span className="text-foreground">{money.format(data.subtotal)}</span>
-                            </div>
-                            <div className="flex justify-between items-center text-xs uppercase font-bold text-destructive gap-10">
-                                <span>Discount:</span>
-                                <span>{money.format(data.discount)}</span>
-                            </div>
-                            <Separator className="my-1.5 bg-border/60" />
-                            <div className="flex justify-between items-center text-xs uppercase font-bold text-foreground gap-10">
-                                <span>Net Amount:</span>
-                                <span className="text-primary tracking-tight">{money.format(data.subtotal - data.discount)}</span>
-                            </div>
-                        </div>
-                        
-                        {isInvoice && (
-                            <div className="space-y-1.5 text-right min-w-[170px]">
-                                <div className="flex justify-between items-center text-xs uppercase font-bold text-muted-foreground gap-10">
-                                    <span>VAT (12%):</span>
-                                    <span className="text-foreground">{money.format(data.vat)}</span>
-                                </div>
-                                <div className="flex justify-between items-center text-xs uppercase font-bold text-muted-foreground gap-10">
-                                    <span>EWT (1%):</span>
-                                    <span className="text-foreground">{money.format(data.ewt)}</span>
-                                </div>
-                                <Separator className="my-1.5 bg-border/60" />
-                                <div className="flex justify-between items-center text-sm font-bold text-primary italic uppercase tracking-tighter gap-10">
-                                    <span className="shrink-0">Total Payable Amount:</span>
-                                    <span className="text-2xl tabular-nums tracking-tighter">{money.format(data.subtotal - data.discount)}</span>
-                                </div>
-                            </div>
-                        )}
-                        {/* ✅ Updated: Always show simple total even if isInvoice is true (but handled above if isInvoice) */}
-                        {!isInvoice && (
-                            <div className="space-y-1.5 text-right min-w-[170px]">
-                                <div className="flex justify-between items-center text-sm font-bold text-primary italic uppercase tracking-tighter gap-10">
-                                    <span className="shrink-0">Total Payable Amount:</span>
-                                    <span className="text-2xl tabular-nums tracking-tighter">{money.format(data.subtotal - data.discount)}</span>
-                                </div>
-                            </div>
-                        )}
-                    </div>
+                    {/* Gross, Discount, Net, VAT, EWT, and Total Payable hidden as requested */}
 
                     <DialogFooter className="px-6 py-5 bg-background border-t border-border flex flex-row items-center justify-center gap-4 sm:gap-6 shrink-0">
                         <Button 

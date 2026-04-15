@@ -11,8 +11,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useState, useEffect } from "react";
+import { BundleViewModal } from "../components/modals/bundle-view-modal";
 
 export default function BundleMasterlistPage() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [selectedBundle, setSelectedBundle] = useState<any>(null);
+  const [isViewOpen, setIsViewOpen] = useState(false);
+
   const {
     approvedData,
     approvedTotal,
@@ -31,7 +37,36 @@ export default function BundleMasterlistPage() {
     refresh,
   } = useBundles();
 
-  if (isLoading && !approvedData.length) return <ModuleSkeleton />;
+  const handleView = (id: number) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const bundle = (approvedData as any[]).find((b) => b.id === id);
+    setSelectedBundle(bundle || null);
+    setIsViewOpen(true);
+  };
+
+  const fetchDetails = async (id: number | string) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const bundle = (approvedData as any[]).find((b) => b.id === id);
+    const isApproved = bundle?.status === "APPROVED";
+    const type = isApproved ? "approved" : "draft";
+    const response = await fetch(
+      `/api/scm/product-management/bundling/${id}?type=${type}`,
+    );
+    const result = await response.json();
+    if (result.error) throw new Error(result.error);
+    return result.data;
+  };
+
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setMounted(true);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!mounted) return <ModuleSkeleton />;
   if (error) return <ErrorPage message={error} reset={refresh} />;
 
   return (
@@ -68,7 +103,7 @@ export default function BundleMasterlistPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
-                {masterData?.bundleTypes.map((t: any) => (
+                {masterData?.bundleTypes.map((t) => (
                   <SelectItem key={t.id} value={t.id.toString()}>
                     {t.name}
                   </SelectItem>
@@ -81,7 +116,8 @@ export default function BundleMasterlistPage() {
 
       {/* Data Table */}
       <BundleMasterlistTable
-        data={approvedData}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        data={approvedData as any}
         totalCount={approvedTotal}
         pageIndex={approvedPage}
         pageSize={approvedLimit}
@@ -92,6 +128,20 @@ export default function BundleMasterlistPage() {
         masterData={masterData}
         isLoading={isLoading}
         onSearch={(v: string) => setSearch(v)}
+        onView={handleView}
+      />
+
+      {/* View Modal */}
+      <BundleViewModal
+        open={isViewOpen}
+        onClose={() => {
+          setIsViewOpen(false);
+          setSelectedBundle(null);
+        }}
+        draft={selectedBundle}
+        masterData={masterData}
+        fetchDetails={fetchDetails}
+        previewMode={true}
       />
     </div>
   );

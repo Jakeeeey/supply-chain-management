@@ -13,15 +13,16 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { CheckCircle2, Loader2, Package, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
-import { BundleDraft, BundleMasterData } from "../../types/bundle.schema";
+import { Bundle, BundleDraft, BundleMasterData } from "../../types/bundle.schema";
 
 interface BundleViewModalProps {
   open: boolean;
   onClose: () => void;
-  draft: BundleDraft | null;
+  draft: BundleDraft | Bundle | null;
   masterData: BundleMasterData | null;
   onApprove?: (id: number | string) => Promise<void>;
   onReject?: (id: number | string) => Promise<void>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   fetchDetails: (id: number | string) => Promise<any>;
   previewMode?: boolean;
 }
@@ -40,8 +41,10 @@ export function BundleViewModal({
   fetchDetails,
   previewMode = false,
 }: BundleViewModalProps) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [details, setDetails] = useState<any>(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  const statusValue = String((draft as Record<string, unknown>)?.status || (draft as Record<string, unknown>)?.draft_status || "");
   const [confirmAction, setConfirmAction] = useState<
     "approve" | "reject" | null
   >(null);
@@ -80,8 +83,8 @@ export function BundleViewModal({
   const getTypeName = () => {
     const raw = draft?.bundle_type_id;
     if (typeof raw === "object" && raw !== null)
-      return (raw as any).name || "-";
-    const found = masterData?.bundleTypes.find((t) => t.id == (raw as any));
+      return String((raw as Record<string, unknown>).name || "-");
+    const found = masterData?.bundleTypes.find((t) => t.id == (raw as number));
     return found?.name || "-";
   };
 
@@ -90,8 +93,31 @@ export function BundleViewModal({
       (prod) => prod.product_id === productId,
     );
     return p
-      ? `${p.product_name} (${p.product_code})`
+      ? (p.product_code 
+          ? `${p.product_name} (${p.product_code})`
+          : p.product_name)
       : `Product #${productId}`;
+  };
+
+  const getProductUnit = (productId: number) => {
+    const p = masterData?.products.find(
+      (prod) => Number(prod.product_id) === Number(productId),
+    );
+    return p?.unit_name || "";
+  };
+
+  const getProductBrand = (productId: number) => {
+    const p = masterData?.products.find(
+      (prod) => Number(prod.product_id) === Number(productId),
+    );
+    return p?.brand_name || "";
+  };
+
+  const getProductCategory = (productId: number) => {
+    const p = masterData?.products.find(
+      (prod) => Number(prod.product_id) === Number(productId),
+    );
+    return p?.category_name || "";
   };
 
   if (!draft) return null;
@@ -167,9 +193,15 @@ export function BundleViewModal({
                   </p>
                   <Badge
                     variant="secondary"
-                    className="bg-amber-500/10 text-amber-600 capitalize"
+                    className={
+                      statusValue === "APPROVED"
+                        ? "bg-emerald-500/10 text-emerald-600 capitalize"
+                        : statusValue === "REJECTED"
+                          ? "bg-destructive/10 text-destructive capitalize"
+                          : "bg-amber-500/10 text-amber-600 capitalize"
+                    }
                   >
-                    {draft.draft_status}
+                    {statusValue || "-"}
                   </Badge>
                 </div>
                 <div className="col-span-2">
@@ -198,6 +230,7 @@ export function BundleViewModal({
                     </div>
                   ) : details?.items?.length ? (
                     <div className="space-y-2">
+                      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                       {details.items.map((item: any, idx: number) => {
                         const productId =
                           typeof item.product_id === "object"
@@ -206,14 +239,35 @@ export function BundleViewModal({
                         return (
                           <div
                             key={item.id || idx}
-                            className="flex items-center justify-between p-3 border rounded-lg bg-background/50"
+                            className="flex items-center justify-between p-3 border rounded-lg bg-background/50 gap-4"
                           >
-                            <span className="text-sm font-medium">
-                              {getProductName(productId)}
-                            </span>
-                            <Badge variant="outline">
-                              Qty: {Number(item.quantity)}
-                            </Badge>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">
+                                {getProductName(productId)}
+                              </p>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                {getProductBrand(productId) && (
+                                  <span className="text-[10px] text-primary font-bold uppercase tracking-tight bg-primary/10 px-1 rounded-sm">
+                                    {getProductBrand(productId)}
+                                  </span>
+                                )}
+                                {getProductCategory(productId) && (
+                                  <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-tight bg-muted px-1 rounded-sm">
+                                    {getProductCategory(productId)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {getProductUnit(productId) && (
+                                <span className="text-xs text-muted-foreground font-medium">
+                                  {getProductUnit(productId)}
+                                </span>
+                              )}
+                              <Badge variant="outline">
+                                Qty: {Math.floor(Number(item.quantity))}
+                              </Badge>
+                            </div>
                           </div>
                         );
                       })}

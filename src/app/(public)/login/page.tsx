@@ -57,6 +57,14 @@ type FieldErrors = {
 }
 
 export default function LoginPage() {
+    return (
+        <React.Suspense fallback={<div className="min-h-dvh flex items-center justify-center">Loading...</div>}>
+            <LoginForm />
+        </React.Suspense>
+    )
+}
+
+function LoginForm() {
     const router = useRouter()
     const searchParams = useSearchParams()
 
@@ -82,7 +90,6 @@ export default function LoginPage() {
     const onSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
 
-        // ✅ client-side required validation (no HTML required attr)
         if (!validate()) return
 
         setLoading(true)
@@ -108,8 +115,9 @@ export default function LoginPage() {
             const next = searchParams.get("next") || "/main-dashboard"
             router.replace(next)
             router.refresh()
-        } catch (err: any) {
-            const raw = err?.message ? String(err.message) : "Network error. Please try again."
+        } catch (err: unknown) {
+            const errorInfo = err as { message?: string };
+            const raw = errorInfo?.message ? String(errorInfo.message) : "Network error. Please try again."
             const msg = normalizeLoginErrorMessage(raw)
             toast.error("Sign in failed", { description: msg })
         } finally {

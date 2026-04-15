@@ -13,12 +13,10 @@ import {
     SortDirection,
     SortKey,
     FlattenedLogisticsRow,
-    PrintStatus,
-    PrintDateRange,
     PrintFilters,
     FilterOptions
 } from "./types"
-import { calculateDateRange, parseCurrency, formatCurrency, formatCurrencyPdf } from "./utils"
+import { calculateDateRange, parseCurrency, formatCurrencyPdf } from "./utils"
 import { fetchLogisticsSummary } from "./providers/fetchProvider"
 import { LogisticsFilter } from "./components/LogisticsFilter"
 import { LogisticsTable } from "./components/LogisticsTable"
@@ -86,9 +84,10 @@ export default function LogisticsSummaryModule() {
                     setTotalPages(result.data.length > 0 ? 1 : 0)
                 }
 
-            } catch (err: any) {
-                console.error("Error fetching data:", err)
-                setError(err.message || 'An error occurred')
+            } catch (err) {
+                const e = err as Error
+                console.error("Error fetching data:", e)
+                setError(e.message || 'An error occurred')
                 setData([])
             } finally {
                 setLoading(false)
@@ -373,7 +372,7 @@ export default function LogisticsSummaryModule() {
 
             const numericStartIdx = 4
             const numericEndIdx = tableColumn.length - 1
-            const colStyles: any = {}
+            const colStyles: { [key: number]: { halign?: "left" | "center" | "right"; fontStyle?: "normal" | "bold" | "italic" | "bolditalic" } } = {}
             for (let i = numericStartIdx; i <= numericEndIdx; i++) { colStyles[i] = { halign: 'right' } }
 
             if (printFilters.status === 'all') {
@@ -403,7 +402,7 @@ export default function LogisticsSummaryModule() {
             else if (printFilters.status === 'returns') statusLabel = "Total Returns"
             else if (printFilters.status === 'concerns') statusLabel = "Total Concerns"
 
-            // @ts-ignore
+            // @ts-expect-error - jsPDF autotable internal state access
             const finalY = doc.lastAutoTable?.finalY || 150
 
             autoTable(doc, {

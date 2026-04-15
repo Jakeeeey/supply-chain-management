@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { bundleService } from "@/modules/supply-chain-management/product-management/bundling/bundle-creation/services/bundle";
+import { bundleService } from "@/modules/supply-chain-management/product-management/bundling/services/bundle";
 import { bundleDraftSchema } from "@/modules/supply-chain-management/product-management/bundling/types/bundle.schema";
 
 export const runtime = "nodejs";
 
 const CACHE_TTL = 60000; // 60 seconds
-let cachedMasterData: { data: any; timestamp: number } | null = null;
+let cachedMasterData: { data: Record<string, unknown>; timestamp: number } | null = null;
 
 /**
  * GET /api/scm/product-management/bundling
@@ -41,12 +41,14 @@ export async function GET(req: NextRequest) {
         draftOffset,
         "DRAFT",
         search,
+        typeFilter ? parseInt(typeFilter) : undefined,
       );
       const pending = await bundleService.fetchDrafts(
         pendingLimit,
         pendingOffset,
         "FOR_APPROVAL",
         search,
+        typeFilter ? parseInt(typeFilter) : undefined,
       );
       const approved = await bundleService.fetchApproved(
         approvedLimit,
@@ -113,9 +115,10 @@ export async function GET(req: NextRequest) {
       search,
     );
     return NextResponse.json(result);
-  } catch (error: any) {
-    console.error("[Bundle GET Error]:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("[Bundle GET Error]:", err.message);
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 
@@ -131,21 +134,22 @@ export async function POST(req: NextRequest) {
     const data = await bundleService.createDraft(validated);
 
     return NextResponse.json({ data });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const err = error as Error & { errors?: unknown[] };
     console.error(
       "[POST /api/scm/product-management/bundling] Error:",
-      error.message,
+      err.message,
     );
-    if (error.errors) {
+    if (err.errors) {
       console.error(
         "[POST /api/scm/product-management/bundling] Zod Details:",
-        JSON.stringify(error.errors, null, 2),
+        JSON.stringify(err.errors, null, 2),
       );
     }
     return NextResponse.json(
       {
-        error: error.message,
-        details: error.errors || [],
+        error: err.message,
+        details: err.errors || [],
       },
       { status: 400 },
     );

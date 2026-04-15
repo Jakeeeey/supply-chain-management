@@ -1,7 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import * as React from "react";
-import { Check, Plus, Search, ShoppingCart, X, Minus } from "lucide-react";
+import { Check, Plus, ShoppingCart, X, Minus } from "lucide-react";
 import type { CartItem, Product } from "../types";
 import { cn, buildMoneyFormatter } from "../utils/calculations";
 
@@ -269,9 +270,21 @@ export function ProductPickerDialog(props: {
                                                     >
                                                         <Minus className="w-3.5 h-3.5" />
                                                     </button>
-                                                    <div className="w-8 text-center text-xs font-black text-foreground">
-                                                        {item.orderQty}
-                                                    </div>
+                                                    <input
+                                                        type="number"
+                                                        value={item.orderQty}
+                                                        onChange={(e) => {
+                                                            const val = parseInt(e.target.value);
+                                                            props.onUpdateTempQty(item.id, isNaN(val) ? 0 : val);
+                                                        }}
+                                                        onBlur={(e) => {
+                                                            const val = parseInt(e.target.value);
+                                                            if (isNaN(val) || val < 1) {
+                                                                props.onUpdateTempQty(item.id, 1);
+                                                            }
+                                                        }}
+                                                        className="w-10 text-center text-xs font-black text-foreground bg-transparent border-none outline-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                    />
                                                     <button
                                                         onClick={() => props.onUpdateTempQty(item.id, item.orderQty + 1)}
                                                         className="w-8 h-8 flex items-center justify-center hover:bg-background transition-colors"

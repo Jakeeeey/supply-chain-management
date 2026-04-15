@@ -14,9 +14,34 @@ export default function VehicleListModule() {
   const { loading, saving, query, setQuery, rows, addVehicle, typeMap, fuelMap, engineMap } =
     useVehicles();
 
+  const [statusFilter, setStatusFilter] = React.useState<string>("all");
+
   const [openAdd, setOpenAdd] = React.useState(false);
   const [openHistory, setOpenHistory] = React.useState(false);
   const [selected, setSelected] = React.useState<VehicleRow | null>(null);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const pageSize = 10;
+
+  // Reset to first page when query or filter changes
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [query, statusFilter]);
+
+
+
+  const filteredByStatus = React.useMemo(() => {
+    if (statusFilter === "all") return rows;
+    return rows.filter((r) => r.status.toLowerCase() === statusFilter.toLowerCase());
+  }, [rows, statusFilter]);
+
+  const totalPagesFiltered = Math.ceil(filteredByStatus.length / pageSize);
+
+  const paginatedRows = React.useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredByStatus.slice(start, start + pageSize);
+  }, [filteredByStatus, currentPage, pageSize]);
 
   const typeOptions = React.useMemo(() => {
     const opts: Array<{ id: number; name: string }> = [];
@@ -53,13 +78,18 @@ export default function VehicleListModule() {
       <VehicleListToolbar
         query={query}
         onQueryChange={setQuery}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
         onAdd={() => setOpenAdd(true)}
       />
 
       <div className="mt-6">
         <VehiclesTable
-          rows={rows}
+          rows={paginatedRows}
           loading={loading}
+          currentPage={currentPage}
+          totalPages={totalPagesFiltered}
+          onPageChange={setCurrentPage}
           onViewHistory={(row) => {
             setSelected(row);
             setOpenHistory(true);

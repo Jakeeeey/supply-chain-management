@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
 
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm, useFieldArray, useWatch, Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   skuSchema,
   SKU,
   MasterData,
+  SKUUnit,
 } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
 import {
   Form,
@@ -32,10 +33,11 @@ import { Plus, Trash2, Box } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Combobox } from "@/components/ui/combobox";
+import { Combobox } from "../Combobox";
 
 interface FormFieldWrapperProps {
-  control: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  control: Control<any>;
   name: string;
   label: string;
   placeholder?: string;
@@ -103,81 +105,35 @@ interface SKUFormProps {
   loading?: boolean;
 }
 
-export function SKUForm({
+interface UnitRowProps {
+  control: Control<SKU>;
+  index: number;
+  unitsMaster: SKUUnit[];
+  watchedUnits: Record<string, unknown>[];
+  initialData?: SKU;
+  onRemove: (index: number) => void;
+  showRemove: boolean;
+}
+
+const UnitRow = ({
+  control,
+  index,
+  unitsMaster,
+  watchedUnits,
   initialData,
-  masterData,
-  onSubmit,
-  loading,
-}: SKUFormProps) {
-  const form = useForm<any>({
-    resolver: zodResolver(skuSchema) as any,
-    defaultValues: {
-      isActive: 0,
-      status: "DRAFT",
-      inventory_type: "Regular",
-      product_name: "",
-      description: "",
-      short_description: "",
-      unit_of_measurement_count: 1,
-      barcode: "",
-      size: "",
-      color: "",
-      volume: "",
-      flavor: "",
-      price_per_unit: 0,
-      cost_per_unit: 0,
-      product_brand: (initialData as any)?.product_brand || 0,
-      product_category: (initialData as any)?.product_category || 0,
-      product_supplier: (initialData as any)?.product_supplier || 0,
-      units: initialData?.units?.length ? initialData.units : [],
-      ...initialData,
-      // Priority overrides for specific IDs
-      product_id: initialData?.product_id,
-      id: (initialData as any)?.id,
-    },
-  });
+  onRemove,
+  showRemove,
+}: UnitRowProps) => {
+  const conversionFactor = useWatch({
+    control,
+    name: `units.${index}.conversion_factor`,
+  }) || 0;
 
-  const { fields, append, remove } = useFieldArray({
-    control: form.control,
-    name: "units",
-  });
-
-  const unitsMaster = masterData?.units || [];
-  const inventoryType = form.watch("inventory_type");
-  const hasInitialized = useRef(false);
-  const isReadOnly =
-    initialData?.status === "Active" || initialData?.status === "For Approval";
-
-  // Auto-init for new records - ensure we have exactly one row on start
-  useEffect(() => {
-    if (
-      !initialData &&
-      !hasInitialized.current &&
-      unitsMaster.length > 0 &&
-      fields.length === 0
-    ) {
-      hasInitialized.current = true;
-      const pieceUnit = unitsMaster.find((u) =>
-        u.name.toLowerCase().includes("piece"),
-      );
-      append({
-        unit_id: pieceUnit?.id || unitsMaster[0].id,
-        conversion_factor: 1,
-        price: 0,
-        cost: 0,
-        barcode: "",
-      });
-    }
-  }, [unitsMaster, fields.length, initialData, append]);
-
-  const renderUnitRow = (fieldItem: any, index: number) => (
-    <div
-      key={fieldItem.id}
-      className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end p-4 border rounded-lg bg-background/50"
-    >
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end p-4 border rounded-lg bg-background/50">
       <div className="md:col-span-5">
         <FormField
-          control={form.control}
+          control={control}
           name={`units.${index}.unit_id`}
           render={({ field }) => (
             <FormItem>
@@ -195,11 +151,9 @@ export function SKUForm({
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {unitsMaster.map((u) => {
-                    const isSelectedElsewhere = (
-                      form.watch("units") || []
-                    ).some(
-                      (unit: any, i: number) =>
+                  {unitsMaster.map((u: SKUUnit) => {
+                    const isSelectedElsewhere = watchedUnits.some(
+                      (unit: Record<string, unknown>, i: number) =>
                         unit.unit_id === u.id && i !== index,
                     );
                     return (
@@ -221,7 +175,7 @@ export function SKUForm({
       </div>
       <div className="md:col-span-3">
         <FormField
-          control={form.control}
+          control={control}
           name={`units.${index}.conversion_factor`}
           render={({ field }) => (
             <FormItem>
@@ -243,16 +197,15 @@ export function SKUForm({
         />
       </div>
       <div className="md:col-span-3 py-2 text-sm font-medium text-primary flex items-center gap-1">
-        1 Unit * {form.watch(`units.${index}.conversion_factor`) || 0} ={" "}
-        {form.watch(`units.${index}.conversion_factor`) || 0} Base
+        1 Unit * {conversionFactor} = {conversionFactor} Base
       </div>
-      {index > 0 && (
+      {showRemove && (
         <div className="md:col-span-1 flex justify-end">
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            onClick={() => remove(index)}
+            onClick={() => onRemove(index)}
             className="text-destructive"
           >
             <Trash2 className="h-4 w-4" />
@@ -261,9 +214,93 @@ export function SKUForm({
       )}
     </div>
   );
+};
+
+export function SKUForm({
+  initialData,
+  masterData,
+  onSubmit,
+  loading,
+}: SKUFormProps) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const form = useForm<any>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolver: zodResolver(skuSchema) as any,
+    defaultValues: {
+      isActive: 0,
+      status: "DRAFT",
+      inventory_type: "Regular",
+      product_name: "",
+      description: "",
+      short_description: "",
+      unit_of_measurement_count: 1,
+      barcode: "",
+      size: "",
+      color: "",
+      volume: "",
+      flavor: "",
+      price_per_unit: 0,
+      cost_per_unit: 0,
+      product_brand: (initialData as Record<string, unknown>)?.product_brand || 0,
+      product_category: (initialData as Record<string, unknown>)?.product_category || 0,
+      product_supplier: (initialData as Record<string, unknown>)?.product_supplier || 0,
+      units: initialData?.units?.length ? initialData.units : [],
+      ...initialData,
+      // Priority overrides for specific IDs
+      product_id: initialData?.product_id,
+      id: (initialData as Record<string, unknown>)?.id,
+    },
+  });
+
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "units",
+  });
+
+  const unitsMaster = useMemo(() => masterData?.units || [], [masterData?.units]);
+  const inventoryType = useWatch({
+    control: form.control,
+    name: "inventory_type",
+  });
+  const hasInitialized = useRef(false);
+  const isReadOnly =
+    initialData?.status === "Active" || initialData?.status === "For Approval";
+
+  // Auto-init for new records - ensure we have exactly one row on start
+  useEffect(() => {
+    if (
+      !initialData &&
+      !hasInitialized.current &&
+      unitsMaster.length > 0 &&
+      fields.length === 0
+    ) {
+      hasInitialized.current = true;
+      const pieceUnit = unitsMaster.find((u: SKUUnit) =>
+        u.name.toLowerCase().includes("piece"),
+      );
+      append({
+        unit_id: pieceUnit?.id || unitsMaster[0].id,
+        conversion_factor: 1,
+        price: 0,
+        cost: 0,
+        barcode: "",
+      });
+    }
+  }, [unitsMaster, fields.length, initialData, append]);
+
+  const watchedUnits = useWatch({
+    control: form.control,
+    name: "units",
+  }) || [];
+
+  const productName = useWatch({
+    control: form.control,
+    name: "product_name",
+  }) || "";
 
   return (
     <Form {...form}>
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
       <form onSubmit={form.handleSubmit(onSubmit as any)} className="space-y-6">
         <ScrollArea className="h-[60vh]">
           <div className="max-w-4xl mx-auto space-y-6 pb-10">
@@ -305,7 +342,7 @@ export function SKUForm({
                               label: b.name,
                             }))}
                             value={field.value?.toString() || ""}
-                            onValueChange={(v) =>
+                            onValueChange={(v: string) =>
                               field.onChange(v ? parseInt(v) : null)
                             }
                             placeholder="Select Brand"
@@ -334,7 +371,7 @@ export function SKUForm({
                               }),
                             )}
                             value={field.value?.toString() || ""}
-                            onValueChange={(v) =>
+                            onValueChange={(v: string) =>
                               field.onChange(v ? parseInt(v) : null)
                             }
                             placeholder="Select Category"
@@ -383,7 +420,7 @@ export function SKUForm({
                               label: s.name,
                             }))}
                             value={field.value?.toString() || ""}
-                            onValueChange={(v) =>
+                            onValueChange={(v: string) =>
                               field.onChange(v ? parseInt(v) : null)
                             }
                             placeholder="Select Supplier"
@@ -404,18 +441,27 @@ export function SKUForm({
               <CardContent className="pt-6 space-y-6">
                 <SectionHeader letter="B" title="Units & Conversion" />
                 <div className="space-y-4">
-                  {fields.map((fieldItem, index) =>
-                    renderUnitRow(fieldItem, index),
-                  )}
+                  {fields.map((fieldItem, index) => (
+                    <UnitRow
+                      key={fieldItem.id}
+                      control={form.control}
+                      index={index}
+                      unitsMaster={unitsMaster}
+                      watchedUnits={watchedUnits as Record<string, unknown>[]}
+                      initialData={initialData}
+                      onRemove={remove}
+                      showRemove={index > 0}
+                    />
+                  ))}
                   <Button
                     type="button"
                     variant="outline"
                     onClick={() => {
                       const selectedIds = (form.getValues("units") || []).map(
-                        (u: any) => u.unit_id,
+                        (u: Record<string, unknown>) => u.unit_id,
                       );
                       const nextUnit =
-                        unitsMaster.find((u) => !selectedIds.includes(u.id)) ||
+                        unitsMaster.find((u: SKUUnit) => !selectedIds.includes(u.id)) ||
                         unitsMaster[0];
                       append({
                         unit_id: nextUnit?.id || 0,
@@ -437,9 +483,9 @@ export function SKUForm({
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                         {fields.map((_, idx) => {
                           const unit = unitsMaster.find(
-                            (u) =>
+                            (u: SKUUnit) =>
                               u.id.toString() ===
-                              form.watch(`units.${idx}.unit_id`)?.toString(),
+                              (watchedUnits[idx] as { unit_id?: number | string })?.unit_id?.toString(),
                           );
                           return (
                             <div
@@ -450,7 +496,7 @@ export function SKUForm({
                                 Auto-Generated
                               </span>
                               <span className="text-xs font-medium">
-                                {form.watch("product_name") || "Product"} (
+                                {productName || "Product"} (
                                 {unit?.name || "..."})
                               </span>
                             </div>

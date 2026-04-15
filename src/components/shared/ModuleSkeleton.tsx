@@ -13,7 +13,6 @@ interface ModuleSkeletonProps {
 export function ModuleSkeleton({
   rowCount = 5,
   columnCount = 6,
-  hasActions = true,
   hasTabs = false,
 }: ModuleSkeletonProps) {
   return (

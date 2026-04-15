@@ -6,7 +6,7 @@ import type { BranchAllocation, CartItem, Supplier, DiscountType } from "../type
 import { buildMoneyFormatter, cn, deriveDiscountPercentFromCode } from "../utils/calculations";
 import { toast } from "sonner";
 
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -31,7 +31,7 @@ type Notice = {
     description?: string;
 };
 
-type SaveResponse = any;
+type SaveResponse = unknown;
 
 export function PurchaseOrderSummary(props: {
     visible: boolean;
@@ -125,6 +125,7 @@ export function PurchaseOrderSummary(props: {
     }, [props.poNumber]);
 
     const disabled = !props.canSave || isSubmitting || locked;
+    const { onSave } = props;
 
     const runSave = React.useCallback(async () => {
         if (disabled) return;
@@ -133,7 +134,8 @@ export function PurchaseOrderSummary(props: {
         setIsSubmitting(true);
 
         try {
-            const res = await Promise.resolve(props.onSave?.());
+            const res = await Promise.resolve(onSave?.());
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const alreadyExists = Boolean((res as any)?.meta?.alreadyExists);
 
             setNotice({
@@ -159,8 +161,9 @@ export function PurchaseOrderSummary(props: {
 
             // ✅ lock to prevent double submit
             setLocked(true);
-        } catch (e: any) {
-            const errMsg = String(e?.message ?? e ?? "Unknown error");
+        } catch (e: unknown) {
+            const err = e as Error;
+            const errMsg = String(err?.message ?? err ?? "Unknown error");
             setNotice({
                 variant: "error",
                 title: "Failed to create purchase order",
@@ -175,7 +178,7 @@ export function PurchaseOrderSummary(props: {
             setIsSubmitting(false);
             setConfirmOpen(false);
         }
-    }, [disabled, props.onSave]);
+    }, [disabled, onSave]);
 
     const NoticeIcon = React.useMemo(() => {
         if (!notice) return null;
@@ -494,7 +497,7 @@ export function PurchaseOrderSummary(props: {
                                     <Tags className="w-4 h-4 text-primary" />
                                     <span className="text-sm font-black uppercase tracking-tight text-foreground">Financial Summary</span>
                                 </div>
-                                <div className="flex items-center gap-2 px-2 py-1 bg-muted/50 rounded-lg border border-border/50 hover:bg-muted transition-colors cursor-pointer group" onClick={() => !locked && props.setIsInvoice(!props.isInvoice)}>
+                                <div className="flex items-center gap-2 px-2 py-1 bg-muted/50 rounded-lg border border-border/50 hover:bg-muted transition-colors group">
                                     <Checkbox 
                                         id="is-invoice" 
                                         checked={props.isInvoice} 
@@ -540,6 +543,9 @@ export function PurchaseOrderSummary(props: {
                                             <span className="text-foreground/70 font-black uppercase tracking-widest">EWT (1%)</span>
                                             <span className="font-black text-foreground text-sm">{money.format(ewtGoods)}</span>
                                         </div>
+                                        <p className="text-[9px] text-amber-600 dark:text-amber-400 font-bold italic text-right mt-0.5">
+                                            Note: EWT is not yet deducted
+                                        </p>
                                     </>
                                 )}
                             </div>

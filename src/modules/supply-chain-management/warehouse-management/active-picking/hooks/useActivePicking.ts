@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { transmitItemScan, lookupRfidTag } from "../providers/fetchProvider";
+import { transmitItemScan, lookupRfidTag, submitManualPick } from "../providers/fetchProvider";
 import { ConsolidatorDto, ConsolidatorDetailsDto } from "../types";
 import { soundFX } from "../utils/audioProvider";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 export interface UseActivePickingProps {
     batch: ConsolidatorDto;
@@ -19,6 +21,7 @@ export interface ScanLog {
 }
 
 export function useActivePicking({ batch, currentUserId }: UseActivePickingProps) {
+    const router = useRouter();
     const [localDetails, setLocalDetails] = useState<ConsolidatorDetailsDto[]>(batch.details || []);
     const [activeDetailId, setActiveDetailId] = useState<number | null>(null);
     const [scanLogs, setScanLogs] = useState<ScanLog[]>([]);
@@ -29,12 +32,11 @@ export function useActivePicking({ batch, currentUserId }: UseActivePickingProps
 
     // 🏎️ PERFORMANCE REFS
     const detailsRef = useRef(batch.details || []);
-    const scannedTagsRef = useRef(new Set<string>()); // DB Shield for RFIDs
+    const scannedTagsRef = useRef(new Set<string>());
     const bufferRef = useRef<string>("");
     const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const isProcessingRef = useRef<boolean>(false);
 
-    // Initial load sync
     useEffect(() => {
         if (batch.details) {
             setLocalDetails(batch.details);
@@ -51,7 +53,7 @@ export function useActivePicking({ batch, currentUserId }: UseActivePickingProps
     const groupedDetails = useMemo(() => {
         const groups: Record<string, Record<string, Record<string, ConsolidatorDetailsDto[]>>> = {};
         localDetails.forEach(detail => {
-            const supplier = (detail as any).supplierName || "UNASSIGNED";
+            const supplier = detail.supplierName || "UNASSIGNED";
             const brand = detail.brandName || "NO BRAND";
             const category = detail.categoryName || "UNCATEGORIZED";
 
@@ -77,12 +79,13 @@ export function useActivePicking({ batch, currentUserId }: UseActivePickingProps
         setScanLogs(prev => [newLog, ...prev].slice(0, 50));
     }, []);
 
-    const processScan = async (inputString: string, isManual: boolean = false, overrideQuantity: number = 1) => {
+    // 🚀 HARDWARE SCANNER LOGIC (Memoized to prevent effect re-runs)
+    const processScan = useCallback(async (inputString: string) => {
         const tag = inputString.trim();
-        if ((!tag && !isManual)) return;
+        if (!tag) return;
 
         const isLikelyRFID = tag.length > 12;
-        if (!isManual && isLikelyRFID && scannedTagsRef.current.has(tag)) {
+        if (isLikelyRFID && scannedTagsRef.current.has(tag)) {
             soundFX.duplicate();
             return;
         }
@@ -92,22 +95,18 @@ export function useActivePicking({ batch, currentUserId }: UseActivePickingProps
         setIsScanning(true);
 
         try {
-            const currentDetails = detailsRef.current; // Always read fresh state
+            const currentDetails = detailsRef.current;
 
-            // 1. Exact Barcode/ID Match
             let targetDetail = currentDetails.find(d =>
                 d.barcode?.toLowerCase() === tag.toLowerCase() ||
                 d.productId?.toString() === tag
             );
 
-            // 2. RFID Database Lookup
-            if (!targetDetail && !isManual) {
+            if (!targetDetail) {
                 const productId = await lookupRfidTag(tag);
                 if (productId) targetDetail = currentDetails.find(d => d.productId === productId);
             }
 
-            // 🚨 BUG FIX 1: Removed the dangerous "fallback to activeDetailId" logic here.
-            // If the scanner scans an unknown barcode, it will cleanly reject it instead of adding +1 to the selected card!
             if (!targetDetail) {
                 logScan(tag, "error", "Unrecognized Barcode/Tag");
                 return;
@@ -116,42 +115,36 @@ export function useActivePicking({ batch, currentUserId }: UseActivePickingProps
             const currentQty = targetDetail.pickedQuantity || 0;
             const requiredQty = targetDetail.orderedQuantity || 0;
 
-            // Strict limit check
-            if (currentQty + overrideQuantity > requiredQty) {
-                logScan(tag || "MANUAL", "error", "Exceeds Requirement");
+            if (currentQty + 1 > requiredQty) {
+                logScan(tag, "error", "Exceeds Requirement");
                 return;
             }
 
-            // 🚨 BUG FIX 2: Synchronous Ref Update!
-            // We update `detailsRef` IMMEDIATELY before React even re-renders.
-            // This prevents a rapid double-scan from over-picking.
-            const updatedQty = currentQty + overrideQuantity;
-            if (!isManual && isLikelyRFID) scannedTagsRef.current.add(tag);
+            const updatedQty = currentQty + 1;
+            if (isLikelyRFID) scannedTagsRef.current.add(tag);
 
             const updatedDetails = currentDetails.map(d =>
                 d.id === targetDetail!.id ? { ...d, pickedQuantity: updatedQty } : d
             );
 
-            detailsRef.current = updatedDetails; // Immediate sync
-            setLocalDetails(updatedDetails);     // Triggers UI render
+            detailsRef.current = updatedDetails;
+            setLocalDetails(updatedDetails);
             setActiveDetailId(targetDetail.id || null);
 
             const isRFIDRequired = (targetDetail.unitOrder || 0) === 3;
-            const transmitTag = isManual ? `MANUAL-${Date.now()}` : tag;
+            const transmitTag = isRFIDRequired ? tag : "";
 
-            // API Transmission
             const result = await transmitItemScan({
                 detailId: targetDetail.id!,
-                rfidTag: isRFIDRequired ? transmitTag : "",
+                rfidTag: transmitTag,
                 scannedBy: currentUserId,
                 newPickedQuantity: updatedQty
             });
 
             if (result.success) {
-                logScan(transmitTag, "success", `Picked ${targetDetail.productName}`);
+                logScan(transmitTag || tag, "success", `Picked ${targetDetail.productName}`);
             } else {
-                // ❌ ROLLBACK ON SERVER REJECT
-                if (!isManual && isLikelyRFID) scannedTagsRef.current.delete(tag);
+                if (isLikelyRFID) scannedTagsRef.current.delete(tag);
 
                 const revertedDetails = currentDetails.map(d =>
                     d.id === targetDetail!.id ? { ...d, pickedQuantity: currentQty } : d
@@ -159,21 +152,17 @@ export function useActivePicking({ batch, currentUserId }: UseActivePickingProps
                 detailsRef.current = revertedDetails;
                 setLocalDetails(revertedDetails);
 
-                logScan(transmitTag, "error", result.message || "Server Rejected");
+                logScan(transmitTag || tag, "error", result.message || "Server Rejected");
             }
-        } catch (err) {
-            logScan(tag || "N/A", "error", "Connection Error");
+        } catch {
+            logScan(tag, "error", "Connection Error");
         } finally {
             setIsScanning(false);
             isProcessingRef.current = false;
-            if (isManualModalOpen) {
-                setIsManualModalOpen(false);
-                setManualQuantity("");
-            }
         }
-    };
+    }, [currentUserId, logScan]);
 
-    // 🚀 HARDWARE SCANNER LISTENER
+    // 🚀 HARDWARE LISTENER
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -184,19 +173,18 @@ export function useActivePicking({ batch, currentUserId }: UseActivePickingProps
             if (e.key === "Enter") {
                 const finalTag = bufferRef.current.trim();
                 bufferRef.current = "";
-                if (finalTag) processScan(finalTag, false);
+                if (finalTag) processScan(finalTag);
             } else if (e.key.length === 1) {
                 bufferRef.current += e.key;
             }
 
-            // Debounce for suffix-less scanners
             scanTimeoutRef.current = setTimeout(() => {
                 const finalTag = bufferRef.current.trim();
-                if (finalTag.length > 3) { // Lowered slightly to catch short 4-digit barcodes
+                if (finalTag.length > 3) {
                     bufferRef.current = "";
-                    processScan(finalTag, false);
+                    processScan(finalTag);
                 }
-            }, 60); // 60ms allows standard USB/Bluetooth barcode scanners to complete transmission
+            }, 60);
         };
 
         window.addEventListener("keydown", handleKeyDown);
@@ -204,11 +192,60 @@ export function useActivePicking({ batch, currentUserId }: UseActivePickingProps
             window.removeEventListener("keydown", handleKeyDown);
             if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
         };
-    }, [activeDetailId, currentUserId]);
+    }, [processScan]);
 
+    // 🚀 MANUAL SUBMIT LOGIC
     const handleManualSubmit = async () => {
         const qty = Number(manualQuantity);
-        if (qty > 0 && !isNaN(qty)) await processScan("", true, qty);
+
+        if (!activeDetail || isNaN(qty) || qty <= 0) return;
+
+        const currentQty = activeDetail.pickedQuantity || 0;
+        const requiredQty = activeDetail.orderedQuantity || 0;
+
+        if (currentQty + qty > requiredQty) {
+            soundFX.error();
+            toast.error(`Exceeds requirement! Max allowed: ${requiredQty - currentQty}`);
+            return;
+        }
+
+        setIsScanning(true);
+
+        try {
+            await submitManualPick({
+                batchId: batch.id!,
+                productId: activeDetail.productId,
+                quantity: qty
+            });
+
+            // Optimistic UI Update
+            const updatedQty = currentQty + qty;
+            const updatedDetails = detailsRef.current.map(d =>
+                d.id === activeDetail.id ? { ...d, pickedQuantity: updatedQty } : d
+            );
+
+            detailsRef.current = updatedDetails;
+            setLocalDetails(updatedDetails);
+
+            logScan(`MANUAL-${qty}`, "success", `Added ${qty} x ${activeDetail.productName}`);
+            soundFX.success();
+            toast.success(`Updated ${activeDetail.productName}`);
+
+            // Refresh data from server
+            router.refresh();
+
+            // Cleanup Modal
+            setIsManualModalOpen(false);
+            setManualQuantity("");
+
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : "Manual pick failed";
+            logScan("MANUAL", "error", message);
+            soundFX.error();
+            toast.error(message);
+        } finally {
+            setIsScanning(false);
+        }
     };
 
     return {

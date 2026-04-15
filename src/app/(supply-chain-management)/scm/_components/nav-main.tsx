@@ -36,7 +36,7 @@ function isRouteActiveExact(currentPath: string, targetUrl: string) {
   return cur === tgt;
 }
 
-type NavNode = {
+export type NavNode = {
   title: string;
   url: string;
   icon?: LucideIcon;
@@ -173,7 +173,7 @@ export function NavMain({ items }: { items: NavNode[] }) {
 
       return changed ? next : prev;
     });
-  }, [pathname, items]);
+  }, [pathname, items, mounted]);
 
   if (!mounted) return null;
 

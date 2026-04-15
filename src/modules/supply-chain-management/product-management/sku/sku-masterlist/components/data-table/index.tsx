@@ -5,7 +5,7 @@ import {
   SKU,
   MasterData,
 } from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
-import { Skeleton } from "@/components/ui/skeleton";
+
 import { DataTable } from "@/components/ui/new-data-table";
 import { getMasterlistColumns } from "./columns";
 import { SortingState } from "@tanstack/react-table";
@@ -23,11 +23,15 @@ interface MasterlistTableProps {
   onSortingChange?: (sorting: SortingState) => void;
   manualSorting?: boolean;
   masterData: MasterData | null;
+  parentImages?: Record<number, string | null>;
   isLoading: boolean;
   title: string;
   onSearch?: (value: string) => void;
   onSelectionChange?: (selectedRows: SKU[]) => void;
   onToggleStatus?: (id: number | string, current: boolean) => void;
+  onEdit?: (sku: SKU) => void;
+  onUpdateImage?: (sku: SKU) => void;
+  onViewGallery?: (sku: SKU) => void;
   actionComponent?: React.ReactNode;
   emptyTitle?: string;
   emptyDescription?: string;
@@ -43,18 +47,38 @@ export function MasterlistTable({
   onSortingChange,
   manualSorting = true,
   masterData,
+  parentImages = {},
   isLoading,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   title,
   onSearch,
   onSelectionChange,
   onToggleStatus,
+  onEdit,
+  onUpdateImage,
+  onViewGallery,
   actionComponent,
   emptyTitle,
   emptyDescription,
 }: MasterlistTableProps) {
   const columns = React.useMemo(
-    () => getMasterlistColumns(masterData, onToggleStatus),
-    [masterData, onToggleStatus],
+    () =>
+      getMasterlistColumns(
+        masterData,
+        parentImages,
+        onToggleStatus,
+        onEdit,
+        onUpdateImage,
+        onViewGallery,
+      ),
+    [
+      masterData,
+      parentImages,
+      onToggleStatus,
+      onEdit,
+      onUpdateImage,
+      onViewGallery,
+    ],
   );
 
   // We don't unmount the table during loading anymore

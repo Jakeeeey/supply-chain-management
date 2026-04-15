@@ -5,6 +5,35 @@ import { chunk, directusGet, type DirectusListResponse } from "./_directus";
 
 export type PendingStatus = "Unlinked" | "For Dispatch" | "Inbound" | "Cleared";
 
+export type SalesInvoice = {
+  invoice_id: number;
+  invoice_no: string;
+  customer_code: string;
+  dispatch_date: string | null;
+  salesman_id: number;
+  sales_type: number;
+  net_amount: number | string;
+  transaction_status: string | null;
+  order_id: string | null;
+  vat_amount: number | string;
+  gross_amount: number | string;
+  discount_amount: number | string;
+  invoice_type: number | null;
+};
+
+export type SalesInvoiceDetail = {
+  id?: number | string;
+  invoice_no: string;
+  product_id: number;
+  unit: number;
+  quantity: number | string;
+  unit_price: number | string;
+  total_amount: number | string;
+  discount_amount: number | string;
+  discount_type: number | null;
+};
+
+
 export type PendingInvoiceListRow = {
   id: number;
   invoice_no: string;
@@ -72,7 +101,7 @@ export function derivePendingStatus(
 // --- Data Fetching Logic ---
 
 async function fetchInvoicesBase(filters: ListFilters) {
-  const directusFilter: any = {
+  const directusFilter: { _and: Record<string, unknown>[] } = {
     _and: [{ sales_type: { _eq: 1 } }],
   };
 
@@ -90,35 +119,35 @@ async function fetchInvoicesBase(filters: ListFilters) {
 
     // 1. Pre-fetch related IDs
     const [salesmenRes, customersRes, plansRes] = await Promise.all([
-      directusGet<DirectusListResponse<any>>("/items/salesman", {
+      directusGet<DirectusListResponse<{ id: number }>>("/items/salesman", {
         filter: JSON.stringify({ salesman_name: { _icontains: q } }),
         fields: "id"
       }),
-      directusGet<DirectusListResponse<any>>("/items/customer", {
+      directusGet<DirectusListResponse<{ customer_code: string }>>("/items/customer", {
         filter: JSON.stringify({ customer_name: { _icontains: q } }),
         fields: "customer_code"
       }),
-      directusGet<DirectusListResponse<any>>("/items/post_dispatch_plan", {
+      directusGet<DirectusListResponse<{ id: number }>>("/items/post_dispatch_plan", {
         filter: JSON.stringify({ doc_no: { _icontains: q } }),
         fields: "id"
       })
     ]);
 
-    const salesIds = (!(salesmenRes instanceof NextResponse) ? (salesmenRes.data ?? []) : []).map((s: any) => s.id);
-    const customerCodes = (!(customersRes instanceof NextResponse) ? (customersRes.data ?? []) : []).map((c: any) => c.customer_code);
-    const planIds = (!(plansRes instanceof NextResponse) ? (plansRes.data ?? []) : []).map((p: any) => p.id);
+    const salesIds = (!(salesmenRes instanceof NextResponse) ? (salesmenRes.data ?? []) : []).map((s) => s.id);
+    const customerCodes = (!(customersRes instanceof NextResponse) ? (customersRes.data ?? []) : []).map((c) => c.customer_code);
+    const planIds = (!(plansRes instanceof NextResponse) ? (plansRes.data ?? []) : []).map((p) => p.id);
 
     let planInvoiceIds: number[] = [];
     if (planIds.length > 0) {
-      const planLinks = await directusGet<DirectusListResponse<any>>("/items/post_dispatch_invoices", {
+      const planLinks = await directusGet<DirectusListResponse<{ invoice_id: number }>>("/items/post_dispatch_invoices", {
         filter: JSON.stringify({ post_dispatch_plan_id: { _in: planIds } }),
         fields: "invoice_id"
       });
-      planInvoiceIds = (!(planLinks instanceof NextResponse) ? (planLinks.data ?? []) : []).map((p: any) => p.invoice_id);
+      planInvoiceIds = (!(planLinks instanceof NextResponse) ? (planLinks.data ?? []) : []).map((p) => p.invoice_id);
     }
 
     // 2. Build the OR filter
-    const searchConditions: any[] = [
+    const searchConditions: Record<string, unknown>[] = [
       { invoice_no: { _icontains: q } },
       { customer_code: { _icontains: q } },
     ];
@@ -130,7 +159,7 @@ async function fetchInvoicesBase(filters: ListFilters) {
     directusFilter._and.push({ _or: searchConditions });
   }
 
-  const res = await directusGet<DirectusListResponse<any>>("/items/sales_invoice", {
+  const res = await directusGet<DirectusListResponse<SalesInvoice>>("/items/sales_invoice", {
     fields: "invoice_id,invoice_no,customer_code,dispatch_date,salesman_id,sales_type,net_amount,transaction_status,order_id,vat_amount,gross_amount,discount_amount",
     sort: "-dispatch_date",
     limit: "-1",
@@ -143,9 +172,9 @@ async function fetchDispatchPlans(invoiceIds: number[]) {
   const map = new Map<number, string[]>();
   if (!invoiceIds.length) return map;
 
-  const pivots = [];
+  const pivots: { invoice_id: number; post_dispatch_plan_id: number }[] = [];
   for (const batch of chunk(invoiceIds, 200)) {
-    const res = await directusGet<DirectusListResponse<any>>("/items/post_dispatch_invoices", {
+    const res = await directusGet<DirectusListResponse<{ invoice_id: number; post_dispatch_plan_id: number }>>("/items/post_dispatch_invoices", {
       fields: "invoice_id,post_dispatch_plan_id",
       limit: "-1",
       filter: JSON.stringify({ invoice_id: { _in: batch } }),
@@ -155,18 +184,18 @@ async function fetchDispatchPlans(invoiceIds: number[]) {
     }
   }
 
-  const planIds = [...new Set(pivots.map((p: any) => p.post_dispatch_plan_id))].filter(Boolean);
+  const planIds = [...new Set(pivots.map((p) => p.post_dispatch_plan_id))].filter(Boolean);
   const planDocMap = new Map<number, string>();
 
   if (planIds.length) {
     for (const batch of chunk(planIds, 200)) {
-      const res = await directusGet<DirectusListResponse<any>>("/items/post_dispatch_plan", {
+      const res = await directusGet<DirectusListResponse<{ id: number; doc_no: string }>>("/items/post_dispatch_plan", {
         fields: "id,doc_no",
         limit: "-1",
         filter: JSON.stringify({ id: { _in: batch } }),
       });
       if (!(res instanceof NextResponse)) {
-        (res.data ?? []).forEach((r: any) => planDocMap.set(r.id, r.doc_no));
+        (res.data ?? []).forEach((r) => planDocMap.set(r.id, r.doc_no));
       }
     }
   }
@@ -192,12 +221,12 @@ export async function listPendingInvoices(filters: ListFilters) {
   const invoiceIds = allInvoices.map((i) => i.invoice_id);
 
   const [customersRes, salesmenRes, dispatchMap] = await Promise.all([
-    directusGet<DirectusListResponse<any>>("/items/customer", {
+    directusGet<DirectusListResponse<{ customer_code: string; customer_name: string }>>("/items/customer", {
       fields: "customer_code,customer_name",
       limit: "-1",
       filter: JSON.stringify({ customer_code: { _in: customerCodes } }),
     }),
-    directusGet<DirectusListResponse<any>>("/items/salesman", {
+    directusGet<DirectusListResponse<{ id: number; salesman_name: string }>>("/items/salesman", {
       fields: "id,salesman_name",
       limit: "-1",
       filter: JSON.stringify({ id: { _in: salesmanIds } }),
@@ -205,8 +234,8 @@ export async function listPendingInvoices(filters: ListFilters) {
     fetchDispatchPlans(invoiceIds),
   ]);
 
-  const custMap = new Map(!(customersRes instanceof NextResponse) ? (customersRes.data ?? []).map((c: any) => [c.customer_code, c.customer_name]) : []);
-  const salesMap = new Map(!(salesmenRes instanceof NextResponse) ? (salesmenRes.data ?? []).map((s: any) => [s.id, s.salesman_name]) : []);
+  const custMap = new Map(!(customersRes instanceof NextResponse) ? (customersRes.data ?? []).map((c) => [c.customer_code, c.customer_name]) : []);
+  const salesMap = new Map(!(salesmenRes instanceof NextResponse) ? (salesmenRes.data ?? []).map((s) => [s.id, s.salesman_name]) : []);
 
   let rows: PendingInvoiceListRow[] = allInvoices.map((inv) => {
     const docs = dispatchMap.get(inv.invoice_id);
@@ -282,7 +311,15 @@ export async function fetchItemizedReplica(filters: ListFilters) {
   const allLines = [];
 
   for (const batch of chunk(invoiceIdArray, 100)) {
-    const detailsRes = await directusGet<DirectusListResponse<any>>("/items/sales_invoice_details", {
+    const detailsRes = await directusGet<DirectusListResponse<{
+        invoice_no: string;
+        product_id: number;
+        unit: number;
+        quantity: number | string;
+        unit_price: number | string;
+        total_amount: number | string;
+        discount_amount: number | string;
+    }>>("/items/sales_invoice_details", {
       fields: "invoice_no,product_id,unit,quantity,unit_price,total_amount,discount_amount",
       limit: "-1",
       filter: JSON.stringify({ invoice_no: { _in: batch } }),
@@ -296,20 +333,20 @@ export async function fetchItemizedReplica(filters: ListFilters) {
   const unitIds = [...new Set(allLines.map((l) => l.unit).filter(Boolean))];
 
   const [productsRes, unitsRes] = await Promise.all([
-    productIds.length > 0 ? directusGet<DirectusListResponse<any>>("/items/products", {
+    productIds.length > 0 ? directusGet<DirectusListResponse<{ product_id: number; product_name: string }>>("/items/products", {
       fields: "product_id,product_name",
       limit: "-1",
       filter: JSON.stringify({ product_id: { _in: productIds } }),
-    }) : { data: [] },
-    unitIds.length > 0 ? directusGet<DirectusListResponse<any>>("/items/units", {
+    }) : { data: [] as { product_id: number; product_name: string }[] },
+    unitIds.length > 0 ? directusGet<DirectusListResponse<{ unit_id: number; unit_name: string }>>("/items/units", {
       fields: "unit_id,unit_name",
       limit: "-1",
       filter: JSON.stringify({ unit_id: { _in: unitIds } }),
-    }) : { data: [] }
+    }) : { data: [] as { unit_id: number; unit_name: string }[] }
   ]);
 
-  const prodMap = new Map((!(productsRes instanceof NextResponse) ? (productsRes.data ?? []) : []).map((p: any) => [p.product_id, p.product_name]));
-  const unitMap = new Map((!(unitsRes instanceof NextResponse) ? (unitsRes.data ?? []) : []).map((u: any) => [u.unit_id, u.unit_name]));
+  const prodMap = new Map((!(productsRes instanceof NextResponse) ? (productsRes.data ?? []) : []).map((p) => [p.product_id, p.product_name]));
+  const unitMap = new Map((!(unitsRes instanceof NextResponse) ? (unitsRes.data ?? []) : []).map((u) => [u.unit_id, u.unit_name]));
 
   const exportRows = [];
   const headersMap = new Map(listResult.rows.map((r) => [r.id, r]));
@@ -333,7 +370,7 @@ export async function fetchItemizedReplica(filters: ListFilters) {
 
 // --- Invoice Details (Single View) ---
 export async function fetchInvoiceDetails(invoiceNo: string) {
-  const headRes = await directusGet<DirectusListResponse<any>>("/items/sales_invoice", {
+  const headRes = await directusGet<DirectusListResponse<SalesInvoice>>("/items/sales_invoice", {
     fields: "*,invoice_type",
     filter: JSON.stringify({ _and: [{ invoice_no: { _eq: invoiceNo } }, { sales_type: { _eq: 1 } }] }),
     limit: "1"
@@ -343,42 +380,42 @@ export async function fetchInvoiceDetails(invoiceNo: string) {
   if (!head) return null;
 
   const [custRes, saleRes, dispatchMap, operationRes, invoiceTypeRes] = await Promise.all([
-    directusGet<DirectusListResponse<any>>("/items/customer", { filter: JSON.stringify({ customer_code: { _eq: head.customer_code } }), limit: "1" }),
-    directusGet<DirectusListResponse<any>>("/items/salesman", { filter: JSON.stringify({ id: { _eq: head.salesman_id } }), limit: "1" }),
+    directusGet<DirectusListResponse<{ brgy: string; city: string; province: string; customer_name: string; customer_code: string }>>("/items/customer", { filter: JSON.stringify({ customer_code: { _eq: head.customer_code } }), limit: "1" }),
+    directusGet<DirectusListResponse<{ salesman_name: string; id: number; price_type: string }>>("/items/salesman", { filter: JSON.stringify({ id: { _eq: head.salesman_id } }), limit: "1" }),
     fetchDispatchPlans([head.invoice_id]),
-    directusGet<DirectusListResponse<any>>("/items/operation", {
+    directusGet<DirectusListResponse<{ operation_name: string }>>("/items/operation", {
       fields: "operation_name",
       filter: JSON.stringify({ id: { _eq: head.sales_type } }),
       limit: "1"
     }),
-    head.invoice_type ? directusGet<DirectusListResponse<any>>("/items/sales_invoice_type", {
+    head.invoice_type ? directusGet<DirectusListResponse<{ type: string }>>("/items/sales_invoice_type", {
       fields: "type",
       filter: JSON.stringify({ id: { _eq: head.invoice_type } }),
       limit: "1"
-    }) : Promise.resolve({ data: [] }),
+    }) : Promise.resolve({ data: [] as { type: string }[] }),
   ]);
 
   // ✅ Fetching specific fields for table logic
-  const detailsRes = await directusGet<DirectusListResponse<any>>("/items/sales_invoice_details", {
+  const detailsRes = await directusGet<DirectusListResponse<SalesInvoiceDetail>>("/items/sales_invoice_details", {
     fields: "*,discount_type,total_amount,discount_amount,unit_price",
     filter: JSON.stringify({ invoice_no: { _eq: head.invoice_id } }),
     limit: "-1"
   });
   const rawLines = !(detailsRes instanceof NextResponse) ? (detailsRes.data ?? []) : [];
 
-  const productIds = [...new Set(rawLines.map((l: any) => l.product_id).filter(Boolean))];
-  const unitIds = [...new Set(rawLines.map((l: any) => l.unit).filter(Boolean))];
-  const discountTypeIds = [...new Set(rawLines.map((l: any) => l.discount_type).filter(Boolean))];
+  const productIds = [...new Set(rawLines.map((l) => l.product_id).filter(Boolean))];
+  const unitIds = [...new Set(rawLines.map((l) => l.unit).filter(Boolean))];
+  const discountTypeIds = [...new Set(rawLines.map((l) => l.discount_type).filter(Boolean))];
 
   const [productsRes, unitsRes, discountsRes] = await Promise.all([
-    productIds.length > 0 ? directusGet<DirectusListResponse<any>>("/items/products", { fields: "product_id,product_name", filter: JSON.stringify({ product_id: { _in: productIds } }), limit: "-1" }) : { data: [] },
-    unitIds.length > 0 ? directusGet<DirectusListResponse<any>>("/items/units", { fields: "unit_id,unit_name", filter: JSON.stringify({ unit_id: { _in: unitIds } }), limit: "-1" }) : { data: [] },
-    discountTypeIds.length > 0 ? directusGet<DirectusListResponse<any>>("/items/discount_type", { fields: "id,discount_type", filter: JSON.stringify({ id: { _in: discountTypeIds } }), limit: "-1" }) : { data: [] },
+    productIds.length > 0 ? directusGet<DirectusListResponse<{ product_id: number; product_name: string }>>("/items/products", { fields: "product_id,product_name", filter: JSON.stringify({ product_id: { _in: productIds } }), limit: "-1" }) : { data: [] as { product_id: number; product_name: string }[] },
+    unitIds.length > 0 ? directusGet<DirectusListResponse<{ unit_id: number; unit_name: string }>>("/items/units", { fields: "unit_id,unit_name", filter: JSON.stringify({ unit_id: { _in: unitIds } }), limit: "-1" }) : { data: [] as { unit_id: number; unit_name: string }[] },
+    discountTypeIds.length > 0 ? directusGet<DirectusListResponse<{ id: number; discount_type: string }>>("/items/discount_type", { fields: "id,discount_type", filter: JSON.stringify({ id: { _in: discountTypeIds } }), limit: "-1" }) : { data: [] as { id: number; discount_type: string }[] },
   ]);
 
-  const prodMap = new Map((!(productsRes instanceof NextResponse) ? (productsRes.data ?? []) : []).map((p: any) => [p.product_id, p.product_name]));
-  const unitMap = new Map((!(unitsRes instanceof NextResponse) ? (unitsRes.data ?? []) : []).map((u: any) => [u.unit_id, u.unit_name]));
-  const discountMap = new Map((!(discountsRes instanceof NextResponse) ? (discountsRes.data ?? []) : []).map((d: any) => [d.id, d.discount_type]));
+  const prodMap = new Map((!(productsRes instanceof NextResponse) ? (productsRes.data ?? []) : []).map((p) => [p.product_id, p.product_name]));
+  const unitMap = new Map((!(unitsRes instanceof NextResponse) ? (unitsRes.data ?? []) : []).map((u) => [u.unit_id, u.unit_name]));
+  const discountMap = new Map((!(discountsRes instanceof NextResponse) ? (discountsRes.data ?? []) : []).map((d) => [d.id, d.discount_type]));
 
   const cust = !(custRes instanceof NextResponse) ? custRes.data?.[0] : null;
   const sale = !(saleRes instanceof NextResponse) ? saleRes.data?.[0] : null;
@@ -410,7 +447,7 @@ export async function fetchInvoiceDetails(invoiceNo: string) {
       status,
       dispatch_plan,
     },
-    lines: rawLines.map((l: any, index: number) => {
+    lines: rawLines.map((l, index) => {
       const unitPrice = toNum(l.unit_price);
       const qty = toNum(l.quantity);
 
@@ -426,7 +463,7 @@ export async function fetchInvoiceDetails(invoiceNo: string) {
       const productNetAmount = productTotalAmount - discAmt;
 
       // ✅ FETCHED: Discount Label
-      const discType = discountMap.get(l.discount_type) ?? (discAmt > 0 ? "Discount" : "No Discount");
+      const discType = (typeof l.discount_type === "number" ? discountMap.get(l.discount_type) : null) ?? (discAmt > 0 ? "Discount" : "No Discount");
 
       return {
         id: l.id ?? `line-${index}`,

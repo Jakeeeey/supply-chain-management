@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Low-level HTTP client for the Pre Dispatch Plan module.
  * Mirrors the pattern from bundle-api.ts for consistency.
@@ -77,4 +78,36 @@ export async function fetchItems<T>(
   const queryString = new URLSearchParams(cleanParams).toString();
   const url = `${baseUrl}${cleanEndpoint}${queryString ? `?${queryString}` : ""}`;
   return request<{ data: T[]; meta?: any }>(url);
+}
+
+/**
+ * Helper to fetch items in batches using an '_in' filter.
+ * Prevents 431 Request Header Too Large errors when filtering by many IDs.
+ */
+export async function fetchItemsInChunks<T>(
+  endpoint: string,
+  filterField: string,
+  ids: (string | number)[],
+  params: Record<string, any> = {},
+  chunkSize: number = 50,
+): Promise<{ data: T[] }> {
+  // Deduplicate and filter out empty IDs
+  const uniqueIds = [...new Set(ids)].filter((id) => id !== null && id !== "");
+  if (!uniqueIds.length) return { data: [] };
+
+  const results: T[] = [];
+  for (let i = 0; i < uniqueIds.length; i += chunkSize) {
+    const chunk = uniqueIds.slice(i, i + chunkSize);
+    const chunkParams = {
+      ...params,
+      [`filter[${filterField}][_in]`]: chunk.join(","),
+    };
+
+    const res = await fetchItems<T>(endpoint, chunkParams);
+    if (res.data) {
+      results.push(...res.data);
+    }
+  }
+
+  return { data: results };
 }

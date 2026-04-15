@@ -4,9 +4,18 @@ import { ColumnDef } from "@tanstack/react-table";
 import { Bundle, BundleMasterData } from "../../../types/bundle.schema";
 import { Badge } from "@/components/ui/badge";
 import { DataTableColumnHeader } from "./table-column-header";
+import { Button } from "@/components/ui/button";
+import { Eye } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface ColumnOptions {
   masterData: BundleMasterData | null;
+  onView: (id: number) => void;
 }
 
 /**
@@ -14,6 +23,7 @@ interface ColumnOptions {
  */
 export function getMasterlistColumns({
   masterData,
+  onView,
 }: ColumnOptions): ColumnDef<Bundle>[] {
   return [
     {
@@ -44,7 +54,7 @@ export function getMasterlistColumns({
         if (typeof raw === "object" && raw !== null) {
           return raw.name || "-";
         }
-        const found = masterData?.bundleTypes.find((t: any) => t.id == raw);
+        const found = masterData?.bundleTypes.find((t) => t.id == raw);
         return found?.name || "-";
       },
     },
@@ -52,6 +62,7 @@ export function getMasterlistColumns({
       accessorKey: "status",
       header: "Status",
       cell: ({ row }) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const isRejected = (row.original as any).draft_status === "REJECTED";
         return (
           <Badge
@@ -64,6 +75,32 @@ export function getMasterlistColumns({
           >
             {isRejected ? "REJECTED" : "APPROVED"}
           </Badge>
+        );
+      },
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => {
+        const bundle = row.original;
+        return (
+          <div className="flex items-center justify-end">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-primary"
+                    onClick={() => onView(bundle.id)}
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>View Details</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
         );
       },
     },

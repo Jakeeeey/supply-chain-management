@@ -88,14 +88,14 @@ export async function OPTIONS(req: NextRequest) {
   return withCors(new NextResponse(null, { status: 204 }), req);
 }
 
-export async function GET(req: NextRequest, ctx: any) {
+export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   return proxy(req, ctx);
 }
 
-export async function PATCH(req: NextRequest, ctx: any) {
+export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   return proxy(req, ctx);
 }
 
-export async function DELETE(req: NextRequest, ctx: any) {
+export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   return proxy(req, ctx);
 }

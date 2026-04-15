@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useBundles } from "../hooks/useBundles";
 import { BundleApprovalTable } from "./components/data-table";
 import { BundleViewModal } from "../components/modals/bundle-view-modal";
@@ -9,6 +9,13 @@ import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import ErrorPage from "@/components/shared/ErrorPage";
 import { toast } from "sonner";
 import { BundleDraft } from "../types/bundle.schema";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { CheckCircle2, XCircle } from "lucide-react";
 
 export default function BundleApprovalPage() {
@@ -24,6 +31,8 @@ export default function BundleApprovalPage() {
     error,
     setSearch,
     refresh,
+    typeFilter,
+    setTypeFilter,
     approveDraft,
     rejectDraft,
     fetchDraftDetails,
@@ -37,8 +46,8 @@ export default function BundleApprovalPage() {
     try {
       await approveDraft(id);
       toast.success("Bundle approved successfully");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to approve bundle");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to approve bundle");
     }
   };
 
@@ -46,8 +55,8 @@ export default function BundleApprovalPage() {
     try {
       await rejectDraft(id);
       toast.success("Bundle rejected successfully");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to reject bundle");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to reject bundle");
     }
   };
 
@@ -68,8 +77,8 @@ export default function BundleApprovalPage() {
       });
       setSelectedRows([]);
       refresh();
-    } catch (err: any) {
-      toast.error(`Error during bulk ${action}: ${err.message}`, {
+    } catch (err: unknown) {
+      toast.error(`Error during bulk ${action}: ${err instanceof Error ? err.message : String(err)}`, {
         id: toastId,
       });
     } finally {
@@ -92,7 +101,16 @@ export default function BundleApprovalPage() {
     setSelectedRows(rows);
   }, []);
 
-  if (isLoading && !pendingData.length) return <ModuleSkeleton />;
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setMounted(true);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!mounted) return <ModuleSkeleton />;
   if (error) return <ErrorPage message={error} reset={refresh} />;
 
   const actionComponent = (
@@ -123,6 +141,23 @@ export default function BundleApprovalPage() {
 
   return (
     <div className="space-y-6">
+      {/* Header with Filter */}
+      <div className="flex flex-col items-end">
+        <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <SelectTrigger className="w-[180px] h-9">
+            <SelectValue placeholder="Bundle Type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            {masterData?.bundleTypes.map((t) => (
+              <SelectItem key={t.id} value={t.id.toString()}>
+                {t.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       {/* Data Table */}
       <BundleApprovalTable
         data={pendingData}

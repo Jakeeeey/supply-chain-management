@@ -14,10 +14,20 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { TaggingPODetail, TaggingPOItem } from "../types";
-import { ArrowLeft, BadgeCheck, BadgeX, ScanLine, Radio } from "lucide-react";
+import { ArrowLeft, BadgeCheck, BadgeX, ScanLine, Radio, Printer } from "lucide-react";
+
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 function sumExpected(po: TaggingPODetail) {
     return po.items.reduce((a, b) => a + (Number(b.expectedQty) || 0), 0);
@@ -42,6 +52,9 @@ export default function ProductTaggingPanel(props: {
     const [sku, setSku] = React.useState("");
     const [rfid, setRfid] = React.useState("");
     const [saving, setSaving] = React.useState(false);
+
+    const [previewOpen, setPreviewOpen] = React.useState(false);
+    const [previewPdfUrl, setPreviewPdfUrl] = React.useState("");
 
     const skuRef = React.useRef<HTMLInputElement | null>(null);
     const rfidRef = React.useRef<HTMLInputElement | null>(null);
@@ -84,13 +97,74 @@ export default function ProductTaggingPanel(props: {
 
             props.onChange(updated);
 
-            // keep SKU (scanner usually repeats SKU), clear RFID
+            toast.success("Successfully tagged!");
+
+            // ✅ Check if this SKU is now fully tagged
+            const updatedItem = updated.items.find((x) => x.sku.toLowerCase() === sku.trim().toLowerCase());
+            const isCompleted = updatedItem && updatedItem.taggedQty >= updatedItem.expectedQty;
+
             setRfid("");
-            rfidRef.current?.focus();
+            
+            if (isCompleted) {
+                setSku("");
+                skuRef.current?.focus();
+            } else {
+                rfidRef.current?.focus();
+            }
         } finally {
             setSaving(false);
         }
     }
+
+    function handlePrintActivity() {
+        if (!po || po.activity.length === 0) return;
+
+        const doc = new jsPDF();
+        
+        doc.setFontSize(18);
+        doc.text("Tagged Products Report", 14, 20);
+        
+        doc.setFontSize(10);
+        doc.text(`PO Number: ${po.poNumber || 'N/A'}`, 14, 28);
+        doc.text(`Supplier: ${po.supplierName || 'N/A'}`, 14, 34);
+        doc.text(`Total Items Tagged: ${po.activity.length}`, 14, 40);
+
+        const tableColumn = ["SKU", "Product Name", "RFID Code", "Time Tagged"];
+        const tableRows = po.activity.map(a => [
+            a.sku,
+            a.productName,
+            a.rfid,
+            a.time
+        ]);
+
+        autoTable(doc, {
+            head: [tableColumn],
+            body: tableRows,
+            startY: 45,
+            theme: 'grid',
+            headStyles: { fillColor: [34, 197, 94] },
+            styles: { fontSize: 8 }
+        });
+
+        // Use Blob URL instead of Data URI for reliable iframe rendering
+        const pdfBlob = doc.output("blob");
+        const pdfUrl = URL.createObjectURL(pdfBlob);
+        setPreviewPdfUrl(pdfUrl);
+        setPreviewOpen(true);
+
+    }
+
+    function handleDownloadPdf() {
+        if (!previewPdfUrl) return;
+        const a = document.createElement("a");
+        a.href = previewPdfUrl;
+        a.download = `Tagged_Products_PO_${po?.poNumber || 'Unknown'}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+
+
 
     return (
         <div className="w-full min-w-0 space-y-4">
@@ -128,9 +202,6 @@ export default function ProductTaggingPanel(props: {
                                 {/* Header */}
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="space-y-1">
-                                        <div className="text-xs font-black uppercase tracking-widest text-muted-foreground">
-                                            1. Scan Barcode (SKU)
-                                        </div>
                                     </div>
 
                                     {/* Right-side actions intentionally removed */}
@@ -139,7 +210,28 @@ export default function ProductTaggingPanel(props: {
 
                                 <div className="mt-3 grid grid-cols-1 lg:grid-cols-[1fr_1fr_auto] gap-3 items-start">
                                     {/* SKU */}
-                                    <div className="space-y-2">
+                                    <div className="space-y-2 flex flex-col justify-end">
+                                        <div className="flex items-center justify-between h-5">
+                                            <div className="flex items-center gap-2">
+                                                <div className="text-xs font-black uppercase tracking-widest text-muted-foreground">
+                                                    1. Scan Barcode (SKU)
+                                                </div>
+                                                {!sku.trim() ? (
+                                                    <div className="text-[10px] italic text-muted-foreground/80 lowercase">
+                                                        (waiting for scan...)
+                                                    </div>
+                                                ) : null}
+                                            </div>
+                                            {sku.trim() && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setSku(""); skuRef.current?.focus(); }}
+                                                    className="text-[10px] font-bold text-primary hover:underline"
+                                                >
+                                                    CLEAR SKU
+                                                </button>
+                                            )}
+                                        </div>
                                         <Input
                                             ref={skuRef}
                                             value={sku}
@@ -158,11 +250,6 @@ export default function ProductTaggingPanel(props: {
                                             }}
                                         />
 
-                                        {!sku.trim() ? (
-                                            <div className="text-xs italic text-muted-foreground/80">
-                                                Waiting for scan...
-                                            </div>
-                                        ) : null}
 
                                         {skuRejected ? (
                                             <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive flex gap-2">
@@ -180,8 +267,8 @@ export default function ProductTaggingPanel(props: {
                                     </div>
 
                                     {/* RFID */}
-                                    <div className="space-y-2">
-                                        <div className="flex items-center justify-between">
+                                    <div className="space-y-2 flex flex-col justify-end">
+                                        <div className="flex items-center justify-between h-5">
                                             <div className="text-xs font-black uppercase tracking-widest text-muted-foreground">
                                                 2. Scan RFID Tag
                                             </div>
@@ -257,10 +344,18 @@ export default function ProductTaggingPanel(props: {
                         <div className="rounded-2xl border border-border bg-background shadow-sm overflow-hidden">
                             <div className="px-5 py-4 border-b border-border bg-muted/30 flex items-center justify-between gap-2">
                                 <div className="text-base font-black text-foreground">Recent Activity Log</div>
-                                <Badge variant="secondary" className="text-[11px] font-black">
-                                    {po.activity.length}{" "}
-                                    {po.activity.length === 1 ? "entry" : "entries"}
-                                </Badge>
+                                <div className="flex items-center gap-2">
+                                    <Badge variant="secondary" className="text-[11px] font-black">
+                                        {po.activity.length}{" "}
+                                        {po.activity.length === 1 ? "entry" : "entries"}
+                                    </Badge>
+                                    {po.activity.length > 0 && (
+                                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handlePrintActivity}>
+                                            <Printer className="h-3.5 w-3.5 mr-1" />
+                                            Print
+                                        </Button>
+                                    )}
+                                </div>
                             </div>
 
                             <div className="p-4">
@@ -270,10 +365,11 @@ export default function ProductTaggingPanel(props: {
                                     </div>
                                 ) : (
                                     <div className="rounded-xl border border-border overflow-hidden">
-                                        <Table>
-                                            <TableHeader>
-                                                <TableRow>
-                                                    <TableHead className="w-[160px]">SKU</TableHead>
+                                        <div className="max-h-[400px] overflow-y-auto relative [&_[data-slot=table-container]]:overflow-visible">
+                                            <Table>
+                                                <TableHeader className="sticky top-0 z-10 bg-muted/95 backdrop-blur-sm shadow-sm">
+                                                    <TableRow>
+                                                        <TableHead className="w-[160px]">SKU</TableHead>
                                                     <TableHead>Product Name</TableHead>
                                                     <TableHead className="w-[180px]">RFID Code</TableHead>
                                                     <TableHead className="w-[120px] text-right">Time</TableHead>
@@ -290,6 +386,7 @@ export default function ProductTaggingPanel(props: {
                                                 ))}
                                             </TableBody>
                                         </Table>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -344,14 +441,34 @@ export default function ProductTaggingPanel(props: {
                                         </Badge>
                                     )}
                                 </div>
+
+                                {totalTagged > 0 && totalTagged < totalExpected && (
+                                    <div className="pt-2">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            className="w-full text-xs font-bold border-primary/30 hover:bg-primary/10 text-primary"
+                                            onClick={() => {
+                                                props.onBack();
+                                                setTimeout(() => {
+                                                    toast.success("Ready for Receiving", {
+                                                        description: "This partially tagged PO is now visible in Receiving Products."
+                                                    });
+                                                }, 100);
+                                            }}
+                                        >
+                                            Send Partially Tagged to Receiving
+                                        </Button>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
-                        {/* VALID SKUS CHEATSHEET */}
+                        {/* VALID PRODUCTS CHEATSHEET */}
                         <div className="rounded-2xl border border-border bg-background shadow-sm overflow-hidden">
                             <div className="px-5 py-4 border-b border-border bg-muted/30">
                                 <div className="text-sm font-black uppercase tracking-wide text-foreground">
-                                    Valid SKUs (Cheatsheet)
+                                    Valid Products (Cheatsheet)
                                 </div>
                             </div>
 
@@ -359,10 +476,9 @@ export default function ProductTaggingPanel(props: {
                                 {po.items.map((it) => (
                                     <div
                                         key={it.id}
-                                        className="rounded-xl border border-border bg-background px-3 py-2 flex items-center justify-between gap-3"
+                                        className="rounded-xl border border-border bg-background px-3 py-2 flex items-center justify-start gap-3"
                                     >
-                                        <div className="font-mono text-xs font-bold text-foreground">{it.sku}</div>
-                                        <div className="text-xs text-muted-foreground truncate text-right">{it.name}</div>
+                                        <div className="text-xs font-bold text-foreground truncate">{it.name}</div>
                                     </div>
                                 ))}
                             </div>
@@ -370,6 +486,36 @@ export default function ProductTaggingPanel(props: {
                     </div>
                 </div>
             )}
+
+            {/* ✅ PDF Preview Modal */}
+            <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+                <DialogContent className="max-w-4xl max-h-[90vh] h-[90vh] flex flex-col p-0 overflow-hidden">
+                    <DialogHeader className="p-4 border-b">
+                        <DialogTitle>PDF Preview</DialogTitle>
+                    </DialogHeader>
+                    <div className="flex-1 bg-muted/20 p-4 h-full relative">
+                        {previewPdfUrl ? (
+                            <iframe 
+                                src={previewPdfUrl} 
+                                className="w-full h-full rounded-md border shadow-sm block"
+                                title="PDF Preview"
+                            />
+                        ) : (
+                            <div className="flex justify-center items-center h-full text-muted-foreground">
+                                Generating PDF...
+                            </div>
+                        )}
+                    </div>
+                    <div className="p-4 border-t bg-background flex justify-end gap-2">
+                        <Button variant="outline" onClick={() => setPreviewOpen(false)}>
+                            Close
+                        </Button>
+                        <Button onClick={handleDownloadPdf}>
+                            Download PDF
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

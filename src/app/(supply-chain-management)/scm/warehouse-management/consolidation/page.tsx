@@ -5,3 +5,4 @@ export default function Page() {
     "/scm/warehouse-management/consolidation/pre-dispatch-plan/pdp-creation",
   );
 }
+

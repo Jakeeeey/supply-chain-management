@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import * as React from "react";
@@ -18,18 +19,13 @@ export function ReceiptCard({ receipt }: { receipt: PostingReceipt }) {
 // ...
 
 
-    // ✅ Gate posting: must be selected, receipt unposted, and PO must be ready (RECEIVED)
+    // ✅ Gate posting: must be selected, receipt unposted, and PO must be ready (at least partially tagged)
     const poStatus = String((selectedPO as any)?.status || "").toUpperCase();
-    const poReady =
-        (selectedPO as any)?.postingReady === true || poStatus === "RECEIVED";
+    const poReady = (selectedPO as any)?.postingReady === true || poStatus === "RECEIVED" || poStatus === "PARTIAL";
 
     const canPost = !!(selectedPO as any)?.id && !isPosted && poReady;
 
-    const disabledReason = !poReady
-        ? "PO is not fully received yet. Complete RFID receiving first."
-        : isPosted
-            ? "Receipt already posted."
-            : "";
+    const disabledReason = !poReady ? "PO is not ready. Complete receiving first." : isPosted ? "Receipt already posted." : "";
 
     return (
         <Card className="p-3">

@@ -36,8 +36,9 @@ export async function GET(req: NextRequest) {
         const data = await springRes.json();
         return NextResponse.json(data);
 
-    } catch (err: any) {
-        console.error(`🚨 GATEWAY ERROR: ${err.message}`);
+    } catch (err) {
+        const error = err as Error;
+        console.error(`🚨 GATEWAY ERROR: ${error.message}`);
         return NextResponse.json({ ok: false, error: "Gateway Timeout/Error" }, { status: 502 });
     }
 }

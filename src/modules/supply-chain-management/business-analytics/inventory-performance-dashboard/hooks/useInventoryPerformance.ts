@@ -37,8 +37,8 @@ export function useInventoryPerformance(filters: GlobalFilter) {
                 toast.success('Inventory performance data loaded');
             }
             isFirstLoad.current = false;
-        } catch (err: any) {
-            setError(err.message || 'An error occurred');
+        } catch (e: unknown) {
+            const err = e as Error; setError(err.message || 'An error occurred');
             toast.error(`Error: ${err.message || 'Failed to load data'}`);
         } finally {
             setIsLoading(false);

@@ -1,9 +1,9 @@
 "use client";
 
-import React, {useState} from "react";
-import {Check, ChevronsUpDown, Building2, MapPin, Search} from "lucide-react";
-import {cn} from "@/lib/utils";
-import {Button} from "@/components/ui/button";
+import React, { useState } from "react";
+import { Check, ChevronsUpDown, Building2, MapPin } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import {
     Command,
     CommandEmpty,
@@ -17,7 +17,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover";
-import {Badge} from "@/components/ui/badge";
+import { Badge } from "@/components/ui/badge";
 
 interface Branch {
     id: number;
@@ -56,41 +56,41 @@ export function BranchSelector({
                     >
                         <div className="flex items-center gap-3 truncate">
                             <div className="p-1.5 bg-primary/10 rounded-lg group-hover:bg-primary/20 transition-colors">
-                                <Building2 className="w-4 h-4 text-primary"/>
+                                <Building2 className="w-4 h-4 text-primary" />
                             </div>
                             <div className="flex flex-col items-start truncate">
-                                <span
-                                    className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 leading-none mb-1">
-                                    Active Terminal
+                                <span className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 leading-none mb-1">
+                                    Branch Selection
                                 </span>
                                 <span className="font-bold text-sm truncate">
                                     {selectedBranch ? selectedBranch.branchName : "Select Branch..."}
                                 </span>
                             </div>
                         </div>
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50"/>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                 </PopoverTrigger>
-                <PopoverContent
-                    className="w-[260px] p-0 bg-card/95 backdrop-blur-2xl border-border/40 rounded-2xl shadow-2xl">
-                    <Command className="bg-transparent">
-                        <div className="flex items-center border-b border-border/40 px-3">
-                            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50"/>
-                            <CommandInput
-                                placeholder="Search facility..."
-                                className="h-11 bg-transparent placeholder:text-[10px] placeholder:uppercase placeholder:font-bold placeholder:tracking-widest"
-                            />
-                        </div>
-                        <CommandList>
-                            <CommandEmpty
-                                className="p-4 text-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+
+                <PopoverContent className="w-[260px] p-0 bg-card/95 backdrop-blur-2xl border-border/40 rounded-2xl shadow-2xl">
+                    <Command
+                        className="bg-transparent rounded-2xl overflow-hidden"
+                        // 🚀 THE FIX: Stops Radix from eating the mouse wheel events!
+                        onWheel={(e) => e.stopPropagation()}
+                    >
+                        <CommandInput
+                            placeholder="Search facility..."
+                            className="h-11 placeholder:text-[10px] placeholder:uppercase placeholder:font-bold placeholder:tracking-widest"
+                        />
+
+                        <CommandList className="max-h-[250px] overflow-y-auto overflow-x-hidden custom-scrollbar">
+                            <CommandEmpty className="p-4 text-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                                 No facility found.
                             </CommandEmpty>
                             <CommandGroup>
                                 {branches.map((branch) => (
                                     <CommandItem
                                         key={branch.id}
-                                        value={branch.branchName} // cmdk filters based on value
+                                        value={`${branch.branchName} ${branch.branchCode}`}
                                         onSelect={() => {
                                             onBranchChange(branch.id);
                                             setOpen(false);
@@ -102,15 +102,13 @@ export function BranchSelector({
                                                 <span className="text-[11px] font-black uppercase tracking-tighter">
                                                     {branch.branchName}
                                                 </span>
-                                                <Badge variant="outline"
-                                                       className="text-[8px] h-4 px-1 border-primary/20 text-primary font-mono uppercase">
+                                                <Badge variant="outline" className="text-[8px] h-4 px-1 border-primary/20 text-primary font-mono uppercase">
                                                     {branch.branchCode}
                                                 </Badge>
                                             </div>
                                             {branch.city && (
-                                                <div
-                                                    className="flex items-center gap-1 text-[9px] text-muted-foreground font-bold uppercase opacity-60">
-                                                    <MapPin className="w-2 h-2"/>
+                                                <div className="flex items-center gap-1 text-[9px] text-muted-foreground font-bold uppercase opacity-60">
+                                                    <MapPin className="w-2 h-2" />
                                                     {branch.city}
                                                 </div>
                                             )}
@@ -128,17 +126,6 @@ export function BranchSelector({
                     </Command>
                 </PopoverContent>
             </Popover>
-
-            {/* Status Indicator */}
-            {selectedBranchId && (
-                <div
-                    className="hidden md:flex items-center gap-1.5 px-3 h-11 rounded-xl border border-emerald-500/20 bg-emerald-500/5 text-emerald-500 transition-all animate-in zoom-in-95">
-                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"/>
-                    <span className="text-[9px] font-black uppercase tracking-widest italic">
-                        Live Stream
-                    </span>
-                </div>
-            )}
         </div>
     );
 }

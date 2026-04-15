@@ -1,4 +1,4 @@
-import StockConversionPage from "@/modules/supply-chain-management/inventory-management/stock-conversion/StockConversionPage";
+import StockConversionModule from "@/modules/supply-chain-management/transfers/stock-conversion/StockConversionModule";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 
 const COOKIE_NAME = "vos_access_token";
 
-function decodeJwtPayload(token: string): any | null {
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
   try {
     const parts = token.split(".");
     if (parts.length < 2) return null;
@@ -35,7 +35,7 @@ function decodeJwtPayload(token: string): any | null {
   }
 }
 
-function pickString(obj: any, keys: string[]): string {
+function pickString(obj: Record<string, unknown> | null, keys: string[]): string {
   for (const k of keys) {
     const v = obj?.[k];
     if (typeof v === "string" && v.trim()) return v.trim();
@@ -64,9 +64,11 @@ function buildHeaderUserFromToken(token: string | null | undefined) {
 
   const name = [first, last].filter(Boolean).join(" ") || email || "User";
 
+  const branchId = Number(payload?.branch_id || payload?.branchId || payload?.branch || 0);
+
   return {
-    id: Number(payload?.id || payload?.userId || payload?.sub || 0),
-    branchId: Number(payload?.branch_id || payload?.branchId || 0),
+    id: Number(payload?.id || payload?.userId || payload?.sub || 0) || undefined,
+    branchId: branchId > 0 ? branchId : undefined,
     name,
     email: email || "",
     avatar: "/avatars/shadcn.jpg",
@@ -75,7 +77,7 @@ function buildHeaderUserFromToken(token: string | null | undefined) {
 
 export default async function Page() {
   const cookieStore = await cookies();
-  const token = cookieStore.get(COOKIE_NAME)?.value ?? null;
+  const token = cookieStore.get("springboot_token")?.value || cookieStore.get(COOKIE_NAME)?.value || null;
 
   const headerUser = buildHeaderUserFromToken(token);
 
@@ -115,9 +117,10 @@ export default async function Page() {
 
       <ScrollArea className="min-h-0 flex-1">
         <div className="p-4">
-          <StockConversionPage user={headerUser} />
+          <StockConversionModule user={headerUser} />
         </div>
       </ScrollArea>
     </div>
   );
 }
+

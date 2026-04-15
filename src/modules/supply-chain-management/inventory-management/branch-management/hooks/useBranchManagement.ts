@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import type { Branch, User } from "../types";
-import { fetchBranches, fetchUsers } from "../providers/fetchProvider";
+import { fetchBranches } from "../providers/fetchProvider";
 
 export function useBranchManagement() {
     const [branches, setBranches] = React.useState<Branch[]>([]);
@@ -25,8 +25,8 @@ export function useBranchManagement() {
             const data = await fetchBranches();
             setBranches(data.branches || []);
             setUsers(data.users || []);
-        } catch (e: any) {
-            setError(e.message || "Failed to load data");
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Failed to load data");
         } finally {
             setLoading(false);
         }

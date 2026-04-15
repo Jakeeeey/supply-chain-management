@@ -8,14 +8,12 @@ import {
   Search,
   Printer,
   RotateCcw,
-  ChevronsUpDown,
-  Check,
   ChevronsLeft,
   ChevronLeft,
   ChevronRight,
   ChevronsRight,
+  History,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -23,19 +21,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
 
 import { useBarcodeMasterlist } from "./hooks/useBarcodeMasterlist";
 import { MasterlistTable } from "./components/MasterlistTable";
@@ -43,22 +28,24 @@ import { BarcodeScannerSkeleton } from "./components/BarcodeScannerSkeleton";
 import { PrintFormatModal, openPrintTab } from "./components/PrintModal";
 // ✅ NEW: Import Detail Modal
 import { ProductDetailModal } from "./components/ProductDetailModal";
+import { BarcodeHistoryModal } from "./components/BarcodeHistoryModal";
 import { Product } from "./types";
+import ErrorPage from "@/components/shared/ErrorPage";
 
 export default function BarcodeMasterlistModule() {
   const {
     products,
     allProducts,
-    suppliers,
     isLoading,
     currentPage,
     setCurrentPage,
     totalPages,
     totalItems,
-    searchQuery,
+    recordTypeFilter,
+    setRecordTypeFilter,
+    error,
+    refresh,
     setSearchQuery,
-    supplierFilter,
-    setSupplierFilter,
   } = useBarcodeMasterlist();
 
   // Selection & Printing State
@@ -66,7 +53,6 @@ export default function BarcodeMasterlistModule() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   // UI States
-  const [openSupplier, setOpenSupplier] = useState(false);
   const [pageInput, setPageInput] = useState(String(currentPage));
 
   // Debounced search
@@ -76,10 +62,13 @@ export default function BarcodeMasterlistModule() {
       setSearchQuery(searchInput);
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchInput]);
+  }, [searchInput, setSearchQuery]);
 
   // Print States
   const [showFormatModal, setShowFormatModal] = useState(false);
+
+  // History Modal State
+  const [showHistory, setShowHistory] = useState(false);
 
   // ✅ NEW: Detail Modal State
   const [viewProduct, setViewProduct] = useState<Product | null>(null);
@@ -120,9 +109,9 @@ export default function BarcodeMasterlistModule() {
     setShowFormatModal(true);
   };
 
-  const handleFormatSelected = (format: "simple" | "detailed") => {
+  const handleFormatSelected = async (format: "simple" | "detailed") => {
     setShowFormatModal(false);
-    openPrintTab(selectedProductsData, format);
+    await openPrintTab(selectedProductsData, format);
   };
 
   const selectedProductsData = allProducts.filter((p) =>
@@ -139,6 +128,17 @@ export default function BarcodeMasterlistModule() {
   };
 
   if (isLoading) return <BarcodeScannerSkeleton />;
+
+  if (error) {
+    return (
+      <ErrorPage
+        code="Connection Error"
+        title="Barcode Masterlist Unreachable"
+        message={error}
+        reset={refresh}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6 p-6 w-full bg-muted/30 min-h-screen">
@@ -171,81 +171,38 @@ export default function BarcodeMasterlistModule() {
             </div>
           </div>
 
-          {/* Supplier */}
-          <div className="flex flex-col gap-2 w-full md:w-[320px]">
+
+          {/* Inventory Type */}
+          <div className="flex flex-col gap-2 w-full md:w-[150px]">
             <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-              Supplier
+              Inventory Type
             </Label>
-            <Popover open={openSupplier} onOpenChange={setOpenSupplier}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={openSupplier}
-                  className="h-10 w-full justify-between font-normal"
-                >
-                  <span className="truncate">
-                    {supplierFilter && supplierFilter !== "all"
-                      ? suppliers.find((s) => String(s.id) === supplierFilter)
-                        ?.supplier_name
-                      : "All Suppliers"}
-                  </span>
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[320px] p-0">
-                <Command>
-                  <CommandInput placeholder="Search supplier..." />
-                  <CommandList>
-                    <CommandEmpty>No supplier found.</CommandEmpty>
-                    <CommandGroup>
-                      <CommandItem
-                        value="all"
-                        onSelect={() => {
-                          setSupplierFilter("all");
-                          setOpenSupplier(false);
-                        }}
-                      >
-                        <Check
-                          className={cn(
-                            "mr-2 h-4 w-4",
-                            supplierFilter === "all"
-                              ? "opacity-100"
-                              : "opacity-0",
-                          )}
-                        />
-                        All Suppliers
-                      </CommandItem>
-                      {suppliers.map((s) => (
-                        <CommandItem
-                          key={s.id}
-                          value={s.supplier_name}
-                          onSelect={() => {
-                            setSupplierFilter(String(s.id));
-                            setOpenSupplier(false);
-                          }}
-                        >
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4",
-                              supplierFilter === String(s.id)
-                                ? "opacity-100"
-                                : "opacity-0",
-                            )}
-                          />
-                          {s.supplier_name}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+            <Select value={recordTypeFilter} onValueChange={setRecordTypeFilter}>
+              <SelectTrigger className="h-10">
+                <SelectValue placeholder="All Types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="product">Regular</SelectItem>
+                <SelectItem value="bundle">Bundle</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
         {/* ACTIONS */}
         <div className="flex items-end gap-3 w-full xl:w-auto justify-end">
+          <div className="flex flex-col gap-2">
+            <div className="h-4 hidden md:block"></div>
+            <Button
+              variant="outline"
+              onClick={() => setShowHistory(true)}
+              className="gap-2 h-10"
+            >
+              <History className="h-4 w-4 text-muted-foreground" /> View History
+            </Button>
+          </div>
+
           <div className="flex flex-col gap-2">
             <div className="h-4 hidden md:block"></div>
             {isSelectionMode ? (
@@ -373,6 +330,12 @@ export default function BarcodeMasterlistModule() {
         open={!!viewProduct}
         product={viewProduct}
         onClose={() => setViewProduct(null)}
+      />
+
+      {/* History Modal */}
+      <BarcodeHistoryModal
+        open={showHistory}
+        onClose={() => setShowHistory(false)}
       />
     </div>
   );

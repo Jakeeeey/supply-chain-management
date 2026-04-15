@@ -1,13 +1,7 @@
 "use client";
 
-import { ColumnDef } from "@tanstack/react-table";
-import {
-  SKU,
-  MasterData,
-} from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, XCircle, Eye, MoreHorizontal, Edit } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
@@ -17,11 +11,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { DataTableColumnHeader } from "./table-column-header";
+import {
+  MasterData,
+  SKU,
+} from "@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema";
+import { ColumnDef } from "@tanstack/react-table";
+import { CheckCircle, Edit, Eye, MoreHorizontal, XCircle } from "lucide-react";
 import {
   CellHelpers,
   statusVariants,
 } from "../../../sku-creation/utils/sku-helpers";
+import { DataTableColumnHeader } from "./table-column-header";
 
 export const getApprovalColumns = (
   masterData: MasterData | null,
@@ -171,7 +171,7 @@ export const getApprovalColumns = (
     meta: { label: "Actions" },
     cell: ({ row }) => {
       const sku = row.original;
-      const id = (sku as any).id || sku.product_id;
+      const id = sku.id || sku.product_id;
       return (
         <div className="flex justify-end w-[60px]">
           <DropdownMenu>

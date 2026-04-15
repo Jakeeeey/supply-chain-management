@@ -18,7 +18,7 @@ export const skuQueryService = {
     search?: string,
     sort?: string,
   ): Promise<PaginatedSKU> {
-    const filter: any = {};
+    const filter: Record<string, unknown> = {};
     const searchFilter = CellHelpers.buildSearchFilter(search);
     if (searchFilter) {
       filter._and = [searchFilter];
@@ -27,11 +27,12 @@ export const skuQueryService = {
     const { data, meta } = await fetchItems<SKU>("/items/products", {
       limit,
       offset,
-      fields: "*.*",
+      fields: "*,parent_id.*",
       meta: "filter_count",
       sort: sort || "-created_at,-product_id",
-      filter:
-        Object.keys(filter).length > 0 ? JSON.stringify(filter) : undefined,
+      ...(Object.keys(filter).length > 0
+        ? { filter: JSON.stringify(filter) }
+        : {}),
     });
 
     return {
@@ -50,7 +51,7 @@ export const skuQueryService = {
     search?: string,
     sort?: string,
   ): Promise<PaginatedSKU> {
-    const filter: any = { _and: [] };
+    const filter: Record<string, unknown[]> = { _and: [] };
 
     // Always exclude ACTIVE status (approved items must not appear in the draft queue)
     filter._and.push({ status: { _neq: "ACTIVE" } });
@@ -70,7 +71,7 @@ export const skuQueryService = {
     const { data, meta } = await fetchItems<SKU>("/items/product_draft", {
       limit,
       offset,
-      fields: "*.*",
+      fields: "*,parent_id.*",
       meta: "filter_count",
       sort: sort || "-last_updated,-product_id",
       filter: JSON.stringify(filter),
@@ -88,10 +89,10 @@ export const skuQueryService = {
   async fetchMasterData(): Promise<MasterData> {
     const fetchResilient = async (
       names: string[],
-    ): Promise<{ data: any[] }> => {
+    ): Promise<{ data: Record<string, unknown>[] }> => {
       for (const name of names) {
         try {
-          const res = await fetchItems<any>(`/items/${name}`, { limit: -1 });
+          const res = await fetchItems<Record<string, unknown>>(`/items/${name}`, { limit: -1 });
           if (res.data?.length) return res;
         } catch (e) {
           console.warn(`[SKU Query] Fetch failed for ${name}:`, e);
@@ -118,8 +119,8 @@ export const skuQueryService = {
   async checkDuplicateName(name: string): Promise<boolean> {
     const filter = `filter[product_name][_eq]=${encodeURIComponent(name)}&limit=1`;
     const [approved, drafts] = await Promise.all([
-      request<{ data: any[] }>(`${API_BASE_URL}/items/products?${filter}`),
-      request<{ data: any[] }>(`${API_BASE_URL}/items/product_draft?${filter}`),
+      request<{ data: SKU[] }>(`${API_BASE_URL}/items/products?${filter}`),
+      request<{ data: SKU[] }>(`${API_BASE_URL}/items/product_draft?${filter}`),
     ]);
     return approved.data?.length > 0 || drafts.data?.length > 0;
   },

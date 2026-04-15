@@ -1,5 +1,5 @@
+import { bundleService } from "@/modules/supply-chain-management/product-management/bundling/services/bundle";
 import { NextRequest, NextResponse } from "next/server";
-import { bundleService } from "@/modules/supply-chain-management/product-management/bundling/bundle-creation/services/bundle";
 
 export const runtime = "nodejs";
 
@@ -21,9 +21,10 @@ export async function GET(req: NextRequest, { params }: { params: Params }) {
         : await bundleService.fetchDraftById(id);
 
     return NextResponse.json({ data });
-  } catch (error: any) {
-    console.error("[Bundle GET By ID Error]:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("[Bundle GET By ID Error]:", err.message);
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 
@@ -54,9 +55,28 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
-  } catch (error: any) {
-    console.error("[Bundle Action Error]:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("[Bundle Action Error]:", err.message);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+/**
+ * PATCH /api/scm/product-management/bundling/[id]
+ * Updates a draft bundle and replaces its items.
+ */
+export async function PATCH(req: NextRequest, { params }: { params: Params }) {
+  try {
+    const { id } = await params;
+    const body = await req.json();
+
+    const data = await bundleService.updateDraft(id, body);
+    return NextResponse.json({ data });
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("[Bundle PATCH Error]:", err.message);
+    return NextResponse.json({ error: err.message }, { status: 400 });
   }
 }
 
@@ -69,8 +89,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Params }) {
     const { id } = await params;
     await bundleService.deleteDraft(id);
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    console.error("[Bundle DELETE Error]:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("[Bundle DELETE Error]:", err.message);
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

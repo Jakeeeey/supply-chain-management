@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
                 // Try to parse the error message Spring Boot sent
                 const errorData = await springRes.json();
                 errorMessage = errorData.message || errorMessage;
-            } catch (parseError) {
+            } catch {
                 // Fallback in case Spring Boot sends plain text instead of JSON
                 console.error("Failed to parse Spring error JSON");
             }
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
         }
 
         return NextResponse.json(await springRes.json());
-    } catch (err) {
+    } catch {
         return NextResponse.json({ ok: false, message: "BFF Network Error" }, { status: 502 });
     }
 }

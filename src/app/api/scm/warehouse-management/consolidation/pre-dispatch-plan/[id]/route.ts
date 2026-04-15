@@ -11,14 +11,15 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    if (isNaN(Number(id))) {
+      return NextResponse.json({ data: null }, { status: 404 });
+    }
     const result = await dispatchPlanService.fetchPlanById(id);
     return NextResponse.json({ data: result });
-  } catch (error: any) {
-    console.error("[PDP API GET by ID Error]:", error.message);
-    return NextResponse.json(
-      { error: error.message || "Failed to fetch dispatch plan" },
-      { status: 500 },
-    );
+  } catch (error: unknown) {
+    const errorMsg = error instanceof Error ? error.message : "Failed to fetch dispatch plan";
+    console.error("[PDP API GET by ID Error]:", errorMsg);
+    return NextResponse.json({ error: errorMsg }, { status: 500 });
   }
 }
 
@@ -32,15 +33,16 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
+    if (isNaN(Number(id))) {
+      return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
+    }
     const body = await req.json();
     await dispatchPlanService.updatePlan(id, body);
     return NextResponse.json({ data: { success: true } });
-  } catch (error: any) {
-    console.error("[PDP API PUT Error]:", error.message);
-    return NextResponse.json(
-      { error: error.message || "Failed to update dispatch plan" },
-      { status: 500 },
-    );
+  } catch (error: unknown) {
+    const errorMsg = error instanceof Error ? error.message : "Failed to update dispatch plan";
+    console.error("[PDP API PUT Error]:", errorMsg);
+    return NextResponse.json({ error: errorMsg }, { status: 500 });
   }
 }
 
@@ -54,6 +56,9 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
+    if (isNaN(Number(id))) {
+      return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
+    }
     const body = await req.json();
     const { action } = body;
 
@@ -63,11 +68,9 @@ export async function PATCH(
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
-  } catch (error: any) {
-    console.error("[PDP API PATCH Error]:", error.message);
-    return NextResponse.json(
-      { error: error.message || "Failed to update dispatch plan" },
-      { status: 500 },
-    );
+  } catch (error: unknown) {
+    const errorMsg = error instanceof Error ? error.message : "Failed to update dispatch plan";
+    console.error("[PDP API PATCH Error]:", errorMsg);
+    return NextResponse.json({ error: errorMsg }, { status: 500 });
   }
 }

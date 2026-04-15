@@ -45,7 +45,7 @@ export function VehicleCategoryDialog({
   const isEdit = !!selectedCategory;
 
   const form = useForm<VehicleCategoryFormValues>({
-    resolver: zodResolver(vehicleCategorySchema) as any,
+    resolver: zodResolver(vehicleCategorySchema),
     defaultValues: {
       name: "",
       description: "",
@@ -72,11 +72,18 @@ export function VehicleCategoryDialog({
       }
       onSuccess();
       onOpenChange(false);
-    } catch (error: any) {
-      if (error.message?.includes("unique") || error.message?.includes("UNIQUE")) {
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : "Something went wrong";
+
+      if (message.includes("unique") || message.includes("UNIQUE")) {
         toast.error("This vehicle category name already exists.");
       } else {
-        toast.error(error.message || "Something went wrong");
+        toast.error(message);
       }
     }
   };
@@ -86,11 +93,11 @@ export function VehicleCategoryDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {isEdit ? "Edit Vehicle Category" : "Create Vehicle Category"}
+            {isEdit ? "Edit Category" : "Create Vehicle Category"}
           </DialogTitle>
           <DialogDescription>
             {isEdit
-              ? "Update vehicle category details below."
+              ? "Update category details below."
               : "Register a new vehicle category to the system."}
           </DialogDescription>
         </DialogHeader>
@@ -98,7 +105,7 @@ export function VehicleCategoryDialog({
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
-              control={form.control as any}
+              control={form.control}
               name="name"
               render={({ field }) => (
                 <FormItem>
@@ -114,7 +121,7 @@ export function VehicleCategoryDialog({
             />
 
             <FormField
-              control={form.control as any}
+              control={form.control}
               name="description"
               render={({ field }) => (
                 <FormItem>

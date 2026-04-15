@@ -15,7 +15,6 @@ import { cookies } from "next/headers";
 import { getDirectusBase, directusHeaders } from "@/lib/directus";
 
 import PurchaseOrderSummaryModule from "@/modules/supply-chain-management/supplier-management/purchase-order-summary/PurchaseOrderSummaryModule";
-import { Supplier } from "./types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,7 +22,7 @@ export const dynamic = "force-dynamic";
 const COOKIE_NAME = "vos_access_token";
 
 // --- JWT Helper Functions ---
-function decodeJwtPayload(token: string): any | null {
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
     try {
         const parts = token.split(".");
         if (parts.length < 2) return null;
@@ -39,7 +38,7 @@ function decodeJwtPayload(token: string): any | null {
     }
 }
 
-function pickString(obj: any, keys: string[]): string {
+function pickString(obj: Record<string, unknown> | null, keys: string[]): string {
     for (const k of keys) {
         const v = obj?.[k];
         if (typeof v === "string" && v.trim()) return v.trim();
@@ -81,12 +80,12 @@ async function getData() {
         const pays = await payRes.json();
         const trans = await transRes.json();
 
-        // Filter only TRADE suppliers
-        const tradeSuppliers = sups.data?.filter((s: Supplier) => s.supplier_type === "TRADE") || [];
+        // Use all suppliers so that both Trade and Non-Trade POs can map their supplier names
+        const allSuppliers = sups.data || [];
 
         return { 
             poData: pos.data || [], 
-            suppliers: tradeSuppliers,
+            suppliers: allSuppliers,
             paymentStatuses: pays.data || [],
             transactionStatuses: trans.data || []
         };

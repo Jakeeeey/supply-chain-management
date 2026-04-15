@@ -36,8 +36,8 @@ export function useStockHealth(filters: GlobalFilter) {
                 toast.success('Stock health data loaded');
             }
             isFirstLoad.current = false;
-        } catch (err: any) {
-            const msg = err.message || 'An error occurred';
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : 'An error occurred';
             setError(msg);
             toast.error(`Stock Health Error: ${msg}`);
         } finally {

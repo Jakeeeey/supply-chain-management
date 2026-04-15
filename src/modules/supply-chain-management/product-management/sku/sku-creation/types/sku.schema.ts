@@ -26,11 +26,14 @@ export const skuSchema = z
     isActive: z.union([z.boolean(), z.number()]),
     status: SKUStatusSchema,
     inventory_type: InventoryTypeSchema,
+    item_type: z.enum(["regular", "promo", "bundle"]).nullable().optional(),
     parent_id: z.number().int().nullable().optional(),
 
     product_name: z.string().min(1, "Product name is required"),
     product_code: z.string().optional(), // System generated
     barcode: z.string().nullable().optional(),
+    product_images: z.string().nullable().optional(),
+    main_image: z.string().nullable().optional(),
 
     product_brand: z.number().int().min(1, "Brand is required"),
     product_category: z.number().int().min(1, "Category is required"),
@@ -108,8 +111,20 @@ export const skuSchema = z
 
 export type SKU = z.infer<typeof skuSchema>;
 
+export interface GalleryImage {
+  image_id: number;
+  image: string;
+  sort_order: number;
+  isActive: number | boolean;
+}
+
+export interface SKUUnit {
+  id: number;
+  name: string;
+}
+
 export interface MasterData {
-  units: { id: number; name: string }[];
+  units: SKUUnit[];
   categories: { id: number; name: string; code: string }[];
   brands: { id: number; name: string; code: string }[];
   suppliers: { id: number; name: string }[];

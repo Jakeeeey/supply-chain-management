@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic"; // Prevent caching
 const DIRECTUS_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 const ACCESS_TOKEN = process.env.DIRECTUS_STATIC_TOKEN;
 
-function json(res: any, status = 200) {
+function json(res: unknown, status = 200) {
   return NextResponse.json(res, { status });
 }
 
@@ -35,7 +35,7 @@ async function fetchDirectus(endpoint: string, params: Record<string, string>) {
   return json.data;
 }
 
-async function updateDirectus(id: string, body: any) {
+async function updateDirectus(id: string, body: Record<string, unknown>) {
   const res = await fetch(`${DIRECTUS_URL}/items/products/${id}`, {
     method: "PATCH",
     headers: {
@@ -91,8 +91,178 @@ export async function GET(req: NextRequest) {
       const data = await fetchDirectus("/items/suppliers", {
         fields: "id,supplier_name,supplier_shortcut",
         "filter[isActive][_eq]": "1",
+        "filter[supplier_type][_eq]": "TRADE",
         limit: "-1",
         sort: "supplier_name",
+      });
+      return json({ data });
+    }
+
+    if (scope === "bundles") {
+      // Fetch ALL bundles WITH barcodes (no status filter — temporary)
+      // Also fetch barcode_type ref data for server-side resolution
+      const [bundles, barcodeTypes] = await Promise.all([
+        fetchDirectus("/items/product_bundles", {
+          fields: [
+            "id",
+            "bundle_sku",
+            "bundle_name",
+            "bundle_type_id.name",
+            "barcode_value",
+            "barcode_type_id",
+            "barcode_date",
+            "weight",
+            "weight_unit_id.id",
+            "weight_unit_id.code",
+            "weight_unit_id.name",
+            "cbm_length",
+            "cbm_width",
+            "cbm_height",
+            "cbm_unit_id.id",
+            "cbm_unit_id.code",
+            "cbm_unit_id.name",
+            "unit_of_measurement",
+          ].join(","),
+          "filter[barcode_value][_nempty]": "true",
+          limit: "-1",
+        }),
+        fetchDirectus("/items/barcode_type", {
+          fields: "id,name",
+          "filter[is_active][_eq]": "1",
+          limit: "-1",
+        }),
+      ]);
+
+      // Build lookup map for barcode types
+      const btMap = new Map<number, { id: number; name: string }>();
+      barcodeTypes.forEach((bt: { id: number; name: string }) => btMap.set(bt.id, { id: bt.id, name: bt.name }));
+
+      // Manually resolve barcode_type_id integers to objects
+      const resolved = bundles.map((b: { barcode_type_id: number | { id: number; name: string } | null }) => ({
+        ...b,
+        barcode_type_id:
+          typeof b.barcode_type_id === "number"
+            ? btMap.get(b.barcode_type_id) || null
+            : b.barcode_type_id || null,
+      }));
+
+      return json({ data: resolved });
+    }
+
+    if (scope === "history") {
+      // Fetch bundles, products, and barcode types in parallel
+      const [bundles, products, barcodeTypes] = await Promise.all([
+        fetchDirectus("/items/product_bundles", {
+          fields: [
+            "id", "bundle_sku", "bundle_name", "barcode_value",
+            "barcode_type_id",
+            "barcode_date", "updated_by", "updated_at",
+          ].join(","),
+          "filter[barcode_value][_nempty]": "true",
+          limit: "-1",
+        }),
+        fetchDirectus("/items/products", {
+          fields: [
+            "product_id", "product_code", "product_name", "barcode",
+            "barcode_type_id.id", "barcode_type_id.name",
+            "barcode_date", "updated_by", "updated_at",
+          ].join(","),
+          "filter[barcode][_nempty]": "true",
+          "filter[isActive][_eq]": "1",
+          limit: "-1",
+        }),
+        fetchDirectus("/items/barcode_type", {
+          fields: "id,name",
+          limit: "-1",
+        }),
+      ]);
+
+      // Build a barcode type lookup map for resolving plain int IDs (bundles)
+      const barcodeTypeMap = new Map<number, string>();
+      barcodeTypes.forEach((bt: { id: number; name: string }) => barcodeTypeMap.set(bt.id, bt.name));
+
+      // Helper: normalize barcode_type_id to { id, name } object
+      const resolveBarcodeType = (raw: number | { id: number; name: string } | null) => {
+        if (raw && typeof raw === "object" && raw.id) return raw; // already resolved (products)
+        if (typeof raw === "number" && barcodeTypeMap.has(raw)) {
+          return { id: raw, name: barcodeTypeMap.get(raw) };
+        }
+        return null;
+      };
+
+      // Normalize both into a unified shape
+      const normalizedBundles = bundles.map((b: { id: number; bundle_sku: string; bundle_name: string; barcode_value: string; barcode_type_id: number | { id: number; name: string } | null; barcode_date: string; updated_by: number; updated_at: string }) => ({
+        id: `bundle-${b.id}`,
+        sku_code: b.bundle_sku,
+        name: b.bundle_name,
+        barcode_value: b.barcode_value,
+        barcode_type_id: resolveBarcodeType(b.barcode_type_id),
+        barcode_date: b.barcode_date,
+        updated_by: b.updated_by,
+        updated_at: b.updated_at,
+        record_type: "Bundle",
+      }));
+
+      const normalizedProducts = products.map((p: { product_id: number; product_code: string; product_name: string; barcode: string; barcode_type_id: number | { id: number; name: string } | null; barcode_date: string; updated_by: number; updated_at: string }) => ({
+        id: `product-${p.product_id}`,
+        sku_code: p.product_code,
+        name: p.product_name,
+        barcode_value: p.barcode,
+        barcode_type_id: resolveBarcodeType(p.barcode_type_id),
+        barcode_date: p.barcode_date,
+        updated_by: p.updated_by,
+        updated_at: p.updated_at,
+        record_type: "Regular",
+      }));
+
+      // Merge and sort by updated_at descending
+      const merged = [...normalizedBundles, ...normalizedProducts].sort((a, b) => {
+        const dateA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+        const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+        return dateB - dateA;
+      });
+
+      // Collect unique user IDs and resolve names from the user table
+      const userIds = [...new Set(merged.map((r) => r.updated_by).filter(Boolean))] as number[];
+      const userMap = new Map<number, { first_name: string; last_name: string }>();
+
+      if (userIds.length > 0) {
+        try {
+          const users = await fetchDirectus("/items/user", {
+            fields: "user_id,user_fname,user_lname",
+            "filter[user_id][_in]": userIds.join(","),
+            limit: "-1",
+          });
+          users.forEach((u: { user_id: number; user_fname: string; user_lname: string }) => userMap.set(u.user_id, {
+            first_name: u.user_fname || "",
+            last_name: u.user_lname || "",
+          }));
+        } catch {
+          // If user table is inaccessible, fall back to showing IDs
+        }
+      }
+
+      // Merge user names into records
+      const data = merged.map((r) => ({
+        ...r,
+        updated_by: r.updated_by && userMap.has(r.updated_by)
+          ? { id: r.updated_by, ...userMap.get(r.updated_by) }
+          : r.updated_by
+            ? { id: r.updated_by, first_name: "User", last_name: `#${r.updated_by}` }
+            : null,
+      }));
+
+      return json({ data });
+    }
+
+    if (scope === "bundle_items") {
+      const bundleId = url.searchParams.get("bundle_id");
+      if (!bundleId) return json({ error: "bundle_id required" }, 400);
+
+      const data = await fetchDirectus("/items/product_bundle_items", {
+        fields: "id,quantity,product_id.product_id,product_id.product_code,product_id.product_name",
+        "filter[bundle_id][_eq]": bundleId,
+        limit: "-1",
       });
       return json({ data });
     }
@@ -144,8 +314,8 @@ export async function GET(req: NextRequest) {
         junctionPromise,
       ]);
 
-      const supplierMap = new Map<number, any[]>();
-      junction.forEach((item: any) => {
+      const supplierMap = new Map<number, { supplier_id: { id: number; supplier_name: string; supplier_shortcut?: string } }[]>();
+      junction.forEach((item: { product_id: number; supplier_id: number | { id: number; supplier_name: string; supplier_shortcut?: string } }) => {
         if (!item.product_id || !item.supplier_id) return;
         const supplierObj =
           typeof item.supplier_id === "object"
@@ -156,7 +326,7 @@ export async function GET(req: NextRequest) {
         supplierMap.get(pid)?.push({ supplier_id: supplierObj });
       });
 
-      const mergedData = products.map((p: any) => ({
+      const mergedData = products.map((p: { product_id: number }) => ({
         ...p,
         product_per_supplier: supplierMap.get(p.product_id) || [],
       }));
@@ -166,9 +336,10 @@ export async function GET(req: NextRequest) {
 
     // If scope is unknown, return error (Don't default to products!)
     return json({ error: `Invalid scope: ${scope}` }, 400);
-  } catch (error: any) {
-    console.error("Linking API Error:", error);
-    return json({ error: error.message }, 500);
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("Linking API Error:", err);
+    return json({ error: err.message }, 500);
   }
 }
 
@@ -183,7 +354,8 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json();
     const result = await updateDirectus(id, body);
     return json({ data: result });
-  } catch (e: any) {
-    return json({ error: e.message }, 500);
+  } catch (e: unknown) {
+    const err = e as Error;
+    return json({ error: err.message }, 500);
   }
 }

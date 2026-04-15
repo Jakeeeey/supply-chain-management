@@ -20,6 +20,7 @@ function sumTagged(po: TaggingPODetail) {
 function isDuplicateRfidMessage(msg: string) {
     const m = (msg || "").toLowerCase();
     return (
+        m.includes("cannot be duplicate") ||
         (m.includes("rfid") && m.includes("already")) ||
         m.includes("already exists in receiving items") ||
         m.includes("rfid already exists")
@@ -223,8 +224,8 @@ export default function TaggingOfPOModule() {
                 const msg = String((e as Error)?.message ?? e ?? "");
 
                 if (isDuplicateRfidMessage(msg)) {
-                    toast.error("RFID already exists", {
-                        description: "This RFID is already registered. Please attach another RFID for uniqueness of the products.",
+                    toast.error("RFID Cannot Be Duplicated", {
+                        description: "This RFID is already tagged, please tag another.",
                     });
                     return (
                         detailRef.current ??

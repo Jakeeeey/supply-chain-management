@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { PendingApprovalPO, PurchaseOrderDetail, PaymentTerm } from "../types";
 
 const API = "/api/scm/supplier-management/approval-of-po";
@@ -15,16 +16,17 @@ function toStr(v: any, fb = ""): string {
     return s ? s : fb;
 }
 
-function unwrapData<T>(json: any): T {
-    return (json?.data ?? json) as T;
+function unwrapData<T>(json: unknown): T {
+    return (json as Record<string, unknown>)?.data as T ?? json as T;
 }
 
-function unwrapDeep<T>(json: any): T {
-    const a: any = unwrapData<any>(json);
-    const b: any = unwrapData<any>(a);
+function unwrapDeep<T>(json: unknown): T {
+    const a: unknown = unwrapData<unknown>(json);
+    const b: unknown = unwrapData<unknown>(a);
     return (b ?? a ?? json) as T;
 }
 
+ 
 function normalizeLine(line: any) {
     const qty = toNum(line?.ordered_quantity ?? line?.expectedQty ?? line?.qty ?? line?.quantity);
     const unit = toNum(line?.unit_price ?? line?.unitPrice ?? line?.price);
@@ -46,10 +48,15 @@ function normalizeLine(line: any) {
 }
 
 export async function fetchPendingApprovalPOs(): Promise<PendingApprovalPO[]> {
-    const res = await fetch(API, { method: "GET", credentials: "include" });
+    const res = await fetch(API, { 
+        method: "GET", 
+        credentials: "include",
+        cache: "no-store"
+    });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(json?.error || "Failed to fetch pending POs");
 
+     
     const rows = unwrapDeep<any[]>(json) ?? [];
 
     return rows.map((r) => ({
@@ -59,18 +66,21 @@ export async function fetchPendingApprovalPOs(): Promise<PendingApprovalPO[]> {
         supplierName: r?.supplierName ?? r?.supplier_name ?? r?.supplierName ?? "",
         branchName: r?.branchName ?? r?.branch_name ?? r?.branch ?? "—",
         date: r?.date ?? r?.date_encoded ?? "—",
+     
     })) as any;
 }
 
 export async function fetchPurchaseOrderDetail(id: string): Promise<PurchaseOrderDetail> {
     const res = await fetch(`${API}?id=${encodeURIComponent(id)}`, {
         method: "GET",
+        cache: "no-store",
         credentials: "include",
     });
 
     const json = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(json?.error || "Failed to fetch PO detail");
 
+     
     const d: any = unwrapDeep<any>(json) ?? {};
 
     // totals
@@ -88,6 +98,7 @@ export async function fetchPurchaseOrderDetail(id: string): Promise<PurchaseOrde
     // normalize items & allocations for pricing display
     const items = Array.isArray(d?.items) ? d.items.map(normalizeLine) : [];
     const allocations = Array.isArray(d?.allocations)
+         
         ? d.allocations.map((a: any) => ({
             ...a,
             items: Array.isArray(a?.items) ? a.items.map(normalizeLine) : [],
@@ -125,6 +136,7 @@ export async function fetchPurchaseOrderDetail(id: string): Promise<PurchaseOrde
         // normalized collections
         items,
         allocations,
+     
     } as any;
 }
 

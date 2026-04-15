@@ -1,79 +1,114 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Plus, MoreHorizontal, Pencil, Search } from "lucide-react";
+import { Plus, MoreHorizontal, Pencil, Eye } from "lucide-react";
 import { toast } from "sonner";
+import { ColumnDef } from "@tanstack/react-table";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Skeleton } from "@/components/ui/skeleton";
-// ✅ Pagination Imports
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-} from "@/components/ui/pagination";
+import { DataTable } from "@/components/ui/new-data-table";
+import ErrorPage from "@/components/shared/ErrorPage";
 
 import { CategoryApiRow } from "./types";
 import { listCategories } from "./providers/fetchProviders";
 import { CategoryDialog } from "./components/CategoryDialog";
+import { ViewCategoryDialog } from "./components/ViewCategoryDialog";
+
+// =============================================================================
+// COLUMN DEFINITIONS
+// =============================================================================
+
+function buildColumns(
+  onView: (row: CategoryApiRow) => void,
+  onEdit: (row: CategoryApiRow) => void
+): ColumnDef<CategoryApiRow>[] {
+  return [
+    {
+      accessorKey: "category_name",
+      header: "Category Name",
+      cell: ({ row }) => (
+        <span className="font-medium">{row.original.category_name}</span>
+      ),
+      meta: { label: "Category Name" },
+    },
+    {
+      accessorKey: "sku_code",
+      header: "Category Code",
+      cell: ({ row }) => row.original.sku_code || "-",
+      meta: { label: "SKU Code" },
+    },
+    {
+      id: "actions",
+      header: () => <div className="text-right">Actions</div>,
+      enableHiding: false,
+      cell: ({ row }) => (
+        <div className="text-right">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onView(row.original)}>
+                <Eye className="mr-2 h-4 w-4" /> View
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onEdit(row.original)}>
+                <Pencil className="mr-2 h-4 w-4" /> Edit
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ),
+    },
+  ];
+}
+
+// =============================================================================
+// MODULE
+// =============================================================================
 
 export default function CategoryModule() {
   const [data, setData] = useState<CategoryApiRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // ✅ Search & Pagination State
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [page, setPage] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
-
-  const LIMIT = 12;
-
+  // Dialog State
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] =
-    useState<CategoryApiRow | null>(null);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<CategoryApiRow | null>(null);
 
-  // 1. Debounce Effect
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedSearch(search);
-      setPage(1); // Reset to page 1 on search
-    }, 500);
-    return () => clearTimeout(handler);
-  }, [search]);
-
-  // 2. Fetch Data (Server-Side)
+  // Fetch ALL data (client-side pagination)
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await listCategories(page, LIMIT, debouncedSearch);
+      setError(null);
+      const res = await listCategories(1, -1); // Fetch all
       setData(res.data);
-      setTotalCount(res.total);
-    } catch (err) {
+    } catch (err: unknown) {
+      console.error("Failed to load categories", err);
+      const message = err instanceof Error ? err.message : "Failed to load categories.";
+      setError(message);
       toast.error("Failed to load categories");
     } finally {
       setLoading(false);
     }
-  }, [page, debouncedSearch]);
+  }, []);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const handleView = (row: CategoryApiRow) => {
+    setSelectedCategory(row);
+    setIsViewDialogOpen(true);
+  };
 
   const handleEdit = (row: CategoryApiRow) => {
     setSelectedCategory(row);
@@ -85,127 +120,47 @@ export default function CategoryModule() {
     setIsDialogOpen(true);
   };
 
-  const totalPages = Math.ceil(totalCount / LIMIT);
+  const columns = buildColumns(handleView, handleEdit);
+
+  // Error State
+  if (error && !loading) {
+    return (
+      <ErrorPage
+        code="Connection Error"
+        title="Categories Unreachable"
+        message={error}
+        reset={fetchData}
+      />
+    );
+  }
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="relative w-64">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search categories..."
-            className="pl-8"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <Button onClick={handleCreate}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Category
-        </Button>
-      </div>
-
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Category Name</TableHead>
-              <TableHead>SKU Code</TableHead>
-              <TableHead className="w-25 text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell>
-                    <Skeleton className="h-6 w-50" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-6 w-25" />
-                  </TableCell>
-                  <TableCell>
-                    <Skeleton className="h-6 w-8 ml-auto" />
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : data.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={3} className="h-24 text-center">
-                  {search
-                    ? "No categories match your search."
-                    : "No categories found."}
-                </TableCell>
-              </TableRow>
-            ) : (
-              // ✅ Map directly over server data
-              data.map((row) => (
-                <TableRow key={row.category_id}>
-                  <TableCell className="font-medium">
-                    {row.category_name}
-                  </TableCell>
-                  <TableCell>{row.sku_code || "-"}</TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleEdit(row)}>
-                          <Pencil className="mr-2 h-4 w-4" /> Edit
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      {/* ✅ Pagination Controls */}
-      {totalPages > 1 && (
-        <Pagination className="justify-end">
-          <PaginationContent>
-            <PaginationItem>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                Previous
-              </Button>
-            </PaginationItem>
-
-            <PaginationItem>
-              <span className="text-sm text-muted-foreground px-2">
-                Page {page} of {totalPages}
-              </span>
-            </PaginationItem>
-
-            <PaginationItem>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              >
-                Next
-              </Button>
-            </PaginationItem>
-          </PaginationContent>
-        </Pagination>
-      )}
+      <DataTable
+        columns={columns}
+        data={data}
+        searchKey="category_name"
+        isLoading={loading}
+        emptyTitle="No categories found"
+        emptyDescription="Create your first category to get started."
+        actionComponent={
+          <Button onClick={handleCreate}>
+            <Plus className="mr-2 h-4 w-4" /> New Category
+          </Button>
+        }
+      />
 
       <CategoryDialog
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
         selectedCategory={selectedCategory}
         onSuccess={fetchData}
+      />
+
+      <ViewCategoryDialog
+        open={isViewDialogOpen}
+        onOpenChange={setIsViewDialogOpen}
+        selectedCategory={selectedCategory}
       />
     </div>
   );
