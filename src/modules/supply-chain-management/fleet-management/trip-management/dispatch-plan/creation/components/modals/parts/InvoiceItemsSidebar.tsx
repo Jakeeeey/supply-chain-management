@@ -194,12 +194,12 @@ function DraggableGroupedStop({
           </div>
 
           {isInvoice && (
-            <div className="flex items-center justify-between mt-1">
-              <span className="text-[11px] text-muted-foreground flex items-center gap-1 truncate">
+            <div className="flex items-center justify-between mt-1 gap-2">
+              <span className="text-[11px] text-muted-foreground flex items-center gap-1 truncate min-w-0">
                 <MapPin className="w-3 h-3 shrink-0" />
-                {stop.city}
+                <span className="truncate">{stop.city}</span>
               </span>
-              <span className="text-xs font-semibold text-foreground tabular-nums">
+              <span className="text-xs font-semibold text-foreground tabular-nums shrink-0">
                 ₱
                 {Number(stop.totalAmount || 0).toLocaleString(undefined, {
                   minimumFractionDigits: 2,
@@ -463,6 +463,7 @@ export function InvoiceItemsSidebar({
         open={isAddingPo}
         onOpenChange={setIsAddingPo}
         onAdd={handleAddPoStop}
+        existingPoIds={planDetails.filter(p => p.isPoStop && p.po_id).map(p => p.po_id as number)}
       />
       </div>
     </TooltipProvider>

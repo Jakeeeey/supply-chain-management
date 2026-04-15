@@ -42,6 +42,9 @@ export function DispatchCreationModal({
   const [approvedPlans, setApprovedPlans] = useState<EnrichedApprovedPlan[]>([]);
   const [isLoadingPlans, setIsLoadingPlans] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
   const [planDetails, setPlanDetails] = useState<PlanDetailItem[]>([]);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
@@ -69,46 +72,70 @@ export function DispatchCreationModal({
 
   const selectedBranch = form.watch("starting_point");
 
+  // Reset selected plans when branch changes
+  useEffect(() => {
+    form.setValue("pre_dispatch_plan_ids", []);
+    form.setValue("amount", 0);
+    setPlanDetails([]);
+  }, [selectedBranch, form]);
+
   useEffect(() => {
     if (open) {
       form.reset();
       setApprovedPlans([]);
       setSearchQuery("");
+      setDebouncedSearch("");
+      setPage(1);
+      setHasMore(true);
       setIsConfirming(false);
       setPendingPayload(null);
       setPlanDetails([]);
     }
   }, [open, form]);
 
-  const loadApprovedPlans = useCallback(async (branchId: number) => {
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
+  const loadApprovedPlans = useCallback(async (branchId: number, currentPage: number, currentSearch: string, isLoadMore = false) => {
     setIsLoadingPlans(true);
-    setApprovedPlans([]);
-    form.setValue("pre_dispatch_plan_ids", []);
-    form.setValue("amount", 0);
-    setPlanDetails([]);
+    if (!isLoadMore) {
+        setApprovedPlans([]);
+    }
     try {
       const res = await fetch(
-        `/api/scm/fleet-management/trip-management/dispatch-plan/creation?type=approved_plans&branch_id=${branchId}`,
+        `/api/scm/fleet-management/trip-management/dispatch-plan/creation?type=approved_plans&branch_id=${branchId}&limit=25&offset=${(currentPage - 1) * 25}${currentSearch ? `&search=${encodeURIComponent(currentSearch)}` : ""}`,
         { cache: "no-store" },
       );
       const result = await res.json();
       if (result.error) throw new Error(result.error);
-      setApprovedPlans(result.data || []);
+      
+      const newPlans = result.data || [];
+      if (newPlans.length < 25) {
+        setHasMore(false);
+      } else {
+        setHasMore(true);
+      }
+
+      setApprovedPlans(prev => isLoadMore ? [...prev, ...newPlans] : newPlans);
     } catch {
       toast.error("Failed to load approved pre-dispatch plans");
     } finally {
       setIsLoadingPlans(false);
     }
-  }, [form]);
+  }, []);
 
-  // Load plans when branch changes
+  // Load plans when branch, search, or page changes
   useEffect(() => {
     if (selectedBranch && selectedBranch > 0) {
-      loadApprovedPlans(selectedBranch);
+      loadApprovedPlans(selectedBranch, page, debouncedSearch, page > 1);
     } else {
       setApprovedPlans([]);
     }
-  }, [selectedBranch, loadApprovedPlans]);
+  }, [selectedBranch, page, debouncedSearch, loadApprovedPlans]);
 
   const handlePlanSelect = async (pdpIdStr: string) => {
     const selectedPdpId = Number(pdpIdStr);
@@ -277,7 +304,12 @@ export function DispatchCreationModal({
                   approvedPlans={approvedPlans}
                   isLoadingPlans={isLoadingPlans}
                   searchQuery={searchQuery}
-                  onSearchChange={setSearchQuery}
+                  onSearchChange={(val) => {
+                    setSearchQuery(val);
+                    setPage(1);
+                  }}
+                  onLoadMore={() => setPage(p => p + 1)}
+                  hasMore={hasMore}
                   selectedPlanIds={form.watch("pre_dispatch_plan_ids") || []}
                   onPlanSelect={handlePlanSelect}
                   selectedBranch={selectedBranch}

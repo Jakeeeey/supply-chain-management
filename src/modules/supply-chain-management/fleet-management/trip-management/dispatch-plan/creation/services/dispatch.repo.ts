@@ -313,32 +313,52 @@ export async function fetchPostDispatchPlanDetails(
 export async function fetchApprovedPreDispatchPlans(
   branchId?: number,
   currentPlanId?: number | number[],
+  limit: number = 25,
+  offset: number = 0,
+  search?: string
 ): Promise<DirectusResponse<EnrichedApprovedPlan>> {
   const params: Record<string, string | number> = {
     fields:
       "dispatch_id,dispatch_no,driver_id,vehicle_id,cluster_id,branch_id,total_amount,status",
-    limit: -1,
+    limit,
+    offset,
+    sort: "-dispatch_id"
   };
 
   // Build a permissive filter:
   // ( (status = 'Picked' AND branch_id = branchId) OR (dispatch_id IN currentPlanId) )
+  const baseFilter: Record<string, unknown>[] = [];
+
+  if (search) {
+     baseFilter.push({ dispatch_no: { _icontains: search } });
+  }
   if (currentPlanId && branchId) {
     const ids = Array.isArray(currentPlanId)
       ? currentPlanId.join(",")
       : currentPlanId;
-    params["filter[_or][0][_and][0][status][_eq]"] = "Picked";
-    params["filter[_or][0][_and][1][branch_id][_eq]"] = branchId;
-    params["filter[_or][1][dispatch_id][_in]"] = ids;
+    if (search) {
+        params["filter[_and][0][_or][0][_and][0][status][_eq]"] = "Picked";
+        params["filter[_and][0][_or][0][_and][1][branch_id][_eq]"] = branchId;
+        params["filter[_and][0][_or][1][dispatch_id][_in]"] = ids;
+        params["filter[_and][1][dispatch_no][_icontains]"] = search;
+    } else {
+        params["filter[_or][0][_and][0][status][_eq]"] = "Picked";
+        params["filter[_or][0][_and][1][branch_id][_eq]"] = branchId;
+        params["filter[_or][1][dispatch_id][_in]"] = ids;
+    }
   } else if (branchId) {
-    params["filter[status][_eq]"] = "Picked";
-    params["filter[branch_id][_eq]"] = branchId;
+    if (search) params["filter[_and][0][dispatch_no][_icontains]"] = search;
+    params[search ? "filter[_and][1][status][_eq]" : "filter[status][_eq]"] = "Picked";
+    params[search ? "filter[_and][2][branch_id][_eq]" : "filter[branch_id][_eq]"] = branchId;
   } else if (currentPlanId) {
     const ids = Array.isArray(currentPlanId)
       ? currentPlanId.join(",")
       : currentPlanId;
-    params["filter[dispatch_id][_in]"] = ids;
+    if (search) params["filter[_and][0][dispatch_no][_icontains]"] = search;
+    params[search ? "filter[_and][1][dispatch_id][_in]" : "filter[dispatch_id][_in]"] = ids;
   } else {
-    params["filter[status][_eq]"] = "Picked";
+    if (search) params["filter[_and][0][dispatch_no][_icontains]"] = search;
+    params[search ? "filter[_and][1][status][_eq]" : "filter[status][_eq]"] = "Picked";
   }
 
   const plansRes = await fetchItems<RawDispatchPlan>(
@@ -782,15 +802,31 @@ export async function fetchPurchaseOrders(
       "purchase_order_id,purchase_order_no,date,supplier_name,total_amount,inventory_status",
     limit: -1,
     sort: "-date",
+    "filter[_and][0][inventory_status][_neq]": 6,
+    "filter[_and][1][inventory_status][_neq]": 3,
   };
   if (query) {
-    params["filter[purchase_order_no][_contains]"] = query;
+    params["filter[_and][2][purchase_order_no][_contains]"] = query;
   }
-  const res = await fetchItems<PurchaseOrderRow>(
+  const res = await fetchItems<PurchaseOrderRow & { inventory_status: number }>(
     "/items/purchase_order",
     params,
   );
-  return res.data || [];
+
+  const poData = res.data || [];
+  if (poData.length === 0) return [];
+
+  // Fetch transaction status map to resolve numeric statuses
+  const transRes = await fetchItems<{ id: number; status: string }>(
+    "/items/transaction_status",
+    { limit: -1, fields: "id,status" }
+  );
+  const statusMap = new Map((transRes.data || []).map((s) => [Number(s.id), s.status]));
+
+  return poData.map((po) => ({
+    ...po,
+    inventory_status: statusMap.get(Number(po.inventory_status)) || `Status ${po.inventory_status}`,
+  })) as any as PurchaseOrderRow[];
 }
 
 // ─── Budget Queries ─────────────────────────────────────────
