@@ -544,14 +544,16 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                                 Start Scan
                             </Button>
                             
-                            <Button
-                                variant="outline"
-                                onClick={() => setIsManualInputOpen(true)}
-                                className="flex-1 md:flex-none rounded-xl px-6 font-bold text-orange-500 border-orange-500/20 bg-orange-500/5 hover:bg-orange-500/10 flex items-center gap-2 h-10 transition-all active:scale-95"
-                            >
-                                <Keyboard className="w-4 h-4" />
-                                Manual Input
-                            </Button>
+                            {false && (
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setIsManualInputOpen(true)}
+                                    className="flex-1 md:flex-none rounded-xl px-6 font-bold text-orange-500 border-orange-500/20 bg-orange-500/5 hover:bg-orange-500/10 flex items-center gap-2 h-10 transition-all active:scale-95"
+                                >
+                                    <Keyboard className="w-4 h-4" />
+                                    Manual Input
+                                </Button>
+                            )}
                         </div>
                     )}
 
