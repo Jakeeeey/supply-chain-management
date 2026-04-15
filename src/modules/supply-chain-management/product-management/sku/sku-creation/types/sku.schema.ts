@@ -26,6 +26,7 @@ export const skuSchema = z
     isActive: z.union([z.boolean(), z.number()]),
     status: SKUStatusSchema,
     inventory_type: InventoryTypeSchema,
+    item_type: z.enum(["regular", "promo", "bundle"]).nullable().optional(),
     parent_id: z.number().int().nullable().optional(),
 
     product_name: z.string().min(1, "Product name is required"),

@@ -24,6 +24,8 @@ import { BulkDraftActionsModal } from "./components/modals/bulk-draft-actions-mo
 
 export default function SKUCreationModule() {
   const {
+    // approvedData is extracted but not used locally in this module
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     approvedData,
     setApprovedPage,
     draftData,
@@ -64,7 +66,10 @@ export default function SKUCreationModule() {
   }>({ open: false, sku: null });
 
   useEffect(() => {
-    setMounted(true);
+    const timer = setTimeout(() => {
+      setMounted(true);
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const resolveId = useCallback(
@@ -225,7 +230,7 @@ export default function SKUCreationModule() {
     }
   };
 
-  if (!mounted || (isLoading && !draftData.length && !approvedData.length)) {
+  if (!mounted) {
     return <ModuleSkeleton hasTabs={false} rowCount={6} />;
   }
 

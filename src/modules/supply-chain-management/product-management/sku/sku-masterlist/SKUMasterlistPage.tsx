@@ -25,6 +25,7 @@ export default function SKUMasterlistModule() {
     sorting,
     setSorting,
     masterData,
+    parentImages,
     isLoading,
     isUpdating,
     error,
@@ -190,7 +191,7 @@ export default function SKUMasterlistModule() {
       </div>
     ) : null;
 
-  if (!mounted || (isLoading && !data.length)) {
+  if (!mounted) {
     return <ModuleSkeleton hasActions={false} rowCount={8} />;
   }
 
@@ -217,6 +218,7 @@ export default function SKUMasterlistModule() {
         sorting={sorting}
         onSortingChange={setSorting}
         masterData={masterData}
+        parentImages={parentImages}
         isLoading={isLoading}
         onSearch={handleSearch}
         onSelectionChange={setSelectedRows}
