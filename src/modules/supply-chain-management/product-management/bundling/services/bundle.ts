@@ -35,7 +35,7 @@ export const bundleService = {
       limit: -1,
       "filter[isActive][_eq]": 1,
       fields:
-        "product_id,product_name,product_code,isActive,unit_of_measurement.*",
+        "product_id,product_name,product_code,isActive,unit_of_measurement.*,product_brand.brand_name,product_category.category_name",
       sort: "product_name",
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -79,6 +79,8 @@ export const bundleService = {
         product_code: String(p.product_code || ""),
         isActive: Number(p.isActive ?? 0),
         unit_name,
+        brand_name: p.product_brand?.brand_name || "",
+        category_name: p.product_category?.category_name || "",
       };
     });
 
@@ -270,8 +272,7 @@ export const bundleService = {
     const fetchMaster = !status || status === "APPROVED" || status === "ALL";
     const fetchRejected = !status || status === "REJECTED" || status === "ALL";
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let results: any[] = [];
+    let results: (Bundle | BundleDraft)[] = [];
     let totalCount = 0;
 
     const masterRes = fetchMaster
@@ -304,27 +305,28 @@ export const bundleService = {
     // Merge results and normalize field names for the UI
     results = [
       ...(draftRes.data || []),
-      ...(masterRes.data || []).map((p: any) => ({
+      ...(masterRes.data || []).map((p: Record<string, unknown>) => ({
         ...p,
-        id: p.product_id,
-        bundle_sku: p.product_code,
-        bundle_name: p.product_name,
-        status: "APPROVED",
-      })),
+        id: (p.product_id as number) || 0,
+        bundle_sku: (p.product_code as string) || "",
+        bundle_name: (p.product_name as string) || "",
+        status: "APPROVED" as const,
+      } as unknown as Bundle)),
     ];
     totalCount =
       (masterRes.meta?.filter_count || 0) + (draftRes.meta?.filter_count || 0);
 
     // Sort: most recently updated/created first (strictly chronological)
     results.sort((a, b) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const getSortTime = (item: any) => {
+      const getSortTime = (item: Bundle | BundleDraft) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const i = item as any; // Cast for dynamic property access
         const dateStr =
-          item.updated_at ||
-          item.last_updated ||
-          item.date_updated ||
-          item.created_at ||
-          item.date_created ||
+          i.updated_at ||
+          i.last_updated ||
+          i.date_updated ||
+          i.created_at ||
+          i.date_created ||
           0;
         return new Date(dateStr).getTime();
       };

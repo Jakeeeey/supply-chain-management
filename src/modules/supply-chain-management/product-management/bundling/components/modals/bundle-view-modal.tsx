@@ -106,6 +106,20 @@ export function BundleViewModal({
     return p?.unit_name || "";
   };
 
+  const getProductBrand = (productId: number) => {
+    const p = masterData?.products.find(
+      (prod) => Number(prod.product_id) === Number(productId),
+    );
+    return p?.brand_name || "";
+  };
+
+  const getProductCategory = (productId: number) => {
+    const p = masterData?.products.find(
+      (prod) => Number(prod.product_id) === Number(productId),
+    );
+    return p?.category_name || "";
+  };
+
   if (!draft) return null;
 
   return (
@@ -227,9 +241,23 @@ export function BundleViewModal({
                             key={item.id || idx}
                             className="flex items-center justify-between p-3 border rounded-lg bg-background/50 gap-4"
                           >
-                            <span className="text-sm font-medium flex-1">
-                              {getProductName(productId)}
-                            </span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">
+                                {getProductName(productId)}
+                              </p>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                {getProductBrand(productId) && (
+                                  <span className="text-[10px] text-primary font-bold uppercase tracking-tight bg-primary/10 px-1 rounded-sm">
+                                    {getProductBrand(productId)}
+                                  </span>
+                                )}
+                                {getProductCategory(productId) && (
+                                  <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-tight bg-muted px-1 rounded-sm">
+                                    {getProductCategory(productId)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                             <div className="flex items-center gap-2">
                               {getProductUnit(productId) && (
                                 <span className="text-xs text-muted-foreground font-medium">
