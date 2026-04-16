@@ -1,6 +1,3 @@
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-
 export interface PickerItem {
     productId: string | number;
     productName: string;
@@ -14,8 +11,39 @@ export interface PickerItem {
     unitOrder?: number;
 }
 
-export const generatePickerPDF = (groupedManifest: Record<string, PickerItem[]>, batchNo: string) => {
-    const doc = new jsPDF();
+// Type definitions to replace `any` in autoTable configurations
+type TableCell = string | number | {
+    content: string | number;
+    colSpan?: number;
+    styles?: Record<string, unknown>;
+};
+
+interface AutoTableCellData {
+    column: { index: number };
+    cell: {
+        section: 'head' | 'body' | 'foot';
+        raw: unknown;
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+    };
+}
+
+interface AutoTablePageData {
+    pageNumber: number;
+}
+
+export const generatePickerPDF = async (groupedManifest: Record<string, PickerItem[]>, batchNo: string) => {
+
+    // ✅ Dynamically import libraries and use strict type casting instead of `any`
+    const jsPDFModule = await import("jspdf");
+    const JsPDFClass = (jsPDFModule.default || jsPDFModule.jsPDF) as unknown as typeof import("jspdf").jsPDF;
+
+    const autoTableModule = await import("jspdf-autotable");
+    const autoTable = (autoTableModule.default || autoTableModule) as unknown as typeof import("jspdf-autotable").default;
+
+    const doc = new JsPDFClass();
 
     Object.entries(groupedManifest).forEach(([rawPickerName, items], index) => {
         const isUnassigned = !rawPickerName ||
@@ -36,7 +64,7 @@ export const generatePickerPDF = (groupedManifest: Record<string, PickerItem[]>,
 
 
         // --- 2. HIERARCHICAL DATA PROCESSING ---
-        const tableRows: (string | number | { content: string | number; colSpan?: number; styles?: Record<string, unknown> })[][] = [];
+        const tableRows: TableCell[][] = [];
         const supplierGroups = items.reduce((acc: Record<string, Record<string, PickerItem[]>>, item: PickerItem) => {
             const sKey = (item.supplierName || 'DIRECT').toUpperCase();
             const bKey = (item.brandName || 'NO BRAND').toUpperCase();
@@ -62,7 +90,7 @@ export const generatePickerPDF = (groupedManifest: Record<string, PickerItem[]>,
 
                 catItems.forEach((item: PickerItem) => {
                     // --- DYNAMIC UNIT STYLING BASED ON `unitOrder` ---
-                    let unitStyle = { fontStyle: 'normal', textColor: [0, 0, 0] };
+                    let unitStyle: Record<string, unknown> = { fontStyle: 'normal', textColor: [0, 0, 0] };
 
                     // Customize these cases to match your database `order` values!
                     switch (item.unitOrder) {
@@ -99,7 +127,7 @@ export const generatePickerPDF = (groupedManifest: Record<string, PickerItem[]>,
             head: [["", "PRODUCT DESCRIPTION", "UNIT", "QTY"]],
             body: tableRows,
             theme: "plain",
-            headStyles: { textColor: [0, 0, 0], fontStyle: "bold", fontSize: 7, cellPadding: 1, lineWidth: { bottom: 0.2 }, lineColor: [0,0,0] },
+            headStyles: { textColor: [0, 0, 0], fontStyle: "bold", fontSize: 7, cellPadding: 1, lineWidth: { bottom: 0.2 }, lineColor: [0, 0, 0] },
             styles: {
                 fontSize: 7.5,
                 cellPadding: 1,
@@ -110,11 +138,12 @@ export const generatePickerPDF = (groupedManifest: Record<string, PickerItem[]>,
             },
             columnStyles: {
                 0: { cellWidth: 8 },
-                1: { cellWidth: 'auto' as const },
-                2: { cellWidth: 18, halign: 'center' as const },
-                3: { cellWidth: 12, halign: 'center' as const, fontStyle: 'bold' as const }
+                1: { cellWidth: 'auto' },
+                2: { cellWidth: 18, halign: 'center' },
+                3: { cellWidth: 12, halign: 'center', fontStyle: 'bold' }
             },
-            didDrawCell: (data) => {
+            didDrawCell: (data: AutoTableCellData) => { 
+                // Draw square checkbox for product rows safely
                 if (data.column.index === 0 && data.cell.section === 'body' && data.cell.raw === "") {
                     const size = 3;
                     const x = data.cell.x + (data.cell.width / 2) - (size / 2);
@@ -122,15 +151,17 @@ export const generatePickerPDF = (groupedManifest: Record<string, PickerItem[]>,
                     doc.setLineWidth(0.1).setDrawColor(0).rect(x, y, size, size);
                 }
             },
-            didDrawPage: (data) => {
-                doc.setFontSize(6).setTextColor(100, 100, 100);
-                doc.text(`Doc: ${batchNo} | Page ${data.pageNumber}`, 14, doc.internal.pageSize.height - 5);
+            didDrawPage: (data: AutoTablePageData) => {
+                doc.setFontSize(7).setTextColor(161, 161, 170);
+                doc.text(`Batch: ${batchNo} | Page ${data.pageNumber}`, 14, doc.internal.pageSize.height - 8);
             }
         });
 
         // --- 4. TIGHT FOOTER SIGNATURES ---
-        // @ts-expect-error - autoTable attaches lastAutoTable to jsPDF instance
-        const finalY = doc.lastAutoTable.finalY + 5;
+        // Safely cast doc to access the lastAutoTable property injected by the plugin
+        const extendedDoc = doc as import("jspdf").jsPDF & { lastAutoTable: { finalY: number } };
+        const finalY = extendedDoc.lastAutoTable.finalY + 5;
+        
         if (finalY > 282) doc.addPage();
 
         doc.setDrawColor(0, 0, 0);

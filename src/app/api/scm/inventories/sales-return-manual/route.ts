@@ -16,7 +16,43 @@ import {
   updateReturn,
   updateStatus,
 } from "@/modules/supply-chain-management/inventories/sales-return-manual/services/sales-return-service";
-import { getUserIdFromToken } from "@/lib/auth-utils";
+/**
+ * Decodes the base64url payload of a JWT without verifying the signature.
+ */
+function decodeJwtPayload(token: string): any {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const base64Url = parts[1];
+    if (!base64Url) return null;
+
+    let base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    while (base64.length % 4) {
+      base64 += "=";
+    }
+
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join(""),
+    );
+    return JSON.parse(jsonPayload);
+  } catch (error) {
+    console.error("Failed to decode JWT payload:", error);
+    return null;
+  }
+}
+
+/**
+ * Helper to extract user ID from a token.
+ */
+function getUserIdFromToken(token: string | undefined): number | null {
+  if (!token) return null;
+  const payload = decodeJwtPayload(token);
+  if (!payload || !payload.id) return null;
+  return Number(payload.id);
+}
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
