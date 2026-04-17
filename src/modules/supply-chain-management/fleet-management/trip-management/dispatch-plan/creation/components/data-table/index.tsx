@@ -16,6 +16,7 @@ interface DispatchPlanTableProps {
   onSortingChange?: (sorting: SortingState) => void;
   emptyTitle?: string;
   emptyDescription?: string;
+  actionComponent?: React.ReactNode;
 }
 
 export const DispatchPlanTable = React.memo(function DispatchPlanTable({
@@ -27,6 +28,7 @@ export const DispatchPlanTable = React.memo(function DispatchPlanTable({
   onSortingChange,
   emptyTitle,
   emptyDescription,
+  actionComponent,
 }: DispatchPlanTableProps) {
   const columns = React.useMemo(
     () => getDispatchPlanColumns(onEdit),
@@ -45,6 +47,7 @@ export const DispatchPlanTable = React.memo(function DispatchPlanTable({
         onSortingChange={onSortingChange}
         emptyTitle={emptyTitle}
         emptyDescription={emptyDescription}
+        actionComponent={actionComponent}
       />
     </div>
   );

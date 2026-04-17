@@ -61,19 +61,17 @@ export const dispatchPlanLifecycleService = {
 
     const createdPlan = planResult.data;
 
-    // Create detail (junction) records for each sales order
+    // Create detail (junction) records in bulk
     if (values.sales_order_ids.length) {
-      await Promise.all(
-        values.sales_order_ids.map((soId) =>
-          request(`${baseUrl}/items/dispatch_plan_details`, {
-            method: "POST",
-            body: JSON.stringify({
-              dispatch_id: createdPlan.dispatch_id,
-              sales_order_id: soId,
-            }),
-          }),
-        ),
-      );
+      const details = values.sales_order_ids.map((soId) => ({
+        dispatch_id: createdPlan.dispatch_id,
+        sales_order_id: soId,
+      }));
+
+      await request(`${baseUrl}/items/dispatch_plan_details`, {
+        method: "POST",
+        body: JSON.stringify(details),
+      });
     }
 
     return createdPlan;
@@ -133,28 +131,24 @@ export const dispatchPlanLifecycleService = {
     );
 
     if (existingDetails.data?.length) {
-      await Promise.all(
-        existingDetails.data.map((d) =>
-          request(`${baseUrl}/items/dispatch_plan_details/${d.detail_id}`, {
-            method: "DELETE",
-          }),
-        ),
-      );
+      const idsToDelete = existingDetails.data.map((d) => d.detail_id);
+      await request(`${baseUrl}/items/dispatch_plan_details`, {
+        method: "DELETE",
+        body: JSON.stringify(idsToDelete),
+      });
     }
 
-    // Create new detail records
+    // Create new detail records in bulk
     if (values.sales_order_ids.length) {
-      await Promise.all(
-        values.sales_order_ids.map((soId) =>
-          request(`${baseUrl}/items/dispatch_plan_details`, {
-            method: "POST",
-            body: JSON.stringify({
-              dispatch_id: Number(id),
-              sales_order_id: soId,
-            }),
-          }),
-        ),
-      );
+      const details = values.sales_order_ids.map((soId) => ({
+        dispatch_id: Number(id),
+        sales_order_id: soId,
+      }));
+
+      await request(`${baseUrl}/items/dispatch_plan_details`, {
+        method: "POST",
+        body: JSON.stringify(details),
+      });
     }
   },
 

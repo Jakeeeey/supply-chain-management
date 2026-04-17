@@ -35,8 +35,11 @@ export async function getMasterData(): Promise<DispatchCreationMasterData> {
 export async function getApprovedPlans(
   branchId?: number,
   currentPlanId?: number | number[],
+  limit: number = 25,
+  offset: number = 0,
+  search?: string
 ): Promise<DirectusResponse<EnrichedApprovedPlan>> {
-  return repo.fetchApprovedPreDispatchPlans(branchId, currentPlanId);
+  return repo.fetchApprovedPreDispatchPlans(branchId, currentPlanId, limit, offset, search);
 }
 
 /**
@@ -78,8 +81,8 @@ export async function getPostPlanDetails(
 /**
  * Fetches available purchase orders for route stop selection.
  */
-export async function getPurchaseOrders(query?: string) {
-  return repo.fetchPurchaseOrders(query);
+export async function getPurchaseOrders(query?: string, branchId?: number) {
+  return repo.fetchPurchaseOrders(query, branchId);
 }
 /**
  * Creates a complete dispatch plan: header + staff + junction + budgets + invoices.

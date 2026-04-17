@@ -180,22 +180,25 @@ async function handleOrphanAdoption(
 
     const { data: orphans } = await fetchItems<SKU>("/items/products", {
       filter: JSON.stringify({ _and: orphanConditions }),
-      limit: -1,
+      limit: 500, // Using 500 instead of -1 for safer bounds
     });
 
     if (orphans?.length) {
       console.log(
         `[SKU Approval] Parent ${finalMasterId} adopting ${orphans.length} orphans...`,
       );
-      await Promise.all(
-        orphans.map((orphan) => {
-          const oId = orphan.id || orphan.product_id;
-          return request(`${API_BASE_URL}/items/products/${oId}`, {
-            method: "PATCH",
-            body: JSON.stringify({ parent_id: finalMasterId }),
-          });
-        }),
-      );
+      
+      const keys = orphans.map((orphan) => orphan.id || orphan.product_id).filter(Boolean);
+      
+      if (keys.length > 0) {
+        await request(`${API_BASE_URL}/items/products`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            keys,
+            data: { parent_id: finalMasterId },
+          }),
+        });
+      }
     }
   }
 }
