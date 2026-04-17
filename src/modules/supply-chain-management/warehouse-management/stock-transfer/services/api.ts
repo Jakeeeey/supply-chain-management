@@ -1,6 +1,5 @@
 /**
  * Low-level HTTP client for the Stock Transfer module.
- * Module-local (same pattern as dispatch-plan/creation/services/api.ts).
  */
 
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -67,7 +66,7 @@ export async function fetchItems<T>(
   const cleanParams: Record<string, string> = {};
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null) {
-      cleanParams[key] = typeof value === 'object' ? JSON.stringify(value) : String(value);
+      cleanParams[key] = String(value);
     }
   });
 
@@ -90,7 +89,7 @@ export async function fetchItem<T>(
   const cleanParams: Record<string, string> = {};
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null) {
-      cleanParams[key] = typeof value === 'object' ? JSON.stringify(value) : String(value);
+      cleanParams[key] = String(value);
     }
   });
 

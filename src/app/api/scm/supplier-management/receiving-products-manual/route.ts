@@ -1,6 +1,7 @@
 // src/app/api/scm/supplier-management/receiving-products/route.ts
+import { getDirectusBase, directusFetch as fetchJson } from "@/modules/supply-chain-management/supplier-management/utils/directus";
 import { NextRequest, NextResponse } from "next/server";
-import { getDirectusBase, directusFetch as fetchJson } from "@/lib/directus";
+
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
