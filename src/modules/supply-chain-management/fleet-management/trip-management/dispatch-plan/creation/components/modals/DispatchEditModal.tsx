@@ -51,8 +51,8 @@ export function DispatchEditModal({
   const [planDetails, setPlanDetails] = useState<PlanDetailItem[]>([]);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
+  const [, setPage] = useState(1);
+  const [hasMore] = useState(false);
 
   useEffect(() => {
     if (open && !masterData) {

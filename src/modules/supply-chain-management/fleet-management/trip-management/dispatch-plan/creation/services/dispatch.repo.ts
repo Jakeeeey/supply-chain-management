@@ -207,7 +207,7 @@ export async function fetchMasterData(): Promise<DispatchCreationMasterData> {
     }),
     // Fetch Helpers
     fetchItems<HelperOption>("/items/user", {
-      "filter[user_department][_eq]": 9, // Helper department
+      "filter[user_department][_eq]": 8, // Helper department
       fields: "user_id,user_fname,user_lname",
       limit: -1,
     }),
@@ -803,8 +803,7 @@ export async function fetchPurchaseOrders(
       "purchase_order_id,purchase_order_no,date,supplier_name,total_amount,inventory_status",
     limit: -1,
     sort: "-date",
-    "filter[_and][0][inventory_status][_neq]": 6,
-    "filter[_and][1][inventory_status][_neq]": 3,
+    "filter[inventory_status][_eq]": 11,
   };
   if (query) {
     params["filter[_and][2][purchase_order_no][_contains]"] = query;
