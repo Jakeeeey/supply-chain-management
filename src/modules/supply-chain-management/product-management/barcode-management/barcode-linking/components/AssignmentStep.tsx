@@ -135,10 +135,6 @@ export function AssignmentStep({
                 setScanSuccess(true);
             }
         }
-<<<<<<< HEAD
-         
-=======
->>>>>>> origin
     }, [setBarcode, setScanSuccess]);
 
     return (

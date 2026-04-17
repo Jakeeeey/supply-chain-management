@@ -1,5 +1,5 @@
+import { handleApiError } from "@/modules/supply-chain-management/inventory-management/stock-adjustment/utils/error-handler";
 import { NextRequest, NextResponse } from "next/server";
-import { handleApiError } from "@/lib/error-handler";
 
 export const runtime = "nodejs";
 

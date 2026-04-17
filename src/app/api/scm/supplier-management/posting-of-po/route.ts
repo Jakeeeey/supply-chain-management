@@ -47,17 +47,6 @@ const BRANCHES_COLLECTION = "branches";
 const POR_COLLECTION = "purchase_order_receiving";
 const POR_ITEMS_COLLECTION = "purchase_order_receiving_items";
 
-<<<<<<< HEAD
-// ── Status flow ────────────────────────────────────────────────────────────
-// inventory_status values in the DB:
-//   12 = partially tagged/received, nothing posted yet  → PARTIAL
-//   13 = some posted but NOT fully received yet         → PARTIAL_POSTED
-//      OR fully received but not all receipts posted    → RECEIVED
-//      (distinguished at runtime by isFullyReceived())
-//   14 = fully received AND all receipts posted         → CLOSED
-// ──────────────────────────────────────────────────────────────────────────
-type POStatus = "OPEN" | "PARTIAL" | "PARTIAL_POSTED" | "RECEIVED" | "CLOSED";
-=======
 type POStatus = "OPEN" | "PARTIAL" | "RECEIVED" | "CLOSED";
 interface Supplier { id: number; supplier_name: string; }
 interface Branch { id: number; branch_name: string; branch_description: string; }
@@ -94,7 +83,6 @@ interface ReceivingItem {
     rfid_code: string;
     created_at: string;
 }
->>>>>>> origin
 
 const POR_SAFE_FIELDS =
     "purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted";
@@ -300,12 +288,8 @@ function hasReceiptEvidence(por: PORRow) {
     return Boolean(toStr(por?.receipt_no) || toStr(por?.receipt_date) || toStr(por?.received_date));
 }
 
-<<<<<<< HEAD
-function effectiveReceivedQty(por: any) {
-=======
 function effectiveReceivedQty(por: PORRow) {
     // IMPORTANT: treat numeric/string consistently
->>>>>>> origin
     const posted = toNum(por?.isPosted) === 1;
     if (posted) return Math.max(0, toNum(por?.received_quantity ?? 0));
     if (!hasReceiptEvidence(por)) return 0;
@@ -456,33 +440,11 @@ function buildReceiptSummary(porRows: PORRow[]) {
     return { receipts, receiptsCount, unpostedReceiptsCount };
 }
 
-<<<<<<< HEAD
-/**
- * Derives the POStatus from the current state of POR rows.
- *
- * Logic:
- *   CLOSED        → fully received AND all existing receipts posted
- *   RECEIVED      → fully received, receipts exist but some unposted
- *   PARTIAL_POSTED → NOT fully received, but some POR rows are posted (partial post happened)
- *   PARTIAL       → NOT fully received, some receiving activity, nothing posted yet
- *   OPEN          → no receiving activity at all
- */
-function receivingStatusFrom(
-    porRows: any[],
-    opts?: { isClosed?: boolean; fullyReceived?: boolean; hasAnyPosted?: boolean }
-): POStatus {
-    if (opts?.isClosed) return "CLOSED";
-    if (opts?.fullyReceived) return "RECEIVED";
-
-    // Partial post: not fully received, but at least one POR row has been posted
-    if (opts?.hasAnyPosted) return "PARTIAL_POSTED";
-=======
 function receivingStatusFrom(porRows: PORRow[], opts?: { isClosed?: boolean; fullyReceived?: boolean }) {
     // CLOSED only if fully received AND all receipts/rows are posted
     if (opts?.isClosed) return "CLOSED" as POStatus;
     // RECEIVED: all items received, receipts exist but not yet posted
     if (opts?.fullyReceived) return "RECEIVED" as POStatus;
->>>>>>> origin
 
     const anyActivity = (porRows ?? []).some((r) => {
         return effectiveReceivedQty(r) > 0 || hasReceiptEvidence(r);
@@ -491,17 +453,12 @@ function receivingStatusFrom(porRows: PORRow[], opts?: { isClosed?: boolean; ful
     return anyActivity ? "PARTIAL" : "OPEN";
 }
 
-<<<<<<< HEAD
-function latestReceiptInfo(porRows: any[]) {
-    let best = { receipt_no: "", receipt_date: "", received_date: "" };
-=======
 function latestReceiptInfo(porRows: PORRow[]) {
     let best: { receipt_no: string; receipt_date: string; received_date: string } = {
         receipt_no: "",
         receipt_date: "",
         received_date: "",
     };
->>>>>>> origin
 
     for (const r of porRows ?? []) {
         const rn = toStr(r?.receipt_no);
@@ -613,25 +570,9 @@ export async function GET() {
         const candJ = await fetchJson(porCandidateUrl) as { data: PORRow[] };
         const porCandidates = Array.isArray(candJ?.data) ? candJ.data : [];
 
-<<<<<<< HEAD
-        // STRATEGY 2: POs by inventory_status 6 (RECEIVED) or 9 (PARTIALLY RECEIVED).
-        const statusCandidateUrl =
-            `${base}/items/${PO_COLLECTION}?limit=-1` +
-            `&filter[_or][0][inventory_status][_eq]=6` +
-            `&filter[_or][1][inventory_status][_eq]=9` +
-            `&fields=purchase_order_id`;
-        const statusCandJ = await fetchJson(statusCandidateUrl);
-        const statusCandidatePoIds: number[] = Array.isArray(statusCandJ?.data)
-            ? (statusCandJ.data as any[]).map((r) => toNum(r?.purchase_order_id)).filter(Boolean)
-            : [];
-
-        const poIdFromPor = porCandidates.map((r: any) => toNum(r?.purchase_order_id)).filter(Boolean) as number[];
-        const candidatePoIds = Array.from(new Set([...poIdFromPor, ...statusCandidatePoIds])) as number[];
-=======
         const candidatePoIds = Array.from(
             new Set(porCandidates.map((r) => toNum(r?.purchase_order_id)).filter(Boolean))
         ) as number[];
->>>>>>> origin
         if (!candidatePoIds.length) return ok([] as PostingListItem[]);
 
         const poHeaders = await fetchPOHeadersByIds(base, candidatePoIds);
@@ -661,13 +602,6 @@ export async function GET() {
             linesByPo.set(poId, arr);
         }
 
-<<<<<<< HEAD
-        const receivingItems = porIdsAll.length ? await fetchReceivingItems(base, porIdsAll) : [];
-        const rfidsByPorId = groupRfidsByPorId(receivingItems);
-
-        const supplierIds = poHeaders.map((p: any) => toNum(p?.supplier_name)).filter(Boolean);
-        const supplierMap = await fetchSupplierNames(base, supplierIds);
-=======
         // RFID tags
         const receivingItems = (porIdsAll.length ? await fetchReceivingItems(base, porIdsAll) : []) as ReceivingItem[];
         const rfidsByPorId = groupRfidsByPorId(receivingItems);
@@ -675,7 +609,6 @@ export async function GET() {
         // Supplier names
         const supplierIds = poHeaders.map((p) => toNum(p?.supplier_name)).filter(Boolean);
         const supplierNamesMap = await fetchSupplierNames(base, supplierIds);
->>>>>>> origin
 
         const list: PostingListItem[] = [];
 
@@ -715,12 +648,8 @@ export async function GET() {
             const hasAnyPosted = porRows.some((r: any) => toNum(r?.isPosted) === 1);
 
             const sid = toNum(po?.supplier_name);
-<<<<<<< HEAD
-            const supplierName = sid ? toStr(supplierMap.get(sid), "—") : "—";
-=======
             const supplierName = sid ? toStr(supplierNamesMap.get(sid), "—") : "—";
 
->>>>>>> origin
             const poNumber = toStr(po?.purchase_order_no, String(poId));
 
             const products = new Set<number>();
@@ -954,17 +883,9 @@ export async function POST(req: NextRequest) {
             const receivingItems = porIds.length ? await fetchReceivingItems(base, porIds) : [];
             const rfidsByPorId = groupRfidsByPorId(receivingItems);
 
-<<<<<<< HEAD
-            const taggingOk = isPartiallyReceivedOrTagged(poId, lines, porRows, rfidsByPorId);
-            const hasAnyPosted = porRows.some((r: any) => toNum(r?.isPosted) === 1);
-            if (!taggingOk && !hasAnyPosted) {
-                return bad("Cannot post. Complete RFID or manual receiving first.", 409);
-            }
-=======
             const taggingOk = isPartiallyTagged(poId, lines, porRows, rfidsByPorId);
             if (!taggingOk) return bad("Cannot post. Complete RFID tagging first.", 409);
 
->>>>>>> origin
 
 
             const target = porRows.filter((r: PORRow) => toStr(r?.receipt_no) === receiptNo);
@@ -1045,11 +966,6 @@ export async function POST(req: NextRequest) {
                 return bad("Cannot post. Please receive items in Receiving Products first.", 409);
             }
 
-<<<<<<< HEAD
-            const fully = isFullyReceived(poId, lines, porRows, rfidsByPorId);
-=======
-
->>>>>>> origin
 
             // Post ALL currently unposted POR rows
             const toPost = porRows

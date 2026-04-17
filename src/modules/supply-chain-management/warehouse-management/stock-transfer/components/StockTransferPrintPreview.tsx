@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Printer, Download, X, Loader2 } from 'lucide-react';
-import { ScannedItem } from '../types';
+import { ScannedItem } from '../types/stock-transfer.types';
 import { generateStockTransferPDF } from '../utils/generateStockTransferPDF';
 
 interface StockTransferPrintPreviewProps {

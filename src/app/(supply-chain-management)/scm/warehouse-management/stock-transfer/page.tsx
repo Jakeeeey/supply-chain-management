@@ -1,4 +1,3 @@
-// src/app/(supply-chain-management)/scm/warehouse-management/stock-transfer/page.tsx
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -11,13 +10,20 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { cookies } from "next/headers"
-import { getHeaderUserFromToken } from "@/lib/auth-utils"
+import { decodeJwtPayload } from "@/lib/auth-utils"
 import StockTransferModule from "@/modules/supply-chain-management/warehouse-management/stock-transfer/StockTransferModule"
-import NavUser from "@/components/shared/app-sidebar/nav-user"
+import { NavUser } from "@/components/shared/app-sidebar/nav-user"
+
 export default async function Page() {
     const cookieStore = await cookies();
     const token = cookieStore.get("vos_access_token")?.value;
-    const headerUser = getHeaderUserFromToken(token);
+    const payload = token ? decodeJwtPayload(token) : null;
+    
+    const headerUser = {
+        name: payload ? `${payload.FirstName} ${payload.LastName}`.trim() : "System User",
+        email: payload?.email || "user@vos.com",
+        avatar: "",
+    };
 
     return (
         <div className="flex h-full min-h-0 flex-col">

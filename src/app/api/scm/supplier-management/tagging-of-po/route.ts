@@ -12,7 +12,6 @@ import type {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-<<<<<<< HEAD
 const DEBUG = false; // ✅ Back to false for production
 function dlog(...args: any[]) {
     if (DEBUG) console.log("[tagging-of-po]", ...args);
@@ -23,15 +22,6 @@ async function fetchJson(url: string, init?: RequestInit) {
         ...init,
         cache: "no-store", // ✅ Ensure fresh data for tagging counts
     });
-=======
-const DEBUG = process.env.DEBUG_TAGGING_PO === "1";
-function dlog(...args: unknown[]) {
-    if (DEBUG) console.log("[tagging-of-po]", ...args);
-}
-
-async function fetchJson<T = unknown>(url: string, init?: RequestInit): Promise<T> {
-    return directusFetch<T>(url, init);
->>>>>>> origin
 }
 
 // =====================
@@ -61,12 +51,8 @@ function toStr(v: unknown, fb = "") {
     const s = String(v ?? "").trim();
     return s ? s : fb;
 }
-<<<<<<< HEAD
 function toNum(v: any) {
     if (v && typeof v === "object" && "id" in v) return toNum(v.id);
-=======
-function toNum(v: unknown) {
->>>>>>> origin
     const n = Number(String(v ?? "").replace(/,/g, ""));
     return Number.isFinite(n) ? n : 0;
 }
@@ -278,12 +264,8 @@ async function fetchAllPORowsByPOId(base: string, poId: number) {
         `&filter[purchase_order_id][_in]=${encodeURIComponent(String(poId))}` +
         `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,isPosted,receipt_no,received_quantity`;
 
-<<<<<<< HEAD
     const j = await fetchJson(url);
     if (DEBUG) dlog(`fetchAllPORowsByPOId for PO ${poId} returned ${j?.data?.length ?? 0} rows.`);
-=======
-    const j = await fetchJson<{ data: PORow[] }>(url);
->>>>>>> origin
     return (j?.data ?? []) as PORow[];
 }
 
@@ -538,7 +520,6 @@ function activityFromReceivingItems(
             time: timeDisplay(toStr(r.created_at, nowISO())),
         };
     });
-<<<<<<< HEAD
 
     return {
         id: String(poId),
@@ -548,8 +529,6 @@ function activityFromReceivingItems(
         activity: activity.slice(0, 50),
         _rawTaggedByKey: taggedByKey, // Expose raw counts for SKU resolution
     } as any;
-=======
->>>>>>> origin
 }
 
 // =====================
@@ -559,12 +538,8 @@ function resolvePoProductLine(args: {
     sku: string;
     strict: boolean;
     poProducts: PoProductRow[];
-<<<<<<< HEAD
     productsMap: Map<number, any>;
     taggedByKey: Map<string, number>; // ✅ Pass existing counts to prefer incomplete rows
-=======
-    productsMap: Map<number, { product_name: string; barcode: string; product_code: string }>;
->>>>>>> origin
 }) {
     const scanned = toStr(args.sku).trim().toLowerCase();
     if (!scanned) return null;
@@ -846,15 +821,8 @@ export async function POST(req: NextRequest) {
             return ok(updated);
         }
 
-<<<<<<< HEAD
         return bad(`Unknown action: ${action}`, 400);
     } catch (e: any) {
         return bad(String(e?.message ?? e ?? "Request failed"), 400);
-=======
-        return bad("Invalid action.", 400);
-    } catch (e: unknown) {
-        const error = e as Error;
-        return bad(String(error?.message ?? error ?? "Request failed"), 400);
->>>>>>> origin
     }
 }

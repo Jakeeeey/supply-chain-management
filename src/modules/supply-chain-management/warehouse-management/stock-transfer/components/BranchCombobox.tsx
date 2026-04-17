@@ -10,11 +10,11 @@ import {
   ComboboxEmpty,
 } from '@/components/ui/combobox';
 
-import type { Branch } from '../types';
-import { getBranchLabel } from '../hooks/useStockTransfer';
+import type { BranchRow } from '../types/stock-transfer.types';
+import { getBranchLabel } from '../services/stock-transfer.helpers';
 
 interface BranchComboboxProps {
-  branches: Branch[];
+  branches: BranchRow[];
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
@@ -45,7 +45,7 @@ export function BranchCombobox({
   return (
     <Combobox
       value={selectedBranch}
-      onValueChange={(val: Branch | null) => {
+      onValueChange={(val: BranchRow | null) => {
         const newId = val ? val.id.toString() : '';
         onChange(newId);
         if (val) setSearch(getBranchLabel(val));
@@ -86,4 +86,3 @@ export function BranchCombobox({
     </Combobox>
   );
 }
-

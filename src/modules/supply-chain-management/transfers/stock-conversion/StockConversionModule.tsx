@@ -1,11 +1,7 @@
 "use client";
 
-<<<<<<< HEAD
 import { useState, useEffect, useRef, useCallback, memo } from "react";
 import { toast } from "sonner";
-=======
-import { useState, useEffect } from "react";
->>>>>>> origin
 import { useStockConversion } from "./hooks/useStockConversion";
 import { StockConversionTable } from "./components/StockConversionTable";
 import { StockConversionModal } from "./components/StockConversionModal";

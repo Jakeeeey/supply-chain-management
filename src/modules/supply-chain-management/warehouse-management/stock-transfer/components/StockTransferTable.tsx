@@ -29,7 +29,7 @@ import {
   PaginationPrevious,
   PaginationEllipsis,
 } from '@/components/ui/pagination';
-import { ScannedItem } from '../types';
+import { ScannedItem } from '../types/stock-transfer.types';
 
 interface StockTransferTableProps {
   items: ScannedItem[];

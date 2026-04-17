@@ -15,11 +15,13 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Loader2, RefreshCcw, CheckCircle2, Printer, ShoppingBag } from 'lucide-react';
 import { toast } from 'sonner';
-import { useStockTransfer, getBranchLabel } from './hooks/useStockTransfer';
+import { useStockTransfer } from './hooks/useStockTransfer';
+import { getBranchLabel } from './services/stock-transfer.helpers';
 import StockTransferTable from './components/StockTransferTable';
 import StockTransferPrintPreview from './components/StockTransferPrintPreview';
 import { BranchCombobox } from './components/BranchCombobox';
 import { ProductSelectionModal } from './components/ProductSelectionModal';
+import { EnrichedProduct } from './types/stock-transfer.types';
 
 export default function StockTransferModule() {
   const {
@@ -262,8 +264,9 @@ export default function StockTransferModule() {
           cost_per_unit: item.unitPrice,
           quantity: item.unitQty,
           totalAmount: item.totalAmount,
-          unit_of_measurement: { unit_name: item.unit }
-        } as unknown as import('@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema').SKU))}
+          unit_of_measurement: { unit_name: item.unit },
+          qtyAvailable: item.qtyAvailable
+        } as unknown as EnrichedProduct))}
         onSelect={(p) => {
           handleAddProduct(p);
           toast.success(`Added ${p.product_name} to transfer list.`);

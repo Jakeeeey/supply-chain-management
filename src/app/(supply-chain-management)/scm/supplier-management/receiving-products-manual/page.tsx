@@ -9,12 +9,12 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { NavUser } from "../../_components/nav-user";
 
 import { cookies } from "next/headers";
 
 import { ReceivingProductsManualModule } from "@/modules/supply-chain-management/supplier-management/receiving-products-manual";
 import type { Metadata } from "next";
+import NavUser from "@/components/shared/app-sidebar/nav-user";
 
 export const metadata: Metadata = {
     title: "Receiving Products (Manual)",

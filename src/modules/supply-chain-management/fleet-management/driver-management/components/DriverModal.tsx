@@ -21,82 +21,6 @@ import {
     CommandItem,
     CommandList,
 } from "@/components/ui/command";
-<<<<<<< HEAD
-import { Check, ChevronsUpDown } from "lucide-react";
-import { cn } from "@/lib/utils";
-
-export type ComboboxOption = {
-    value: string;
-    label: string;
-};
-
-interface LocalComboboxProps {
-    options: ComboboxOption[];
-    value: string;
-    onValueChange: (value: string) => void;
-    placeholder?: string;
-    emptyMessage?: string;
-    className?: string;
-}
-
-function LocalCombobox({
-    options,
-    value,
-    onValueChange,
-    placeholder = "Search...",
-    emptyMessage = "No results found.",
-    className,
-}: LocalComboboxProps) {
-    const [open, setOpen] = React.useState(false);
-    return (
-        <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-                <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={open}
-                    className={cn("w-full justify-between font-normal text-muted-foreground", className, value && "text-foreground")}
-                >
-                    {value
-                        ? options.find((opt) => opt.value === value)?.label || placeholder
-                        : placeholder}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-full p-0" align="start">
-                <Command>
-                    <CommandInput placeholder={placeholder} />
-                    <CommandList>
-                        <CommandEmpty>{emptyMessage}</CommandEmpty>
-                        <CommandGroup>
-                            {options.map((option) => (
-                                <CommandItem
-                                    key={option.value}
-                                    value={option.label}
-                                    onSelect={() => {
-                                        onValueChange(option.value === value ? "" : option.value);
-                                        setOpen(false);
-                                    }}
-                                >
-                                    <Check
-                                        className={cn(
-                                            "mr-2 h-4 w-4",
-                                            value === option.value ? "opacity-100" : "opacity-0"
-                                        )}
-                                    />
-                                    {option.label}
-                                </CommandItem>
-                            ))}
-                        </CommandGroup>
-                    </CommandList>
-                </Command>
-            </PopoverContent>
-        </Popover>
-    );
-}
-
-=======
->>>>>>> origin
 import { Button } from "@/components/ui/button";
 import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -257,60 +181,6 @@ export function DriverModal({
                     </DialogDescription>
                 </DialogHeader>
 
-<<<<<<< HEAD
-                <form onSubmit={handleSubmit} className="space-y-6 mt-6">
-                    {/* User Selection */}
-                    <div className="space-y-2.5">
-                        <label className="text-sm font-bold uppercase tracking-wider text-foreground/80">
-                            Select Driver*
-                        </label>
-                        <LocalCombobox
-                            options={userOptions}
-                            value={selectedUserId}
-                            onValueChange={setSelectedUserId}
-                            placeholder="Search drivers..."
-                            emptyMessage="No drivers found."
-                            className="w-full h-10 rounded-lg border-input bg-background text-foreground font-medium focus:ring-2 focus:ring-ring transition-all"
-                        />
-                        <p className="text-xs text-muted-foreground/60 font-medium">Select the user to assign as driver</p>
-                    </div>
-
-                    {/* Good Branch Selection */}
-                    <div className="space-y-2.5">
-                        <label className="text-sm font-bold uppercase tracking-wider text-foreground/80">
-                            Good Branch*
-                        </label>
-                        <LocalCombobox
-                            options={goodBranchOptions}
-                            value={selectedGoodBranchId}
-                            onValueChange={setSelectedGoodBranchId}
-                            placeholder="Search branches..."
-                            emptyMessage="No branches found."
-                            className="w-full h-10 rounded-lg border-input bg-background text-foreground font-medium focus:ring-2 focus:ring-ring transition-all"
-                        />
-                        <p className="text-xs text-muted-foreground/60 font-medium">
-                            {goodBranches.length} good branch(es) available
-                        </p>
-                    </div>
-
-                    {/* Bad Branch Selection */}
-                    <div className="space-y-2.5">
-                        <label className="text-sm font-bold uppercase tracking-wider text-foreground/80">
-                            Bad Branch
-                        </label>
-                        <LocalCombobox
-                            options={badBranchOptions}
-                            value={selectedBadBranchId}
-                            onValueChange={setSelectedBadBranchId}
-                            placeholder="Search branches..."
-                            emptyMessage="No branches found."
-                            className="w-full h-10 rounded-lg border-input bg-background text-foreground font-medium focus:ring-2 focus:ring-ring transition-all"
-                        />
-                        <p className="text-xs text-muted-foreground/60 font-medium">
-                            {badBranches.length} bad branch(es) available (Optional)
-                        </p>
-                    </div>
-=======
                 <div className="flex-1 overflow-y-auto min-h-0">
                     <form id="driver-form" onSubmit={handleSubmit} className="space-y-6 p-6">
                         {/* User Selection */}
@@ -453,7 +323,6 @@ export function DriverModal({
                         </div>
                     </form>
                 </div>
->>>>>>> origin
 
                 <div className="p-6 flex justify-end gap-3 mt-auto border-t shrink-0">
                     <Button

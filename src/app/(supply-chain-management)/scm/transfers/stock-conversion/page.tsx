@@ -10,12 +10,8 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-<<<<<<< HEAD
-import { NavUser } from "../../_components/nav-user";
-=======
 import { NavUser } from "@/components/shared/app-sidebar/nav-user";
 
->>>>>>> origin
 import { cookies } from "next/headers";
 
 export const runtime = "nodejs";
@@ -38,10 +34,7 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
 }
 
 function pickString(obj: Record<string, unknown> | null, keys: string[]): string {
-<<<<<<< HEAD
   if (!obj) return "";
-=======
->>>>>>> origin
   for (const k of keys) {
     const v = obj[k];
     if (typeof v === "string" && v.trim()) return v.trim();
@@ -144,9 +137,4 @@ export default async function Page() {
       </ScrollArea>
     </div>
   );
-<<<<<<< HEAD
 }
-=======
-}
-
->>>>>>> origin

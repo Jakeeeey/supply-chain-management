@@ -1,4 +1,3 @@
-// src/app/(supply-chain-management)/scm/warehouse-management/stock-transfer/receive-manual/page.tsx
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -11,14 +10,21 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { cookies } from "next/headers"
-import { getHeaderUserFromToken } from "@/lib/auth-utils"
-import { NavUser } from "../../../_components/nav-user"
+import { decodeJwtPayload } from "@/lib/auth-utils"
+import { NavUser } from "@/components/shared/app-sidebar/nav-user"
 import StockTransferReceiveManualModule from "@/modules/supply-chain-management/warehouse-management/stock-transfer/receive-manual/StockTransferReceiveManualModule"
 
 export default async function Page() {
     const cookieStore = await cookies();
     const token = cookieStore.get("vos_access_token")?.value;
-    const headerUser = getHeaderUserFromToken(token);
+    const payload = token ? decodeJwtPayload(token) : null;
+    
+    // Explicitly typed user object to resolve lint issues
+    const headerUser = {
+        name: payload ? `${payload.FirstName || ""} ${payload.LastName || ""}`.trim() || "System User" : "System User",
+        email: payload?.email || "user@vos.com",
+        avatar: "",
+    };
 
     return (
         <div className="flex h-full min-h-0 flex-col">
@@ -36,7 +42,7 @@ export default async function Page() {
                             </BreadcrumbItem>
                             <BreadcrumbSeparator className="hidden md:block" />
                             <BreadcrumbItem className="hidden md:block">
-                                <BreadcrumbLink href="#">Stock Transfer</BreadcrumbLink>
+                                <BreadcrumbLink href="/scm/warehouse-management/stock-transfer">Stock Transfer</BreadcrumbLink>
                             </BreadcrumbItem>
                             <BreadcrumbSeparator className="hidden md:block" />
                             <BreadcrumbItem>

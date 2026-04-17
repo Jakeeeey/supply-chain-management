@@ -1,11 +1,19 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { StockTransfer, Branch, ScannedItem } from '../types';
+import { stockTransferLifecycleService } from '../services/stock-transfer.lifecycle';
+import { calculateGrandTotal } from '../services/stock-transfer.helpers';
+import type { 
+  StockTransferRow, 
+  BranchRow, 
+  ScannedItem,
+  EnrichedProduct
+} from '../types/stock-transfer.types';
+import { toast } from 'sonner';
 
 interface UseStockTransferReturn {
-  stockTransfers: StockTransfer[];
-  branches: Branch[];
+  stockTransfers: StockTransferRow[];
+  branches: BranchRow[];
   loading: boolean;
   confirming: boolean;
   sourceBranch: string;
@@ -15,8 +23,7 @@ interface UseStockTransferReturn {
   leadDate: string;
   setLeadDate: (v: string) => void;
   scannedItems: ScannedItem[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  handleAddProduct: (product: any) => void;
+  handleAddProduct: (product: EnrichedProduct) => void;
   updateQty: (rfid: string, qty: number) => void;
   removeItem: (rfid: string) => void;
   reset: () => void;
@@ -26,21 +33,9 @@ interface UseStockTransferReturn {
   status: string;
 }
 
-/**
- * Derives a display name from a branch record.
- * Tries common field names used across the Directus schema.
- */
-function getBranchLabel(b: Branch): string {
-  return (
-    (b.branch_name as string) ||
-    (b.name as string) ||
-    `Branch ${b.id}`
-  );
-}
-
 export function useStockTransfer(): UseStockTransferReturn {
-  const [stockTransfers, setStockTransfers] = useState<StockTransfer[]>([]);
-  const [branches, setBranches] = useState<Branch[]>([]);
+  const [stockTransfers, setStockTransfers] = useState<StockTransferRow[]>([]);
+  const [branches, setBranches] = useState<BranchRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [sourceBranch, setSourceBranch] = useState('');
@@ -52,37 +47,35 @@ export function useStockTransfer(): UseStockTransferReturn {
   const [transferStatus, setTransferStatus] = useState('');
   const [orderNo, setOrderNo] = useState('');
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const res = await fetch('/api/scm/warehouse-management/stock-transfer');
-        if (!res.ok) throw new Error('Failed to fetch');
-        const json = await res.json();
-        setStockTransfers(json.stockTransfers ?? []);
-        setBranches(json.branches ?? []);
-      } catch (err) {
-        console.error('useStockTransfer fetch error:', err);
-      } finally {
-        setLoading(false);
-      }
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await stockTransferLifecycleService.fetchTransfers();
+      setStockTransfers(res.stockTransfers ?? []);
+      setBranches(res.branches ?? []);
+    } catch (err) {
+      console.error('useStockTransfer fetch error:', err);
+    } finally {
+      setLoading(false);
     }
-    fetchData();
   }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const updateQty = useCallback((rfid: string, qty: number) => {
     setScannedItems((prev) =>
       prev.map((item) => {
         if (item.rfid !== rfid) return item;
-        // Use the stored unit price so total calculates correctly even from qty=0
         const total = parseFloat((item.unitPrice * qty).toFixed(2));
         return { ...item, unitQty: qty, totalAmount: total };
       })
     );
   }, []);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleAddProduct = useCallback((product: any) => {
-    const productId = product.product_id || product.id;
+  const handleAddProduct = useCallback((product: EnrichedProduct) => {
+    const productId = product.product_id;
     
     // If product already in list, just increment quantity
     const existing = scannedItems.find((item) => item.productId === productId);
@@ -97,20 +90,17 @@ export function useStockTransfer(): UseStockTransferReturn {
     let extractedUnit = 'unit';
     let unitId = 0;
     if (typeof product.unit_of_measurement === 'object' && product.unit_of_measurement !== null) {
-      extractedUnit = String(product.unit_of_measurement.unit_name || product.unit_of_measurement.name || 'unit');
-      unitId = Number(product.unit_of_measurement.unit_id || product.unit_of_measurement.id || 0);
+      extractedUnit = product.unit_of_measurement.unit_name || 'unit';
+      unitId = product.unit_of_measurement.unit_id || 0;
     } else if (product.unit_of_measurement) {
-      extractedUnit = String(product.unit_of_measurement);
       unitId = Number(product.unit_of_measurement);
     }
 
-    const price = parseFloat(product.cost_per_unit || product.price_per_unit || product.estimated_unit_cost || 0);
+    const price = product.price_per_unit || product.cost_per_unit || 0;
 
     let extractedBrand = 'N/A';
     if (typeof product.product_brand === 'object' && product.product_brand !== null) {
-      extractedBrand = String(product.product_brand.brand_name || 'N/A');
-    } else if (product.product_brand) {
-      extractedBrand = String(product.product_brand);
+      extractedBrand = product.product_brand.brand_name || 'N/A';
     }
 
     const newItem: ScannedItem = {
@@ -147,25 +137,24 @@ export function useStockTransfer(): UseStockTransferReturn {
   const confirmTransfer = useCallback(async () => {
     setConfirming(true);
     try {
-      const res = await fetch('/api/scm/warehouse-management/stock-transfer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sourceBranch, targetBranch, leadDate, scannedItems }),
+      const res = await stockTransferLifecycleService.submitTransferRequest({ 
+        sourceBranch, 
+        targetBranch, 
+        leadDate, 
+        scannedItems 
       });
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err?.error ?? 'Failed to save transfer');
-      }
-
-      const json = await res.json();
       setIsTransferConfirmed(true);
-      setTransferStatus('For Approval');
-      // Capture the generated order number
-      if (json.orderNo) {
-        setOrderNo(json.orderNo);
-        setTransferStatus(`For Approval (Order: ${json.orderNo})`);
+      if (res.orderNo) {
+        setOrderNo(res.orderNo);
+        setTransferStatus(`For Approval (Order: ${res.orderNo})`);
+      } else {
+        setTransferStatus('For Approval');
       }
+      toast.success('Transfer request submitted successfully!');
+    } catch (err: any) {
+      console.error('confirmTransfer error:', err);
+      toast.error('Submission failed', { description: err.message });
     } finally {
       setConfirming(false);
     }
@@ -189,9 +178,7 @@ export function useStockTransfer(): UseStockTransferReturn {
     reset,
     confirmTransfer,
     isTransferConfirmed,
-    orderNo: orderNo,
+    orderNo,
     status: transferStatus,
   };
 }
-
-export { getBranchLabel };

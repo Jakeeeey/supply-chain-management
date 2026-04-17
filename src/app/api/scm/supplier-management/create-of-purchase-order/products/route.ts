@@ -155,19 +155,9 @@ export async function GET(req: NextRequest) {
             );
         }
 
-<<<<<<< HEAD
-        const rows = (json.data ?? []).map((p: any) => ({
-            ...p,
-            unit_of_measurement: resolveUom(p),
-        }));
-
-        return NextResponse.json({ data: rows });
-    } catch (err: any) {
-=======
         return NextResponse.json({ data: json.data ?? [] });
     } catch (e: unknown) {
         const err = e as Error;
->>>>>>> origin
         return NextResponse.json(
             { error: "Products route failed", details: String(err?.message ?? err) },
             { status: 500 }

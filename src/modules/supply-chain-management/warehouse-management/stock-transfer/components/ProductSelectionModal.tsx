@@ -14,19 +14,20 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Search, ShoppingCart, Loader2, Package, Tag, CheckCircle2, ChevronRight, Minus, Plus, Trash2, X } from 'lucide-react';
 import { SKU } from '@/modules/supply-chain-management/product-management/sku/sku-creation/types/sku.schema';
+import { EnrichedProduct } from '../types/stock-transfer.types';
 
 interface ProductSelectionModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSelect: (product: SKU) => void;
+  onSelect: (product: EnrichedProduct) => void;
   sourceBranch?: string;
-  selectedProducts?: SKU[];
+  selectedProducts?: EnrichedProduct[];
   onUpdateQty?: (productId: number, qty: number) => void;
   onRemoveItem?: (productId: number) => void;
 }
 
 export function ProductSelectionModal({ open, onOpenChange, onSelect, sourceBranch, selectedProducts = [], onUpdateQty, onRemoveItem }: ProductSelectionModalProps) {
-  const [products, setProducts] = useState<SKU[]>([]);
+  const [products, setProducts] = useState<EnrichedProduct[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
 
@@ -57,7 +58,7 @@ export function ProductSelectionModal({ open, onOpenChange, onSelect, sourceBran
     };
   }, [open, search, sourceBranch]);
 
-  const handleSelect = (product: SKU) => {
+  const handleSelect = (product: EnrichedProduct) => {
     onSelect(product);
   };
 
@@ -123,7 +124,7 @@ export function ProductSelectionModal({ open, onOpenChange, onSelect, sourceBran
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-8 pb-8">
                   {products.map((product) => (
                     <div 
-                      key={product.id || product.product_id}
+                      key={product.product_id}
                       className="group relative bg-card border border-border rounded-xl overflow-hidden hover:border-primary/50 hover:shadow-md transition-all duration-300 flex flex-col"
                     >
                       <div className="aspect-[16/9] bg-muted/30 flex items-center justify-center relative overflow-hidden">
@@ -153,7 +154,7 @@ export function ProductSelectionModal({ open, onOpenChange, onSelect, sourceBran
                             </div>
                             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                               <Tag className="w-3 h-3 shrink-0 text-amber-500/70" />
-                              <span className="font-mono text-amber-600/80 font-bold">ID: {product.product_id || product.id}</span>
+                              <span className="font-mono text-amber-600/80 font-bold">ID: {product.product_id}</span>
                             </div>
                             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                               <Package className="w-3 h-3 shrink-0 text-primary/60" />
@@ -203,7 +204,7 @@ export function ProductSelectionModal({ open, onOpenChange, onSelect, sourceBran
                   </div>
                 ) : (
                   selectedProducts.map((p, idx) => {
-                    const pid = p.product_id || p.id;
+                    const pid = p.product_id;
                     const uom = typeof p.unit_of_measurement === 'object' && p.unit_of_measurement !== null 
                       ? (p.unit_of_measurement as { unit_name?: string }).unit_name 
                       : (p.unit_of_measurement || 'Pieces');
