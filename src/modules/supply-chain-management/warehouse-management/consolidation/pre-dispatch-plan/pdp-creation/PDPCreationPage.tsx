@@ -9,7 +9,7 @@ import {
   DispatchPlanFormValues,
 } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/types/dispatch-plan.schema";
 import { Plus } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { toast } from "sonner";
 import { PDPGlobalFilter } from "../pdp-planner/components/PDPGlobalFilter";
 import { PDPCreationTable } from "./components/data-table";
@@ -30,6 +30,8 @@ export default function PDPCreationPage() {
     isLoading,
     error,
     setSearch,
+    clusterId,
+    branchId,
     refresh,
     createPlan,
     updatePlan,
@@ -84,7 +86,16 @@ export default function PDPCreationPage() {
     [fetchAvailableOrders],
   );
 
-  if (isLoading && !pendingData.length) return <ModuleSkeleton />;
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setMounted(true);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!mounted) return <ModuleSkeleton />;
   if (error) return <ErrorPage message={error} reset={refresh} />;
 
   return (
@@ -99,8 +110,8 @@ export default function PDPCreationPage() {
         onSearch={(v: string) => setSearch(v)}
         actionComponent={
           <Button onClick={() => setIsCreateOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Create PDP
+            <Plus className="h-4 w-4" />
+            Create
           </Button>
         }
       />
@@ -114,6 +125,8 @@ export default function PDPCreationPage() {
         availableOrders={availableOrders}
         isLoadingOrders={isLoadingOrders}
         onFilterChange={handleFilterChange}
+        initialClusterId={clusterId}
+        initialBranchId={branchId}
         editPlan={editPlan}
         editDetails={editDetails}
       />

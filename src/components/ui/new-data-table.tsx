@@ -45,7 +45,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { EmptyPlaceholder } from "@/components/shared/EmptyPlaceholder";
 
 interface SearchInputProps {
   placeholder: string;
@@ -150,7 +149,7 @@ export function DataTable<TData, TValue>({
   );
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({});
-  const [rowSelection, setRowSelection] = React.useState({});
+  const [rowSelection, setRowSelection] = React.useState<Record<string, boolean>>({});
 
   // Trigger onSelectionChange when rowSelection updates
   React.useEffect(() => {
@@ -158,7 +157,7 @@ export function DataTable<TData, TValue>({
       // rowSelection is a map of index/id to boolean
       // We need to map it back to the data
       const selectedIndices = Object.keys(rowSelection).filter(
-        (key) => rowSelection[key as keyof typeof rowSelection],
+        (key) => rowSelection[key],
       );
       const selectedData = selectedIndices
         .map((index) => data[parseInt(index)])
@@ -174,6 +173,7 @@ export function DataTable<TData, TValue>({
     pageSize: pagination?.pageSize ?? 10,
   });
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data,
     columns,
@@ -225,7 +225,7 @@ export function DataTable<TData, TValue>({
 
   const handleSearchWrapper = React.useCallback(
     (value: string) => {
-      if (searchKey) {
+      if (searchKey && !onSearch) {
         const col = table.getColumn(searchKey);
         if (col) col.setFilterValue(value);
       }
@@ -242,7 +242,9 @@ export function DataTable<TData, TValue>({
             <SearchInput
               placeholder={`Search ${searchKey.replace(/_/g, " ")}...`}
               initialValue={
-                (table.getColumn(searchKey)?.getFilterValue() as string) ?? ""
+                onSearch
+                  ? ""
+                  : ((table.getColumn(searchKey)?.getFilterValue() as string) ?? "")
               }
               isLoading={isLoading}
               onSearch={handleSearchWrapper}
@@ -273,7 +275,7 @@ export function DataTable<TData, TValue>({
                         column.toggleVisibility(!!value)
                       }
                     >
-                      {(column.columnDef.meta as any)?.label ||
+                      {(column.columnDef.meta as { label?: string })?.label ||
                         column.id.replace(/_/g, " ")}
                     </DropdownMenuCheckboxItem>
                   );
@@ -346,7 +348,10 @@ export function DataTable<TData, TValue>({
                   colSpan={columns.length}
                   className="h-24 text-center"
                 >
-                  <p className="text-sm text-muted-foreground">No results.</p>
+                  <div className="flex flex-col items-center justify-center gap-1">
+                    <p className="text-sm font-medium text-muted-foreground">{emptyTitle || "No results."}</p>
+                    {emptyDescription && <p className="text-xs text-muted-foreground/60">{emptyDescription}</p>}
+                  </div>
                 </TableCell>
               </TableRow>
             )}

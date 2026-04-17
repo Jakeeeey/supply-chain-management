@@ -3,9 +3,9 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DispatchPlan } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/types/dispatch-plan.schema";
+import { formatPeso } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/utils/format";
 import { ColumnDef } from "@tanstack/react-table";
 import { Pencil } from "lucide-react";
-import { formatPeso } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/utils/format";
 
 /**
  * Column definitions for the PDP Creation (Pending) table.
@@ -40,15 +40,19 @@ export function getPDPCreationColumns({
       },
     },
     {
-      id: "cluster_branch",
-      header: "Cluster / Branch",
+      id: "cluster",
+      header: "Cluster",
       cell: ({ row }) => (
-        <div>
-          <div className="font-medium">{row.original.cluster_name || "—"}</div>
-          <div className="text-xs text-muted-foreground">
-            {row.original.branch_name || "—"}
-          </div>
-        </div>
+        <span className="font-medium">{row.original.cluster_name || "—"}</span>
+      ),
+    },
+    {
+      id: "branch",
+      header: "Branch",
+      cell: ({ row }) => (
+        <span className="font-medium text-xs text-muted-foreground">
+          {row.original.branch_name || "—"}
+        </span>
       ),
     },
     {

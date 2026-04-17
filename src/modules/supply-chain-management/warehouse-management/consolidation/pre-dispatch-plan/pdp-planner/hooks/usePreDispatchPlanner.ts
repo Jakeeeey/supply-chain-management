@@ -3,6 +3,7 @@ import {
   DispatchPlanDetail,
   DispatchPlanMasterData,
 } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/types/dispatch-plan.schema";
+import { format } from "date-fns";
 import { useCallback, useEffect, useState } from "react";
 import { usePDPFilter } from "../../context/PDPFilterContext";
 
@@ -13,11 +14,18 @@ const API_PATH =
  * Hook for the PDP Planner sub-module.
  */
 export function usePreDispatchPlanner() {
-  const { clusterId, status, search, setSearch } = usePDPFilter();
+  const { clusterId, status, search, setSearch, branchId, dateRange } =
+    usePDPFilter();
 
   // ─── Plans State ──────────────────────────────────
   const [plansData, setPlansData] = useState<DispatchPlan[]>([]);
   const [plansTotal, setPlansTotal] = useState(0);
+
+  // ─── Pagination State ─────────────────────────────
+  const [pagination, setPagination] = useState({
+    pageIndex: 0,
+    pageSize: 25,
+  });
 
   // ─── Master Data (for filters) ───────────────────
   const [masterData, setMasterData] = useState<DispatchPlanMasterData | null>(
@@ -32,36 +40,55 @@ export function usePreDispatchPlanner() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * Fetch master data only if not already loaded.
+   */
+  const loadMasterData = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_PATH}?type=master`);
+      const result = await res.json();
+      if (result.data) setMasterData(result.data);
+    } catch (e) {
+      console.error("Failed to load master data", e);
+    }
+  }, []);
+
   // ─── Fetch All Data ──────────────────────────────
   const refresh = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams({
-        limit: "-1",
+        limit: String(pagination.pageSize),
+        offset: String(pagination.pageIndex * pagination.pageSize),
         search: search,
       });
 
       if (clusterId) params.append("cluster_id", String(clusterId));
       if (status) params.append("status", status);
+      if (branchId) params.append("branch_id", String(branchId));
 
-      const [plansRes, masterRes, metricsRes] = await Promise.all([
+      if (dateRange?.from) {
+        params.append("start_date", format(dateRange.from, "yyyy-MM-dd"));
+      }
+      if (dateRange?.to) {
+        params.append("end_date", format(dateRange.to, "yyyy-MM-dd"));
+      }
+
+      const [plansRes, metricsRes] = await Promise.all([
         fetch(`${API_PATH}?${params.toString()}`).then((r) => r.json()),
-        fetch(`${API_PATH}?type=master`).then((r) => r.json()),
-        fetch(
-          `${API_PATH}?type=metrics${clusterId ? `&cluster_id=${clusterId}` : ""}`,
-        ).then((r) => r.json()),
+        fetch(`${API_PATH}?type=metrics&${params.toString()}`).then((r) =>
+          r.json(),
+        ),
       ]);
 
       if (plansRes.error) throw new Error(plansRes.error);
-      if (masterRes.error) throw new Error(masterRes.error);
       if (metricsRes.error) throw new Error(metricsRes.error);
 
       setPlansData(plansRes.data || []);
       setPlansTotal(
         plansRes.meta?.filter_count || plansRes.meta?.total_count || 0,
       );
-      setMasterData(masterRes.data || null);
       setMetrics(metricsRes.data || null);
     } catch (e: unknown) {
       const err = e as Error;
@@ -69,7 +96,7 @@ export function usePreDispatchPlanner() {
     } finally {
       setIsLoading(false);
     }
-  }, [search, clusterId, status]);
+  }, [search, clusterId, status, branchId, dateRange, pagination]);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -77,6 +104,11 @@ export function usePreDispatchPlanner() {
     }, 300);
     return () => clearTimeout(handler);
   }, [refresh]);
+
+  // Initial load of master data
+  useEffect(() => {
+    loadMasterData();
+  }, [loadMasterData]);
 
   // ─── Fetch Plan Details ───────────────────────────
   const fetchPlanDetails = useCallback(
@@ -108,6 +140,8 @@ export function usePreDispatchPlanner() {
   return {
     plansData,
     plansTotal,
+    pagination,
+    setPagination,
 
     masterData,
     metrics,

@@ -29,7 +29,7 @@ export default function VehicleListModule() {
     setCurrentPage(1);
   }, [query, statusFilter]);
 
-  const totalPages = Math.ceil(rows.length / pageSize);
+
 
   const filteredByStatus = React.useMemo(() => {
     if (statusFilter === "all") return rows;

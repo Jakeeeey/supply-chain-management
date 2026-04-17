@@ -1,8 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useEffect } from "react";
-import { useForm, SubmitHandler } from "react-hook-form"; // ✅ Added SubmitHandler
+import { useForm, SubmitHandler, Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
@@ -27,7 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
 import { unitSchema, UnitFormValues, UnitApiRow } from "../types";
-import { createUnit, updateUnit } from "../providers/fetchProviders";
+import { createUnit, updateUnit, checkUnitUniqueness } from "../providers/fetchProviders";
 
 interface UnitDialogProps {
   open: boolean;
@@ -45,8 +44,7 @@ export function UnitDialog({
   const isEdit = !!selectedUnit;
 
   const form = useForm<UnitFormValues>({
-    // 🔴 THE NUCLEAR FIX: Casting resolver to 'any' stops the type conflict
-    resolver: zodResolver(unitSchema) as any,
+    resolver: zodResolver(unitSchema) as unknown as Resolver<UnitFormValues>,
     defaultValues: {
       unit_name: "",
       unit_shortcut: "",
@@ -69,6 +67,29 @@ export function UnitDialog({
   // ✅ Explicitly typed SubmitHandler
   const onSubmit: SubmitHandler<UnitFormValues> = async (values) => {
     try {
+      // 🛡️ Strict Uniqueness Checker
+      const nameUnique = await checkUnitUniqueness("unit_name", values.unit_name, selectedUnit?.unit_id);
+      if (!nameUnique) {
+        toast.error(`The Unit Name "${values.unit_name}" is already in use.`);
+        return;
+      }
+
+      if (values.unit_shortcut) {
+        const shortcutUnique = await checkUnitUniqueness("unit_shortcut", values.unit_shortcut, selectedUnit?.unit_id);
+        if (!shortcutUnique) {
+          toast.error(`The Unit Shortcut "${values.unit_shortcut}" is already in use.`);
+          return;
+        }
+      }
+
+      if (values.sku_code) {
+        const skuUnique = await checkUnitUniqueness("sku_code", values.sku_code, selectedUnit?.unit_id);
+        if (!skuUnique) {
+          toast.error(`The SKU Code "${values.sku_code}" is already in use by another unit.`);
+          return;
+        }
+      }
+
       if (isEdit && selectedUnit) {
         await updateUnit(selectedUnit.unit_id, values);
         toast.success("Unit updated");
@@ -78,12 +99,9 @@ export function UnitDialog({
       }
       onSuccess();
       onOpenChange(false);
-    } catch (error: any) {
-      if (error.message.includes("unique")) {
-        toast.error("This Unit Name or Shortcut already exists.");
-      } else {
-        toast.error(error.message || "Operation failed");
-      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Operation failed";
+      toast.error(message);
     }
   };
 
@@ -101,8 +119,7 @@ export function UnitDialog({
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <FormField
-                // 🔴 FIX: Casting control to 'any' to satisfy shadcn FormField
-                control={form.control as any}
+                control={form.control}
                 name="unit_name"
                 render={({ field }) => (
                   <FormItem>
@@ -118,7 +135,7 @@ export function UnitDialog({
               />
 
               <FormField
-                control={form.control as any}
+                control={form.control}
                 name="unit_shortcut"
                 render={({ field }) => (
                   <FormItem>
@@ -135,7 +152,7 @@ export function UnitDialog({
             </div>
 
             <FormField
-              control={form.control as any}
+              control={form.control}
               name="sku_code"
               render={({ field }) => (
                 <FormItem>
@@ -149,7 +166,7 @@ export function UnitDialog({
             />
 
             <FormField
-              control={form.control as any}
+              control={form.control}
               name="order"
               render={({ field }) => (
                 <FormItem>
@@ -160,9 +177,12 @@ export function UnitDialog({
                       placeholder="0"
                       {...field}
                       // Handle number conversion manually
-                      onChange={(e) => field.onChange(e.target.value)}
+                      onChange={(e) => field.onChange(Number(e.target.value))}
                     />
                   </FormControl>
+                  <p className="text-[11px] text-muted-foreground leading-snug bg-muted/20 p-2 rounded border-l-2 border-primary/30">
+                    <b>Guide:</b> 1 (Small: pc, g) • 2 (Med: pack, kg) • 3 (Big: box, case)
+                  </p>
                   <FormMessage />
                 </FormItem>
               )}

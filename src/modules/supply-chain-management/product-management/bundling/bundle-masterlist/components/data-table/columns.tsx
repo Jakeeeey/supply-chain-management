@@ -54,7 +54,7 @@ export function getMasterlistColumns({
         if (typeof raw === "object" && raw !== null) {
           return raw.name || "-";
         }
-        const found = masterData?.bundleTypes.find((t: any) => t.id == raw);
+        const found = masterData?.bundleTypes.find((t) => t.id == raw);
         return found?.name || "-";
       },
     },
@@ -62,6 +62,7 @@ export function getMasterlistColumns({
       accessorKey: "status",
       header: "Status",
       cell: ({ row }) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const isRejected = (row.original as any).draft_status === "REJECTED";
         return (
           <Badge

@@ -20,11 +20,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { DriverWithDetails, User } from "../types";
+import type { DriverWithDetails } from "../types";
 
 interface DriverTableProps {
     drivers: DriverWithDetails[];
-    users: User[];
     loading: boolean;
     onEdit: (driver: DriverWithDetails) => void;
     currentPage: number;
@@ -66,7 +65,6 @@ function DriverTableSkeleton() {
 
 export function DriverTable({
     drivers,
-    users,
     loading,
     onEdit,
     currentPage,
@@ -75,11 +73,6 @@ export function DriverTable({
     itemsPerPage,
     onItemsPerPageChange
 }: DriverTableProps) {
-    const userMap = React.useMemo(() => {
-        const map = new Map<number, User>();
-        users.forEach((u) => map.set(u.user_id, u));
-        return map;
-    }, [users]);
 
     if (loading) {
         return <DriverTableSkeleton />;
@@ -105,7 +98,7 @@ export function DriverTable({
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {drivers.map((driver) => {
+                        {drivers.map((driver, index) => {
                             const user = driver.user;
                             const driverName = user
                                 ? `${user.user_fname} ${user.user_mname ? user.user_mname + " " : ""}${user.user_lname}`.trim()
@@ -116,7 +109,7 @@ export function DriverTable({
                             return (
                                 <TableRow key={driver.id} className="hover:bg-primary/[0.02] border-white/5 transition-colors group">
                                     <TableCell className="py-4 font-bold text-sm text-foreground/80 w-12">
-                                        {driver.user_id}
+                                        {startIndex + index}
                                     </TableCell>
                                     <TableCell className="py-4">
                                         <div className="flex flex-col">

@@ -24,13 +24,6 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -42,7 +35,6 @@ import {
     ComboboxContent,
     ComboboxList,
     ComboboxItem,
-    ComboboxEmpty,
 } from "@/components/ui/combobox";
 
 import type { User, Province, City, Barangay, Branch } from "../types";
@@ -147,11 +139,16 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }
         },
     });
 
-    // Load Provinces and Set Form Values for Editing
+    // Fetch provinces only once when modal opens
+    React.useEffect(() => {
+        if (isOpen && provinces.length === 0) {
+            fetchProvinces().then(setProvinces);
+        }
+    }, [isOpen, provinces.length]);
+
+    // Handle form reset and editing branch data loading
     React.useEffect(() => {
         if (isOpen) {
-            fetchProvinces().then(setProvinces);
-
             if (editingBranch) {
                 // Pre-load cities and barangays if editing
                 const loadLocationData = async () => {
@@ -201,7 +198,7 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }
                 });
             }
         }
-    }, [isOpen, editingBranch, provinces.length]); // Added provinces.length to trigger location data load once provinces are available
+    }, [isOpen, editingBranch, provinces, form]);
 
     // Handle Province Change -> Load Cities
     const onProvinceChange = async (provinceCode: string | null) => {
@@ -278,22 +275,22 @@ export function BranchModal({ isOpen, onClose, users, onSuccess, editingBranch }
             onSuccess();
             onClose();
             form.reset();
-        } catch (error: any) {
-            toast.error(error?.message || `Failed to ${editingBranch ? "update" : "register"} branch`);
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : `Failed to ${editingBranch ? "update" : "register"} branch`);
         } finally {
             setIsSubmitting(false);
         }
     }
 
-    const onInvalid = (errors: any) => {
+    const onInvalid = (errors: import("react-hook-form").FieldErrors<FormValues>) => {
         const messages = Object.values(errors)
-            .map((err: any) => err.message)
+            .map((err) => err?.message)
             .filter(Boolean);
 
         if (messages.length > 0) {
             // Uniq messages to avoid double toasts for same error type if any
             const uniqueMessages = Array.from(new Set(messages));
-            uniqueMessages.forEach((msg: any) => toast.error(msg));
+            uniqueMessages.forEach((msg) => toast.error(msg as string));
         }
     };
 

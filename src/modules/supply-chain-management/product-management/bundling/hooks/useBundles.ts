@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { bundleService } from "../services/bundle";
 import {
   BundleDraft,
   Bundle,
@@ -69,8 +68,8 @@ export function useBundles() {
       setApprovedTotal(res.approved?.meta?.total_count || 0);
 
       setMasterData(res.master || null);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsLoading(false);
     }

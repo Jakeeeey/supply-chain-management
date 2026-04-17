@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 interface ConsolidationCreationSuccessProps {
     batch: {
         consolidatorNo: string;
-        dispatches?: any[];
-        details?: any[];
+        dispatches?: unknown[];
+        details?: unknown[];
     };
     onReset: () => void;
     onViewBatch: () => void;
@@ -52,7 +52,7 @@ export default function ConsolidationCreationSuccess({ batch, onReset, onViewBat
                                 {batch.consolidatorNo}
                             </span>
                         </div>
-                        <Badge variant="outline" className="font-mono text-[10px] border-emerald-500/30 text-emerald-500 bg-emerald-500/5">
+                        <Badge className="font-mono text-[10px] border-emerald-500/30 text-emerald-500 bg-emerald-500/5">
                             LIVE
                         </Badge>
                     </div>
@@ -98,7 +98,7 @@ export default function ConsolidationCreationSuccess({ batch, onReset, onViewBat
 }
 
 // 🚀 Helper for the Status Badge
-function Badge({ children, className, variant }: { children: React.ReactNode, className?: string, variant?: string }) {
+function Badge({ children, className }: { children: React.ReactNode, className?: string }) {
     return (
         <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${className}`}>
             {children}

@@ -4,3 +4,4 @@ import { SettingsAppearance } from "./settings-appearance";
 export default function Page() {
     return <SettingsAppearance />;
 }
+

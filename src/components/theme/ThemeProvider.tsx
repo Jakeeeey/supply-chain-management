@@ -5,8 +5,8 @@ import * as React from "react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 
 export default function ThemeProvider({
-                                          children,
-                                      }: {
+    children,
+}: {
     children: React.ReactNode;
 }) {
     return (
@@ -15,6 +15,7 @@ export default function ThemeProvider({
             defaultTheme="system"
             enableSystem
             disableTransitionOnChange
+            enableColorScheme={false}
         >
             {children}
         </NextThemesProvider>

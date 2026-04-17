@@ -1,4 +1,6 @@
-export async function fetchSuppliers(type?: string) {
+import {PlanningRow} from "../types";
+
+export async function fetchSuppliers(type?: string): Promise<unknown[]> {
     // If a type is provided (e.g., "Non-Trade"), append it. Otherwise, use the default endpoint.
     const endpoint = type
         ? `/api/scm/inventory-management/inventory-controls/suppliers?type=${encodeURIComponent(type)}`
@@ -15,7 +17,7 @@ export async function fetchSuppliers(type?: string) {
     return Array.isArray(data) ? data : data.data || [];
 }
 
-export async function fetchBranches() {
+export async function fetchBranches(): Promise<unknown[]> {
     const res = await fetch("/api/scm/inventory-management/inventory-controls/branches", {cache: "no-store"});
     const data = await res.json();
 
@@ -27,7 +29,7 @@ export async function fetchBranches() {
     return Array.isArray(data) ? data : data.data || [];
 }
 
-export async function fetchInTransitPOs(supplierId: string) {
+export async function fetchInTransitPOs(supplierId: string): Promise<unknown[]> {
     const res = await fetch(`/api/scm/inventory-management/inventory-controls/in-transit?supplierId=${supplierId}`, {cache: "no-store"});
     const data = await res.json();
 
@@ -48,7 +50,7 @@ export async function fetchHistoricalData(payload: {
     inTransitPoIds: (string | number)[];
     selectedMonths: number[]; // Array of month numbers (1-12)
     selectedYear: number;     // The selected year (e.g., 2026)
-}) {
+}): Promise<PlanningRow[]> {
     const res = await fetch("/api/scm/inventory-management/inventory-controls/load-planning/historical", {
         method: "POST",
         headers: {
@@ -69,14 +71,12 @@ export async function fetchHistoricalData(payload: {
 
 /**
  * 🚀 POST: Fetch the fully calculated FORECAST Planning Dashboard Data
- * Note: Forecast doesn't strictly need selectedMonths/Year sent to the DB,
- * as the DB pulls all available future forecast months based on the date range.
  */
 export async function fetchForecastData(payload: {
     supplierId: number;
     branchIds: number[];
     inTransitPoIds: (string | number)[];
-}) {
+}): Promise<PlanningRow[]> {
     // Make sure your Next.js BFF route matches this path!
     const res = await fetch("/api/scm/inventory-management/inventory-controls/load-planning/forecast", {
         method: "POST",
@@ -95,6 +95,7 @@ export async function fetchForecastData(payload: {
 
     return Array.isArray(data) ? data : data.data || [];
 }
+
 export interface PoItemPayload {
     productId: number;
     orderQty: number;

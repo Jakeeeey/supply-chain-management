@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { toast } from "sonner";
-import { Product, Supplier } from "../types";
+import { Product, BarcodeType, WeightUnit, CbmUnit } from "../types";
 import {
   getMasterlistProducts,
   getMasterlistBundles,
@@ -42,7 +42,23 @@ export function useBarcodeMasterlist() {
         .map((p) => ({ ...p, record_type: "product" as const }));
 
       // Normalize bundles to Product shape
-      const validBundles: Product[] = bundlesData.map((b: any) => ({
+      interface BundleAPI {
+        id: number;
+        bundle_sku?: string;
+        bundle_name?: string;
+        barcode_value?: string | null;
+        barcode_date?: string | null;
+        bundle_type_id?: { name: string };
+        barcode_type_id?: BarcodeType | null;
+        weight?: number | string | null;
+        weight_unit_id?: WeightUnit | null;
+        cbm_length?: number | string | null;
+        cbm_width?: number | string | null;
+        cbm_height?: number | string | null;
+        cbm_unit_id?: CbmUnit | null;
+      }
+
+      const validBundles: Product[] = (bundlesData as BundleAPI[]).map((b) => ({
         product_id: String(b.id),
         product_code: b.bundle_sku || "",
         product_name: b.bundle_name || "",
@@ -52,20 +68,21 @@ export function useBarcodeMasterlist() {
         product_category: b.bundle_type_id?.name || "Bundle",
         unit_of_measurement: null,
         product_per_supplier: [],
-        barcode_type_id: b.barcode_type_id || null,
+        barcode_type_id: b.barcode_type_id as BarcodeType | null,
         weight: b.weight ? Number(b.weight) : null,
-        weight_unit_id: b.weight_unit_id || null,
+        weight_unit_id: b.weight_unit_id as WeightUnit | null,
         cbm_length: b.cbm_length ? Number(b.cbm_length) : null,
         cbm_width: b.cbm_width ? Number(b.cbm_width) : null,
         cbm_height: b.cbm_height ? Number(b.cbm_height) : null,
-        cbm_unit_id: b.cbm_unit_id || null,
+        cbm_unit_id: b.cbm_unit_id as CbmUnit | null,
         record_type: "bundle" as const,
       }));
 
       setAllProducts([...validProducts, ...validBundles]);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to fetch data", err);
-      setError(err.message || "Failed to load masterlist data.");
+      const message = err instanceof Error ? err.message : "Failed to load masterlist data.";
+      setError(message);
       toast.error("Failed to load masterlist data.");
     } finally {
       setIsLoading(false);

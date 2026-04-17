@@ -25,7 +25,7 @@ export interface ConsolidatorDto {
     branchId: number;
     branchName: string;
     checkedBy?: number;
-    details: ConsolidatorDetailsDto[];
+    details?: ConsolidatorDetailsDto[]; // Made optional
 }
 
 export interface BranchDto {

@@ -55,7 +55,7 @@ export function BulkRejectModal({
     if (isOpen) {
       const initial: Record<string, string> = {};
       selectedSKUs.forEach((sku) => {
-        const id = String((sku as any).id || sku.product_id);
+        const id = String(sku.id || sku.product_id);
         initial[id] = individualRemarks[id] || "";
       });
       const timer = setTimeout(() => {
@@ -63,6 +63,7 @@ export function BulkRejectModal({
       }, 0);
       return () => clearTimeout(timer);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, selectedSKUs]);
 
   const handleIndividualChange = (id: string, value: string) => {
@@ -71,7 +72,7 @@ export function BulkRejectModal({
 
   const handleConfirm = async () => {
     const rejections = selectedSKUs.map((sku) => {
-      const id = String((sku as any).id || sku.product_id);
+      const id = String(sku.id || sku.product_id);
       return {
         id,
         remarks: applySameReason ? commonRemarks : individualRemarks[id] || "",
@@ -84,7 +85,7 @@ export function BulkRejectModal({
   const isComplete = applySameReason
     ? commonRemarks.trim().length >= 12
     : selectedSKUs.every((sku) => {
-        const id = String((sku as any).id || sku.product_id);
+        const id = String(sku.id || sku.product_id);
         return (individualRemarks[id] || "").trim().length >= 12;
       });
 
@@ -150,7 +151,7 @@ export function BulkRejectModal({
             <ScrollArea className="h-[250px] pr-4 border rounded-lg p-2 bg-muted/10">
               <div className="space-y-4 pt-1">
                 {selectedSKUs.map((sku) => {
-                  const id = String((sku as any).id || sku.product_id);
+                  const id = String(sku.id || sku.product_id);
                   const remark = individualRemarks[id] || "";
                   return (
                     <div

@@ -57,7 +57,7 @@ export interface RawPurchaseOrder {
     purchase_order_no: string;
     order_date: string;
     inventory_status: number;
-    [key: string]: any;
+    [key: string]: unknown;
 }
 
 export interface RawPurchaseOrderReceiving {
@@ -79,5 +79,5 @@ export interface RawSupplier {
     supplier_shortcut: string;
     isActive: number;
     nonBuy: number;
-    [key: string]: any;
+    [key: string]: unknown;
 }

@@ -10,15 +10,16 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
-import { cookies } from "next/headers"
-import { getHeaderUserFromToken } from "@/lib/auth-utils"
-import StockTransferModule from "@/modules/supply-chain-management/warehouse-management/stock-transfer/StockTransferModule"
-import { NavUser } from "@/app/(supply-chain-management)/scm/_components/nav-user"
-export default async function Page() {
-    const cookieStore = await cookies();
-    const token = cookieStore.get("vos_access_token")?.value;
-    const headerUser = getHeaderUserFromToken(token);
+import { NavUser } from "@/components/shared/app-sidebar/nav-user";
+import StockTransferModule from "@/modules/supply-chain-management/warehouse-management/stock-transfer"
 
+const headerUser = {
+    name: "Jake Dave M. De Guzman",
+    email: "jakedavedeguzman@vertex.com",
+    avatar: "/avatars/shadcn.jpg",
+}
+
+export default function Page() {
     return (
         <div className="flex h-full min-h-0 flex-col">
             <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-2 bg-background">
@@ -52,3 +53,4 @@ export default async function Page() {
         </div>
     )
 }
+

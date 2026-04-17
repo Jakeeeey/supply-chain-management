@@ -32,13 +32,14 @@ export async function GET(req: NextRequest) {
         const data = await getInventoryPerformanceData(validation.data, token);
 
         return NextResponse.json(data);
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[BIA_INVENTORY_PERFORMANCE_ERROR]:', error);
+        const err = error as Error;
         // Include more detail in the response for debugging if possible
         return NextResponse.json(
             {
-                error: error.message || 'Internal Server Error',
-                stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+                error: err.message || 'Internal Server Error',
+                stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
             },
             { status: 500 },
         );

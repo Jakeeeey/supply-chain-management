@@ -14,9 +14,9 @@ const EMPTY: DashboardData = {
   avgSales: 0,
 };
 
-function toUserMessage(err: any): string {
-  // Most common fetch error in Next: "Failed to fetch"
-  const msg = String(err?.message || err || "").trim();
+function toUserMessage(err: unknown): string {
+  const e = err as { message?: string };
+  const msg = String(e?.message || err || "").trim();
   if (!msg) return "Request failed.";
 
   // Improve common low-signal messages
@@ -71,7 +71,7 @@ export function useStatisticsDeliveries() {
         viewType,
       });
       setData(result);
-    } catch (e: any) {
+    } catch (e) {
       const msg = toUserMessage(e);
       showErrorToast(msg);
       setData(EMPTY); // keep UI stable (zeros) but no inline error

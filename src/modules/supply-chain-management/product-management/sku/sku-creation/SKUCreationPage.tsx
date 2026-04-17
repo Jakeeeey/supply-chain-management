@@ -24,6 +24,8 @@ import { BulkDraftActionsModal } from "./components/modals/bulk-draft-actions-mo
 
 export default function SKUCreationModule() {
   const {
+    // approvedData is extracted but not used locally in this module
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     approvedData,
     setApprovedPage,
     draftData,
@@ -64,13 +66,16 @@ export default function SKUCreationModule() {
   }>({ open: false, sku: null });
 
   useEffect(() => {
-    setMounted(true);
+    const timer = setTimeout(() => {
+      setMounted(true);
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const resolveId = useCallback(
     (sku: SKU | undefined | null): number | null => {
       if (!sku) return null;
-      const id = (sku as any).id || sku.product_id;
+      const id = sku.id || sku.product_id;
       return id ? Number(id) : null;
     },
     [],
@@ -114,11 +119,10 @@ export default function SKUCreationModule() {
           "The product record has been permanently removed from the system.",
       });
       setSkuToDelete(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error("Deletion Failed", {
         description:
-          err.message ||
-          "An unexpected error occurred while trying to delete the record.",
+          (err instanceof Error ? err.message : "An unexpected error occurred while trying to delete the record."),
       });
     }
   };
@@ -141,8 +145,8 @@ export default function SKUCreationModule() {
       }
       setIsModalOpen(false);
       setDuplicateWarning({ open: false, sku: null });
-    } catch (err: any) {
-      toast.error("Operation failed: " + err.message);
+    } catch (err: unknown) {
+      toast.error("Operation failed: " + (err instanceof Error ? err.message : String(err)));
       throw err;
     } finally {
       setSaving(false);
@@ -174,10 +178,10 @@ export default function SKUCreationModule() {
           "The record has been moved to the manager's approval queue.",
       });
       setSelectedRows((prev) => prev.filter((p) => resolveId(p) !== id));
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error("Submission Failed", {
         description:
-          err.message || "Could not move the record to the approval queue.",
+          (err instanceof Error ? err.message : "Could not move the record to the approval queue."),
       });
     }
   };
@@ -194,10 +198,10 @@ export default function SKUCreationModule() {
       });
       setSelectedRows([]);
       setBulkActionType(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error("Bulk Submission Failed", {
         description:
-          err.message || "An error occurred while submitting multiple records.",
+          (err instanceof Error ? err.message : "An error occurred while submitting multiple records."),
       });
     } finally {
       setSaving(false);
@@ -216,17 +220,17 @@ export default function SKUCreationModule() {
       });
       setSelectedRows([]);
       setBulkActionType(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error("Bulk Deletion Failed", {
         description:
-          err.message || "An error occurred while deleting multiple records.",
+          (err instanceof Error ? err.message : "An error occurred while deleting multiple records."),
       });
     } finally {
       setSaving(false);
     }
   };
 
-  if (!mounted || (isLoading && !draftData.length && !approvedData.length)) {
+  if (!mounted) {
     return <ModuleSkeleton hasTabs={false} rowCount={6} />;
   }
 

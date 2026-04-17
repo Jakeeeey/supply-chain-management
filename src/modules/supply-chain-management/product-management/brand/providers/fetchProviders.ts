@@ -51,7 +51,7 @@ export async function createBrand(
   payload: BrandFormValues,
 ): Promise<BrandApiRow> {
   const cleanPayload = { ...payload };
-  if ("brand_id" in cleanPayload) delete (cleanPayload as any).brand_id;
+  if ("brand_id" in cleanPayload) delete (cleanPayload as Record<string, unknown>).brand_id;
 
   const res = await fetch(API_BASE, {
     method: "POST",
@@ -65,7 +65,7 @@ export async function createBrand(
 }
 
 export async function updateBrand(
-  id: string,
+  id: number,
   payload: BrandFormValues,
 ): Promise<BrandApiRow> {
   const res = await fetch(`${API_BASE}?id=${id}`, {
@@ -77,4 +77,24 @@ export async function updateBrand(
   if (!res.ok) throw new Error(await readError(res));
   const json = (await res.json()) as DirectusItemResponse<BrandApiRow>;
   return json?.data;
+}
+
+export async function checkBrandUniqueness(
+  field: "brand_name" | "sku_code",
+  value: string,
+  excludeId?: number
+): Promise<boolean> {
+  const filter: Record<string, { _eq: string } | { _neq: number }> = {
+    [field]: { _eq: value },
+  };
+
+  if (excludeId) {
+    filter.brand_id = { _neq: excludeId };
+  }
+
+  const res = await fetch(`${API_BASE}?limit=1&filter=${encodeURIComponent(JSON.stringify(filter))}`);
+  if (!res.ok) return true; // Fail safe
+
+  const json = await res.json();
+  return (json?.data?.length ?? 0) === 0;
 }

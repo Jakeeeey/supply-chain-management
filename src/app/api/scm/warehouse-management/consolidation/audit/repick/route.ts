@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
 
         if (!res.ok) return NextResponse.json({ ok: false }, { status: res.status });
         return NextResponse.json(await res.json());
-    } catch (err) {
+    } catch {
         return NextResponse.json({ ok: false }, { status: 502 });
     }
 }

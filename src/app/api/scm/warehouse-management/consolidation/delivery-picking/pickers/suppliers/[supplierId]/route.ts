@@ -33,7 +33,7 @@ export async function GET(
 
         if (!springRes.ok) return NextResponse.json({ ok: false }, { status: springRes.status });
         return NextResponse.json(await springRes.json());
-    } catch (err) {
+    } catch {
         return NextResponse.json({ ok: false }, { status: 502 });
     }
 }

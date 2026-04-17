@@ -12,7 +12,7 @@ import { StockAdjustmentHeader } from "../types/stock-adjustment.schema";
  * re-fetch the adjustment list and vice-versa.
  */
 export function useStockAdjustment() {
-  const [data, setData] = useState<StockAdjustmentHeader[]>([]);
+  const [rawData, setRawData] = useState<StockAdjustmentHeader[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,7 +38,7 @@ export function useStockAdjustment() {
       if (debouncedSearch) queryParams.set("search", debouncedSearch);
       if (branchId) queryParams.set("branchId", String(branchId));
       if (type) queryParams.set("type", type);
-      if (status) queryParams.set("status", status);
+      // NOTE: status is filtered client-side to avoid Directus boolean filter issues
 
       const response = await fetch(
         `/api/scm/inventory-management/stock-adjustment?${queryParams.toString()}`
@@ -46,18 +46,34 @@ export function useStockAdjustment() {
       const result = await response.json();
 
       if (result.error) throw new Error(result.error);
-      setData(result.data || []);
-    } catch (err: any) {
-      setError(err.message);
+      setRawData(result.data || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An unknown error occurred");
       toast.error("Failed to load stock adjustments");
     } finally {
       setIsLoading(false);
     }
-  }, [debouncedSearch, branchId, type, status]);
+  }, [debouncedSearch, branchId, type]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // Client-side status filter — avoids Directus boolean filter inconsistencies
+  const data = rawData.filter((item) => {
+    if (!status) return true;
+    // Directus may return isPosted as a Buffer, number (0/1), or boolean
+    const rawPosted = item.isPosted as unknown;
+    let posted: boolean;
+    if (rawPosted && typeof rawPosted === 'object' && 'data' in rawPosted) {
+      posted = (rawPosted as { data: number[] }).data?.[0] === 1;
+    } else {
+      posted = Number(rawPosted) === 1;
+    }
+    if (status === "Posted") return posted;
+    if (status === "Unposted") return !posted;
+    return true;
+  });
 
   const deleteAdjustment = async (id: number) => {
     try {
@@ -69,14 +85,14 @@ export function useStockAdjustment() {
       if (result.error) throw new Error(result.error);
       toast.success("Adjustment deleted successfully");
       await refresh();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to delete adjustment");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete adjustment");
       throw err;
     }
   };
 
   return {
-    data,
+    data,  // already filtered by status client-side
     isLoading,
     error,
     refresh,

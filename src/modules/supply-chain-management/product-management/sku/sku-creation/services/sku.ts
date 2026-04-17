@@ -31,6 +31,7 @@ export const skuService = {
     skuLifecycleService.submitForApproval.bind(skuLifecycleService),
   rejectDraft: skuLifecycleService.rejectDraft.bind(skuLifecycleService),
   deleteDraft: skuLifecycleService.deleteDraft.bind(skuLifecycleService),
+  uploadImage: skuLifecycleService.uploadImage.bind(skuLifecycleService),
 
   // ─── Approval Workflow ─────────────────────────────────────────────────────
   approveDraft: skuApprovalService.approveDraft.bind(skuApprovalService),

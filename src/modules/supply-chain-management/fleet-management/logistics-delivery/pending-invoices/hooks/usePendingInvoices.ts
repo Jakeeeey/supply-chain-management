@@ -18,8 +18,8 @@ export function usePendingInvoices(filters: FiltersState) {
         setLoading(true);
         const res = await listPendingInvoices(filters);
         if (mounted) setData(res);
-      } catch (e: any) {
-        if (mounted) setError(e?.message ?? "Failed to load pending invoices");
+      } catch (e) {
+        if (mounted) setError(e instanceof Error ? e.message : "Failed to load pending invoices");
       } finally {
         if (mounted) setLoading(false);
       }
@@ -28,16 +28,7 @@ export function usePendingInvoices(filters: FiltersState) {
     return () => {
       mounted = false;
     };
-  }, [
-    filters.q,
-    filters.status,
-    filters.salesmanId,
-    filters.customerCode,
-    filters.dateFrom,
-    filters.dateTo,
-    filters.page,
-    filters.pageSize,
-  ]);
+  }, [filters]);
 
   return { data, loading, error };
 }

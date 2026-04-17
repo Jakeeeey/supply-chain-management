@@ -52,15 +52,27 @@ export function ProductDetailModal({
 
   // Fetch bundle items when a bundle is opened
   useEffect(() => {
+    let isMounted = true;
     if (open && isBundle && product) {
-      setLoadingItems(true);
+      Promise.resolve().then(() => {
+        if (isMounted) setLoadingItems(true);
+      });
       getBundleItems(product.product_id)
-        .then((items) => setBundleItems(items))
+        .then((items) => {
+          if (isMounted) setBundleItems(items);
+        })
         .catch((err) => console.error("Failed to load bundle items", err))
-        .finally(() => setLoadingItems(false));
+        .finally(() => {
+          if (isMounted) setLoadingItems(false);
+        });
     } else {
-      setBundleItems([]);
+      Promise.resolve().then(() => {
+        if (isMounted) setBundleItems([]);
+      });
     }
+    return () => {
+      isMounted = false;
+    };
   }, [open, isBundle, product]);
 
   if (!product) return null;

@@ -10,7 +10,8 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { NavUser } from "../../_components/nav-user";
+import { NavUser } from "@/components/shared/app-sidebar/nav-user";
+
 import { cookies } from "next/headers";
 
 export const runtime = "nodejs";
@@ -22,59 +23,53 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
   try {
     const parts = token.split(".");
     if (parts.length < 2) return null;
+
     const p = parts[1];
     const b64 = p.replace(/-/g, "+").replace(/_/g, "/");
     const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+
     const json = Buffer.from(padded, "base64").toString("utf8");
-    return JSON.parse(json) as Record<string, unknown>;
+    return JSON.parse(json);
   } catch {
     return null;
   }
 }
 
 function pickString(obj: Record<string, unknown> | null, keys: string[]): string {
-  if (!obj) return "";
   for (const k of keys) {
-    const v = obj[k];
+    const v = obj?.[k];
     if (typeof v === "string" && v.trim()) return v.trim();
   }
   return "";
 }
 
-function toSafeNumber(value: unknown): number {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function buildHeaderUserFromToken(token: string | null | undefined): {
-  id: number;
-  branchId: number;
-  name: string;
-  email: string;
-  avatar: string;
-} {
+function buildHeaderUserFromToken(token: string | null | undefined) {
   const payload = token ? decodeJwtPayload(token) : null;
 
-  const first = pickString(payload, ["Firstname", "FirstName", "firstName", "firstname", "first_name"]);
-  const last = pickString(payload, ["LastName", "Lastname", "lastName", "lastname", "last_name"]);
+  const first = pickString(payload, [
+    "Firstname",
+    "FirstName",
+    "firstName",
+    "firstname",
+    "first_name",
+  ]);
+  const last = pickString(payload, [
+    "LastName",
+    "Lastname",
+    "lastName",
+    "lastname",
+    "last_name",
+  ]);
   const email = pickString(payload, ["email", "Email"]);
 
-  const nameParts: string[] = [];
-  if (first) nameParts.push(first);
-  if (last) nameParts.push(last);
-  const name = nameParts.length > 0 ? nameParts.join(" ") : email || "User";
+  const name = [first, last].filter(Boolean).join(" ") || email || "User";
 
-  const branchId = toSafeNumber(
-    payload?.branch_id ?? payload?.branchId ?? payload?.branch ?? 0
-  );
-  const id = toSafeNumber(
-    payload?.id ?? payload?.userId ?? payload?.sub ?? 0
-  );
+  const branchId = Number(payload?.branch_id || payload?.branchId || payload?.branch || 0);
 
   return {
-    id: id > 0 ? id : 0,
-    branchId: branchId > 0 ? branchId : 0,
-    name: name || "User",
+    id: Number(payload?.id || payload?.userId || payload?.sub || 0) || undefined,
+    branchId: branchId > 0 ? branchId : undefined,
+    name,
     email: email || "",
     avatar: "/avatars/shadcn.jpg",
   };
@@ -82,10 +77,7 @@ function buildHeaderUserFromToken(token: string | null | undefined): {
 
 export default async function Page() {
   const cookieStore = await cookies();
-  const token =
-    cookieStore.get("springboot_token")?.value ??
-    cookieStore.get(COOKIE_NAME)?.value ??
-    null;
+  const token = cookieStore.get("springboot_token")?.value || cookieStore.get(COOKIE_NAME)?.value || null;
 
   const headerUser = buildHeaderUserFromToken(token);
 
@@ -125,15 +117,10 @@ export default async function Page() {
 
       <ScrollArea className="min-h-0 flex-1">
         <div className="p-4">
-          <StockConversionModule
-            userId={headerUser.id}
-            userBranchId={headerUser.branchId}
-            userName={headerUser.name}
-            userEmail={headerUser.email}
-            userAvatar={headerUser.avatar}
-          />
+          <StockConversionModule user={headerUser} />
         </div>
       </ScrollArea>
     </div>
   );
 }
+

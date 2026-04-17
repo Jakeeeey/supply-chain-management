@@ -48,7 +48,7 @@ export function AddVehicleDialog({
   fuelOptions: Array<{ id: number; name: string }>;
   engineOptions: Array<{ id: number; name: string }>;
   saving: boolean;
-  onCreate: (payload: Record<string, any>) => Promise<void>;
+  onCreate: (payload: Record<string, unknown>) => Promise<void>;
 }) {
   const [form, setForm] = React.useState<CreateVehicleForm>({
     plateNumber: "",
@@ -67,6 +67,7 @@ export function AddVehicleDialog({
     purchasedDate: "",
     cbmLength: "",
     cbmWidth: "",
+    cbmHeight: "",
     imageFile: null,
   });
 
@@ -107,7 +108,8 @@ export function AddVehicleDialog({
     requiredOk(form.maxLiters || "") &&
     requiredOk(form.purchasedDate || "") &&
     requiredOk(form.cbmLength || "") &&
-    requiredOk(form.cbmWidth || "");
+    requiredOk(form.cbmWidth || "") &&
+    requiredOk(form.cbmHeight || "");
 
   function set<K extends keyof CreateVehicleForm>(k: K, v: CreateVehicleForm[K]) {
     setForm((p) => ({ ...p, [k]: v }));
@@ -128,6 +130,7 @@ export function AddVehicleDialog({
     if (!requiredOk(form.purchasedDate || "")) missing.push("Purchased Date");
     if (!requiredOk(form.cbmLength || "")) missing.push("CBM Length");
     if (!requiredOk(form.cbmWidth || "")) missing.push("CBM Width");
+    if (!requiredOk(form.cbmHeight || "")) missing.push("CBM Height");
     return missing;
   }
 
@@ -176,15 +179,15 @@ export function AddVehicleDialog({
       if (form.imageFile) {
         imageId = await uploadVehicleImage(form.imageFile);
       }
-    } catch (e: any) {
-      toast.error("Image upload failed", { description: String(e?.message || e) });
+    } catch (e) {
+      toast.error("Image upload failed", { description: String(e instanceof Error ? e.message : e) });
       return;
     }
 
     const yearInt = toIntOrNull(form.year);
     const mileageInt = toIntOrNull(String(form.mileageKm || ""));
 
-    const payload: Record<string, any> = {
+    const payload: Record<string, unknown> = {
       vehicle_plate: form.plateNumber.trim(),
       name: form.vehicleName.trim(),
       vehicle_type: form.typeId,
@@ -210,6 +213,7 @@ export function AddVehicleDialog({
     payload.purchased_date = form.purchasedDate;
     payload.cbm_length = form.cbmLength;
     payload.cbm_width = form.cbmWidth;
+    payload.cbm_height = form.cbmHeight;
 
     // ✅ reuse vehicles.image
     if (imageId) payload.image = imageId;
@@ -238,17 +242,18 @@ export function AddVehicleDialog({
         purchasedDate: "",
         cbmLength: "",
         cbmWidth: "",
+        cbmHeight: "",
         imageFile: null,
       });
 
       setTouched(false);
       onOpenChange(false);
-    } catch (err: any) {
-      const raw =
-        err?.response?.data?.errors?.[0]?.message ||
-        err?.response?.data?.error ||
-        err?.message ||
-        "Please try again.";
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Please try again.";
+      const response = (err as Record<string, unknown>)?.response as Record<string, unknown>;
+      const data = response?.data as Record<string, unknown>;
+      const errors = data?.errors as Record<string, unknown>[];
+      const raw = errors?.[0]?.message || data?.error || msg;
 
       toast.error("Add vehicle failed", { description: String(raw) });
     }
@@ -440,7 +445,7 @@ export function AddVehicleDialog({
 
               <div className="grid gap-2">
                 <Label>
-                  Maximum Weight <span className="text-destructive">*</span>
+                  Maximum Weight (kg)<span className="text-destructive">*</span>
                 </Label>
                 <Input
                   value={form.maximumWeight || ""}
@@ -452,7 +457,7 @@ export function AddVehicleDialog({
 
               <div className="grid gap-2">
                 <Label>
-                  Maximum Load <span className="text-destructive">*</span>
+                  Minimum Load (₱ value)<span className="text-destructive">*</span>
                 </Label>
                 <Input
                   value={form.minimumLoad || ""}
@@ -506,6 +511,18 @@ export function AddVehicleDialog({
                   value={form.cbmWidth || ""}
                   onChange={(e) => set("cbmWidth", e.target.value)}
                   className={touched && !requiredOk(form.cbmWidth || "") ? "ring-1 ring-destructive" : ""}
+                  placeholder="0.00"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label>
+                  CBM Height <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  value={form.cbmHeight || ""}
+                  onChange={(e) => set("cbmHeight", e.target.value)}
+                  className={touched && !requiredOk(form.cbmHeight || "") ? "ring-1 ring-destructive" : ""}
                   placeholder="0.00"
                 />
               </div>

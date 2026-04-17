@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getDirectusBase, getDirectusToken } from "@/lib/directus";
+import { getDirectusBase, getDirectusToken } from "@/modules/supply-chain-management/supplier-management/utils/directus";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,7 +48,7 @@ export async function GET() {
         const json = await res.json();
 
         // ✅ ensure total_percent is usable (ACE promo already computed in DB)
-        const mapped = (json?.data ?? []).map((d: any) => {
+        const mapped = (json?.data ?? []).map((d: Record<string, unknown>) => {
             const rawPct = Number.parseFloat(String(d?.total_percent ?? "0")) || 0;
             const code = String(d?.discount_type ?? "");
             const computed = rawPct > 0 ? rawPct : deriveDiscountPercentFromCode(code);
@@ -61,9 +61,10 @@ export async function GET() {
         });
 
         return NextResponse.json({ data: mapped });
-    } catch (e: any) {
+    } catch (e: unknown) {
+        const error = e as Error;
         return NextResponse.json(
-            { error: "Failed to fetch discount types", details: String(e?.message ?? e) },
+            { error: "Failed to fetch discount types", details: String(error?.message ?? error) },
             { status: 500 }
         );
     }

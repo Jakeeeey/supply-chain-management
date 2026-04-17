@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { toast } from "sonner";
 import {
   StockAdjustmentDetail,
   StockAdjustmentFormValues,
+  StockAdjustmentProduct,
+  SelectionBranch,
+  SelectionSupplier
 } from "../types/stock-adjustment.schema";
 
 /**
@@ -15,9 +17,9 @@ import {
  * only relevant to the list view.
  */
 export function useStockAdjustmentForm() {
-  const [branches, setBranches] = useState<any[]>([]);
-  const [suppliers, setSuppliers] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
+  const [branches, setBranches] = useState<SelectionBranch[]>([]);
+  const [suppliers, setSuppliers] = useState<SelectionSupplier[]>([]);
+  const [products, setProducts] = useState<StockAdjustmentProduct[]>([]);
   const [isProductsLoading, setIsProductsLoading] = useState(false);
   const [isSuppliersLoading, setIsSuppliersLoading] = useState(false);
   const [isRfidLoading, setIsRfidLoading] = useState(false);
@@ -48,7 +50,7 @@ export function useStockAdjustmentForm() {
       );
       const result = await response.json();
       setProducts(result.data || []);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Failed to fetch products:", err);
     } finally {
       setIsProductsLoading(false);
@@ -82,7 +84,7 @@ export function useStockAdjustmentForm() {
       );
       const result = await response.json();
       setProducts(result.data || []);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Failed to fetch products by supplier:", err);
     } finally {
       setIsProductsLoading(false);
@@ -99,7 +101,7 @@ export function useStockAdjustmentForm() {
       if (!response.ok) return;
       const result = await response.json();
       const ids = new Set<number>(
-        (result.products || []).map((p: any) => Number(p.productId || p.product_id))
+        (result.products || []).map((p: { productId?: number; product_id?: number }) => Number(p.productId || p.product_id))
       );
       setRfidProductIds(ids);
     } catch (err) {
@@ -119,7 +121,7 @@ export function useStockAdjustmentForm() {
       if (!response.ok) return;
       const result = await response.json();
       const map = new Map<number, number>();
-      (result.inventory || []).forEach((item: any) => {
+      (result.inventory || []).forEach((item: { product_id: number; running_inventory?: number }) => {
         map.set(Number(item.product_id), Number(item.running_inventory || 0));
       });
       setInventoryMap(map);
@@ -153,7 +155,7 @@ export function useStockAdjustmentForm() {
     }
   }, []);
 
-  const checkRFID = useCallback(async (productId: number, branchId: number): Promise<any> => {
+  const checkRFID = useCallback(async (productId: number, branchId: number): Promise<Record<string, unknown> | null> => {
     try {
       const response = await fetch(
         `/api/scm/inventory-management/stock-adjustment/check-rfid?productId=${productId}&branchId=${branchId}`
@@ -164,6 +166,24 @@ export function useStockAdjustmentForm() {
     } catch (err) {
       console.error("Failed to check RFID:", err);
       return null;
+    }
+  }, []);
+
+  const validateRFIDAvailability = useCallback(async (rfid: string, branchId?: number): Promise<{ exists: boolean; location?: string }> => {
+    try {
+      const params = new URLSearchParams();
+      params.set("rfid", rfid);
+      if (branchId) params.set("branchId", String(branchId));
+
+      const response = await fetch(
+        `/api/scm/inventory-management/stock-adjustment/check-available-rfid?${params.toString()}`
+      );
+      if (!response.ok) return { exists: false };
+      const result = await response.json();
+      return { exists: !!result.exists, location: result.location };
+    } catch (err) {
+      console.error("Failed to validate RFID availability:", err);
+      return { exists: false };
     }
   }, []);
 
@@ -263,6 +283,7 @@ export function useStockAdjustmentForm() {
     fetchBranchInventory,
     fetchInventory,
     checkRFID,
+    validateRFIDAvailability,
     fetchNextDocNo,
     createAdjustment,
     updateAdjustment,

@@ -28,8 +28,8 @@ export function useDriverManagement() {
             setDrivers(data.drivers || []);
             setUsers(data.users || []);
             setBranches(data.branches || []);
-        } catch (e: any) {
-            setError(e.message || "Failed to load data");
+        } catch (e: unknown) {
+            setError(e instanceof Error ? e.message : "Failed to load data");
         } finally {
             setLoading(false);
         }

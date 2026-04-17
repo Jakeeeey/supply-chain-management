@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 const DIRECTUS_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
-function json(res: any, status = 200) {
+function json(res: unknown, status = 200) {
   return NextResponse.json(res, { status });
 }
 
@@ -31,8 +31,9 @@ export async function GET(req: NextRequest) {
 
     const { body } = await readUpstream(upstream);
     return json(body, upstream.status);
-  } catch (e: any) {
-    return json({ error: String(e?.message || e) }, 500);
+  } catch (e: unknown) {
+    const err = e as Error;
+    return json({ error: String(err?.message || err) }, 500);
   }
 }
 
@@ -51,7 +52,8 @@ export async function POST(req: NextRequest) {
 
     const { body } = await readUpstream(upstream);
     return json(body, upstream.status);
-  } catch (e: any) {
-    return json({ error: String(e?.message || e) }, 500);
+  } catch (e: unknown) {
+    const err = e as Error;
+    return json({ error: String(err?.message || err) }, 500);
   }
 }

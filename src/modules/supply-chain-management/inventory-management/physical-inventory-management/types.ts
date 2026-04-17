@@ -69,6 +69,7 @@ export type ProductRow = {
     unit_of_measurement_count: number | null;
 
     isActive: number;
+    cost_per_unit: number | null;
 };
 
 export type ProductPerSupplierRow = {
@@ -97,6 +98,8 @@ export type PhysicalInventoryHeaderRow = {
     remarks: string | null;
     isComitted: number;
     isCancelled: number;
+    committed_at: string | null;
+    cancelled_at: string | null;
     total_amount: number | null;
     supplier_id: number | null;
     category_id: number | null;
@@ -148,6 +151,8 @@ export type PhysicalInventoryHeaderUpsertPayload = {
     encoder_id?: number | null;
     isComitted?: number;
     isCancelled?: number;
+    committed_at?: string | null;
+    cancelled_at?: string | null;
     total_amount?: number | null;
 
     // optional future-ready field
@@ -236,6 +241,7 @@ export type EligibleVariantRow = {
     unit_count: number;
 
     unit_price: number | null;
+    cost_per_unit: number | null;
 };
 
 export type GroupedPhysicalInventoryChildRow = {
@@ -257,6 +263,7 @@ export type GroupedPhysicalInventoryChildRow = {
     unit_count: number;
 
     unit_price: number | null;
+    cost_per_unit: number | null;
 
     detail_id: number | null;
     ph_id: number | null;

@@ -18,8 +18,8 @@ export function usePendingInvoiceOptions() {
         setLoading(true);
         const res = await getPendingInvoiceOptions();
         if (mounted) setData(res);
-      } catch (e: any) {
-        if (mounted) setError(e?.message ?? "Failed to load options");
+      } catch (e) {
+        if (mounted) setError(e instanceof Error ? e.message : "Failed to load options");
       } finally {
         if (mounted) setLoading(false);
       }

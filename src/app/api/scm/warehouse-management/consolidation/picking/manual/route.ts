@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
             try {
                 const errorData = await springRes.json();
                 errorMessage = errorData.message || errorMessage;
-            } catch (e) {
+            } catch {
                 console.error("Failed to parse Spring error JSON for manual pick");
             }
 
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
 
         const data = await springRes.json();
         return NextResponse.json({ ok: true, ...data });
-    } catch (err) {
+    } catch {
         return NextResponse.json({ ok: false, message: "BFF Network Error" }, { status: 502 });
     }
 }

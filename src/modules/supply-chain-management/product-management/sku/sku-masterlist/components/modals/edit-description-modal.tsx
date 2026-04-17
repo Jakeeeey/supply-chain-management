@@ -13,13 +13,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Info,
-  FileText,
   Tag,
   Package,
   Factory,
   LayoutGrid,
   Barcode,
   Box,
+  type LucideIcon,
 } from "lucide-react";
 import {
   SKU,
@@ -44,7 +44,7 @@ const InfoItem = ({
 }: {
   label: string;
   value: string | number;
-  icon: any;
+  icon: LucideIcon;
 }) => (
   <div className="space-y-1.5 p-3 rounded-lg bg-muted/30 border border-muted-foreground/5 transition-colors hover:bg-muted/50">
     <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
@@ -90,8 +90,8 @@ export function EditDescriptionModal({
 
   const handleSave = async () => {
     if (!sku) return;
-    const id = (sku as any).id || (sku as any).product_id;
-    await onSave(id, description);
+    const id = sku.id || sku.product_id;
+    await onSave(id!, description);
     onClose();
   };
 

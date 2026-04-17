@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Plus, MoreHorizontal, Pencil } from "lucide-react";
+import { Plus, MoreHorizontal, Pencil, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { ColumnDef } from "@tanstack/react-table";
 
@@ -18,12 +18,16 @@ import ErrorPage from "@/components/shared/ErrorPage";
 import { BrandApiRow } from "./types";
 import { listBrands } from "./providers/fetchProviders";
 import { BrandDialog } from "./components/BrandDialog";
+import { ViewBrandDialog } from "./components/ViewBrandDialog";
 
 // =============================================================================
 // COLUMN DEFINITIONS
 // =============================================================================
 
-function buildColumns(onEdit: (row: BrandApiRow) => void): ColumnDef<BrandApiRow>[] {
+function buildColumns(
+  onView: (row: BrandApiRow) => void,
+  onEdit: (row: BrandApiRow) => void
+): ColumnDef<BrandApiRow>[] {
   return [
     {
       accessorKey: "brand_name",
@@ -35,7 +39,7 @@ function buildColumns(onEdit: (row: BrandApiRow) => void): ColumnDef<BrandApiRow
     },
     {
       accessorKey: "sku_code",
-      header: "SKU Code",
+      header: "Brand Code",
       cell: ({ row }) => row.original.sku_code || "-",
       meta: { label: "SKU Code" },
     },
@@ -52,6 +56,9 @@ function buildColumns(onEdit: (row: BrandApiRow) => void): ColumnDef<BrandApiRow
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onView(row.original)}>
+                <Eye className="mr-2 h-4 w-4" /> View
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onEdit(row.original)}>
                 <Pencil className="mr-2 h-4 w-4" /> Edit
               </DropdownMenuItem>
@@ -67,13 +74,18 @@ function buildColumns(onEdit: (row: BrandApiRow) => void): ColumnDef<BrandApiRow
 // MODULE
 // =============================================================================
 
-export default function BrandModule() {
+type BrandModuleProps = {
+  currentUser?: { id: string; name: string; email: string };
+};
+
+export default function BrandModule({ currentUser }: BrandModuleProps) {
   const [data, setData] = useState<BrandApiRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Dialog State
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [selectedBrand, setSelectedBrand] = useState<BrandApiRow | null>(null);
 
   // Fetch ALL data (client-side pagination)
@@ -83,9 +95,10 @@ export default function BrandModule() {
       setError(null);
       const res = await listBrands(1, -1); // Fetch all
       setData(res.data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to load brands", err);
-      setError(err.message || "Failed to load brands.");
+      const message = err instanceof Error ? err.message : "Failed to load brands.";
+      setError(message);
       toast.error("Failed to load brands");
     } finally {
       setLoading(false);
@@ -95,6 +108,11 @@ export default function BrandModule() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const handleView = (row: BrandApiRow) => {
+    setSelectedBrand(row);
+    setIsViewDialogOpen(true);
+  };
 
   const handleEdit = (row: BrandApiRow) => {
     setSelectedBrand(row);
@@ -106,7 +124,7 @@ export default function BrandModule() {
     setIsDialogOpen(true);
   };
 
-  const columns = buildColumns(handleEdit);
+  const columns = buildColumns(handleView, handleEdit);
 
   // Error State
   if (error && !loading) {
@@ -141,6 +159,13 @@ export default function BrandModule() {
         onOpenChange={setIsDialogOpen}
         selectedBrand={selectedBrand}
         onSuccess={fetchData}
+        currentUser={currentUser}
+      />
+
+      <ViewBrandDialog
+        open={isViewDialogOpen}
+        onOpenChange={setIsViewDialogOpen}
+        selectedBrand={selectedBrand}
       />
     </div>
   );

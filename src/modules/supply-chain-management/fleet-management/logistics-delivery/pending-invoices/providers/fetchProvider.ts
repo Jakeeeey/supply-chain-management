@@ -61,5 +61,5 @@ export async function getItemizedReplica(params: {
   if (params.dateFrom) p.set("dateFrom", params.dateFrom);
   if (params.dateTo) p.set("dateTo", params.dateTo);
 
-  return http<{ rows: any[] }>(`${API_BASE}/itemized?${p.toString()}`);
+  return http<{ rows: Record<string, unknown>[] }>(`${API_BASE}/itemized?${p.toString()}`);
 }

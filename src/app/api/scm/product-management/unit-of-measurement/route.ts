@@ -7,7 +7,7 @@ const ACCESS_TOKEN = process.env.DIRECTUS_STATIC_TOKEN;
 // ✅ Correct endpoint matches folder name
 const ENDPOINT = "/items/units";
 
-function json(res: any, status = 200) {
+function json(res: Record<string, unknown> | unknown[] | { error: string }, status = 200) {
   return NextResponse.json(res, { status });
 }
 
@@ -22,6 +22,7 @@ async function proxyRequest(req: NextRequest, method: string) {
   const page = url.searchParams.get("page") ?? "1";
   const limit = url.searchParams.get("limit") ?? "12";
   const search = url.searchParams.get("search") ?? "";
+  const filterParam = url.searchParams.get("filter") ?? "";
 
   let upstreamUrl = `${DIRECTUS_URL}${ENDPOINT}`;
 
@@ -31,8 +32,10 @@ async function proxyRequest(req: NextRequest, method: string) {
     // ✅ Sort by 'order', include params & meta
     upstreamUrl += `?sort=order&page=${page}&limit=${limit}&meta=filter_count`;
 
-    // ✅ Server-side Filter: Matches Name OR Shortcut OR SKU
-    if (search) {
+    // ✅ Apply filter directly if provided, otherwise fallback to search logic
+    if (filterParam) {
+      upstreamUrl += `&filter=${encodeURIComponent(filterParam)}`;
+    } else if (search) {
       const filter = {
         _or: [
           { unit_name: { _icontains: search } },
@@ -65,8 +68,9 @@ async function proxyRequest(req: NextRequest, method: string) {
     }
 
     return json(data, 200);
-  } catch (error: any) {
-    return json({ error: error.message }, 500);
+  } catch (error: unknown) {
+    const err = error as Error;
+    return json({ error: err.message }, 500);
   }
 }
 

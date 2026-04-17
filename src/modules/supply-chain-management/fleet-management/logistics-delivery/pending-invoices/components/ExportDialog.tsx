@@ -176,14 +176,14 @@ export function ExportDialog({ open, onClose, options }: { open: boolean; onClos
       const dateStr = preset === "All Time" ? "All Time" : `${dateFrom} to ${dateTo}`;
       doc.text(`Range: ${dateStr} | Status: ${status}`, 40, 55);
 
-      const body = rows.map((r: any) => [
+      const body = rows.map((r: Record<string, unknown>) => [
         r.invoice_no,
         r.invoice_date,
         String(r.customer ?? "").substring(0, 30),
         String(r.salesman ?? "").substring(0, 20),
-        money(r.net_amount),
-        r.dispatch_plan === "unlinked" ? "-" : r.dispatch_plan,
-        r.pending_status,
+        money(Number(r.net_amount || 0)),
+        r.dispatch_plan === "unlinked" ? "-" : String(r.dispatch_plan || ""),
+        String(r.pending_status || ""),
       ]);
 
       autoTable(doc, {

@@ -30,7 +30,7 @@ import {
     Scale,
     Ruler,
 } from "lucide-react";
-import { Product, Category, Unit, RefData } from "../types";
+import { Product, Category, RefData } from "../types";
 
 interface DimensionState {
     length: string;
@@ -50,7 +50,6 @@ interface AssignmentStepProps {
     scanSuccess: boolean;
     setScanSuccess: (v: boolean) => void;
     cameraError: string | null;
-    setCameraError: (v: string | null) => void;
     selectedBarcodeTypeId: string;
     setSelectedBarcodeTypeId: (v: string) => void;
     recordDimensions: boolean;
@@ -72,7 +71,6 @@ export function AssignmentStep({
     setActiveTab,
     scanSuccess,
     setScanSuccess,
-    setCameraError,
     selectedBarcodeTypeId,
     setSelectedBarcodeTypeId,
     recordDimensions,
@@ -101,7 +99,9 @@ export function AssignmentStep({
     const scannerInputRef = useRef<HTMLInputElement>(null);
     const [scanBuffer, setScanBuffer] = useState("");
     const scanSuccessRef = useRef(scanSuccess);
-    scanSuccessRef.current = scanSuccess;
+    useEffect(() => {
+        scanSuccessRef.current = scanSuccess;
+    }, [scanSuccess]);
 
     // Auto-focus the hidden input when Scan tab is active and not yet scanned
     useEffect(() => {
@@ -125,16 +125,16 @@ export function AssignmentStep({
     };
 
     // Camera scan handler — uses ref so callback is stable and never stale
-    const handleScan = useCallback((err: any, result: any) => {
-        if (err?.name === "NotAllowedError") return;
-        if (result && !scanSuccessRef.current) {
-            const value = result.getText().trim();
+    const handleScan = useCallback((err: unknown, result: unknown) => {
+        if (err && typeof err === "object" && "name" in err && err.name === "NotAllowedError") return;
+        if (result && typeof result === "object" && "getText" in result) {
+            const zResult = result as { getText: () => string };
+            const value = zResult.getText().trim();
             if (value) {
                 setBarcode(value);
                 setScanSuccess(true);
             }
         }
-         
     }, [setBarcode, setScanSuccess]);
 
     return (

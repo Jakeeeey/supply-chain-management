@@ -6,6 +6,7 @@ import React, {
     forwardRef,
     useEffect,
     useMemo,
+    useCallback,
 } from "react"
 import {
     Table,
@@ -67,6 +68,10 @@ export interface ForecastItem {
 
     orderQty: number
     abcClass?: string
+}
+
+export interface ForecastPlanningTableHandle {
+    getCalculatedData: () => ForecastItem[]
 }
 
 interface Props {
@@ -153,7 +158,7 @@ function ForecastHeader({label, sKey, className, sortConfig, setSortConfig}: For
     )
 }
 
-export const ForecastPlanningTable = forwardRef<any, Props>(
+export const ForecastPlanningTable = forwardRef<ForecastPlanningTableHandle, Props>(
     ({data, selectedMonths, onQuantityChange}, ref) => {
         // 🚀 FIX 1: We only store manual overrides in state now. No more duplicated data!
         const [manualOrderQtys, setManualOrderQtys] = useState<Record<string, number>>({})
@@ -163,14 +168,14 @@ export const ForecastPlanningTable = forwardRef<any, Props>(
         const [pageSize, setPageSize] = useState(10)
 
         // Helper to get the final list combining raw data + manual edits
-        const getMergedData = () => {
-            return (data || []).map((item) => ({
+        const getMergedData = useCallback(() => {
+            return (data || []).map((item: ForecastItem) => ({
                 ...item,
                 orderQty: manualOrderQtys[item.product_id] !== undefined
                     ? manualOrderQtys[item.product_id]
                     : (item.orderQty !== undefined ? item.orderQty : (item.suggestedQty || 0))
             }))
-        }
+        }, [data, manualOrderQtys])
 
         useImperativeHandle(ref, () => ({
             getCalculatedData: () => getMergedData(),
@@ -181,7 +186,7 @@ export const ForecastPlanningTable = forwardRef<any, Props>(
             const q = searchQuery.trim().toLowerCase()
 
             // 🚀 FIX 2: Used 'const' here instead of 'let'. Array.sort() mutates in place!
-            const filtered = mergedData.filter((item) => {
+            const filtered = mergedData.filter((item: ForecastItem) => {
                 const p = String(item.productName || "").toLowerCase()
                 const b = String(item.brandName || "").toLowerCase()
                 const c = String(item.category_name || "").toLowerCase()
@@ -189,12 +194,12 @@ export const ForecastPlanningTable = forwardRef<any, Props>(
             })
 
             if (sortConfig.dir) {
-                filtered.sort((a, b) => {
+                filtered.sort((a: ForecastItem, b: ForecastItem) => {
                     const aPrice = Number(a.computedPricePerBox) || Number(a.lastCost || 0) * Number(a.boxMultiplier || 1)
                     const bPrice = Number(b.computedPricePerBox) || Number(b.lastCost || 0) * Number(b.boxMultiplier || 1)
 
-                    const aVal: any = sortConfig.key === "subtotal" ? Number(a.orderQty || 0) * aPrice : (a as any)[sortConfig.key]
-                    const bVal: any = sortConfig.key === "subtotal" ? Number(b.orderQty || 0) * bPrice : (b as any)[sortConfig.key]
+                    const aVal = sortConfig.key === "subtotal" ? Number(a.orderQty || 0) * aPrice : a[sortConfig.key as keyof ForecastItem]
+                    const bVal = sortConfig.key === "subtotal" ? Number(b.orderQty || 0) * bPrice : b[sortConfig.key as keyof ForecastItem]
 
                     if (typeof aVal === "string") {
                         return sortConfig.dir === "asc"
@@ -209,7 +214,7 @@ export const ForecastPlanningTable = forwardRef<any, Props>(
             }
 
             return filtered
-        }, [data, manualOrderQtys, searchQuery, sortConfig])
+        }, [searchQuery, sortConfig, getMergedData])
 
         const totalPages = Math.max(1, Math.ceil(processedItems.length / pageSize))
         const safePage = Math.min(currentPage, totalPages)
@@ -308,7 +313,7 @@ export const ForecastPlanningTable = forwardRef<any, Props>(
                             </TableHeader>
 
                             <TableBody>
-                                {visibleItems.map((item) => {
+                                {visibleItems.map((item: ForecastItem) => {
                                     const pricePerBox =
                                         Number(item.computedPricePerBox) ||
                                         Number(item.lastCost || 0) * Number(item.boxMultiplier || 1)
