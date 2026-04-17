@@ -12,7 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 
 // ✅ FIX: nav-user is under scm/_components (not supplier-management/_components)
-import { NavUser } from "../../_components/nav-user";
+import { NavUser } from "@/components/shared/app-sidebar/nav-user";
 
 import { cookies } from "next/headers";
 

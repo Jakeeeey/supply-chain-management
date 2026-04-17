@@ -7,41 +7,10 @@ type DirectusListResponse<T> = {
 };
 type DirectusItemResponse<T> = { data: T };
 
+import { readError } from "../lib/utils";
+
+const MODULE_NAME = "RTSReturnType";
 const API_BASE = "/api/scm/file-management/return-supplier-type";
-
-function isJsonResponse(res: Response) {
-  const ct = res.headers.get("content-type") || "";
-  return ct.includes("application/json");
-}
-
-async function readError(res: Response) {
-  try {
-    if (isJsonResponse(res)) {
-      const j = await res.json();
-      console.error("[RTSReturnType API Error]", j);
-      
-      // Standard Directus error format: { errors: [{ message: ... }] }
-      if (Array.isArray(j?.errors) && j.errors.length > 0) {
-        return j.errors[0]?.message || "A database error occurred.";
-      }
-      
-      // Other JSON formats: { error: ... } or { message: ... }
-      if (j?.error) return j.error;
-      if (j?.message) return j.message;
-      
-      // Stringify if no obvious message field
-      return JSON.stringify(j);
-    }
-    
-    // Non-JSON errors (like Gateway Timeouts or Nginx errors)
-    const text = await res.text();
-    console.error("[RTSReturnType API Error Text]", text);
-    return text || `HTTP ${res.status}: ${res.statusText}`;
-  } catch (error) {
-    console.error("[RTSReturnType readError Failed]", error);
-    return `Server communication failed (${res.status})`;
-  }
-}
 
 export async function listRTSReturnTypes(
   page = 1,
@@ -51,7 +20,7 @@ export async function listRTSReturnTypes(
   const res = await fetch(
     `${API_BASE}?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`,
   );
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw new Error(await readError(res, MODULE_NAME));
 
   const json = (await res.json()) as DirectusListResponse<RTSReturnType>;
 
@@ -70,7 +39,7 @@ export async function createRTSReturnType(
     body: JSON.stringify(payload),
   });
 
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw new Error(await readError(res, MODULE_NAME));
   const json = (await res.json()) as DirectusItemResponse<RTSReturnType>;
   return json?.data;
 }
@@ -85,7 +54,7 @@ export async function updateRTSReturnType(
     body: JSON.stringify(payload),
   });
 
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw new Error(await readError(res, MODULE_NAME));
   const json = (await res.json()) as DirectusItemResponse<RTSReturnType>;
   return json?.data;
 }

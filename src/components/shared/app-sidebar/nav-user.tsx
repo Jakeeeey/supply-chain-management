@@ -92,8 +92,6 @@ export function NavUser({ user, onLogout }: NavUserProps) {
         }
     }, [loggingOut, onLogout, router])
 
-    if (!mounted) return null
-
     return (
         <SidebarMenu>
             <SidebarMenuItem>
@@ -143,28 +141,28 @@ export function NavUser({ user, onLogout }: NavUserProps) {
                             </DropdownMenuItem>
 
                             <DropdownMenuItem asChild>
-                                <Link href="/profile" className="cursor-pointer">
+                                <Link href="/hrm/my-profile" className="cursor-pointer">
                                     <User className="mr-2 size-4" />
                                     My Profile
                                 </Link>
                             </DropdownMenuItem>
 
                             <DropdownMenuItem asChild>
-                                <Link href="/change-password" className="cursor-pointer">
+                                <Link href="/hrm/change-password" className="cursor-pointer">
                                     <KeyRound className="mr-2 size-4" />
                                     Change Password
                                 </Link>
                             </DropdownMenuItem>
 
                             <DropdownMenuItem asChild>
-                                <Link href="/login-activity" className="cursor-pointer">
+                                <Link href="/hrm/login-activity" className="cursor-pointer">
                                     <ShieldCheck className="mr-2 size-4" />
                                     Login Activity
                                 </Link>
                             </DropdownMenuItem>
 
                             <DropdownMenuItem asChild>
-                                <Link href="/scm/settings" className="cursor-pointer">
+                                <Link href="/hrm/settings" className="cursor-pointer">
                                     <Settings className="mr-2 size-4" />
                                     Settings
                                 </Link>
