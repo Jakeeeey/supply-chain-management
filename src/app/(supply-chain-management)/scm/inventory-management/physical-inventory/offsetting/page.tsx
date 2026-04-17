@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { NavUser } from "../../../_components/nav-user";
+import { NavUser } from "@/components/shared/app-sidebar/nav-user";
 
 import { cookies } from "next/headers";
 import PhysicalInventoryOffsettingWorkspaceClient from "./PhysicalInventoryOffsettingWorkspaceClient";
@@ -90,6 +90,9 @@ export default async function Page() {
     const token = cookieStore.get(COOKIE_NAME)?.value ?? null;
 
     const headerUser = buildHeaderUserFromToken(token);
+    const payload = token ? decodeJwtPayload(token) : null;
+    const userId = payload?.sub ? Number(payload.sub) : null;
+    const currentUser = userId ? { id: userId, name: headerUser.name } : null;
 
     return (
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -127,7 +130,7 @@ export default async function Page() {
             </header>
 
             <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-2 sm:p-4">
-                <PhysicalInventoryOffsettingWorkspaceClient />
+                <PhysicalInventoryOffsettingWorkspaceClient currentUser={currentUser || undefined} />
             </main>
         </div>
     );

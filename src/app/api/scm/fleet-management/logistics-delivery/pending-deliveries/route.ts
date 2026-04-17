@@ -123,7 +123,7 @@ export async function GET() {
 
         return NextResponse.json({ data: result });
 
-    } catch (err: any) {
+    } catch (err) {
         console.error("Pending Deliveries API Error:", err);
         return NextResponse.json({ error: "Failed to load pending deliveries" }, { status: 500 });
     }

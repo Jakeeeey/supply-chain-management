@@ -20,8 +20,8 @@ export function useInvoiceDetails(open: boolean, invoiceNo: string | null) {
         setLoading(true);
         const res = await getInvoiceDetails(invoiceNo);
         if (mounted) setData(res);
-      } catch (e: any) {
-        if (mounted) setError(e?.message ?? "Failed to load invoice details");
+      } catch (e) {
+        if (mounted) setError(e instanceof Error ? e.message : "Failed to load invoice details");
       } finally {
         if (mounted) setLoading(false);
       }

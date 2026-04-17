@@ -97,7 +97,14 @@ export const dispatchPlanDataService = {
   /**
    * Fetches dashboard metrics (counts and sums) grouped by status.
    */
-  async fetchMetrics(clusterId?: number) {
+  async fetchMetrics(
+    clusterId?: number,
+    branchId?: number,
+    status?: string,
+    search?: string,
+    startDate?: string,
+    endDate?: string,
+  ) {
     const params: Record<string, any> = {
       fields: "status,total_amount",
       limit: -1, // Fetch all to aggregate
@@ -105,6 +112,26 @@ export const dispatchPlanDataService = {
 
     if (clusterId) {
       params["filter[cluster_id][_eq]"] = clusterId;
+    }
+    if (branchId) {
+      params["filter[branch_id][_eq]"] = branchId;
+    }
+    if (status) {
+      params["filter[status][_eq]"] = status;
+    }
+    if (search) {
+      params["filter[dispatch_no][_icontains]"] = search;
+    }
+
+    if (startDate && endDate) {
+      params["filter[dispatch_date][_between]"] = [
+        `${startDate}T00:00:00`,
+        `${endDate}T23:59:59`,
+      ];
+    } else if (startDate) {
+      params["filter[dispatch_date][_gte]"] = `${startDate}T00:00:00`;
+    } else if (endDate) {
+      params["filter[dispatch_date][_lte]"] = `${endDate}T23:59:59`;
     }
 
     const { data } = await fetchItems<DispatchPlan>(

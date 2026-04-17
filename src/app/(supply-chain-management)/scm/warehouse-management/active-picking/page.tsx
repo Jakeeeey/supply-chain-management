@@ -9,7 +9,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
-import { NavUser } from "../../_components/nav-user" // Verify this path based on your folder structure
+import { NavUser } from "@/components/shared/app-sidebar/nav-user";
 import { cookies } from "next/headers"
 
 // 🚀 Import the new Picker Module
@@ -21,7 +21,7 @@ export const dynamic = "force-dynamic";
 const COOKIE_NAME = "vos_access_token";
 
 // --- JWT HELPER FUNCTIONS ---
-function decodeJwtPayload(token: string): any | null {
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
     try {
         const parts = token.split(".");
         if (parts.length < 2) return null;
@@ -37,7 +37,7 @@ function decodeJwtPayload(token: string): any | null {
     }
 }
 
-function pickString(obj: any, keys: string[]): string {
+function pickString(obj: Record<string, unknown> | null, keys: string[]): string {
     for (const k of keys) {
         const v = obj?.[k];
         if (typeof v === "string" && v.trim()) return v.trim();

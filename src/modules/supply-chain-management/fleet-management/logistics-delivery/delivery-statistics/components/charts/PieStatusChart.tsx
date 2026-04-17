@@ -43,27 +43,31 @@ export default function PieStatusChart(props: {
   }
 
   // Build arcs
-  let cursor = 0;
-  const arcs = props.data.map((d) => {
-    const value = d.value ?? 0;
-    const pct = value / total;
-    const sweep = pct * 360;
+  const { results: arcs } = props.data.reduce(
+    (acc, d) => {
+      const value = d.value ?? 0;
+      const pct = value / total;
+      const sweep = pct * 360;
 
-    const start = cursor;
-    const end = cursor + sweep;
-    cursor = end;
+      const start = acc.cursor;
+      const end = start + sweep;
 
-    // Avoid full 360 arc weirdness; clamp end slightly
-    const safeEnd = clamp(end, start + 0.001, start + 359.999);
+      // Avoid full 360 arc weirdness; clamp end slightly
+      const safeEnd = clamp(end, start + 0.001, start + 359.999);
 
-    return {
-      name: d.name,
-      value,
-      color: d.color,
-      start,
-      end: safeEnd,
-    };
-  });
+      acc.results.push({
+        name: d.name,
+        value,
+        color: d.color,
+        start,
+        end: safeEnd,
+      });
+
+      acc.cursor = end;
+      return acc;
+    },
+    { results: [] as { name: string; value: number; color: string; start: number; end: number }[], cursor: 0 }
+  );
 
   return (
     <div className="flex items-center justify-center">

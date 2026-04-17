@@ -1,7 +1,11 @@
 "use client";
 
+<<<<<<< HEAD
 import { useState, useEffect, useRef, useCallback, memo } from "react";
 import { toast } from "sonner";
+=======
+import { useState, useEffect } from "react";
+>>>>>>> origin
 import { useStockConversion } from "./hooks/useStockConversion";
 import { StockConversionTable } from "./components/StockConversionTable";
 import { StockConversionModal } from "./components/StockConversionModal";
@@ -372,7 +376,16 @@ export default function StockConversionModule({
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
-  if (isLoading && !data.length) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setMounted(true);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!mounted) {
     return <ModuleSkeleton hasActions={false} rowCount={8} />;
   }
 

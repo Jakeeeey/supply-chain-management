@@ -10,18 +10,26 @@ import {
   SalesOrderOption,
   VehicleOption,
 } from "../types/dispatch-plan.schema";
-import { API_BASE_URL, fetchItems, request } from "./dispatch-plan-api";
+import {
+  API_BASE_URL,
+  fetchItems,
+  fetchItemsInChunks,
+  request,
+} from "./dispatch-plan-api";
 
 export const dispatchPlanQueryService = {
   /**
    * Fetches dispatch plans with server-side pagination and optional filtering.
    */
   async fetchPlans(
-    limit: number = 10,
+    limit: number = 25,
     offset: number = 0,
     status?: string,
     search?: string,
     clusterId?: number,
+    branchId?: number,
+    startDate?: string,
+    endDate?: string,
   ): Promise<PaginatedDispatchPlans> {
     const params: Record<string, any> = {
       fields: "*",
@@ -41,6 +49,21 @@ export const dispatchPlanQueryService = {
 
     if (clusterId) {
       params["filter[cluster_id][_eq]"] = clusterId;
+    }
+
+    if (branchId) {
+      params["filter[branch_id][_eq]"] = branchId;
+    }
+
+    if (startDate && endDate) {
+      params["filter[dispatch_date][_between]"] = [
+        `${startDate}T00:00:00`,
+        `${endDate}T23:59:59`,
+      ];
+    } else if (startDate) {
+      params["filter[dispatch_date][_gte]"] = `${startDate}T00:00:00`;
+    } else if (endDate) {
+      params["filter[dispatch_date][_lte]"] = `${endDate}T23:59:59`;
     }
 
     const result = await fetchItems<DispatchPlan>(
@@ -65,26 +88,42 @@ export const dispatchPlanQueryService = {
   async enrichPlans(plans: DispatchPlan[]): Promise<DispatchPlan[]> {
     if (!plans.length) return [];
 
-    // Fetch master data once for resolution
+    const driverIds = [...new Set(plans.map((p) => p.driver_id).filter(Boolean))];
+    const clusterIds = [...new Set(plans.map((p) => p.cluster_id).filter(Boolean))];
+    const branchIds = [...new Set(plans.map((p) => p.branch_id).filter(Boolean))];
+    const vehicleIds = [...new Set(plans.map((p) => p.vehicle_id).filter(Boolean))];
+
+    // Fetch master data only for the entities referenced in the current plans
     const [driversRes, clustersRes, branchesRes, vehiclesRes, vehicleTypesRes] =
       await Promise.all([
-        fetchItems<DriverOption>("/items/user", {
-          "filter[user_department][_eq]": 8,
-          fields: "user_id,user_fname,user_mname,user_lname",
-          limit: -1,
-        }),
-        fetchItems<ClusterOption>("/items/cluster", {
-          fields: "id,cluster_name",
-          limit: -1,
-        }),
-        fetchItems<BranchOption>("/items/branches", {
-          fields: "id,branch_name",
-          limit: -1,
-        }),
-        fetchItems<VehicleOption>("/items/vehicles", {
-          fields: "vehicle_id,maximum_weight,vehicle_plate,vehicle_type",
-          limit: -1,
-        }),
+        driverIds.length
+          ? fetchItems<DriverOption>("/items/user", {
+              "filter[user_id][_in]": driverIds.join(","),
+              fields: "user_id,user_fname,user_mname,user_lname",
+              limit: -1,
+            })
+          : Promise.resolve({ data: [] }),
+        clusterIds.length
+          ? fetchItems<ClusterOption>("/items/cluster", {
+              "filter[id][_in]": clusterIds.join(","),
+              fields: "id,cluster_name",
+              limit: -1,
+            })
+          : Promise.resolve({ data: [] }),
+        branchIds.length
+          ? fetchItems<BranchOption>("/items/branches", {
+              "filter[id][_in]": branchIds.join(","),
+              fields: "id,branch_name",
+              limit: -1,
+            })
+          : Promise.resolve({ data: [] }),
+        vehicleIds.length
+          ? fetchItems<VehicleOption>("/items/vehicles", {
+              "filter[vehicle_id][_in]": vehicleIds.join(","),
+              fields: "vehicle_id,maximum_weight,vehicle_plate,vehicle_type",
+              limit: -1,
+            })
+          : Promise.resolve({ data: [] }),
         fetchItems<{ id: number; type_name: string }>("/items/vehicle_type", {
           fields: "id,type_name",
           limit: -1,
@@ -123,15 +162,13 @@ export const dispatchPlanQueryService = {
 
     // Fetch details for all plans to compute outlet counts and weights
     const planIds = plans.map((p) => p.dispatch_id);
-    const detailsRes = await fetchItems<{
+    const { data: details } = await fetchItemsInChunks<{
       dispatch_id: number;
       sales_order_id: number;
-    }>("/items/dispatch_plan_details", {
-      "filter[dispatch_id][_in]": planIds.join(","),
+    }>("/items/dispatch_plan_details", "dispatch_id", planIds, {
       fields: "*",
       limit: -1,
     });
-    const details = detailsRes.data || [];
 
     // Map sales order IDs to plan IDs
     const soToPlanMap = new Map<number, number>();
@@ -144,13 +181,16 @@ export const dispatchPlanQueryService = {
     const soWeightMap = new Map<number, number>();
 
     if (soIds.length) {
-      // Step 1: Fetch all sales order details for these orders
-      const soDetailsRes = await fetchItems<any>("/items/sales_order_details", {
-        "filter[order_id][_in]": soIds.join(","),
-        fields: "order_id,ordered_quantity,allocated_quantity,product_id",
-        limit: -1,
-      });
-      const soDetails = soDetailsRes.data || [];
+      // Step 1: Fetch all sales order details for these orders in chunks
+      const { data: soDetails } = await fetchItemsInChunks<any>(
+        "/items/sales_order_details",
+        "order_id",
+        soIds,
+        {
+          fields: "order_id,ordered_quantity,allocated_quantity,product_id",
+          limit: -1,
+        },
+      );
 
       // Step 2: Extract unique product IDs
       const normalizeId = (val: any) => {
@@ -168,20 +208,19 @@ export const dispatchPlanQueryService = {
         ),
       ];
 
-      // Step 3: Fetch weights for all these products
+      // Step 3: Fetch weights for all these products in chunks
       let prodWeightMap = new Map<string, number>();
       if (productIds.length) {
-        const prodRes = await fetchItems<{
+        const { data: products } = await fetchItemsInChunks<{
           product_id: number;
           weight: number | string | null;
-        }>("/items/products", {
-          "filter[product_id][_in]": productIds.join(","),
+        }>("/items/products", "product_id", productIds, {
           fields: "product_id,weight",
           limit: -1,
         });
 
         prodWeightMap = new Map(
-          (prodRes.data || []).map((p) => [
+          products.map((p) => [
             String(p.product_id),
             typeof p.weight === "number"
               ? p.weight
@@ -306,44 +345,105 @@ export const dispatchPlanQueryService = {
     const enrichedDetails: DispatchPlanDetail[] = [];
     if (rawDetails.length) {
       const soIds = rawDetails.map((d) => d.sales_order_id);
-      const [ordersRes] = await Promise.all([
-        fetchItems<{
-          order_id: number;
-          order_no: string;
-          customer_code: string;
-          total_amount: number;
-          net_amount: number;
-          allocated_amount: number | null;
-          po_no: string | null;
-        }>("/items/sales_order", {
-          "filter[order_id][_in]": soIds.join(","),
-          fields:
-            "order_id,order_no,customer_code,total_amount,net_amount,allocated_amount,po_no",
-          limit: -1,
-        }),
-      ]);
+      const { data: orders } = await fetchItemsInChunks<{
+        order_id: number;
+        order_no: string;
+        customer_code: string;
+        total_amount: number;
+        net_amount: number;
+        allocated_amount: number | null;
+        po_no: string | null;
+        order_status: string | null;
+      }>("/items/sales_order", "order_id", soIds, {
+        fields:
+          "order_id,order_no,order_status,customer_code,total_amount,net_amount,allocated_amount,po_no",
+        limit: -1,
+      });
 
-      const orderMap = new Map(
-        (ordersRes.data || []).map((o) => [o.order_id, o]),
-      );
+      const orderMap = new Map(orders.map((o) => [o.order_id, o]));
 
       // Resolve customer names
       const customerCodes = [
-        ...new Set(
-          (ordersRes.data || []).map((o) => o.customer_code).filter(Boolean),
-        ),
-      ];
+        ...new Set(orders.map((o: any) => o.customer_code).filter(Boolean)),
+      ] as (string | number)[];
 
       let customerMap = new Map<string, CustomerInfo>();
       if (customerCodes.length) {
-        const custRes = await fetchItems<CustomerInfo>("/items/customer", {
-          "filter[customer_code][_in]": customerCodes.join(","),
-          fields: "id,customer_code,customer_name,store_name,city,province",
+        const { data: customers } = await fetchItemsInChunks<CustomerInfo>(
+          "/items/customer",
+          "customer_code",
+          customerCodes,
+          {
+            fields: "id,customer_code,customer_name,store_name,city,province",
+            limit: -1,
+          },
+        );
+        customerMap = new Map(customers.map((c) => [c.customer_code, c]));
+      }
+
+      // Compute weight for each Sales Order
+      const { data: soDetails } = await fetchItemsInChunks<any>(
+        "/items/sales_order_details",
+        "order_id",
+        soIds,
+        {
+          fields: "order_id,ordered_quantity,allocated_quantity,product_id",
+          limit: -1,
+        },
+      );
+
+      const normalizeId = (val: any) => {
+        if (!val) return "";
+        if (typeof val === "object")
+          return String(val.product_id || val.id || "");
+        return String(val);
+      };
+
+      const productIds = [
+        ...new Set(
+          soDetails
+            .map((sod: any) => normalizeId(sod.product_id))
+            .filter(Boolean),
+        ),
+      ];
+
+      let prodWeightMap = new Map<string, number>();
+      if (productIds.length) {
+        const { data: products } = await fetchItemsInChunks<{
+          product_id: number;
+          weight: number | string | null;
+        }>("/items/products", "product_id", productIds, {
+          fields: "product_id,weight",
           limit: -1,
         });
-        customerMap = new Map(
-          (custRes.data || []).map((c) => [c.customer_code, c]),
+
+        prodWeightMap = new Map(
+          products.map((p) => [
+            String(p.product_id),
+            typeof p.weight === "number"
+              ? p.weight
+              : parseFloat(String(p.weight)) || 0,
+          ]),
         );
+      }
+
+      const soWeightMap = new Map<number, number>();
+      for (const sod of soDetails) {
+        const orderId =
+          typeof sod.order_id === "object"
+            ? sod.order_id?.order_id
+            : sod.order_id;
+        const productId = normalizeId(sod.product_id);
+        const qty = Number(sod.allocated_quantity || sod.ordered_quantity || 0);
+        const weight = prodWeightMap.get(productId) || 0;
+
+        const totalWeight = qty * weight;
+        if (orderId) {
+          soWeightMap.set(
+            orderId,
+            (soWeightMap.get(orderId) || 0) + totalWeight,
+          );
+        }
       }
 
       for (const detail of rawDetails) {
@@ -361,8 +461,14 @@ export const dispatchPlanQueryService = {
             customer?.customer_name || customer?.store_name || "\u2014",
           city: customer?.city ?? undefined,
           province: customer?.province ?? undefined,
-          amount: order?.allocated_amount ?? order?.net_amount ?? order?.total_amount ?? 0,
+          amount:
+            order?.allocated_amount ??
+            order?.net_amount ??
+            order?.total_amount ??
+            0,
           po_no: order?.po_no ?? undefined,
+          order_status: order?.order_status,
+          weight: soWeightMap.get(detail.sales_order_id) || 0,
         } as any);
       }
     }
@@ -398,27 +504,37 @@ export const dispatchPlanQueryService = {
       allowedAreas = areasRes.data || [];
     }
 
-    // Step 2: Fetch sales order details as the base table (Detail-First approach)
-    const detailsParams: Record<string, any> = {
-      "filter[order_id][order_status][_eq]": "For Consolidation",
+    // Step 2: Fetch sales order details as the base table (Split-Fetch approach)
+    // We fetch statuses in parallel to avoid one status burying the other due to limits
+    const baseParams: Record<string, any> = {
       fields:
-        "ordered_quantity,allocated_quantity,product_id,order_id.order_id,order_id.order_no,order_id.customer_code,order_id.total_amount,order_id.net_amount,order_id.allocated_amount,order_id.po_no",
+        "ordered_quantity,allocated_quantity,product_id,order_id.order_id,order_id.order_no,order_id.order_status,order_id.customer_code,order_id.total_amount,order_id.net_amount,order_id.allocated_amount,order_id.po_no",
       limit: -1,
     };
 
     if (search) {
-      detailsParams["filter[order_id][order_no][_contains]"] = search;
+      baseParams["filter[order_id][order_no][_icontains]"] = search;
     }
 
     if (branchId) {
-      detailsParams["filter[order_id][branch_id][_eq]"] = branchId;
+      baseParams["filter[order_id][branch_id][_eq]"] = branchId;
     }
 
-    const detailsRes = await fetchItems<any>(
-      "/items/sales_order_details",
-      detailsParams,
-    );
-    const details = detailsRes.data || [];
+    const [consolidationRes, notFulfilledRes] = await Promise.all([
+      fetchItems<any>("/items/sales_order_details", {
+        ...baseParams,
+        "filter[order_id][order_status][_eq]": "For Consolidation",
+      }),
+      fetchItems<any>("/items/sales_order_details", {
+        ...baseParams,
+        "filter[order_id][order_status][_eq]": "Not Fulfilled",
+      }),
+    ]);
+
+    const details = [
+      ...(consolidationRes.data || []),
+      ...(notFulfilledRes.data || []),
+    ];
 
     if (!details.length) return [];
 
@@ -438,17 +554,16 @@ export const dispatchPlanQueryService = {
 
     let prodWeightMap = new Map<string, number>();
     if (productIds.length) {
-      const prodRes = await fetchItems<{
+      const { data: products } = await fetchItemsInChunks<{
         product_id: number;
         weight: number | string | null;
-      }>("/items/products", {
-        "filter[product_id][_in]": productIds.join(","),
+      }>("/items/products", "product_id", productIds, {
         fields: "product_id,weight",
         limit: -1,
       });
 
       prodWeightMap = new Map(
-        (prodRes.data || []).map((p) => [
+        products.map((p) => [
           String(p.product_id),
           typeof p.weight === "number"
             ? p.weight
@@ -487,36 +602,89 @@ export const dispatchPlanQueryService = {
     const customerCodes = [...new Set(orderList.map((o) => o.customer_code))];
     let customerMap = new Map<string, CustomerInfo>();
     if (customerCodes.length) {
-      const custRes = await fetchItems<CustomerInfo>("/items/customer", {
-        "filter[customer_code][_in]": customerCodes.join(","),
-        fields: "id,customer_code,customer_name,store_name,brgy,city,province",
-        limit: -1,
-      });
-      customerMap = new Map(
-        (custRes.data || []).map((c) => [c.customer_code, c]),
+      const { data: customers } = await fetchItemsInChunks<CustomerInfo>(
+        "/items/customer",
+        "customer_code",
+        customerCodes,
+        {
+          fields: "id,customer_code,customer_name,store_name,brgy,city,province",
+          limit: -1,
+        },
       );
+      customerMap = new Map(customers.map((c) => [c.customer_code, c]));
+    }
+
+    // Step 5.5: Filter "Not Fulfilled" by Clearance Status
+    const notFulfilledOrderNos = orderList
+      .filter((o) => o.order_status === "Not Fulfilled")
+      .map((o) => o.order_no)
+      .filter(Boolean);
+
+    const clearedOrderNos = new Set<string>();
+    if (notFulfilledOrderNos.length) {
+      // 1. Fetch invoices matching these order numbers in chunks
+      const { data: invoices } = await fetchItemsInChunks<any>(
+        "/items/sales_invoice",
+        "order_id",
+        notFulfilledOrderNos,
+        {
+          fields: "invoice_id,order_id",
+          limit: -1,
+        },
+      );
+      const invoiceIds = invoices.map((i: any) => i.invoice_id);
+
+      if (invoiceIds.length) {
+        // 2. Check which of these invoices are cleared in chunks
+        const { data: clearanceData } = await fetchItemsInChunks<any>(
+          "/items/post_dispatch_invoices",
+          "invoice_id",
+          invoiceIds,
+          {
+            "filter[isCleared][_eq]": 1,
+            fields: "invoice_id",
+            limit: -1,
+          },
+        );
+        const clearedInvoiceIds = new Set(
+          clearanceData.map((c: any) => c.invoice_id),
+        );
+
+        // 3. Map back to order numbers
+        invoices.forEach((inv: any) => {
+          if (clearedInvoiceIds.has(inv.invoice_id)) {
+            clearedOrderNos.add(inv.order_id);
+          }
+        });
+      }
     }
 
     // Step 6: Filter by Cluster Area and Exclude Assigned Orders
     const allOrderIds = orderList.map((o) => o.order_id);
     let assignedOrderIds = new Set<number>();
+    // Step 7: Exclude Already Assigned Orders (Only for non-terminal plans)
     if (allOrderIds.length) {
-      const assignedRes = await fetchItems<{ sales_order_id: number }>(
-        "/items/dispatch_plan_details",
-        {
-          "filter[sales_order_id][_in]": allOrderIds.join(","),
-          fields: "sales_order_id",
-          limit: -1,
-        },
-      );
-      assignedOrderIds = new Set(
-        (assignedRes.data || []).map((d) => d.sales_order_id),
-      );
+      const { data: assignedDetails } = await fetchItemsInChunks<{
+        sales_order_id: number;
+      }>("/items/dispatch_plan_details", "sales_order_id", allOrderIds, {
+        "filter[dispatch_id][status][_nin]": "Dispatched,Cancelled,Delivered",
+        "filter[sales_order_id][order_status][_neq]": "Not Fulfilled",
+        fields: "sales_order_id",
+        limit: -1,
+      });
+      assignedOrderIds = new Set(assignedDetails.map((d) => d.sales_order_id));
     }
 
     // Final construction and filtering
     return orderList
       .filter((o) => !assignedOrderIds.has(o.order_id))
+      .filter((o) => {
+        // If Not Fulfilled, must be cleared
+        if (o.order_status === "Not Fulfilled") {
+          return clearedOrderNos.has(o.order_no);
+        }
+        return true;
+      })
       .filter((o) => {
         if (!clusterId || !allowedAreas.length) return true;
         const customer = customerMap.get(o.customer_code);
@@ -541,6 +709,7 @@ export const dispatchPlanQueryService = {
           net_amount: o.net_amount,
           allocated_amount: o.allocated_amount,
           po_no: o.po_no,
+          order_status: o.order_status,
           total_weight: o.total_weight,
         };
       });

@@ -38,10 +38,19 @@ export type VehiclesApiRow = {
   image?: string | null;
   custodian_id?: number | null;
 
+  // legacy fields for compatibility
+  vehicle_name?: string | null;
+  model?: string | null;
+  vehicle_model?: string | null;
+  mileage_km?: number | string | null;
+  mileage?: number | string | null;
+  odometer?: number | string | null;
+
   // existing optional fields
   branch_id?: number | null;
   cbm_length?: string | number | null;
   cbm_width?: string | number | null;
+  cbm_height?: string | number | null;
   max_liters?: string | number | null;
   maximum_weight?: string | number | null;
   minimum_load?: string | number | null;
@@ -135,6 +144,7 @@ export type CreateVehicleForm = {
   purchasedDate?: string;
   cbmLength?: string;
   cbmWidth?: string;
+  cbmHeight?: string;
 
   // ✅ file upload
   imageFile?: File | null;

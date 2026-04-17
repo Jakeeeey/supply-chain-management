@@ -108,11 +108,12 @@ export function useSKUs() {
       }
 
       setMasterData(masterRes.data || null);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     approved.approvedLimit,
     approved.approvedPage,

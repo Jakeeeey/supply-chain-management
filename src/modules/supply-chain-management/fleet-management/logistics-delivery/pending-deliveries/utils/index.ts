@@ -1,4 +1,4 @@
-import { TableRow, DateRange, ClusterFilterValue } from "../types";
+import { DateRange, ClusterFilterValue } from "../types";
 
 export const formatCurrency = (amount: number) => {
     if (amount === 0) return "-";

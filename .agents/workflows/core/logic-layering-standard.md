@@ -8,9 +8,10 @@ To ensure every module is scalable and testable, strictly follow this 4-layer ar
 
 ## 1. The Service Layer (`/services/`)
 
-- **Directus Interaction**: This is the ONLY place where external API calls (Directus, third-party) occur.
-- **Pure Logic**: All data mapping and business rules happen here.
-- **Independence**: Service functions must be pure TypeScript (no React hooks) so they can run in both Server Components and API Routes.
+- **Sub-Layer: Repository (`[name].repo.ts`)**: The ONLY place where `fetch()` or Directus API calls occur. Zero business logic. Must return strictly typed Enriched or Raw objects.
+- **Sub-Layer: Orchestration (`[name].service.ts`)**: Coordinates multiple repository calls. Handles business logic, status transitions, and data composition. Never calls `fetch()` directly.
+- **Sub-Layer: Helpers (`[name].helpers.ts`)**: Pure TypeScript utility functions (no Side Effects).
+- **Independence**: All service logic must be pure TypeScript (no React hooks) to run in both Server Components and API Routes.
 
 ## 2. The API Layer (`/api/`)
 

@@ -84,6 +84,7 @@ import {
 type Props = {
     initialHeaderId?: number | null;
     onRecordChange?: (header: PhysicalInventoryHeaderRow) => void;
+    currentUser?: { id: number; name: string } | null;
 };
 
 type RebuildInput = {
@@ -99,8 +100,14 @@ type LocalRfidSavedPayload = {
     rfidCount: number;
 };
 
-function todayInputValue(): string {
-    return new Date().toISOString().slice(0, 10);
+function nowInputValue(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    const hours = String(now.getHours()).padStart(2, "0");
+    const minutes = String(now.getMinutes()).padStart(2, "0");
+    return `${year}-${month}-${day}T${hours}:${minutes}:00`;
 }
 
 function toNullableNumberInput(value: string): number {
@@ -197,7 +204,7 @@ function groupedRowHasUncounted(row: GroupedPhysicalInventoryRow): boolean {
 }
 
 export function PhysicalInventoryManagementModule(props: Props) {
-    const { initialHeaderId = null, onRecordChange } = props;
+    const { initialHeaderId = null, onRecordChange, currentUser } = props;
     const router = useRouter();
 
     const [isBootLoading, setIsBootLoading] = React.useState(true);
@@ -207,6 +214,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
     const [isHydratingRecord, setIsHydratingRecord] = React.useState(false);
     const [isRebuildingGroups, setIsRebuildingGroups] = React.useState(false);
     const [isSavingDetailBatch, setIsSavingDetailBatch] = React.useState(false);
+    const [isConfirmLoadDialogOpen, setIsConfirmLoadDialogOpen] = React.useState(false);
 
     const [branches, setBranches] = React.useState<BranchRow[]>([]);
     const [suppliers, setSuppliers] = React.useState<SupplierRow[]>([]);
@@ -225,6 +233,39 @@ export function PhysicalInventoryManagementModule(props: Props) {
     );
 
     const [header, setHeader] = React.useState<PhysicalInventoryHeaderRow | null>(null);
+
+    const setHydratedHeader = React.useCallback(
+        (
+            next:
+                | PhysicalInventoryHeaderRow
+                | null
+                | ((prev: PhysicalInventoryHeaderRow | null) => PhysicalInventoryHeaderRow | null),
+        ) => {
+            setHeader((prev) => {
+                const result = typeof next === "function" ? next(prev) : next;
+                if (!result || !currentUser) return result;
+
+                const numericId =
+                    typeof result.encoder_id === "object"
+                        ? result.encoder_id?.user_id
+                        : result.encoder_id;
+
+                if (numericId === currentUser.id) {
+                    return {
+                        ...result,
+                        encoder_id: {
+                            user_id: currentUser.id,
+                            user_fname: currentUser.name,
+                            user_lname: "",
+                        },
+                    };
+                }
+                return result;
+            });
+        },
+        [currentUser],
+    );
+
     const [detailRows, setDetailRows] = React.useState<PhysicalInventoryDetailRow[]>([]);
     const [groupedRows, setGroupedRows] = React.useState<GroupedPhysicalInventoryRow[]>([]);
     const [rfidDialogRow, setRfidDialogRow] =
@@ -243,6 +284,25 @@ export function PhysicalInventoryManagementModule(props: Props) {
         "ALL" | "VARIANCE" | "RFID" | "UNCOUNTED"
     >("ALL");
     const [activeQuickCategory, setActiveQuickCategory] = React.useState<string>("ALL");
+
+    React.useEffect(() => {
+        if (filters.branch_id && currentUser) {
+            setHydratedHeader((prev) => {
+                if (!prev) return prev;
+                if (prev.id !== 0) return prev;
+                if (prev.date_encoded && prev.encoder_id) return prev;
+                return {
+                    ...prev,
+                    date_encoded: new Date().toISOString(),
+                    encoder_id: {
+                        user_id: currentUser.id,
+                        user_fname: currentUser.name,
+                        user_lname: "",
+                    },
+                };
+            });
+        }
+    }, [filters.branch_id, currentUser, setHydratedHeader]);
 
     const hasLoadedDetails = detailRows.length > 0;
 
@@ -499,13 +559,15 @@ export function PhysicalInventoryManagementModule(props: Props) {
             const nextDetails = detailRows.map((detail) => updatedMap.get(detail.id) ?? detail);
 
             setDetailRows(nextDetails);
-            dirtyDetailIdsRef.current.clear();
+            for (const id of dirtyIds) {
+                dirtyDetailIdsRef.current.delete(id);
+            }
 
             const nextHeader = await updatePhysicalInventoryHeader(header.id, {
                 total_amount: sumHeaderTotalAmount(nextDetails),
             });
 
-            setHeader(nextHeader);
+            setHydratedHeader(nextHeader);
             onRecordChange?.(nextHeader);
 
             rebuildGroupedRows({
@@ -520,7 +582,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
         } finally {
             setIsSavingDetailBatch(false);
         }
-    }, [detailRows, filters, header, onRecordChange, rebuildGroupedRows]);
+    }, [detailRows, filters, header, onRecordChange, rebuildGroupedRows, setHydratedHeader]);
 
     const applyLocalRfidSavedPayload = React.useCallback(
         (payload: LocalRfidSavedPayload) => {
@@ -542,7 +604,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
                     total_amount: sumHeaderTotalAmount(nextDetails),
                 };
 
-                setHeader(nextHeader);
+                setHydratedHeader(nextHeader);
                 onRecordChange?.(nextHeader);
 
                 if (header.id > 0) {
@@ -568,7 +630,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
                 nextRfidCountByDetailId,
             });
         },
-        [detailRows, filters, header, onRecordChange, rebuildGroupedRows, rfidCountByDetailId],
+        [detailRows, filters, header, onRecordChange, rebuildGroupedRows, rfidCountByDetailId, setHydratedHeader],
     );
 
     React.useEffect(() => {
@@ -616,7 +678,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
                         price_type_id: existingHeader.price_type,
                     };
 
-                    setHeader(existingHeader);
+                    setHydratedHeader(existingHeader);
                     setDetailRows(existingDetails);
                     setFilters(nextFilters);
 
@@ -709,7 +771,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
                     id: 0,
                     ph_no: nextPhNo,
                     date_encoded: null,
-                    cutOff_date: todayInputValue(),
+                    cutOff_date: nowInputValue(),
                     starting_date: null,
                     price_type: null,
                     stock_type: "GOOD",
@@ -717,6 +779,8 @@ export function PhysicalInventoryManagementModule(props: Props) {
                     remarks: "",
                     isComitted: 0,
                     isCancelled: 0,
+                    committed_at: null,
+                    cancelled_at: null,
                     total_amount: 0,
                     supplier_id: null,
                     category_id: null,
@@ -725,7 +789,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
 
                 if (cancelled) return;
 
-                setHeader(draftHeader);
+                setHydratedHeader(draftHeader);
                 setDetailRows([]);
                 setGroupedRows([]);
                 setCategories([]);
@@ -753,7 +817,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
         return () => {
             cancelled = true;
         };
-    }, [initialHeaderId]);
+    }, [initialHeaderId, setHydratedHeader]);
 
     React.useEffect(() => {
         async function syncStartingDate() {
@@ -762,7 +826,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
             try {
                 const latestCutoff = await fetchLatestCommittedCutoffDateByBranch(filters.branch_id);
 
-                setHeader((prev) => {
+                setHydratedHeader((prev) => {
                     if (!prev) return prev;
 
                     if (prev.branch_id === filters.branch_id && prev.starting_date === latestCutoff) {
@@ -783,7 +847,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
         }
 
         void syncStartingDate();
-    }, [filters.branch_id, hasLoadedDetails, header?.id]);
+    }, [filters.branch_id, hasLoadedDetails, header?.id, setHydratedHeader]);
 
     React.useEffect(() => {
         if (!lookupBundle || !filters.supplier_id) {
@@ -839,6 +903,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
         }
 
         rebuildGroupedRows();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
         filters.branch_id,
         filters.supplier_id,
@@ -846,7 +911,6 @@ export function PhysicalInventoryManagementModule(props: Props) {
         filters.price_type_id,
         isBootLoading,
         lookupBundle,
-        rebuildGroupedRows,
         rfidCountByDetailId,
         runningInventoryRows,
     ]);
@@ -912,57 +976,34 @@ export function PhysicalInventoryManagementModule(props: Props) {
         };
 
         if (header.id > 0) {
-            const updated = await updatePhysicalInventoryHeader(header.id, payload);
-            setHeader(updated);
+            const updated = await updatePhysicalInventoryHeader(header.id, {
+                ...payload,
+                encoder_id: typeof header.encoder_id === "object" ? header.encoder_id?.user_id : header.encoder_id || currentUser?.id,
+            });
+            setHydratedHeader(updated);
             onRecordChange?.(updated);
             return updated;
         }
 
-        const created = await createPhysicalInventoryHeader(payload);
-        setHeader(created);
+        const created = await createPhysicalInventoryHeader({
+            ...payload,
+            encoder_id: currentUser?.id,
+        });
+        setHydratedHeader(created);
         onRecordChange?.(created);
         return created;
     }, [
+        currentUser?.id,
         filters.branch_id,
         filters.category_id,
         filters.price_type_id,
         filters.supplier_id,
         header,
         onRecordChange,
+        setHydratedHeader,
         totalAmount,
     ]);
 
-    const handleResetFilters = React.useCallback(() => {
-        if (!canEdit) return;
-
-        setFilters({
-            branch_id: null,
-            supplier_id: null,
-            category_id: null,
-            price_type_id: null,
-        });
-        setCategories([]);
-        setDetailRows([]);
-        setGroupedRows([]);
-        setRunningInventoryRows([]);
-        setRfidCountByDetailId({});
-        setProductSearch("");
-        setActiveQuickFilter("ALL");
-        setActiveQuickCategory("ALL");
-        dirtyDetailIdsRef.current.clear();
-        setHeader((prev) => {
-            if (!prev) return prev;
-            return {
-                ...prev,
-                branch_id: null,
-                supplier_id: null,
-                category_id: null,
-                price_type: null,
-                starting_date: null,
-                total_amount: 0,
-            };
-        });
-    }, [canEdit]);
 
     const handleLoadProducts = React.useCallback(async () => {
         const validation = validateLoadProductsFilters(filters);
@@ -1071,7 +1112,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
                 total_amount: sumHeaderTotalAmount(persistedDetails),
             });
 
-            setHeader(nextHeader);
+            setHydratedHeader(nextHeader);
             onRecordChange?.(nextHeader);
 
             rebuildGroupedRows({
@@ -1098,6 +1139,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
         lookupBundle,
         onRecordChange,
         rebuildGroupedRows,
+        setHydratedHeader,
         suppliers,
     ]);
 
@@ -1246,7 +1288,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
 
             const updatedHeader = await cancelPhysicalInventory(header.id);
 
-            setHeader(updatedHeader);
+            setHydratedHeader(updatedHeader);
             onRecordChange?.(updatedHeader);
 
             rebuildGroupedRows({
@@ -1263,7 +1305,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
         } finally {
             setIsCancelling(false);
         }
-    }, [canEdit, detailRows, filters, header?.id, onRecordChange, rebuildGroupedRows]);
+    }, [canEdit, detailRows, filters, header?.id, onRecordChange, rebuildGroupedRows, setHydratedHeader]);
 
     const canCancelAction =
         Boolean(header?.id) &&
@@ -1366,19 +1408,19 @@ export function PhysicalInventoryManagementModule(props: Props) {
                 canEdit={canEdit}
                 totalAmount={totalAmount}
                 onChangePhNo={(value) =>
-                    setHeader((prev) => (prev ? { ...prev, ph_no: value } : prev))
+                    setHydratedHeader((prev) => (prev ? { ...prev, ph_no: value } : prev))
                 }
                 onChangeStockType={(value) =>
-                    setHeader((prev) => (prev ? { ...prev, stock_type: value } : prev))
+                    setHydratedHeader((prev) => (prev ? { ...prev, stock_type: value } : prev))
                 }
                 onChangeRemarks={(value) =>
-                    setHeader((prev) => (prev ? { ...prev, remarks: value } : prev))
+                    setHydratedHeader((prev) => (prev ? { ...prev, remarks: value } : prev))
                 }
                 onChangeCutoffDate={(value) =>
-                    setHeader((prev) => (prev ? { ...prev, cutOff_date: value } : prev))
+                    setHydratedHeader((prev) => (prev ? { ...prev, cutOff_date: value } : prev))
                 }
                 onChangeStartingDate={(value) =>
-                    setHeader((prev) => (prev ? { ...prev, starting_date: value } : prev))
+                    setHydratedHeader((prev) => (prev ? { ...prev, starting_date: value } : prev))
                 }
             />
 
@@ -1449,8 +1491,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
                         };
                     });
                 }}
-                onReset={handleResetFilters}
-                onLoadProducts={handleLoadProducts}
+                onLoadProducts={() => setIsConfirmLoadDialogOpen(true)}
             />
 
             {groupedRows.length > 0 ? (
@@ -1723,13 +1764,7 @@ export function PhysicalInventoryManagementModule(props: Props) {
 
             <PhysicalInventoryTable
                 rows={visibleGroupedRows}
-                isLoading={
-                    isBootLoading ||
-                    isHydratingRecord ||
-                    isLoadingProducts ||
-                    isSavingDetailBatch ||
-                    isRebuildingGroups
-                }
+                isLoading={isBootLoading || isHydratingRecord || isLoadingProducts}
                 canEdit={canEdit}
                 onPhysicalCountChange={handlePhysicalCountChange}
                 onPhysicalCountBlur={handlePhysicalCountBlur}
@@ -1755,6 +1790,31 @@ export function PhysicalInventoryManagementModule(props: Props) {
                 onOpenChange={setIsGlobalScannerOpen}
                 onSaved={handleAfterAnyScan}
             />
+
+            <AlertDialog open={isConfirmLoadDialogOpen} onOpenChange={setIsConfirmLoadDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Load Products for Counting?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will fetch all eligible products based on your selected Branch, Supplier, Category, and Price Type.
+                            Once loaded, the filter criteria will be locked for this record.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel className="cursor-pointer">Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            className="cursor-pointer"
+                            onClick={(event) => {
+                                event.preventDefault();
+                                setIsConfirmLoadDialogOpen(false);
+                                void handleLoadProducts();
+                            }}
+                        >
+                            Load Products
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
             <AlertDialog open={openCancelDialog} onOpenChange={setOpenCancelDialog}>
                 <AlertDialogContent>

@@ -67,6 +67,7 @@ export const StockAdjustmentItemSchema = z.object({
   description: z.string().nullable().optional(),
   inferred_supplier_id: z.number().optional(),
   category_name: z.string().nullable().optional(),
+  unit_order: z.number().nullable().optional(),
   db_id: z.number().optional(),
 });
 export type StockAdjustmentItem = z.infer<typeof StockAdjustmentItemSchema>;
@@ -82,7 +83,7 @@ export const StockAdjustmentHeaderSchema = z.object({
   amount: z.number().default(0),
   remarks: z.string().optional(),
   supplier_id: z.any().optional(), // Number or expanded object
-  isPosted: z.any().optional(), // Buffered [1] or Boolean
+  isPosted: z.boolean(),
   created_at: z.string().optional(),
   created_by: z.any().optional(),
   posted_by: z.any().optional(),
@@ -107,10 +108,12 @@ export const StockAdjustmentFormSchema = z.object({
   doc_no: z.string().min(1, "Document number is required"),
   branch_id: z.number().min(1, "Branch is required"),
   supplier_id: z.number().min(1, "Supplier is required"),
-  type: StockAdjustmentTypeSchema.default("IN"),
+  type: StockAdjustmentTypeSchema,
   remarks: z.string().optional(),
   items: z.array(StockAdjustmentItemSchema).min(1, "At least one item is required"),
-  isPosted: z.boolean().optional().default(false),
+  isPosted: z.boolean(),
+  postedAt: z.string().optional(),
+  posted_by: z.any().optional(),
 });
 export type StockAdjustmentFormValues = z.infer<typeof StockAdjustmentFormSchema>;
 
@@ -124,3 +127,46 @@ export const StockAdjustmentListResponseSchema = z.object({
     filter_count: z.number().optional(),
   }).optional(),
 });
+
+/**
+ * Product Data Schema for UI dropdowns and selections
+ */
+export const StockAdjustmentProductSchema = z.object({
+  id: z.number(),
+  product_id: z.number().optional(),
+  product_name: z.string(),
+  product_code: z.string(),
+  unit_name: z.string().optional(),
+  cost_per_unit: z.number().optional(),
+  price_per_unit: z.number().optional(),
+  brand_name: z.string().optional(),
+  barcode: z.string().optional(),
+  description: z.string().optional(),
+  unit_of_measurement: z.object({
+    order: z.number(),
+    unit_id: z.number().optional(),
+  }).optional(),
+  unit_id: z.number().optional(),
+  current_stock: z.number().optional(),
+  rfidData: z.object({
+    quantity: z.number().optional(),
+    count: z.number().optional(),
+  }).optional(),
+  index: z.number().optional(),
+});
+export type StockAdjustmentProduct = z.infer<typeof StockAdjustmentProductSchema>;
+
+/**
+ * Branch/Supplier types for selections
+ */
+export interface SelectionBranch {
+  id: number;
+  branch_name: string;
+  branch_code?: string;
+}
+
+export interface SelectionSupplier {
+  id: number;
+  supplier_name: string;
+  supplier_shortcut?: string;
+}

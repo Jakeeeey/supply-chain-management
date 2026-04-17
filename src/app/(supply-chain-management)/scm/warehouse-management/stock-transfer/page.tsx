@@ -13,7 +13,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 import { cookies } from "next/headers"
 import { getHeaderUserFromToken } from "@/lib/auth-utils"
 import StockTransferModule from "@/modules/supply-chain-management/warehouse-management/stock-transfer/StockTransferModule"
-import { NavUser } from "@/app/(supply-chain-management)/scm/_components/nav-user"
+import NavUser from "@/components/shared/app-sidebar/nav-user"
 export default async function Page() {
     const cookieStore = await cookies();
     const token = cookieStore.get("vos_access_token")?.value;
@@ -52,3 +52,4 @@ export default async function Page() {
         </div>
     )
 }
+

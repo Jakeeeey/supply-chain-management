@@ -10,16 +10,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ColumnDef } from "@tanstack/react-table";
-import { Edit, MoreHorizontal, Package, Send } from "lucide-react";
+import { Edit, MoreHorizontal, Package, Send, Trash2 } from "lucide-react";
 import { BundleDraft, BundleMasterData } from "../../../types/bundle.schema";
 import { DataTableColumnHeader } from "./table-column-header";
 
 interface ColumnOptions {
   masterData: BundleMasterData | null;
   onSubmit: (id: number | string) => void;
-  onDelete: (id: number | string) => void;
   onView: (draft: BundleDraft) => void;
   onEdit: (id: number | string) => void;
+  onDelete: (id: number | string) => void;
 }
 
 /**
@@ -28,9 +28,9 @@ interface ColumnOptions {
 export function getDraftColumns({
   masterData,
   onSubmit,
-  onDelete,
   onView,
   onEdit,
+  onDelete,
 }: ColumnOptions): ColumnDef<BundleDraft>[] {
   return [
     {
@@ -122,12 +122,12 @@ export function getDraftColumns({
                 <DropdownMenuItem onClick={() => onSubmit(id)}>
                   <Send className="mr-2 h-4 w-4" /> Submit for Approval
                 </DropdownMenuItem>
-                {/* <DropdownMenuItem
+                <DropdownMenuItem
                   onClick={() => onDelete(id)}
                   className="text-destructive focus:text-destructive"
                 >
-                  <Trash2 className="mr-2 h-4 w-4" /> Delete
-                </DropdownMenuItem> */}
+                  <Trash2 className="mr-2 h-4 w-4" /> Delete Draft
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDirectusBase, directusHeaders } from "@/lib/directus";
+import { getDirectusBase, directusHeaders } from "@/modules/supply-chain-management/supplier-management/utils/directus";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -65,15 +65,15 @@ export async function GET(req: NextRequest) {
 
             const productIds = unique(
                 links
-                    .map((x: any) => x?.product_id)
-                    .filter((v: any) => v !== null && v !== undefined)
-                    .map((v: any) => String(v))
+                    .map((x: Record<string, unknown>) => x?.product_id)
+                    .filter((v: unknown) => v !== null && v !== undefined)
+                    .map((v: unknown) => String(v))
             );
 
             if (productIds.length === 0) return NextResponse.json({ data: [] });
 
             // Map product_id -> discount_type (FIXED)
-            const discountByProductId = new Map<string, any>();
+            const discountByProductId = new Map<string, unknown>();
             for (const l of links) {
                 const pid = String(l?.product_id ?? "");
                 if (!pid) continue;
@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
                 );
             }
 
-            const rows = (prodJson.data ?? []).map((p: any) => {
+            const rows = (prodJson.data ?? []).map((p: Record<string, unknown>) => {
                 const pid = String(p?.product_id ?? p?.id ?? "");
                 return {
                     ...p,
@@ -155,6 +155,7 @@ export async function GET(req: NextRequest) {
             );
         }
 
+<<<<<<< HEAD
         const rows = (json.data ?? []).map((p: any) => ({
             ...p,
             unit_of_measurement: resolveUom(p),
@@ -162,6 +163,11 @@ export async function GET(req: NextRequest) {
 
         return NextResponse.json({ data: rows });
     } catch (err: any) {
+=======
+        return NextResponse.json({ data: json.data ?? [] });
+    } catch (e: unknown) {
+        const err = e as Error;
+>>>>>>> origin
         return NextResponse.json(
             { error: "Products route failed", details: String(err?.message ?? err) },
             { status: 500 }

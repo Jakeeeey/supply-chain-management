@@ -15,7 +15,7 @@ function StatCard({
 }: {
   title: string;
   value?: React.ReactNode;
-  icon: any;
+  icon: React.ElementType;
   accent?: string;
   loading?: boolean;
 }) {

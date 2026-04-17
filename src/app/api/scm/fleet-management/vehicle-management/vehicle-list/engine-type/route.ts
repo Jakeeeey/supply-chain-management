@@ -29,7 +29,8 @@ export async function GET(req: NextRequest) {
 
     const body = await readUpstream(upstream);
     return NextResponse.json(body, { status: upstream.status });
-  } catch (e: any) {
-    return NextResponse.json({ error: String(e?.message || e) }, { status: 500 });
+  } catch (e: unknown) {
+    const err = e as Error;
+    return NextResponse.json({ error: String(err?.message || err) }, { status: 500 });
   }
 }

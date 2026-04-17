@@ -6,7 +6,8 @@ export async function GET() {
   try {
     const data = await stockAdjustmentService.fetchUnits();
     return NextResponse.json({ data });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    const error = err as Error;
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

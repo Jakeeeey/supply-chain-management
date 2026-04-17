@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useBundles } from "../hooks/useBundles";
 import { BundleApprovalTable } from "./components/data-table";
 import { BundleViewModal } from "../components/modals/bundle-view-modal";
@@ -46,8 +46,8 @@ export default function BundleApprovalPage() {
     try {
       await approveDraft(id);
       toast.success("Bundle approved successfully");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to approve bundle");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to approve bundle");
     }
   };
 
@@ -55,8 +55,8 @@ export default function BundleApprovalPage() {
     try {
       await rejectDraft(id);
       toast.success("Bundle rejected successfully");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to reject bundle");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to reject bundle");
     }
   };
 
@@ -77,8 +77,8 @@ export default function BundleApprovalPage() {
       });
       setSelectedRows([]);
       refresh();
-    } catch (err: any) {
-      toast.error(`Error during bulk ${action}: ${err.message}`, {
+    } catch (err: unknown) {
+      toast.error(`Error during bulk ${action}: ${err instanceof Error ? err.message : String(err)}`, {
         id: toastId,
       });
     } finally {
@@ -101,7 +101,16 @@ export default function BundleApprovalPage() {
     setSelectedRows(rows);
   }, []);
 
-  if (isLoading && !pendingData.length) return <ModuleSkeleton />;
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setMounted(true);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!mounted) return <ModuleSkeleton />;
   if (error) return <ErrorPage message={error} reset={refresh} />;
 
   const actionComponent = (
@@ -140,7 +149,7 @@ export default function BundleApprovalPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Types</SelectItem>
-            {masterData?.bundleTypes.map((t: any) => (
+            {masterData?.bundleTypes.map((t) => (
               <SelectItem key={t.id} value={t.id.toString()}>
                 {t.name}
               </SelectItem>

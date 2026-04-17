@@ -45,12 +45,31 @@ export const generateManifestPDF = (
             Object.values(customers).forEach(items => allItems.push(...items));
         });
 
-        const pdfGroups: any = {};
+        interface OutletData {
+            totalAmt: number;
+            remarks: Set<string>;
+        }
+        interface CityData {
+            total: number;
+            outlets: Record<string, OutletData>;
+        }
+        interface ProvinceData {
+            total: number;
+            cities: Record<string, CityData>;
+        }
+        interface DriverStats {
+            plate: string;
+            cluster: string;
+            total: number;
+            provinces: Record<string, ProvinceData>;
+        }
+
+        const pdfGroups: Record<string, DriverStats> = {};
         let pdpTotalAmount = 0;
 
         allItems.forEach(item => {
             const driver = item.driverName || "NO DRIVER";
-            const plate = (item as any).plateNumber || "N/A";
+            const plate = (item as VPreDispatchPlanDetailedDto & { plateNumber?: string }).plateNumber || "N/A";
             const cluster = item.clusterName || "___________";
             const prov = item.customerProvince || "UNKNOWN PROV";
             const city = item.customerCity || "UNKNOWN CITY";
@@ -81,9 +100,9 @@ export const generateManifestPDF = (
             }
         });
 
-        const tableBody: any[] = [];
+        const tableBody: (string | { content: string; styles?: Record<string, unknown>; colSpan?: number })[][] = [];
 
-        Object.entries(pdfGroups).forEach(([driver, dData]: [string, any]) => {
+        Object.entries(pdfGroups).forEach(([driver, dData]: [string, DriverStats]) => {
             // 🚚 DRIVER HEADER
             tableBody.push([{
                 content: `TRUCK: ${driver} | PLATE: ${dData.plate}\nCLUSTER: ${dData.cluster}\nMANPOWER: ______________________`,
@@ -91,7 +110,7 @@ export const generateManifestPDF = (
                 styles: { fillColor: [50, 50, 50], textColor: [255, 255, 255], fontStyle: "bold", cellPadding: 4, fontSize: 7 }
             }]);
 
-            Object.entries(dData.provinces).forEach(([prov, pData]: [string, any]) => {
+            Object.entries(dData.provinces).forEach(([prov, pData]: [string, ProvinceData]) => {
                 // 📍 PROVINCE HEADER (Removed Emojis!)
                 tableBody.push([{
                     content: prov.toUpperCase(),
@@ -99,7 +118,7 @@ export const generateManifestPDF = (
                     styles: { fillColor: [200, 200, 200], fontStyle: "bold", textColor: [0, 0, 0], cellPadding: 3 }
                 }]);
 
-                Object.entries(pData.cities).forEach(([city, cData]: [string, any]) => {
+                Object.entries(pData.cities).forEach(([city, cData]: [string, CityData]) => {
                     // 🏢 CITY HEADER (Removed Emojis, added indent)
                     tableBody.push([{
                         content: `  ${city.toUpperCase()}`,
@@ -108,7 +127,7 @@ export const generateManifestPDF = (
                     }]);
 
                     // 🛍️ OUTLETS
-                    Object.entries(cData.outlets).forEach(([outlet, oData]: [string, any]) => {
+                    Object.entries(cData.outlets).forEach(([outlet, oData]: [string, OutletData]) => {
                         let outletText = `    • ${outlet}`; // Clean text indent
                         if (oData.remarks.size > 0) {
                             outletText += `\n      * ${Array.from(oData.remarks).join(" | ")}`;
@@ -160,7 +179,7 @@ export const generateManifestPDF = (
         });
 
         // --- ✍️ ABSOLUTE SIGNATURES (Outside the table) ---
-        const finalY = (doc as any).lastAutoTable.finalY + 25;
+        const finalY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 25;
 
         doc.setFontSize(7);
         doc.setFont("helvetica", "bold");

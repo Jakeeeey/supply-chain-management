@@ -11,10 +11,11 @@ export async function GET(req: NextRequest, { params }: { params: Params }) {
     // For now, we fetch from drafts as that's where maintenance happens
     // We fetch a larger limit to find the item, or ideally the service should have a fetchById
     const response = await skuService.fetchDrafts(100, 0);
-    const item = response.data.find((d) => (d as any).id.toString() === id);
+    const item = response.data.find((d) => (d as { id: number | string }).id.toString() === id);
     return NextResponse.json({ data: item });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const err = error as Error;
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 
@@ -24,8 +25,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
     const body = await req.json();
     const data = await skuService.updateDraft(id, body);
     return NextResponse.json({ data });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  } catch (error: unknown) {
+    const err = error as Error;
+    return NextResponse.json({ error: err.message }, { status: 400 });
   }
 }
 
@@ -34,8 +36,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Params }) {
     const { id } = await params;
     await skuService.deleteDraft(id);
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const err = error as Error;
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 
@@ -63,7 +66,8 @@ export async function POST(req: NextRequest, { params }: { params: Params }) {
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const err = error as Error;
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

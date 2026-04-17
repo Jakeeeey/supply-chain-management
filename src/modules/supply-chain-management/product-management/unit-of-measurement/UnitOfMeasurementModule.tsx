@@ -1,8 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Plus, MoreHorizontal, Pencil } from "lucide-react";
+import { Plus, MoreHorizontal, Pencil, Info } from "lucide-react";
 import { toast } from "sonner";
 import { ColumnDef } from "@tanstack/react-table";
 
@@ -42,7 +41,7 @@ function buildColumns(onEdit: (row: UnitApiRow) => void): ColumnDef<UnitApiRow>[
     },
     {
       accessorKey: "sku_code",
-      header: "SKU Code",
+      header: "Unit Code",
       cell: ({ row }) => row.original.sku_code || "-",
       meta: { label: "SKU Code" },
     },
@@ -96,9 +95,10 @@ export default function UnitOfMeasurementModule() {
       setError(null);
       const res = await listUnits(1, -1); // Fetch all
       setData(res.data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to load units", err);
-      setError(err.message || "Failed to load units.");
+      const message = err instanceof Error ? err.message : "Failed to load units.";
+      setError(message);
       toast.error("Failed to load units");
     } finally {
       setLoading(false);
@@ -135,6 +135,33 @@ export default function UnitOfMeasurementModule() {
 
   return (
     <div className="space-y-4">
+      {/* 📘 Sort Order Legend Map */}
+      <div className="bg-muted/30 border rounded-lg p-4 flex gap-3 items-start transition-all hover:bg-muted/40">
+        <div className="bg-primary/10 p-1.5 rounded-md mt-0.5">
+          <Info className="h-4 w-4 text-primary" />
+        </div>
+        <div className="space-y-1">
+          <h4 className="text-sm font-semibold leading-none">Sort Order Legend</h4>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            The <b>Order</b> number defines the relative scale of units to aid in sorting and grouping:
+          </p>
+          <div className="flex flex-wrap gap-x-6 gap-y-1 mt-2 text-xs">
+            <div className="flex items-center gap-1.5">
+              <span className="flex h-4 w-4 items-center justify-center rounded bg-primary/10 font-bold text-[10px]">1</span>
+              <span><b>Small Units</b> (piece, gram, ml)</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="flex h-4 w-4 items-center justify-center rounded bg-primary/10 font-bold text-[10px]">2</span>
+              <span><b>Medium Units</b> (pack, kg, L)</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="flex h-4 w-4 items-center justify-center rounded bg-primary/10 font-bold text-[10px]">3</span>
+              <span><b>Big Units</b> (box, case, crate)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <DataTable
         columns={columns}
         data={data}

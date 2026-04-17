@@ -22,7 +22,6 @@ import {
 } from "../utils/compute";
 
 import { Dialog, DialogPortal, DialogOverlay } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import {
     AlertCircle,
     CheckCircle2,
@@ -315,16 +314,34 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
 
         try {
             setIsLoadingExisting(true);
-            const [tags, onhandRows] = await Promise.all([
-                fetchPhysicalInventoryDetailRfid(phId),
-                branchId ? fetchRfidOnhandByBranch(branchId) : Promise.resolve([]),
-            ]);
+            const CACHE_KEY = `rfid_onhand_${branchId}`;
+            const cachedStorage = localStorage.getItem(CACHE_KEY);
+            const nextCache = new Map<string, number>();
+
+            if (cachedStorage) {
+                try {
+                    const parsed = JSON.parse(cachedStorage);
+                    if (Array.isArray(parsed)) {
+                        for (const [key, val] of parsed) {
+                            nextCache.set(key, val);
+                        }
+                    }
+                } catch {
+                    // ignore parse error
+                }
+            }
+
+            const tags = await fetchPhysicalInventoryDetailRfid(phId);
             setExistingPiTags(tags);
 
-            const nextCache = new Map<string, number>();
-            for (const row of onhandRows) {
-                nextCache.set(row.rfid, row.productId);
+            if (nextCache.size === 0 && branchId) {
+                const onhandRows = await fetchRfidOnhandByBranch(branchId);
+                for (const row of onhandRows) {
+                    nextCache.set(row.rfid, row.productId);
+                }
+                localStorage.setItem(CACHE_KEY, JSON.stringify(Array.from(nextCache.entries())));
             }
+
             setOnhandCache(nextCache);
         } catch (error) {
             const message =
@@ -518,6 +535,7 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
                         setOnhandCache((prev) => {
                             const next = new Map(prev);
                             next.set(normalized, rfidProductId!);
+                            localStorage.setItem(`rfid_onhand_${branchId}`, JSON.stringify(Array.from(next.entries())));
                             return next;
                         });
                     }
@@ -653,6 +671,7 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
             rowByProductId,
             setTemporarySignal,
             existingPiTags,
+            onhandCache,
         ],
     );
 
@@ -871,13 +890,7 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
                             />
 
                             <div className="space-y-4 p-4 sm:p-5">
-                                <div className="grid grid-cols-2 gap-2 rounded-xl border bg-muted/30 p-3 text-xs sm:grid-cols-4">
-                                    <div>
-                                        <span className="font-medium">Branch:</span> {branchId ?? "—"}
-                                    </div>
-                                    <div>
-                                        <span className="font-medium">PI:</span> {phId ?? "—"}
-                                    </div>
+                                <div className="grid grid-cols-2 gap-2 rounded-xl border bg-muted/30 p-3 text-xs">
                                     <div>
                                         <span className="font-medium">RFID Rows:</span>{" "}
                                         {totalRfidEligibleRows}
@@ -983,17 +996,6 @@ export function PhysicalInventoryGlobalRFIDScannerDialog(props: Props) {
                                 </div>
                             </div>
 
-                            <div className="flex justify-end border-t px-4 py-3 sm:px-5">
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="cursor-pointer"
-                                    onClick={() => onOpenChange(false)}
-                                >
-                                    Close
-                                </Button>
-                            </div>
                         </div>
                     </div>
                 </DialogPortal>

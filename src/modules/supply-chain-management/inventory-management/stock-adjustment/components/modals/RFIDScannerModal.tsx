@@ -10,10 +10,9 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Trash2, Smartphone, ScanLine, Tag, Wifi, Loader2 } from "lucide-react";
+import { Trash2, ScanLine, Tag, Wifi, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface RFIDScannerModalProps {
@@ -23,6 +22,8 @@ interface RFIDScannerModalProps {
   onSave: (tags: string[]) => void;
   initialTags?: string[];
   type: "IN" | "OUT";
+  branchId?: number;
+  validateRFID?: (rfid: string, branchId?: number) => Promise<{ exists: boolean; location?: string }>;
 }
 
 export function RFIDScannerModal({
@@ -32,30 +33,39 @@ export function RFIDScannerModal({
   onSave,
   initialTags = [],
   type,
+  branchId,
+  validateRFID,
 }: RFIDScannerModalProps) {
   const [tags, setTags] = useState<string[]>(initialTags);
+  const [prevOpen, setPrevOpen] = useState(open);
+
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) {
+      setTags(initialTags);
+    }
+  }
+
   const [currentInput, setCurrentInput] = useState("");
   const [lastScanned, setLastScanned] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open) {
-      setTags(initialTags);
       // Focus input when modal opens with a very short delay
       requestAnimationFrame(() => {
         inputRef.current?.focus();
       });
     }
-  }, [open, initialTags]);
+  }, [open]);
 
-  const handleAddTag = (tag: string) => {
+  const handleAddTag = async (tag: string) => {
     let rawTag = tag.trim();
     if (!rawTag) return;
 
     // --- Pattern Detection for Concatenated Scans ---
-    // If the string appears to be the same ID repeated (e.g., IDID or IDIDID), extract only one ID.
-    // We check for repeats of lengths from 8 up to half the string length.
     if (rawTag.length >= 16) {
       for (let len = 8; len <= rawTag.length / 2; len++) {
         if (rawTag.length % len === 0) {
@@ -70,8 +80,28 @@ export function RFIDScannerModal({
     }
 
     if (tags.includes(rawTag)) {
-      toast.error("RFID tag already added");
+      toast.error("RFID tag already added in this session");
       return;
+    }
+
+    // --- Backend Validation for EXISTING tags during Stock In ---
+    if (type === "IN" && validateRFID) {
+      setIsValidating(true);
+      try {
+        const { exists, location } = await validateRFID(rawTag, branchId);
+        if (exists) {
+          toast.error("Process Blocked", {
+            description: `RFID tag ${rawTag} already exists (${location || "Unknown Location"}).`,
+            duration: 5000,
+          });
+          setCurrentInput("");
+          return;
+        }
+      } catch (err) {
+        console.error("RFID Validation failed:", err);
+      } finally {
+        setIsValidating(false);
+      }
     }
 
     setTags((prev) => [...prev, rawTag]);
@@ -97,6 +127,7 @@ export function RFIDScannerModal({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (isValidating) return; // Block input while validating
     if (e.key === "Enter") {
       e.preventDefault();
       const val = currentInput;
@@ -113,8 +144,8 @@ export function RFIDScannerModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px] border-none shadow-2xl overflow-hidden p-0 bg-card">
-        <div className="bg-blue-600 dark:bg-blue-700 p-6 text-white shadow-inner">
+      <DialogContent className="w-[95vw] sm:max-w-[500px] border-none shadow-2xl overflow-hidden p-0 bg-card max-h-[95vh] sm:max-h-[90vh] flex flex-col">
+        <div className="bg-blue-600 dark:bg-blue-700 p-4 sm:p-6 text-white shadow-inner shrink-0">
           <DialogHeader>
             <div className="flex items-center gap-3 mb-2">
               <div className="bg-white/20 dark:bg-black/20 p-2 rounded-lg backdrop-blur-md">
@@ -130,7 +161,7 @@ export function RFIDScannerModal({
           </DialogHeader>
         </div>
 
-        <div className="p-6 space-y-8" onClick={handleContainerClick}>
+        <div className="p-4 sm:p-6 space-y-6 sm:space-y-8 flex-1 overflow-y-auto min-h-0" onClick={handleContainerClick}>
           {/* Hidden Input for Scanner Events */}
           <input
             ref={inputRef}
@@ -143,25 +174,25 @@ export function RFIDScannerModal({
           />
 
           {/* Ready to Scan Visual State */}
-          <div className={`flex flex-col items-center justify-center py-8 px-4 border-2 border-dashed rounded-3xl transition-all duration-300 space-y-4 animate-in fade-in zoom-in duration-500 shadow-sm ${
+          <div className={`flex flex-col items-center justify-center py-6 sm:py-10 px-4 border-2 border-dashed rounded-3xl transition-all duration-300 space-y-4 animate-in fade-in zoom-in duration-500 shadow-sm ${
             isSuccess 
               ? "border-green-500/50 bg-green-500/5 dark:bg-green-500/10 scale-[1.02]" 
               : "border-blue-500/20 bg-blue-500/5 dark:bg-blue-500/5"
           }`}>
             <div className="relative">
               <div className={`absolute inset-0 rounded-full animate-ping scale-150 duration-2000 ${isSuccess ? "bg-green-500/20" : "bg-blue-500/20"}`} />
-              <div className={`relative p-6 rounded-full shadow-xl transition-all duration-300 ${
+              <div className={`relative p-4 sm:p-6 rounded-full shadow-xl transition-all duration-300 ${
                 isSuccess ? "bg-green-500 shadow-green-500/20" : "bg-blue-500 shadow-blue-500/20"
               }`}>
                 {isSuccess ? (
-                  <Tag className="h-10 w-10 text-white animate-bounce" />
+                  <Tag className="h-8 w-8 sm:h-12 sm:w-12 text-white animate-bounce" />
                 ) : (
-                  <Wifi className="h-10 w-10 text-white animate-pulse" />
+                  <Wifi className="h-8 w-8 sm:h-12 sm:w-12 text-white animate-pulse" />
                 )}
               </div>
             </div>
             <div className="text-center space-y-1">
-              <h3 className={`text-xl font-black tracking-tight transition-colors duration-300 ${
+              <h3 className={`text-lg sm:text-2xl font-black tracking-tight transition-colors duration-300 ${
                 isSuccess ? "text-green-600 dark:text-green-400" : "text-blue-600 dark:text-blue-400"
               }`}>
                 {isSuccess ? "Captured!" : "Ready to Scan"}
@@ -198,7 +229,7 @@ export function RFIDScannerModal({
               </Badge>
             </div>
             <div className="border border-border rounded-xl bg-muted/10 overflow-hidden">
-                <ScrollArea className="h-[250px] w-full p-4">
+                <ScrollArea className="h-[200px] sm:h-[300px] w-full p-4">
                   {tags.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center opacity-40 py-12">
                       <Tag className="h-10 w-10 text-muted-foreground mb-2" />
@@ -235,7 +266,7 @@ export function RFIDScannerModal({
           </div>
         </div>
 
-        <DialogFooter className="bg-muted/10 p-6 border-t border-border flex gap-3">
+        <DialogFooter className="bg-muted/10 p-4 sm:p-6 border-t border-border flex flex-col sm:flex-row gap-2 sm:gap-3 shrink-0">
           <Button
             type="button"
             variant="ghost"

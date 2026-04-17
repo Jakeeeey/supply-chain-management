@@ -1,4 +1,4 @@
-import { ConsolidatorDto } from "../types";
+import { ConsolidatorDto, BranchDto, ConsolidationPreviewItem } from "../types";
 
 // Interface for the Paginated Response
 export interface PaginatedConsolidators {
@@ -19,14 +19,14 @@ const getHeaders = () => {
 
 // --- 🏛️ BRANCH API CALLS ---
 
-export const fetchActiveBranches = async (): Promise<any[]> => {
+export const fetchActiveBranches = async (): Promise<BranchDto[] | null> => {
     try {
         const url = `/api/scm/warehouse-management/consolidation/branches?_t=${Date.now()}`;
         const response = await fetch(url, {
             headers: getHeaders(),
             cache: "no-store"
         });
-        if (response.status === 401) return null as any;
+        if (response.status === 401) return null;
         if (!response.ok) return [];
         const data = await response.json();
         return Array.isArray(data) ? data : [];
@@ -88,8 +88,9 @@ export const fetchConsolidators = async (
             number: Number(data.page?.number ?? data.number ?? 0)
         };
 
-    } catch (error: any) {
-        console.error("Consolidator Fetch Error:", error.message);
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Unknown error";
+        console.error("Consolidator Fetch Error:", message);
         return { content: [], totalPages: 0, totalElements: 0, number: 0 };
     }
 };
@@ -103,8 +104,8 @@ export const fetchConsolidatorSummary = async (): Promise<Record<string, number>
         });
         if (response.status === 401) return null;
         return await response.json();
-    } catch (error) {
-        console.error("Summary Fetch Error:", error);
+    } catch {
+        console.error("Summary Fetch Error");
         return {};
     }
 };
@@ -119,7 +120,7 @@ export async function fetchPickersBySupplier(supplierId: number) {
         if (!res.ok) return [];
         const data = await res.json();
         return Array.isArray(data) ? data : [];
-    } catch (error) {
+    } catch {
         return [];
     }
 }
@@ -132,7 +133,7 @@ export async function assignPicker(userId: number, supplierId: number) {
             body: JSON.stringify({ userId, supplierId })
         });
         return res.ok;
-    } catch (error) {
+    } catch {
         return false;
     }
 }
@@ -145,7 +146,7 @@ export async function unassignPicker(userId: number, supplierId: number) {
             body: JSON.stringify({ userId, supplierId })
         });
         return res.ok;
-    } catch (error) {
+    } catch {
         return false;
     }
 }
@@ -159,7 +160,7 @@ export async function fetchAllActiveSuppliers(supplierType?: string) {
         if (!res.ok) return [];
         const data = await res.json();
         return Array.isArray(data) ? data : [];
-    } catch (error) {
+    } catch {
         return [];
     }
 }
@@ -173,14 +174,14 @@ export async function fetchAllUsers(departmentId?: number) {
         if (!res.ok) return [];
         const data = await res.json();
         return Array.isArray(data) ? data : [];
-    } catch (error) {
+    } catch {
         return [];
     }
 }
 
 // --- 🧙 CONSOLIDATION WIZARD API CALLS ---
 
-export const fetchDispatchPlans = async (branchId?: number | string): Promise<any[]> => {
+export const fetchDispatchPlans = async (branchId?: number | string): Promise<unknown[]> => {
     try {
         const params = new URLSearchParams({ status: "Approved" });
         if (branchId) params.append("branchId", branchId.toString());
@@ -189,19 +190,19 @@ export const fetchDispatchPlans = async (branchId?: number | string): Promise<an
         if (!res.ok) return [];
         const data = await res.json();
         return data.content || data;
-    } catch (error) {
+    } catch {
         return [];
     }
 };
 
-export const fetchConsolidationPreview = async (dispatchIds: number[]): Promise<any[]> => {
+export const fetchConsolidationPreview = async (dispatchIds: number[]): Promise<ConsolidationPreviewItem[]> => {
     try {
         if (!dispatchIds.length) return [];
         const params = new URLSearchParams({ dispatchIds: dispatchIds.join(','), _t: Date.now().toString() });
         const url = `/api/scm/warehouse-management/consolidation/preview?${params.toString()}`;
         const res = await fetch(url, { headers: getHeaders() });
         return res.ok ? await res.json() : [];
-    } catch (error) {
+    } catch {
         return [];
     }
 };
@@ -215,7 +216,7 @@ export const generateConsolidationBatch = async (dispatchIds: number[]): Promise
             body: JSON.stringify({ dispatchIds })
         });
         return res.ok ? await res.json() : null;
-    } catch (error) {
+    } catch {
         return null;
     }
 };
@@ -231,7 +232,7 @@ export const startPickingBatch = async (consolidatorNo: string, checkerId: numbe
             body: JSON.stringify({ consolidatorNo, checkerId }),
         });
         return response.ok;
-    } catch (error) {
+    } catch {
         return false;
     }
 };
@@ -250,7 +251,7 @@ export const transmitItemScan = async (payload: {
             body: JSON.stringify(payload),
         });
         return response.ok;
-    } catch (error) {
+    } catch {
         return false;
     }
 };

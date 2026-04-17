@@ -21,8 +21,8 @@ export function ActivePickingHeader({
                                         isBatchComplete, isScanning, onClose, onBatchComplete
                                     }: Props) {
     return (
-        <>
-            <header className="shrink-0 bg-card border-b border-border/40 p-4 shadow-sm flex items-center justify-between z-20">
+        <div className="sticky top-0 z-30">
+            <header className="shrink-0 bg-card border-b border-border/40 p-4 shadow-sm flex items-center justify-between">
                 <div className="flex items-center gap-4">
                     <Button variant="outline" size="icon" onClick={onClose} className="h-14 w-14 rounded-2xl shadow-sm">
                         <ArrowLeft className="h-7 w-7" />
@@ -63,6 +63,6 @@ export function ActivePickingHeader({
                 </div>
             </header>
             <Progress value={progressPercent} className="h-2 rounded-none bg-muted shrink-0" />
-        </>
+        </div>
     );
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDirectusBase, directusHeaders } from "@/lib/directus";
+import { getDirectusBase, directusHeaders } from "@/modules/supply-chain-management/supplier-management/utils/directus";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,7 +31,8 @@ export async function GET(req: NextRequest) {
         }
 
         return NextResponse.json({ data: json.data ?? [] });
-    } catch (err: any) {
+    } catch (e: unknown) {
+        const err = e as Error;
         return NextResponse.json(
             { error: "Branches route failed", details: String(err?.message ?? err) },
             { status: 500 }

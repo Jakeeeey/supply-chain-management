@@ -1,6 +1,6 @@
 // ✅ FILE: src/app/api/scm/supplier-management/purchase-order/product-supplier-links/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { getDirectusBase, getDirectusToken } from "@/lib/directus";
+import { getDirectusBase, getDirectusToken } from "@/modules/supply-chain-management/supplier-management/utils/directus";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,9 +50,10 @@ export async function GET(req: NextRequest) {
 
         const json = await res.json();
         return NextResponse.json({ data: json?.data ?? [] });
-    } catch (e: any) {
+    } catch (e: unknown) {
+        const error = e as Error;
         return NextResponse.json(
-            { error: "Failed to fetch product-supplier-links", details: String(e?.message ?? e) },
+            { error: "Failed to fetch product-supplier-links", details: String(error?.message ?? error) },
             { status: 500 }
         );
     }

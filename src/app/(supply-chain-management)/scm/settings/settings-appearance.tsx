@@ -148,7 +148,7 @@ export function SettingsAppearance() {
                                 value={settings.density}
                                 onValueChange={(v) => {
                                     if (!v) return;
-                                    updateSettings({ density: v as any });
+                                    updateSettings({ density: v as "comfortable" | "compact" });
                                 }}
                                 className="justify-start"
                             >

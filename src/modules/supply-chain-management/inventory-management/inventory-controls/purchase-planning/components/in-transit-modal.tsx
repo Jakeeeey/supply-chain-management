@@ -8,16 +8,17 @@ import { cn } from "@/lib/utils"
 
 // 🚀 IMPORT THE REFACTORED SERVICE
 import { fetchInTransitPOs } from "../services/purchase-planning-api"
+import { PurchaseOrder } from "../types"
 
 interface InTransitModalProps {
     open: boolean
     setOpen: (open: boolean) => void
-    onConfirm: (selectedPOs: any[]) => void
+    onConfirm: (selectedPOs: PurchaseOrder[]) => void
     supplierId: string | null
 }
 
 export function InTransitModal({ open, setOpen, onConfirm, supplierId }: InTransitModalProps) {
-    const [pendingPOs, setPendingPOs] = useState<any[]>([])
+    const [pendingPOs, setPendingPOs] = useState<PurchaseOrder[]>([])
     const [selectedPoIds, setSelectedPoIds] = useState<string[]>([])
     const [isLoading, setIsLoading] = useState(false)
     const [isProcessing, setIsProcessing] = useState(false)
@@ -33,22 +34,23 @@ export function InTransitModal({ open, setOpen, onConfirm, supplierId }: InTrans
                 setError(null)
                 try {
                     // ✅ USING THE SERVICE FUNCTION INSTEAD OF RAW FETCH
-                    const result = await fetchInTransitPOs(supplierId)
+                    const result = await fetchInTransitPOs(supplierId) as PurchaseOrder[]
 
                     if (isMounted) {
                         // Mapping to ensure ID is a string for selection tracking
-                        const sanitizedData = result.map((po: any) => ({
+                        const sanitizedData = result.map((po: PurchaseOrder): PurchaseOrder => ({
                             ...po,
                             id: String(po.id)
                         }))
 
                         setPendingPOs(sanitizedData)
                         // Default to selecting all POs initially
-                        setSelectedPoIds(sanitizedData.map((p: any) => p.id))
+                        setSelectedPoIds(sanitizedData.map((p: PurchaseOrder) => p.id))
                     }
-                } catch (e: any) {
+                } catch (e: unknown) {
                     console.error("❌ In-Transit Modal Sync Error:", e)
-                    if (isMounted) setError(e.message || "Could not sync with Purchase Orders")
+                    const m = e instanceof Error ? e.message : "Could not sync with Purchase Orders"
+                    if (isMounted) setError(m)
                 } finally {
                     if (isMounted) setIsLoading(false)
                 }

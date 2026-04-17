@@ -97,7 +97,7 @@ export async function uploadVehicleImage(file: File): Promise<string> {
   if (!res.ok) throw new Error(await readError(res));
 
   const json = (await res.json()) as DirectusItemResponse<{ path: string }>;
-  const p = String((json as any)?.data?.path ?? "").trim();
+  const p = String(json?.data?.path ?? "").trim();
   if (!p) throw new Error("Upload succeeded but no path was returned.");
   return p;
 }
@@ -114,10 +114,18 @@ const VEHICLE_ALLOWED_KEYS = new Set([
   "year_to_last",
   "image",
   "custodian_id",
+  "rfid_code",
+  "seats",
+  "maximum_weight",
+  "minimum_load",
+  "max_liters",
+  "cbm_length",
+  "cbm_width",
+  "cbm_height",
 ]);
 
-function sanitizeVehicleCreatePayload(payload: Record<string, any>) {
-  const out: Record<string, any> = {};
+function sanitizeVehicleCreatePayload(payload: Record<string, unknown>) {
+  const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(payload || {})) {
     if (!VEHICLE_ALLOWED_KEYS.has(k)) continue;
     if (v === undefined) continue;
@@ -127,7 +135,7 @@ function sanitizeVehicleCreatePayload(payload: Record<string, any>) {
   return out;
 }
 
-export async function createVehicle(payload: Record<string, any>) {
+export async function createVehicle(payload: Record<string, unknown>) {
   const first = await fetch("/api/scm/fleet-management/vehicle-management/vehicle-list", {
     method: "POST",
     headers: { "content-type": "application/json" },

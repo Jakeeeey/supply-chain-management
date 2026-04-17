@@ -112,9 +112,9 @@ export default function TripsTab({ vehicle }: { vehicle: VehicleRow }) {
       });
 
       setRows(sorted);
-    } catch (e: any) {
+    } catch (e) {
       toast.error("Failed to load trips", {
-        description: String(e?.message || e),
+        description: String(e instanceof Error ? e.message : e),
       });
       setRows([]);
     } finally {
@@ -160,14 +160,14 @@ export default function TripsTab({ vehicle }: { vehicle: VehicleRow }) {
       {rows.map((p) => {
         const date = fmtDate(pickPlanDate(p));
         const route = "N/A"; // leave blank until you have location joins
-        const distance = fmtDistanceKm((p as any)?.total_distance);
+        const distance = fmtDistanceKm(p.total_distance);
         const duration = fmtDuration(
-          (p as any)?.estimated_time_of_dispatch || (p as any)?.time_of_dispatch,
-          (p as any)?.estimated_time_of_arrival || (p as any)?.time_of_arrival
+          p.estimated_time_of_dispatch || p.time_of_dispatch,
+          p.estimated_time_of_arrival || p.time_of_arrival
         );
 
         return (
-          <Card key={String((p as any)?.id ?? `${date}-${Math.random()}`)}>
+          <Card key={String(p.id ?? `${date}-${Math.random()}`)}>
             <CardContent className="p-5">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="grid gap-1">

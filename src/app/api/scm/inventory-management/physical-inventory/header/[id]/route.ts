@@ -83,6 +83,8 @@ export async function PATCH(
         if ("category_id" in body) payload.category_id = Number.isFinite(Number(body.category_id)) ? Number(body.category_id) : null;
         if ("isComitted" in body) payload.isComitted = Number(body.isComitted) === 1 ? 1 : 0;
         if ("isCancelled" in body) payload.isCancelled = Number(body.isCancelled) === 1 ? 1 : 0;
+        if ("committed_at" in body) payload.committed_at = typeof body.committed_at === "string" ? body.committed_at : null;
+        if ("cancelled_at" in body) payload.cancelled_at = typeof body.cancelled_at === "string" ? body.cancelled_at : null;
         if ("total_amount" in body) payload.total_amount = Number.isFinite(Number(body.total_amount)) ? Number(body.total_amount) : 0;
 
         if (encoderId) {

@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { NavUser } from "../../_components/nav-user";
+import { NavUser } from "@/components/shared/app-sidebar/nav-user";
 
 import { cookies } from "next/headers";
 
@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
 
 const COOKIE_NAME = "vos_access_token";
 
-function decodeJwtPayload(token: string): any | null {
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
   try {
     const parts = token.split(".");
     if (parts.length < 2) return null;
@@ -36,7 +36,7 @@ function decodeJwtPayload(token: string): any | null {
   }
 }
 
-function pickString(obj: any, keys: string[]): string {
+function pickString(obj: Record<string, unknown> | null, keys: string[]): string {
   for (const k of keys) {
     const v = obj?.[k];
     if (typeof v === "string" && v.trim()) return v.trim();
@@ -65,7 +65,10 @@ function buildHeaderUserFromToken(token: string | null | undefined) {
 
   const name = [first, last].filter(Boolean).join(" ") || email || "User";
 
+  const id = pickString(payload, ["id", "ID", "user_id", "sub"]);
+
   return {
+    id,
     name,
     email: email || "",
     avatar: "/avatars/shadcn.jpg",
@@ -116,8 +119,9 @@ export default async function Page() {
 
       {/* ✅ Only content scrolls inside RIGHT column */}
       <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-2 sm:p-4">
-        <Brand />
+        <Brand currentUser={headerUser} />
       </main>
     </div>
   );
 }
+

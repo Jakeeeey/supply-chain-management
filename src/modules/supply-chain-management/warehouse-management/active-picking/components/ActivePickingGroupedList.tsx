@@ -3,22 +3,15 @@
 import React, {useState, useMemo, useEffect} from "react";
 import {
     CheckCircle2, ChevronRight, ChevronDown, Factory, Keyboard, ListTodo, ScanLine, Barcode,
-    Send, Search, PackageX, AlertOctagon, Zap, FilterX
+    Send, Search, PackageX, Zap, FilterX
 } from "lucide-react";
 import {Badge} from "@/components/ui/badge";
 import {Button} from "@/components/ui/button";
-import {ScrollArea} from "@/components/ui/scroll-area";
 import {Input} from "@/components/ui/input";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle
-} from "@/components/ui/dialog";
 import {motion} from "framer-motion";
 import {ConsolidatorDetailsDto} from "../types";
+import {usePickingList} from "../hooks/usePickingList";
+import {ForceEndDialog} from "./ForceEndDialog";
 
 interface Props {
     cldtoNo: string;
@@ -33,88 +26,47 @@ export function ActivePickingGroupedList({
                                              cldtoNo, groupedDetails, activeDetailId,
                                              setActiveDetailId, onOpenManualModal, onFinalizeBatch
                                          }: Props) {
-    const [searchQuery, setSearchQuery] = useState("");
-    const [showRfidOnly, setShowRfidOnly] = useState(false);
+    const {
+        searchQuery,
+        setSearchQuery,
+        showRfidOnly,
+        setShowRfidOnly,
+        collapsedSections,
+        toggleCollapse,
+        isSearching,
+        filteredGroupedDetails,
+        isFilteredEmpty,
+        clearFilters,
+    } = usePickingList(groupedDetails);
+
     const [showForceEndDialog, setShowForceEndDialog] = useState(false);
-    const [cldtoInput, setCldtoInput] = useState("");
-    const [hasError, setHasError] = useState(false);
 
-    // 🚀 NEW: State to track which sections are collapsed
-    const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
-
-    // ✅ CORRECT PLACEMENT: Evaluates on every render based on current state
-    const isSearching = searchQuery.trim() !== "" || showRfidOnly;
-
-    // Auto-scroll to active item
     useEffect(() => {
         if (activeDetailId) {
             const element = document.getElementById(`pick-card-${activeDetailId}`);
-            if (element) element.scrollIntoView({behavior: 'smooth', block: 'center'});
+            if (element) {
+                element.scrollIntoView({behavior: 'smooth', block: 'center'});
+            }
         }
     }, [activeDetailId]);
-
-    const toggleCollapse = (id: string) => {
-        setCollapsedSections(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(id)) newSet.delete(id);
-            else newSet.add(id);
-            return newSet;
-        });
-    };
 
     const allItems = useMemo(() => Object.values(groupedDetails).flatMap(b => Object.values(b).flatMap(c => Object.values(c).flat())), [groupedDetails]);
     const totalOrdered = useMemo(() => allItems.reduce((sum, item) => sum + (item.orderedQuantity || 0), 0), [allItems]);
     const totalPicked = useMemo(() => allItems.reduce((sum, item) => sum + (item.pickedQuantity || 0), 0), [allItems]);
     const isFullyDone = totalPicked >= totalOrdered && totalOrdered > 0;
 
-    const filteredGroupedDetails = useMemo(() => {
-        const lowerQuery = searchQuery.toLowerCase().trim();
-        const result: typeof groupedDetails = {};
-
-        Object.entries(groupedDetails).forEach(([supplier, brands]) => {
-            const filteredBrands: Record<string, Record<string, ConsolidatorDetailsDto[]>> = {};
-
-            Object.entries(brands).forEach(([brand, categories]) => {
-                const filteredCategories: Record<string, ConsolidatorDetailsDto[]> = {};
-
-                Object.entries(categories).forEach(([category, items]) => {
-                    const filteredItems = items.filter(item => {
-                        const matchesSearch = !lowerQuery ||
-                            item.productName?.toLowerCase().includes(lowerQuery) ||
-                            item.barcode?.toLowerCase().includes(lowerQuery) ||
-                            item.productId?.toString().includes(lowerQuery);
-                        const matchesRfidFilter = !showRfidOnly || item.unitOrder === 3;
-                        return matchesSearch && matchesRfidFilter;
-                    });
-                    if (filteredItems.length > 0) filteredCategories[category] = filteredItems;
-                });
-                if (Object.keys(filteredCategories).length > 0) filteredBrands[brand] = filteredCategories;
-            });
-            if (Object.keys(filteredBrands).length > 0) result[supplier] = filteredBrands;
-        });
-        return result;
-    }, [groupedDetails, searchQuery, showRfidOnly]);
-
-    const isFilteredEmpty = Object.keys(filteredGroupedDetails).length === 0;
-
     const handleEndSessionClick = () => {
-        if (isFullyDone) onFinalizeBatch();
-        else {
-            setCldtoInput("");
-            setHasError(false);
+        if (isFullyDone) {
+            onFinalizeBatch();
+        } else {
             setShowForceEndDialog(true);
         }
     };
 
-    const handleConfirmForceEnd = () => {
-        if (cldtoInput.trim().toLowerCase() === cldtoNo.trim().toLowerCase()) {
-            setShowForceEndDialog(false);
-            onFinalizeBatch();
-        } else setHasError(true);
-    };
-
     return (
         <div className="w-full md:w-2/3 lg:w-3/4 flex flex-col border-r border-border/40 bg-muted/10 min-h-0 relative">
+
+            {/* STICKY FILTERS HEADER */}
             <div className="shrink-0 p-3 bg-card border-b border-border/40 flex flex-col gap-3 shadow-sm z-20">
                 <div className="flex justify-between items-center">
                     <h2 className="font-black uppercase text-xs tracking-widest text-muted-foreground flex items-center gap-2">
@@ -122,39 +74,39 @@ export function ActivePickingGroupedList({
                     </h2>
                     <div className="flex items-center gap-2">
                         <Button
-                            variant={showRfidOnly ? "default" : "outline"} size="sm"
+                            variant={showRfidOnly ? "default" : "outline"}
+                            size="sm"
                             onClick={() => setShowRfidOnly(!showRfidOnly)}
                             className={`text-[9px] font-black uppercase tracking-widest h-7 rounded-md transition-all ${showRfidOnly ? "bg-primary shadow-sm" : "text-muted-foreground"}`}
                         >
                             <Zap className={`mr-1 h-3 w-3 ${showRfidOnly ? "fill-current" : ""}`}/> RFID Only
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={handleEndSessionClick}
-                                className="text-[10px] font-black uppercase tracking-tighter md:hidden h-7">End</Button>
                     </div>
                 </div>
 
                 <div className="flex gap-2">
                     <div className="relative flex-1">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50"/>
-                        <Input placeholder="Filter Name, Barcode..." value={searchQuery}
-                               onChange={(e) => setSearchQuery(e.target.value)}
-                               className="pl-9 h-10 bg-muted/50 border-border/50 text-sm rounded-lg"/>
+                        <Input
+                            placeholder="Filter Name, Barcode..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="pl-9 h-10 bg-muted/50 border-border/50 text-sm rounded-lg"
+                        />
                     </div>
                     {isSearching && (
                         <Button variant="ghost"
                                 className="h-10 w-10 rounded-lg text-muted-foreground hover:text-destructive"
-                                onClick={() => {
-                                    setSearchQuery("");
-                                    setShowRfidOnly(false);
-                                }}>
+                                onClick={clearFilters}>
                             <FilterX className="h-4 w-4"/>
                         </Button>
                     )}
                 </div>
             </div>
 
-            <ScrollArea className="flex-1 min-h-0" type="always">
-                <div className="p-3 md:p-4 space-y-6 pb-40">
+            {/* 🚀 SCROLLABLE LIST (Swapped to native overflow-y-auto so sticky headers actually work!) */}
+            <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar relative">
+                <div className="p-3 md:p-4 space-y-6 pb-6">
                     {isFilteredEmpty ? (
                         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground/50">
                             <PackageX className="h-12 w-12 mb-3 opacity-50"/>
@@ -163,13 +115,13 @@ export function ActivePickingGroupedList({
                     ) : (
                         Object.entries(filteredGroupedDetails).map(([supplier, brands]) => {
                             const supplierId = `sup-${supplier}`;
-                            // Force expand if searching, otherwise respect collapse state
                             const isSupplierCollapsed = !isSearching && collapsedSections.has(supplierId);
 
                             return (
                                 <div key={supplier}
                                      className="border border-border/50 rounded-xl shadow-sm bg-card relative overflow-hidden transition-all duration-300">
-                                    {/* 🚀 SUPPLIER HEADER (COLLAPSIBLE) */}
+
+                                    {/* THIS NOW STICKS PERFECTLY WITHIN ITS PARENT */}
                                     <div
                                         className="sticky top-0 z-10 bg-card/95 backdrop-blur-md px-4 py-3 border-b border-border/50 flex items-center justify-between shadow-sm cursor-pointer hover:bg-muted/40 transition-colors"
                                         onClick={() => toggleCollapse(supplierId)}
@@ -188,12 +140,10 @@ export function ActivePickingGroupedList({
                                                 <React.Fragment key={brand}>
                                                     {Object.entries(categories).map(([category, items]) => {
                                                         const catId = `cat-${supplier}-${brand}-${category}`;
-                                                        // Force expand if searching, otherwise respect collapse state
                                                         const isCatCollapsed = !isSearching && collapsedSections.has(catId);
 
                                                         return (
                                                             <div key={category} className="space-y-3">
-                                                                {/* 🚀 CATEGORY HEADER (COLLAPSIBLE) */}
                                                                 <div
                                                                     className="flex items-center justify-between text-muted-foreground/80 bg-muted/40 px-3 py-2 rounded-md border border-border/40 cursor-pointer hover:bg-muted/60 transition-colors"
                                                                     onClick={() => toggleCollapse(catId)}
@@ -227,10 +177,7 @@ export function ActivePickingGroupedList({
                                                                                     key={detail.id}
                                                                                     id={`pick-card-${detail.id}`}
                                                                                     onClick={() => !isComplete && setActiveDetailId(detail.id || null)}
-                                                                                    className={`relative flex flex-col p-3 rounded-xl border-2 transition-all cursor-pointer overflow-hidden group ${
-                                                                                        isComplete ? "bg-emerald-500/5 border-emerald-500/20 opacity-60 grayscale-[50%]" :
-                                                                                            isActive ? "bg-primary/5 border-primary shadow-md shadow-primary/10 z-10" :
-                                                                                                "bg-card border-border/60 hover:border-primary/30"
+                                                                                    className={`relative flex flex-col p-3 rounded-xl border-2 transition-all cursor-pointer overflow-hidden group ${isComplete ? "bg-emerald-500/5 border-emerald-500/20 opacity-60 grayscale-[50%]" : isActive ? "bg-primary/5 border-primary shadow-md shadow-primary/10 z-10" : "bg-card border-border/60 hover:border-primary/30"
                                                                                     }`}
                                                                                 >
                                                                                     {isActive && <div
@@ -320,61 +267,49 @@ export function ActivePickingGroupedList({
                         })
                     )}
                 </div>
-            </ScrollArea>
-
-            {/* Global Progress Bar */}
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-[95%] md:w-[70%] z-50 pointer-events-none">
-                <motion.div initial={{y: 50, opacity: 0}} animate={{y: 0, opacity: 1}}
-                            className="bg-card/95 border border-primary/20 rounded-2xl p-3 shadow-lg backdrop-blur-xl flex items-center justify-between gap-4 pointer-events-auto">
-                    <div className="pl-1 shrink-0">
-                        <div className="flex items-baseline gap-1">
-                            <span className="text-xl font-black italic">{totalPicked}</span>
-                            <span className="text-xs font-bold text-muted-foreground">/ {totalOrdered}</span>
-                        </div>
-                    </div>
-                    <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden hidden sm:block">
-                        <motion.div className={`h-full ${isFullyDone ? 'bg-emerald-500' : 'bg-primary'}`}
-                                    initial={{width: 0}}
-                                    animate={{width: `${totalOrdered > 0 ? (totalPicked / totalOrdered) * 100 : 0}%`}}
-                                    transition={{ease: "circOut", duration: 0.8}}/>
-                    </div>
-                    <Button onClick={handleEndSessionClick} size="sm"
-                            className={`h-10 px-6 rounded-xl font-black uppercase tracking-tighter shadow-sm shrink-0 ${isFullyDone ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-destructive hover:bg-destructive/90'}`}>
-                        {isFullyDone ? 'Finish' : 'End'} <Send className="ml-2 h-4 w-4"/>
-                    </Button>
-                </motion.div>
             </div>
 
-            <Dialog open={showForceEndDialog} onOpenChange={setShowForceEndDialog}>
-                <DialogContent className="sm:max-w-md p-4">
-                    <DialogHeader>
-                        <DialogTitle
-                            className="flex items-center gap-2 text-destructive font-black uppercase text-base tracking-widest">
-                            <AlertOctagon className="h-4 w-4"/> Incomplete Batch
-                        </DialogTitle>
-                        <DialogDescription className="text-xs font-medium mt-1">
-                            Type <strong className="text-foreground">{cldtoNo}</strong> below to confirm.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="flex flex-col gap-2 py-2">
-                        <Input placeholder="Enter CLDTO No." value={cldtoInput} onChange={(e) => {
-                            setCldtoInput(e.target.value);
-                            if (hasError) setHasError(false);
-                        }} onKeyDown={(e) => e.key === 'Enter' && handleConfirmForceEnd()}
-                               className={`h-10 text-center font-mono font-bold text-sm tracking-widest uppercase ${hasError ? "border-destructive bg-destructive/5" : ""}`}/>
-                        {hasError &&
-                            <p className="text-[10px] font-bold text-destructive text-center uppercase">Incorrect
-                                Number</p>}
+            {/* STICKY ACTION FOOTER */}
+            <div
+                className="shrink-0 bg-card border-t border-border/40 p-4 md:px-6 shadow-[0_-15px_40px_-15px_rgba(0,0,0,0.05)] z-40 relative">
+                <div className="flex items-center justify-between gap-4 lg:gap-8 mx-auto">
+                    <div className="flex items-center gap-4 shrink-0">
+                        <div className="flex flex-col">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Overall Progress</span>
+                            <div className="flex items-baseline gap-1">
+                                <span
+                                    className="text-2xl font-black italic leading-none text-foreground">{totalPicked}</span>
+                                <span
+                                    className="text-sm font-bold text-muted-foreground leading-none">/ {totalOrdered}</span>
+                            </div>
+                        </div>
                     </div>
-                    <DialogFooter className="flex-row gap-2 mt-2">
-                        <Button type="button" variant="ghost" size="sm" onClick={() => setShowForceEndDialog(false)}
-                                className="flex-1 text-xs font-bold uppercase">Cancel</Button>
-                        <Button type="button" variant="destructive" size="sm" onClick={handleConfirmForceEnd}
-                                disabled={!cldtoInput.trim()} className="flex-1 text-xs font-black uppercase">Force
-                            End</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+
+                    <div className="flex-1 h-2.5 bg-muted rounded-full overflow-hidden hidden sm:block">
+                        <motion.div
+                            className={`h-full ${isFullyDone ? 'bg-emerald-500' : 'bg-primary'}`}
+                            initial={{width: 0}}
+                            animate={{width: `${totalOrdered > 0 ? (totalPicked / totalOrdered) * 100 : 0}%`}}
+                            transition={{ease: "circOut", duration: 0.8}}
+                        />
+                    </div>
+
+                    <Button
+                        onClick={handleEndSessionClick}
+                        size="lg"
+                        className={`h-12 px-6 md:px-8 rounded-xl font-black uppercase tracking-widest shadow-md shrink-0 transition-all ${isFullyDone ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20 text-white' : 'bg-destructive hover:bg-destructive/90 shadow-destructive/20 text-white'}`}
+                    >
+                        {isFullyDone ? 'Finish Batch' : 'Force End'} <Send className="ml-3 h-5 w-5"/>
+                    </Button>
+                </div>
+            </div>
+
+            <ForceEndDialog
+                isOpen={showForceEndDialog}
+                onClose={() => setShowForceEndDialog(false)}
+                onConfirm={onFinalizeBatch}
+                cldtoNo={cldtoNo}
+            />
         </div>
     );
 }

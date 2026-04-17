@@ -27,10 +27,11 @@ export async function GET(req: NextRequest) {
         // const data = await db.query(...);
         const data = { items: [] };
         return NextResponse.json(data);
-    } catch (error: any) {
+    } catch (error) {
         console.error('[BIA_STOCK_HEALTH_ERROR]:', error);
+        const err = error as Error;
         return NextResponse.json(
-            { error: error.message || 'Internal Server Error' },
+            { error: err.message || 'Internal Server Error' },
             { status: 500 },
         );
     }

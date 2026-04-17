@@ -73,7 +73,7 @@ export function StockAdjustmentList({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40 font-bold border-border">
-              <DropdownMenuItem onClick={() => filters.setSearch("")} className={!filters.search ? "bg-accent text-accent-foreground" : ""}>All Types</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => filters.setType(undefined)} className={!filters.type ? "bg-accent text-accent-foreground" : ""}>All Types</DropdownMenuItem>
               <DropdownMenuItem onClick={() => filters.setType("IN")} className={filters.type === "IN" ? "bg-accent text-accent-foreground" : ""}>Stock In</DropdownMenuItem>
               <DropdownMenuItem onClick={() => filters.setType("OUT")} className={filters.type === "OUT" ? "bg-accent text-accent-foreground" : ""}>Stock Out</DropdownMenuItem>
             </DropdownMenuContent>
@@ -106,7 +106,16 @@ export function StockAdjustmentList({
           </div>
         ) : (
           data.map((item) => {
-            const isPosted = item.isPosted === true || (typeof item.isPosted === 'object' && item.isPosted?.data?.[0] === 1);
+            // Directus may return isPosted as a Buffer {type:'Buffer',data:[0|1]},
+            // a number (0 or 1), or a boolean. Normalise all cases:
+            const rawPosted = item.isPosted as unknown;
+            let isPosted: boolean;
+            if (rawPosted && typeof rawPosted === 'object' && 'data' in rawPosted) {
+              // MySQL Buffer: { type: 'Buffer', data: [0] } or [1]
+              isPosted = (rawPosted as { data: number[] }).data?.[0] === 1;
+            } else {
+              isPosted = Number(rawPosted) === 1;
+            }
             
             return (
               <Card key={item.id} className="group overflow-hidden border-border/60 shadow-sm hover:shadow-md transition-all bg-card">
@@ -141,9 +150,14 @@ export function StockAdjustmentList({
                           </div>
                           <div className="flex flex-col">
                             <span className="text-[10px] font-bold text-muted-foreground/60 mb-0.5">Items</span>
-                            <span className="font-bold text-blue-600 dark:text-blue-400">
-                              {(Array.isArray(item.items) ? item.items.length : (Array.isArray((item as any).stock_adjustment) ? (item as any).stock_adjustment.length : 0))} products
-                            </span>
+                             <span className="font-bold text-blue-600 dark:text-blue-400">
+                               {(() => {
+                                 if (Array.isArray(item.items)) return item.items.length;
+                                 const raw = item as Record<string, unknown>;
+                                 if (Array.isArray(raw.stock_adjustment)) return raw.stock_adjustment.length;
+                                 return 0;
+                               })()} products
+                             </span>
                           </div>
                           <div className="flex flex-col">
                             <span className="text-[10px] uppercase font-bold text-muted-foreground/60">Created At</span>

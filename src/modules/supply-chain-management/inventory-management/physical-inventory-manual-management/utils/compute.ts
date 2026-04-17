@@ -107,7 +107,7 @@ export function canEditPhysicalInventory(input: {
     return derivePhysicalInventoryStatus(input) === "Pending";
 }
 
-export function requiresRfid(unitOrder: number | null | undefined): boolean {
+export function requiresRfid(): boolean {
     return false;
 }
 

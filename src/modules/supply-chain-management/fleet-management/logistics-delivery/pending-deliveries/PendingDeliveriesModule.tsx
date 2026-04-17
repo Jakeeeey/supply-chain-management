@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo } from "react";
 import {
     Search,
     Filter,
@@ -30,7 +30,7 @@ import {
     formatDatePrinted,
     clusterLabel
 } from "./utils";
-import { TableRow, DateRange, SortDirection } from "./types";
+import { TableRow, DateRange, SortDirection, SortConfig } from "./types";
 
 // Shadcn UI Components
 import { Button } from "@/components/ui/button";
@@ -126,6 +126,45 @@ function ClusterMultiSelect({
     );
 }
 
+const SortableHeader = ({
+    label,
+    sortKey,
+    sortConfig,
+    onSort,
+    align = "left",
+    className = "",
+}: {
+    label: string;
+    sortKey: keyof TableRow;
+    sortConfig: SortConfig | null;
+    onSort: (key: keyof TableRow) => void;
+    align?: "left" | "center" | "right";
+    className?: string;
+}) => (
+    <TableHead
+        className={`px-4 py-3 h-auto cursor-pointer hover:bg-muted transition-colors group ${className}`}
+        onClick={() => onSort(sortKey)}
+    >
+        <div
+            className={`flex items-center ${align === "right" ? "justify-end" : align === "center" ? "justify-center" : "justify-start"
+                } gap-1`}
+        >
+            {label}
+            <span className="text-muted-foreground group-hover:text-foreground">
+                {sortConfig?.key === sortKey ? (
+                    sortConfig.direction === "asc" ? (
+                        <ArrowUp className="w-3 h-3" />
+                    ) : (
+                        <ArrowDown className="w-3 h-3" />
+                    )
+                ) : (
+                    <ArrowUpDown className="w-3 h-3 opacity-0 group-hover:opacity-50" />
+                )}
+            </span>
+        </div>
+    </TableHead>
+);
+
 export default function PendingDeliveriesModule() {
     const {
         rawGroups,
@@ -165,9 +204,18 @@ export default function PendingDeliveriesModule() {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(50);
 
-    useEffect(() => {
+    // Reset pagination to 1 when filters change
+    const [prevFilters, setPrevFilters] = useState(() => ({ searchTerm, dateRange, salesmanFilter, clusterFilter }));
+
+    if (
+        prevFilters.searchTerm !== searchTerm ||
+        prevFilters.dateRange !== dateRange ||
+        prevFilters.salesmanFilter !== salesmanFilter ||
+        prevFilters.clusterFilter !== clusterFilter
+    ) {
+        setPrevFilters({ searchTerm, dateRange, salesmanFilter, clusterFilter });
         setCurrentPage(1);
-    }, [searchTerm, dateRange, salesmanFilter, clusterFilter]);
+    }
 
     const handlePageChange = (newPage: number) => {
         if (newPage >= 1 && newPage <= Math.ceil(sortedRows.length / itemsPerPage)) {
@@ -337,7 +385,7 @@ export default function PendingDeliveriesModule() {
         tableHeader.push("Total");
 
         const tableRowsData = printRows.map((row) => {
-            const rowData: any[] = [row.clusterName, row.customerName, row.salesmanName, formatDate(row.orderDate)];
+            const rowData: (string | number)[] = [row.clusterName, row.customerName, row.salesmanName, formatDate(row.orderDate)];
             activeStatusKeys.forEach((key) => rowData.push(formatNumberForPDF(row[key] as number)));
             rowData.push(formatNumberForPDF(row.amount));
             return rowData;
@@ -366,7 +414,8 @@ export default function PendingDeliveriesModule() {
             .sort((a, b) => a[0].localeCompare(b[0]))
             .map(([name, total]) => [name, formatNumberForPDF(total)]);
 
-        let finalY = (doc as any).lastAutoTable?.finalY || 50;
+        // @ts-expect-error - jsPDF autotable internal state access
+        let finalY = doc.lastAutoTable?.finalY || 50;
         if (finalY > 160) { doc.addPage(); finalY = 20; } else { finalY += 10; }
 
         doc.setFontSize(10);
@@ -381,7 +430,7 @@ export default function PendingDeliveriesModule() {
             styles: { fontSize: 8, cellPadding: 2 },
             headStyles: { fillColor: [229, 231, 235], textColor: [0, 0, 0], fontStyle: "bold" },
             columnStyles: { 1: { halign: "right" } },
-            didDrawPage: (data: any) => {
+            didDrawPage: (data: { pageNumber: number; cursor?: { y: number } | null }) => {
                 const totalPages = doc.getNumberOfPages();
                 if (data.pageNumber === totalPages) {
                     const cursorY = data.cursor?.y ?? 20;
@@ -447,40 +496,7 @@ export default function PendingDeliveriesModule() {
         return rows;
     }, [sortedRows, indexOfFirstItem, indexOfLastItem]);
 
-    const SortableHeader = ({
-        label,
-        sortKey,
-        align = "left",
-        className = "",
-    }: {
-        label: string;
-        sortKey: keyof TableRow;
-        align?: "left" | "center" | "right";
-        className?: string;
-    }) => (
-        <TableHead
-            className={`px-4 py-3 h-auto cursor-pointer hover:bg-muted transition-colors group ${className}`}
-            onClick={() => handleSort(sortKey)}
-        >
-            <div
-                className={`flex items-center ${align === "right" ? "justify-end" : align === "center" ? "justify-center" : "justify-start"
-                    } gap-1`}
-            >
-                {label}
-                <span className="text-muted-foreground group-hover:text-foreground">
-                    {sortConfig?.key === sortKey ? (
-                        sortConfig.direction === "asc" ? (
-                            <ArrowUp className="w-3 h-3" />
-                        ) : (
-                            <ArrowDown className="w-3 h-3" />
-                        )
-                    ) : (
-                        <ArrowUpDown className="w-3 h-3 opacity-0 group-hover:opacity-50" />
-                    )}
-                </span>
-            </div>
-        </TableHead>
-    );
+
 
     return (
         <div className="p-8 relative space-y-8">
@@ -741,20 +757,20 @@ export default function PendingDeliveriesModule() {
                     <Table className="border-collapse">
                         <TableHeader className="bg-muted/40 text-[10px] uppercase font-semibold">
                             <ShadcnTableRow>
-                                <SortableHeader label="Cluster" sortKey="clusterName" className="border-r" />
-                                <SortableHeader label="Customer" sortKey="customerName" className="border-r" />
-                                <SortableHeader label="Salesman" sortKey="salesmanName" />
-                                <SortableHeader label="Date" sortKey="orderDate" align="center" />
+                                <SortableHeader label="Cluster" sortKey="clusterName" sortConfig={sortConfig} onSort={handleSort} className="border-r" />
+                                <SortableHeader label="Customer" sortKey="customerName" sortConfig={sortConfig} onSort={handleSort} className="border-r" />
+                                <SortableHeader label="Salesman" sortKey="salesmanName" sortConfig={sortConfig} onSort={handleSort} />
+                                <SortableHeader label="Date" sortKey="orderDate" sortConfig={sortConfig} onSort={handleSort} align="center" />
 
-                                <SortableHeader label="For Approval" sortKey="approval" align="right" className="text-purple-700 bg-purple-50/80 border-l" />
-                                <SortableHeader label="For Conso" sortKey="consolidation" align="right" className="text-blue-700 bg-blue-50/80 border-l" />
-                                <SortableHeader label="For Picking" sortKey="picking" align="right" className="text-cyan-700 bg-cyan-50/80 border-l" />
-                                <SortableHeader label="For Invoicing" sortKey="invoicing" align="right" className="text-yellow-700 bg-yellow-50/80 border-l" />
-                                <SortableHeader label="For Loading" sortKey="loading" align="right" className="text-orange-700 bg-orange-50/80 border-l" />
-                                <SortableHeader label="For Shipping" sortKey="shipping" align="right" className="text-green-700 bg-green-50/80 border-l" />
+                                <SortableHeader label="For Approval" sortKey="approval" sortConfig={sortConfig} onSort={handleSort} align="right" className="text-purple-700 bg-purple-50/80 border-l" />
+                                <SortableHeader label="For Conso" sortKey="consolidation" sortConfig={sortConfig} onSort={handleSort} align="right" className="text-blue-700 bg-blue-50/80 border-l" />
+                                <SortableHeader label="For Picking" sortKey="picking" sortConfig={sortConfig} onSort={handleSort} align="right" className="text-cyan-700 bg-cyan-50/80 border-l" />
+                                <SortableHeader label="For Invoicing" sortKey="invoicing" sortConfig={sortConfig} onSort={handleSort} align="right" className="text-yellow-700 bg-yellow-50/80 border-l" />
+                                <SortableHeader label="For Loading" sortKey="loading" sortConfig={sortConfig} onSort={handleSort} align="right" className="text-orange-700 bg-orange-50/80 border-l" />
+                                <SortableHeader label="For Shipping" sortKey="shipping" sortConfig={sortConfig} onSort={handleSort} align="right" className="text-green-700 bg-green-50/80 border-l" />
 
-                                <SortableHeader label="Total" sortKey="amount" align="right" className="border-l font-bold text-foreground" />
-                                <SortableHeader label="Cluster Total" sortKey="clusterTotal" align="right" className="border-l font-bold text-foreground bg-muted/30" />
+                                <SortableHeader label="Total" sortKey="amount" sortConfig={sortConfig} onSort={handleSort} align="right" className="border-l font-bold text-foreground" />
+                                <SortableHeader label="Cluster Total" sortKey="clusterTotal" sortConfig={sortConfig} onSort={handleSort} align="right" className="border-l font-bold text-foreground bg-muted/30" />
                             </ShadcnTableRow>
                         </TableHeader>
                         <TableBody className="text-sm">
