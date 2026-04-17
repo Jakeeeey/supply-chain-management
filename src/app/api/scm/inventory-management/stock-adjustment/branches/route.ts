@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { stockAdjustmentService } from "@/modules/supply-chain-management/inventory-management/stock-adjustment/services/stock-adjustment-service";
-import { handleApiError } from "@/lib/error-handler";
+import { handleApiError } from "@/modules/supply-chain-management/inventory-management/stock-adjustment/utils/error-handler";
 
 export async function GET() {
   try {
