@@ -535,6 +535,7 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                 <div className="flex flex-col md:flex-row justify-end items-center gap-3 pt-4 border-t border-border mt-auto">
                     {reconciliation.status !== 'Fulfilled' && (
                         <div className="flex items-center gap-2 w-full md:w-auto md:mr-auto">
+                            {true && (
                             <Button
                                 variant="outline"
                                 onClick={() => setIsScanningOpen(true)}
@@ -543,15 +544,18 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                                 <Scan className="w-4 h-4" />
                                 Start Scan
                             </Button>
+                            )}
                             
-                            <Button
-                                variant="outline"
-                                onClick={() => setIsManualInputOpen(true)}
-                                className="flex-1 md:flex-none rounded-xl px-6 font-bold text-orange-500 border-orange-500/20 bg-orange-500/5 hover:bg-orange-500/10 flex items-center gap-2 h-10 transition-all active:scale-95"
-                            >
-                                <Keyboard className="w-4 h-4" />
-                                Manual Input
-                            </Button>
+                            {false && (
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setIsManualInputOpen(true)}
+                                    className="flex-1 md:flex-none rounded-xl px-6 font-bold text-orange-500 border-orange-500/20 bg-orange-500/5 hover:bg-orange-500/10 flex items-center gap-2 h-10 transition-all active:scale-95"
+                                >
+                                    <Keyboard className="w-4 h-4" />
+                                    Manual Input
+                                </Button>
+                            )}
                         </div>
                     )}
 

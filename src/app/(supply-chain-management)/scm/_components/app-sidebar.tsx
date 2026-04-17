@@ -1,19 +1,3 @@
-"use client";
-
-import {
-  ArrowRightLeft,
-  Building2,
-  ClipboardList,
-  Command,
-  LayoutDashboard,
-  LineChart,
-  Package,
-  Route,
-  Search,
-  Truck,
-  Warehouse,
-} from "lucide-react";
-import Link from "next/link";
 import * as React from "react";
 import { useMemo, useState } from "react";
 
