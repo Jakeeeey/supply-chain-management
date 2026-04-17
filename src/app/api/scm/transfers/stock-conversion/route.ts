@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { handleApiError } from "@/lib/error-handler";
+import { handleApiError } from "@/modules/supply-chain-management/transfers/stock-conversion/utils/error-handler";
 import { fetchStockList, convertStock, fetchInventoryMap } from "@/modules/supply-chain-management/transfers/stock-conversion/services/stock-conversion";
 import { stockConversionPayloadSchema } from "@/modules/supply-chain-management/transfers/stock-conversion/types/stock-conversion.schema";
 
