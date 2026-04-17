@@ -1,6 +1,6 @@
 // src/app/api/scm/supplier-management/tagging-of-po/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { getDirectusBase, directusFetch } from "@/lib/directus";
+import { getDirectusBase, directusFetch } from "@/modules/supply-chain-management/supplier-management/utils/directus";
 
 import type {
     TaggablePOListItem,

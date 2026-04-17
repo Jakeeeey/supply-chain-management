@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stockAdjustmentService } from "@/modules/supply-chain-management/inventory-management/stock-adjustment/services/stock-adjustment-service";
-// import { handleApiError } from "@/lib/error-handler";
+import { handleApiError } from "@/modules/supply-chain-management/inventory-management/stock-adjustment/utils/error-handler";
 import { getUserIdFromToken } from "@/modules/supply-chain-management/inventory-management/stock-adjustment/utils/auth-utils";
 
 export async function GET(request: NextRequest) {
@@ -23,11 +23,11 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    
+
     // Extract userId from cookie
     const token = request.cookies.get("vos_access_token")?.value;
     const userId = getUserIdFromToken(token);
-    
+
     console.log(`[API] Creating stock adjustment with userId: ${userId}`);
     const data = await stockAdjustmentService.create({ ...body, userId: userId || undefined });
     return NextResponse.json({ data });
