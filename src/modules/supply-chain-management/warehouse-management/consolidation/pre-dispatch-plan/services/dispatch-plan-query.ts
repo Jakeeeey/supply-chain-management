@@ -22,7 +22,7 @@ export const dispatchPlanQueryService = {
    * Fetches dispatch plans with server-side pagination and optional filtering.
    */
   async fetchPlans(
-    limit: number = 10,
+    limit: number = 25,
     offset: number = 0,
     status?: string,
     search?: string,
@@ -88,26 +88,42 @@ export const dispatchPlanQueryService = {
   async enrichPlans(plans: DispatchPlan[]): Promise<DispatchPlan[]> {
     if (!plans.length) return [];
 
-    // Fetch master data once for resolution
+    const driverIds = [...new Set(plans.map((p) => p.driver_id).filter(Boolean))];
+    const clusterIds = [...new Set(plans.map((p) => p.cluster_id).filter(Boolean))];
+    const branchIds = [...new Set(plans.map((p) => p.branch_id).filter(Boolean))];
+    const vehicleIds = [...new Set(plans.map((p) => p.vehicle_id).filter(Boolean))];
+
+    // Fetch master data only for the entities referenced in the current plans
     const [driversRes, clustersRes, branchesRes, vehiclesRes, vehicleTypesRes] =
       await Promise.all([
-        fetchItems<DriverOption>("/items/user", {
-          "filter[user_department][_eq]": 8,
-          fields: "user_id,user_fname,user_mname,user_lname",
-          limit: -1,
-        }),
-        fetchItems<ClusterOption>("/items/cluster", {
-          fields: "id,cluster_name",
-          limit: -1,
-        }),
-        fetchItems<BranchOption>("/items/branches", {
-          fields: "id,branch_name",
-          limit: -1,
-        }),
-        fetchItems<VehicleOption>("/items/vehicles", {
-          fields: "vehicle_id,maximum_weight,vehicle_plate,vehicle_type",
-          limit: -1,
-        }),
+        driverIds.length
+          ? fetchItems<DriverOption>("/items/user", {
+              "filter[user_id][_in]": driverIds.join(","),
+              fields: "user_id,user_fname,user_mname,user_lname",
+              limit: -1,
+            })
+          : Promise.resolve({ data: [] }),
+        clusterIds.length
+          ? fetchItems<ClusterOption>("/items/cluster", {
+              "filter[id][_in]": clusterIds.join(","),
+              fields: "id,cluster_name",
+              limit: -1,
+            })
+          : Promise.resolve({ data: [] }),
+        branchIds.length
+          ? fetchItems<BranchOption>("/items/branches", {
+              "filter[id][_in]": branchIds.join(","),
+              fields: "id,branch_name",
+              limit: -1,
+            })
+          : Promise.resolve({ data: [] }),
+        vehicleIds.length
+          ? fetchItems<VehicleOption>("/items/vehicles", {
+              "filter[vehicle_id][_in]": vehicleIds.join(","),
+              fields: "vehicle_id,maximum_weight,vehicle_plate,vehicle_type",
+              limit: -1,
+            })
+          : Promise.resolve({ data: [] }),
         fetchItems<{ id: number; type_name: string }>("/items/vehicle_type", {
           fields: "id,type_name",
           limit: -1,

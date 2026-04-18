@@ -18,16 +18,18 @@ export const skuQueryService = {
     search?: string,
     sort?: string,
   ): Promise<PaginatedSKU> {
-    const filter: Record<string, unknown> = {};
+    const filter: { _and: (Record<string, object> | { _or: Record<string, object>[] })[] } = {
+      _and: [{ item_type: { _neq: "bundle" } }],
+    };
     const searchFilter = CellHelpers.buildSearchFilter(search);
     if (searchFilter) {
-      filter._and = [searchFilter];
+      filter._and.push(searchFilter);
     }
 
     const { data, meta } = await fetchItems<SKU>("/items/products", {
       limit,
       offset,
-      fields: "*.*",
+      fields: "*,parent_id.*",
       meta: "filter_count",
       sort: sort || "-created_at,-product_id",
       ...(Object.keys(filter).length > 0
@@ -71,7 +73,7 @@ export const skuQueryService = {
     const { data, meta } = await fetchItems<SKU>("/items/product_draft", {
       limit,
       offset,
-      fields: "*.*",
+      fields: "*,parent_id.*",
       meta: "filter_count",
       sort: sort || "-last_updated,-product_id",
       filter: JSON.stringify(filter),

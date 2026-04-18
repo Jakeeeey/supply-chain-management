@@ -53,7 +53,7 @@ export function PDPGlobalFilter({
             <Button
               variant={"outline"}
               className={cn(
-                "h-8 w-[240px] justify-start text-left text-xs font-medium",
+                "h-8 w-fit justify-start text-left text-xs font-medium",
                 !stagedDateRange,
               )}
             >
@@ -96,7 +96,7 @@ export function PDPGlobalFilter({
           value={stagedBranchId ? String(stagedBranchId) : ""}
           onValueChange={(v) => setStagedBranchId(v ? Number(v) : null)}
           placeholder="Search Branch..."
-          className="h-8 w-[220px] text-xs"
+          className="h-8 w-fit text-xs"
         />
 
         {/* Cluster Filter */}
@@ -111,7 +111,7 @@ export function PDPGlobalFilter({
           value={stagedClusterId ? String(stagedClusterId) : ""}
           onValueChange={(v) => setStagedClusterId(v ? Number(v) : null)}
           placeholder="Search Cluster..."
-          className="h-8 w-[220px] text-xs"
+          className="h-8 w-fit text-xs"
         />
 
         {/* Status Filter */}
@@ -120,7 +120,7 @@ export function PDPGlobalFilter({
             value={stagedStatus || "all"}
             onValueChange={(v) => setStagedStatus(v === "all" ? null : v)}
           >
-            <SelectTrigger className="h-8 w-[150px] text-xs font-medium">
+            <SelectTrigger className="h-8 text-xs font-medium">
               <SelectValue placeholder="All Status" />
             </SelectTrigger>
             <SelectContent>

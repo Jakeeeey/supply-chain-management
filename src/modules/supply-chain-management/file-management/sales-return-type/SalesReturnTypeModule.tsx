@@ -5,16 +5,17 @@ import { Plus, MoreHorizontal, Pencil, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { ColumnDef } from "@tanstack/react-table";
 
-import { Button } from "@/components/ui/button";
 import {
+  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { DataTable } from "@/components/ui/new-data-table";
-import ErrorPage from "@/components/shared/ErrorPage";
+  DataTable,
+  ErrorPage,
+} from "./lib/ui";
 
+import { formatDate } from "./lib/utils";
 import { SalesReturnType } from "./types";
 import { listSalesReturnTypes } from "./providers/fetchProviders";
 import { SalesReturnTypeDialog } from "./components/SalesReturnTypeDialog";
@@ -58,17 +59,7 @@ function buildColumns(
     {
       accessorKey: "created_at",
       header: "Created At",
-      cell: ({ row }) =>
-        row.original.created_at
-          ? new Date(
-              row.original.created_at.endsWith("Z")
-                ? row.original.created_at
-                : `${row.original.created_at.replace(" ", "T")}Z`
-            ).toLocaleString(undefined, {
-              dateStyle: "medium",
-              timeStyle: "short",
-            })
-          : "-",
+      cell: ({ row }) => formatDate(row.original.created_at),
       meta: { label: "Created At" },
     },
     {

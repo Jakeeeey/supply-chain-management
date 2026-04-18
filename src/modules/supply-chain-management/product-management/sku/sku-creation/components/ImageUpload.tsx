@@ -1,10 +1,10 @@
 "use client";
 
+import React, { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Loader2, Upload, X } from "lucide-react";
-import Image from "next/image";
-import React, { useRef, useState } from "react";
+import { Upload, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import Image from "next/image";
 
 interface ImageUploadProps {
   value?: string | null;
@@ -17,7 +17,7 @@ export function ImageUpload({
   value,
   onChange,
   onUpload,
-  disabled,
+  disabled
 }: ImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);

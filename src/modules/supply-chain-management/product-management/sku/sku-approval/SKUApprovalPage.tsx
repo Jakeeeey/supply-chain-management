@@ -44,7 +44,10 @@ export default function SKUApprovalPage() {
   const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
+    const timer = setTimeout(() => {
+      setMounted(true);
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const handlePagination = useCallback(
@@ -179,7 +182,7 @@ export default function SKUApprovalPage() {
     }
   };
 
-  if (!mounted || (isLoading && !pendingApprovalData.length)) {
+  if (!mounted) {
     return <ModuleSkeleton hasActions={false} rowCount={5} />;
   }
 

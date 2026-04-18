@@ -5,7 +5,7 @@ import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import { Button } from "@/components/ui/button";
 import { DispatchPlan } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/types/dispatch-plan.schema";
 import { RefreshCw } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { PDPPlannerTable } from "./components/data-table";
 import { PDPApproveModal } from "./components/modals/pdp-approve-modal";
@@ -21,6 +21,8 @@ export default function PDPPlannerPage() {
   const {
     plansData,
     plansTotal,
+    pagination,
+    setPagination,
     masterData,
     metrics,
     isLoading,
@@ -58,7 +60,16 @@ export default function PDPPlannerPage() {
     }
   };
 
-  if (isLoading && !plansData.length) return <ModuleSkeleton />;
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setMounted(true);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!mounted) return <ModuleSkeleton />;
   if (error) return <ErrorPage message={error} reset={refresh} />;
 
   return (
@@ -70,6 +81,8 @@ export default function PDPPlannerPage() {
       <PDPPlannerTable
         data={plansData}
         totalCount={plansTotal}
+        pagination={pagination}
+        onPaginationChange={setPagination}
         isLoading={isLoading}
         onView={handleView}
         onApprove={handleApproveClick}

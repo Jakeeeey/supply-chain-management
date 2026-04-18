@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, Send, Trash2 } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { BundleViewModal } from "../components/modals/bundle-view-modal";
 import { useBundles } from "../hooks/useBundles";
@@ -125,7 +125,16 @@ export default function BundleCreationPage() {
     setSelectedRows(rows);
   }, []);
 
-  if (isLoading && !draftData.length) return <ModuleSkeleton />;
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setMounted(true);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!mounted) return <ModuleSkeleton />;
   if (error) return <ErrorPage message={error} reset={refresh} />;
 
   return (

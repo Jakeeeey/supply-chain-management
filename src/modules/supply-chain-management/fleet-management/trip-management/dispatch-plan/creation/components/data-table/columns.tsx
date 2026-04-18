@@ -1,4 +1,5 @@
 "use client";
+import { cn } from "@/lib/utils";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,9 @@ export type DispatchPlanSummary = {
   timeOfDispatch?: string | null;
   timeOfArrival?: string | null;
   customerTransactions?: CustomerTransaction[];
+  totalWeight?: number;
+  maximumWeight?: number;
+  capacityPercentage?: number;
   createdAt?: string;
 };
 
@@ -169,6 +173,36 @@ export const getDispatchPlanColumns = (
         })}
       </span>
     ),
+  },
+  {
+    id: "weight",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} label="Weight" />
+    ),
+    meta: { label: "Weight" },
+    cell: ({ row }) => {
+      const weight = row.original.totalWeight || 0;
+      const capacity = row.original.capacityPercentage || 0;
+      return (
+        <div className="flex flex-col">
+          <span className="text-sm font-semibold text-foreground tabular-nums">
+            {weight.toLocaleString(undefined, { maximumFractionDigits: 0 })} kg
+          </span>
+          <span
+            className={cn(
+              "text-[10px] font-medium transition-colors",
+              capacity > 100
+                ? "text-destructive animate-pulse"
+                : capacity >= 90
+                ? "text-amber-500"
+                : "text-muted-foreground"
+            )}
+          >
+            {capacity.toFixed(0)}% capacity
+          </span>
+        </div>
+      );
+    },
   },
   {
     accessorKey: "budgetTotal",

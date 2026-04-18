@@ -1,4 +1,4 @@
-import { handleApiError } from "@/lib/error-handler";
+import { handleApiError } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/utils/error-handler";
 import { dispatchPlanService } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/services/dispatch-plan";
 import { dispatchPlanFormSchema } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/types/dispatch-plan.schema";
 import { NextRequest, NextResponse } from "next/server";

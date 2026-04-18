@@ -9,10 +9,10 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { NavUser } from "../../_components/nav-user"; // Relative path base sa iyong example
+import { NavUser } from "@/components/shared/app-sidebar/nav-user";
 
 import { cookies } from "next/headers";
-import { getDirectusBase, directusHeaders } from "@/lib/directus";
+import { getDirectusBase, directusHeaders } from "@/modules/supply-chain-management/supplier-management/utils/directus";
 
 import PurchaseOrderSummaryModule from "@/modules/supply-chain-management/supplier-management/purchase-order-summary/PurchaseOrderSummaryModule";
 

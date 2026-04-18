@@ -225,7 +225,7 @@ export function DataTable<TData, TValue>({
 
   const handleSearchWrapper = React.useCallback(
     (value: string) => {
-      if (searchKey) {
+      if (searchKey && !onSearch) {
         const col = table.getColumn(searchKey);
         if (col) col.setFilterValue(value);
       }
@@ -242,7 +242,9 @@ export function DataTable<TData, TValue>({
             <SearchInput
               placeholder={`Search ${searchKey.replace(/_/g, " ")}...`}
               initialValue={
-                (table.getColumn(searchKey)?.getFilterValue() as string) ?? ""
+                onSearch
+                  ? ""
+                  : ((table.getColumn(searchKey)?.getFilterValue() as string) ?? "")
               }
               isLoading={isLoading}
               onSearch={handleSearchWrapper}
