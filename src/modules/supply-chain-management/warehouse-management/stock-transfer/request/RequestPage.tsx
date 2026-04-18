@@ -17,15 +17,15 @@ import { Loader2, RefreshCcw, CheckCircle2, Printer, ShoppingBag } from 'lucide-
 import { toast } from 'sonner';
 
 // New centralized hooks
-import { useStockTransferRequest } from '../hooks/use-stock-transfer-request';
+import { useStockTransferRequest } from './hooks/use-stock-transfer-request';
 import { getBranchLabel } from '../services/stock-transfer.helpers';
 
 // Shared components
-import StockTransferTable from '../components/shared/StockTransferTable';
-import { BranchCombobox } from '../components/shared/BranchCombobox';
-import { ProductSelectionModal } from '../components/shared/ProductSelectionModal';
+import StockTransferTable from '../shared/components/StockTransferTable';
+import { BranchCombobox } from '../shared/components/BranchCombobox';
+import { ProductSelectionModal } from '../shared/components/ProductSelectionModal';
 import { EnrichedProduct } from '../types/stock-transfer.types';
-import { StockTransferPrintPreview } from '../components/shared/StockTransferPrintPreview';
+import { StockTransferPrintPreview } from '../shared/components/StockTransferPrintPreview';
 
 export default function StockTransferRequestView() {
   const {

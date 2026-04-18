@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { cookies } from "next/headers"
 import { decodeJwtPayload } from "@/lib/auth-utils"
-import StockTransferRequestView from "@/modules/supply-chain-management/warehouse-management/stock-transfer/views/StockTransferRequestView"
+import { StockTransferRequestView } from "@/modules/supply-chain-management/warehouse-management/stock-transfer"
 import { NavUser } from "@/components/shared/app-sidebar/nav-user"
 
 export default async function Page() {

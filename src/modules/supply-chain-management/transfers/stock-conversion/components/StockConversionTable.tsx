@@ -41,7 +41,7 @@ import { Input } from "@/components/ui/input";
 
 // ✅ Now uses @base-ui/react Combobox internally — no Radix FocusScope,
 //    no "Maximum update depth exceeded" error when filtering.
-import { SearchableCombobox } from "@/modules/supply-chain-management/warehouse-management/stock-transfer/components/shared/searchable-combobox";
+import { SearchableCombobox } from "@/modules/supply-chain-management/warehouse-management/stock-transfer/shared/components/searchable-combobox";
 
 interface StockConversionTableProps {
   data: StockConversionProduct[];
@@ -270,7 +270,7 @@ export function StockConversionTable({
                 })) || []
               }
               value={selectedBranchId ? String(selectedBranchId) : ""}
-              onValueChange={(val) =>
+              onValueChange={(val: string | null) =>
                 onBranchChange?.(val ? Number(val) : undefined)
               }
               placeholder="Select Branch"
@@ -293,7 +293,7 @@ export function StockConversionTable({
                 })),
               ]}
               value={supplierFilter}
-              onValueChange={(val) => setSupplierFilter(val || "all")}
+              onValueChange={(val: string | null) => setSupplierFilter(val || "all")}
               placeholder="All Suppliers"
               className="w-[180px]"
             />

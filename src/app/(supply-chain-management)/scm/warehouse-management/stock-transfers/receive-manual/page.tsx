@@ -12,7 +12,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 import { cookies } from "next/headers"
 import { decodeJwtPayload } from "@/lib/auth-utils"
 import { NavUser } from "@/components/shared/app-sidebar/nav-user"
-import StockTransferReceiveManualView from "@/modules/supply-chain-management/warehouse-management/stock-transfer/views/StockTransferReceiveManualView"
+import { StockTransferReceiveManualView } from "@/modules/supply-chain-management/warehouse-management/stock-transfer"
 
 export default async function Page() {
     const cookieStore = await cookies();

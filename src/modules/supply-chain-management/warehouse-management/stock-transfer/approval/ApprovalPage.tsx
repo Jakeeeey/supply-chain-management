@@ -3,7 +3,7 @@
 import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Search, ClipboardCheck, Loader2, RefreshCcw, ServerCrash } from 'lucide-react';
-import { useStockTransferApproval } from '../hooks/use-stock-transfer-approval';
+import { useStockTransferApproval } from './hooks/use-stock-transfer-approval';
 import type { OrderGroupItem, ProductRow } from '../types/stock-transfer.types';
 import {
   AlertDialog,
@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 // Shared components
-import { OrderSelectionModal } from '../components/shared/OrderSelectionModal';
+import { OrderSelectionModal } from '../shared/components/OrderSelectionModal';
 import {
   Table,
   TableBody,

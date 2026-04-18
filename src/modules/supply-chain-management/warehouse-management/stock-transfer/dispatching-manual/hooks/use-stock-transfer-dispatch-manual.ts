@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useStockTransferBase } from './use-stock-transfer-base';
-import { stockTransferLifecycleService } from '../services/stock-transfer.lifecycle';
+import { useStockTransferBase } from '../../shared/hooks/use-stock-transfer-base';
+import { stockTransferLifecycleService } from '../../services/stock-transfer.lifecycle';
 import { toast } from 'sonner';
 
 /**

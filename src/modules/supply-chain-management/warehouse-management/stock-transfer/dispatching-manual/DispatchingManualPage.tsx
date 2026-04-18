@@ -3,12 +3,12 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Truck, Printer, Loader2, CheckCircle2, ChevronLeft, ChevronRight, Hand } from 'lucide-react';
-import { useStockTransferDispatchManual } from '../hooks/use-stock-transfer-dispatch-manual';
+import { useStockTransferDispatchManual } from './hooks/use-stock-transfer-dispatch-manual';
 import { OrderGroupItem } from '../types/stock-transfer.types';
 import { cn } from '@/lib/utils';
 
 // Shared components
-import { OrderSelectionModal } from '../components/shared/OrderSelectionModal';
+import { OrderSelectionModal } from '../shared/components/OrderSelectionModal';
 import {
   Table,
   TableBody,

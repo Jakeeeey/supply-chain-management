@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useStockTransferBase } from './use-stock-transfer-base';
-import { stockTransferLifecycleService } from '../services/stock-transfer.lifecycle';
+import { useStockTransferBase } from '../../shared/hooks/use-stock-transfer-base';
+import { stockTransferLifecycleService } from '../../services/stock-transfer.lifecycle';
 import { toast } from 'sonner';
-import type { OrderGroup, OrderGroupItem, ProductRow } from '../types/stock-transfer.types';
+import type { OrderGroup, OrderGroupItem, ProductRow } from '../../types/stock-transfer.types';
 
 const LOCAL_STORAGE_KEY_RECEIVE = 'scm_receive_scans_v1';
 

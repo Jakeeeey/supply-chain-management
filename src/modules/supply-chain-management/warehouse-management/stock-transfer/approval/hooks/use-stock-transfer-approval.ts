@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { useStockTransferBase } from './use-stock-transfer-base';
-import { stockTransferLifecycleService } from '../services/stock-transfer.lifecycle';
-import type { OrderGroup, OrderGroupItem, ProductRow } from '../types/stock-transfer.types';
+import { useStockTransferBase } from '../../shared/hooks/use-stock-transfer-base';
+import { stockTransferLifecycleService } from '../../services/stock-transfer.lifecycle';
+import type { OrderGroup, OrderGroupItem, ProductRow } from '../../types/stock-transfer.types';
 
 const APPROVAL_STATUSES = ['Requested'];
 

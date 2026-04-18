@@ -10,7 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { cookies } from "next/headers"
-import StockTransferDispatchView from "@/modules/supply-chain-management/warehouse-management/stock-transfer/views/StockTransferDispatchView"
+import { StockTransferDispatchView } from "@/modules/supply-chain-management/warehouse-management/stock-transfer"
 import { NavUser } from "@/components/shared/app-sidebar/nav-user"
 import { decodeJwtPayload } from "@/lib/auth-utils"
 

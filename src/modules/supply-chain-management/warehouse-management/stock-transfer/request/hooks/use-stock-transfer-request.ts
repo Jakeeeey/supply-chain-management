@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { stockTransferLifecycleService } from '../services/stock-transfer.lifecycle';
+import { stockTransferLifecycleService } from '../../services/stock-transfer.lifecycle';
 import type { 
   StockTransferRow, 
   BranchRow, 
   ScannedItem,
   EnrichedProduct
-} from '../types/stock-transfer.types';
+} from '../../types/stock-transfer.types';
 import { toast } from 'sonner';
 
 interface UseStockTransferRequestReturn {
