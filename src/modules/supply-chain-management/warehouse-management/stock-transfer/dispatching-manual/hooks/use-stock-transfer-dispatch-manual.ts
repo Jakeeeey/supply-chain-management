@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useStockTransferBase } from '../../shared/hooks/use-stock-transfer-base';
 import { stockTransferLifecycleService } from '../../services/stock-transfer.lifecycle';
 import { toast } from 'sonner';
+import type { OrderGroup, OrderGroupItem, ProductRow } from '../../types/stock-transfer.types';
 
 /**
  * Hook for managing the "Stock Transfer Dispatch" phase (Manual Entry).
@@ -23,17 +24,17 @@ export function useStockTransferDispatchManual() {
   }, []);
 
   const orderGroups = useMemo(() => {
-    return base.baseOrderGroups.map(group => {
-      const enrichedItems = group.items.map(st => {
-        const product = st.product_id as unknown as Record<string, unknown>;
-        const pid = (product?.product_id as number) || (product?.id as number) || st.product_id;
+    return base.baseOrderGroups.map((group: OrderGroup) => {
+      const enrichedItems = group.items.map((st: OrderGroupItem) => {
+        const product = st.product_id as ProductRow;
+        const pid = product?.product_id || st.product_id;
         
-        const uom = product?.unit_of_measurement as Record<string, unknown> | undefined;
-        const unitName = (uom?.unit_name as string || '').toLowerCase();
+        const uom = typeof product?.unit_of_measurement === 'object' ? product.unit_of_measurement : null;
+        const unitName = (uom?.unit_name || '').toLowerCase();
         const unitId = Number(uom?.unit_id || 0);
         const loosePack = unitName.includes('loose') || unitName.includes('pieces') || unitName.includes('pcs') || unitName.includes('tie') || unitId === 4;
         
-        const rawAvailable = scannedInventory[pid as number] ?? (st as unknown as Record<string, unknown>).qtyAvailable ?? 0;
+        const rawAvailable = scannedInventory[pid as number] ?? (st as OrderGroupItem).qtyAvailable ?? 0;
 
         return {
           ...st,
@@ -52,7 +53,7 @@ export function useStockTransferDispatchManual() {
 
   const selectedGroup = useMemo(() => {
     if (!base.selectedOrderNo) return null;
-    return orderGroups.find((g) => g.orderNo === base.selectedOrderNo) || null;
+    return orderGroups.find((g: OrderGroup) => g.orderNo === base.selectedOrderNo) || null;
   }, [base.selectedOrderNo, orderGroups]);
 
   // Fetch initial inventory for selected order
@@ -67,15 +68,15 @@ export function useStockTransferDispatchManual() {
         const sourceBranchName = base.getBranchName(sourceBranch);
 
         // Fetch all uncached product inventories in parallel
-        const itemsToFetch = selectedGroup.items.filter(item => {
-          const product = item.product_id as unknown as Record<string, unknown>;
-          const pid = (product?.product_id as number) || (product?.id as number) || item.product_id;
+        const itemsToFetch = selectedGroup.items.filter((item: OrderGroupItem) => {
+          const product = item.product_id as ProductRow;
+          const pid = product?.product_id || item.product_id;
           return pid && scannedInventory[pid as number] === undefined;
         });
 
-        const results = await Promise.allSettled(itemsToFetch.map(async (item) => {
-          const product = item.product_id as unknown as Record<string, unknown>;
-          const pid = (product?.product_id as number) || (product?.id as number) || item.product_id;
+        const results = await Promise.allSettled(itemsToFetch.map(async (item: OrderGroupItem) => {
+          const product = item.product_id as ProductRow;
+          const pid = product?.product_id || item.product_id;
 
           const params = new URLSearchParams({
             branchName: sourceBranchName,
@@ -89,11 +90,11 @@ export function useStockTransferDispatchManual() {
           if (res.ok) {
             const data = await res.json();
             const list = Array.isArray(data) ? data : (data.data || []);
-            const inventoryList = list.filter((inv: Record<string, unknown>) => 
+            const inventoryList = list.filter((inv: { productId: string | number; branchId: string | number; runningInventory: number }) => 
                String(inv.productId) === String(pid) && 
                String(inv.branchId) === String(sourceBranch)
             );
-            const availableCount = inventoryList.reduce((acc: number, inv: Record<string, unknown>) => acc + Number(inv.runningInventory || 0), 0);
+            const availableCount = inventoryList.reduce((acc: number, inv: { runningInventory: number }) => acc + Number(inv.runningInventory || 0), 0);
             const unitCount = Number(product?.unit_of_measurement_count || 1) || 1;
             return { pid: pid as number, available: Math.max(0, Math.floor(availableCount / unitCount)) };
           }
@@ -106,7 +107,7 @@ export function useStockTransferDispatchManual() {
           }
         }
         
-        if (results.some(r => r.status === 'fulfilled')) setScannedInventory(newAvailable);
+        if (results.some((r: any) => r.status === 'fulfilled')) setScannedInventory(newAvailable);
       } catch (err) {
         console.error('Failed to fetch initial available quantities:', err);
       } finally {
@@ -119,13 +120,13 @@ export function useStockTransferDispatchManual() {
   }, [base.selectedOrderNo]);
 
   const dispatchOrder = async (orderNo: string) => {
-    const group = orderGroups.find((g) => g.orderNo === orderNo);
+    const group = orderGroups.find((g: OrderGroup) => g.orderNo === orderNo);
     if (!group) return;
 
     base.setProcessing(true);
     try {
       await stockTransferLifecycleService.submitManualDispatch(
-        group.items.map(i => i.id),
+        group.items.map((i: OrderGroupItem) => i.id),
         'For Loading'
       );
 
@@ -143,10 +144,10 @@ export function useStockTransferDispatchManual() {
   const markAsPicked = async (orderNo: string) => {
     base.setProcessing(true);
     try {
-      const group = orderGroups.find(g => g.orderNo === orderNo);
+      const group = orderGroups.find((g: OrderGroup) => g.orderNo === orderNo);
       if (group) {
         await stockTransferLifecycleService.submitStatusUpdate({
-          items: group.items.map(i => ({ id: i.id, status: 'Picked' })),
+          items: group.items.map((i: OrderGroupItem) => ({ id: i.id, status: 'Picked' })),
           status: 'Picked'
         });
         toast.success(`Successfully marked as Done Picking.`);

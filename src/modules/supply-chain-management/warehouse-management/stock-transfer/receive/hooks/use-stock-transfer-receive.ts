@@ -50,7 +50,7 @@ export function useStockTransferReceive() {
   }, [base.baseOrderGroups]);
 
   const orderGroups = useMemo(() => {
-    return base.baseOrderGroups.map(group => {
+    return base.baseOrderGroups.map((group: OrderGroup) => {
       const enrichedItems = group.items.map((st: OrderGroupItem) => {
         const product = st.product_id as ProductRow;
         const pid = product?.product_id || st.product_id;
@@ -74,7 +74,7 @@ export function useStockTransferReceive() {
 
   const selectedGroup = useMemo(() => {
     if (!base.selectedOrderNo) return null;
-    return orderGroups.find((g) => g.orderNo === base.selectedOrderNo) || null;
+    return orderGroups.find((g: OrderGroup) => g.orderNo === base.selectedOrderNo) || null;
   }, [base.selectedOrderNo, orderGroups]);
 
   const receiveOrder = async (orderNo: string) => {
@@ -83,15 +83,15 @@ export function useStockTransferReceive() {
 
     base.setProcessing(true);
     try {
-      const rfidsPayload = group.items.flatMap(item => 
-        item.receivedRfids.map(rfid => ({ 
+      const rfidsPayload = group.items.flatMap((item: OrderGroupItem) => 
+        item.receivedRfids.map((rfid: string) => ({ 
           stock_transfer_id: item.id, 
           rfid_tag: rfid,
           scan_type: 'RECEIVE'
         }))
       );
 
-      const itemsPayload = group.items.map(i => ({
+      const itemsPayload = group.items.map((i: OrderGroupItem) => ({
         id: i.id,
         status: 'Received'
       }));

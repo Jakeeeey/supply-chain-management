@@ -117,6 +117,9 @@ export interface OrderGroupItem extends StockTransferRow {
   scannedQty?: number;
   /** Number of items received at the target branch. */
   receivedQty?: number;
+  /** RFID tags scanned/received for this item during pick/receipt. */
+  scannedRfids: string[];
+  receivedRfids: string[];
   /** Available qty at source branch (fetched from inventory). */
   qtyAvailable?: number;
   /** Whether this item is a loose-pack variant. */

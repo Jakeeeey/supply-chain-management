@@ -58,7 +58,7 @@ export function useStockTransferDispatch() {
 
   // Group logical items with scan data
   const orderGroups = useMemo(() => {
-    return base.baseOrderGroups.map(group => {
+    return base.baseOrderGroups.map((group: OrderGroup) => {
       const enrichedItems = group.items.map((st: OrderGroupItem) => {
         const product = st.product_id as ProductRow;
         const pid = product?.product_id || st.product_id;
@@ -92,7 +92,7 @@ export function useStockTransferDispatch() {
 
   const selectedGroup = useMemo(() => {
     if (!base.selectedOrderNo) return null;
-    return orderGroups.find((g) => g.orderNo === base.selectedOrderNo) || null;
+    return orderGroups.find((g: OrderGroup) => g.orderNo === base.selectedOrderNo) || null;
   }, [base.selectedOrderNo, orderGroups]);
 
   // Fetch initial inventory for selected order

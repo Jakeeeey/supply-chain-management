@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { useStockTransferBase } from '../../shared/hooks/use-stock-transfer-base';
 import { stockTransferLifecycleService } from '../../services/stock-transfer.lifecycle';
 import { toast } from 'sonner';
+import type { OrderGroup, OrderGroupItem } from '../../types/stock-transfer.types';
 
 /**
  * Hook for managing the "Stock Transfer Receive" phase (Manual Entry).
@@ -21,8 +22,8 @@ export function useStockTransferReceiveManual() {
   }, []);
 
   const orderGroups = useMemo(() => {
-    return base.baseOrderGroups.map(group => {
-      const enrichedItems = group.items.map(st => {
+    return base.baseOrderGroups.map((group: OrderGroup) => {
+      const enrichedItems = group.items.map((st: OrderGroupItem) => {
         return {
           ...st,
           receivedQty: receivedQtys[st.id] ?? 0, 
@@ -38,17 +39,17 @@ export function useStockTransferReceiveManual() {
 
   const selectedGroup = useMemo(() => {
     if (!base.selectedOrderNo) return null;
-    return orderGroups.find((g) => g.orderNo === base.selectedOrderNo) || null;
+    return orderGroups.find((g: OrderGroup) => g.orderNo === base.selectedOrderNo) || null;
   }, [base.selectedOrderNo, orderGroups]);
 
   const receiveOrder = async (orderNo: string) => {
-    const group = orderGroups.find((g) => g.orderNo === orderNo);
+    const group = orderGroups.find((g: OrderGroup) => g.orderNo === orderNo);
     if (!group) return;
 
     base.setProcessing(true);
     try {
       await stockTransferLifecycleService.submitManualReceive(
-        group.items.map(i => i.id),
+        group.items.map((i: OrderGroupItem) => i.id),
         'Received'
       );
 
