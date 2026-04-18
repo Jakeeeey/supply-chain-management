@@ -2,8 +2,9 @@
 
 import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Search, ClipboardCheck, Loader2, RefreshCcw, ChevronLeft, ChevronRight, ServerCrash, X } from 'lucide-react';
+import { Search, ClipboardCheck, Loader2, RefreshCcw, ServerCrash } from 'lucide-react';
 import { useStockTransferApproval } from '../hooks/use-stock-transfer-approval';
+import type { OrderGroupItem, ProductRow } from '../types/stock-transfer.types';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,13 +28,6 @@ import {
   TableRow,
   TableFooter,
 } from '@/components/ui/table';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -48,7 +42,6 @@ export default function StockTransferApprovalView() {
     fetchError,
     updateStatus,
     getBranchName,
-    stockTransfers,
     refresh,
     allocatedQtys,
     availableQtys,
@@ -57,7 +50,7 @@ export default function StockTransferApprovalView() {
   } = useStockTransferApproval();
 
   const [currentPage, setCurrentPage] = React.useState(1);
-  const [itemsPerPage, setItemsPerPage] = React.useState(10);
+  const [itemsPerPage] = React.useState(10);
   const [productSearch, setProductSearch] = React.useState('');
 
   // Reset page when group or search changes
@@ -75,15 +68,15 @@ export default function StockTransferApprovalView() {
         day: '2-digit',
         year: 'numeric'
       }).format(date);
-    } catch (e) {
+    } catch {
       return dateString;
     }
   };
 
   const filteredItems = React.useMemo(() => {
     if (!selectedGroup) return [];
-    return selectedGroup.items.filter((item: any) => {
-      const product = typeof item.product_id === 'object' && item.product_id !== null ? item.product_id : null;
+    return selectedGroup.items.filter((item: OrderGroupItem) => {
+      const product = typeof item.product_id === 'object' && item.product_id !== null ? (item.product_id as ProductRow) : null;
       const productName = product?.product_name || `PRD-${item.product_id}`;
       const barcode = product?.barcode || '';
       return (
@@ -94,8 +87,6 @@ export default function StockTransferApprovalView() {
     });
   }, [selectedGroup, productSearch]);
 
-  const totalItems = filteredItems.length;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
   const paginatedItems = filteredItems.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
@@ -103,7 +94,7 @@ export default function StockTransferApprovalView() {
 
   const currentTotalAmount = React.useMemo(() => {
     if (!selectedGroup) return 0;
-    return selectedGroup.items.reduce((sum: number, item: any) => {
+    return selectedGroup.items.reduce((sum: number, item: OrderGroupItem) => {
       const qty = allocatedQtys[item.id] ?? item.ordered_quantity ?? 0;
       const unitPrice = item.ordered_quantity > 0 ? (Number(item.amount || 0) / item.ordered_quantity) : 0;
       return sum + (qty * unitPrice);
@@ -229,13 +220,13 @@ export default function StockTransferApprovalView() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {paginatedItems.map((item: any) => {
-                      const product = typeof item.product_id === 'object' && item.product_id !== null ? item.product_id : null;
+                    {paginatedItems.map((item: OrderGroupItem) => {
+                      const product = typeof item.product_id === 'object' && item.product_id !== null ? (item.product_id as ProductRow) : null;
                       const productName = product?.product_name || `PRD-${item.product_id}`;
                       const description = product?.description || product?.barcode || 'N/A';
-                      const brandName = product?.product_brand?.brand_name || 'N/A';
-                      const unitName = product?.unit_of_measurement?.unit_name || 'unit';
-                      const originalId = product ? (product.product_id || product.id) : item.product_id;
+                      const brandName = typeof product?.product_brand === 'object' ? product?.product_brand?.brand_name : 'N/A';
+                      const unitName = typeof product?.unit_of_measurement === 'object' ? product?.unit_of_measurement?.unit_name : 'unit';
+                      const originalId = product ? (product.product_id) : item.product_id;
 
                       return (
                         <TableRow key={item.id} className="hover:bg-muted/5 border-b border-border/50">

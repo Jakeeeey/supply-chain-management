@@ -49,7 +49,7 @@ export function PostingPODetail() {
         );
     }
 
-    const status = String((selectedPO as any)?.status || "").toUpperCase();
+    const status = String(selectedPO.status || "").toUpperCase();
     const unposted = (selectedPO.receipts ?? []).filter(
         (r) => Number(r.isPosted) !== 1 && r.isPosted !== true
     );
@@ -102,7 +102,7 @@ export function PostingPODetail() {
                             type="button"
                             size="sm"
                             disabled={posting}
-                            onClick={() => postAllReceipts(String((selectedPO as any).id))}
+                            onClick={() => postAllReceipts(String(selectedPO.id))}
                             className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold"
                         >
                             {posting ? "Posting..." : "Post All"}

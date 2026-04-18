@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 
 // ─── In-Memory RFID Cache (60s TTL) ─────────────────────────────────────────
 // Kept in route.ts for edge-side performance on common lookups
-const rfidCache = new Map<string, { data: any; expiry: number }>();
+const rfidCache = new Map<string, { data: Record<string, unknown>; expiry: number }>();
 const CACHE_TTL_MS = 60_000;
 
 function getCachedRfid(key: string) {
@@ -25,7 +25,7 @@ function getCachedRfid(key: string) {
   return null;
 }
 
-function setCachedRfid(key: string, data: any) {
+function setCachedRfid(key: string, data: Record<string, unknown>) {
   rfidCache.set(key, { data, expiry: Date.now() + CACHE_TTL_MS });
 }
 
@@ -46,17 +46,18 @@ export async function GET(request: NextRequest) {
 
       // Try Spring Boot lookup through repo
       const springMatch = await repo.fetchBranchInventory(Number(branchId), token);
-      const match = Array.isArray(springMatch) ? springMatch.find((i: any) => i.rfid === rfid) : null;
+      const match = Array.isArray(springMatch) ? springMatch.find((i: Record<string, unknown>) => i.rfid === rfid) : null;
 
       let productId: number | null = null;
       let branchIdMatch = branchId;
 
       if (match) {
-        productId = match.productId || match.product_id;
+        productId = (match.productId as number) || (match.product_id as number);
         branchIdMatch = String(match.branchId || match.branch_id || branchId);
       } else {
         // Fallback to Directus legacy records
-        productId = await repo.fallbackRfidLookup(rfid);
+        const fallbackProd = await repo.fallbackRfidLookup(rfid);
+        productId = fallbackProd?.product_id ?? null;
       }
 
       if (!productId) {
@@ -72,7 +73,7 @@ export async function GET(request: NextRequest) {
       }
 
       const inventory = await repo.fetchBranchInventory(Number(branchIdMatch), token);
-      const invCount = Array.isArray(inventory) ? inventory.filter((i: any) => (i.productId || i.product_id) === productId).length : 0;
+      const invCount = Array.isArray(inventory) ? inventory.filter((i: Record<string, unknown>) => (i.productId || i.product_id) === productId).length : 0;
 
       const result = {
         rfid,
@@ -104,10 +105,10 @@ export async function GET(request: NextRequest) {
     ]);
 
     return NextResponse.json({ stockTransfers, branches });
-
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Internal Server Error";
     console.error("[Stock Transfer API GET Error]:", error);
-    return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -116,11 +117,12 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as CreateTransferPayload;
     // Note: In a real app, we'd get the actual user ID from the session
-    const result = await createTransfer(body, 0); 
+    const result = await createTransfer(body); 
     return NextResponse.json(result, { status: 201 });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
     console.error("[Stock Transfer API POST Error]:", error);
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 }
 
@@ -130,8 +132,9 @@ export async function PATCH(request: NextRequest) {
     const body = (await request.json()) as UpdateTransferPayload;
     const result = await updateTransferStatus(body);
     return NextResponse.json(result, { status: 200 });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
     console.error("[Stock Transfer API PATCH Error]:", error);
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 }

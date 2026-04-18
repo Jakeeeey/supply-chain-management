@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useStockTransferBase } from './use-stock-transfer-base';
 import { stockTransferLifecycleService } from '../services/stock-transfer.lifecycle';
+import type { OrderGroup, OrderGroupItem, ProductRow } from '../types/stock-transfer.types';
 
 const APPROVAL_STATUSES = ['Requested'];
 
@@ -17,7 +18,7 @@ export function useStockTransferApproval() {
 
   const playErrorSound = () => {
     try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
       if (audioCtx.state === 'suspended') audioCtx.resume();
       
       const oscillator = audioCtx.createOscillator();
@@ -52,8 +53,8 @@ export function useStockTransferApproval() {
         const newAllocated: Record<number, number> = {};
 
         for (const item of base.selectedGroup!.items) {
-          const product = item.product_id as any;
-          const pid = product?.product_id || product?.id;
+          const product = item.product_id as ProductRow;
+          const pid = product?.product_id;
 
           // Call the inventory-proxy through the Next.js API
           const params = new URLSearchParams({
@@ -69,12 +70,12 @@ export function useStockTransferApproval() {
           if (res.ok) {
             const data = await res.json();
             const list = Array.isArray(data) ? data : (data.data || []);
-            const inventoryList = list.filter((inv: any) => 
+            const inventoryList = list.filter((inv: { productId: string | number; branchId: string | number; runningInventory: number }) => 
                String(inv.productId) === String(pid) && 
                String(inv.branchId) === String(base.selectedGroup!.sourceBranch)
             );
             
-            const availableCount = inventoryList.reduce((acc: number, inv: any) => acc + Number(inv.runningInventory || 0), 0);
+            const availableCount = inventoryList.reduce((acc: number, inv: { runningInventory: number }) => acc + Number(inv.runningInventory || 0), 0);
             const unitCount = Number(product?.unit_of_measurement_count || 1) || 1;
             let finalAvailable = Math.floor(availableCount / unitCount);
             
@@ -98,7 +99,7 @@ export function useStockTransferApproval() {
     };
 
     fetchAvailable();
-  }, [base.selectedGroup, base.getBranchName]);
+  }, [base.selectedGroup, base.getBranchName, base]);
 
   const updateAllocatedQty = (itemId: number, qty: number, maxAllowed: number) => {
     const boundedQty = Math.max(0, Math.min(isNaN(qty) ? 0 : qty, maxAllowed));
@@ -106,7 +107,7 @@ export function useStockTransferApproval() {
   };
 
   const updateStatus = async (orderNo: string, status: 'approved' | 'rejected') => {
-    const group = base.baseOrderGroups.find((g: any) => g.orderNo === orderNo);
+    const group = base.baseOrderGroups.find((g: OrderGroup) => g.orderNo === orderNo);
     if (!group) return;
 
     base.setProcessing(true);
@@ -123,7 +124,7 @@ export function useStockTransferApproval() {
 
           if (allocated > maxAllowed) {
             toast.error(`Invalid Allocation`, {
-              description: `Allocated quantity for ${(item.product_id as any)?.product_name || 'item'} exceeds ordered quantity or available stock.`
+              description: `Allocated quantity for ${(item.product_id as ProductRow)?.product_name || 'item'} exceeds ordered quantity or available stock.`
             });
             base.setProcessing(false);
             return;
@@ -139,8 +140,8 @@ export function useStockTransferApproval() {
         }
       }
 
-      const itemsPayload = group.items.map((item: any) => {
-        const payload: any = {
+      const itemsPayload = group.items.map((item: OrderGroupItem) => {
+        const payload: { id: number; status: string; allocated_quantity?: number } = {
           id: item.id,
           status: finalStatus
         };
@@ -158,10 +159,11 @@ export function useStockTransferApproval() {
       toast.success(`Order ${orderNo} successfully ${status}.`);
       base.setSelectedOrderNo(null);
       await base.refresh(); 
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Something went wrong while updating status.';
       console.error('Status update failed:', err);
       playErrorSound();
-      toast.error(err.message || 'Something went wrong while updating status.');
+      toast.error(message);
     } finally {
       base.setProcessing(false);
     }

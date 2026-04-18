@@ -1,23 +1,18 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable react-hooks/exhaustive-deps */
 "use client";
 
 import * as React from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { useReceivingProductsManual } from "../../providers/ReceivingProductsManualProvider";
 
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ReceiptPreviewModal } from "../ReceiptPreviewModal";
 
 export function ManualProductsStep() {
-    const router = useRouter();
-    const [previewOpen, setPreviewOpen] = React.useState(false);
+
 
     const {
         selectedPO,
@@ -48,20 +43,21 @@ export function ManualProductsStep() {
         
         selectedPO.allocations.forEach(a => {
             a.items.forEach(it => {
-                const porId = String((it as any).porId ?? it.id);
-                if ((it as any).lot_no) newLots[porId] = (it as any).lot_no;
-                if ((it as any).expiry_date) newExpiries[porId] = (it as any).expiry_date;
+                const itObj = it as Record<string, unknown>;
+                const porId = String(itObj.porId ?? itObj.id);
+                if (itObj.lot_no) newLots[porId] = itObj.lot_no as string;
+                if (itObj.expiry_date) newExpiries[porId] = itObj.expiry_date as string;
             });
         });
         
         setLotNumbers(prev => ({ ...newLots, ...prev }));
         setExpiryDates(prev => ({ ...newExpiries, ...prev }));
-    }, [selectedPO?.id]);
+    }, [selectedPO?.id, selectedPO?.allocations]);
 
     React.useEffect(() => {
         if (!receiptSaved) return;
         toast.success(`Receipt ${receiptSaved.receiptNo} saved successfully.`);
-    }, [receiptSaved?.savedAt]);
+    }, [receiptSaved]);
 
     const allItems = React.useMemo(() => {
         const allocs = Array.isArray(selectedPO?.allocations) ? selectedPO!.allocations : [];
@@ -70,13 +66,13 @@ export function ManualProductsStep() {
             return items
                 .map((it) => ({
                     ...it,
-                    porId: String((it as any)?.porId ?? it.id),
+                    porId: String((it as Record<string, unknown>)?.porId ?? it.id),
                     branchName: a?.branch?.name ?? "Unassigned",
                 }))
                 // Filter out fully-received items for partial receiving
-                .filter((it: any) => {
-                    const received = Number(it.receivedQty ?? 0);
-                    const expected = Number(it.expectedQty ?? 0);
+                .filter((it) => {
+                    const received = Number((it as Record<string, unknown>).receivedQty ?? 0);
+                    const expected = Number((it as Record<string, unknown>).expectedQty ?? 0);
                     return expected <= 0 || received < expected;
                 });
         });
@@ -226,10 +222,11 @@ export function ManualProductsStep() {
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {rcvPageItems.map((it: any) => {
-                                            const porId = String(it.porId ?? it.id);
-                                            const expected = Number(it.expectedQty || 0);
-                                            const receivedSoFar = Number(it.receivedQty || 0);
+                                        {rcvPageItems.map((it) => {
+                                            const itemObj = it as Record<string, unknown>;
+                                            const porId = String(itemObj.porId ?? itemObj.id);
+                                            const expected = Number(itemObj.expectedQty || 0);
+                                            const receivedSoFar = Number(itemObj.receivedQty || 0);
                                             const remaining = expected - receivedSoFar;
                                             const currentEntry = manualCounts[porId] || "";
 

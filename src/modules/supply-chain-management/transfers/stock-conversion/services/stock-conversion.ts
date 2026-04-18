@@ -148,7 +148,7 @@ export async function fetchStockList(
     products.forEach((p: any) => {
         const pId = Number(p.product_id);
         const parentId = p.parent_id ? Number(p.parent_id) : undefined;
-        let nameKey = (p.product_name || "").trim().toLowerCase();
+        const nameKey = (p.product_name || "").trim().toLowerCase();
         
         let groupKey: string;
         if (parentId) {
@@ -168,7 +168,7 @@ export async function fetchStockList(
     products.forEach((p: any) => {
       const pId = Number(p.product_id);
       const parentId = p.parent_id ? Number(p.parent_id) : undefined;
-      let nameKey = (p.product_name || "").trim().toLowerCase();
+      const nameKey = (p.product_name || "").trim().toLowerCase();
       let groupKey: string;
       if (parentId) {
           groupKey = `ID-${parentId}`;

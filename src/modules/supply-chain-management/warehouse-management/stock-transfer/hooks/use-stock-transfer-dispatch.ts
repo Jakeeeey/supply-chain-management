@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useStockTransferBase } from './use-stock-transfer-base';
 import { stockTransferLifecycleService } from '../services/stock-transfer.lifecycle';
 import { toast } from 'sonner';
+import type { OrderGroup, OrderGroupItem, ProductRow } from '../types/stock-transfer.types';
 
 const LOCAL_STORAGE_KEY = 'scm_dispatching_scans_v1';
 
@@ -37,19 +38,20 @@ export function useStockTransferDispatch() {
   // Group logical items with scan data
   const orderGroups = useMemo(() => {
     return base.baseOrderGroups.map(group => {
-      const enrichedItems = group.items.map(st => {
-        const product = st.product_id as any;
-        const pid = product?.product_id || product?.id || st.product_id;
+      const enrichedItems = group.items.map((st: OrderGroupItem) => {
+        const product = st.product_id as ProductRow;
+        const pid = product?.product_id || st.product_id;
         
         const rfids = scannedItemsState[group.orderNo]?.[pid as number] || [];
-        const unitName = (product?.unit_of_measurement?.unit_name || '').toLowerCase();
-        const unitId = Number(product?.unit_of_measurement?.unit_id || 0);
+        const uom = typeof product?.unit_of_measurement === 'object' ? product.unit_of_measurement : null;
+        const unitName = (uom?.unit_name || '').toLowerCase();
+        const unitId = Number(uom?.unit_id || 0);
 
         // Mark as loose pack if unit is pieces, tie, pcs, or loose (these don't need RFID scanning)
         const loosePack = unitName.includes('loose') || unitName.includes('pieces') || unitName.includes('pcs') || unitName.includes('tie') || unitId === 4;
         
         const targetQty = Math.max(0, st.allocated_quantity ?? st.ordered_quantity ?? 0);
-        const rawAvailable = scannedInventory[pid as number] ?? (st as any).qtyAvailable ?? 0;
+        const rawAvailable = scannedInventory[pid as number] ?? (st as OrderGroupItem).qtyAvailable ?? 0;
 
         return {
           ...st,
@@ -85,8 +87,8 @@ export function useStockTransferDispatch() {
         const sourceBranchName = base.getBranchName(sourceBranch);
 
         for (const item of selectedGroup.items) {
-          const product = item.product_id as any;
-          const pid = product?.product_id || product?.id || item.product_id;
+          const product = item.product_id as ProductRow;
+          const pid = product?.product_id || item.product_id;
           
           if (!pid || scannedInventory[pid as number] !== undefined) continue;
 
@@ -102,11 +104,11 @@ export function useStockTransferDispatch() {
           if (res.ok) {
             const data = await res.json();
             const list = Array.isArray(data) ? data : (data.data || []);
-            const inventoryList = list.filter((inv: any) => 
+            const inventoryList = list.filter((inv: { productId: string | number; branchId: string | number; runningInventory: number }) => 
                String(inv.productId) === String(pid) && 
                String(inv.branchId) === String(sourceBranch)
             );
-            const availableCount = inventoryList.reduce((acc: number, inv: any) => acc + Number(inv.runningInventory || 0), 0);
+            const availableCount = inventoryList.reduce((acc: number, inv: { runningInventory: number }) => acc + Number(inv.runningInventory || 0), 0);
             const unitCount = Number(product?.unit_of_measurement_count || 1) || 1;
             const finalAvailable = Math.max(0, Math.floor(availableCount / unitCount));
 
@@ -131,7 +133,7 @@ export function useStockTransferDispatch() {
   }, [base.selectedOrderNo]);
 
   const updateOrderStatus = async (orderNo: string, status: string) => {
-    const group = orderGroups.find((g) => g.orderNo === orderNo);
+    const group = orderGroups.find((g: OrderGroup) => g.orderNo === orderNo);
     if (!group) return;
 
     try {
@@ -150,7 +152,7 @@ export function useStockTransferDispatch() {
   };
 
   const dispatchOrder = async (orderNo: string) => {
-    const group = orderGroups.find((g) => g.orderNo === orderNo);
+    const group = orderGroups.find((g: OrderGroup) => g.orderNo === orderNo);
     if (!group) return;
 
     base.setProcessing(true);
@@ -184,10 +186,11 @@ export function useStockTransferDispatch() {
       });
 
       await base.refresh();
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Something went wrong while dispatching.';
       console.error('Dispatch failed:', err);
       playErrorSound();
-      toast.error(err.message || 'Something went wrong while dispatching.');
+      toast.error(message);
     } finally {
       base.setProcessing(false);
     }
@@ -195,7 +198,7 @@ export function useStockTransferDispatch() {
 
   const playSuccessSound = () => {
     try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
       if (audioCtx.state === 'suspended') audioCtx.resume();
       const oscillator = audioCtx.createOscillator();
       const gainNode = audioCtx.createGain();
@@ -215,7 +218,7 @@ export function useStockTransferDispatch() {
 
   const playErrorSound = () => {
     try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
       if (audioCtx.state === 'suspended') audioCtx.resume();
       const oscillator = audioCtx.createOscillator();
       const gainNode = audioCtx.createGain();
@@ -244,8 +247,8 @@ export function useStockTransferDispatch() {
       const productId = match.productId;
       
       const itemInOrder = selectedGroup.items.find(i => {
-        const itemProduct = i.product_id as any;
-        const itemPid = itemProduct?.product_id || itemProduct?.id || i.product_id;
+        const itemProduct = i.product_id as ProductRow;
+        const itemPid = itemProduct?.product_id || i.product_id;
         return itemPid === productId;
       });
       
@@ -297,10 +300,11 @@ export function useStockTransferDispatch() {
 
       // Check if all items are scanned to mark as 'Picked' (Simplified check)
       // This is a bit reactive, might need stabilization if multiple scans fast.
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'RFID lookup failed';
       console.error('Scanner lookup error:', error);
       playErrorSound();
-      toast.error("RFID lookup failed", { description: error.message });
+      toast.error("RFID lookup failed", { description: message });
     }
   };
 
@@ -309,7 +313,7 @@ export function useStockTransferDispatch() {
     try {
       await updateOrderStatus(orderNo, 'Picked');
       toast.success(`Successfully marked as Done Picking.`);
-    } catch (err) {
+    } catch {
       toast.error('Failed to update status to Picked');
     } finally {
       base.setProcessing(false);

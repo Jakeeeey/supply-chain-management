@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
       cache: 'no-store',
     });
 
-    let aggregateData: any = null;
+    let aggregateData: Record<string, unknown> | Record<string, unknown>[] | null = null;
     if (response.ok) {
       const data = await response.json();
       aggregateData = data;
@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
       // Check if we found the product with non-zero inventory
       const list = Array.isArray(data) ? data : (data.data || []);
       const productId = searchParams.get('productId');
-      const found = list.find((inv: any) => String(inv.productId) === productId);
+      const found = list.find((inv: Record<string, unknown>) => String(inv.productId) === productId);
       
       if (found) {
         console.log(`[Proxy] Found aggregate inventory for product ${productId}: ${found.runningInventory}`);
@@ -124,7 +124,7 @@ async function getTagCount(branchId: string, productId: string, token?: string) 
       const data = await res.json();
       const rows = Array.isArray(data) ? data : (data.data || []);
       // Count rows matching productId
-      return rows.filter((row: any) => String(row.productId || row.product_id) === productId).length;
+      return rows.filter((row: Record<string, unknown>) => String(row.productId || row.product_id) === productId).length;
     }
   } catch (e) {
     console.warn(`[getTagCount] Failed for ${url}:`, e);

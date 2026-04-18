@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import * as React from "react";
@@ -14,22 +13,24 @@ export function ReceiptCard({ receipt }: { receipt: PostingReceipt }) {
     const { selectedPO, postReceipt, posting } = usePostingOfPo();
     const [open, setOpen] = React.useState(false);
 
+    if (!selectedPO) return null;
+
     // Normalise isPosted to boolean — API returns 0 | 1
     const isPosted = Number(receipt.isPosted) === 1 || receipt.isPosted === true;
 
-    const poStatus = String((selectedPO as any)?.status || "").toUpperCase();
+    const poStatus = String(selectedPO.status || "").toUpperCase();
 
     // PO is ready to post receipts when:
     //   - PARTIAL: some items received, nothing posted yet
     //   - PARTIAL_POSTED: some receipts already posted, more can still be posted
     //   - RECEIVED: fully received, posting receipts to close it out
     const poReady =
-        (selectedPO as any)?.postingReady === true ||
+        selectedPO.postingReady === true ||
         poStatus === "RECEIVED" ||
         poStatus === "PARTIAL" ||
         poStatus === "PARTIAL_POSTED";
 
-    const canPost = !!(selectedPO as any)?.id && !isPosted && poReady;
+    const canPost = !!selectedPO.id && !isPosted && poReady;
 
     const disabledReason = !poReady
         ? "PO is not ready. Complete receiving first."
@@ -83,8 +84,8 @@ export function ReceiptCard({ receipt }: { receipt: PostingReceipt }) {
                 loading={posting}
                 onConfirm={async () => {
                     setOpen(false);
-                    if (!(selectedPO as any)?.id) return;
-                    await postReceipt((selectedPO as any).id, receipt.receiptNo);
+                    if (!selectedPO?.id) return;
+                    await postReceipt(selectedPO.id, receipt.receiptNo);
                 }}
             />
         </Card>

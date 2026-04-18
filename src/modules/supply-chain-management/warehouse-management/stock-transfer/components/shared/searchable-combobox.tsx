@@ -9,7 +9,6 @@ import {
   ComboboxContent,
   ComboboxList,
   ComboboxItem,
-  ComboboxEmpty,
 } from "@/components/ui/combobox";
 
 export type SearchableComboboxOption = {
@@ -20,7 +19,7 @@ export type SearchableComboboxOption = {
 interface SearchableComboboxProps {
   options: SearchableComboboxOption[];
   value: string;
-  onValueChange: (value: any) => void;
+  onValueChange: (value: string) => void;
   placeholder?: string;
   emptyMessage?: string;
   className?: string;

@@ -30,11 +30,12 @@ export function useStockTransferBase({ statuses, autoFetch = true }: UseStockTra
       const res = await stockTransferLifecycleService.fetchTransfers(statusesStr);
       setStockTransfers(res.stockTransfers ?? []);
       setBranches(res.branches ?? []);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch stock transfers.';
       console.error('[Stock Transfer Base Hook] Fetch Failed:', err);
-      setFetchError(err.message || 'Unable to reach the server. Please check your connection.');
+      setFetchError(message);
       toast.error('Network Error', {
-        description: err.message || 'Failed to fetch stock transfers.'
+        description: message
       });
     } finally {
       setLoading(false);

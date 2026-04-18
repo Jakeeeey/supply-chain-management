@@ -25,14 +25,15 @@ export function useStockTransferDispatchManual() {
   const orderGroups = useMemo(() => {
     return base.baseOrderGroups.map(group => {
       const enrichedItems = group.items.map(st => {
-        const product = st.product_id as any;
-        const pid = product?.product_id || product?.id || st.product_id;
+        const product = st.product_id as unknown as Record<string, unknown>;
+        const pid = (product?.product_id as number) || (product?.id as number) || st.product_id;
         
-        const unitName = (product?.unit_of_measurement?.unit_name || '').toLowerCase();
-        const unitId = Number(product?.unit_of_measurement?.unit_id || 0);
+        const uom = product?.unit_of_measurement as Record<string, unknown> | undefined;
+        const unitName = (uom?.unit_name as string || '').toLowerCase();
+        const unitId = Number(uom?.unit_id || 0);
         const loosePack = unitName.includes('loose') || unitName.includes('pieces') || unitName.includes('pcs') || unitName.includes('tie') || unitId === 4;
         
-        const rawAvailable = scannedInventory[pid as number] ?? (st as any).qtyAvailable ?? 0;
+        const rawAvailable = scannedInventory[pid as number] ?? (st as unknown as Record<string, unknown>).qtyAvailable ?? 0;
 
         return {
           ...st,
@@ -67,8 +68,8 @@ export function useStockTransferDispatchManual() {
         const sourceBranchName = base.getBranchName(sourceBranch);
 
         for (const item of selectedGroup.items) {
-          const product = item.product_id as any;
-          const pid = product?.product_id || product?.id || item.product_id;
+          const product = item.product_id as unknown as Record<string, unknown>;
+          const pid = (product?.product_id as number) || (product?.id as number) || item.product_id;
           
           if (!pid || scannedInventory[pid as number] !== undefined) continue;
 
@@ -84,11 +85,11 @@ export function useStockTransferDispatchManual() {
           if (res.ok) {
             const data = await res.json();
             const list = Array.isArray(data) ? data : (data.data || []);
-            const inventoryList = list.filter((inv: any) => 
+            const inventoryList = list.filter((inv: Record<string, unknown>) => 
                String(inv.productId) === String(pid) && 
                String(inv.branchId) === String(sourceBranch)
             );
-            const availableCount = inventoryList.reduce((acc: number, inv: any) => acc + Number(inv.runningInventory || 0), 0);
+            const availableCount = inventoryList.reduce((acc: number, inv: Record<string, unknown>) => acc + Number(inv.runningInventory || 0), 0);
             const unitCount = Number(product?.unit_of_measurement_count || 1) || 1;
             const finalAvailable = Math.max(0, Math.floor(availableCount / unitCount));
 
@@ -126,8 +127,9 @@ export function useStockTransferDispatchManual() {
       toast.success(`Order ${orderNo} successfully dispatched manually.`);
       base.setSelectedOrderNo(null);
       await base.refresh();
-    } catch (err: any) {
-      toast.error(err.message || 'Something went wrong while dispatching.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Something went wrong while dispatching.';
+      toast.error(msg);
     } finally {
       base.setProcessing(false);
     }
@@ -145,7 +147,7 @@ export function useStockTransferDispatchManual() {
         toast.success(`Successfully marked as Done Picking.`);
         await base.refresh();
       }
-    } catch (err) {
+    } catch {
       toast.error('Failed to update status to Picked');
     } finally {
       base.setProcessing(false);

@@ -41,7 +41,7 @@ import { Input } from "@/components/ui/input";
 
 // ✅ Now uses @base-ui/react Combobox internally — no Radix FocusScope,
 //    no "Maximum update depth exceeded" error when filtering.
-import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { SearchableCombobox } from "@/modules/supply-chain-management/warehouse-management/stock-transfer/components/shared/searchable-combobox";
 
 interface StockConversionTableProps {
   data: StockConversionProduct[];

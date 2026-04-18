@@ -67,7 +67,7 @@ export function ProductCombobox({ onSelect }: ProductComboboxProps) {
           {!loading && products.length === 0 && <ComboboxEmpty>No products found.</ComboboxEmpty>}
           {products.map((product) => (
             <ComboboxItem
-              key={product.id || product.product_id}
+              key={product.product_id}
               value={product}
             >
               <div className="flex flex-col gap-0.5">

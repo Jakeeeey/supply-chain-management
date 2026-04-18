@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Search, ShoppingCart, Loader2, Package, Tag, CheckCircle2, ChevronRight, Minus, Plus, Trash2, X } from 'lucide-react';
+import { Search, ShoppingCart, Loader2, Package, CheckCircle2, Minus, Plus, Trash2 } from 'lucide-react';
 import { EnrichedProduct } from '../../types/stock-transfer.types';
 
 interface ProductSelectionModalProps {
@@ -191,7 +191,7 @@ export function ProductSelectionModal({ open, onOpenChange, onSelect, sourceBran
                     const uom = typeof p.unit_of_measurement === 'object' && p.unit_of_measurement !== null 
                       ? (p.unit_of_measurement as { unit_name?: string }).unit_name 
                       : (p.unit_of_measurement || 'PCS');
-                    const qty = (p as any).quantity || 1;
+                    const qty = (p as EnrichedProduct & { quantity?: number }).quantity || 1;
 
                     return (
                       <div key={idx} className="bg-background border border-border/40 rounded-lg p-2.5 hover:border-primary/30 transition-all group/item shadow-none">
