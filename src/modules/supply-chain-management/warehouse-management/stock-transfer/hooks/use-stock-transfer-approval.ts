@@ -64,7 +64,7 @@ export function useStockTransferApproval() {
             current: '0'
           });
 
-          const proxyUrl = `/api/scm/warehouse-management/inventory-proxy?${params.toString()}`;
+          const proxyUrl = `/api/scm/warehouse-management/stock-transfer/inventory-proxy?${params.toString()}`;
           
           const res = await fetch(proxyUrl);
           if (res.ok) {
@@ -99,7 +99,8 @@ export function useStockTransferApproval() {
     };
 
     fetchAvailable();
-  }, [base.selectedGroup, base.getBranchName, base]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [base.selectedGroup?.orderNo]); // Use specific scalar property to prevent infinite object ref loops
 
   const updateAllocatedQty = (itemId: number, qty: number, maxAllowed: number) => {
     const boundedQty = Math.max(0, Math.min(isNaN(qty) ? 0 : qty, maxAllowed));

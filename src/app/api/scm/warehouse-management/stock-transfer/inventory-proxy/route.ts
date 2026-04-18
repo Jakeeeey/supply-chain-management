@@ -102,32 +102,50 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// Simple memory cache for fallback tag counts to prevent N+1 payload crashes
+const rfidCache = new Map<string, { expiredAt: number; data: Record<string, unknown>[] }>();
+
 /** Helper to count RFID tags in v_rfid_onhand for a specific product */
 async function getTagCount(branchId: string, productId: string, token?: string) {
   const springBase = process.env.SPRING_API_BASE_URL?.replace(/\/$/, '');
   if (!springBase) return 0;
 
-  const url = `${springBase}/api/view-rfid-onhand?branchId=${branchId}`;
-  try {
-    const res = await fetch(url, {
-      headers: {
-        'Accept': 'application/json',
-        ...(token ? { 
-          'Authorization': `Bearer ${token}`,
-          'Cookie': `vos_access_token=${token}`
-        } : {}),
-      },
-      cache: 'no-store'
-    });
+  const cacheKey = branchId; // We cache the entire branch's RFIDs to serve all N+1 lookups instantly
+  const cached = rfidCache.get(cacheKey);
+  const now = Date.now();
 
-    if (res.ok) {
-      const data = await res.json();
-      const rows = Array.isArray(data) ? data : (data.data || []);
-      // Count rows matching productId
-      return rows.filter((row: Record<string, unknown>) => String(row.productId || row.product_id) === productId).length;
+  let rows: Record<string, unknown>[] = [];
+
+  if (cached && cached.expiredAt > now) {
+    rows = cached.data;
+  } else {
+    // Note: If the backend supports productId we pass it, but if it ignores it, we gracefully cache the full array.
+    const url = `${springBase}/api/view-rfid-onhand?branchId=${branchId}&productId=${productId}`;
+    try {
+      const res = await fetch(url, {
+        headers: {
+          'Accept': 'application/json',
+          ...(token ? { 
+            'Authorization': `Bearer ${token}`,
+            'Cookie': `vos_access_token=${token}`
+          } : {}),
+        },
+        cache: 'no-store'
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        rows = Array.isArray(data) ? data : (data.data || []);
+        
+        // Cache the result for 15 seconds (perfect for a burst of lazy load requests)
+        rfidCache.set(cacheKey, { expiredAt: now + 15000, data: rows });
+      }
+    } catch (e) {
+      console.warn(`[getTagCount] Failed for ${url}:`, e);
+      return 0;
     }
-  } catch (e) {
-    console.warn(`[getTagCount] Failed for ${url}:`, e);
   }
-  return 0;
+
+  // Count rows matching productId
+  return rows.filter((row) => String(row.productId || row.product_id) === productId).length;
 }

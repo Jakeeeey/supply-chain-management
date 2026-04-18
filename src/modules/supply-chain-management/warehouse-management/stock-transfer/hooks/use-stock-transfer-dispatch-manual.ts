@@ -80,7 +80,7 @@ export function useStockTransferDispatchManual() {
             current: '0'
           });
 
-          const proxyUrl = `/api/scm/warehouse-management/inventory-proxy?${params.toString()}`;
+          const proxyUrl = `/api/scm/warehouse-management/stock-transfer/inventory-proxy?${params.toString()}`;
           const res = await fetch(proxyUrl);
           if (res.ok) {
             const data = await res.json();

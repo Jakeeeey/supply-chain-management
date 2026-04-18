@@ -228,7 +228,7 @@ export function ProductSelectionModal({ open, onOpenChange, onSelect, sourceBran
                             </Button>
                           </div>
                           <div className="flex flex-col items-end">
-                            <span className="font-black text-primary text-[11px] font-mono tracking-tighter">₱{Number((p as { totalAmount?: number }).totalAmount || p.cost_per_unit || 0).toLocaleString()}</span>
+                            <span className="font-black text-primary text-[11px] font-mono tracking-tighter">₱{Number((p as { totalAmount?: number }).totalAmount || (p as { cost_per_unit?: number }).cost_per_unit || 0).toLocaleString()}</span>
                             <span className="text-[8px] font-bold text-muted-foreground/50 uppercase tracking-widest">{uom}</span>
                           </div>
                         </div>
@@ -244,7 +244,7 @@ export function ProductSelectionModal({ open, onOpenChange, onSelect, sourceBran
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] opacity-60">Estimated Total</span>
                   <span className="text-sm font-black text-primary font-mono tracking-tighter">
-                    ₱{selectedProducts.reduce((sum, p) => sum + Number((p as { totalAmount?: number }).totalAmount || p.cost_per_unit || 0), 0).toLocaleString()}
+                    ₱{selectedProducts.reduce((sum, p) => sum + Number((p as { totalAmount?: number }).totalAmount || (p as { cost_per_unit?: number }).cost_per_unit || 0), 0).toLocaleString()}
                   </span>
                 </div>
               </div>
