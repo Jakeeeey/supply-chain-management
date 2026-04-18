@@ -1,6 +1,6 @@
 // src/app/api/scm/supplier-management/purchase-order/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { getDirectusBase, getDirectusToken } from "@/modules/supply-chain-management/supplier-management/utils/directus";
+import { getDirectusBase, directusFetch } from "@/modules/supply-chain-management/supplier-management/purchase-order-creation/providers/fetchProviders";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,9 +18,6 @@ interface DirectusResponse {
     error?: string;
 }
 
-function getServerToken() {
-    return getDirectusToken();
-}
 
 function now() {
     return new Date();
@@ -111,24 +108,6 @@ function toFixedMoney(v: unknown) {
     return safe.toFixed(2);
 }
 
-async function directusFetch(url: string, init?: RequestInit) {
-    const TOKEN = getServerToken();
-    if (!TOKEN) {
-        throw new Error(
-            "DIRECTUS_STATIC_TOKEN (or DIRECTUS_TOKEN) is missing. Add it to .env.local then restart dev server."
-        );
-    }
-
-    return fetch(url, {
-        cache: "no-store",
-        ...init,
-        headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${TOKEN}`,
-            ...(init?.headers || {}),
-        },
-    });
-}
 
 async function safeJson(res: Response) {
     const text = await res.text().catch(() => "");

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import React, { useState, useMemo, useRef, useEffect, useTransition } from "react";
 import {
   Table,
   TableBody,
@@ -28,6 +28,10 @@ import {
 } from "@/components/ui/dialog";
 import { PurchaseOrder, Supplier, StatusRef } from "./types";
 import { generatePOSummaryPDF } from "./utils/generatePOSummaryPDF";
+import { DataTable } from "@/components/ui/new-data-table";
+import type { ColumnDef } from "@tanstack/react-table";
+import { Skeleton } from "@/components/ui/skeleton";
+import ErrorPage from "@/components/shared/ErrorPage";
 
 interface Props {
   poData: PurchaseOrder[];
@@ -48,15 +52,36 @@ export default function PurchaseOrderSummaryModule({
   const [filterPayStatus, setFilterPayStatus] = useState("all");
   const [filterTransType, setFilterTransType] = useState("all");
   
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
+  // States to simulate loading and handle actual errors
+  const [isPending, startTransition] = useTransition();
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  // Sort PO data by date descending (latest first)
+  const sortedPoData = useMemo(() => {
+    if (!poData) return [];
+    return [...poData].sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+  }, [poData]);
+
+  // Simulate initial load for the pulse effect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsInitialLoad(false);
+    }, 1000); // 1-second initial load pulse mapping to the user requirement
+    
+    // Check for prop error conceptually (e.g. if poData is totally missing due to fetch error)
+    if (!poData || !suppliers) {
+      setError(new Error("Failed to load necessary data from server."));
+    }
+    
+    return () => clearTimeout(timer);
+  }, [poData, suppliers]);
 
   const getInventoryStatusColor = (status: string) => {
     const s = status?.toLowerCase() || "";
@@ -80,7 +105,7 @@ export default function PurchaseOrderSummaryModule({
   };
 
   const filteredData = useMemo(() => {
-    return poData.filter((item) => {
+    return sortedPoData.filter((item) => {
       const searchLower = searchTerm.toLowerCase();
       const supplierName = suppliers.find(s => s.id === item.supplier_name)?.supplier_name || "";
       const transTypeText = item.transaction_type === 1 ? "trade" : "non-trade";
@@ -100,7 +125,7 @@ export default function PurchaseOrderSummaryModule({
       
       return matchesSearch && matchesSupplier && matchesInv && matchesPay && matchesTrans && matchesDate;
     });
-  }, [searchTerm, filterSupplier, filterInvStatus, filterPayStatus, filterTransType, poData, dateFrom, dateTo, suppliers]);
+  }, [searchTerm, filterSupplier, filterInvStatus, filterPayStatus, filterTransType, sortedPoData, dateFrom, dateTo, suppliers]);
 
   const previewTotals = useMemo(() => {
     return filteredData.reduce(
@@ -118,21 +143,23 @@ export default function PurchaseOrderSummaryModule({
     );
   }, [filteredData]);
 
-  const totalPages = Math.ceil(filteredData.length / pageSize) || 1;
-  const currentData = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return filteredData.slice(start, start + pageSize);
-  }, [filteredData, currentPage, pageSize]);
-
   const resetFilters = () => {
-    setSearchTerm("");
-    setFilterSupplier("all");
-    setFilterInvStatus("all");
-    setFilterPayStatus("all");
-    setFilterTransType("all");
-    setDateFrom("");
-    setDateTo("");
-    setCurrentPage(1);
+    startTransition(() => {
+      setSearchTerm("");
+      setFilterSupplier("all");
+      setFilterInvStatus("all");
+      setFilterPayStatus("all");
+      setFilterTransType("all");
+      setDateFrom("");
+      setDateTo("");
+    });
+  };
+
+  // Helper to wrap state updates with transition for pulse loading effect
+  const handleFilterChange = (updater: () => void) => {
+    startTransition(() => {
+      updater();
+    });
   };
 
   // ── Searchable Filter Dropdown Component ──
@@ -178,7 +205,7 @@ export default function PurchaseOrderSummaryModule({
             <div className="flex items-center gap-1 shrink-0 ml-2">
               {value !== "all" && (
                 <span 
-                  onClick={(e) => { e.stopPropagation(); onChange("all"); setCurrentPage(1); }}
+                  onClick={(e) => { e.stopPropagation(); handleFilterChange(() => onChange("all")); }}
                   className="p-0.5 rounded hover:bg-destructive/10 hover:text-destructive transition-colors cursor-pointer"
                 >
                   <X className="w-3 h-3" />
@@ -206,7 +233,7 @@ export default function PurchaseOrderSummaryModule({
               <div className="max-h-[200px] overflow-y-auto p-1">
                 <button
                   type="button"
-                  onClick={() => { onChange("all"); setCurrentPage(1); setOpen(false); }}
+                  onClick={() => { handleFilterChange(() => onChange("all")); setOpen(false); }}
                   className={`w-full text-left px-3 py-2 text-xs rounded-md transition-colors ${value === "all" ? "bg-primary/10 text-primary font-bold" : "hover:bg-muted/50 text-foreground"}`}
                 >
                   {allLabel}
@@ -215,7 +242,7 @@ export default function PurchaseOrderSummaryModule({
                   <button
                     key={o.id}
                     type="button"
-                    onClick={() => { onChange(o.id); setCurrentPage(1); setOpen(false); }}
+                    onClick={() => { handleFilterChange(() => onChange(o.id)); setOpen(false); }}
                     className={`w-full text-left px-3 py-2 text-xs rounded-md transition-colors ${value === o.id ? "bg-primary/10 text-primary font-bold" : "hover:bg-muted/50 text-foreground"}`}
                   >
                     {o.label}
@@ -235,6 +262,104 @@ export default function PurchaseOrderSummaryModule({
   const supplierOptions = useMemo(() => suppliers.map(s => ({ id: s.id.toString(), label: s.supplier_name })), [suppliers]);
   const invStatusOptions = useMemo(() => transactionStatuses.map(s => ({ id: s.id.toString(), label: s.status })), [transactionStatuses]);
   const payStatusOptions = useMemo(() => paymentStatuses.map(s => ({ id: s.id.toString(), label: s.status })), [paymentStatuses]);
+
+  const isLoading = isInitialLoad || isPending;
+
+  // ── DataTable Columns Definition ──
+  const columns: ColumnDef<PurchaseOrder>[] = useMemo(() => [
+    {
+      accessorKey: "purchase_order_no",
+      header: "PO Number",
+      cell: ({ row }) => {
+        return (
+          <div 
+            className="font-bold text-primary hover:underline cursor-pointer"
+            onClick={() => setSelectedPO(row.original)}
+          >
+            {row.original.purchase_order_no}
+          </div>
+        );
+      },
+      enableHiding: false, // critical column
+    },
+    {
+      accessorKey: "transaction_type",
+      header: "Type",
+      cell: ({ row }) => (
+        <span className="text-xs font-medium text-muted-foreground">
+          {row.original.transaction_type === 1 ? "Trade" : "Non-Trade"}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "supplier_name",
+      header: "Supplier Name",
+      cell: ({ row }) => {
+        const supplierName = suppliers.find(s => s.id === row.original.supplier_name)?.supplier_name || row.original.supplier_name;
+        return <span className="text-xs font-semibold text-foreground uppercase">{supplierName}</span>;
+      },
+    },
+    {
+      accessorKey: "date",
+      header: "Date Requested",
+      cell: ({ row }) => <span className="text-xs text-muted-foreground whitespace-nowrap">{row.original.date || "--"}</span>,
+    },
+    {
+      accessorKey: "remark",
+      header: "Remarks",
+      cell: ({ row }) => <span className="text-xs text-muted-foreground italic truncate max-w-[200px] block">{row.original.remark || "--"}</span>,
+    },
+    {
+      accessorKey: "total_amount",
+      header: () => <div className="text-right">Total Amount</div>,
+      cell: ({ row }) => {
+        const val = row.original.total_amount ?? row.original.total ?? row.original.net_amount ?? 0;
+        return (
+          <div className="text-right text-xs font-bold font-mono text-foreground">
+            {Number(val).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: "inventory_status",
+      header: () => <div className="text-center">Inventory Status</div>,
+      cell: ({ row }) => {
+        const invStatusText = transactionStatuses.find(s => s.id === row.original.inventory_status)?.status || "Unknown";
+        return (
+          <div className="flex justify-center">
+            <Badge variant="outline" className={`${getInventoryStatusColor(invStatusText)} px-2.5 py-1 text-[10px] font-black border rounded-md shadow-none uppercase`}>
+              {invStatusText}
+            </Badge>
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: "payment_status",
+      header: () => <div className="text-center">Payment Status</div>,
+      cell: ({ row }) => {
+        const payStatusText = paymentStatuses.find(s => s.id === row.original.payment_status)?.status || "Unknown";
+        return (
+          <div className="flex justify-center">
+            <Badge variant="outline" className={`${getPaymentStatusColor(payStatusText)} px-2.5 py-1 text-[10px] font-black border rounded-md shadow-none uppercase`}>
+              {payStatusText}
+            </Badge>
+          </div>
+        );
+      },
+    },
+  ], [suppliers, transactionStatuses, paymentStatuses]);
+
+  if (error) {
+    return <ErrorPage 
+      code="500" 
+      title="Data Loading Failed" 
+      message={error.message} 
+      reset={() => window.location.reload()} 
+    />;
+  }
+
 
   return (
     <div className="space-y-6">
@@ -270,12 +395,16 @@ export default function PurchaseOrderSummaryModule({
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Search</label>
             <div className="relative">
-              <Input 
-                placeholder="Search by PO number, supplier, transaction type, or remarks..." 
-                className="h-11 bg-muted/20 border-border focus-visible:ring-1"
-                value={searchTerm}
-                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-              />
+              {isLoading ? (
+                <Skeleton className="h-11 w-full" />
+              ) : (
+                <Input 
+                  placeholder="Search by PO number, supplier, transaction type, or remarks..." 
+                  className="h-11 bg-muted/20 border-border focus-visible:ring-1"
+                  value={searchTerm}
+                  onChange={(e) => { handleFilterChange(() => setSearchTerm(e.target.value)); }}
+                />
+              )}
             </div>
           </div>
 
@@ -283,71 +412,95 @@ export default function PurchaseOrderSummaryModule({
             <label className="text-[10px] font-bold uppercase text-muted-foreground mb-3 block">Filter By</label>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Supplier - Searchable */}
-              <SearchableFilter
-                label="Supplier"
-                value={filterSupplier}
-                onChange={setFilterSupplier}
-                options={supplierOptions}
-                allLabel="All Suppliers"
-              />
+              {isLoading ? (
+                <div className="space-y-1.5"><Skeleton className="h-10 w-full" /></div>
+              ) : (
+                <SearchableFilter
+                  label="Supplier"
+                  value={filterSupplier}
+                  onChange={setFilterSupplier}
+                  options={supplierOptions}
+                  allLabel="All Suppliers"
+                />
+              )}
 
               {/* Transaction Type */}
               <div className="space-y-1.5">
                 <span className="text-[9px] font-bold uppercase text-muted-foreground/70 ml-1">Transaction Type</span>
-                <Select value={filterTransType} onValueChange={(v) => { setFilterTransType(v); setCurrentPage(1); }}>
-                  <SelectTrigger className="h-10 text-xs bg-background border-border">
-                    <SelectValue placeholder="All Types" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Types</SelectItem>
-                    <SelectItem value="1">Trade</SelectItem>
-                    <SelectItem value="0">Non-Trade</SelectItem>
-                  </SelectContent>
-                </Select>
+                {isLoading ? (
+                  <Skeleton className="h-10 w-full" />
+                ) : (
+                  <Select value={filterTransType} onValueChange={(v) => { handleFilterChange(() => setFilterTransType(v)); }}>
+                    <SelectTrigger className="h-10 text-xs bg-background border-border">
+                      <SelectValue placeholder="All Types" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Types</SelectItem>
+                      <SelectItem value="1">Trade</SelectItem>
+                      <SelectItem value="0">Non-Trade</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
               {/* Inventory Status - Searchable */}
-              <SearchableFilter
-                label="Inventory Status"
-                value={filterInvStatus}
-                onChange={setFilterInvStatus}
-                options={invStatusOptions}
-                allLabel="All Statuses"
-              />
+              {isLoading ? (
+                <div className="space-y-1.5"><Skeleton className="h-10 w-full" /></div>
+              ) : (
+                <SearchableFilter
+                  label="Inventory Status"
+                  value={filterInvStatus}
+                  onChange={setFilterInvStatus}
+                  options={invStatusOptions}
+                  allLabel="All Statuses"
+                />
+              )}
 
               {/* Payment Status - Searchable */}
-              <SearchableFilter
-                label="Payment Status"
-                value={filterPayStatus}
-                onChange={setFilterPayStatus}
-                options={payStatusOptions}
-                allLabel="All Statuses"
-              />
+              {isLoading ? (
+                <div className="space-y-1.5"><Skeleton className="h-10 w-full" /></div>
+              ) : (
+                <SearchableFilter
+                  label="Payment Status"
+                  value={filterPayStatus}
+                  onChange={setFilterPayStatus}
+                  options={payStatusOptions}
+                  allLabel="All Statuses"
+                />
+              )}
 
               {/* Date Requested Range */}
               <div className="space-y-1.5 lg:col-span-2">
                 <span className="text-[9px] font-bold uppercase text-muted-foreground/70 ml-1">Date Requested (From - To)</span>
-                <div className="flex items-center gap-2">
-                   <div className="relative flex-1">
-                      <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
-                      <Input 
-                        type="date" 
-                        className="pl-8 h-10 text-xs bg-background border-border" 
-                        value={dateFrom}
-                        onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
-                      />
-                   </div>
-                   <div className="text-muted-foreground text-xs">—</div>
-                   <div className="relative flex-1">
-                      <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
-                      <Input 
-                        type="date" 
-                        className="pl-8 h-10 text-xs bg-background border-border" 
-                        value={dateTo}
-                        onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
-                      />
-                   </div>
-                </div>
+                {isLoading ? (
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-10 w-full flex-1" />
+                    <div className="text-muted-foreground text-xs">—</div>
+                    <Skeleton className="h-10 w-full flex-1" />
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                     <div className="relative flex-1">
+                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+                        <Input 
+                          type="date" 
+                          className="pl-8 h-10 text-xs bg-background border-border" 
+                          value={dateFrom}
+                          onChange={(e) => { handleFilterChange(() => setDateFrom(e.target.value)); }}
+                        />
+                     </div>
+                     <div className="text-muted-foreground text-xs">—</div>
+                     <div className="relative flex-1">
+                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+                        <Input 
+                          type="date" 
+                          className="pl-8 h-10 text-xs bg-background border-border" 
+                          value={dateTo}
+                          onChange={(e) => { handleFilterChange(() => setDateTo(e.target.value)); }}
+                        />
+                     </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -355,116 +508,13 @@ export default function PurchaseOrderSummaryModule({
       </div>
 
       {/* TABLE SECTION */}
-      <div className="border border-border rounded-xl bg-card overflow-hidden shadow-sm">
-        <Table>
-          <TableHeader className="bg-muted/40">
-            <TableRow className="hover:bg-transparent border-b border-border">
-              <TableHead className="font-bold text-foreground h-12 text-[11px] uppercase tracking-wider">PO Number</TableHead>
-              <TableHead className="font-bold text-foreground text-[11px] uppercase tracking-wider">Transaction Type</TableHead>
-              <TableHead className="font-bold text-foreground text-[11px] uppercase tracking-wider">Supplier Name</TableHead>
-              <TableHead className="font-bold text-foreground text-[11px] uppercase tracking-wider">Date Requested</TableHead>
-              <TableHead className="font-bold text-foreground text-[11px] uppercase tracking-wider">Remarks</TableHead>
-              <TableHead className="font-bold text-foreground text-[11px] uppercase tracking-wider text-right">Total Amount</TableHead>
-              <TableHead className="font-bold text-foreground text-[11px] uppercase tracking-wider text-center">Inventory Status</TableHead>
-              <TableHead className="font-bold text-foreground text-[11px] uppercase tracking-wider text-center">Payment Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {currentData.length > 0 ? (
-              currentData.map((po) => {
-                const invStatusText = transactionStatuses.find(s => s.id === po.inventory_status)?.status || "Unknown";
-                const payStatusText = paymentStatuses.find(s => s.id === po.payment_status)?.status || "Unknown";
-                const supplierName = suppliers.find(s => s.id === po.supplier_name)?.supplier_name || po.supplier_name;
-
-                return (
-                  <TableRow 
-                    key={po.purchase_order_id} 
-                    className="border-border hover:bg-muted/10 transition-colors cursor-pointer"
-                    onClick={() => setSelectedPO(po)}
-                  >
-                    <TableCell className="font-bold text-primary hover:underline py-4">{po.purchase_order_no}</TableCell>
-                    <TableCell className="text-xs font-medium text-muted-foreground">
-                      {po.transaction_type === 1 ? "Trade" : "Non-Trade"}
-                    </TableCell>
-                    <TableCell className="text-xs font-semibold text-foreground">{supplierName}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{po.date}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground italic">
-                      {/* GINAGAMIT NA ANG FIELD NA 'remark' MULA SA API */}
-                      {po.remark || "--"}
-                    </TableCell>
-                    <TableCell className="text-right text-xs font-bold font-mono text-foreground">
-                      {Number(po.total_amount ?? po.total ?? po.net_amount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant="outline" className={`${getInventoryStatusColor(invStatusText)} px-2.5 py-1 text-[10px] font-black border rounded-md shadow-none uppercase`}>
-                        {invStatusText}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant="outline" className={`${getPaymentStatusColor(payStatusText)} px-2.5 py-1 text-[10px] font-black border rounded-md shadow-none uppercase`}>
-                        {payStatusText}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            ) : (
-              <TableRow>
-                <TableCell colSpan={8} className="h-32 text-center text-muted-foreground text-sm italic">
-                  No purchase orders found matching your filters.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      {/* PAGINATION SECTION */}
-      <div className="flex flex-col md:flex-row items-center justify-between px-2 gap-6 pb-4">
-        <div className="flex items-center gap-6">
-          <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-            Showing <span className="text-foreground">{filteredData.length > 0 ? (currentPage - 1) * pageSize + 1 : 0}</span> to <span className="text-foreground">{Math.min(currentPage * pageSize, filteredData.length)}</span> of {filteredData.length} entries
-          </p>
-          
-          <div className="flex items-center gap-2 border-l border-border pl-6">
-            <span className="text-[11px] font-bold text-muted-foreground uppercase">Per Page:</span>
-            <Select value={pageSize.toString()} onValueChange={(v) => { setPageSize(parseInt(v)); setCurrentPage(1); }}>
-              <SelectTrigger className="w-[75px] h-8 text-[11px] font-bold bg-card border-border shadow-none">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {[10, 20, 50, 100].map(size => <SelectItem key={size} value={size.toString()}>{size}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button 
-            variant="outline" 
-            size="icon" 
-            className="h-8 w-8 border-border shadow-none"
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage(p => p - 1)}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          
-          <div className="flex items-center justify-center min-w-[110px] h-8 text-[10px] font-black bg-foreground text-background rounded-md px-4 uppercase tracking-tighter shadow-sm">
-            Page {currentPage} of {totalPages}
-          </div>
-
-          <Button 
-            variant="outline" 
-            size="icon" 
-            className="h-8 w-8 border-border shadow-none"
-            disabled={currentPage === totalPages || filteredData.length === 0}
-            onClick={() => setCurrentPage(p => p + 1)}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+      <DataTable 
+        columns={columns} 
+        data={filteredData} 
+        isLoading={isLoading} 
+        searchKey="purchase_order_no"
+        emptyTitle="No purchase orders found matching your filters."
+      />
 
       {/* MODAL POP-UP FOR ROW DETAILS */}
       <Dialog open={!!selectedPO} onOpenChange={(open) => !open && setSelectedPO(null)}>

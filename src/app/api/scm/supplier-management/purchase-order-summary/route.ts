@@ -1,38 +1,19 @@
 import { NextResponse } from 'next/server';
+import { getDirectusBase, directusFetch as fetchJson } from "@/modules/supply-chain-management/supplier-management/purchase-order-summary/providers/fetchProviders";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET() {
-  // Kunin ang base URL at Token mula sa .env
-  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
-  const staticToken = process.env.DIRECTUS_STATIC_TOKEN;
-
-  // Error handling kung sakaling hindi nabasa ang .env
-  if (!baseUrl) {
-    return NextResponse.json({ error: "API Base URL is not defined" }, { status: 500 });
-  }
-
   try {
-    // Pag-construct ng URL gamit ang env variable
-    const apiUrl = `${baseUrl}/items/purchase_order?limit=-1`;
+    const base = getDirectusBase();
+    const apiUrl = `${base}/items/purchase_order?limit=-1`;
 
-    const res = await fetch(apiUrl, {
-      method: 'GET',
-      headers: {
-        // Idagdag ang Static Token para sa authorization (kung kailangan ng Directus mo)
-        'Authorization': `Bearer ${staticToken}`,
-        'Content-Type': 'application/json',
-      },
-      cache: 'no-store'
-    });
-
-    if (!res.ok) {
-      throw new Error(`Failed to fetch: ${res.statusText}`);
-    }
-
-    const data = await res.json();
+    const data = await fetchJson(apiUrl);
     return NextResponse.json(data);
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Route Error:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return NextResponse.json({ error: error?.message || "Internal Server Error" }, { status: 500 });
   }
 }

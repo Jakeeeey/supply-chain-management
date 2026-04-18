@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDirectusBase, directusHeaders } from "@/modules/supply-chain-management/supplier-management/utils/directus";
+import { getDirectusBase, directusHeaders } from "@/modules/supply-chain-management/supplier-management/purchase-order-creation/providers/fetchProviders";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

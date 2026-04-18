@@ -1,28 +1,23 @@
-// src/app/api/scm/supplier-management/tagging-of-po/route.ts
+// src/app/api/scm/supplier-management/purchase-order-tagging/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { getDirectusBase, directusFetch } from "@/lib/directus";
+import { getDirectusBase, directusFetch as fetchJson } from "@/modules/supply-chain-management/supplier-management/purchase-order-tagging/providers/fetchProviders";
 
 import type {
     TaggablePOListItem,
     TaggingPODetail,
     TaggingPOItem,
     TaggingActivity,
-} from "@/modules/supply-chain-management/supplier-management/tagging-of-po/types";
+} from "@/modules/supply-chain-management/supplier-management/purchase-order-tagging/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const DEBUG = false; // ✅ Back to false for production
 function dlog(...args: any[]) {
-    if (DEBUG) console.log("[tagging-of-po]", ...args);
+    if (DEBUG) console.log("[purchase-order-tagging]", ...args);
 }
 
-async function fetchJson(url: string, init?: RequestInit) {
-    return directusFetch(url, {
-        ...init,
-        cache: "no-store", // ✅ Ensure fresh data for tagging counts
-    });
-}
+
 
 // =====================
 // CONSTS / COLLECTIONS

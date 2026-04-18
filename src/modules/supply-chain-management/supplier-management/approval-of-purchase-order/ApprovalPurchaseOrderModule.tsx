@@ -3,7 +3,7 @@
 import * as React from "react";
 
 import type { PendingApprovalPO, PurchaseOrderDetail, PaymentTerm } from "./types";
-import * as provider from "./providers/approvalPurchaseOrderProvider";
+import * as provider from "./providers/fetchProviders";
 
 import PendingApprovalList from "./components/PendingApprovalList";
 import PurchaseOrderReviewPanel from "./components/PurchaseOrderReviewPanel";

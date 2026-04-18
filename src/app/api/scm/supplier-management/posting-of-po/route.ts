@@ -1,6 +1,6 @@
 // src/app/api/scm/supplier-management/posting-of-po/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { getDirectusBase, directusFetch as fetchJson } from "@/lib/directus";
+import { getDirectusBase, directusFetch as fetchJson } from "@/modules/supply-chain-management/supplier-management/purchase-order-posting/providers/fetchProviders";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

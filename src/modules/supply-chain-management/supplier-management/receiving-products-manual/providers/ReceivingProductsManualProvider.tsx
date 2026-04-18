@@ -139,7 +139,7 @@ function genReceiptNo() {
     return `REC-${String(Math.floor(Math.random() * 9000) + 1000)}`;
 }
 
-const API_URL = "/api/scm/supplier-management/receiving-products-manual";
+const API_URL = "/api/scm/supplier-management/purchase-order-receiving-manual";
 
 const playBeep = (type: "success" | "error" = "success") => {
     try {
