@@ -28,6 +28,27 @@ export function useStockTransferReceive() {
     }
   }, [receivedItemsState]);
 
+  // Garbage-collect orphaned localStorage entries for canceled/rejected orders
+  useEffect(() => {
+    if (!base.baseOrderGroups || base.baseOrderGroups.length === 0) return;
+
+    const validOrderNumbers = new Set(base.baseOrderGroups.map(g => g.orderNo));
+
+    setReceivedItemsState(prevState => {
+      let hasPurged = false;
+      const cleanState = { ...prevState };
+
+      Object.keys(cleanState).forEach(cachedOrderNo => {
+        if (!validOrderNumbers.has(cachedOrderNo)) {
+          delete cleanState[cachedOrderNo];
+          hasPurged = true;
+        }
+      });
+
+      return hasPurged ? cleanState : prevState;
+    });
+  }, [base.baseOrderGroups]);
+
   const orderGroups = useMemo(() => {
     return base.baseOrderGroups.map(group => {
       const enrichedItems = group.items.map((st: OrderGroupItem) => {

@@ -62,7 +62,7 @@ export function useStockTransferBase({ statuses, autoFetch = true }: UseStockTra
     return baseOrderGroups.find((g) => g.orderNo === selectedOrderNo) || null;
   }, [selectedOrderNo, baseOrderGroups]);
 
-  return {
+  return useMemo(() => ({
     stockTransfers,
     setStockTransfers,
     branches,
@@ -79,5 +79,8 @@ export function useStockTransferBase({ statuses, autoFetch = true }: UseStockTra
     refresh: fetchTransfers,
     getBranchName,
     baseOrderGroups,
-  };
+  }), [
+    stockTransfers, branches, loading, processing, fetchError,
+    selectedOrderNo, selectedGroup, fetchTransfers, getBranchName, baseOrderGroups
+  ]);
 }

@@ -63,15 +63,19 @@ export function useStockTransferDispatchManual() {
       setFetchingAvailable(true);
       try {
         const newAvailable: Record<number, number> = { ...scannedInventory };
-        let hasChanges = false;
         const sourceBranch = selectedGroup.sourceBranch!;
         const sourceBranchName = base.getBranchName(sourceBranch);
 
-        for (const item of selectedGroup.items) {
+        // Fetch all uncached product inventories in parallel
+        const itemsToFetch = selectedGroup.items.filter(item => {
           const product = item.product_id as unknown as Record<string, unknown>;
           const pid = (product?.product_id as number) || (product?.id as number) || item.product_id;
-          
-          if (!pid || scannedInventory[pid as number] !== undefined) continue;
+          return pid && scannedInventory[pid as number] === undefined;
+        });
+
+        const results = await Promise.allSettled(itemsToFetch.map(async (item) => {
+          const product = item.product_id as unknown as Record<string, unknown>;
+          const pid = (product?.product_id as number) || (product?.id as number) || item.product_id;
 
           const params = new URLSearchParams({
             branchName: sourceBranchName,
@@ -91,12 +95,15 @@ export function useStockTransferDispatchManual() {
             );
             const availableCount = inventoryList.reduce((acc: number, inv: Record<string, unknown>) => acc + Number(inv.runningInventory || 0), 0);
             const unitCount = Number(product?.unit_of_measurement_count || 1) || 1;
-            const finalAvailable = Math.max(0, Math.floor(availableCount / unitCount));
+            return { pid: pid as number, available: Math.max(0, Math.floor(availableCount / unitCount)) };
+          }
+          return { pid: pid as number, available: 0 };
+        }));
 
-            newAvailable[pid as number] = finalAvailable;
-            hasChanges = true;
-          } else {
-            newAvailable[pid as number] = 0;
+        let hasChanges = false;
+        for (const result of results) {
+          if (result.status === 'fulfilled') {
+            newAvailable[result.value.pid] = result.value.available;
             hasChanges = true;
           }
         }

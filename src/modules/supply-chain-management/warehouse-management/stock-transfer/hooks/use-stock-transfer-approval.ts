@@ -52,42 +52,46 @@ export function useStockTransferApproval() {
         const newAvailable: Record<number, number> = {};
         const newAllocated: Record<number, number> = {};
 
-        for (const item of base.selectedGroup!.items) {
+        // Fetch all product inventories in parallel (eliminates serial N+1 waterfall)
+        const group = base.selectedGroup!;
+        await Promise.all(group.items.map(async (item) => {
           const product = item.product_id as ProductRow;
           const pid = product?.product_id;
 
-          // Call the inventory-proxy through the Next.js API
           const params = new URLSearchParams({
             branchName: sourceBranchName,
-            branchId: String(base.selectedGroup!.sourceBranch),
+            branchId: String(group.sourceBranch),
             productId: String(pid),
             current: '0'
           });
 
           const proxyUrl = `/api/scm/warehouse-management/stock-transfer/inventory-proxy?${params.toString()}`;
           
-          const res = await fetch(proxyUrl);
-          if (res.ok) {
-            const data = await res.json();
-            const list = Array.isArray(data) ? data : (data.data || []);
-            const inventoryList = list.filter((inv: { productId: string | number; branchId: string | number; runningInventory: number }) => 
-               String(inv.productId) === String(pid) && 
-               String(inv.branchId) === String(base.selectedGroup!.sourceBranch)
-            );
-            
-            const availableCount = inventoryList.reduce((acc: number, inv: { runningInventory: number }) => acc + Number(inv.runningInventory || 0), 0);
-            const unitCount = Number(product?.unit_of_measurement_count || 1) || 1;
-            let finalAvailable = Math.floor(availableCount / unitCount);
-            
-            finalAvailable = Math.max(0, finalAvailable);
+          try {
+            const res = await fetch(proxyUrl);
+            if (res.ok) {
+              const data = await res.json();
+              const list = Array.isArray(data) ? data : (data.data || []);
+              const inventoryList = list.filter((inv: { productId: string | number; branchId: string | number; runningInventory: number }) => 
+                 String(inv.productId) === String(pid) && 
+                 String(inv.branchId) === String(group.sourceBranch)
+              );
+              
+              const availableCount = inventoryList.reduce((acc: number, inv: { runningInventory: number }) => acc + Number(inv.runningInventory || 0), 0);
+              const unitCount = Number(product?.unit_of_measurement_count || 1) || 1;
+              const finalAvailable = Math.max(0, Math.floor(availableCount / unitCount));
 
-            newAvailable[item.id] = finalAvailable;
-            newAllocated[item.id] = Math.min(item.ordered_quantity || 0, finalAvailable);
-          } else {
+              newAvailable[item.id] = finalAvailable;
+              newAllocated[item.id] = Math.min(item.ordered_quantity || 0, finalAvailable);
+            } else {
+              newAvailable[item.id] = 0;
+              newAllocated[item.id] = 0;
+            }
+          } catch {
             newAvailable[item.id] = 0;
             newAllocated[item.id] = 0;
           }
-        }
+        }));
 
         setAvailableQtys(newAvailable);
         setAllocatedQtys(newAllocated);
