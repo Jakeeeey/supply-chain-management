@@ -62,10 +62,14 @@ export default function ThemeSettingsProvider({ children }: { children: React.Re
         applyDensityClass(settings.density);
         applyRadius(settings.radiusRem);
         applyAccent(settings.accent, isDark);
-
-        // Persist
-        saveSettingsToStorage(settings);
     }, [mounted, settings, isDark]);
+
+    React.useEffect(() => {
+        if (!mounted) return;
+
+        // Persist (debounced from actual application)
+        saveSettingsToStorage(settings);
+    }, [mounted, settings]);
 
     const updateSettings = React.useCallback(
         (patch: Partial<ThemeSettings>) => {
