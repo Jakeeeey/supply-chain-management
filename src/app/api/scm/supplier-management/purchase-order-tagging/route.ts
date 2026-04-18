@@ -1,23 +1,28 @@
-// src/app/api/scm/supplier-management/purchase-order-tagging/route.ts
+// src/app/api/scm/supplier-management/tagging-of-po/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { getDirectusBase, directusFetch as fetchJson } from "@/modules/supply-chain-management/supplier-management/purchase-order-tagging/providers/fetchProviders";
+import { getDirectusBase, directusFetch } from "@/modules/supply-chain-management/supplier-management/utils/directus";
 
 import type {
     TaggablePOListItem,
     TaggingPODetail,
     TaggingPOItem,
     TaggingActivity,
-} from "@/modules/supply-chain-management/supplier-management/purchase-order-tagging/types";
+} from "@/modules/supply-chain-management/supplier-management/tagging-of-po/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const DEBUG = false; // ✅ Back to false for production
 function dlog(...args: any[]) {
-    if (DEBUG) console.log("[purchase-order-tagging]", ...args);
+    if (DEBUG) console.log("[tagging-of-po]", ...args);
 }
 
-
+async function fetchJson(url: string, init?: RequestInit) {
+    return directusFetch(url, {
+        ...init,
+        cache: "no-store", // ✅ Ensure fresh data for tagging counts
+    });
+}
 
 // =====================
 // CONSTS / COLLECTIONS
@@ -36,13 +41,13 @@ const RFID_LEN = 24;
 // =====================
 // HELPERS
 // =====================
-function ok(data: any, status = 200) {
+function ok(data: unknown, status = 200) {
     return NextResponse.json({ data }, { status });
 }
-function bad(error: string, status = 400, extra?: any) {
+function bad(error: string, status = 400, extra?: unknown) {
     return NextResponse.json(DEBUG ? { error, debug: extra } : { error }, { status });
 }
-function toStr(v: any, fb = "") {
+function toStr(v: unknown, fb = "") {
     const s = String(v ?? "").trim();
     return s ? s : fb;
 }
@@ -109,16 +114,19 @@ function normalizeRfidServer(raw: string): { rfid: string; hadMultiple: boolean 
     return { rfid: sliced, hadMultiple: cleaned.length > RFID_LEN };
 }
 
-function productName(p: any) {
-    return toStr(p?.product_name) || toStr(p?.name) || "Unknown";
+function productName(p: unknown) {
+    const product = p as Record<string, unknown> | null;
+    return toStr(product?.product_name) || toStr(product?.name) || "Unknown";
 }
-function productPrimaryScan(p: any) {
-    return toStr(p?.barcode) || toStr(p?.product_code) || "";
+function productPrimaryScan(p: unknown) {
+    const product = p as Record<string, unknown> | null;
+    return toStr(product?.barcode) || toStr(product?.product_code) || "";
 }
-function productCodes(p: any) {
-    const a = toStr(p?.barcode);
-    const b = toStr(p?.product_code);
-    const c = toStr(p?.sku);
+function productCodes(p: unknown) {
+    const product = p as Record<string, unknown> | null;
+    const a = toStr(product?.barcode);
+    const b = toStr(product?.product_code);
+    const c = toStr(product?.sku);
     return [a, b, c].filter(Boolean);
 }
 
@@ -130,7 +138,7 @@ function keyProdBranch(productId: number, branchId: number) {
 // MAP FETCHERS
 // =====================
 async function fetchSuppliersMapByIds(base: string, supplierIds: number[]) {
-    const map = new Map<number, any>();
+    const map = new Map<number, { id: number; supplier_name: string }>();
     const uniq = Array.from(new Set((supplierIds || []).filter(Boolean)));
     if (!uniq.length) return map;
 
@@ -139,7 +147,7 @@ async function fetchSuppliersMapByIds(base: string, supplierIds: number[]) {
         `&filter[id][_in]=${encodeURIComponent(uniq.join(","))}` +
         `&fields=id,supplier_name`;
 
-    const j = await fetchJson(url);
+    const j = await fetchJson<{ data: Record<string, unknown>[] }>(url);
     for (const s of j?.data ?? []) {
         const id = Number(s?.id);
         if (!Number.isFinite(id) || id <= 0) continue;
@@ -149,7 +157,7 @@ async function fetchSuppliersMapByIds(base: string, supplierIds: number[]) {
 }
 
 async function fetchProductsMapByIds(base: string, productIds: number[]) {
-    const map = new Map<number, any>();
+    const map = new Map<number, { product_id: number; product_name: string; barcode: string; product_code: string }>();
     const uniq = Array.from(new Set((productIds || []).filter(Boolean)));
     if (!uniq.length) return map;
 
@@ -158,7 +166,7 @@ async function fetchProductsMapByIds(base: string, productIds: number[]) {
         `&filter[product_id][_in]=${encodeURIComponent(uniq.join(","))}` +
         `&fields=product_id,product_name,barcode,product_code`;
 
-    const j = await fetchJson(url);
+    const j = await fetchJson<{ data: Record<string, unknown>[] }>(url);
     for (const p of j?.data ?? []) {
         const id = Number(p?.product_id ?? p?.id);
         if (!Number.isFinite(id) || id <= 0) continue;
@@ -187,7 +195,7 @@ async function fetchApprovedPOs(base: string) {
     ].join("&");
 
     const url = `${base}/items/${PO_COLLECTION}?${qs}`;
-    const j = await fetchJson(url);
+    const j = await fetchJson<{ data: Record<string, unknown>[] }>(url);
     return Array.isArray(j?.data) ? j.data : [];
 }
 
@@ -209,7 +217,7 @@ async function fetchPOProductsByPOIds(base: string, poIds: number[]) {
             `${base}/items/${PO_PRODUCTS_COLLECTION}?limit=-1` +
             `&filter[purchase_order_id][_in]=${encodeURIComponent(ids.join(","))}` +
             `&fields=purchase_order_product_id,purchase_order_id,product_id,ordered_quantity,received,branch_id,unit_price`;
-        const j = await fetchJson(url);
+        const j = await fetchJson<{ data: PoProductRow[] }>(url);
         rows.push(...((j?.data ?? []) as PoProductRow[]));
     }
     return rows;
@@ -221,7 +229,7 @@ async function fetchPOProductsByPOId(base: string, poId: number) {
         `&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}` +
         `&fields=purchase_order_product_id,purchase_order_id,product_id,ordered_quantity,received,branch_id,unit_price`;
 
-    const j = await fetchJson(url);
+    const j = await fetchJson<{ data: PoProductRow[] }>(url);
     return (j?.data ?? []) as PoProductRow[];
 }
 
@@ -243,7 +251,7 @@ async function fetchAllPORowsByPOIds(base: string, poIds: number[]) {
             `${base}/items/${PO_RECEIVING_COLLECTION}?limit=-1` +
             `&filter[purchase_order_id][_in]=${encodeURIComponent(ids.join(","))}` +
             `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,isPosted,receipt_no,received_quantity`;
-        const j = await fetchJson(url);
+        const j = await fetchJson<{ data: PORow[] }>(url);
         rows.push(...((j?.data ?? []) as PORow[]));
     }
     return rows;
@@ -279,7 +287,7 @@ async function fetchReceivingItemsByLinkIds(base: string, linkIds: number[]) {
             `&sort=-created_at` +
             `&filter[purchase_order_product_id][_in]=${encodeURIComponent(ids.join(","))}` +
             `&fields=receiving_item_id,purchase_order_product_id,product_id,rfid_code,created_at`;
-        const j = await fetchJson(url);
+        const j = await fetchJson<{ data: ReceivingItemRow[] }>(url);
         out.push(...((j?.data ?? []) as ReceivingItemRow[]));
     }
     return out;
@@ -292,50 +300,9 @@ async function fetchExistingRfidRow(base: string, rfid: string): Promise<Receivi
         `&filter[rfid_code][_eq]=${encodeURIComponent(rfid)}` +
         `&fields=receiving_item_id,purchase_order_product_id,product_id,rfid_code,created_at`;
 
-    const j = await fetchJson(url);
+    const j = await fetchJson<{ data: ReceivingItemRow[] }>(url);
     const row = Array.isArray(j?.data) ? j.data[0] : null;
     return row ?? null;
-}
-
-async function resolveOwnerOfReceivingItem(base: string, purchaseOrderProductId: number) {
-    const id = toNum(purchaseOrderProductId);
-    if (!id) return null;
-
-    // 1) Try POR
-    try {
-        const porUrl =
-            `${base}/items/${PO_RECEIVING_COLLECTION}/${encodeURIComponent(String(id))}` +
-            `?fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,receipt_no,isPosted`;
-        const j = await fetchJson(porUrl);
-        const por = j?.data ?? null;
-
-        const poId = toNum(por?.purchase_order_id);
-        const productId = toNum(por?.product_id);
-        const branchId = toNum(por?.branch_id);
-
-        if (poId && productId && branchId) {
-            return { kind: "POR" as const, poId, productId, branchId };
-        }
-    } catch {}
-
-    // 2) Try POP (legacy)
-    try {
-        const popUrl =
-            `${base}/items/${PO_PRODUCTS_COLLECTION}/${encodeURIComponent(String(id))}` +
-            `?fields=purchase_order_product_id,purchase_order_id,product_id,branch_id`;
-        const j2 = await fetchJson(popUrl);
-        const pop = j2?.data ?? null;
-
-        const poId = toNum(pop?.purchase_order_id);
-        const productId = toNum(pop?.product_id);
-        const branchId = toNum(pop?.branch_id);
-
-        if (poId && productId && branchId) {
-            return { kind: "POP" as const, poId, productId, branchId };
-        }
-    } catch {}
-
-    return null;
 }
 
 // =====================
@@ -359,7 +326,7 @@ async function ensureOpenReceivingRow(args: {
         `&filter[isPosted][_eq]=0` +
         `&fields=purchase_order_product_id,received_quantity,receipt_no`;
 
-    const found = await fetchJson(findUrl);
+    const found = await fetchJson<{ data: Record<string, unknown>[] }>(findUrl);
     const row = Array.isArray(found?.data) ? found.data[0] : null;
     if (row?.purchase_order_product_id) {
         return {
@@ -370,7 +337,7 @@ async function ensureOpenReceivingRow(args: {
     }
 
     const insertUrl = `${base}/items/${PO_RECEIVING_COLLECTION}`;
-    const payload: any = {
+    const payload: Record<string, unknown> = {
         purchase_order_id: poId,
         product_id: productId,
         branch_id: branchId,
@@ -393,7 +360,7 @@ async function ensureOpenReceivingRow(args: {
 
     dlog("Creating purchase_order_receiving row:", payload);
 
-    const created = await fetchJson(insertUrl, {
+    const created = await fetchJson<{ data: Record<string, unknown> }>(insertUrl, {
         method: "POST",
         body: JSON.stringify(payload),
     });
@@ -416,7 +383,7 @@ async function buildDetail(base: string, poId: number): Promise<TaggingPODetail>
         `${base}/items/${PO_COLLECTION}/${encodeURIComponent(String(poId))}` +
         `?fields=purchase_order_id,purchase_order_no,supplier_name`;
 
-    const headerJ = await fetchJson(headerUrl);
+    const headerJ = await fetchJson<{ data: Record<string, unknown> }>(headerUrl);
     const header = headerJ?.data ?? null;
 
     const poNumber = toStr(header?.purchase_order_no, String(poId));
@@ -523,7 +490,22 @@ async function buildDetail(base: string, poId: number): Promise<TaggingPODetail>
         };
     });
 
-    const activity: TaggingActivity[] = receivingItems.map((r) => {
+    const activity: TaggingActivity[] = activityFromReceivingItems(receivingItems, productsMap);
+
+    return {
+        id: String(poId),
+        poNumber,
+        supplierName,
+        items,
+        activity: activity.slice(0, 50),
+    };
+}
+
+function activityFromReceivingItems(
+    receivingItems: ReceivingItemRow[],
+    productsMap: Map<number, { product_name: string; barcode: string; product_code: string }>
+): TaggingActivity[] {
+    return receivingItems.map((r) => {
         const pid = toNum(r.product_id);
         const p = pid ? productsMap.get(pid) : null;
 
@@ -603,8 +585,8 @@ export async function GET() {
     try {
         const base = getDirectusBase();
 
-        const rows = await fetchApprovedPOs(base);
-        const poIds = rows.map((r: any) => toNum(r?.purchase_order_id)).filter(Boolean);
+        const rows = await fetchApprovedPOs(base) as Record<string, unknown>[];
+        const poIds = rows.map((r) => toNum(r?.purchase_order_id)).filter(Boolean);
 
         const poProducts = await fetchPOProductsByPOIds(base, poIds);
 
@@ -649,10 +631,10 @@ export async function GET() {
             taggedByPo.set(poId, (taggedByPo.get(poId) ?? 0) + 1);
         }
 
-        const supplierIds = rows.map((r: any) => toNum(r?.supplier_name)).filter(Boolean);
+        const supplierIds = rows.map((r) => toNum(r?.supplier_name)).filter(Boolean);
         const suppliersMap = await fetchSuppliersMapByIds(base, supplierIds);
 
-        const list: TaggablePOListItem[] = rows.map((r: any) => {
+        const list: TaggablePOListItem[] = rows.map((r) => {
             const poId = toNum(r?.purchase_order_id);
             const totalItems = expectedByPo.get(poId) ?? 0;
             const taggedItems = taggedByPo.get(poId) ?? 0;
@@ -672,8 +654,9 @@ export async function GET() {
         });
 
         return ok(list);
-    } catch (e: any) {
-        return bad(String(e?.message ?? e ?? "Failed to load list"), 500);
+    } catch (e: unknown) {
+        const error = e as Error;
+        return bad(String(error?.message ?? error ?? "Failed to load list"), 500);
     }
 }
 

@@ -1,6 +1,6 @@
 // src/app/api/scm/supplier-management/posting-of-po/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { getDirectusBase, directusFetch as fetchJson } from "@/modules/supply-chain-management/supplier-management/purchase-order-posting/providers/fetchProviders";
+import { getDirectusBase, directusFetch as fetchJson } from "@/modules/supply-chain-management/supplier-management/utils/directus";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,18 +8,19 @@ export const dynamic = "force-dynamic";
 // =====================
 // HELPERS
 // =====================
-function ok(data: any, status = 200) {
+function ok(data: unknown, status = 200) {
     return NextResponse.json({ data }, { status });
 }
 function bad(error: string, status = 400) {
     return NextResponse.json({ error }, { status });
 }
-function toStr(v: any, fb = "") {
+function toStr(v: unknown, fb = "") {
     const s = String(v ?? "").trim();
     return s ? s : fb;
 }
-function toNum(v: any) {
-    const n = Number(String(v ?? "").replace(/,/g, ""));
+function toNum(v: unknown) {
+    const s = String(v ?? "").replace(/,/g, "");
+    const n = Number(s);
     return Number.isFinite(n) ? n : 0;
 }
 function nowISO() {
@@ -46,15 +47,42 @@ const BRANCHES_COLLECTION = "branches";
 const POR_COLLECTION = "purchase_order_receiving";
 const POR_ITEMS_COLLECTION = "purchase_order_receiving_items";
 
-// ── Status flow ────────────────────────────────────────────────────────────
-// inventory_status values in the DB:
-//   12 = partially tagged/received, nothing posted yet  → PARTIAL
-//   13 = some posted but NOT fully received yet         → PARTIAL_POSTED
-//      OR fully received but not all receipts posted    → RECEIVED
-//      (distinguished at runtime by isFullyReceived())
-//   14 = fully received AND all receipts posted         → CLOSED
-// ──────────────────────────────────────────────────────────────────────────
-type POStatus = "OPEN" | "PARTIAL" | "PARTIAL_POSTED" | "RECEIVED" | "CLOSED";
+type POStatus = "OPEN" | "PARTIAL" | "RECEIVED" | "CLOSED";
+interface Supplier { id: number; supplier_name: string; }
+interface Branch { id: number; branch_name: string; branch_description: string; }
+interface Product { product_id: number; product_name: string; barcode: string; product_code: string; }
+interface POHeader {
+    purchase_order_id: number;
+    purchase_order_no: string;
+    date: string;
+    date_encoded: string;
+    supplier_name: number | string;
+    total_amount: number | string;
+    date_received: string;
+    inventory_status: string;
+    gross_amount: number | string;
+    discounted_amount: number | string;
+    vat_amount: number | string;
+    withholding_tax_amount?: number | string;
+}
+interface PORRow {
+    purchase_order_product_id: number;
+    purchase_order_id: number;
+    product_id: number;
+    branch_id: number;
+    received_quantity: number | string;
+    receipt_no: string;
+    receipt_date: string;
+    received_date: string;
+    isPosted: number | string;
+}
+interface ReceivingItem {
+    receiving_item_id: number;
+    purchase_order_product_id: number;
+    product_id: number;
+    rfid_code: string;
+    created_at: string;
+}
 
 const POR_SAFE_FIELDS =
     "purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted";
@@ -67,13 +95,13 @@ async function fetchSupplierNames(base: string, supplierIds: number[]) {
     const uniq = Array.from(new Set((supplierIds || []).filter((n) => n > 0)));
     if (!uniq.length) return map;
 
-    const rows: any[] = [];
+    const rows: Supplier[] = [];
     for (const ids of chunk(uniq, 250)) {
         const url =
             `${base}/items/${SUPPLIERS_COLLECTION}?limit=-1` +
             `&filter[id][_in]=${encodeURIComponent(ids.join(","))}` +
             `&fields=id,supplier_name`;
-        const j = await fetchJson(url);
+        const j = await fetchJson(url) as { data: Supplier[] };
         rows.push(...(Array.isArray(j?.data) ? j.data : []));
     }
 
@@ -90,13 +118,13 @@ async function fetchBranchesMap(base: string, branchIds: number[]) {
     const uniq = Array.from(new Set((branchIds || []).filter((n) => n > 0)));
     if (!uniq.length) return map;
 
-    const rows: any[] = [];
+    const rows: Branch[] = [];
     for (const ids of chunk(uniq, 250)) {
         const url =
             `${base}/items/${BRANCHES_COLLECTION}?limit=-1` +
             `&filter[id][_in]=${encodeURIComponent(ids.join(","))}` +
             `&fields=id,branch_name,branch_description`;
-        const j = await fetchJson(url);
+        const j = await fetchJson(url) as { data: Branch[] };
         rows.push(...(Array.isArray(j?.data) ? j.data : []));
     }
 
@@ -109,17 +137,17 @@ async function fetchBranchesMap(base: string, branchIds: number[]) {
 }
 
 async function fetchProductsMap(base: string, productIds: number[]) {
-    const map = new Map<number, any>();
+    const map = new Map<number, Product>();
     const uniq = Array.from(new Set((productIds || []).filter((n) => n > 0)));
     if (!uniq.length) return map;
 
-    const rows: any[] = [];
+    const rows: (Product & { id?: number })[] = [];
     for (const ids of chunk(uniq, 250)) {
         const url =
             `${base}/items/${PRODUCTS_COLLECTION}?limit=-1` +
             `&filter[product_id][_in]=${encodeURIComponent(ids.join(","))}` +
             `&fields=product_id,product_name,barcode,product_code`;
-        const j = await fetchJson(url);
+        const j = await fetchJson(url) as { data: (Product & { id?: number })[] };
         rows.push(...(Array.isArray(j?.data) ? j.data : []));
     }
 
@@ -149,13 +177,13 @@ type PoProductRow = {
 
 async function fetchPOProductsByPOIds(base: string, poIds: number[]) {
     if (!poIds.length) return [] as PoProductRow[];
-    const rows: any[] = [];
+    const rows: PoProductRow[] = [];
     for (const ids of chunk(Array.from(new Set(poIds)), 250)) {
         const url =
             `${base}/items/${PO_PRODUCTS_COLLECTION}?limit=-1` +
             `&filter[purchase_order_id][_in]=${encodeURIComponent(ids.join(","))}` +
             `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,ordered_quantity,unit_price,total_amount`;
-        const j = await fetchJson(url);
+        const j = await fetchJson(url) as { data: PoProductRow[] };
         rows.push(...(Array.isArray(j?.data) ? j.data : []));
     }
     return rows as PoProductRow[];
@@ -166,19 +194,19 @@ async function fetchPOProductsByPOId(base: string, poId: number) {
         `${base}/items/${PO_PRODUCTS_COLLECTION}?limit=-1` +
         `&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}` +
         `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,ordered_quantity,unit_price,total_amount`;
-    const j = await fetchJson(url);
+    const j = await fetchJson(url) as { data: PoProductRow[] };
     return (Array.isArray(j?.data) ? j.data : []) as PoProductRow[];
 }
 
 async function fetchPOHeadersByIds(base: string, poIds: number[]) {
     if (!poIds.length) return [];
-    const rows: any[] = [];
+    const rows: POHeader[] = [];
     for (const ids of chunk(Array.from(new Set(poIds)), 250)) {
         const url =
             `${base}/items/${PO_COLLECTION}?limit=-1` +
             `&filter[purchase_order_id][_in]=${encodeURIComponent(ids.join(","))}` +
             `&fields=purchase_order_id,purchase_order_no,date,date_encoded,supplier_name,total_amount,date_received,inventory_status,gross_amount,discounted_amount,vat_amount,withholding_tax_amount`;
-        const j = await fetchJson(url);
+        const j = await fetchJson(url) as { data: POHeader[] };
         rows.push(...(Array.isArray(j?.data) ? j.data : []));
     }
     return rows;
@@ -186,13 +214,13 @@ async function fetchPOHeadersByIds(base: string, poIds: number[]) {
 
 async function fetchPORByPOIds(base: string, poIds: number[]) {
     if (!poIds.length) return [];
-    const rows: any[] = [];
+    const rows: PORRow[] = [];
     for (const ids of chunk(Array.from(new Set(poIds)), 250)) {
         const url =
             `${base}/items/${POR_COLLECTION}?limit=-1` +
             `&filter[purchase_order_id][_in]=${encodeURIComponent(ids.join(","))}` +
             `&fields=${encodeURIComponent(POR_SAFE_FIELDS)}`;
-        const j = await fetchJson(url);
+        const j = await fetchJson(url) as { data: PORRow[] };
         rows.push(...(Array.isArray(j?.data) ? j.data : []));
     }
     return rows;
@@ -207,16 +235,16 @@ async function fetchReceivingItems(base: string, filterPorIds?: number[]) {
         qs.push(`filter[purchase_order_product_id][_in]=${encodeURIComponent(filterPorIds.join(","))}`);
     }
     const url = `${base}/items/${POR_ITEMS_COLLECTION}?${qs.join("&")}`;
-    const j = await fetchJson(url);
+    const j = await fetchJson(url) as { data: ReceivingItem[] };
     return Array.isArray(j?.data) ? j.data : [];
 }
 
-async function patchPO(base: string, poId: number, payload: any) {
+async function patchPO(base: string, poId: number, payload: unknown) {
     const url = `${base}/items/${PO_COLLECTION}/${encodeURIComponent(String(poId))}`;
     await fetchJson(url, { method: "PATCH", body: JSON.stringify(payload) }).catch(() => {});
 }
 
-async function patchPOR(base: string, porId: number, payload: any) {
+async function patchPOR(base: string, porId: number, payload: unknown) {
     const url = `${base}/items/${POR_COLLECTION}/${encodeURIComponent(String(porId))}`;
     await fetchJson(url, { method: "PATCH", body: JSON.stringify(payload) });
 }
@@ -226,9 +254,9 @@ async function fetchProductSupplierLinks(base: string, supplierId: number) {
         `${base}/items/product_per_supplier?limit=-1` +
         `&filter[supplier_id][_eq]=${encodeURIComponent(String(supplierId))}` +
         `&fields=id,product_id,supplier_id,discount_type`;
-    const j = await fetchJson(url);
+    const j = await fetchJson(url) as { data: { product_id: number; discount_type: number | string }[] };
     const rows = Array.isArray(j?.data) ? j.data : [];
-    const map = new Map<number, any>();
+    const map = new Map<number, { product_id: number; discount_type: number | string }>();
     for (const r of rows) {
         const pid = toNum(r?.product_id);
         if (pid) map.set(pid, r);
@@ -239,11 +267,11 @@ async function fetchProductSupplierLinks(base: string, supplierId: number) {
 // =====================
 // BUILDERS / LOGIC
 // =====================
-function productDisplayCode(p: any, productId: number) {
+function productDisplayCode(p: Product | null, productId: number) {
     return toStr(p?.barcode) || toStr(p?.product_code) || String(productId);
 }
 
-function groupRfidsByPorId(rows: any[]) {
+function groupRfidsByPorId(rows: ReceivingItem[]) {
     const map = new Map<number, string[]>();
     for (const r of rows) {
         const porId = toNum(r?.purchase_order_product_id);
@@ -256,18 +284,19 @@ function groupRfidsByPorId(rows: any[]) {
     return map;
 }
 
-function hasReceiptEvidence(por: any) {
+function hasReceiptEvidence(por: PORRow) {
     return Boolean(toStr(por?.receipt_no) || toStr(por?.receipt_date) || toStr(por?.received_date));
 }
 
-function effectiveReceivedQty(por: any) {
+function effectiveReceivedQty(por: PORRow) {
+    // IMPORTANT: treat numeric/string consistently
     const posted = toNum(por?.isPosted) === 1;
     if (posted) return Math.max(0, toNum(por?.received_quantity ?? 0));
     if (!hasReceiptEvidence(por)) return 0;
     return Math.max(0, toNum(por?.received_quantity ?? 0));
 }
 
-function buildPorIdsByKey(porRows: any[]) {
+function buildPorIdsByKey(porRows: PORRow[]) {
     const map = new Map<string, number[]>();
     for (const r of porRows) {
         const poId = toNum(r?.purchase_order_id);
@@ -286,7 +315,7 @@ function buildPorIdsByKey(porRows: any[]) {
 function isPartiallyReceivedOrTagged(
     poId: number,
     lines: PoProductRow[],
-    porRows: any[],
+    porRows: PORRow[],
     rfidsByPorId: Map<number, string[]>
 ) {
     if (!lines.length) return false;
@@ -320,7 +349,7 @@ function isPartiallyReceivedOrTagged(
 function isFullyReceived(
     poId: number,
     lines: PoProductRow[],
-    porRows: any[],
+    porRows: PORRow[],
     rfidsByPorId: Map<number, string[]>
 ) {
     if (!lines.length) return false;
@@ -357,8 +386,8 @@ type PostingReceipt = {
     isPosted: 0 | 1;
 };
 
-function buildReceiptSummary(porRows: any[]) {
-    const groups = new Map<string, any[]>();
+function buildReceiptSummary(porRows: PORRow[]) {
+    const groups = new Map<string, PORRow[]>();
 
     for (const r of porRows ?? []) {
         const rn = toStr(r?.receipt_no);
@@ -411,25 +440,11 @@ function buildReceiptSummary(porRows: any[]) {
     return { receipts, receiptsCount, unpostedReceiptsCount };
 }
 
-/**
- * Derives the POStatus from the current state of POR rows.
- *
- * Logic:
- *   CLOSED        → fully received AND all existing receipts posted
- *   RECEIVED      → fully received, receipts exist but some unposted
- *   PARTIAL_POSTED → NOT fully received, but some POR rows are posted (partial post happened)
- *   PARTIAL       → NOT fully received, some receiving activity, nothing posted yet
- *   OPEN          → no receiving activity at all
- */
-function receivingStatusFrom(
-    porRows: any[],
-    opts?: { isClosed?: boolean; fullyReceived?: boolean; hasAnyPosted?: boolean }
-): POStatus {
-    if (opts?.isClosed) return "CLOSED";
-    if (opts?.fullyReceived) return "RECEIVED";
-
-    // Partial post: not fully received, but at least one POR row has been posted
-    if (opts?.hasAnyPosted) return "PARTIAL_POSTED";
+function receivingStatusFrom(porRows: PORRow[], opts?: { isClosed?: boolean; fullyReceived?: boolean }) {
+    // CLOSED only if fully received AND all receipts/rows are posted
+    if (opts?.isClosed) return "CLOSED" as POStatus;
+    // RECEIVED: all items received, receipts exist but not yet posted
+    if (opts?.fullyReceived) return "RECEIVED" as POStatus;
 
     const anyActivity = (porRows ?? []).some((r) => {
         return effectiveReceivedQty(r) > 0 || hasReceiptEvidence(r);
@@ -438,8 +453,12 @@ function receivingStatusFrom(
     return anyActivity ? "PARTIAL" : "OPEN";
 }
 
-function latestReceiptInfo(porRows: any[]) {
-    let best = { receipt_no: "", receipt_date: "", received_date: "" };
+function latestReceiptInfo(porRows: PORRow[]) {
+    let best: { receipt_no: string; receipt_date: string; received_date: string } = {
+        receipt_no: "",
+        receipt_date: "",
+        received_date: "",
+    };
 
     for (const r of porRows ?? []) {
         const rn = toStr(r?.receipt_no);
@@ -548,22 +567,12 @@ export async function GET() {
             `&filter[_or][3][received_quantity][_gt]=0` +
             `&fields=${encodeURIComponent(POR_SAFE_FIELDS)}`;
 
-        const candJ = await fetchJson(porCandidateUrl);
+        const candJ = await fetchJson(porCandidateUrl) as { data: PORRow[] };
         const porCandidates = Array.isArray(candJ?.data) ? candJ.data : [];
 
-        // STRATEGY 2: POs by inventory_status 6 (RECEIVED) or 9 (PARTIALLY RECEIVED).
-        const statusCandidateUrl =
-            `${base}/items/${PO_COLLECTION}?limit=-1` +
-            `&filter[_or][0][inventory_status][_eq]=6` +
-            `&filter[_or][1][inventory_status][_eq]=9` +
-            `&fields=purchase_order_id`;
-        const statusCandJ = await fetchJson(statusCandidateUrl);
-        const statusCandidatePoIds: number[] = Array.isArray(statusCandJ?.data)
-            ? (statusCandJ.data as any[]).map((r) => toNum(r?.purchase_order_id)).filter(Boolean)
-            : [];
-
-        const poIdFromPor = porCandidates.map((r: any) => toNum(r?.purchase_order_id)).filter(Boolean) as number[];
-        const candidatePoIds = Array.from(new Set([...poIdFromPor, ...statusCandidatePoIds])) as number[];
+        const candidatePoIds = Array.from(
+            new Set(porCandidates.map((r) => toNum(r?.purchase_order_id)).filter(Boolean))
+        ) as number[];
         if (!candidatePoIds.length) return ok([] as PostingListItem[]);
 
         const poHeaders = await fetchPOHeadersByIds(base, candidatePoIds);
@@ -572,7 +581,7 @@ export async function GET() {
         // Fetch ALL POR rows (both posted and unposted) so we can assess partial-post state
         const porRowsAll = await fetchPORByPOIds(base, candidatePoIds);
 
-        const porByPo = new Map<number, any[]>();
+        const porByPo = new Map<number, PORRow[]>();
         const porIdsAll: number[] = [];
         for (const r of porRowsAll) {
             const poId = toNum(r?.purchase_order_id);
@@ -593,11 +602,13 @@ export async function GET() {
             linesByPo.set(poId, arr);
         }
 
-        const receivingItems = porIdsAll.length ? await fetchReceivingItems(base, porIdsAll) : [];
+        // RFID tags
+        const receivingItems = (porIdsAll.length ? await fetchReceivingItems(base, porIdsAll) : []) as ReceivingItem[];
         const rfidsByPorId = groupRfidsByPorId(receivingItems);
 
-        const supplierIds = poHeaders.map((p: any) => toNum(p?.supplier_name)).filter(Boolean);
-        const supplierMap = await fetchSupplierNames(base, supplierIds);
+        // Supplier names
+        const supplierIds = poHeaders.map((p) => toNum(p?.supplier_name)).filter(Boolean);
+        const supplierNamesMap = await fetchSupplierNames(base, supplierIds);
 
         const list: PostingListItem[] = [];
 
@@ -637,7 +648,8 @@ export async function GET() {
             const hasAnyPosted = porRows.some((r: any) => toNum(r?.isPosted) === 1);
 
             const sid = toNum(po?.supplier_name);
-            const supplierName = sid ? toStr(supplierMap.get(sid), "—") : "—";
+            const supplierName = sid ? toStr(supplierNamesMap.get(sid), "—") : "—";
+
             const poNumber = toStr(po?.purchase_order_no, String(poId));
 
             const products = new Set<number>();
@@ -679,8 +691,9 @@ export async function GET() {
 
         list.sort((a, b) => (a.poNumber < b.poNumber ? 1 : -1));
         return ok(list);
-    } catch (e: any) {
-        return bad(String(e?.message ?? e ?? "Failed to load posting list"), 500);
+    } catch (e: unknown) {
+        const err = e as Error;
+        return bad(String(err?.message ?? e ?? "Failed to load posting list"), 500);
     }
 }
 
@@ -701,14 +714,14 @@ export async function POST(req: NextRequest) {
                 `${base}/items/${PO_COLLECTION}/${encodeURIComponent(String(poId))}` +
                 `?fields=purchase_order_id,purchase_order_no,date,date_encoded,supplier_name,total_amount,date_received,inventory_status,gross_amount,discounted_amount,vat_amount,withholding_tax_amount`;
 
-            const pj = await fetchJson(poUrl);
+            const pj = await fetchJson(poUrl) as { data: Record<string, unknown> };
             const po = pj?.data ?? null;
             if (!po) return bad("PO not found.", 404);
 
             const lines = await fetchPOProductsByPOId(base, poId);
             const porRows = await fetchPORByPOIds(base, [poId]);
 
-            const porIds = porRows.map((r: any) => toNum(r?.purchase_order_product_id)).filter(Boolean);
+            const porIds = porRows.map((r: PORRow) => toNum(r?.purchase_order_product_id)).filter(Boolean);
             const receivingItems = porIds.length ? await fetchReceivingItems(base, porIds) : [];
             const rfidsByPorId = groupRfidsByPorId(receivingItems);
 
@@ -843,12 +856,12 @@ export async function POST(req: NextRequest) {
                 `&filter[purchase_order_no][_eq]=${encodeURIComponent(barcode)}` +
                 `&fields=purchase_order_id`;
 
-            const j = await fetchJson(url);
+            const j = await fetchJson(url) as { data: Record<string, unknown>[] };
             const row = Array.isArray(j?.data) ? j.data[0] : null;
             const poId = toNum(row?.purchase_order_id);
             if (!poId) return bad("PO not found.", 404);
 
-            const poReq = { ...req, json: async () => ({ action: "open_po", poId }) } as any;
+            const poReq = { ...req, json: async () => ({ action: "open_po", poId }) } as unknown as NextRequest;
             return POST(poReq);
         }
 
@@ -866,21 +879,20 @@ export async function POST(req: NextRequest) {
             const lines = await fetchPOProductsByPOId(base, poId);
             const porRows = await fetchPORByPOIds(base, [poId]);
 
-            const porIds = porRows.map((r: any) => toNum(r?.purchase_order_product_id)).filter(Boolean);
+            const porIds = porRows.map((r: PORRow) => toNum(r?.purchase_order_product_id)).filter(Boolean);
             const receivingItems = porIds.length ? await fetchReceivingItems(base, porIds) : [];
             const rfidsByPorId = groupRfidsByPorId(receivingItems);
 
-            const taggingOk = isPartiallyReceivedOrTagged(poId, lines, porRows, rfidsByPorId);
-            const hasAnyPosted = porRows.some((r: any) => toNum(r?.isPosted) === 1);
-            if (!taggingOk && !hasAnyPosted) {
-                return bad("Cannot post. Complete RFID or manual receiving first.", 409);
-            }
+            const taggingOk = isPartiallyTagged(poId, lines, porRows, rfidsByPorId);
+            if (!taggingOk) return bad("Cannot post. Complete RFID tagging first.", 409);
 
-            const target = porRows.filter((r: any) => toStr(r?.receipt_no) === receiptNo);
+
+
+            const target = porRows.filter((r: PORRow) => toStr(r?.receipt_no) === receiptNo);
             if (!target.length) return bad("Receipt not found for this PO.", 404);
 
             const toPost = target
-                .map((r: any) => ({
+                .map((r: PORRow) => ({
                     porId: toNum(r?.purchase_order_product_id),
                     posted: toNum(r?.isPosted) === 1,
                     canPost: hasReceiptEvidence(r) || effectiveReceivedQty(r) > 0,
@@ -940,7 +952,7 @@ export async function POST(req: NextRequest) {
             const lines = await fetchPOProductsByPOId(base, poId);
             const porRows = await fetchPORByPOIds(base, [poId]);
 
-            const porIds = porRows.map((r: any) => toNum(r?.purchase_order_product_id)).filter(Boolean);
+            const porIds = porRows.map((r: PORRow) => toNum(r?.purchase_order_product_id)).filter(Boolean);
             const receivingItems = porIds.length ? await fetchReceivingItems(base, porIds) : [];
             const rfidsByPorId = groupRfidsByPorId(receivingItems);
 
@@ -954,11 +966,10 @@ export async function POST(req: NextRequest) {
                 return bad("Cannot post. Please receive items in Receiving Products first.", 409);
             }
 
-            const fully = isFullyReceived(poId, lines, porRows, rfidsByPorId);
 
             // Post ALL currently unposted POR rows
             const toPost = porRows
-                .map((r: any) => ({
+                .map((r: PORRow) => ({
                     porId: toNum(r?.purchase_order_product_id),
                     posted: toNum(r?.isPosted) === 1,
                 }))
@@ -1000,7 +1011,8 @@ export async function POST(req: NextRequest) {
         }
 
         return bad("Unknown action.", 400);
-    } catch (e: any) {
-        return bad(String(e?.message ?? e ?? "Failed request"), 500);
+    } catch (e: unknown) {
+        const err = e as Error;
+        return bad(String(err?.message ?? e ?? "Failed request"), 500);
     }
 }
