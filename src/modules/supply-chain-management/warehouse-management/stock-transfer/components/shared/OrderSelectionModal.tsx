@@ -11,14 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Search, ClipboardList, CheckCircle2, ArrowRight, X, ChevronLeft, ChevronRight } from 'lucide-react';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Search, ClipboardList, ArrowRight, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { OrderGroup } from '../../types/stock-transfer.types';
 import {
   Dialog as ShadcnDialog,
@@ -56,7 +49,7 @@ export function OrderSelectionModal({
   );
   
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage] = useState(10);
   
   // Reset page when search changes
   React.useEffect(() => {

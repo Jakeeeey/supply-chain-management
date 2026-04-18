@@ -13,12 +13,12 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const DEBUG = false; // ✅ Back to false for production
-function dlog(...args: any[]) {
+function dlog(...args: unknown[]) {
     if (DEBUG) console.log("[tagging-of-po]", ...args);
 }
 
-async function fetchJson(url: string, init?: RequestInit) {
-    return directusFetch(url, {
+async function fetchJson<T = unknown>(url: string, init?: RequestInit): Promise<T> {
+    return directusFetch<T>(url, {
         ...init,
         cache: "no-store", // ✅ Ensure fresh data for tagging counts
     });
@@ -51,7 +51,7 @@ function toStr(v: unknown, fb = "") {
     const s = String(v ?? "").trim();
     return s ? s : fb;
 }
-function toNum(v: any) {
+function toNum(v: unknown) {
     if (v && typeof v === "object" && "id" in v) return toNum(v.id);
     const n = Number(String(v ?? "").replace(/,/g, ""));
     return Number.isFinite(n) ? n : 0;
@@ -80,18 +80,7 @@ function timeDisplay(iso: string) {
     });
 }
 
-function isDuplicateRfidMessage(msg: string) {
-    const m = (msg || "").toLowerCase();
-    return (
-        m.includes("cannot be duplicate") ||
-        (m.includes("rfid") && (m.includes("already") || m.includes("exists"))) ||
-        m.includes("already exists") ||
-        m.includes("has to be unique") ||
-        m.includes("unique") ||
-        m.includes("duplicate") ||
-        m.includes("conflict")
-    );
-}
+
 
 function chunk<T>(arr: T[], size: number) {
     const out: T[][] = [];
@@ -122,13 +111,7 @@ function productPrimaryScan(p: unknown) {
     const product = p as Record<string, unknown> | null;
     return toStr(product?.barcode) || toStr(product?.product_code) || "";
 }
-function productCodes(p: unknown) {
-    const product = p as Record<string, unknown> | null;
-    const a = toStr(product?.barcode);
-    const b = toStr(product?.product_code);
-    const c = toStr(product?.sku);
-    return [a, b, c].filter(Boolean);
-}
+
 
 function keyProdBranch(productId: number, branchId: number) {
     return `${productId}::${branchId}`;
@@ -264,7 +247,7 @@ async function fetchAllPORowsByPOId(base: string, poId: number) {
         `&filter[purchase_order_id][_in]=${encodeURIComponent(String(poId))}` +
         `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,isPosted,receipt_no,received_quantity`;
 
-    const j = await fetchJson(url);
+    const j = await fetchJson<{ data: PORow[] }>(url);
     if (DEBUG) dlog(`fetchAllPORowsByPOId for PO ${poId} returned ${j?.data?.length ?? 0} rows.`);
     return (j?.data ?? []) as PORow[];
 }
@@ -520,15 +503,6 @@ function activityFromReceivingItems(
             time: timeDisplay(toStr(r.created_at, nowISO())),
         };
     });
-
-    return {
-        id: String(poId),
-        poNumber,
-        supplierName,
-        items,
-        activity: activity.slice(0, 50),
-        _rawTaggedByKey: taggedByKey, // Expose raw counts for SKU resolution
-    } as any;
 }
 
 // =====================
@@ -538,7 +512,7 @@ function resolvePoProductLine(args: {
     sku: string;
     strict: boolean;
     poProducts: PoProductRow[];
-    productsMap: Map<number, any>;
+    productsMap: Map<number, Record<string, unknown>>;
     taggedByKey: Map<string, number>; // ✅ Pass existing counts to prefer incomplete rows
 }) {
     const scanned = toStr(args.sku).trim().toLowerCase();
@@ -699,13 +673,13 @@ export async function POST(req: NextRequest) {
             const productsMap = await fetchProductsMapByIds(base, productIds);
 
             // Resolve matching line (now considers existing counts to find incomplete lines)
-            const detailWithRawTags = (await buildDetail(base, poId)) as any;
+            const detailWithRawTags = (await buildDetail(base, poId)) as Record<string, unknown>;
             const line = resolvePoProductLine({
                 sku,
                 strict,
                 poProducts,
                 productsMap,
-                taggedByKey: detailWithRawTags._rawTaggedByKey, 
+                taggedByKey: detailWithRawTags._rawTaggedByKey as Map<string, number>, 
             });
 
             if (strict && !line) {
@@ -822,7 +796,7 @@ export async function POST(req: NextRequest) {
         }
 
         return bad(`Unknown action: ${action}`, 400);
-    } catch (e: any) {
-        return bad(String(e?.message ?? e ?? "Request failed"), 400);
+    } catch (e: unknown) {
+        return bad(String((e as Error)?.message ?? e ?? "Request failed"), 400);
     }
 }

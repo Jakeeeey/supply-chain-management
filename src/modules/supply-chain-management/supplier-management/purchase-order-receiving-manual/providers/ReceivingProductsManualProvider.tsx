@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable react-hooks/exhaustive-deps */
 "use client";
 
 import * as React from "react";
@@ -141,35 +139,7 @@ function genReceiptNo() {
 
 const API_URL = "/api/scm/supplier-management/purchase-order-receiving-manual";
 
-const playBeep = (type: "success" | "error" = "success") => {
-    try {
-        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-        if (!AudioContext) return;
-        const ctx = new AudioContext();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        if (type === "success") {
-            osc.type = "sine";
-            osc.frequency.setValueAtTime(800, ctx.currentTime);
-            osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.1);
-            gain.gain.setValueAtTime(0.1, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
-            osc.start(ctx.currentTime);
-            osc.stop(ctx.currentTime + 0.1);
-        } else {
-            osc.type = "square";
-            osc.frequency.setValueAtTime(300, ctx.currentTime);
-            gain.gain.setValueAtTime(0.1, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-            osc.start(ctx.currentTime);
-            osc.stop(ctx.currentTime + 0.3);
-        }
-    } catch {
-        // Ignored if audio is blocked or unsupported
-    }
-};
+
 
 export function ReceivingProductsManualProvider({ children }: { children: React.ReactNode }) {
     const [list, setList] = React.useState<ReceivingListItem[]>([]);
@@ -202,9 +172,9 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
         try {
             const r = await fetch(API_URL, { cache: "no-store" });
             const j = await asJson(r);
-            setList(Array.isArray(j?.data) ? j.data : []);
-        } catch (e: any) {
-            const msg = String(e?.message ?? e);
+            setList(Array.isArray((j as { data: ReceivingListItem[] })?.data) ? (j as { data: ReceivingListItem[] }).data : []);
+        } catch (e: unknown) {
+            const msg = (e as Error)?.message ?? String(e);
             if (msg.trim().toLowerCase() !== "fetch failed") {
                 setListError(msg);
             }
@@ -233,6 +203,7 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
             // ✅ avoid stale PO if server blocks or errors
             setSelectedPO(null);
 
+
             const id = String(poId ?? "").trim();
             if (!id) return;
 
@@ -252,8 +223,8 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
                 setReceiptType("");
 
                 setPoBarcode(detail?.poNumber ?? "");
-            } catch (e: any) {
-                const msg = String(e?.message ?? e);
+            } catch (e: unknown) {
+                const msg = (e as Error)?.message ?? String(e);
                 if (msg.trim().toLowerCase() !== "fetch failed") {
                     setVerifyError(msg);
                 }
@@ -294,8 +265,8 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
                 setReceiptType("");
 
                 setPoBarcode(code);
-            } catch (e: any) {
-                const msg = String(e?.message ?? e);
+            } catch (e: unknown) {
+                const msg = (e as Error)?.message ?? String(e);
                 if (msg.trim().toLowerCase() !== "fetch failed") {
                     setVerifyError(msg);
                 }
@@ -308,8 +279,8 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
         async (poId: string) => {
             try {
                 await openPOById(poId);
-            } catch (e: any) {
-                setListError(String(e?.message ?? e));
+            } catch (e: unknown) {
+                setListError((e as Error)?.message ?? String(e));
             }
         },
         [openPOById]
@@ -336,8 +307,8 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
 
                 setPoBarcode(first);
                 await openPOByBarcode(first);
-            } catch (e: any) {
-                setVerifyError(String(e?.message ?? e));
+            } catch (e: unknown) {
+                setVerifyError((e as Error)?.message ?? String(e));
             }
         },
         [list, openPOByBarcode, openPOById]
@@ -346,8 +317,8 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
     const verifyPO = React.useCallback(async () => {
         try {
             await openPOByBarcode(poBarcode);
-        } catch (e: any) {
-            setVerifyError(String(e?.message ?? e));
+        } catch (e: unknown) {
+            setVerifyError((e as Error)?.message ?? String(e));
         }
     }, [openPOByBarcode, poBarcode]);
 
@@ -392,23 +363,28 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
 
             // ✅ gather items for printing (All items in PO, with their current statuses)
             const allocs = Array.isArray(detail?.allocations) ? detail.allocations : [];
-            const allItems = allocs.flatMap((a: any) => Array.isArray(a?.items) ? a.items : []);
+            const allItems = allocs.flatMap((a: unknown) => {
+                const aObj = a as Record<string, unknown>;
+                return Array.isArray(aObj?.items) ? aObj.items : [];
+            });
             
             // Calculate if fully received across all items
             const countsMap = counts || {};
-            const isFullyReceivedNow = allItems.every((it: any) => {
-                const scannedNow = Number(countsMap[it.id] || 0);
-                return (Number(it.receivedQty) + scannedNow) >= Number(it.expectedQty);
+            const isFullyReceivedNow = allItems.every((it: unknown) => {
+                const itObj = it as ReceivingPOItem;
+                const scannedNow = Number(countsMap[itObj.id] || 0);
+                return (Number(itObj.receivedQty) + scannedNow) >= Number(itObj.expectedQty);
             });
-
-            const savedItems: SavedItem[] = allItems.map((it: any) => {
-                const scannedNow = Number(countsMap[it.id] || 0);
+            
+            const savedItems: SavedItem[] = allItems.map((it: unknown) => {
+                const itObj = it as ReceivingPOItem;
+                const scannedNow = Number(countsMap[itObj.id] || 0);
                 return {
-                    productId: it.productId,
-                    name: it.name,
-                    barcode: it.barcode,
-                    expectedQty: Number(it.expectedQty),
-                    receivedQtyAtStart: Number(it.receivedQty) - scannedNow, // already matched in detail
+                    productId: String(itObj.productId),
+                    name: String(itObj.name),
+                    barcode: String(itObj.barcode),
+                    expectedQty: Number(itObj.expectedQty),
+                    receivedQtyAtStart: Number(itObj.receivedQty) - scannedNow,
                     receivedQtyNow: scannedNow,
                     rfids: []
                 };
@@ -433,8 +409,8 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
             setReceiptDate(todayYMD());
             setReceiptNo(genReceiptNo());
             setReceiptType("");
-        } catch (e: any) {
-            setSaveError(String(e?.message ?? e));
+        } catch (e: unknown) {
+            setSaveError((e as Error)?.message ?? String(e));
         } finally {
             setSavingReceipt(false);
         }

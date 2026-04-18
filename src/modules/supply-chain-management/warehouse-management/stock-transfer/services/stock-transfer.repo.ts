@@ -1,11 +1,10 @@
-import { fetchItems, fetchItem, createItems, updateItem, request, API_BASE_URL } from "./api";
+import { fetchItems, createItems, updateItem } from "./api";
 import type { 
   BranchRow, 
   StockTransferRow, 
   StockTransferRfidRow, 
   ProductRow,
-  StockTransferInsertPayload,
-  EnrichedProduct
+  StockTransferInsertPayload
 } from "../types/stock-transfer.types";
 
 const SPRING_API_BASE_URL = process.env.SPRING_API_BASE_URL;
@@ -107,7 +106,7 @@ export async function fetchProducts(search?: string): Promise<ProductRow[]> {
 /**
  * Fetches real-time inventory from the Spring Boot API.
  */
-export async function fetchBranchInventory(branchId: number, token?: string): Promise<any[]> {
+export async function fetchBranchInventory(branchId: number, token?: string): Promise<Record<string, unknown>[]> {
   if (!SPRING_API_BASE_URL) return [];
 
   const url = `${SPRING_API_BASE_URL}/api/view-rfid-onhand?branch_id=${branchId}`;
@@ -169,11 +168,14 @@ export async function insertRfidTracking(entries: { stock_transfer_id: number; r
 /**
  * Fallback for RFID lookup using Directus receiving records when Spring Boot is unavailable.
  */
-export async function fallbackRfidLookup(rfid: string): Promise<any | null> {
-  const res = await fetchItems<any>("items/purchase_order_receiving_items", {
+export async function fallbackRfidLookup(rfid: string): Promise<ProductRow | null> {
+  interface ReceivingItem {
+    product_id: ProductRow;
+  }
+  const res = await fetchItems<ReceivingItem>("items/purchase_order_receiving_items", {
     "filter[rfid_tag][_eq]": rfid,
     fields: "product_id.*",
     limit: 1,
   });
-  return res.data?.[0]?.product_id || null;
+  return (res.data?.[0]?.product_id as ProductRow) || null;
 }

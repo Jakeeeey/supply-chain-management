@@ -2,9 +2,10 @@
 
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PackageOpen, Printer, ScanLine, Loader2, CheckCircle2, Radar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { PackageOpen, Printer, ScanLine, Loader2, CheckCircle2, Radar } from 'lucide-react';
 import { useStockTransferReceive } from '../hooks/use-stock-transfer-receive';
 import { cn } from '@/lib/utils';
+import type { OrderGroupItem, ProductRow } from '../types/stock-transfer.types';
 
 // Shared components
 import { OrderSelectionModal } from '../components/shared/OrderSelectionModal';
@@ -15,17 +16,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  TableFooter,
 } from '@/components/ui/table';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 
 export default function StockTransferReceiveView() {
   const {
@@ -33,30 +25,26 @@ export default function StockTransferReceiveView() {
     selectedGroup,
     selectedOrderNo,
     setSelectedOrderNo,
-    loading,
     processing,
     receiveOrder,
     handleScanRFID,
     getBranchName,
-    verifyAll,
   } = useStockTransferReceive();
 
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage] = useState(10);
 
   // Reset page when group changes
   React.useEffect(() => {
     setCurrentPage(1);
   }, [selectedOrderNo]);
 
-  const totalItems = selectedGroup?.items.length || 0;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
   const paginatedItems = selectedGroup?.items.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   ) || [];
 
-  const [rfidInput, setRfidInput] = useState('');
+  const [, setRfidInput] = useState('');
   const [isScanning, setIsScanning] = useState(false);
   const rfidBuffer = React.useRef('');
 
@@ -88,7 +76,7 @@ export default function StockTransferReceiveView() {
     return () => window.removeEventListener('keydown', handleGlobalKey);
   }, [selectedOrderNo, isScanning, handleScanRFID]);
 
-  const isAllReceived = selectedGroup?.items.every(i => i.receivedQty >= i.ordered_quantity);
+  const isAllReceived = selectedGroup?.items.every((i: OrderGroupItem) => (i.receivedQty || 0) >= i.ordered_quantity);
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -179,9 +167,9 @@ export default function StockTransferReceiveView() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {paginatedItems.map((item) => {
-                      const complete = item.receivedQty >= item.ordered_quantity;
-                      const product = typeof item.product_id === 'object' && item.product_id !== null ? item.product_id : null;
+                    {paginatedItems.map((item: OrderGroupItem) => {
+                      const complete = (item.receivedQty || 0) >= item.ordered_quantity;
+                      const product = typeof item.product_id === 'object' && item.product_id !== null ? (item.product_id as ProductRow) : null;
                       const productName = product?.product_name || `PRD-${item.product_id}`;
 
                       return (
@@ -189,7 +177,7 @@ export default function StockTransferReceiveView() {
                           <TableCell className="py-3">
                             <div className="flex flex-col">
                               <span className="font-semibold text-sm">{productName}</span>
-                              <span className="text-[10px] text-muted-foreground font-mono">ID: {String((product?.product_id || product?.id) || 'N/A')}</span>
+                              <span className="text-[10px] text-muted-foreground font-mono">ID: {String(product?.product_id || 'N/A')}</span>
                             </div>
                           </TableCell>
                           <TableCell className="text-sm text-center font-bold">{item.ordered_quantity}</TableCell>

@@ -45,6 +45,7 @@ export function BranchCombobox({
 
   return (
     <Combobox
+      disabled={disabled}
       value={selectedBranch}
       onValueChange={(val: BranchRow | null) => {
         const newId = val ? val.id.toString() : '';

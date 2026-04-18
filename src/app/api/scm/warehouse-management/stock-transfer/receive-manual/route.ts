@@ -17,8 +17,8 @@ export async function PATCH(request: NextRequest) {
       success, 
       count: ids.length 
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[Manual Receive API Error]:", error);
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ error: (error as Error).message }, { status: 400 });
   }
 }

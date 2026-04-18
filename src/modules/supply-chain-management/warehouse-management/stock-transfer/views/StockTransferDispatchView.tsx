@@ -2,9 +2,10 @@
 
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Truck, Printer, ScanLine, Loader2, CheckCircle2, Radar, ChevronLeft, ChevronRight, ServerCrash, RefreshCcw } from 'lucide-react';
+import { Truck, Printer, ScanLine, Loader2, CheckCircle2, Radar } from 'lucide-react';
 import { useStockTransferDispatch } from '../hooks/use-stock-transfer-dispatch';
 import { cn } from '@/lib/utils';
+import type { OrderGroupItem, ProductRow, UnitOfMeasurement } from '../types/stock-transfer.types';
 
 // Shared components
 import { OrderSelectionModal } from '../components/shared/OrderSelectionModal';
@@ -15,17 +16,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  TableFooter,
 } from '@/components/ui/table';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 
 export default function StockTransferDispatchView() {
   const {
@@ -40,20 +32,17 @@ export default function StockTransferDispatchView() {
     handleScanRFID,
     getBranchName,
     markAsPicked,
-    refresh,
     fetchingAvailable,
   } = useStockTransferDispatch();
 
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage] = useState(10);
 
   // Reset page when group changes
   React.useEffect(() => {
     setCurrentPage(1);
   }, [selectedOrderNo]);
 
-  const totalItems = selectedGroup?.items.length || 0;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
   const paginatedItems = selectedGroup?.items.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
@@ -91,9 +80,9 @@ export default function StockTransferDispatchView() {
     return () => window.removeEventListener('keydown', handleGlobalKey);
   }, [selectedOrderNo, isScanning, handleScanRFID]);
 
-  const isAllScanned = selectedGroup?.items.every((i: any) => {
+  const isAllScanned = selectedGroup?.items.every((i: OrderGroupItem) => {
     const targetQty = Math.max(0, i.allocated_quantity ?? i.ordered_quantity ?? 0);
-    return i.scannedQty >= targetQty;
+    return (i.scannedQty || 0) >= targetQty;
   });
 
   return (
@@ -209,10 +198,10 @@ export default function StockTransferDispatchView() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {paginatedItems.map((item: any) => {
+                    {paginatedItems.map((item: OrderGroupItem) => {
                       const targetQty = Math.max(0, item.allocated_quantity ?? item.ordered_quantity ?? 0);
-                      const complete = item.scannedQty >= targetQty;
-                      const product = typeof item.product_id === 'object' && item.product_id !== null ? item.product_id : null;
+                      const complete = (item.scannedQty || 0) >= targetQty;
+                      const product = typeof item.product_id === 'object' && item.product_id !== null ? (item.product_id as ProductRow) : null;
                       const productName = product?.product_name || `PRD-${item.product_id}`;
 
                       return (
@@ -220,13 +209,17 @@ export default function StockTransferDispatchView() {
                           <TableCell className="py-3">
                             <div className="flex flex-col">
                               <span className="font-semibold text-sm">{productName}</span>
-                              <span className="text-[10px] text-muted-foreground font-mono uppercase tracking-tight">ID: {String((product?.product_id || product?.id) || 'N/A')}</span>
+                              <span className="text-[10px] text-muted-foreground font-mono uppercase tracking-tight">ID: {String((product?.product_id) || 'N/A')}</span>
                               {item.isLoosePack && (
                                 <span className="text-[9px] bg-sky-500/10 text-sky-600 px-1.5 py-0.5 rounded w-fit mt-1 font-bold">BYPASS SCAN</span>
                               )}
                             </div>
                           </TableCell>
-                          <TableCell className="text-[10px] font-medium uppercase text-muted-foreground">{product?.unit_of_measurement?.unit_name || 'unit'}</TableCell>
+                          <TableCell className="text-[10px] font-medium uppercase text-muted-foreground">
+                            {typeof product?.unit_of_measurement === 'object' && product.unit_of_measurement !== null 
+                              ? (product.unit_of_measurement as UnitOfMeasurement).unit_name 
+                              : 'unit'}
+                          </TableCell>
                           <TableCell className="text-sm text-center font-bold text-foreground">{targetQty}</TableCell>
                           <TableCell className="text-xs text-center font-medium font-mono text-muted-foreground italic">
                             {fetchingAvailable ? (

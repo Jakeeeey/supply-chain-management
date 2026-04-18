@@ -85,8 +85,8 @@ async function getData() {
         const popData = await popRes.json();
 
         const allSuppliers = sups.data || [];
-        const porRows: any[] = porData.data || [];
-        const popRows: any[] = popData.data || [];
+        const porRows: Record<string, unknown>[] = porData.data || [];
+        const popRows: Record<string, unknown>[] = popData.data || [];
 
         // Build maps: PO → total ordered qty, PO → total received qty, PO → has receipts
         const orderedByPo = new Map<number, number>();
@@ -106,7 +106,7 @@ async function getData() {
         }
 
         // Derive accurate inventory_status for each PO
-        const poList = (pos.data || []).map((po: any) => {
+        const poList = (pos.data || []).map((po: Record<string, unknown>) => {
             const poId = Number(po.purchase_order_id);
             const dbStatus = Number(po.inventory_status || 0);
             const hasReceipt = hasReceiptByPo.get(poId) || false;

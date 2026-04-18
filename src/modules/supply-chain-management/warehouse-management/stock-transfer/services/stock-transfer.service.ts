@@ -2,7 +2,6 @@ import * as repo from "./stock-transfer.repo";
 import * as helpers from "./stock-transfer.helpers";
 import type { 
   StockTransferRow, 
-  BranchRow, 
   EnrichedProduct,
   CreateTransferPayload,
   UpdateTransferPayload,
@@ -56,7 +55,7 @@ export async function getEnrichedProducts(
 
   // Build inventory map for faster lookup: productId -> total rfid count
   const invMap: Record<number, number> = {};
-  inventory.forEach((i: any) => {
+  inventory.forEach((i: { productId?: number; product_id?: number; runningInventory?: number; running_inventory?: number }) => {
     const pId = Number(i.productId || i.product_id);
     const qty = Number(i.runningInventory || i.running_inventory || 0);
     if (!isNaN(pId)) invMap[pId] = (invMap[pId] || 0) + qty;
@@ -77,7 +76,7 @@ export async function getEnrichedProducts(
 /**
  * Handles the creation of a new stock transfer request.
  */
-export async function createTransfer(payload: CreateTransferPayload, userId: number): Promise<{ success: boolean; orderNo: string }> {
+export async function createTransfer(payload: CreateTransferPayload): Promise<{ success: boolean; orderNo: string }> {
   // 1. Validate payload
   const validated = CreateStockTransferSchema.parse(payload);
   

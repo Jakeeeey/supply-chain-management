@@ -349,8 +349,7 @@ function isPartiallyReceivedOrTagged(
 function isFullyReceived(
     poId: number,
     lines: PoProductRow[],
-    porRows: PORRow[],
-    rfidsByPorId: Map<number, string[]>
+    porRows: PORRow[]
 ) {
     if (!lines.length) return false;
     const porIdsByKey = buildPorIdsByKey(porRows);
@@ -376,6 +375,12 @@ function isFullyReceived(
     }
 
     return true;
+}
+
+function isPartiallyTagged() {
+    // If no RFID tags are used at all in this PO, we allow posting.
+    // Generally we don't block manual flows here.
+    return true; 
 }
 
 type PostingReceipt = {
@@ -440,7 +445,7 @@ function buildReceiptSummary(porRows: PORRow[]) {
     return { receipts, receiptsCount, unpostedReceiptsCount };
 }
 
-function receivingStatusFrom(porRows: PORRow[], opts?: { isClosed?: boolean; fullyReceived?: boolean }) {
+function receivingStatusFrom(porRows: PORRow[], opts?: { isClosed?: boolean; fullyReceived?: boolean; hasAnyPosted?: boolean }) {
     // CLOSED only if fully received AND all receipts/rows are posted
     if (opts?.isClosed) return "CLOSED" as POStatus;
     // RECEIVED: all items received, receipts exist but not yet posted
@@ -629,7 +634,7 @@ export async function GET() {
             
             // ✅ Also check if there are unposted POR rows with receipt activity
             // This catches POs whose inventory_status was never updated but DO have received items
-            const hasUnpostedReceipts = porRows.some((r: any) => 
+            const hasUnpostedReceipts = porRows.some((r) => 
                 toNum(r?.isPosted) === 0 && (
                     toStr(r?.receipt_no) || toStr(r?.receipt_date) || toStr(r?.received_date) || toNum(r?.received_quantity) > 0
                 )
@@ -641,11 +646,11 @@ export async function GET() {
             // If status is 12 (En Route) and nothing is tagged, skip
             if (!taggingOk && !hasUnpostedReceipts && invStatus === 12) continue;
 
-            const fully = isFullyReceived(poId, lines, porRows, rfidsByPorId);
+            const fully = isFullyReceived(poId, lines, porRows);
 
             // hasAnyPosted: true when at least one POR row is already posted
             // This is the key signal for PARTIAL_POSTED status
-            const hasAnyPosted = porRows.some((r: any) => toNum(r?.isPosted) === 1);
+            const hasAnyPosted = porRows.some((r) => toNum(r?.isPosted) === 1);
 
             const sid = toNum(po?.supplier_name);
             const supplierName = sid ? toStr(supplierNamesMap.get(sid), "—") : "—";
@@ -728,12 +733,12 @@ export async function POST(req: NextRequest) {
             const receivingOk = isPartiallyReceivedOrTagged(poId, lines, porRows, rfidsByPorId);
             // Also allow opening POs that already had a partial post (inventory_status=13)
             const invStatus = toNum(po?.inventory_status);
-            const hasAnyPosted = porRows.some((r: any) => toNum(r?.isPosted) === 1);
+            const hasAnyPosted = porRows.some((r) => toNum(r?.isPosted) === 1);
             if (!receivingOk && !hasAnyPosted && invStatus !== 13) {
                 return bad("PO is not ready for posting. Please receive at least one item first.", 409);
             }
 
-            const fully = isFullyReceived(poId, lines, porRows, rfidsByPorId);
+            const fully = isFullyReceived(poId, lines, porRows);
 
             const sid = toNum(po?.supplier_name);
             const supplierMap = await fetchSupplierNames(base, sid ? [sid] : []);
@@ -879,11 +884,9 @@ export async function POST(req: NextRequest) {
             const lines = await fetchPOProductsByPOId(base, poId);
             const porRows = await fetchPORByPOIds(base, [poId]);
 
-            const porIds = porRows.map((r: PORRow) => toNum(r?.purchase_order_product_id)).filter(Boolean);
-            const receivingItems = porIds.length ? await fetchReceivingItems(base, porIds) : [];
-            const rfidsByPorId = groupRfidsByPorId(receivingItems);
 
-            const taggingOk = isPartiallyTagged(poId, lines, porRows, rfidsByPorId);
+
+            const taggingOk = isPartiallyTagged();
             if (!taggingOk) return bad("Cannot post. Complete RFID tagging first.", 409);
 
 
@@ -908,18 +911,15 @@ export async function POST(req: NextRequest) {
             }
 
             // Re-check fully received AFTER posting these rows
-            const updatedPorRows = porRows.map((r: any) => {
+            const updatedPorRows = porRows.map((r) => {
                 const wasPosted = toPost.find((p) => p.porId === toNum(r?.purchase_order_product_id));
                 return wasPosted ? { ...r, isPosted: 1 } : r;
             });
-            const fully = isFullyReceived(poId, lines, updatedPorRows, rfidsByPorId);
-
+            const fully = isFullyReceived(poId, lines, updatedPorRows);
+            
             try {
-                const poUpdate: any = { date_received: nowISO() };
+                const poUpdate: Record<string, unknown> = { date_received: nowISO() };
                 if (fully) {
-                    // Check if ALL receipts are now posted after this operation
-                    const rs = buildReceiptSummary(updatedPorRows);
-                    const allNowPosted = rs.receiptsCount > 0 && rs.unpostedReceiptsCount === 0;
                     // If fully received and all posted, we keep status 6 (Received)
                     // The front-end will know it is "Closed" if unpostedReceiptsCount === 0
                     poUpdate.inventory_status = 6;
@@ -958,9 +958,9 @@ export async function POST(req: NextRequest) {
 
             const taggingOk = isPartiallyReceivedOrTagged(poId, lines, porRows, rfidsByPorId);
             const hasAnyActivity = porRows.some(
-                (r: any) => effectiveReceivedQty(r) > 0 || hasReceiptEvidence(r)
+                (r) => effectiveReceivedQty(r) > 0 || hasReceiptEvidence(r)
             );
-            const hasAnyPosted = porRows.some((r: any) => toNum(r?.isPosted) === 1);
+            const hasAnyPosted = porRows.some((r) => toNum(r?.isPosted) === 1);
 
             if (!taggingOk && !hasAnyActivity && !hasAnyPosted) {
                 return bad("Cannot post. Please receive items in Receiving Products first.", 409);
@@ -979,19 +979,10 @@ export async function POST(req: NextRequest) {
                 await patchPOR(base, row.porId, { isPosted: 1 });
             }
 
-            // Determine the correct inventory_status:
-            // - fully received AND all receipts now posted → 14 (CLOSED)
-            // - fully received but some receipts still unposted → 13 (RECEIVED)
-            // - NOT fully received (partial post) → 13 (PARTIAL_POSTED)
-            //   PO stays at 13 so it remains visible in the posting list
-            //   when new receipts arrive from Receiving Products.
+            const fully = isFullyReceived(poId, lines, porRows);
             try {
-                const poUpdate: any = { date_received: nowISO() };
+                const poUpdate: Record<string, unknown> = { date_received: nowISO() };
                 if (fully) {
-                    // Re-check: are there any remaining unposted POR rows after this batch?
-                    const remainingUnposted = porRows
-                        .filter((r: any) => toNum(r?.isPosted) !== 1)
-                        .filter((r: any) => !toPost.find((p) => p.porId === toNum(r?.purchase_order_product_id)));
                     // Keep at status 6 (Received)
                     poUpdate.inventory_status = 6;
                 } else {

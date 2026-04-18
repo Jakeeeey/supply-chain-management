@@ -121,7 +121,7 @@ export function generateStockTransferPDF(data: StockTransferPDFData): jsPDF {
     item.unit,
     String(item.qtyAvailable),
     String(item.unitQty),
-    String((item as any).allocated_quantity ?? item.unitQty),
+    String((item as unknown as Record<string, unknown>).allocated_quantity ?? item.unitQty),
     `PHP ${item.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
   ]);
 
@@ -171,7 +171,7 @@ export function generateStockTransferPDF(data: StockTransferPDFData): jsPDF {
 
   /* ── Signature Footer ────────────────────────────────────── */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const afterTableY = (doc as any).lastAutoTable?.finalY ?? y + 40;
+  const afterTableY = (doc as Record<string, any>).lastAutoTable?.finalY ?? y + 40;
   const sigY = afterTableY + 16;
   const sigLineW = (contentW - 16) / 3;
   const sigLabels = ['PREPARED BY', 'RECEIVED BY', 'APPROVED BY'];

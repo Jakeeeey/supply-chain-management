@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
           const payload = await onHandRes.json();
           const items = Array.isArray(payload) ? payload : (payload ? [payload] : []);
           
-          const exists = items.some((item: any) => item.rfid === rfid || item.rfid_tag === rfid);
+          const exists = items.some((item: Record<string, unknown>) => item.rfid === rfid || item.rfid_tag === rfid);
           return NextResponse.json({ exists });
         }
         // If not ok, assume it doesn't exist
@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
            const payload = await onHandRes.json();
            const items = Array.isArray(payload) ? payload : (payload.data && Array.isArray(payload.data) ? payload.data : []);
            
-           const hasRfids = items.some((item: any) => String(item.productId || item.product_id) === String(productId));
+           const hasRfids = items.some((item: Record<string, unknown>) => String(item.productId || item.product_id) === String(productId));
            return NextResponse.json({ hasRfids });
         }
         return NextResponse.json({ hasRfids: false });
@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({ error: "Invalid action or missing parameters" }, { status: 400 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return handleApiError(error);
   }
 }

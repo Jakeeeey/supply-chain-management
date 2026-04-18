@@ -55,8 +55,9 @@ export function useStockTransferReceiveManual() {
       toast.success(`Order ${orderNo} successfully received manually.`);
       base.setSelectedOrderNo(null);
       await base.refresh();
-    } catch (err: any) {
-      toast.error(err.message || 'Something went wrong while receiving.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Something went wrong while receiving.';
+      toast.error(msg);
     } finally {
       base.setProcessing(false);
     }

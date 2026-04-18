@@ -154,9 +154,10 @@ export function useStockTransferRequest(): UseStockTransferRequestReturn {
         setTransferStatus('For Approval');
       }
       toast.success('Transfer request submitted successfully!');
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Something went wrong';
       console.error('confirmTransfer error:', err);
-      toast.error('Submission failed', { description: err.message });
+      toast.error('Submission failed', { description: message });
     } finally {
       setConfirming(false);
     }

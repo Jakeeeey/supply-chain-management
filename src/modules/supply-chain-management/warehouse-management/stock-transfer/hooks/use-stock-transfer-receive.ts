@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useStockTransferBase } from './use-stock-transfer-base';
 import { stockTransferLifecycleService } from '../services/stock-transfer.lifecycle';
 import { toast } from 'sonner';
+import type { OrderGroup, OrderGroupItem, ProductRow } from '../types/stock-transfer.types';
 
 const LOCAL_STORAGE_KEY_RECEIVE = 'scm_receive_scans_v1';
 
@@ -29,16 +30,17 @@ export function useStockTransferReceive() {
 
   const orderGroups = useMemo(() => {
     return base.baseOrderGroups.map(group => {
-      const enrichedItems = group.items.map(st => {
-        const product = st.product_id as any;
-        const pid = Number(product?.product_id || product?.id || st.product_id);
-        const rfids = receivedItemsState[group.orderNo]?.[pid] || [];
+      const enrichedItems = group.items.map((st: OrderGroupItem) => {
+        const product = st.product_id as ProductRow;
+        const pid = product?.product_id || st.product_id;
+        
+        const rfids = receivedItemsState[group.orderNo]?.[pid as number] || [];
         
         return {
           ...st,
           receivedQty: rfids.length,
           receivedRfids: rfids,
-          dispatched_rfids: (st as any).dispatched_rfids || []
+          dispatched_rfids: (st as OrderGroupItem).dispatched_rfids || []
         };
       });
 
@@ -55,7 +57,7 @@ export function useStockTransferReceive() {
   }, [base.selectedOrderNo, orderGroups]);
 
   const receiveOrder = async (orderNo: string) => {
-    const group = orderGroups.find((g) => g.orderNo === orderNo);
+    const group = orderGroups.find((g: OrderGroup) => g.orderNo === orderNo);
     if (!group) return;
 
     base.setProcessing(true);
@@ -87,10 +89,11 @@ export function useStockTransferReceive() {
         return next;
       });
       await base.refresh();
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Something went wrong while receiving.';
       console.error('Receive failed:', err);
       playErrorSound();
-      toast.error(err.message || 'Something went wrong while receiving.');
+      toast.error(message);
     } finally {
       base.setProcessing(false);
     }
@@ -98,7 +101,7 @@ export function useStockTransferReceive() {
 
   const playSuccessSound = () => {
     try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
       if (audioCtx.state === 'suspended') audioCtx.resume();
       const oscillator = audioCtx.createOscillator();
       const gainNode = audioCtx.createGain();
@@ -116,7 +119,7 @@ export function useStockTransferReceive() {
 
   const playErrorSound = () => {
     try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
       if (audioCtx.state === 'suspended') audioCtx.resume();
       const oscillator = audioCtx.createOscillator();
       const gainNode = audioCtx.createGain();
@@ -143,8 +146,8 @@ export function useStockTransferReceive() {
       const productId = match.productId;
       
       const itemInOrder = selectedGroup.items.find(i => {
-        const itemProduct = i.product_id as any;
-        const itemPid = Number(itemProduct?.product_id || itemProduct?.id || i.product_id);
+        const itemProduct = i.product_id as ProductRow;
+        const itemPid = Number(itemProduct?.product_id || i.product_id);
         return itemPid === productId;
       });
 
@@ -196,10 +199,11 @@ export function useStockTransferReceive() {
       
       playSuccessSound();
       toast.success(`Received & Verified: ${match.productName}`);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'RFID lookup failed';
       console.error('Scanner lookup error:', error);
       playErrorSound();
-      toast.error("RFID lookup failed", { description: error.message });
+      toast.error("RFID lookup failed", { description: message });
     }
   };
 
@@ -209,7 +213,8 @@ export function useStockTransferReceive() {
     setReceivedItemsState(prev => {
       const orderState = { ...(prev[base.selectedOrderNo!] || {}) };
       selectedGroup.items.forEach(item => {
-        const itemPid = Number((item.product_id as any)?.product_id || (item.product_id as any)?.id || item.product_id);
+        const product = item.product_id as ProductRow;
+        const itemPid = Number(product?.product_id || item.product_id);
         orderState[itemPid] = [...(item.dispatched_rfids || [])];
       });
       return { ...prev, [base.selectedOrderNo!]: orderState };

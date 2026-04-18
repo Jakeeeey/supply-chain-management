@@ -28,15 +28,15 @@ export async function GET(req: NextRequest) {
         const unitsRes = await fetch(unitsUrl, { headers, cache: "no-store" });
         const unitsJson = await unitsRes.json().catch(() => ({}));
         const units = unitsJson.data ?? [];
-        const unitsMap = new Map<number, any>();
+        const unitsMap = new Map<number, Record<string, unknown>>();
         for (const u of units) {
             const uid = Number(u?.unit_id || u?.id);
             if (uid) unitsMap.set(uid, u);
         }
 
-        const resolveUom = (p: any) => {
+        const resolveUom = (p: Record<string, unknown>) => {
             const rawUom = p?.unit_of_measurement;
-            const uomId = Number(typeof rawUom === "object" ? rawUom?.unit_id ?? rawUom?.id : rawUom);
+            const uomId = Number(typeof rawUom === "object" && rawUom !== null ? (rawUom as Record<string, unknown>)?.unit_id ?? (rawUom as Record<string, unknown>)?.id : rawUom);
             if (uomId && unitsMap.has(uomId)) {
                 return unitsMap.get(uomId);
             }
@@ -135,7 +135,7 @@ export async function GET(req: NextRequest) {
                 );
             }
 
-            const rows = (prodJson.data ?? []).map((p: any) => ({
+            const rows = (prodJson.data ?? []).map((p: Record<string, unknown>) => ({
                 ...p,
                 unit_of_measurement: resolveUom(p),
             }));

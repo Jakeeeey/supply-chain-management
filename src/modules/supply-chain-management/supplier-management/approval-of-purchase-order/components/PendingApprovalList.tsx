@@ -149,8 +149,8 @@ export default function PendingApprovalList({
     }, [items, searchQuery]);
 
     const totalPages = React.useMemo(
-        () => Math.max(1, Math.ceil((filteredItems?.length ?? 0) / pageSize)),
-        [filteredItems?.length, pageSize]
+        () => Math.max(1, Math.ceil(filteredItems.length / pageSize)),
+        [filteredItems.length, pageSize]
     );
 
     React.useEffect(() => {

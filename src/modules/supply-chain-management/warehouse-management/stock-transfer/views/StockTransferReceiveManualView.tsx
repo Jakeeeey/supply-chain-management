@@ -2,8 +2,9 @@
 
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PackageOpen, Printer, Loader2, CheckCircle2, ChevronLeft, ChevronRight, ServerCrash, RefreshCcw, Hand } from 'lucide-react';
+import { PackageOpen, Printer, Loader2, ChevronLeft, ChevronRight, Hand } from 'lucide-react';
 import { useStockTransferReceiveManual } from '../hooks/use-stock-transfer-receive-manual';
+import { OrderGroupItem, UnitOfMeasurement } from '../types/stock-transfer.types';
 import { cn } from '@/lib/utils';
 
 // Shared components
@@ -38,7 +39,6 @@ export default function StockTransferReceiveManualView() {
     fetchError,
     receiveOrder,
     getBranchName,
-    refresh,
     receivedQtys,
     updateReceivedQty,
   } = useStockTransferReceiveManual();
@@ -58,7 +58,7 @@ export default function StockTransferReceiveManualView() {
     currentPage * itemsPerPage
   ) || [];
 
-  const isAllReceived = selectedGroup?.items.every((i: any) => {
+  const isAllReceived = selectedGroup?.items.every((i: OrderGroupItem) => {
     const targetQty = Math.max(0, i.allocated_quantity ?? i.ordered_quantity ?? 0);
     return (receivedQtys[i.id] ?? 0) >= targetQty;
   }) ?? false;
@@ -147,7 +147,7 @@ export default function StockTransferReceiveManualView() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {paginatedItems.map((item: any) => {
+                    {paginatedItems.map((item: OrderGroupItem) => {
                       const targetQty = Math.max(0, item.allocated_quantity ?? item.ordered_quantity ?? 0);
                       const currentQty = receivedQtys[item.id] ?? 0;
                       const complete = currentQty >= targetQty;
@@ -159,12 +159,14 @@ export default function StockTransferReceiveManualView() {
                           <TableCell className="py-3">
                             <div className="flex flex-col">
                               <span className="font-semibold text-sm">{productName}</span>
-                              <span className="text-[10px] text-muted-foreground font-mono uppercase tracking-tight">ID: {String((product?.product_id || product?.id) || 'N/A')}</span>
+                              <span className="text-[10px] text-muted-foreground font-mono uppercase tracking-tight">ID: {String(product?.product_id || 'N/A')}</span>
                             </div>
                           </TableCell>
                           <TableCell className="text-sm font-bold text-center">{targetQty}</TableCell>
                           <TableCell className="text-xs text-center font-medium font-mono text-muted-foreground uppercase italic tracking-tighter">
-                            {product?.unit_of_measurement?.unit_name || 'unit'}
+                            {typeof product?.unit_of_measurement === 'object' && product.unit_of_measurement !== null 
+                              ? (product.unit_of_measurement as UnitOfMeasurement).unit_name 
+                              : 'unit'}
                           </TableCell>
                           <TableCell className="print:hidden text-center">
                             <Input
@@ -190,7 +192,7 @@ export default function StockTransferReceiveManualView() {
                     <TableRow>
                       <TableCell colSpan={4} className="text-right text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Total Verification Value</TableCell>
                       <TableCell className="text-right text-sm font-bold text-foreground font-mono">
-                         ₱{selectedGroup.items.reduce((sum: number, item: any) => {
+                         ₱{selectedGroup.items.reduce((sum: number, item: OrderGroupItem) => {
                           const rqty = receivedQtys[item.id] ?? 0;
                           const unitPrice = item.ordered_quantity > 0 ? (Number(item.amount || 0) / item.ordered_quantity) : 0;
                           return sum + (rqty * unitPrice);

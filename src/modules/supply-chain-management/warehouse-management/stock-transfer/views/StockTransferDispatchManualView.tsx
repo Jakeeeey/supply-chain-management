@@ -2,8 +2,9 @@
 
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Truck, Printer, Loader2, CheckCircle2, ChevronLeft, ChevronRight, ServerCrash, RefreshCcw, Hand } from 'lucide-react';
+import { Truck, Printer, Loader2, CheckCircle2, ChevronLeft, ChevronRight, Hand } from 'lucide-react';
 import { useStockTransferDispatchManual } from '../hooks/use-stock-transfer-dispatch-manual';
+import { OrderGroupItem } from '../types/stock-transfer.types';
 import { cn } from '@/lib/utils';
 
 // Shared components
@@ -39,7 +40,6 @@ export default function StockTransferDispatchManualView() {
     dispatchOrder,
     getBranchName,
     markAsPicked,
-    refresh,
     fetchingAvailable,
     scannedQtys,
     updateScannedQty,
@@ -60,7 +60,7 @@ export default function StockTransferDispatchManualView() {
     currentPage * itemsPerPage
   ) || [];
 
-  const isAllScanned = selectedGroup?.items.every((i: any) => {
+  const isAllScanned = selectedGroup?.items.every((i: OrderGroupItem) => {
     const targetQty = Math.max(0, i.allocated_quantity ?? i.ordered_quantity ?? 0);
     return (scannedQtys[i.id] ?? 0) >= targetQty;
   }) ?? false;
@@ -167,7 +167,7 @@ export default function StockTransferDispatchManualView() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {paginatedItems.map((item: any) => {
+                    {paginatedItems.map((item: OrderGroupItem) => {
                       const targetQty = Math.max(0, item.allocated_quantity ?? item.ordered_quantity ?? 0);
                       const currentQty = scannedQtys[item.id] ?? 0;
                       const complete = currentQty >= targetQty;
@@ -179,7 +179,7 @@ export default function StockTransferDispatchManualView() {
                           <TableCell className="py-3">
                             <div className="flex flex-col">
                               <span className="font-semibold text-sm">{productName}</span>
-                              <span className="text-[10px] text-muted-foreground font-mono uppercase tracking-tight">ID: {String((product?.product_id || product?.id) || 'N/A')}</span>
+                              <span className="text-[10px] text-muted-foreground font-mono uppercase tracking-tight">ID: {String(product?.product_id || 'N/A')}</span>
                             </div>
                           </TableCell>
                           <TableCell className="text-sm font-bold text-center">{targetQty}</TableCell>
@@ -215,7 +215,7 @@ export default function StockTransferDispatchManualView() {
                     <TableRow>
                       <TableCell colSpan={4} className="text-right text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Total Withdrawal Amount</TableCell>
                       <TableCell className="text-right text-sm font-bold text-foreground font-mono">
-                        ₱{selectedGroup.items.reduce((sum: number, item: any) => {
+                        ₱{selectedGroup.items.reduce((sum: number, item: OrderGroupItem) => {
                           const sqty = scannedQtys[item.id] ?? 0;
                           const unitPrice = item.ordered_quantity > 0 ? (Number(item.amount || 0) / item.ordered_quantity) : 0;
                           return sum + (sqty * unitPrice);

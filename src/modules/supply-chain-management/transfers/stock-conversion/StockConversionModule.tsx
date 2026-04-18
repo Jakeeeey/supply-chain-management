@@ -60,8 +60,8 @@ export default function StockConversionModule({
         if (!cancelled && Array.isArray(json.branches)) {
           setBranches(json.branches);
         }
-      } catch (e) {
-        console.error("Failed to fetch branches", e);
+      } catch (err) {
+        console.error("Failed to fetch branches", err);
       }
     })();
     return () => { cancelled = true; };
@@ -88,6 +88,7 @@ export default function StockConversionModule({
     checkProductRfids,
     validateDuplicateTag,
   } = useStockConversion(selectedBranchId > 0 ? selectedBranchId : undefined);
+
 
   const [selectedProduct, setSelectedProduct] = useState<StockConversionProduct | null>(null);
   const [isUnitModalOpen, setIsUnitModalOpen] = useState(false);
@@ -181,7 +182,7 @@ export default function StockConversionModule({
        setSelectedProduct(pendingSourceProduct);
        setPendingConversion(null);
        setIsUnitModalOpen(true);
-     } catch (e) {
+     } catch {
        toast.error("Error validating source RFID");
      } finally {
        setIsSubmitting(false);
@@ -238,7 +239,7 @@ export default function StockConversionModule({
               description: "Please load the product's inventory first."
             });
           }
-        } catch (err) {
+        } catch {
           toast.error("Network error reading RFID.");
         } finally {
           setIsScanning(false);
