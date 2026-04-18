@@ -16,10 +16,17 @@ export type Branch = {
     raw?: unknown;
 };
 
+export type DiscountLine = {
+    id: number;
+    description: string;
+    percentage: number;
+};
+
 export type DiscountType = {
     id: string;
     name: string;
     percent: number;
+    lines?: DiscountLine[]; // ✅ Relational breakdown
 };
 
 export type Product = {

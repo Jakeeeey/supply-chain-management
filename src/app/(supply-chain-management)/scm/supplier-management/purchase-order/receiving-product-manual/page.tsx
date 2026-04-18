@@ -1,4 +1,4 @@
-import { ReceivingProductsManualModule } from "@/modules/supply-chain-management/supplier-management/receiving-products-manual";
+import { ReceivingProductsManualModule } from "@/modules/supply-chain-management/supplier-management/purchase-order-receiving-manual";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {

@@ -1,244 +1,32 @@
-// =============================================================================
-// SERVER-SIDE DIRECTUS HELPERS (For API Routes)
-// =============================================================================
+type Envelope<T> = { data: T };
 
-export function getDirectusBase(): string {
-    const raw =
-        process.env.DIRECTUS_URL ||
-        process.env.NEXT_PUBLIC_DIRECTUS_URL ||
-        process.env.NEXT_PUBLIC_API_BASE_URL ||
-        "";
-    const cleaned = raw.trim().replace(/\/$/, "");
-    if (!cleaned) {
-        throw new Error(
-            "DIRECTUS_URL is not set. Add it to .env.local and restart the dev server."
-        );
-    }
-    return /^https?:\/\//i.test(cleaned) ? cleaned : `http://${cleaned}`;
-}
-
-export function getDirectusToken(): string {
-    const token = (
-        process.env.DIRECTUS_STATIC_TOKEN ||
-        process.env.DIRECTUS_TOKEN ||
-        ""
-    ).trim();
-    if (!token) {
-        throw new Error(
-            "DIRECTUS_STATIC_TOKEN is not set. Add it to .env.local and restart the dev server."
-        );
-    }
-    return token;
-}
-
-export function directusHeaders(): Record<string, string> {
-    return {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getDirectusToken()}`,
-    };
-}
-
-export async function directusFetch<T = any>(
-    url: string,
-    init?: RequestInit
-): Promise<T> {
+async function fetchData<T>(url: string, init?: RequestInit): Promise<T> {
     const res = await fetch(url, {
-        ...init,
-        headers: {
-            ...directusHeaders(),
-            ...(init?.headers as Record<string, string> | undefined),
-        },
         cache: "no-store",
+        ...init,
+        headers: { "Content-Type": "application/json", ...(init?.headers as any) },
     });
-    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) {
-        const errors = json?.errors as Array<{ message: string }> | undefined;
-        const msg =
-            errors?.[0]?.message ||
-            (json?.error as string) ||
-            `Directus responded ${res.status} ${res.statusText}`;
-        throw new Error(msg);
+        const text = await res.text().catch(() => "");
+        throw new Error(`Request failed ${res.status} ${res.statusText} :: ${url} :: ${text}`);
     }
+    const json = await res.json().catch(() => null);
+    if (json && typeof json === "object" && "data" in json) return (json as Envelope<T>).data;
     return json as T;
 }
 
-export async function directusGet<T>(path: string): Promise<T> {
-    const base = getDirectusBase();
-    const url = `${base}${path.startsWith("/") ? "" : "/"}${path}`;
-    return directusFetch(url, { method: "GET" });
+const BASE = "/api/scm/supplier-management/approval-of-purchase-order";
+
+export async function fetchPendingApprovalPOs() {
+    return fetchData<any[]>(BASE);
 }
 
-export async function directusMutate<T>(
-    path: string,
-    method: "POST" | "PATCH" | "DELETE",
-    body?: unknown
-): Promise<T> {
-    const base = getDirectusBase();
-    const url = `${base}${path.startsWith("/") ? "" : "/"}${path}`;
-    const options: RequestInit = { method };
-    if (body !== undefined) {
-        options.body = JSON.stringify(body);
-    }
-    return directusFetch(url, options);
-}
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import type { PendingApprovalPO, PurchaseOrderDetail, PaymentTerm } from "../types";
-
-const API = "/api/scm/supplier-management/approval-of-purchase-order";
-
-function toNum(v: any): number {
-    if (v === null || v === undefined) return 0;
-    const s = String(v).trim();
-    if (!s) return 0;
-    const n = Number(s.replace(/,/g, ""));
-    return Number.isFinite(n) ? n : 0;
+export async function fetchPurchaseOrderDetail(id: string | number) {
+    return fetchData<any>(`${BASE}?id=${id}`);
 }
 
-function toStr(v: any, fb = ""): string {
-    const s = String(v ?? "").trim();
-    return s ? s : fb;
+export async function approvePurchaseOrder(payload: { id: string | number; [key: string]: any }) {
+    return fetchData<any>(BASE, { method: "POST", body: JSON.stringify(payload) });
 }
 
-function unwrapData<T>(json: unknown): T {
-    return (json as Record<string, unknown>)?.data as T ?? json as T;
-}
 
-function unwrapDeep<T>(json: unknown): T {
-    const a: unknown = unwrapData<unknown>(json);
-    const b: unknown = unwrapData<unknown>(a);
-    return (b ?? a ?? json) as T;
-}
-
- 
-function normalizeLine(line: any) {
-    const qty = toNum(line?.ordered_quantity ?? line?.expectedQty ?? line?.qty ?? line?.quantity);
-    const unit = toNum(line?.unit_price ?? line?.unitPrice ?? line?.price);
-    const lineTotal = qty * unit;
-
-    return {
-        ...line,
-        ordered_quantity: qty,
-        expectedQty: qty,
-        qty: qty,
-        quantity: qty,
-        unit_price: unit,
-        unitPrice: unit,
-        price: unit,
-        uom: toStr(line?.uom, "—"),
-        line_total: toNum(line?.line_total) || lineTotal,
-        lineTotal: toNum(line?.lineTotal) || lineTotal,
-    };
-}
-
-export async function fetchPendingApprovalPOs(): Promise<PendingApprovalPO[]> {
-    const res = await fetch(API, { 
-        method: "GET", 
-        credentials: "include",
-        cache: "no-store"
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json?.error || "Failed to fetch pending POs");
-
-     
-    const rows = unwrapDeep<any[]>(json) ?? [];
-
-    return rows.map((r) => ({
-        ...r,
-        id: String(r?.id ?? r?.purchase_order_id ?? ""),
-        poNumber: r?.poNumber ?? r?.purchase_order_no ?? r?.purchase_order_no ?? "",
-        supplierName: r?.supplierName ?? r?.supplier_name ?? r?.supplierName ?? "",
-        branchName: r?.branchName ?? r?.branch_name ?? r?.branch ?? "—",
-        date: r?.date ?? r?.date_encoded ?? "—",
-     
-    })) as any;
-}
-
-export async function fetchPurchaseOrderDetail(id: string): Promise<PurchaseOrderDetail> {
-    const res = await fetch(`${API}?id=${encodeURIComponent(id)}`, {
-        method: "GET",
-        cache: "no-store",
-        credentials: "include",
-    });
-
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json?.error || "Failed to fetch PO detail");
-
-     
-    const d: any = unwrapDeep<any>(json) ?? {};
-
-    // totals
-    const gross = toNum(d?.gross_amount ?? d?.grossAmount ?? d?.subtotal);
-    let discAmt = toNum(d?.discounted_amount ?? d?.discountAmount ?? d?.discount_amount ?? d?.discount_value);
-
-    let discPct = toNum(d?.discount_percent ?? d?.discountPercent ?? d?.discount_rate ?? d?.discountRate);
-    if (!discAmt && discPct > 0 && gross > 0) discAmt = (gross * discPct) / 100;
-    if (!discPct && discAmt > 0 && gross > 0) discPct = (discAmt / gross) * 100;
-
-    const vat = toNum(d?.vat_amount ?? d?.vatAmount ?? d?.vat);
-    const ewt = toNum(d?.withholding_tax_amount ?? d?.ewtGoods ?? d?.ewt_amount);
-    const total = toNum(d?.total_amount ?? d?.total);
-
-    // normalize items & allocations for pricing display
-    const items = Array.isArray(d?.items) ? d.items.map(normalizeLine) : [];
-    const allocations = Array.isArray(d?.allocations)
-         
-        ? d.allocations.map((a: any) => ({
-            ...a,
-            items: Array.isArray(a?.items) ? a.items.map(normalizeLine) : [],
-        }))
-        : [];
-
-    return {
-        ...d,
-        id: String(d?.purchase_order_id ?? d?.id ?? id),
-        purchase_order_id: d?.purchase_order_id ?? d?.id ?? id,
-        purchase_order_no: d?.purchase_order_no ?? d?.poNumber ?? d?.purchase_order_no,
-
-        // branch display
-        branchName: d?.branchName ?? d?.branch_name ?? d?.branch?.name ?? "—",
-
-        // supplier display
-        supplierName: d?.supplierName ?? d?.supplier?.name ?? d?.supplierName ?? "",
-
-        // financials
-        gross_amount: gross,
-        discounted_amount: discAmt,
-        discount_percent: discPct,
-        vat_amount: vat,
-        withholding_tax_amount: ewt,
-        total_amount: total,
-
-        // duplicates for safety
-        grossAmount: gross,
-        discountAmount: discAmt,
-        discountPercent: discPct,
-        vatAmount: vat,
-        ewtGoods: ewt,
-        total: total,
-
-        // normalized collections
-        items,
-        allocations,
-     
-    } as any;
-}
-
-// ✅ MUST exist (fix your import error)
-export async function approvePurchaseOrder(payload: {
-    id: string;
-    markAsInvoice: boolean;
-    paymentTerm: PaymentTerm;
-    termsDays?: number;
-}) {
-    const res = await fetch(API, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(payload),
-    });
-
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json?.error || "Failed to approve PO");
-
-    return unwrapDeep(json);
-}

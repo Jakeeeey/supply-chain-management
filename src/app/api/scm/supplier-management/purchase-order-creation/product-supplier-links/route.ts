@@ -1,6 +1,20 @@
-// ✅ FILE: src/app/api/scm/supplier-management/purchase-order/product-supplier-links/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { getDirectusBase, getDirectusToken } from "@/modules/supply-chain-management/supplier-management/purchase-order-creation/providers/fetchProviders";
+
+// =====================
+// DIRECTUS HELPERS
+// =====================
+function getDirectusBase(): string {
+    const raw = process.env.DIRECTUS_URL || process.env.NEXT_PUBLIC_DIRECTUS_URL || process.env.NEXT_PUBLIC_API_BASE_URL || "";
+    const cleaned = raw.trim().replace(/\/$/, "");
+    if (!cleaned) throw new Error("DIRECTUS_URL is not set.");
+    return /^https?:\/\//i.test(cleaned) ? cleaned : `http://${cleaned}`;
+}
+
+function getDirectusToken(): string {
+    const token = (process.env.DIRECTUS_STATIC_TOKEN || process.env.DIRECTUS_TOKEN || "").trim();
+    if (!token) throw new Error("DIRECTUS_STATIC_TOKEN is not set.");
+    return token;
+}
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

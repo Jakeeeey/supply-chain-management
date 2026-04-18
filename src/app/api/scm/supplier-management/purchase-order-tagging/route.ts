@@ -1,13 +1,49 @@
-// src/app/api/scm/supplier-management/tagging-of-po/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { getDirectusBase, directusFetch } from "@/modules/supply-chain-management/supplier-management/utils/directus";
+
+// =====================
+// DIRECTUS HELPERS
+// =====================
+function getDirectusBase(): string {
+    const raw = process.env.DIRECTUS_URL || process.env.NEXT_PUBLIC_DIRECTUS_URL || process.env.NEXT_PUBLIC_API_BASE_URL || "";
+    const cleaned = raw.trim().replace(/\/$/, "");
+    if (!cleaned) throw new Error("DIRECTUS_URL is not set.");
+    return /^https?:\/\//i.test(cleaned) ? cleaned : `http://${cleaned}`;
+}
+
+function getDirectusToken(): string {
+    const token = (process.env.DIRECTUS_STATIC_TOKEN || process.env.DIRECTUS_TOKEN || "").trim();
+    if (!token) throw new Error("DIRECTUS_STATIC_TOKEN is not set.");
+    return token;
+}
+
+function directusHeaders(): Record<string, string> {
+    return {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getDirectusToken()}`,
+    };
+}
+
+async function directusFetch<T = any>(url: string, init?: RequestInit): Promise<T> {
+    const res = await fetch(url, {
+        ...init,
+        headers: { ...directusHeaders(), ...(init?.headers as Record<string, string> | undefined) },
+        cache: "no-store",
+    });
+    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!res.ok) {
+        const errors = json?.errors as Array<{ message: string }> | undefined;
+        const msg = errors?.[0]?.message || (json?.error as string) || `Directus error ${res.status} ${res.statusText}`;
+        throw new Error(msg);
+    }
+    return json as T;
+}
 
 import type {
     TaggablePOListItem,
     TaggingPODetail,
     TaggingPOItem,
     TaggingActivity,
-} from "@/modules/supply-chain-management/supplier-management/tagging-of-po/types";
+} from "@/modules/supply-chain-management/supplier-management/purchase-order-tagging/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -560,7 +596,7 @@ export async function GET() {
         const base = getDirectusBase();
 
         const rows = await fetchApprovedPOs(base) as Record<string, unknown>[];
-        const poIds = rows.map((r) => toNum(r?.purchase_order_id)).filter(Boolean);
+        const poIds = rows.map((r: any) => toNum(r?.purchase_order_id)).filter(Boolean);
 
         const poProducts = await fetchPOProductsByPOIds(base, poIds);
 
@@ -714,7 +750,7 @@ export async function POST(req: NextRequest) {
 
             // do not exceed expected qty
             const currentDetail = await buildDetail(base, poId);
-            const currentItem = currentDetail.items.find((x) => x.id === String(popId));
+            const currentItem = currentDetail.items.find((x: any) => x.id === String(popId));
             const expectedQty = currentItem?.expectedQty ?? 0;
             const taggedQty = currentItem?.taggedQty ?? 0;
 
@@ -746,12 +782,12 @@ export async function POST(req: NextRequest) {
             // we will manually inject it into the result so the UI updates instantly.
             const updated = await buildDetail(base, poId);
 
-            const isPresent = updated.activity.some((a) => a.rfid === rfid);
+            const isPresent = updated.activity.some((a: any) => a.rfid === rfid);
             if (!isPresent) {
                 if (DEBUG) dlog(`Optimistically injecting tag ${rfid} for SKU ${sku}`);
                 
                 // Find the line that should receive this tag
-                const line = updated.items.find((it) => it.sku === sku);
+                const line = updated.items.find((it: any) => it.sku === sku);
                 if (line) {
                     // Only increment if not already "full" in the returned state
                     // (if it's already full, Directus might have actually returned it and it's just a duplicate activity check)
