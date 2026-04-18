@@ -1,6 +1,6 @@
-// src/app/api/scm/supplier-management/purchase-order-receiving-rfid/route.ts
+// src/app/api/scm/supplier-management/purchase-order-receiving-manual/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { getDirectusBase, directusFetch as fetchJson } from "@/modules/supply-chain-management/supplier-management/receiving-products-manual/providers/fetchProviders";
+import { getDirectusBase, directusFetch as fetchJson } from "@/modules/supply-chain-management/supplier-management/purchase-order-receiving-manual/providers/fetchProviders";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

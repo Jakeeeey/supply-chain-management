@@ -84,7 +84,7 @@ export async function directusMutate<T>(
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { PendingApprovalPO, PurchaseOrderDetail, PaymentTerm } from "../types";
 
-const API = "/api/scm/supplier-management/approval-of-po";
+const API = "/api/scm/supplier-management/approval-of-purchase-order";
 
 function toNum(v: any): number {
     if (v === null || v === undefined) return 0;

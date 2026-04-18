@@ -1,4 +1,4 @@
-// src/app/(supply-chain-management)/scm/supplier-management/purchase-order-receiving-rfid/page.tsx
+// src/app/(supply-chain-management)/scm/supplier-management/purchase-order/purchase-order-receiving-rfid/page.tsx
 
 import {
     Breadcrumb,
@@ -15,7 +15,7 @@ import { NavUser } from "@/components/shared/app-sidebar/nav-user";
 
 import { cookies } from "next/headers";
 
-import ReceivingProductsModule from "@/modules/supply-chain-management/supplier-management/receiving-products/ReceivingProductsModule";
+import ReceivingProductsModule from "@/modules/supply-chain-management/supplier-management/purchase-order-receiving-rfid/ReceivingProductsModule";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

@@ -174,3 +174,11 @@ export async function directusMutate<T>(
     }
     return directusFetch(url, options);
 }
+export async function updateTaggingStatus(poId: string, action: string) {
+    const res = await fetch(API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, poId }),
+    });
+    return await asJson(res);
+}

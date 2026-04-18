@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
 import { Printer, Download, Package } from "lucide-react";
-import { generatePurchaseOrderPDF } from "../../receiving-products/utils/printUtils";
+import { generatePurchaseOrderPDF } from "../../purchase-order-receiving-rfid/utils/printUtils";
 import { cn, buildMoneyFormatter } from "../utils/calculations";
 
 interface POPreviewModalProps {

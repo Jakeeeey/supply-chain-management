@@ -1,3 +1,31 @@
+const BASE = "/api/scm/supplier-management/purchase-order-posting";
+
+async function fetchData<T>(url: string, init?: RequestInit): Promise<T> {
+    const res = await fetch(url, {
+        cache: "no-store",
+        ...init,
+        headers: {
+            "Content-Type": "application/json",
+            ...(init?.headers as any),
+        },
+    });
+
+    if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(`Request failed ${res.status} ${res.statusText} :: ${url} :: ${text}`);
+    }
+
+    const json = await res.json().catch(() => null);
+    if (json && typeof json === "object" && "data" in json) {
+        return json.data as T;
+    }
+    return json as T;
+}
+
+export async function fetchDiscountTypes() {
+    return fetchData<any[]>(`${BASE}/discount-types`);
+}
+
 // =============================================================================
 // SERVER-SIDE DIRECTUS HELPERS (For API Routes)
 // =============================================================================
