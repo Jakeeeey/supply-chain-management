@@ -10,9 +10,9 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { cookies } from "next/headers"
-import StockTransferReceiveView from "@/modules/supply-chain-management/warehouse-management/stock-transfer/views/StockTransferReceiveView"
-import { NavUser } from "@/components/shared/app-sidebar/nav-user"
 import { decodeJwtPayload } from "@/lib/auth-utils"
+import StockTransferRequestView from "@/modules/supply-chain-management/warehouse-management/stock-transfer/views/StockTransferRequestView"
+import { NavUser } from "@/components/shared/app-sidebar/nav-user"
 
 export default async function Page() {
     const cookieStore = await cookies();
@@ -41,11 +41,11 @@ export default async function Page() {
                             </BreadcrumbItem>
                             <BreadcrumbSeparator className="hidden md:block" />
                             <BreadcrumbItem className="hidden md:block">
-                                <BreadcrumbLink href="/scm/warehouse-management/stock-transfer">Stock Transfer</BreadcrumbLink>
+                                <BreadcrumbLink href="/scm/warehouse-management/stock-transfers/request">Stock Transfer</BreadcrumbLink>
                             </BreadcrumbItem>
                             <BreadcrumbSeparator className="hidden md:block" />
                             <BreadcrumbItem>
-                                <BreadcrumbPage>Receive</BreadcrumbPage>
+                                <BreadcrumbPage>Request</BreadcrumbPage>
                             </BreadcrumbItem>
                         </BreadcrumbList>
                     </Breadcrumb>
@@ -57,9 +57,8 @@ export default async function Page() {
             </header>
 
             <ScrollArea className="min-h-0 flex-1">
-                <StockTransferReceiveView />
+                <StockTransferRequestView />
             </ScrollArea>
         </div>
     )
 }
-

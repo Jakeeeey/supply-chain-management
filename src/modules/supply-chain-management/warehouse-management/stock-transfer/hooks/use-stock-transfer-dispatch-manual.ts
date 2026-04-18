@@ -100,15 +100,13 @@ export function useStockTransferDispatchManual() {
           return { pid: pid as number, available: 0 };
         }));
 
-        let hasChanges = false;
         for (const result of results) {
           if (result.status === 'fulfilled') {
             newAvailable[result.value.pid] = result.value.available;
-            hasChanges = true;
           }
         }
         
-        if (hasChanges) setScannedInventory(newAvailable);
+        if (results.some(r => r.status === 'fulfilled')) setScannedInventory(newAvailable);
       } catch (err) {
         console.error('Failed to fetch initial available quantities:', err);
       } finally {

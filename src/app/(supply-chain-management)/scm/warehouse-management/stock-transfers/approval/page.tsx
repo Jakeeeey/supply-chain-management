@@ -41,7 +41,7 @@ export default async function Page() {
                             </BreadcrumbItem>
                             <BreadcrumbSeparator className="hidden md:block" />
                             <BreadcrumbItem className="hidden md:block">
-                                <BreadcrumbLink href="/scm/warehouse-management/stock-transfer">Stock Transfer</BreadcrumbLink>
+                                <BreadcrumbLink href="/scm/warehouse-management/stock-transfers/request">Stock Transfer</BreadcrumbLink>
                             </BreadcrumbItem>
                             <BreadcrumbSeparator className="hidden md:block" />
                             <BreadcrumbItem>
