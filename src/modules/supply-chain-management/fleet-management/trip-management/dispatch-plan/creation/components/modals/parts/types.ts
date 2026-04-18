@@ -8,6 +8,8 @@ export interface PlanDetailItem {
   customer_name?: string;
   city?: string;
   amount: number;
+  weight?: number;
+  invoice_status?: string;
   isManualStop?: boolean;
   remarks?: string;
   distance?: number;

@@ -24,9 +24,13 @@ interface MasterData {
 
 interface TripConfigurationFormProps {
   masterData: MasterData | null;
+  vehicleCapacity: number;
 }
 
-export function TripConfigurationForm({ masterData }: TripConfigurationFormProps) {
+export function TripConfigurationForm({ 
+  masterData,
+  vehicleCapacity
+}: TripConfigurationFormProps) {
   const form = useFormContext<DispatchCreationFormValues>();
   const { fields: helperFields, append, remove } = useFieldArray({
     control: form.control,
@@ -92,7 +96,7 @@ export function TripConfigurationForm({ masterData }: TripConfigurationFormProps
             name="vehicle_id"
             render={({ field }) => (
               <FormItem className="flex flex-col">
-                <FormLabel className="text-[11px] font-medium text-muted-foreground uppercase tracking-tight">
+                <FormLabel className="text-[11px] font-bold text-muted-foreground uppercase tracking-tight">
                   Vehicle
                 </FormLabel>
                 <FormControl>
@@ -106,6 +110,9 @@ export function TripConfigurationForm({ masterData }: TripConfigurationFormProps
                     placeholder="Select vehicle"
                   />
                 </FormControl>
+                <p className="text-[10px] text-muted-foreground mt-1 px-1">
+                  Max: <span className="text-foreground">{Number(vehicleCapacity || 0).toLocaleString()} kg</span>
+                </p>
                 <FormMessage className="text-[10px]" />
               </FormItem>
             )}
