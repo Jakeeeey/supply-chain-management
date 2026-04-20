@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Download, FileText, X } from "lucide-react";
 import { ReceiptSavedInfo } from "../providers/ReceivingProductsProvider";
-import { generateOfficialSupplierReceiptV5 } from "../utils/printUtils";
+import { generateOfficialSupplierReceiptV5, ReceiptData } from "../utils/printUtils";
 
 interface ReceiptPreviewModalProps {
     isOpen: boolean;
@@ -47,6 +47,9 @@ export function ReceiptPreviewModal({
                 receivedQtyAtStart: it.receivedQtyAtStart,
                 receivedQtyNow: it.receivedQtyNow,
                 rfids: it.rfids,
+                lotId: it.lotId,
+                batchNo: it.batchNo,
+                expiryDate: it.expiryDate
             })),
         });
     };
@@ -125,17 +128,37 @@ export function ReceiptPreviewModal({
                                                             {it.barcode}
                                                         </code>
                                                     </div>
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {it.rfids.map((code, ri) => (
-                                                            <span key={ri} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-muted/50 border border-primary/5 text-muted-foreground">
-                                                                {code}
-                                                            </span>
-                                                        ))}
-                                                        {it.rfids.length === 0 && (
-                                                            <span className="text-[10px] italic text-muted-foreground">Waiting for verification...</span>
-                                                        )}
+                                                        <div className="flex items-center gap-4 mt-2">
+                                                            {it.lotId && (
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-tighter">Lot</span>
+                                                                    <span className="text-[10px] font-black">{it.lotId}</span>
+                                                                </div>
+                                                            )}
+                                                            {it.batchNo && (
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-tighter">Batch</span>
+                                                                    <span className="text-[10px] font-black">{it.batchNo}</span>
+                                                                </div>
+                                                            )}
+                                                            {it.expiryDate && (
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-tighter">Expiry</span>
+                                                                    <span className="text-[10px] font-black">{it.expiryDate}</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex flex-wrap gap-1 mt-2">
+                                                            {it.rfids.map((code, ri) => (
+                                                                <span key={ri} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-muted/50 border border-primary/5 text-muted-foreground">
+                                                                    {code}
+                                                                </span>
+                                                            ))}
+                                                            {it.rfids.length === 0 && (
+                                                                <span className="text-[10px] italic text-muted-foreground">Waiting for verification...</span>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                </div>
 
                                                 <div className="shrink-0 flex items-center gap-6 pl-4 border-l">
                                                     <div className="text-center min-w-[60px]">

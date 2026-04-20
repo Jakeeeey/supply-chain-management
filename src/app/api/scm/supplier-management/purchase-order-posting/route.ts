@@ -111,6 +111,10 @@ interface PORRow {
     receipt_date: string;
     received_date: string;
     isPosted: number | string;
+    discounted_amount: number | string;
+    vat_amount: number | string;
+    withholding_amount: number | string;
+    total_amount: number | string;
 }
 interface ReceivingItem {
     receiving_item_id: number;
@@ -121,7 +125,7 @@ interface ReceivingItem {
 }
 
 const POR_SAFE_FIELDS =
-    "purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted";
+    "purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted,discounted_amount,vat_amount,withholding_amount,total_amount";
 
 // =====================
 // FETCHERS
@@ -425,6 +429,11 @@ type PostingReceipt = {
     linesCount: number;
     totalReceivedQty: number;
     isPosted: 0 | 1;
+    grossAmount: number;
+    discountAmount: number;
+    vatAmount: number;
+    withholdingTaxAmount: number;
+    totalAmount: number;
 };
 
 function buildReceiptSummary(porRows: PORRow[]) {
@@ -445,6 +454,11 @@ function buildReceiptSummary(porRows: PORRow[]) {
         let bestDate = "";
         let total = 0;
         let allPosted = true;
+        let gross = 0;
+        let disc = 0;
+        let vat = 0;
+        let wht = 0;
+        let net = 0;
 
         for (const r of rows) {
             const porId = toNum(r?.purchase_order_product_id);
@@ -457,6 +471,14 @@ function buildReceiptSummary(porRows: PORRow[]) {
 
             total += effectiveReceivedQty(r);
             if (toNum(r?.isPosted) !== 1) allPosted = false;
+
+            gross += toNum(r?.total_amount || 0); // Note: total_amount in POR is Gross + VAT
+            disc += toNum(r?.discounted_amount || 0);
+            vat += toNum(r?.vat_amount || 0);
+            wht += toNum(r?.withholding_amount || 0);
+            
+            // Reconstruct net based on formula: (Gross - Disc) + VAT - WHT
+            net += toNum(r?.total_amount || 0) - toNum(r?.withholding_amount || 0);
         }
 
         receipts.push({
@@ -465,6 +487,11 @@ function buildReceiptSummary(porRows: PORRow[]) {
             linesCount: porIds.size,
             totalReceivedQty: total,
             isPosted: allPosted ? 1 : 0,
+            grossAmount: gross, // This is actually Total (Gross+VAT) in our naming? Let's check POR logic.
+            discountAmount: disc,
+            vatAmount: vat,
+            withholdingTaxAmount: wht,
+            totalAmount: net,
         });
     }
 
@@ -708,6 +735,12 @@ export async function GET() {
             const isClosed = fully && allPosted;
             const fullyReceived = fully && !allPosted;
 
+            // Align totalAmount with what's actually being posted
+            const unpostedRows = porRows.filter(r => toNum(r.isPosted) === 0 && (toNum(r.received_quantity) > 0 || toStr(r.receipt_no)));
+            const listTotal = unpostedRows.length > 0 
+                ? unpostedRows.reduce((sum, r) => sum + (toNum(r.total_amount) - toNum(r.withholding_amount)), 0)
+                : toNum(po?.total_amount ?? 0);
+
             list.push({
                 id: String(poId),
                 poNumber,
@@ -718,7 +751,7 @@ export async function GET() {
                     // Only flag PARTIAL_POSTED when not fully received
                     hasAnyPosted: !fully && hasAnyPosted,
                 }),
-                totalAmount: toNum(po?.total_amount ?? 0),
+                totalAmount: listTotal,
                 currency: "PHP",
                 itemsCount: products.size,
                 branchesCount: branches.size,
@@ -855,6 +888,16 @@ export async function POST(req: NextRequest) {
 
             const branchName = branchesLabelFromLines(lines, branchesMap);
 
+            // If there are unposted receipts, the summary should focus on what's about to be posted
+            const unpostedRows = porRows.filter(r => toNum(r.isPosted) === 0 && hasReceiptEvidence(r));
+            const hasUnposted = unpostedRows.length > 0;
+            
+            const detailGross = hasUnposted ? unpostedRows.reduce((sum, r) => sum + toNum(r.total_amount), 0) : toNum(po?.gross_amount);
+            const detailDisc = hasUnposted ? unpostedRows.reduce((sum, r) => sum + toNum(r.discounted_amount), 0) : toNum(po?.discounted_amount);
+            const detailVat = hasUnposted ? unpostedRows.reduce((sum, r) => sum + toNum(r.vat_amount), 0) : toNum(po?.vat_amount);
+            const detailWht = hasUnposted ? unpostedRows.reduce((sum, r) => sum + toNum(r.withholding_amount), 0) : toNum(po?.withholding_tax_amount);
+            const detailTotal = hasUnposted ? (detailGross - detailWht) : toNum(po?.total_amount);
+
             const detail: PostingPODetail = {
                 id: String(poId),
                 poNumber: toStr(po?.purchase_order_no, String(poId)),
@@ -865,7 +908,7 @@ export async function POST(req: NextRequest) {
                     fullyReceived,
                     hasAnyPosted: !fully && hasAnyPosted,
                 }),
-                totalAmount: toNum(po?.total_amount ?? 0),
+                totalAmount: detailTotal,
                 currency: "PHP",
                 branchName,
                 allocations,
@@ -876,10 +919,10 @@ export async function POST(req: NextRequest) {
                 postingReady: true,
                 latestReceiptNo: lr.receipt_no || undefined,
                 latestReceiptDate: lr.received_date || lr.receipt_date || undefined,
-                grossAmount: toNum(po?.gross_amount),
-                discountAmount: toNum(po?.discounted_amount),
-                vatAmount: toNum(po?.vat_amount),
-                withholdingTaxAmount: toNum(po?.withholding_tax_amount),
+                grossAmount: detailGross,
+                discountAmount: detailDisc,
+                vatAmount: detailVat,
+                withholdingTaxAmount: detailWht,
             };
 
             return ok(detail);

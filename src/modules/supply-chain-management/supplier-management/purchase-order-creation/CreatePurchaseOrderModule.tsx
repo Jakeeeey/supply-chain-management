@@ -633,6 +633,7 @@ export default function CreatePurchaseOrderModule() {
 
                         return np;
                     })
+                    .filter((np: any) => np.uomId === BOX_UOM_ID)
                 );
                 setIsInvoice(false);
             } catch (e: unknown) {

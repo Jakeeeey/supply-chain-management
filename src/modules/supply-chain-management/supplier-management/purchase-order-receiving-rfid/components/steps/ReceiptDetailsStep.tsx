@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import {
     Select,
     SelectContent,
@@ -110,6 +111,46 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
                 ) : null}
             </Card>
 
+            {/* ✅ MERGED: Previous Receipts History */}
+            {selectedPO?.history && selectedPO.history.length > 0 && (
+                <Card className="p-4 border-amber-500/20 bg-amber-500/5">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                        Previous Receipts History
+                    </div>
+                    <div className="mt-3 space-y-2">
+                        {selectedPO.history.map((h) => (
+                            <div
+                                key={h.receiptNo}
+                                className="flex items-center justify-between gap-3 text-xs border-b border-amber-500/10 pb-2 last:border-0 last:pb-0"
+                            >
+                                <div className="flex flex-col">
+                                    <span className="font-mono font-medium text-amber-900 dark:text-amber-100">
+                                        {h.receiptNo}
+                                    </span>
+                                    <span className="text-[10px] text-amber-700/70 dark:text-amber-400/60">
+                                        {h.receiptDate || "N/A"}
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-muted-foreground">
+                                        {h.itemsCount} {h.itemsCount === 1 ? "item" : "items"}
+                                    </span>
+                                    <Badge
+                                        variant="outline"
+                                        className={cn(
+                                            "text-[10px] uppercase h-4 px-1 leading-none border-amber-500/30",
+                                            h.isPosted ? "bg-amber-100 text-amber-800" : "bg-white text-muted-foreground"
+                                        )}
+                                    >
+                                        {h.isPosted ? "Posted" : "Unposted"}
+                                    </Badge>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </Card>
+            )}
+
             <Card className="p-4">
                 <div className="text-sm font-semibold">Receipt Details</div>
                 <div className="mt-1 text-xs text-muted-foreground">
@@ -119,7 +160,11 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
                 <div className="mt-4 grid gap-4">
                     <div className="grid gap-2">
                         <Label>Receipt Number *</Label>
-                        <Input value={receiptNo} onChange={(e) => setReceiptNo(e.target.value)} />
+                        <Input 
+                            value={receiptNo} 
+                            onChange={(e) => setReceiptNo(e.target.value)} 
+                            placeholder="Enter Receipt Number..."
+                        />
                     </div>
 
                     <div className="grid gap-2">

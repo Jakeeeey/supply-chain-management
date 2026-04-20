@@ -5,7 +5,7 @@ import autoTable from "jspdf-autotable";
 
 
 
-type ReceiptData = {
+export type ReceiptData = {
     poNumber: string;
     supplierName: string;
     receiptNo: string;
@@ -19,6 +19,9 @@ type ReceiptData = {
         receivedQtyAtStart: number;
         receivedQtyNow: number;
         rfids: string[];
+        lotId?: string;
+        batchNo?: string;
+        expiryDate?: string;
     }>;
 };
 
@@ -91,13 +94,22 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
         const isPending = now === 0;
         const rfids = it.rfids || [];
 
+        const metaInfo = [
+            it.batchNo ? `Batch: ${it.batchNo}` : "",
+            it.lotId ? `Lot: ${it.lotId}` : "",
+            it.expiryDate ? `Exp: ${it.expiryDate}` : ""
+        ].filter(Boolean).join(" | ");
+
         // First row for the item
         tableRows.push([
             { 
                 content: it.name || "Unknown Product", 
                 styles: { fontStyle: isPending ? "italic" : "normal", textColor: isPending ? [150, 150, 150] : [0, 0, 0] } 
             },
-            it.barcode || "N/A",
+            {
+                content: `${it.barcode || "N/A"}${metaInfo ? "\n" + metaInfo : ""}`,
+                styles: { fontSize: 8 }
+            },
             {
                 content: qtyText,
                 styles: { halign: "center", fontStyle: "bold" }

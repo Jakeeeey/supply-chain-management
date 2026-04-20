@@ -4,10 +4,11 @@ import * as React from "react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { useReceivingProducts } from "../providers/ReceivingProductsProvider";
-// ❌ removed ScanPOStep (barcode scanner not needed anymore)
-// import { ScanPOStep } from "./steps/ScanPOStep";
 import { ReceiptDetailsStep } from "./steps/ReceiptDetailsStep";
-import { ScanProductsStep } from "./steps/ScanProductsStep";
+import ScanBarcodeStep from "./steps/ScanBarcodeStep";
+import { TagRFIDStep } from "./steps/TagRFIDStep";
+import { ReviewReceiptStep } from "./steps/ReviewReceiptStep";
+import { AssignTagModal } from "./AssignTagModal";
 
 function StepDot({ active }: { active: boolean }) {
     return (
@@ -19,10 +20,10 @@ function StepDot({ active }: { active: boolean }) {
 
 export function ReceivingWorkbench() {
     const { selectedPO } = useReceivingProducts();
-    const [step, setStep] = React.useState<0 | 1 | 2>(0);
+    const [step, setStep] = React.useState<0 | 1 | 2 | 3 | 4>(0);
 
     // ✅ only auto-advance from 0 -> 1 when PO becomes available.
-    // ✅ if user is already on step 2, do NOT force back to step 1 on selectedPO refresh.
+    // ✅ if user is already on a deeper step, do NOT force back to step 1 on selectedPO refresh.
     React.useEffect(() => {
         setStep((prev) => {
             if (!selectedPO) return 0;
@@ -45,27 +46,35 @@ export function ReceivingWorkbench() {
                     <StepDot active={step === 0} />
                     <StepDot active={step === 1} />
                     <StepDot active={step === 2} />
+                    <StepDot active={step === 3} />
+                    <StepDot active={step === 4} />
                 </div>
             </div>
 
             <div className="mt-4">
                 {step === 0 ? (
-                    // ✅ Replaced barcode scanner with a simple instruction state
                     <div className="rounded-xl border border-dashed border-border bg-muted/10 p-8 text-center">
                         <div className="text-sm font-semibold text-foreground">
                             Select a Purchase Order to start receiving
                         </div>
                         <div className="mt-1 text-xs text-muted-foreground">
-                            Barcode scanning was removed here because it’s already handled in Tagging of PO.
-                            Please select a PO from the list to continue.
+                            New RFID tags will be automatically assigned during scanning.
+                            Select a PO from the list to continue.
                         </div>
                     </div>
                 ) : step === 1 ? (
                     <ReceiptDetailsStep onContinue={() => setStep(2)} />
+                ) : step === 2 && selectedPO ? (
+                    <ScanBarcodeStep poDetail={selectedPO} onContinue={() => setStep(3)} />
+                ) : step === 3 ? (
+                    <TagRFIDStep onContinue={() => setStep(4)} />
                 ) : (
-                    <ScanProductsStep />
+                    <ReviewReceiptStep onBack={() => setStep(3)} />
                 )}
             </div>
+
+            {/* ✅ MERGED: On-the-fly tag assignment modal */}
+            <AssignTagModal />
         </Card>
     );
 }
