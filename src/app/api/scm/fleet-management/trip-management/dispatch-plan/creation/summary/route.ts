@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
         `/items/sales_invoice?limit=-1&fields=invoice_id,total_amount,customer_code,salesman_id`,
       ),
 
-      fetchDirectus(`/items/vehicles?limit=-1&fields=vehicle_id,vehicle_plate`),
+      fetchDirectus(`/items/vehicles?limit=-1&fields=vehicle_id,vehicle_plate,maximum_weight`),
       fetchDirectus(
         `/items/user?limit=-1&fields=user_id,user_fname,user_lname`,
       ),
@@ -138,10 +138,13 @@ export async function GET(req: NextRequest) {
       ]),
     );
 
-    const vehicleMap = new Map<string, string>(
+    const vehicleMap = new Map<string, { plate: string, maxWeight: number }>(
       vehicles.map((v) => [
         String(v.vehicle_id),
-        String(v.vehicle_plate ?? ""),
+        { 
+          plate: String(v.vehicle_plate ?? ""), 
+          maxWeight: typeof v.maximum_weight === 'number' ? v.maximum_weight : parseFloat(String(v.maximum_weight)) || 0 
+        },
       ]),
     );
 
@@ -152,6 +155,52 @@ export async function GET(req: NextRequest) {
     const salesInvoiceMap = new Map<string, SalesInvoice>(
       salesInvoices.map((si) => [String(si.invoice_id), si]),
     );
+
+    // --- WEIGHT CALCULATION START ---
+    // 1. Map invoice IDs to order IDs (using salesInvoices)
+    const invoiceToOrderMap = new Map<string, string>();
+    salesInvoices.forEach(si => {
+      if (si.invoice_id) invoiceToOrderMap.set(String(si.invoice_id), String(si.order_id || ""));
+    });
+
+    // 2. Collect all order IDs that need weight calculation
+    const orderIds = [...new Set(salesInvoices.map(si => String(si.order_id || "")).filter(Boolean))];
+    
+    // 3. Fetch weights in bulk
+    const orderWeightMap = new Map<string, number>();
+    if (orderIds.length) {
+      // Chunking fetch for safety
+      const CHUNK_SIZE = 50;
+      const allSoDetails: SalesOrderDetail[] = [];
+      
+      for (let i = 0; i < orderIds.length; i += CHUNK_SIZE) {
+        const chunk = orderIds.slice(i, i + CHUNK_SIZE);
+        const res = await fetchDirectus<DirectusResponse<SalesOrderDetail>>(`/items/sales_order_details?filter[order_id][_in]=${chunk.join(',')}&fields=order_id,product_id,ordered_quantity,allocated_quantity`);
+        if (res.ok && res.json?.data) {
+          allSoDetails.push(...res.json.data);
+        }
+      }
+
+      const productIds = [...new Set(allSoDetails.map(d => String(d.product_id)).filter(Boolean))];
+      if (productIds.length) {
+        const prodWeightMap = new Map<string, number>();
+        for (let i = 0; i < productIds.length; i += CHUNK_SIZE) {
+          const chunk = productIds.slice(i, i + CHUNK_SIZE);
+          const res = await fetchDirectus<DirectusResponse<Product>>(`/items/products?filter[product_id][_in]=${chunk.join(',')}&fields=product_id,weight`);
+          if (res.ok && res.json?.data) {
+            res.json.data.forEach((p) => prodWeightMap.set(String(p.product_id), Number(p.weight || 0)));
+          }
+        }
+
+        allSoDetails.forEach(d => {
+          const oid = String(d.order_id);
+          const weight = prodWeightMap.get(String(d.product_id)) || 0;
+          const qty = Number(d.allocated_quantity || d.ordered_quantity || 0);
+          orderWeightMap.set(oid, (orderWeightMap.get(oid) || 0) + (weight * qty));
+        });
+      }
+    }
+    // --- WEIGHT CALCULATION END ---
 
     const customerMap = new Map<string, Customer>();
     customers.forEach((c) => {
@@ -207,7 +256,9 @@ export async function GET(req: NextRequest) {
       const driverName = userMap.get(driverUserId) || "Unknown Driver";
 
       const vehicleIdStr = plan.vehicle_id ? String(plan.vehicle_id) : "";
-      const vehiclePlateNo = vehicleMap.get(vehicleIdStr) || "Unknown Plate";
+      const vehicleInfo = vehicleMap.get(vehicleIdStr);
+      const vehiclePlateNo = vehicleInfo?.plate || "Unknown Plate";
+      const vehicleMaxWeight = vehicleInfo?.maxWeight || 0;
 
       const planInvoices = invoicesByPlan.get(planIdStr) || [];
       const planOthersList = othersByPlan.get(planIdStr) || [];
@@ -287,6 +338,14 @@ export async function GET(req: NextRequest) {
         });
       });
 
+      // Calculate total weight for the plan
+      const totalWeight = planInvoices.reduce((sum, inv) => {
+        const oid = invoiceToOrderMap.get(String(inv.invoice_id)) || "";
+        return sum + (orderWeightMap.get(oid) || 0);
+      }, 0);
+
+      const capacityPercentage = vehicleMaxWeight > 0 ? (totalWeight / vehicleMaxWeight) * 100 : 0;
+
       return {
         id: planIdStr,
         dpNumber: String(plan.doc_no ?? ""),
@@ -303,6 +362,9 @@ export async function GET(req: NextRequest) {
         estimatedArrival: String(plan.estimated_time_of_arrival ?? ""),
         customerTransactions,
         helpers: helpersByPlan.get(planIdStr) || [],
+        totalWeight,
+        maximumWeight: vehicleMaxWeight,
+        capacityPercentage,
         status: String(plan.status ?? ""),
         createdAt: String(plan.date_encoded ?? ""),
         updatedAt: String(plan.date_encoded ?? ""),
@@ -351,6 +413,7 @@ interface PostDispatchInvoice {
 
 interface SalesInvoice {
   invoice_id: number;
+  order_id: string | number;
   total_amount: number | string;
   customer_code: string;
   salesman_id: number;
@@ -359,6 +422,7 @@ interface SalesInvoice {
 interface Vehicle {
   vehicle_id: number;
   vehicle_plate: string;
+  maximum_weight: number | string | null;
 }
 
 interface User {
@@ -395,4 +459,20 @@ interface PostDispatchPurchase {
     purchase_order_no: string;
   };
   status: string;
+}
+
+interface DirectusResponse<T> {
+  data: T[];
+}
+
+interface SalesOrderDetail {
+  order_id: string | number;
+  product_id: string | number;
+  ordered_quantity: number | string;
+  allocated_quantity: number | string;
+}
+
+interface Product {
+  product_id: number;
+  weight: number | string | null;
 }

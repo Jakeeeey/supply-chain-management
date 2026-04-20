@@ -1,6 +1,6 @@
 // src/app/api/scm/supplier-management/purchase-order/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { getDirectusBase, getDirectusToken } from "@/lib/directus";
+import { getDirectusBase, getDirectusToken } from "@/modules/supply-chain-management/supplier-management/utils/directus";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

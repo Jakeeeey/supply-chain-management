@@ -65,3 +65,34 @@ export async function fetchItems<T>(
   const url = `${baseUrl}${cleanEndpoint}${queryString ? `?${queryString}` : ""}`;
   return request<{ data: T[]; meta?: unknown }>(url);
 }
+
+/**
+ * Helper to fetch items in batches to avoid extremely long URL query parameters
+ * which can cause 431 Request Header Fields Too Large errors.
+ */
+export async function fetchItemsInChunks<T>(
+  endpoint: string,
+  idField: string,
+  ids: (string | number)[],
+  params: Record<string, unknown> = {},
+): Promise<{ data: T[] }> {
+  if (!ids || ids.length === 0) return { data: [] };
+
+  const chunkSize = 50; // Directus standard safe chunk
+  const chunks = [];
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    chunks.push(ids.slice(i, i + chunkSize));
+  }
+
+  const allItems: T[] = [];
+  for (const chunk of chunks) {
+    const chunkParams = {
+      ...params,
+      [`filter[${idField}][_in]`]: chunk.join(","),
+    };
+    const res = await fetchItems<T>(endpoint, chunkParams);
+    if (res.data) allItems.push(...res.data);
+  }
+
+  return { data: allItems };
+}
