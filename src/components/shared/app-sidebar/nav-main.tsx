@@ -12,6 +12,12 @@ import {
     SearchX,
     Sparkles,
 } from "lucide-react";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
@@ -95,12 +101,12 @@ const SUB_WRAP_L3 = cn(
 );
 
 const ROW = "flex w-full min-w-0 flex-nowrap items-center overflow-hidden";
-const LABEL = "min-w-0 w-0 flex-1 truncate";
+const LABEL = "min-w-0 flex-1 truncate !whitespace-nowrap";
 
 /* ----------------------------- pill (hover + active) ------------------------ */
 
 const PILL_BASE =
-    "flex min-w-0 flex-1 items-center " +
+    "flex min-w-0 flex-1 items-center flex-nowrap whitespace-nowrap " +
     "rounded-[var(--radius)] px-3 py-1.5 " +
     "bg-transparent text-inherit shadow-none " +
     "transition-[background-color,color,box-shadow] duration-150";
@@ -173,20 +179,65 @@ function HighlightMatch({ text, term }: { text: string; term?: string }) {
     const parts = text.split(new RegExp(`(${safeTerm})`, "gi"));
 
     return (
-        <>
+        <span className="inline whitespace-nowrap">
             {parts.map((part, i) =>
                 part.toLowerCase() === term.toLowerCase() ? (
                     <span
                         key={i}
-                        className="text-amber-600 font-bold underline decoration-2 underline-offset-[3px] decoration-amber-500/40"
+                        className="inline text-amber-600 font-bold underline decoration-2 underline-offset-[3px] decoration-amber-500/40 whitespace-nowrap"
                     >
                         {part}
                     </span>
                 ) : (
-                    <span key={i}>{part}</span>
+                    <span key={i} className="inline whitespace-nowrap">{part}</span>
                 )
             )}
-        </>
+        </span>
+    );
+}
+
+function TruncatedLabel({ 
+    text, 
+    term, 
+    className 
+}: { 
+    text: string; 
+    term?: string; 
+    className?: string 
+}) {
+    const [isTruncated, setIsTruncated] = React.useState(false);
+    const textRef = React.useRef<HTMLSpanElement>(null);
+
+    const checkTruncation = () => {
+        const el = textRef.current;
+        if (el) {
+            setIsTruncated(el.scrollWidth > el.clientWidth);
+        }
+    };
+
+    return (
+        <TooltipProvider delayDuration={300}>
+            <Tooltip>
+                <TooltipTrigger asChild onMouseEnter={checkTruncation}>
+                    <span 
+                        ref={textRef} 
+                        className={cn("inline-block max-w-full truncate !whitespace-nowrap", className)}
+                    >
+                        <HighlightMatch text={text} term={term} />
+                    </span>
+                </TooltipTrigger>
+                {isTruncated && (
+                    <TooltipContent 
+                        side="right" 
+                        align="center"
+                        sideOffset={8}
+                        className="max-w-[280px] break-words font-bold px-3 py-1.5 text-[11px] shadow-2xl border-none bg-zinc-900 text-zinc-50 dark:bg-zinc-50 dark:text-zinc-900 animate-in fade-in zoom-in-95"
+                    >
+                        {text}
+                    </TooltipContent>
+                )}
+            </Tooltip>
+        </TooltipProvider>
     );
 }
 
@@ -242,9 +293,7 @@ function RecursiveNavItem({
                 if (depth === 1) return <L2Icon node={node} kind={hasChildren ? "parent" : "leaf"} />;
                 return <L3Icon node={node} />;
             })()}
-            <span className={LABEL}>
-                <HighlightMatch text={node.title} term={searchTerm} />
-            </span>
+                <TruncatedLabel text={node.title} term={searchTerm} className={LABEL} />
             {node.status === "comingSoon" && <SoonBadge />}
 
             {hasChildren && (
@@ -259,7 +308,7 @@ function RecursiveNavItem({
 
 
     const nestedClass = cn(
-        "relative w-full flex items-center min-w-0 overflow-hidden cursor-pointer rounded-md",
+        "group relative w-full flex items-center min-w-0 overflow-hidden cursor-pointer rounded-md",
         depth > 2 ? "h-8 text-sm pr-2" : (depth === 1 ? "h-8 text-sm pl-7 pr-2" : "h-8 text-sm pl-12 pr-2"),
         getPaddingClass(depth),
         node.status === "comingSoon" && "opacity-60 cursor-not-allowed",
