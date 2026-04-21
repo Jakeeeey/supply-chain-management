@@ -19,6 +19,7 @@ import {
 
 // Shared components
 import { OrderSelectionModal } from '../shared/components/OrderSelectionModal';
+import { QuantityStepper } from '../shared/components/QuantityStepper';
 import {
   Table,
   TableBody,
@@ -47,6 +48,7 @@ export default function StockTransferApprovalView() {
     availableQtys,
     fetchingAvailable,
     updateAllocatedQty,
+    totalAllocatedCount,
   } = useStockTransferApproval();
 
   const [currentPage, setCurrentPage] = React.useState(1);
@@ -248,15 +250,24 @@ export default function StockTransferApprovalView() {
                             )}
                           </TableCell>
                           <TableCell className="text-sm text-center">
-                            <Input
-                              type="number"
-                              className="h-8 w-16 text-center mx-auto text-xs bg-background border-border"
-                              value={allocatedQtys[item.id] ?? item.ordered_quantity}
-                              onChange={(e) => {
-                                const maxAllowed = Math.min(item.ordered_quantity || 0, availableQtys[item.id] || 0);
-                                updateAllocatedQty(item.id, Number(e.target.value), maxAllowed);
-                              }}
-                            />
+                            {fetchingAvailable ? (
+                              <span className="text-muted-foreground/30">—</span>
+                            ) : (availableQtys[item.id] ?? 0) === 0 ? (
+                              <Input
+                                type="number"
+                                className="h-8 w-16 text-center mx-auto text-xs bg-muted border-border opacity-50 cursor-not-allowed"
+                                value={0}
+                                disabled
+                              />
+                            ) : (
+                              <QuantityStepper 
+                                value={allocatedQtys[item.id] ?? item.ordered_quantity}
+                                max={Math.min(item.ordered_quantity || 0, availableQtys[item.id] || 0)}
+                                onChange={(val) => updateAllocatedQty(item.id, val, Math.min(item.ordered_quantity || 0, availableQtys[item.id] || 0))}
+                                className="h-8 w-fit mx-auto"
+                                size="sm"
+                              />
+                            )}
                           </TableCell>
                           <TableCell className="text-right text-sm font-bold text-foreground">
                             ₱{((allocatedQtys[item.id] ?? item.ordered_quantity ?? 0) * (item.ordered_quantity > 0 ? (Number(item.amount || 0) / item.ordered_quantity) : 0)).toLocaleString('en-PH', {minimumFractionDigits: 2})}
@@ -311,7 +322,7 @@ export default function StockTransferApprovalView() {
                       <Button 
                         size="sm"
                         className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-none font-bold text-xs"
-                        disabled={processing || fetchingAvailable || currentTotalAmount === 0}
+                        disabled={processing || fetchingAvailable || totalAllocatedCount === 0}
                       >
                         {(processing || fetchingAvailable) && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
                         {fetchingAvailable ? 'Checking Inventory...' : 'Approve & Release'}

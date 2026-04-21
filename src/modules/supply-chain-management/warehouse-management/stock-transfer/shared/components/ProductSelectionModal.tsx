@@ -12,8 +12,9 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Search, ShoppingCart, Loader2, Package, CheckCircle2, Minus, Plus, Trash2 } from 'lucide-react';
+import { Search, ShoppingCart, Loader2, Package, CheckCircle2, Trash2 } from 'lucide-react';
 import { EnrichedProduct } from '../../types/stock-transfer.types';
+import { QuantityStepper } from './QuantityStepper';
 
 interface ProductSelectionModalProps {
   open: boolean;
@@ -208,25 +209,13 @@ export function ProductSelectionModal({ open, onOpenChange, onSelect, sourceBran
                         </div>
                         
                         <div className="flex items-center justify-between">
-                           <div className="flex items-center gap-1 border border-border/60 rounded p-0.5 bg-muted/20">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-4 w-4 text-muted-foreground hover:text-primary"
-                              onClick={() => onUpdateQty?.(Number(pid), Math.max(1, qty - 1))}
-                            >
-                              <Minus className="w-2.5 h-2.5" />
-                            </Button>
-                            <span className="text-[10px] font-black w-6 text-center font-mono">{qty}</span>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-4 w-4 text-muted-foreground hover:text-primary"
-                              onClick={() => onUpdateQty?.(Number(pid), qty + 1)}
-                            >
-                              <Plus className="w-2.5 h-2.5" />
-                            </Button>
-                          </div>
+                           <QuantityStepper 
+                             value={qty}
+                             max={9999}
+                             onChange={(val) => onUpdateQty?.(Number(pid), val)}
+                             className="h-7 w-fit"
+                             size="sm"
+                           />
                           <div className="flex flex-col items-end">
                             <span className="font-black text-primary text-[11px] font-mono tracking-tighter">₱{Number((p as { totalAmount?: number }).totalAmount || (p as { cost_per_unit?: number }).cost_per_unit || 0).toLocaleString()}</span>
                             <span className="text-[8px] font-bold text-muted-foreground/50 uppercase tracking-widest">{uom}</span>

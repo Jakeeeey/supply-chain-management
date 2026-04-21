@@ -9,6 +9,8 @@ import { cn } from '@/lib/utils';
 
 // Shared components
 import { OrderSelectionModal } from '../shared/components/OrderSelectionModal';
+import { QuantityStepper } from '../shared/components/QuantityStepper';
+import { Badge } from '@/components/ui/badge';
 import {
   Table,
   TableBody,
@@ -139,11 +141,11 @@ export default function StockTransferReceiveManualView() {
                 <Table>
                   <TableHeader>
                     <TableRow className="border-b border-border bg-muted/20">
-                      <TableHead className="text-[10px] uppercase font-bold">Product</TableHead>
-                      <TableHead className="text-[10px] uppercase font-bold text-center">Expected</TableHead>
-                      <TableHead className="text-[10px] uppercase font-bold text-center">Unit</TableHead>
-                      <TableHead className="text-[10px] uppercase font-bold text-center print:hidden">Manual Verify</TableHead>
-                      <TableHead className="text-[10px] uppercase font-bold text-right">Amount</TableHead>
+                      <TableHead className="text-[10px] uppercase font-bold py-4">Product</TableHead>
+                      <TableHead className="text-[10px] uppercase font-bold text-center w-[100px]">Unit</TableHead>
+                      <TableHead className="text-[10px] uppercase font-bold text-center w-[100px]">Expected</TableHead>
+                      <TableHead className="text-[10px] uppercase font-bold text-center w-[150px] print:hidden">Verified</TableHead>
+                      <TableHead className="text-[10px] uppercase font-bold text-right py-4 px-6">Amount</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -162,24 +164,22 @@ export default function StockTransferReceiveManualView() {
                               <span className="text-[10px] text-muted-foreground font-mono uppercase tracking-tight">ID: {String(product?.product_id || 'N/A')}</span>
                             </div>
                           </TableCell>
-                          <TableCell className="text-sm font-bold text-center">{targetQty}</TableCell>
-                          <TableCell className="text-xs text-center font-medium font-mono text-muted-foreground uppercase italic tracking-tighter">
-                            {typeof product?.unit_of_measurement === 'object' && product.unit_of_measurement !== null 
-                              ? (product.unit_of_measurement as UnitOfMeasurement).unit_name 
-                              : 'unit'}
+                          <TableCell className="text-sm font-bold text-center">
+                             <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest border-border/50 bg-muted/30 mx-auto w-fit">
+                              {typeof product?.unit_of_measurement === 'object' && product.unit_of_measurement !== null 
+                                ? (product.unit_of_measurement as UnitOfMeasurement).unit_name 
+                                : 'unit'}
+                            </Badge>
                           </TableCell>
-                          <TableCell className="print:hidden text-center">
-                            <Input
-                              type="number"
-                              min={0}
-                              max={targetQty}
-                              value={currentQty}
-                              onChange={(e) => updateReceivedQty(item.id, parseInt(e.target.value) || 0, targetQty)}
-                              className={cn(
-                                "h-8 w-20 mx-auto text-center font-bold text-xs shadow-none border-border",
-                                complete ? "border-blue-500/50 text-blue-600 bg-blue-50/50" : "bg-background"
-                              )}
-                            />
+                          <TableCell className="text-sm font-bold text-center font-mono">{targetQty}</TableCell>
+                          <TableCell className="text-center print:hidden py-2">
+                             <QuantityStepper 
+                                value={currentQty}
+                                max={targetQty}
+                                onChange={(val) => updateReceivedQty(item.id, val, targetQty)}
+                                className="h-8 w-fit mx-auto"
+                                size="sm"
+                              />
                           </TableCell>
                           <TableCell className="text-right text-xs font-semibold font-mono text-foreground">
                             ₱{((currentQty || 0) * (item.ordered_quantity > 0 ? (Number(item.amount || 0) / item.ordered_quantity) : 0)).toLocaleString('en-PH', { minimumFractionDigits: 2 })}

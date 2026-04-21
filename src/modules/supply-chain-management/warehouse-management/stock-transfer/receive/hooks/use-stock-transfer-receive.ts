@@ -1,8 +1,10 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+'use client';
+
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useStockTransferBase } from '../../shared/hooks/use-stock-transfer-base';
 import { stockTransferLifecycleService } from '../../services/stock-transfer.lifecycle';
 import { toast } from 'sonner';
-import type { OrderGroup, OrderGroupItem, ProductRow } from '../../types/stock-transfer.types';
+import type { OrderGroup, OrderGroupItem, ProductRow, ScanLog } from '../../types/stock-transfer.types';
 
 const LOCAL_STORAGE_KEY_RECEIVE = 'scm_receive_scans_v1';
 
@@ -11,10 +13,10 @@ const LOCAL_STORAGE_KEY_RECEIVE = 'scm_receive_scans_v1';
  */
 export function useStockTransferReceive() {
   const base = useStockTransferBase({ 
-    statuses: ['For Loading', 'Picked'] 
+    statuses: ['For Loading'] 
   });
 
-  const [receivedItemsState, setReceivedItemsState] = useState<Record<string, Record<number, string[]>>>(() => {
+  const [receivedItemsState, setReceivedItemsState] = useState<Record<string, ScanLog[]>>(() => {
     if (typeof window === 'undefined') return {};
     try {
       const saved = localStorage.getItem(LOCAL_STORAGE_KEY_RECEIVE);
@@ -22,11 +24,28 @@ export function useStockTransferReceive() {
     } catch { return {}; }
   });
 
+  const [manualQtysState, setManualQtysState] = useState<Record<string, Record<number, number>>>(() => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const saved = localStorage.getItem('scm_receive_manual_v1');
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  });
+
+  const [isThrottled, setIsThrottled] = useState(false);
+  const recentLocks = useRef<Map<string, number>>(new Map());
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem(LOCAL_STORAGE_KEY_RECEIVE, JSON.stringify(receivedItemsState));
     }
   }, [receivedItemsState]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('scm_receive_manual_v1', JSON.stringify(manualQtysState));
+    }
+  }, [manualQtysState]);
 
   // Garbage-collect orphaned localStorage entries for canceled/rejected orders
   useEffect(() => {
@@ -47,6 +66,20 @@ export function useStockTransferReceive() {
 
       return hasPurged ? cleanState : prevState;
     });
+
+    setManualQtysState(prevState => {
+      let hasPurged = false;
+      const cleanState = { ...prevState };
+
+      Object.keys(cleanState).forEach(cachedOrderNo => {
+        if (!validOrderNumbers.has(cachedOrderNo)) {
+          delete cleanState[cachedOrderNo];
+          hasPurged = true;
+        }
+      });
+
+      return hasPurged ? cleanState : prevState;
+    });
   }, [base.baseOrderGroups]);
 
   const orderGroups = useMemo(() => {
@@ -55,13 +88,25 @@ export function useStockTransferReceive() {
         const product = st.product_id as ProductRow;
         const pid = product?.product_id || st.product_id;
         
-        const rfids = receivedItemsState[group.orderNo]?.[pid as number] || [];
+        const scanLogs = receivedItemsState[group.orderNo] || [];
+        const itemScans = scanLogs.filter(s => s.status === 'SUCCESS' && s.productId === pid);
+        const rfids = itemScans.map(s => s.rfid);
+
+        const uom = typeof product?.unit_of_measurement === 'object' ? product.unit_of_measurement : null;
+        const unitName = (uom?.unit_name || '').toLowerCase();
+        const unitId = Number(uom?.unit_id || 0);
+
+        // Mark as loose pack if unit is pieces, tie, pcs, or loose (these don't need RFID scanning)
+        const isLoosePack = unitName.includes('loose') || unitName.includes('pieces') || unitName.includes('pcs') || unitName.includes('tie') || unitId === 4;
+        
+        const manualQty = (manualQtysState[group.orderNo] || {})[pid as number] || 0;
         
         return {
           ...st,
-          receivedQty: rfids.length,
+          receivedQty: isLoosePack ? manualQty : rfids.length,
           receivedRfids: rfids,
-          dispatched_rfids: (st as OrderGroupItem).dispatched_rfids || []
+          dispatched_rfids: (st as OrderGroupItem).dispatched_rfids || [],
+          isLoosePack
         };
       });
 
@@ -70,7 +115,7 @@ export function useStockTransferReceive() {
         items: enrichedItems
       };
     });
-  }, [base.baseOrderGroups, receivedItemsState]);
+  }, [base.baseOrderGroups, receivedItemsState, manualQtysState]);
 
   const selectedGroup = useMemo(() => {
     if (!base.selectedOrderNo) return null;
@@ -93,7 +138,8 @@ export function useStockTransferReceive() {
 
       const itemsPayload = group.items.map((i: OrderGroupItem) => ({
         id: i.id,
-        status: 'Received'
+        status: 'Received',
+        received_quantity: i.receivedQty || 0
       }));
 
       await stockTransferLifecycleService.submitStatusUpdate({ 
@@ -105,6 +151,11 @@ export function useStockTransferReceive() {
       toast.success(`Order ${orderNo} successfully received!`);
       base.setSelectedOrderNo(null);
       setReceivedItemsState(prev => {
+        const next = { ...prev };
+        delete next[orderNo];
+        return next;
+      });
+      setManualQtysState(prev => {
         const next = { ...prev };
         delete next[orderNo];
         return next;
@@ -161,6 +212,34 @@ export function useStockTransferReceive() {
       toast.error("Please select a dispatched order first before scanning");
       return;
     }
+
+    const pushError = (msg: string, type: string = 'Error') => {
+      playErrorSound();
+      const newError: ScanLog = {
+        rfid,
+        timestamp: Date.now(),
+        status: 'ERROR',
+        errorType: type,
+        productName: msg
+      };
+      setReceivedItemsState(prev => ({
+        ...prev,
+        [base.selectedOrderNo!]: [newError, ...(prev[base.selectedOrderNo!] || [])]
+      }));
+    };
+
+    // Basic validation: Ignore very short strings (accidental noise)
+    if (rfid.length < 8) return;
+
+    // Spam prevention: Ignore the same tag if processed within the last 10 seconds
+    const now = Date.now();
+    const lastTime = recentLocks.current.get(rfid) || 0;
+    if (now - lastTime < 10000) {
+      setIsThrottled(true);
+      setTimeout(() => setIsThrottled(false), 2000);
+      return;
+    }
+    recentLocks.current.set(rfid, now);
     
     try {
       const match = await stockTransferLifecycleService.lookupRfid(rfid);
@@ -173,58 +252,44 @@ export function useStockTransferReceive() {
       });
 
       if (!itemInOrder) {
-        playErrorSound();
-        toast.error(`Invalid Scan`, { description: `Product is not part of this order!` });
+        pushError(`Product is not part of this order!`, 'Mismatch');
         return;
       }
 
       const dispatchedTags = itemInOrder.dispatched_rfids || [];
       if (dispatchedTags.length > 0 && !dispatchedTags.map(t => String(t).trim()).includes(String(rfid).trim())) {
-        playErrorSound();
-        toast.error("Invalid RFID Tag", { description: "Tag was not part of original dispatch." });
+        pushError("Tag was not part of original dispatch.", "Mismatch");
         return;
       }
 
-      const currentRfids = receivedItemsState[base.selectedOrderNo!]?.[productId] || [];
-      if (currentRfids.includes(rfid)) {
-        playErrorSound();
-        toast.warning("Already Scanned");
-        return;
-      }
-
-      const allScannedInOrder = Object.values(receivedItemsState[base.selectedOrderNo!] || {}).flat();
-      if (allScannedInOrder.includes(rfid)) {
-        playErrorSound();
-        toast.error("Duplicate RFID in order.");
+      const currentScans = receivedItemsState[base.selectedOrderNo!] || [];
+      if (currentScans.some(s => s.status === 'SUCCESS' && s.rfid === rfid)) {
+        pushError("Already Scanned", "Duplicate");
         return;
       }
       
       const targetQty = itemInOrder.ordered_quantity || 0;
       if (itemInOrder.receivedQty >= targetQty) {
-        playErrorSound();
-        toast.info(`Already Complete`);
+        pushError(`Already Complete for ${match.productName}`, "Over-scan");
         return;
       }
       
-      setReceivedItemsState(prev => {
-        const orderState = prev[base.selectedOrderNo!] || {};
-        const rfids = orderState[productId] || [];
-        return {
-          ...prev,
-          [base.selectedOrderNo!]: {
-            ...orderState,
-            [productId]: [...rfids, rfid]
-          }
-        };
-      });
+      const newScan: ScanLog = {
+        rfid,
+        productId,
+        productName: match.productName,
+        timestamp: Date.now(),
+        status: 'SUCCESS'
+      };
+
+      setReceivedItemsState(prev => ({
+        ...prev,
+        [base.selectedOrderNo!]: [newScan, ...(prev[base.selectedOrderNo!] || [])]
+      }));
       
       playSuccessSound();
-      toast.success(`Received & Verified: ${match.productName}`);
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'RFID lookup failed';
-      console.error('Scanner lookup error:', error);
-      playErrorSound();
-      toast.error("RFID lookup failed", { description: message });
+      pushError('Tag not found in inventory', 'Not Found');
     }
   };
 
@@ -232,17 +297,36 @@ export function useStockTransferReceive() {
     if (!base.selectedOrderNo || !selectedGroup) return;
     
     setReceivedItemsState(prev => {
-      const orderState = { ...(prev[base.selectedOrderNo!] || {}) };
-      selectedGroup.items.forEach(item => {
+      const dispatchLogs: ScanLog[] = selectedGroup.items.flatMap(item => {
         const product = item.product_id as ProductRow;
         const itemPid = Number(product?.product_id || item.product_id);
-        orderState[itemPid] = [...(item.dispatched_rfids || [])];
+        return (item.dispatched_rfids || []).map(rfid => ({
+          rfid,
+          productId: itemPid,
+          productName: product?.product_name || `Item ${itemPid}`,
+          timestamp: Date.now(),
+          status: 'SUCCESS' as const,
+        }));
       });
-      return { ...prev, [base.selectedOrderNo!]: orderState };
+      return { ...prev, [base.selectedOrderNo!]: dispatchLogs };
     });
     
     toast.success("All items verified as received.");
   }, [base.selectedOrderNo, selectedGroup]);
+
+  const updateManualQty = (productId: number, qty: number) => {
+    if (!base.selectedOrderNo) return;
+    setManualQtysState(prev => {
+      const orderManual = prev[base.selectedOrderNo!] || {};
+      return {
+        ...prev,
+        [base.selectedOrderNo!]: {
+          ...orderManual,
+          [productId]: qty
+        }
+      };
+    });
+  };
 
   return {
     ...base,
@@ -251,5 +335,13 @@ export function useStockTransferReceive() {
     receiveOrder,
     handleScanRFID,
     verifyAll,
+    updateManualQty,
+    recentScans: (base.selectedOrderNo ? receivedItemsState[base.selectedOrderNo] : []) || [],
+    isThrottled,
+    clearHistory: () => {
+      if (base.selectedOrderNo) {
+        setReceivedItemsState(prev => ({ ...prev, [base.selectedOrderNo!]: [] }));
+      }
+    }
   };
 }

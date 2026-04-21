@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { stockTransferLifecycleService } from '../../services/stock-transfer.lifecycle';
 import { groupByOrderNo, resolveBranchName } from '../../services/stock-transfer.helpers';

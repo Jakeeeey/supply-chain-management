@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Printer, Download, X, Loader2, FileText } from 'lucide-react';
-import { ScannedItem } from '../../types/stock-transfer.types';
+import { ScannedItem, CompanyData } from '../../types/stock-transfer.types';
 import { generateStockTransferPDF } from '../../utils/generate-stock-transfer-pdf';
 
 interface StockTransferPrintPreviewProps {
@@ -36,10 +36,28 @@ export function StockTransferPrintPreview({
 }: StockTransferPrintPreviewProps) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [generating, setGenerating] = useState(open);
+  const [companyData, setCompanyData] = useState<CompanyData | null>(null);
 
   useEffect(() => {
     setGenerating(open);
   }, [open]);
+
+  // Fetch company data on mount
+  useEffect(() => {
+    const fetchCompany = async () => {
+      try {
+        const res = await fetch('/api/pdf/company');
+        if (res.ok) {
+          const result = await res.json();
+          const company = result.data?.[0] || (Array.isArray(result.data) ? null : result.data);
+          setCompanyData(company);
+        }
+      } catch (err) {
+        console.error('Error fetching company data:', err);
+      }
+    };
+    fetchCompany();
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -52,6 +70,7 @@ export function StockTransferPrintPreview({
         targetBranchLabel,
         leadDate,
         scannedItems,
+        companyData,
       });
 
       const blob = doc.output('blob');
@@ -61,7 +80,7 @@ export function StockTransferPrintPreview({
     }, 50);
 
     return () => clearTimeout(timer);
-  }, [open, orderNo, status, sourceBranchLabel, targetBranchLabel, leadDate, scannedItems]);
+  }, [open, orderNo, status, sourceBranchLabel, targetBranchLabel, leadDate, scannedItems, companyData]);
 
   const handleClose = useCallback(() => {
     if (pdfUrl) {
@@ -79,13 +98,14 @@ export function StockTransferPrintPreview({
       targetBranchLabel,
       leadDate,
       scannedItems,
+      companyData,
     });
     doc.autoPrint();
     const blob = doc.output('blob');
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank');
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
-  }, [orderNo, status, sourceBranchLabel, targetBranchLabel, leadDate, scannedItems]);
+  }, [orderNo, status, sourceBranchLabel, targetBranchLabel, leadDate, scannedItems, companyData]);
 
   const handleSave = useCallback(() => {
     const doc = generateStockTransferPDF({
@@ -95,10 +115,11 @@ export function StockTransferPrintPreview({
       targetBranchLabel,
       leadDate,
       scannedItems,
+      companyData,
     });
     const filename = `ST-SLIP-${orderNo || 'UNSAVED'}.pdf`;
     doc.save(filename);
-  }, [orderNo, status, sourceBranchLabel, targetBranchLabel, leadDate, scannedItems]);
+  }, [orderNo, status, sourceBranchLabel, targetBranchLabel, leadDate, scannedItems, companyData]);
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>

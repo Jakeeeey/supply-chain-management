@@ -1,4 +1,6 @@
-import { useState, useEffect } from 'react';
+'use client';
+
+import { useState, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import { useStockTransferBase } from '../../shared/hooks/use-stock-transfer-base';
 import { stockTransferLifecycleService } from '../../services/stock-transfer.lifecycle';
@@ -111,6 +113,17 @@ export function useStockTransferApproval() {
     setAllocatedQtys(prev => ({ ...prev, [itemId]: boundedQty }));
   };
 
+  /**
+   * Total sum of all allocated quantities in the currently selected group.
+   * Used to determine if the order has at least one item ready for approval.
+   */
+  const totalAllocatedCount = useMemo(() => {
+    if (!base.selectedGroup) return 0;
+    return base.selectedGroup.items.reduce((sum, item) => {
+      return sum + (allocatedQtys[item.id] ?? 0);
+    }, 0);
+  }, [base.selectedGroup, allocatedQtys]);
+
   const updateStatus = async (orderNo: string, status: 'approved' | 'rejected') => {
     const group = base.baseOrderGroups.find((g: OrderGroup) => g.orderNo === orderNo);
     if (!group) return;
@@ -182,5 +195,6 @@ export function useStockTransferApproval() {
     availableQtys,
     fetchingAvailable,
     updateAllocatedQty,
+    totalAllocatedCount,
   };
 }

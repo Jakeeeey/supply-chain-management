@@ -106,6 +106,19 @@ export interface ScannedItem {
   totalAmount: number;
 }
 
+/** 
+ * A single scan event recorded during dispatch or receive verification. 
+ * Linked to a specific stock transfer line item by productId.
+ */
+export interface ScanLog {
+  rfid: string;
+  productId?: number;
+  productName?: string;
+  timestamp: number;
+  status: 'SUCCESS' | 'ERROR';
+  errorType?: string;
+}
+
 // ─── Order Grouping ────────────────────────────────────────
 
 /**
@@ -209,6 +222,7 @@ export interface UpdateTransferItem {
   id: number;
   status: string;
   allocated_quantity?: number;
+  scanned_quantity?: number;
 }
 
 /** RFID tracking entry in the PATCH request body. */
@@ -261,3 +275,16 @@ export type StockTransferStatus =
 
 /** All valid RFID scan types. */
 export type RfidScanType = "DISPATCH" | "RECEIVE";
+
+/** Corporate branding and contact data for PDF generation. */
+export interface CompanyData {
+  company_name: string;
+  company_address: string;
+  company_brgy: string;
+  company_city: string;
+  company_province: string;
+  company_zipCode: string;
+  company_contact: string;
+  company_email: string;
+  company_logo: string;
+}

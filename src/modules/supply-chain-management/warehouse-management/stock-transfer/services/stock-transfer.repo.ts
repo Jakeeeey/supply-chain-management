@@ -96,7 +96,7 @@ export async function fetchProducts(search?: string): Promise<ProductRow[]> {
       "product_category.category_name",
       "product_per_supplier.supplier_id.supplier_shortcut",
     ].join(","),
-    limit: 100,
+    limit: -1,
   };
 
   if (search) {
@@ -105,6 +105,39 @@ export async function fetchProducts(search?: string): Promise<ProductRow[]> {
 
   const res = await fetchItems<ProductRow>("items/products", params);
   return res.data;
+}
+
+/**
+ * Fetches a single product by its ID with full details.
+ */
+export async function fetchProductById(id: number): Promise<ProductRow | null> {
+  const params: Record<string, unknown> = {
+    fields: [
+      "product_id",
+      "product_name",
+      "description",
+      "barcode",
+      "product_code",
+      "cost_per_unit",
+      "price_per_unit",
+      "unit_of_measurement.unit_id",
+      "unit_of_measurement.unit_name",
+      "unit_of_measurement_count",
+      "product_brand.brand_id",
+      "product_brand.brand_name",
+      "product_category.category_id",
+      "product_category.category_name",
+      "product_per_supplier.supplier_id.supplier_shortcut",
+    ].join(","),
+    limit: 1,
+  };
+
+  const res = await fetchItems<ProductRow>(`items/products/${id}`, params);
+  
+  // Directus returns a single object if ID is provided in path, but if we used filter it would be an array.
+  // Our fetchItems likely expects data to be an array or object based on internal implementation.
+  // Let's assume it handles single record fetch correctly based on the common pattern.
+  return res.data ? (Array.isArray(res.data) ? res.data[0] : res.data) as ProductRow : null;
 }
 
 /**

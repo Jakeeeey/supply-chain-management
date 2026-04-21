@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 
 // Shared components
 import { OrderSelectionModal } from '../shared/components/OrderSelectionModal';
+import { QuantityStepper } from '../shared/components/QuantityStepper';
 import {
   Table,
   TableBody,
@@ -191,17 +192,13 @@ export default function StockTransferDispatchManualView() {
                             )}
                           </TableCell>
                           <TableCell className="print:hidden text-center">
-                            <Input
-                              type="number"
-                              min={0}
-                              max={targetQty}
+                            <QuantityStepper 
                               value={currentQty}
-                              onChange={(e) => updateScannedQty(item.id, parseInt(e.target.value) || 0, targetQty)}
-                              className={cn(
-                                "h-8 w-20 mx-auto text-center font-bold text-xs shadow-none border-border",
-                                complete ? "border-emerald-500/50 text-emerald-600 bg-emerald-50/50" : "bg-background"
-                              )}
+                              max={targetQty}
+                              onChange={(val) => updateScannedQty(item.id, val, targetQty)}
                               disabled={selectedGroup?.status !== 'For Picking'}
+                              className="h-8 w-fit mx-auto"
+                              size="sm"
                             />
                           </TableCell>
                           <TableCell className="text-right text-xs font-semibold font-mono text-foreground">

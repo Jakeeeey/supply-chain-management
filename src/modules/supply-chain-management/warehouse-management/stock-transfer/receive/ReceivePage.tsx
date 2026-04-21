@@ -2,13 +2,16 @@
 
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PackageOpen, Printer, ScanLine, Loader2, CheckCircle2, Radar } from 'lucide-react';
+import { PackageOpen, Printer, ScanLine, Loader2, CheckCircle2, Radar, Edit2 } from 'lucide-react';
 import { useStockTransferReceive } from './hooks/use-stock-transfer-receive';
 import { cn } from '@/lib/utils';
+import { ScanHistorySidebar } from '../shared/components/ScanHistorySidebar';
 import type { OrderGroupItem, ProductRow } from '../types/stock-transfer.types';
 
 // Shared components
 import { OrderSelectionModal } from '../shared/components/OrderSelectionModal';
+import { QuantityStepper } from '../shared/components/QuantityStepper';
+import { Badge } from '@/components/ui/badge';
 import {
   Table,
   TableBody,
@@ -29,6 +32,10 @@ export default function StockTransferReceiveView() {
     receiveOrder,
     handleScanRFID,
     getBranchName,
+    recentScans,
+    isThrottled,
+    clearHistory,
+    updateManualQty,
   } = useStockTransferReceive();
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -44,7 +51,7 @@ export default function StockTransferReceiveView() {
     currentPage * itemsPerPage
   ) || [];
 
-  const [, setRfidInput] = useState('');
+  const [rfidInput, setRfidInput] = useState('');
   const [isScanning, setIsScanning] = useState(false);
   const rfidBuffer = React.useRef('');
 
@@ -66,7 +73,7 @@ export default function StockTransferReceiveView() {
         } finally {
           setIsScanning(false);
         }
-      } else if (e.key.length === 1) {
+      } else if (e.key.length === 1 && !isScanning) {
         rfidBuffer.current += e.key;
         setRfidInput(rfidBuffer.current);
       }
@@ -79,147 +86,197 @@ export default function StockTransferReceiveView() {
   const isAllReceived = selectedGroup?.items.every((i: OrderGroupItem) => (i.receivedQty || 0) >= i.ordered_quantity);
 
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-      <div className="flex items-center justify-between space-y-2 print:hidden">
-        <h2 className="text-3xl font-bold tracking-tight text-foreground">Stock Deposit (RFID Verification)</h2>
-        <Button 
-          variant="outline" 
-          onClick={() => window.print()} 
-          disabled={!selectedGroup}
-          className="gap-2 border-border shadow-none"
-        >
-          <Printer className="w-4 h-4" /> Print Document
-        </Button>
-      </div>
-
-      <Card className="border-border shadow-none bg-card">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 print:hidden">
-          <div className="space-y-1">
-            <CardTitle className="text-2xl font-bold">Verification & Deposit</CardTitle>
-            <CardDescription>
-              Verify incoming items and finalize the transfer record.
-            </CardDescription>
+    <div className="flex flex-col lg:flex-row gap-6 p-4 md:p-8 pt-6 min-h-[calc(100vh-4rem)] bg-muted/5">
+      <style dangerouslySetInnerHTML={{
+        __html: `
+        @media print {
+          @page { margin: 1cm; size: auto; }
+          .print-hidden { display: none !important; }
+        }
+        @keyframes loading-bar {
+          0% { transform: translateX(-100%); }
+          50% { transform: translateX(0); }
+          100% { transform: translateX(100%); }
+        }
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          25% { transform: translateX(-4px); }
+          75% { transform: translateX(4px); }
+        }
+        .animate-shake {
+          animation: shake 0.2s ease-in-out 0s 2;
+        }
+      ` }} />
+      
+      {/* Main Content Area */}
+      <div className="flex-1 space-y-4 min-w-0">
+        <div className="flex items-center justify-between space-y-2 print:hidden">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3">
+              <PackageOpen className="w-8 h-8 text-blue-500" />
+              Stock Deposit
+            </h2>
+            <p className="text-muted-foreground text-sm">Verify and finalize incoming transfers via RFID.</p>
           </div>
-          <PackageOpen className="h-8 w-8 text-muted-foreground/30" />
-        </CardHeader>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => window.print()} 
+              disabled={!selectedGroup}
+              className="gap-2 border-border shadow-sm bg-background"
+            >
+              <Printer className="w-4 h-4" /> Print
+            </Button>
+            <Button
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-lg shadow-blue-500/20"
+              disabled={processing || !isAllReceived}
+              onClick={() => receiveOrder(selectedOrderNo!)}
+            >
+              {processing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Finalize Receipt
+            </Button>
+          </div>
+        </div>
 
-        <CardContent className="mt-4 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:hidden">
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                In-Transit Order
-              </label>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 print:hidden">
+          <Card className="md:col-span-2 border-border shadow-sm bg-card/50 backdrop-blur-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Select Incoming Order</CardTitle>
+            </CardHeader>
+            <CardContent>
               <OrderSelectionModal 
                 orderGroups={orderGroups}
                 selectedOrderNo={selectedOrderNo}
                 onSelect={setSelectedOrderNo}
                 getBranchName={getBranchName}
-                title="Select Incoming"
-                description="Choose an order to verify."
+                title="Active Dispatches"
+                description="Select a dispatched order to verify content."
               />
-            </div>
+            </CardContent>
+          </Card>
 
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                Verification Hub
-                {selectedGroup && <span className="flex h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />}
-              </label>
-              <div className={`relative flex flex-col gap-2 p-3 border rounded-lg transition-all duration-300 ${!selectedGroup ? 'border-border bg-muted/20' : 'border-blue-500/30 bg-blue-500/5'}`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Radar className={cn("w-4 h-4", !selectedGroup ? "text-muted-foreground/30" : "text-blue-500 animate-pulse")} />
-                    <span className={cn("text-[10px] font-bold uppercase tracking-widest", !selectedGroup ? "text-muted-foreground/40" : "text-blue-600")}>
-                      {!selectedGroup ? 'Awaiting Order' : 'Scanning Active'}
-                    </span>
-                  </div>
-                </div>
+          <Card className="border-border shadow-sm bg-card/50 backdrop-blur-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Transfer Info</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1">
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Origin:</span>
+                <span className="font-bold">{selectedGroup ? getBranchName(selectedGroup.sourceBranch) : '---'}</span>
               </div>
-            </div>
-          </div>
-
-          {selectedGroup && (
-            <div className="space-y-6 border border-border rounded-xl overflow-hidden shadow-sm bg-card/50">
-              <div className="bg-muted/30 p-4 border-b border-border">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Origin</p>
-                    <p className="font-medium text-sm">{getBranchName(selectedGroup.sourceBranch)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Destination</p>
-                    <p className="font-medium text-sm">{getBranchName(selectedGroup.targetBranch)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider font-mono">{selectedOrderNo}</p>
-                    <p className="font-medium text-sm">Active Reference</p>
-                  </div>
-                </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Status:</span>
+                <Badge variant="outline" className="px-1 py-0 h-4 text-[9px] uppercase">{selectedGroup?.status || 'Waiting'}</Badge>
               </div>
+            </CardContent>
+          </Card>
+        </div>
 
-              <div className="p-4">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-b border-border bg-muted/20">
-                      <TableHead className="text-[10px] uppercase font-bold">Product</TableHead>
-                      <TableHead className="text-[10px] uppercase font-bold text-center">Expected</TableHead>
-                      <TableHead className="text-[10px] uppercase font-bold text-center">Verified</TableHead>
-                      <TableHead className="text-[10px] uppercase font-bold text-right print:hidden">Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paginatedItems.map((item: OrderGroupItem) => {
-                      const complete = (item.receivedQty || 0) >= item.ordered_quantity;
-                      const product = typeof item.product_id === 'object' && item.product_id !== null ? (item.product_id as ProductRow) : null;
-                      const productName = product?.product_name || `PRD-${item.product_id}`;
+        {selectedGroup && (
+          <Card className="border-border shadow-xl bg-card overflow-hidden">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b border-border bg-muted/40 hover:bg-muted/40">
+                    <TableHead className="text-[10px] uppercase font-bold py-4 px-6">Product Details</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold text-center w-[100px]">Unit</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold text-center w-[100px]">Expected</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold text-center w-[150px]">Verified</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold text-right py-4 px-6 print:hidden w-[100px]">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedItems.map((item: OrderGroupItem) => {
+                    const progress = item.ordered_quantity > 0 ? (item.receivedQty || 0) / item.ordered_quantity : 0;
+                    const complete = progress >= 1;
+                    const product = typeof item.product_id === 'object' ? (item.product_id as ProductRow) : null;
+                    const productName = product?.product_name || `PRD-${item.product_id}`;
 
-                      return (
-                        <TableRow key={item.id} className="border-b border-border/50">
-                          <TableCell className="py-3">
-                            <div className="flex flex-col">
-                              <span className="font-semibold text-sm">{productName}</span>
-                              <span className="text-[10px] text-muted-foreground font-mono">ID: {String(product?.product_id || 'N/A')}</span>
+                    return (
+                      <TableRow key={item.id} className="border-b border-border/50 group hover:bg-muted/20 transition-colors">
+                        <TableCell className="py-4 px-6">
+                          <div className="flex items-center gap-3">
+                            <div className={cn(
+                              "p-2 rounded-lg border transition-colors",
+                              complete ? "bg-blue-500/10 border-blue-500/20" : "bg-muted border-border"
+                            )}>
+                              <Radar className={cn("w-4 h-4", complete ? "text-blue-500" : "text-muted-foreground")} />
                             </div>
-                          </TableCell>
-                          <TableCell className="text-sm text-center font-bold">{item.ordered_quantity}</TableCell>
-                           <TableCell className="text-sm text-center">
-                              <span className={cn("font-bold font-mono", complete ? 'text-blue-500' : 'text-amber-500')}>
-                                {item.receivedQty}
+                            <div className="flex flex-col">
+                              <span className="font-bold text-sm group-hover:text-primary transition-colors">{productName}</span>
+                              <span className="text-[10px] text-muted-foreground font-mono">CODE: {product?.product_code || '---'}</span>
+                              {item.isLoosePack && (
+                                <span className="text-[9px] bg-sky-500/10 text-sky-600 px-1.5 py-0.5 rounded w-fit mt-1 font-bold flex items-center gap-1">
+                                  <Edit2 className="w-2 h-2" /> MANUAL ENTRY
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                           <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest border-border/50 bg-muted/30 mx-auto w-fit">
+                            {typeof product?.unit_of_measurement === 'object' && product.unit_of_measurement !== null 
+                              ? (product.unit_of_measurement as { unit_name?: string }).unit_name 
+                              : 'PCS'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-center font-mono font-bold text-sm">{item.ordered_quantity}</TableCell>
+                        <TableCell className="text-center">
+                          {item.isLoosePack ? (
+                            <QuantityStepper 
+                              value={item.receivedQty || 0}
+                              max={item.ordered_quantity || 0}
+                              onChange={(val) => updateManualQty(Number(product?.product_id || item.product_id), val)}
+                              className="h-8 w-fit mx-auto"
+                              size="sm"
+                            />
+                          ) : (
+                            <div className="flex flex-col items-center">
+                              <span className={cn(
+                                "font-bold font-mono text-sm px-3 py-1 rounded-md w-fit mx-auto",
+                                complete ? "bg-blue-500/10 text-blue-600 border border-blue-500/20" : "bg-amber-500/10 text-amber-600 border border-amber-500/20"
+                              )}>
+                                {item.receivedQty || 0}
                               </span>
-                          </TableCell>
-                          <TableCell className="text-right text-sm print:hidden">
-                            {complete ? (
-                              <CheckCircle2 className="w-4 h-4 text-blue-500 ml-auto" />
-                            ) : (
-                              <ScanLine className="w-4 h-4 text-amber-500/50 ml-auto animate-pulse" />
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-
-                <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 print:hidden">
-                  <div className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">
-                    {!isAllReceived ? "Verification in progress..." : "Fully Verified"}
-                  </div>
-                  <div className="flex gap-2 w-full sm:w-auto">
-                    <Button 
-                      size="sm"
-                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-none"
-                      disabled={processing || !isAllReceived}
-                      onClick={() => receiveOrder(selectedOrderNo!)}
-                    >
-                      {processing && <Loader2 className="mr-2 h-3 w-3 animate-spin font-bold" />}
-                      Finalize Receive
-                    </Button>
-                  </div>
-                </div>
-              </div>
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right px-6 print:hidden">
+                          {complete ? (
+                            <div className="flex items-center justify-end text-blue-500 gap-1.5 animate-in fade-in zoom-in duration-500">
+                              <CheckCircle2 className="w-5 h-5" />
+                              <span className="text-[10px] font-bold uppercase tracking-tighter">Verified</span>
+                            </div>
+                          ) : (
+                            <div className="w-full max-w-[60px] ml-auto h-1.5 bg-muted rounded-full overflow-hidden border border-border/50">
+                              <div 
+                                className="h-full bg-amber-500 transition-all duration-500 ease-out"
+                                style={{ width: `${Math.min(100, progress * 100)}%` }}
+                              />
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </Card>
+        )}
+      </div>
+
+      {/* Sidebar Panel */}
+      <aside className="w-full lg:w-[320px] print:hidden">
+        <ScanHistorySidebar 
+          scans={recentScans} 
+          isScanning={isScanning}
+          selectedGroup={selectedGroup}
+          buffer={rfidInput}
+          isThrottled={isThrottled}
+          onClear={clearHistory}
+        />
+      </aside>
     </div>
   );
 }

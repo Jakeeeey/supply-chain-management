@@ -30,6 +30,7 @@ import {
   PaginationEllipsis,
 } from '@/components/ui/pagination';
 import { ScannedItem } from '../../types/stock-transfer.types';
+import { QuantityStepper } from './QuantityStepper';
 
 interface StockTransferTableProps {
   items: ScannedItem[];
@@ -117,16 +118,12 @@ export default function StockTransferTable({ items, onQtyChange, onDelete }: Sto
                   {item.unit}
                 </TableCell>
                 <TableCell className="text-right py-1.5">
-                  <Input
-                    type="number"
-                    min={0}
-                    placeholder="0"
-                    value={item.unitQty === 0 ? '' : item.unitQty}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      onQtyChange(item.rfid, val === '' ? 0 : Math.max(0, parseInt(val) || 0));
-                    }}
-                    className="h-8 w-16 text-xs text-right ml-auto bg-background border-border shadow-none focus-visible:ring-1"
+                  <QuantityStepper 
+                    value={item.unitQty}
+                    max={9999}
+                    onChange={(val) => onQtyChange(item.rfid, val)}
+                    className="h-8 w-fit ml-auto"
+                    size="sm"
                   />
                 </TableCell>
                 <TableCell className="text-xs font-bold text-foreground text-right py-2.5 font-mono">
