@@ -3,10 +3,12 @@
 
 import * as React from "react";
 import { Card } from "@/components/ui/card";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import {
     Select,
     SelectContent,
@@ -40,8 +42,6 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
         setReceiptDate,
     } = useReceivingProductsManual();
 
-    const [localError, setLocalError] = React.useState("");
-
     const branchesLabel = React.useMemo(() => {
         const allocs = Array.isArray(selectedPO?.allocations) ? selectedPO!.allocations : [];
         const names = allocs
@@ -69,11 +69,23 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
     }, [selectedPO, progress]);
 
     const handleContinue = () => {
-        setLocalError("");
-        if (!selectedPO) return setLocalError("Select a PO first.");
-        if (!receiptNo.trim()) return setLocalError("Receipt Number is required.");
-        if (!receiptType.trim()) return setLocalError("Receipt Type is required.");
-        if (!receiptDate.trim()) return setLocalError("Receipt Date is required.");
+        if (!selectedPO) {
+            toast.error("Process aborted", { description: "Select a PO first." });
+            return;
+        }
+
+        const errs: string[] = [];
+        if (!receiptNo.trim()) errs.push("Receipt Number is required.");
+        if (!receiptType.trim()) errs.push("Receipt Type is required.");
+        if (!receiptDate.trim()) errs.push("Receipt Date is required.");
+
+        if (errs.length > 0) {
+            toast.error("Required fields missing", {
+                description: errs.join(" "),
+            });
+            return;
+        }
+
         onContinue();
     };
 
@@ -110,16 +122,56 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
                 ) : null}
             </Card>
 
+            {/* ✅ MERGED: Previous Receipts History */}
+            {selectedPO?.history && selectedPO.history.length > 0 && (
+                <Card className="p-4 border-amber-500/20 bg-amber-500/5">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                        Previous Receipts History
+                    </div>
+                    <div className="mt-3 space-y-2">
+                        {selectedPO.history.map((h: any) => (
+                            <div
+                                key={h.receiptNo}
+                                className="flex items-center justify-between gap-3 text-xs border-b border-amber-500/10 pb-2 last:border-0 last:pb-0"
+                            >
+                                <div className="flex flex-col">
+                                    <span className="font-mono font-medium text-amber-900 dark:text-amber-100">
+                                        {h.receiptNo}
+                                    </span>
+                                    <span className="text-[10px] text-amber-700/70 dark:text-amber-400/60">
+                                        {h.receiptDate || "N/A"}
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-muted-foreground">
+                                        {h.itemsCount} {h.itemsCount === 1 ? "item" : "items"}
+                                    </span>
+                                    <Badge
+                                        variant="outline"
+                                        className={cn(
+                                            "text-[10px] uppercase h-4 px-1 leading-none border-amber-500/30",
+                                            h.isPosted ? "bg-amber-100 text-amber-800" : "bg-white text-muted-foreground"
+                                        )}
+                                    >
+                                        {h.isPosted ? "Posted" : "Unposted"}
+                                    </Badge>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </Card>
+            )}
+
             <Card className="p-4">
                 <div className="text-sm font-semibold">Receipt Details</div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                    Create receipt first, then continue to manual product quantities.
+                    Create receipt first, then continue to product verification.
                 </div>
 
                 <div className="mt-4 grid gap-4">
                     <div className="grid gap-2">
                         <Label>Receipt Number *</Label>
-                        <Input value={receiptNo} onChange={(e) => setReceiptNo(e.target.value)} />
+                        <Input value={receiptNo} onChange={(e) => setReceiptNo(e.target.value)} placeholder="Enter receipt number" />
                     </div>
 
                     <div className="grid gap-2">
@@ -147,12 +199,10 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
                         />
                     </div>
 
-                    {localError ? (
-                        <div className="text-xs text-destructive">{localError}</div>
-                    ) : null}
+
 
                     <Button type="button" className="w-full" onClick={handleContinue}>
-                        Continue to Manual Entry
+                        Continue Product Verification
                     </Button>
                 </div>
             </Card>

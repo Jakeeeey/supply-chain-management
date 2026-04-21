@@ -3,6 +3,7 @@
 
 import * as React from "react";
 import { Card } from "@/components/ui/card";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -41,8 +42,6 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
         setReceiptDate,
     } = useReceivingProducts();
 
-    const [localError, setLocalError] = React.useState("");
-
     const branchesLabel = React.useMemo(() => {
         const allocs = Array.isArray(selectedPO?.allocations) ? selectedPO!.allocations : [];
         const names = allocs
@@ -70,11 +69,23 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
     }, [selectedPO, progress]);
 
     const handleContinue = () => {
-        setLocalError("");
-        if (!selectedPO) return setLocalError("Select a PO first.");
-        if (!receiptNo.trim()) return setLocalError("Receipt Number is required.");
-        if (!receiptType.trim()) return setLocalError("Receipt Type is required.");
-        if (!receiptDate.trim()) return setLocalError("Receipt Date is required.");
+        if (!selectedPO) {
+            toast.error("Process aborted", { description: "Select a PO first." });
+            return;
+        }
+
+        const errs: string[] = [];
+        if (!receiptNo.trim()) errs.push("Receipt Number is required.");
+        if (!receiptType.trim()) errs.push("Receipt Type is required.");
+        if (!receiptDate.trim()) errs.push("Receipt Date is required.");
+
+        if (errs.length > 0) {
+            toast.error("Required fields missing", {
+                description: errs.join(" "),
+            });
+            return;
+        }
+
         onContinue();
     };
 
@@ -192,9 +203,7 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
                         />
                     </div>
 
-                    {localError ? (
-                        <div className="text-xs text-destructive">{localError}</div>
-                    ) : null}
+
 
                     <Button type="button" className="w-full" onClick={handleContinue}>
                         Continue Product Scanning

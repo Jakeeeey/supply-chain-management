@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useReceivingProductsManual } from "../../providers/ReceivingProductsManualProvider";
 import { Scan } from "lucide-react";
 
-export function ScanPOStep() {
+export function ScanPOStep({ onContinue }: { onContinue?: () => void }) {
     const { poBarcode, setPoBarcode, verifyPO, verifyError, selectedPO } =
         useReceivingProductsManual();
 
@@ -24,6 +24,17 @@ export function ScanPOStep() {
             .filter(Boolean) as string[];
         return names.length ? names.join(", ") : "—";
     }, [selectedPO]);
+
+    const handleVerify = async () => {
+        await verifyPO();
+    };
+
+    // Auto-advance when PO is selected (e.g. from sidebar click)
+    React.useEffect(() => {
+        if (selectedPO && onContinue) {
+            onContinue();
+        }
+    }, [selectedPO?.id]);
 
     return (
         <div className="space-y-4">
@@ -58,7 +69,7 @@ export function ScanPOStep() {
                         onChange={(e) => setPoBarcode(e.target.value)}
                         placeholder="Scan or type PO barcode..."
                         onKeyDown={(e) => {
-                            if (e.key === "Enter") verifyPO();
+                            if (e.key === "Enter") handleVerify();
                         }}
                     />
 
@@ -68,7 +79,7 @@ export function ScanPOStep() {
 
                     <Button
                         className="w-full bg-orange-600 hover:bg-orange-700"
-                        onClick={verifyPO}
+                        onClick={handleVerify}
                         type="button"
                     >
                         Verify &amp; Continue
@@ -78,3 +89,4 @@ export function ScanPOStep() {
         </div>
     );
 }
+

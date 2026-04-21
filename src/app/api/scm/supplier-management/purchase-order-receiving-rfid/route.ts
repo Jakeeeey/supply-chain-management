@@ -184,11 +184,11 @@ const POR_SAFE_FIELDS = "purchase_order_product_id,purchase_order_id,product_id,
 
 async function fetchApprovedNotReceivedPOs(base: string) {
     const qs = [
-        "limit=-1", "sort=-date_encoded",
+        "limit=-1", "sort=-purchase_order_id",
         "fields=purchase_order_id,purchase_order_no,date,date_encoded,approver_id,date_approved,payment_status,inventory_status,date_received,supplier_name,total_amount",
         "filter[_or][0][inventory_status][_eq]=3", "filter[_or][1][inventory_status][_eq]=9",
         "filter[_or][2][inventory_status][_eq]=11", "filter[_or][3][inventory_status][_eq]=12",
-        "filter[date_received][_null]=true", "filter[inventory_status][_neq]=6",
+        "filter[date_received][_null]=true", "filter[inventory_status][_neq]=13",
     ].join("&");
     const url = `${base}/items/${PO_COLLECTION}?${qs}`;
     const j = await fetchJson(url) as any;

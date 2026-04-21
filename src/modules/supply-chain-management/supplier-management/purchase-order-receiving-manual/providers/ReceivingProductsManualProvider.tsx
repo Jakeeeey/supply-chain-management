@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { toast } from "sonner";
 
 type POStatus = "OPEN" | "PARTIAL" | "CLOSED";
 
@@ -16,12 +17,14 @@ export type ReceivingListItem = {
 };
 
 export type ReceivingPOItem = {
-    id: string; // porId
+    id: string; // unique identifier (porId or placeholder)
     porId?: string;
     productId: string;
+    branchId?: string;
     name: string;
     barcode: string;
     uom: string;
+    uomCount?: number;
     expectedQty: number;
     receivedQty: number;
     requiresRfid: true;
@@ -34,6 +37,18 @@ export type ReceivingPOItem = {
     netAmount?: number;
     lot_no?: string;
     expiry_date?: string;
+    isExtra?: boolean;
+};
+
+export type LotOption = {
+    lot_id: number;
+    lot_name: string;
+};
+
+export type UnitOption = {
+    unit_id: number;
+    unit_name: string;
+    unit_shortcut: string;
 };
 
 export type ReceivingPODetail = {
@@ -47,10 +62,15 @@ export type ReceivingPODetail = {
         branch: { id: string; name: string };
         items: ReceivingPOItem[];
     }>;
+    history?: Array<{
+        receiptNo: string;
+        receiptDate: string;
+        isPosted: boolean;
+        itemsCount: number;
+    }>;
     createdAt: string;
+    priceType?: string;
 };
-
-
 
 export type SavedItem = {
     productId: string;
@@ -59,8 +79,7 @@ export type SavedItem = {
     expectedQty: number;
     receivedQtyAtStart: number;
     receivedQtyNow: number;
-    rfids?: string[]; // Kept for compatibility but unused
-
+    rfids?: string[];
 };
 
 export type ReceiptSavedInfo = {
@@ -110,9 +129,29 @@ type Ctx = {
     receiptSaved: ReceiptSavedInfo | null;
     clearReceiptSaved: () => void;
 
-    saveReceipt: (porMetaData?: Record<string, { lotNo: string; expiryDate: string }>) => Promise<void>;
+    saveReceipt: (porMetaData?: Record<string, { lotNo: string; batchNo?: string; expiryDate: string }>) => Promise<void>;
     savingReceipt: boolean;
     saveError: string;
+
+    // ✅ NEW: Barcode Verification
+    verifiedBarcodes: string[];
+    verifyBarcode: (barcode: string) => Promise<boolean>;
+    markProductAsVerified: (productId: string) => void;
+    activeProductId: string | null;
+    setActiveProductId: (id: string | null) => void;
+    scanError: string;
+
+    // ✅ NEW: Extra Product
+    lookupProduct: (barcode: string) => Promise<{ productId: string; name: string; barcode: string; unitPrice: number } | null>;
+    addExtraProductLocally: (item: { productId: string; name: string; barcode: string; branchId: string; branchName: string; unitPrice?: number }) => void;
+
+    // ✅ LOTS
+    lots: LotOption[];
+    lotsLoading: boolean;
+
+    // ✅ UNITS
+    units: UnitOption[];
+    unitsLoading: boolean;
 };
 
 const ReceivingProductsManualContext = React.createContext<Ctx | null>(null);
@@ -133,13 +172,37 @@ function todayYMD() {
     return `${yyyy}-${mm}-${dd}`;
 }
 
-function genReceiptNo() {
-    return `REC-${String(Math.floor(Math.random() * 9000) + 1000)}`;
-}
-
 const API_URL = "/api/scm/supplier-management/purchase-order-receiving-manual";
 
-
+const playBeep = (type: "success" | "error" = "success") => {
+    try {
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioContext) return;
+        const ctx = new AudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        if (type === "success") {
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(800, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.1, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.1);
+        } else {
+            osc.type = "square";
+            osc.frequency.setValueAtTime(300, ctx.currentTime);
+            gain.gain.setValueAtTime(0.1, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.3);
+        }
+    } catch {
+        // Ignored if audio is blocked or unsupported
+    }
+};
 
 export function ReceivingProductsManualProvider({ children }: { children: React.ReactNode }) {
     const [list, setList] = React.useState<ReceivingListItem[]>([]);
@@ -166,6 +229,19 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
     const [receiptSaved, setReceiptSaved] = React.useState<ReceiptSavedInfo | null>(null);
     const clearReceiptSaved = React.useCallback(() => setReceiptSaved(null), []);
 
+    // ✅ NEW: Barcode Verification State
+    const [verifiedBarcodes, setVerifiedBarcodes] = React.useState<string[]>([]);
+    const [activeProductId, setActiveProductId] = React.useState<string | null>(null);
+    const [scanError, setScanError] = React.useState("");
+
+    // ✅ LOTS
+    const [lots, setLots] = React.useState<LotOption[]>([]);
+    const [lotsLoading, setLotsLoading] = React.useState(false);
+
+    // ✅ UNITS
+    const [units, setUnits] = React.useState<UnitOption[]>([]);
+    const [unitsLoading, setUnitsLoading] = React.useState(false);
+
     const refreshList = React.useCallback(async () => {
         setListLoading(true);
         setListError("");
@@ -177,6 +253,7 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
             const msg = (e as Error)?.message ?? String(e);
             if (msg.trim().toLowerCase() !== "fetch failed") {
                 setListError(msg);
+                toast.error(`Load failed: ${msg}`);
             }
             setList([]);
         } finally {
@@ -188,9 +265,52 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
         refreshList();
     }, [refreshList]);
 
+    // ✅ Fetch lots on mount
+    React.useEffect(() => {
+        (async () => {
+            setLotsLoading(true);
+            try {
+                const r = await fetch(API_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "get_lots" }),
+                });
+                const j = await asJson(r);
+                setLots(Array.isArray(j?.data) ? j.data : []);
+            } catch {
+                setLots([]);
+            } finally {
+                setLotsLoading(false);
+            }
+        })();
+    }, []);
+
+    // ✅ Fetch units on mount
+    React.useEffect(() => {
+        (async () => {
+            setUnitsLoading(true);
+            try {
+                const r = await fetch(API_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "get_units" }),
+                });
+                const j = await asJson(r);
+                setUnits(Array.isArray(j?.data) ? j.data : []);
+            } catch {
+                setUnits([]);
+            } finally {
+                setUnitsLoading(false);
+            }
+        })();
+    }, []);
+
     const resetSession = React.useCallback(() => {
         setSaveError("");
+        setScanError("");
         setManualCounts({});
+        setVerifiedBarcodes([]);
+        setActiveProductId(null);
     }, []);
 
     const openPOById = React.useCallback(
@@ -202,7 +322,6 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
 
             // ✅ avoid stale PO if server blocks or errors
             setSelectedPO(null);
-
 
             const id = String(poId ?? "").trim();
             if (!id) return;
@@ -219,7 +338,7 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
                 setSelectedPO(detail);
 
                 setReceiptDate(todayYMD());
-                setReceiptNo(genReceiptNo());
+                setReceiptNo("");
                 setReceiptType("");
 
                 setPoBarcode(detail?.poNumber ?? "");
@@ -227,6 +346,7 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
                 const msg = (e as Error)?.message ?? String(e);
                 if (msg.trim().toLowerCase() !== "fetch failed") {
                     setVerifyError(msg);
+                    toast.error(`Error: ${msg}`);
                 }
             }
         },
@@ -261,7 +381,7 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
                 setSelectedPO(detail);
 
                 setReceiptDate(todayYMD());
-                setReceiptNo(genReceiptNo());
+                setReceiptNo("");
                 setReceiptType("");
 
                 setPoBarcode(code);
@@ -269,6 +389,7 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
                 const msg = (e as Error)?.message ?? String(e);
                 if (msg.trim().toLowerCase() !== "fetch failed") {
                     setVerifyError(msg);
+                    toast.error(`Verification error: ${msg}`);
                 }
             }
         },
@@ -322,19 +443,163 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
         }
     }, [openPOByBarcode, poBarcode]);
 
+    // ✅ NEW: Product lookup for extra products
+    const lookupProduct = React.useCallback(async (barcode: string) => {
+        try {
+            const r = await fetch(API_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "lookup_product", barcode }),
+            });
+            const j = await asJson(r);
+            return j?.data || null;
+        } catch {
+            return null;
+        }
+    }, []);
 
+    // ✅ NEW: Add extra product locally
+    const addExtraProductLocally = React.useCallback((item: { productId: string; name: string; barcode: string; branchId: string; branchName: string; unitPrice?: number }) => {
+        setSelectedPO(prev => {
+            if (!prev) return prev;
+            const updated = { ...prev };
+            const allocs = [...updated.allocations];
 
-    const saveReceipt = React.useCallback(async (porMetaData?: Record<string, { lotNo: string; expiryDate: string }>) => {
+            let branchAlloc = allocs.find(a => a.branch.id === item.branchId);
+            if (!branchAlloc) {
+                branchAlloc = { branch: { id: item.branchId, name: item.branchName }, items: [] };
+                allocs.push(branchAlloc);
+            }
+
+            const existingItem = branchAlloc.items.find(i => i.productId === item.productId);
+            if (!existingItem) {
+                branchAlloc.items = [...branchAlloc.items, {
+                    id: `${item.productId}-${item.branchId}`,
+                    porId: "",
+                    productId: String(item.productId),
+                    branchId: String(item.branchId),
+                    name: item.name,
+                    barcode: item.barcode,
+                    uom: "—",
+                    expectedQty: 0,
+                    receivedQty: 0,
+                    requiresRfid: true,
+                    taggedQty: 0,
+                    rfids: [],
+                    isReceived: false,
+                    unitPrice: item.unitPrice || 0,
+                    discountType: "Standard",
+                    discountAmount: 0,
+                    netAmount: 0,
+                    isExtra: true
+                }];
+            }
+
+            updated.allocations = allocs;
+            return updated;
+        });
+    }, []);
+
+    // ✅ NEW: Barcode verification (for both existing and extra products)
+    const verifyBarcode = React.useCallback(async (barcode: string) => {
+        if (!selectedPO) return false;
+
+        const code = String(barcode).trim().toLowerCase();
+        if (!code) return false;
+
+        const allocs = Array.isArray(selectedPO.allocations) ? selectedPO.allocations : [];
+        let matchingItem: ReceivingPOItem | null = null;
+
+        // Find matching item in PO
+        for (const alloc of allocs) {
+            for (const item of alloc.items) {
+                if (
+                    String(item.barcode).toLowerCase() === code ||
+                    String(item.productId) === code
+                ) {
+                    matchingItem = item;
+                    break;
+                }
+            }
+            if (matchingItem) break;
+        }
+
+        if (!matchingItem) {
+            // ✅ EXTRA PRODUCT LOGIC
+            setScanError("");
+            playBeep("success");
+            const extraMatch = await lookupProduct(code);
+            if (!extraMatch) {
+                playBeep("error");
+                setScanError(`Product not found in this Purchase Order, and not found in Master Catalog.`);
+                return false;
+            }
+
+            const branchId = selectedPO.allocations[0]?.branch?.id || "0";
+            const branchName = selectedPO.allocations[0]?.branch?.name || "Unassigned";
+
+            addExtraProductLocally({
+                productId: extraMatch.productId,
+                name: extraMatch.name,
+                barcode: extraMatch.barcode,
+                branchId,
+                branchName,
+                unitPrice: extraMatch.unitPrice
+            });
+
+            matchingItem = { productId: extraMatch.productId } as ReceivingPOItem;
+        }
+
+        // Ensure not already verified
+        if (verifiedBarcodes.includes(matchingItem.productId)) {
+            playBeep("error");
+            setScanError("Product already verified for this session.");
+            return false;
+        }
+
+        if (matchingItem) {
+            setVerifiedBarcodes((prev) => [...new Set([...prev, matchingItem!.productId])]);
+            setActiveProductId(matchingItem.productId);
+            toast.info(`Product Verified: ${matchingItem.name}`);
+            playBeep("success");
+            setScanError("");
+            return true;
+        }
+
+        return false;
+    }, [selectedPO, verifiedBarcodes, lookupProduct, addExtraProductLocally]);
+
+    const markProductAsVerified = React.useCallback((productId: string) => {
+        setVerifiedBarcodes(prev => {
+            if (prev.includes(productId)) return prev;
+            return [...prev, productId];
+        });
+        setActiveProductId(productId);
+    }, []);
+
+    const saveReceipt = React.useCallback(async (porMetaData?: Record<string, { lotNo: string; batchNo?: string; expiryDate: string }>) => {
         setSaveError("");
 
         const poId = selectedPO?.id;
         if (!poId) return setSaveError("Select a PO first.");
-        if (!receiptNo.trim()) return setSaveError("Receipt Number is required.");
-        if (!receiptType.trim()) return setSaveError("Receipt Type is required.");
-        if (!receiptDate.trim()) return setSaveError("Receipt Date is required.");
+        const errs: string[] = [];
+        if (!receiptNo.trim()) errs.push("Receipt Number is required.");
+        if (!receiptType.trim()) errs.push("Receipt Type is required.");
+        if (!receiptDate.trim()) errs.push("Receipt Date is required.");
+
+        if (errs.length > 0) {
+            toast.error("Required fields missing", {
+                description: errs.join(" "),
+            });
+            return setSaveError(errs.join(" "));
+        }
 
         const counts = manualCounts ?? {};
-        if (!Object.keys(counts).length || Object.values(counts).every(c => c <= 0)) return setSaveError("Enter at least 1 count before saving.");
+        if (!Object.keys(counts).length || Object.values(counts).every(c => c <= 0)) {
+            const err = "Enter at least 1 count before saving.";
+            toast.error(err);
+            return setSaveError(err);
+        }
 
         setSavingReceipt(true);
         try {
@@ -361,21 +626,21 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
                 setPoBarcode(detail?.poNumber ?? "");
             }
 
-            // ✅ gather items for printing (All items in PO, with their current statuses)
+            // ✅ gather items for printing
             const allocs = Array.isArray(detail?.allocations) ? detail.allocations : [];
             const allItems = allocs.flatMap((a: unknown) => {
                 const aObj = a as Record<string, unknown>;
                 return Array.isArray(aObj?.items) ? aObj.items : [];
             });
-            
-            // Calculate if fully received across all items
+
+            // Calculate if fully received
             const countsMap = counts || {};
             const isFullyReceivedNow = allItems.every((it: unknown) => {
                 const itObj = it as ReceivingPOItem;
                 const scannedNow = Number(countsMap[itObj.id] || 0);
                 return (Number(itObj.receivedQty) + scannedNow) >= Number(itObj.expectedQty);
             });
-            
+
             const savedItems: SavedItem[] = allItems.map((it: unknown) => {
                 const itObj = it as ReceivingPOItem;
                 const scannedNow = Number(countsMap[itObj.id] || 0);
@@ -389,7 +654,8 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
                     rfids: []
                 };
             });
-
+            
+            toast.success(`Receipt ${oldReceiptNo} saved successfully!`);
 
             // ✅ mark success for UI
             setReceiptSaved({
@@ -405,12 +671,14 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
             refreshList();
             resetSession();
 
-            // ✅ IMPORTANT: prepare a new receipt immediately (supports multiple receipts)
+            // ✅ prepare a new receipt immediately
             setReceiptDate(todayYMD());
-            setReceiptNo(genReceiptNo());
+            setReceiptNo("");
             setReceiptType("");
         } catch (e: unknown) {
-            setSaveError((e as Error)?.message ?? String(e));
+            const msg = (e as Error)?.message ?? String(e);
+            setSaveError(msg);
+            toast.error(`Save failed: ${msg}`);
         } finally {
             setSavingReceipt(false);
         }
@@ -450,6 +718,23 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
         saveReceipt,
         savingReceipt,
         saveError,
+
+        // ✅ NEW
+        verifiedBarcodes,
+        verifyBarcode,
+        markProductAsVerified,
+        activeProductId,
+        setActiveProductId,
+        scanError,
+
+        lookupProduct,
+        addExtraProductLocally,
+
+        lots,
+        lotsLoading,
+
+        units,
+        unitsLoading,
     };
 
     return <ReceivingProductsManualContext.Provider value={value}>{children}</ReceivingProductsManualContext.Provider>;

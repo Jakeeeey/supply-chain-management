@@ -477,8 +477,8 @@ function buildReceiptSummary(porRows: PORRow[]) {
             vat += toNum(r?.vat_amount || 0);
             wht += toNum(r?.withholding_amount || 0);
             
-            // Reconstruct net based on formula: (Gross - Disc) + VAT - WHT
-            net += toNum(r?.total_amount || 0) - toNum(r?.withholding_amount || 0);
+            // Reconstruct net based on formula: Total - Disc - WHT
+            net += toNum(r?.total_amount || 0) - toNum(r?.discounted_amount || 0) - toNum(r?.withholding_amount || 0);
         }
 
         receipts.push({
@@ -741,7 +741,7 @@ export async function GET() {
             const unpostedRows = porRows.filter(r => toNum(r.isPosted) === 0 && (toNum(r.received_quantity) > 0 || toStr(r.receipt_no)));
             let listTotal = 0;
             if (unpostedRows.length > 0) {
-                const porSum = unpostedRows.reduce((sum, r) => sum + (toNum(r.total_amount) - toNum(r.withholding_amount)), 0);
+                const porSum = unpostedRows.reduce((sum, r) => sum + (toNum(r.total_amount) - toNum(r.discounted_amount) - toNum(r.withholding_amount)), 0);
                 if (porSum === 0) {
                     // Fallback for old records: recalculate from line items
                     for (const r of unpostedRows) {
@@ -972,7 +972,7 @@ export async function POST(req: NextRequest) {
                     detailDisc = porDisc;
                     detailVat = porVat;
                     detailWht = porWht;
-                    detailTotal = porGross - porWht;
+                    detailTotal = porGross - porDisc - porWht;
                 }
             } else {
                 detailGross = toNum(po?.gross_amount);
@@ -980,6 +980,11 @@ export async function POST(req: NextRequest) {
                 detailVat = toNum(po?.vat_amount);
                 detailWht = toNum(po?.withholding_tax_amount);
                 detailTotal = toNum(po?.total_amount);
+
+                // ✅ Ensure total matches components if it was stored incorrectly
+                if (detailTotal === detailGross - detailWht && detailDisc > 0) {
+                    detailTotal = detailGross - detailDisc - detailWht;
+                }
             }
 
             const detail: PostingPODetail = {

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { toast } from "sonner";
 
 type POStatus = "OPEN" | "PARTIAL" | "CLOSED";
 
@@ -317,6 +318,7 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
             const msg = String(e?.message ?? e);
             if (msg.trim().toLowerCase() !== "fetch failed") {
                 setListError(msg);
+                toast.error(`Load failed: ${msg}`);
             }
             setList([]);
         } finally {
@@ -417,6 +419,7 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
                 const msg = e instanceof Error ? e.message : String(e);
                 if (msg.trim().toLowerCase() !== "fetch failed") {
                     setVerifyError(msg);
+                    toast.error(`Open failed: ${msg}`);
                 }
             }
         },
@@ -463,6 +466,7 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
                 const msg = e instanceof Error ? e.message : String(e);
                 if (msg.trim().toLowerCase() !== "fetch failed") {
                     setVerifyError(msg);
+                    toast.error(`Verify failed: ${msg}`);
                 }
             }
         },
@@ -554,6 +558,7 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
         const value = (rfidOverride ?? rfid).trim();
         if (!value) {
             playBeep("error");
+            toast.error("Scan error");
             return setScanError("Scan RFID first.");
         }
 
@@ -871,9 +876,17 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
 
         const poId = selectedPO?.id;
         if (!poId) return setSaveError("Select a PO first.");
-        if (!receiptNo.trim()) return setSaveError("Receipt Number is required.");
-        if (!receiptType.trim()) return setSaveError("Receipt Type is required.");
-        if (!receiptDate.trim()) return setSaveError("Receipt Date is required.");
+        const errs: string[] = [];
+        if (!receiptNo.trim()) errs.push("Receipt Number is required.");
+        if (!receiptType.trim()) errs.push("Receipt Type is required.");
+        if (!receiptDate.trim()) errs.push("Receipt Date is required.");
+
+        if (errs.length > 0) {
+            toast.error("Required fields missing", {
+                description: errs.join(" "),
+            });
+            return setSaveError(errs.join(" "));
+        }
 
         const counts = scannedCountByPorId ?? {};
         if (!Object.keys(counts).length) return setSaveError("Scan at least 1 RFID before saving.");
@@ -938,6 +951,7 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
                 };
             });
 
+            toast.success(`Receipt ${oldReceiptNo} saved successfully!`);
 
             // ✅ mark success for UI
             setReceiptSaved({
@@ -958,7 +972,9 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
             setReceiptNo(genReceiptNo());
             setReceiptType("");
         } catch (e: unknown) {
-            setSaveError(e instanceof Error ? e.message : String(e));
+            const msg = (e as Error)?.message ?? String(e);
+            setSaveError(msg);
+            toast.error(`Save failed: ${msg}`);
         } finally {
             setSavingReceipt(false);
         }

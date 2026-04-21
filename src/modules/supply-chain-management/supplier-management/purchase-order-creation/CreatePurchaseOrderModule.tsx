@@ -927,6 +927,7 @@ export default function CreatePurchaseOrderModule() {
             const err = e as Error;
             const msg = String(err?.message ?? err);
             setError(msg);
+            toast.error("Failed to create Purchase Order", { description: msg });
             throw new Error(msg);
         } finally {
             setIsSaving(false);

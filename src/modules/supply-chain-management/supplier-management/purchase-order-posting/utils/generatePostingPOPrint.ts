@@ -112,7 +112,6 @@ export function generatePostingPOPrint(data: PrintData): jsPDF {
   (po.allocations || []).forEach(alloc => {
     if (!alloc.items.length) return;
     
-    // Add some space before each table
     y += 4;
 
     doc.setFontSize(9);
@@ -121,21 +120,34 @@ export function generatePostingPOPrint(data: PrintData): jsPDF {
     doc.text(`Branch: ${alloc.branch?.name || "Unknown"}`, margin, y);
     y += 2;
 
+    let computedDiscountItemTotal = 0;
+
     const rows = alloc.items.map((item, i) => {
         const uprice = item.unitPrice || 0;
         const qty = item.expectedQty || 0;
         const gross = item.grossAmount || (uprice * qty);
 
         let discountDisplay = "—";
-        if (item.discountTypeId) {
+        let discAmtVal = 0;
+
+        if (item.discountTypeId && item.discountTypeId !== "null") {
             const dt = discountTypes.find(d => String(d.id) === String(item.discountTypeId) || String(d.name) === String(item.discountTypeId));
             if (dt) {
-                const discAmt = (dt.percent / 100) * gross;
-                discountDisplay = `${dt.name} ${safeMoney(discAmt, po.currency || "PHP")}`;
-            } else if (item.discountTypeId && item.discountTypeId !== "null") {
-                discountDisplay = String(item.discountTypeId);
+                discAmtVal = (dt.percent / 100) * gross;
+                discountDisplay = `${dt.name} ${safeMoney(discAmtVal, po.currency || "PHP")}`;
+            } else {
+                const nums = (item.discountTypeId.match(/\d+(?:\.\d+)?/g) ?? []).map(Number).filter(n => Number.isFinite(n) && n > 0 && n <= 100);
+                if (nums.length) {
+                    const factor = nums.reduce((a, p) => a * (1 - p / 100), 1);
+                    discAmtVal = gross * (1 - factor);
+                    discountDisplay = `${item.discountTypeId} ${safeMoney(discAmtVal, po.currency || "PHP")}`;
+                } else {
+                    discountDisplay = String(item.discountTypeId);
+                }
             }
         }
+
+        const netTotal = gross - discAmtVal;
 
         return [
             String(i + 1),
@@ -144,7 +156,7 @@ export function generatePostingPOPrint(data: PrintData): jsPDF {
             String(qty),
             safeMoney(uprice, po.currency || "PHP"),
             discountDisplay.replace(/₱/g, "PHP "),
-            safeMoney(gross, po.currency || "PHP")
+            safeMoney(netTotal, po.currency || "PHP")
         ];
     });
 
@@ -187,15 +199,38 @@ export function generatePostingPOPrint(data: PrintData): jsPDF {
     else if (isLast) doc.setTextColor(0, 0, 0);
     else doc.setTextColor(50, 50, 50);
     
-    const valStr = safeMoney(value, cur);
+    // add minus sign for discount
+    const valPrefix = isDiscount ? "-" : "";
+    const valStr = `${valPrefix}${safeMoney(value, cur)}`;
     doc.text(valStr, pageW - margin, y, { align: 'right' });
     y += 5;
     doc.setTextColor(100, 100, 100);
     doc.setFont('helvetica', 'normal');
   };
 
+  // Compute total discount similar to dashboard
+  const computedTotalDiscount = (po.allocations || []).reduce((sum, alloc) => {
+      return sum + alloc.items.reduce((itemSum, it) => {
+          const uprice = it.unitPrice || 0;
+          const qty = it.expectedQty || 0;
+          const gross = uprice * qty;
+          
+          if (!it.discountTypeId || it.discountTypeId === "null") return itemSum;
+          const dt = discountTypes.find(d => String(d.id) === String(it.discountTypeId) || String(d.name) === String(it.discountTypeId));
+          if (dt) return itemSum + ((dt.percent / 100) * gross);
+          const nums = (it.discountTypeId.match(/\d+(?:\.\d+)?/g) ?? []).map(Number).filter(n => Number.isFinite(n) && n > 0 && n <= 100);
+          if (nums.length) {
+              const factor = nums.reduce((a, p) => a * (1 - p / 100), 1);
+              return itemSum + (gross * (1 - factor));
+          }
+          return itemSum;
+      }, 0);
+  }, 0);
+
+  const finalDiscountAmt = Number(po.discountAmount) > 0 ? Number(po.discountAmount) : computedTotalDiscount;
+
   addLine('Gross Amount:', po.grossAmount || 0);
-  if (Number(po.discountAmount) > 0) addLine('Total Discount:', po.discountAmount || 0, false, true);
+  if (finalDiscountAmt > 0) addLine('Total Discount:', finalDiscountAmt, false, true);
   if (Number(po.vatAmount) > 0) addLine('VAT details:', po.vatAmount || 0);
   if (Number(po.withholdingTaxAmount) > 0) addLine('EWT details:', po.withholdingTaxAmount || 0, false, true);
   
