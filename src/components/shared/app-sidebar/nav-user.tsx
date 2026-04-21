@@ -107,8 +107,8 @@ export function NavUser({ user, onLogout }: NavUserProps) {
                             <div className="grid flex-1 text-left text-sm leading-tight">
                                 <span className="truncate font-medium">{user.name}</span>
                                 <span className="truncate text-xs text-muted-foreground">
-                  {user.email}
-                </span>
+                                    {user.email}
+                                </span>
                             </div>
 
                             <ChevronsUpDown className="ml-auto size-4 opacity-70" />
@@ -141,28 +141,28 @@ export function NavUser({ user, onLogout }: NavUserProps) {
                             </DropdownMenuItem>
 
                             <DropdownMenuItem asChild>
-                                <Link href="/hrm/my-profile" className="cursor-pointer">
+                                <Link href="/scm/my-profile" className="cursor-pointer">
                                     <User className="mr-2 size-4" />
                                     My Profile
                                 </Link>
                             </DropdownMenuItem>
 
                             <DropdownMenuItem asChild>
-                                <Link href="/hrm/change-password" className="cursor-pointer">
+                                <Link href="/scm/change-password" className="cursor-pointer">
                                     <KeyRound className="mr-2 size-4" />
                                     Change Password
                                 </Link>
                             </DropdownMenuItem>
 
                             <DropdownMenuItem asChild>
-                                <Link href="/hrm/login-activity" className="cursor-pointer">
+                                <Link href="/scm/login-activity" className="cursor-pointer">
                                     <ShieldCheck className="mr-2 size-4" />
                                     Login Activity
                                 </Link>
                             </DropdownMenuItem>
 
                             <DropdownMenuItem asChild>
-                                <Link href="/hrm/settings" className="cursor-pointer">
+                                <Link href="/scm/settings" className="cursor-pointer">
                                     <Settings className="mr-2 size-4" />
                                     Settings
                                 </Link>
@@ -178,10 +178,10 @@ export function NavUser({ user, onLogout }: NavUserProps) {
                                 onClick={handleLogout}
                                 disabled={loggingOut}
                             >
-                <span className="inline-flex items-center">
-                  <LogOut className="mr-2 size-4" />
-                    {loggingOut ? "Logging out..." : "Log out"}
-                </span>
+                                <span className="inline-flex items-center">
+                                    <LogOut className="mr-2 size-4" />
+                                    {loggingOut ? "Logging out..." : "Log out"}
+                                </span>
                             </button>
                         </DropdownMenuItem>
                     </DropdownMenuContent>
