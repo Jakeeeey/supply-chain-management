@@ -512,7 +512,9 @@ function receivingStatusFrom(porRows: PORRow[], opts?: { isClosed?: boolean; ful
     // CLOSED only if fully received AND all receipts/rows are posted
     if (opts?.isClosed) return "CLOSED" as POStatus;
     // RECEIVED: all items received, receipts exist but not yet posted
-    if (opts?.fullyReceived) return "RECEIVED" as POStatus;
+    if (opts?.fullyReceived) return "FOR POSTING" as POStatus;
+    // PARTIAL_POSTED: some receipts posted, some not, NOT fully received
+    if (opts?.hasAnyPosted) return "PARTIAL_POSTED" as POStatus;
 
     const anyActivity = (porRows ?? []).some((r) => {
         return effectiveReceivedQty(r) > 0 || hasReceiptEvidence(r);
@@ -737,9 +739,25 @@ export async function GET() {
 
             // Align totalAmount with what's actually being posted
             const unpostedRows = porRows.filter(r => toNum(r.isPosted) === 0 && (toNum(r.received_quantity) > 0 || toStr(r.receipt_no)));
-            const listTotal = unpostedRows.length > 0 
-                ? unpostedRows.reduce((sum, r) => sum + (toNum(r.total_amount) - toNum(r.withholding_amount)), 0)
-                : toNum(po?.total_amount ?? 0);
+            let listTotal = 0;
+            if (unpostedRows.length > 0) {
+                const porSum = unpostedRows.reduce((sum, r) => sum + (toNum(r.total_amount) - toNum(r.withholding_amount)), 0);
+                if (porSum === 0) {
+                    // Fallback for old records: recalculate from line items
+                    for (const r of unpostedRows) {
+                        const pid = toNum(r.product_id);
+                        const bid = toNum(r.branch_id);
+                        const qty = effectiveReceivedQty(r);
+                        const matchLine = lines.find(l => toNum(l.product_id) === pid && toNum(l.branch_id) === bid);
+                        const uPrice = matchLine ? toNum(matchLine.unit_price) : 0;
+                        listTotal += uPrice * qty;
+                    }
+                } else {
+                    listTotal = porSum;
+                }
+            } else {
+                listTotal = toNum(po?.total_amount ?? 0);
+            }
 
             list.push({
                 id: String(poId),
@@ -786,7 +804,7 @@ export async function POST(req: NextRequest) {
 
             const poUrl =
                 `${base}/items/${PO_COLLECTION}/${encodeURIComponent(String(poId))}` +
-                `?fields=purchase_order_id,purchase_order_no,date,date_encoded,supplier_name,total_amount,date_received,inventory_status,gross_amount,discounted_amount,vat_amount,withholding_tax_amount`;
+                `?fields=purchase_order_id,purchase_order_no,date,date_encoded,supplier_name,total_amount,date_received,inventory_status,gross_amount,discounted_amount,vat_amount,withholding_tax_amount,discount_type.*,discount_type.line_per_discount_type.line_id.*,price_type`;
 
             const pj = await fetchJson(poUrl) as { data: Record<string, unknown> };
             const po = pj?.data ?? null;
@@ -820,6 +838,25 @@ export async function POST(req: NextRequest) {
             const branchesMap = await fetchBranchesMap(base, branchIds);
             const productSupplierLinks = sid ? await fetchProductSupplierLinks(base, sid) : new Map();
 
+            // ── Resolve PO-level discount name & percent ──
+            const poDType = po?.discount_type as Record<string, unknown> | null;
+            const poDiscountName = toStr(poDType?.discount_type || poDType?.discount_code || poDType?.name, "");
+            const poDLines = (poDType?.line_per_discount_type ?? []) as { line_id?: { percentage?: number }; percentage?: number }[];
+            let poDiscountPercent = 0;
+            if (Array.isArray(poDLines) && poDLines.length > 0) {
+                poDiscountPercent = poDLines.reduce((acc, l) => {
+                    const p = toNum(l?.line_id?.percentage ?? l?.percentage ?? 0);
+                    return acc * (1 - p / 100);
+                }, 1);
+                poDiscountPercent = Number(((1 - poDiscountPercent) * 100).toFixed(4));
+            } else if (poDiscountName) {
+                // Derive from code like "L5/L8/L25"
+                const nums = (poDiscountName.match(/\d+(?:\.\d+)?/g) ?? []).map(Number).filter(n => Number.isFinite(n) && n > 0 && n <= 100);
+                if (nums.length) {
+                    poDiscountPercent = Number(((1 - nums.reduce((a, p) => a * (1 - p / 100), 1)) * 100).toFixed(4));
+                }
+            }
+
             const porIdsByKey = buildPorIdsByKey(porRows);
 
             const recByPor = new Map<number, number>();
@@ -848,6 +885,12 @@ export async function POST(req: NextRequest) {
                 const p = productsMap.get(pid) ?? null;
                 const primaryPorId = porIdsForLine[0] || ln.purchase_order_product_id;
 
+                // Resolve discount: prefer product-supplier link, else PO header
+                const psl = productSupplierLinks.get(pid);
+                const itemDiscountId = psl?.discount_type
+                    ? String(psl.discount_type)
+                    : (poDiscountName || undefined);
+
                 const item: PostingPOItem = {
                     id: String(primaryPorId),
                     porId: String(primaryPorId),
@@ -862,9 +905,7 @@ export async function POST(req: NextRequest) {
                     isReceived,
                     unitPrice: toNum(ln.unit_price),
                     grossAmount: toNum(ln.total_amount),
-                    discountTypeId: productSupplierLinks.get(pid)?.discount_type
-                        ? String(productSupplierLinks.get(pid)?.discount_type)
-                        : undefined,
+                    discountTypeId: itemDiscountId,
                 };
 
                 const arr = itemsByBranch.get(bid) ?? [];
@@ -891,12 +932,55 @@ export async function POST(req: NextRequest) {
             // If there are unposted receipts, the summary should focus on what's about to be posted
             const unpostedRows = porRows.filter(r => toNum(r.isPosted) === 0 && hasReceiptEvidence(r));
             const hasUnposted = unpostedRows.length > 0;
-            
-            const detailGross = hasUnposted ? unpostedRows.reduce((sum, r) => sum + toNum(r.total_amount), 0) : toNum(po?.gross_amount);
-            const detailDisc = hasUnposted ? unpostedRows.reduce((sum, r) => sum + toNum(r.discounted_amount), 0) : toNum(po?.discounted_amount);
-            const detailVat = hasUnposted ? unpostedRows.reduce((sum, r) => sum + toNum(r.vat_amount), 0) : toNum(po?.vat_amount);
-            const detailWht = hasUnposted ? unpostedRows.reduce((sum, r) => sum + toNum(r.withholding_amount), 0) : toNum(po?.withholding_tax_amount);
-            const detailTotal = hasUnposted ? (detailGross - detailWht) : toNum(po?.total_amount);
+
+            let detailGross = 0;
+            let detailDisc = 0;
+            let detailVat = 0;
+            let detailWht = 0;
+            let detailTotal = 0;
+
+            if (hasUnposted) {
+                const porGross = unpostedRows.reduce((sum, r) => sum + toNum(r.total_amount), 0);
+                const porDisc = unpostedRows.reduce((sum, r) => sum + toNum(r.discounted_amount), 0);
+                const porVat = unpostedRows.reduce((sum, r) => sum + toNum(r.vat_amount), 0);
+                const porWht = unpostedRows.reduce((sum, r) => sum + toNum(r.withholding_amount), 0);
+
+                // ✅ Fallback: if POR rows have zero financial data (old records),
+                // recalculate from line items × received qty × discount
+                if (porGross === 0 && unpostedRows.length > 0) {
+                    for (const r of unpostedRows) {
+                        const pid = toNum(r.product_id);
+                        const bid = toNum(r.branch_id);
+                        const qty = effectiveReceivedQty(r);
+                        // Find matching PO line for unit price
+                        const matchLine = lines.find(l => toNum(l.product_id) === pid && toNum(l.branch_id) === bid);
+                        const uPrice = matchLine ? toNum(matchLine.unit_price) : 0;
+                        const lineGross = uPrice * qty;
+                        const lineDisc = lineGross * (poDiscountPercent / 100);
+                        const lineNet = lineGross - lineDisc;
+                        const lineVat = Number((lineNet * 0.12).toFixed(2));
+                        const lineWht = Number((lineNet * 0.01).toFixed(2));
+
+                        detailGross += Number(lineGross.toFixed(2));
+                        detailDisc += Number(lineDisc.toFixed(2));
+                        detailVat += lineVat;
+                        detailWht += lineWht;
+                    }
+                    detailTotal = Number(((detailGross - detailDisc) + detailVat - detailWht).toFixed(2));
+                } else {
+                    detailGross = porGross;
+                    detailDisc = porDisc;
+                    detailVat = porVat;
+                    detailWht = porWht;
+                    detailTotal = porGross - porWht;
+                }
+            } else {
+                detailGross = toNum(po?.gross_amount);
+                detailDisc = toNum(po?.discounted_amount);
+                detailVat = toNum(po?.vat_amount);
+                detailWht = toNum(po?.withholding_tax_amount);
+                detailTotal = toNum(po?.total_amount);
+            }
 
             const detail: PostingPODetail = {
                 id: String(poId),

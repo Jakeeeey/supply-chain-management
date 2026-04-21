@@ -19,9 +19,9 @@ import { usePostingOfPo } from "../providers/PostingOfPoProvider";
 
 function statusBadge(status: string) {
     const s = String(status || "").toUpperCase();
-    if (s === "CLOSED")
+    if (s === "CLOSED" || s === "RECEIVED")
         return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20";
-    if (s === "RECEIVED")
+    if (s === "FOR POSTING")
         return "bg-teal-500/15 text-teal-700 dark:text-teal-300 border border-teal-500/20";
     if (s === "PARTIAL_POSTED")
         return "bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/20";
@@ -32,6 +32,7 @@ function statusBadge(status: string) {
 
 function statusLabel(status: string) {
     const s = String(status || "").toUpperCase();
+    if (s === "FOR_POSTING" || s === "FOR POSTING") return "FOR POSTING";
     if (s === "PARTIAL_POSTED") return "PARTIAL POSTED";
     return s;
 }

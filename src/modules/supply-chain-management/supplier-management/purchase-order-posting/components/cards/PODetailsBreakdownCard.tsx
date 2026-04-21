@@ -22,6 +22,26 @@ export function PODetailsBreakdownCard() {
     const allocations = selectedPO.allocations || [];
     if (allocations.length === 0) return null;
 
+    const computedDiscount = allocations.reduce((sum, alloc) => {
+        return sum + alloc.items.reduce((itemSum, it) => {
+            const uprice = it.unitPrice || 0;
+            const qty = it.receivedQty || it.expectedQty || 0;
+            const gross = uprice * qty;
+
+            if (!it.discountTypeId || it.discountTypeId === "null") return itemSum;
+            const dt = discountTypes.find(d => String(d.id) === String(it.discountTypeId) || String(d.name) === String(it.discountTypeId));
+            if (dt) return itemSum + ((dt.percent / 100) * gross);
+            const nums = (it.discountTypeId.match(/\d+(?:\.\d+)?/g) ?? []).map(Number).filter(n => Number.isFinite(n) && n > 0 && n <= 100);
+            if (nums.length) {
+                const factor = nums.reduce((a, p) => a * (1 - p / 100), 1);
+                return itemSum + (gross * (1 - factor));
+            }
+            return itemSum;
+        }, 0);
+    }, 0);
+
+    const finalDiscount = Number(selectedPO.discountAmount) > 0 ? Number(selectedPO.discountAmount) : computedDiscount;
+
     return (
         <Card className="flex flex-col border border-border bg-card shadow-sm p-4 w-full">
             <h3 className="font-semibold text-sm mb-4">Detailed Allocations</h3>
@@ -31,8 +51,11 @@ export function PODetailsBreakdownCard() {
                     const branchName = alloc.branch?.name || "Unknown Branch";
                     const branchId = alloc.branch?.id || "unknown";
 
-                    // Total for this branch
-                    const branchTotal = alloc.items.reduce((sum, item) => sum + (item.grossAmount || 0), 0);
+                    // Total for this branch — use received qty for accurate Net Total
+                    const branchTotal = alloc.items.reduce((sum, item) => {
+                        const qty = item.receivedQty || item.expectedQty || 0;
+                        return sum + (item.unitPrice || 0) * qty;
+                    }, 0);
 
                     return (
                         <div key={branchId} className="space-y-2 border border-border/50 rounded-lg p-3">
@@ -58,19 +81,41 @@ export function PODetailsBreakdownCard() {
                                     <TableBody>
                                         {alloc.items.map((it) => {
                                             const uprice = it.unitPrice || 0;
-                                            const qty = it.expectedQty || 0;
-                                            const gross = it.grossAmount || (uprice * qty);
+                                            const qty = it.receivedQty || it.expectedQty || 0;
+                                            const gross = uprice * qty;
 
                                             let discountDisplay = "—";
                                             if (it.discountTypeId && it.discountTypeId !== "null") {
+                                                // First, try to find it in the fetched discount types
                                                 const dt = discountTypes.find(d => String(d.id) === String(it.discountTypeId) || String(d.name) === String(it.discountTypeId));
                                                 if (dt) {
                                                     const discAmt = (dt.percent / 100) * gross;
                                                     discountDisplay = `${dt.name} ${money(discAmt, selectedPO.currency || "PHP")}`;
                                                 } else {
-                                                    discountDisplay = it.discountTypeId;
+                                                    // discountTypeId is already the name (e.g., "L3/L1.5")
+                                                    // Try to derive percent from the name to show the amount
+                                                    const nums = (it.discountTypeId.match(/\d+(?:\.\d+)?/g) ?? []).map(Number).filter(n => Number.isFinite(n) && n > 0 && n <= 100);
+                                                    if (nums.length) {
+                                                        const factor = nums.reduce((a, p) => a * (1 - p / 100), 1);
+                                                        const discAmt = gross * (1 - factor);
+                                                        discountDisplay = `${it.discountTypeId} ${money(discAmt, selectedPO.currency || "PHP")}`;
+                                                    } else {
+                                                        discountDisplay = it.discountTypeId;
+                                                    }
                                                 }
                                             }
+
+                                            const netTotal = gross - ((() => {
+                                                if (!it.discountTypeId || it.discountTypeId === "null") return 0;
+                                                const dt = discountTypes.find(d => String(d.id) === String(it.discountTypeId) || String(d.name) === String(it.discountTypeId));
+                                                if (dt) return (dt.percent / 100) * gross;
+                                                const nums = (it.discountTypeId.match(/\d+(?:\.\d+)?/g) ?? []).map(Number).filter(n => Number.isFinite(n) && n > 0 && n <= 100);
+                                                if (nums.length) {
+                                                    const factor = nums.reduce((a, p) => a * (1 - p / 100), 1);
+                                                    return gross * (1 - factor);
+                                                }
+                                                return 0;
+                                            })());
 
                                             return (
                                                 <TableRow key={it.productId} className="border-border transition-colors hover:bg-muted/30">
@@ -79,7 +124,7 @@ export function PODetailsBreakdownCard() {
                                                     <TableCell className="h-8 py-1 align-middle text-right">{qty}</TableCell>
                                                     <TableCell className="h-8 py-1 align-middle text-right">{money(uprice, selectedPO.currency || "PHP")}</TableCell>
                                                     <TableCell className="h-8 py-1 align-middle text-right text-muted-foreground">{discountDisplay}</TableCell>
-                                                    <TableCell className="h-8 py-1 align-middle text-right font-medium">{money(gross, selectedPO.currency || "PHP")}</TableCell>
+                                                    <TableCell className="h-8 py-1 align-middle text-right font-medium">{money(netTotal, selectedPO.currency || "PHP")}</TableCell>
                                                 </TableRow>
                                             );
                                         })}
@@ -96,10 +141,10 @@ export function PODetailsBreakdownCard() {
                     <span>Gross Amount:</span>
                     <span>{money(selectedPO.grossAmount || 0, selectedPO.currency || "PHP")}</span>
                 </div>
-                {Number(selectedPO.discountAmount) > 0 && (
+                {finalDiscount > 0 && (
                     <div className="flex justify-between items-center text-red-500/80 dark:text-red-400">
-                        <span>Discount:</span>
-                        <span>{money(selectedPO.discountAmount || 0, selectedPO.currency || "PHP")}</span>
+                        <span>Total Discount:</span>
+                        <span>-{money(finalDiscount, selectedPO.currency || "PHP")}</span>
                     </div>
                 )}
                 {Number(selectedPO.vatAmount) > 0 && (

@@ -8,7 +8,6 @@ import { ReceiptDetailsStep } from "./steps/ReceiptDetailsStep";
 import ScanBarcodeStep from "./steps/ScanBarcodeStep";
 import { TagRFIDStep } from "./steps/TagRFIDStep";
 import { ReviewReceiptStep } from "./steps/ReviewReceiptStep";
-import { AssignTagModal } from "./AssignTagModal";
 
 function StepDot({ active }: { active: boolean }) {
     return (
@@ -72,9 +71,6 @@ export function ReceivingWorkbench() {
                     <ReviewReceiptStep onBack={() => setStep(3)} />
                 )}
             </div>
-
-            {/* ✅ MERGED: On-the-fly tag assignment modal */}
-            <AssignTagModal />
         </Card>
     );
 }
