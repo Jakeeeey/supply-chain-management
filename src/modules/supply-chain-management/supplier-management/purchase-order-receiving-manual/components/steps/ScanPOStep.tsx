@@ -34,7 +34,7 @@ export function ScanPOStep({ onContinue }: { onContinue?: () => void }) {
         if (selectedPO && onContinue) {
             onContinue();
         }
-    }, [selectedPO?.id]);
+    }, [selectedPO, onContinue]);
 
     return (
         <div className="space-y-4">

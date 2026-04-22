@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { useReceivingProducts, ReceivingPOItem } from "../../providers/ReceivingProductsProvider";
+import { useReceivingProducts, ReceivingPOItem, ActivityRow } from "../../providers/ReceivingProductsProvider";
 import { toast } from "sonner";
 import { ReceiptPreviewModal } from "../ReceiptPreviewModal";
 import {
@@ -34,7 +34,6 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
         savingReceipt,
         saveError,
         receiptSaved,
-        clearReceiptSaved,
         lots,
         verifiedBarcodes,
         activity,
@@ -66,27 +65,27 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
         setLotIds(prev => ({ ...newLots, ...prev }));
         setBatchNos(prev => ({ ...newBatches, ...prev }));
         setExpiryDates(prev => ({ ...newExpiries, ...prev }));
-    }, [selectedPO?.id]);
+    }, [selectedPO?.id, selectedPO?.allocations]);
 
     React.useEffect(() => {
         if (!receiptSaved) return;
         toast.success(`Receipt ${receiptSaved.receiptNo} saved successfully.`);
         setClientSaveError("");
-    }, [receiptSaved?.savedAt]);
+    }, [receiptSaved]);
 
-    const safeCounts: Record<string, number> = scannedCountByPorId || {};
+    const safeCounts: Record<string, number> = React.useMemo(() => scannedCountByPorId || {}, [scannedCountByPorId]);
 
     const allItems = React.useMemo(() => {
         const allocs = Array.isArray(selectedPO?.allocations) ? selectedPO!.allocations : [];
         return allocs.flatMap((a) => {
             const items = Array.isArray(a?.items) ? a.items : [];
             return items
-                .map((it) => ({
+                .map((it: ReceivingPOItem) => ({
                     ...it,
                     porId: String(it.porId || it.id),
                     branchName: a?.branch?.name ?? "Unassigned",
                 }))
-                .filter((it) => verifiedBarcodes.includes(it.productId)) as Array<ReceivingPOItem & { branchName: string }>;
+                .filter((it: ReceivingPOItem & { branchName: string }) => verifiedBarcodes.includes(it.productId)) as Array<ReceivingPOItem & { branchName: string }>;
         });
     }, [selectedPO, verifiedBarcodes]);
 
@@ -107,7 +106,7 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
         }
 
         const missingLotOrExpiry: string[] = [];
-        allItems.forEach(it => {
+        allItems.forEach((it: ReceivingPOItem) => {
             const porId = String(it.porId || it.id);
             const scanned = safeCounts[porId] ?? 0;
             if (scanned > 0) {
@@ -125,7 +124,7 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
         setClientSaveError("");
 
         // ✅ Check if Incomplete
-        const isPartial = allItems.some((it) => {
+        const isPartial = allItems.some((it: ReceivingPOItem) => {
             const porId = String(it.porId || it.id);
             const scanned = safeCounts[porId] ?? 0;
             const expected = Number(it.expectedQty || 0);
@@ -152,7 +151,7 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
         let gross = 0;
         let discount = 0;
         
-        allItems.forEach((it) => {
+        allItems.forEach((it: ReceivingPOItem) => {
             const porId = String(it.porId ?? it.id);
             const scanned = safeCounts[porId] ?? 0;
             const price = Number(it.unitPrice || 0);
@@ -220,7 +219,7 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {allItems.map((it) => {
+                                {allItems.map((it: ReceivingPOItem) => {
                                     const porId = String(it.porId || it.id);
                                     const scanned = safeCounts[porId] ?? 0;
                                     const expected = Number(it.expectedQty || it.taggedQty || 0);
@@ -241,7 +240,7 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
                                             <TableCell className="min-w-[120px]">
                                                 <select className="h-8 w-full rounded-md border border-input bg-background px-2 text-[11px]" value={lotIds[porId] || ""} onChange={(e) => setLotIds(prev => ({ ...prev, [porId]: e.target.value }))}>
                                                     <option value="">Select Lot</option>
-                                                    {lots.map(l => <option key={l.lot_id} value={String(l.lot_id)}>{l.lot_name}</option>)}
+                                                    {lots.map((l: { lot_id: string | number; lot_name: string }) => <option key={l.lot_id} value={String(l.lot_id)}>{l.lot_name}</option>)}
                                                 </select>
                                             </TableCell>
                                             <TableCell className="min-w-[130px]">
@@ -335,7 +334,7 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
                             expectedQty: Number(it.taggedQty) || 0,
                             receivedQtyAtStart: 0,
                             receivedQtyNow: safeCounts[String(it.porId || it.id)] ?? 0,
-                            rfids: (activity || []).filter((a: any) => a.productId === it.productId && a.status === "ok").map((a: any) => a.rfid)
+                            rfids: (activity || []).filter((a: ActivityRow) => a.productId === it.productId && a.status === "ok").map((a: ActivityRow) => a.rfid)
                         }))
                     }}
                     poNumber={selectedPO?.poNumber || "N/A"}

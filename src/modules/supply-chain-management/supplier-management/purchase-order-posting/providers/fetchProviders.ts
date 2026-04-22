@@ -1,10 +1,12 @@
+import type { POListItem } from "../types";
+
 type Envelope<T> = { data: T };
 
 async function fetchData<T>(url: string, init?: RequestInit): Promise<T> {
     const res = await fetch(url, {
         cache: "no-store",
         ...init,
-        headers: { "Content-Type": "application/json", ...(init?.headers as any) },
+        headers: { "Content-Type": "application/json", ...(init?.headers as Record<string, string>) },
     });
     if (!res.ok) {
         const text = await res.text().catch(() => "");
@@ -17,12 +19,12 @@ async function fetchData<T>(url: string, init?: RequestInit): Promise<T> {
 
 const BASE = "/api/scm/supplier-management/purchase-order-posting";
 
-export async function fetchPendingPOs() {
-    return fetchData<any[]>(BASE);
+export async function fetchPendingPOs(): Promise<POListItem[]> {
+    return fetchData<POListItem[]>(BASE);
 }
 
-export async function postPO(id: string | number) {
-    return fetchData<any>(BASE, { method: "POST", body: JSON.stringify({ id }) });
+export async function postPO(id: string | number): Promise<unknown> {
+    return fetchData<unknown>(BASE, { method: "POST", body: JSON.stringify({ id }) });
 }
 
 

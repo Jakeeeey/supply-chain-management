@@ -40,7 +40,7 @@ export function ManualProductsStep({ onContinue, onBack }: { onContinue: () => v
         return Object.values(manualCounts).reduce((a, b) => a + (Number(b) || 0), 0);
     }, [manualCounts]);
 
-    const handleCountChange = (id: string, val: string, expectedQty: number) => {
+    const handleCountChange = (id: string, val: string) => {
         const parsed = parseInt(val, 10);
         let validVal = isNaN(parsed) ? 0 : parsed;
         if (validVal < 0) validVal = 0;
@@ -120,7 +120,7 @@ export function ManualProductsStep({ onContinue, onBack }: { onContinue: () => v
                                                                 min="0"
                                                                 placeholder="0"
                                                                 value={currentEntry}
-                                                                onChange={(e) => handleCountChange(id, e.target.value, expected)}
+                                                                onChange={(e) => handleCountChange(id, e.target.value)}
                                                                 className="h-9 w-full text-center font-black text-sm border-2 focus-visible:border-primary focus-visible:ring-0 shadow-none transition-colors"
                                                             />
                                                         </div>

@@ -231,9 +231,9 @@ const API_URL = "/api/scm/supplier-management/purchase-order-receiving-rfid";
 
 const playBeep = (type: "success" | "error" = "success") => {
     try {
-        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-        if (!AudioContext) return;
-        const ctx = new AudioContext();
+        const AudioCtor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        if (!AudioCtor) return;
+        const ctx = new AudioCtor();
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.connect(gain);
@@ -314,8 +314,8 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
             const r = await fetch(API_URL, { cache: "no-store" });
             const j = await asJson(r);
             setList(Array.isArray(j?.data) ? j.data : []);
-        } catch (e: any) {
-            const msg = String(e?.message ?? e);
+        } catch (e: unknown) {
+            const msg = String((e as Error)?.message ?? e);
             if (msg.trim().toLowerCase() !== "fetch failed") {
                 setListError(msg);
                 toast.error(`Load failed: ${msg}`);
@@ -923,17 +923,17 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
             
             // Calculate if fully received across all items
             const countsMap = counts || {};
-            const isFullyReceivedNow = (allItems as ReceivingPOItem[]).every((it) => {
+            const isFullyReceivedNow = allItems.every((it: ReceivingPOItem) => {
                 const scannedNow = Number(countsMap[it.porId || it.id] || 0);
                 return (Number(it.receivedQty) + scannedNow) >= Number(it.expectedQty);
             });
 
             const savedItems: SavedItem[] = (allItems as ReceivingPOItem[]).map((it) => {
-                const porId = String(it.id);
+                const porId = String(it.porId || it.id);
                 const scannedNow = Number(countsMap[porId] || 0);
                 const itemRfids = activity
-                    .filter((a) => a.status === "ok" && String(a.porId) === porId)
-                    .map((a) => a.rfid);
+                    .filter((a: ActivityRow) => a.status === "ok" && String(a.porId) === porId)
+                    .map((a: ActivityRow) => a.rfid);
                 
                 const meta = (porMetaData && typeof porMetaData === "object") ? porMetaData[porId] : null;
 
@@ -978,7 +978,7 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
         } finally {
             setSavingReceipt(false);
         }
-    }, [selectedPO, receiptNo, receiptType, receiptDate, scannedCountByPorId, refreshList, resetSession]);
+    }, [selectedPO, receiptNo, receiptType, receiptDate, scannedCountByPorId, refreshList, resetSession, localScannedRfids, activity]);
 
     const value: Ctx = {
         list,

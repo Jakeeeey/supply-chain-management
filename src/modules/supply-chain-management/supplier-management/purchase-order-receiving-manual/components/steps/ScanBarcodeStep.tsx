@@ -51,7 +51,7 @@ export default function ScanBarcodeStep({ poDetail, onContinue }: ScanBarcodeSte
         return true; // Manual mode: all items are eligible
     });
 
-    const verifiedItems = eligibleItems.filter((it: any) => verifiedBarcodes.includes(it.productId));
+    const verifiedItems = eligibleItems.filter((it: ReceivingPOItem) => verifiedBarcodes.includes(it.productId));
 
     return (
         <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-300">

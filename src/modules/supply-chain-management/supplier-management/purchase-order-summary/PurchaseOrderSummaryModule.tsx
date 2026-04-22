@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ChevronRight, ChevronLeft, FilterX, ListFilter, Printer, Calendar, Search, ChevronDown, X } from "lucide-react";
+import { FilterX, ListFilter, Printer, Calendar, Search, ChevronDown, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {

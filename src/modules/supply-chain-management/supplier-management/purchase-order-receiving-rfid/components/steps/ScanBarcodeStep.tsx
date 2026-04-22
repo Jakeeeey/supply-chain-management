@@ -52,7 +52,7 @@ export default function ScanBarcodeStep({ poDetail, onContinue }: ScanBarcodeSte
         return uom === "BOX";
     });
 
-    const verifiedItems = boxItemsInPO.filter((it: any) => verifiedBarcodes.includes(it.productId));
+    const verifiedItems = boxItemsInPO.filter((it: ReceivingPOItem) => verifiedBarcodes.includes(it.productId));
 
     return (
         <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-300">

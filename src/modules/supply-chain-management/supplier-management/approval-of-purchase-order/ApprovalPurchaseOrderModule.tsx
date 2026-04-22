@@ -92,7 +92,7 @@ export default function ApprovalPurchaseOrderModule() {
                 toast.error(`Approval failed: ${msg}`);
             }
         },
-        [selectedId]
+        [selectedId, refreshList]
     );
 
     return (

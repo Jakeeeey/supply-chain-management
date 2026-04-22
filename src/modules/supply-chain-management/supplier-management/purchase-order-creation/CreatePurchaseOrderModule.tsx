@@ -49,23 +49,18 @@ import { Spinner } from "@/components/ui/spinner";
 const ProductPickerDialog =
      
     (ProductPickerDialogModule as any).ProductPickerDialog ??
-     
     (ProductPickerDialogModule as any).default;
 
 const PurchaseOrderSummary =
      
     (PurchaseOrderSummaryModule as any).PurchaseOrderSummary ??
-     
     (PurchaseOrderSummaryModule as any).default;
 
  
-type RawSupplier = any;
- 
-type RawBranch = any;
- 
-type RawProduct = any;
- 
-type RawDiscountType = any;
+type RawSupplier = { id?: string | number; supplier_id?: string | number; supplier_name?: string; name?: string; payment_terms?: string; delivery_terms?: string; apBalance?: number; ap_balance?: number; supplier_type?: string; supplierType?: string };
+type RawBranch = { id?: string | number; branch_id?: string | number; branch_code?: string; branch_name?: string; branch_description?: string };
+type RawProduct = { product_id?: string | number; id?: string | number; product_name?: string; name?: string; product_code?: string; barcode?: string; sku?: string; category?: string; product_category_name?: string; product_category?: any; brand?: string; product_brand_name?: string; product_brand?: any; cost_price_unit?: number; priceA?: number; price_per_unit?: number; cost_per_unit?: number; price?: number; unit_of_measurement?: any; uom_id?: number | string; unit_id?: number | string; unit_of_measurement_count?: number; description?: string; short_description?: string; uom_name?: string; uom?: any; unit_name?: string };
+type RawDiscountType = { id?: string | number; discount_type?: string; name?: string; total_percent?: string | number; percent?: string | number };
 
 const BOX_UOM_ID = 11;
 const FALLBACK_NO_DISCOUNT_ID = "24";
@@ -203,12 +198,8 @@ function normalizeProduct(raw: RawProduct, fixedDiscountTypeId: string): Product
             ).toUpperCase(),
         ],
 
-        baseUnitPrice,
-        baseUomId,
-        unitsPerBox: piecesPerBox,
-        baseUnitsPerBox,
         discountTypeId: String(fixedDiscountTypeId || ""),
-    } as any;
+    } as Product;
 }
 
 function SupplierSelect(props: {
@@ -608,7 +599,6 @@ export default function CreatePurchaseOrderModule() {
                 let debugCount = 0;
 
                 setAllProducts(
-                     
                     (rawProducts ?? []).map((rp: any) => {
                         const pid = String(rp?.product_id ?? rp?.id ?? "");
                         const fixedDiscountTypeId =
@@ -700,7 +690,7 @@ export default function CreatePurchaseOrderModule() {
 
             setTempCart(
                  
-                (branch.items ?? []).map((it: any) => ({
+                (branch.items ?? []).map((it: CartItem) => ({
                     ...it,
                     selectedUom: it.uom || "BOX",
                     uom: it.uom || "BOX",
@@ -914,7 +904,7 @@ export default function CreatePurchaseOrderModule() {
 
             const json = await provider.createPurchaseOrder(payload);
 
-            console.log("PO RESPONSE:", json?.data ?? json);
+            console.log("PO RESPONSE:", (json as any)?.data ?? json);
             setIsLocked(true);
             toast.success("Purchase Order created successfully!", {
                 description: `PO ${poNumber} has been saved. The page will now refresh for the next transaction.`,

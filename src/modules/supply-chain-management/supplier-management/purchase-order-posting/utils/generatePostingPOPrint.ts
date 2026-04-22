@@ -120,7 +120,6 @@ export function generatePostingPOPrint(data: PrintData): jsPDF {
     doc.text(`Branch: ${alloc.branch?.name || "Unknown"}`, margin, y);
     y += 2;
 
-    let computedDiscountItemTotal = 0;
 
     const rows = alloc.items.map((item, i) => {
         const uprice = item.unitPrice || 0;

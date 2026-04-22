@@ -1169,6 +1169,127 @@ export async function POST(req: NextRequest) {
             });
         }
 
+        // -------------------------
+        // revert_receipt — revert a single unposted receipt back to receiving.
+        // Only the POR rows for the specified receiptNo are affected.
+        // Already-posted receipts and other unposted receipts are NOT touched.
+        // -------------------------
+        if (action === "revert_receipt") {
+            const poId = toNum(body?.poId);
+            const receiptNo = toStr(body?.receiptNo);
+            if (!poId) return bad("Missing poId.", 400);
+            if (!receiptNo) return bad("Missing receiptNo.", 400);
+
+            // 1. Fetch all POR rows for this PO
+            const porRows = await fetchPORByPOIds(base, [poId]);
+
+            // 2. Identify the rows matching the target receiptNo
+            const targetRows = porRows.filter(
+                (r) => toStr(r?.receipt_no) === receiptNo
+            );
+            if (!targetRows.length) {
+                return bad("Receipt not found for this PO.", 404);
+            }
+
+            // 3. Safety: block reverting already-posted receipts
+            const anyPosted = targetRows.some((r) => toNum(r?.isPosted) === 1);
+            if (anyPosted) {
+                return bad(
+                    "Cannot revert a receipt that has already been posted. Only unposted receipts can be reverted.",
+                    409
+                );
+            }
+
+            // 4. Reset each target POR row: clear quantities, financials, and receipt metadata
+            const targetPorIds: number[] = [];
+            for (const r of targetRows) {
+                const porId = toNum(r?.purchase_order_product_id);
+                if (!porId) continue;
+                targetPorIds.push(porId);
+
+                await patchPOR(base, porId, {
+                    received_quantity: 0,
+                    receipt_no: null,
+                    receipt_date: null,
+                    received_date: null,
+                    discounted_amount: 0,
+                    vat_amount: 0,
+                    withholding_amount: 0,
+                    total_amount: 0,
+                });
+            }
+
+            // 4.5. Delete associated RFID tags (both new POR and legacy POP linkages)
+            const lines = await fetchPOProductsByPOId(base, poId);
+            
+            const targetPopIds: number[] = [];
+            for (const r of targetRows) {
+                const pop = lines.find(ln => toNum(ln.product_id) === toNum(r.product_id) && toNum(ln.branch_id) === toNum(r.branch_id));
+                const popId = toNum(pop?.purchase_order_product_id);
+                if (popId) targetPopIds.push(popId);
+            }
+
+            const allLinkIds = [...targetPorIds, ...targetPopIds];
+
+            if (allLinkIds.length > 0) {
+                try {
+                    const linkedItems = await fetchReceivingItems(base, allLinkIds);
+                    const itemIdsToDelete = linkedItems.map(it => toNum(it.receiving_item_id)).filter(id => id > 0);
+                    if (itemIdsToDelete.length > 0) {
+                        const deleteUrl = `${base}/items/${POR_ITEMS_COLLECTION}`;
+                        await fetch(deleteUrl, {
+                            method: "DELETE",
+                            headers: directusHeaders(),
+                            body: JSON.stringify(itemIdsToDelete),
+                        });
+                    }
+                } catch (err) {
+                    console.error("Failed to delete RFID tags during receipt revert:", err);
+                }
+            }
+
+            // 5. Re-evaluate PO status based on remaining activity
+            const updatedPorRows = await fetchPORByPOIds(base, [poId]);
+
+            const hasAnyRemainingReceipts = updatedPorRows.some(
+                (r) => toStr(r?.receipt_no) || effectiveReceivedQty(r) > 0
+            );
+            const hasAnyPosted = updatedPorRows.some(
+                (r) => toNum(r?.isPosted) === 1
+            );
+
+            // Determine next status:
+            // - If posted receipts exist but PO not fully received -> 9 (Partially Received)
+            // - If any unposted receipts with activity remain -> 9 (Partially Received)
+            // - If no activity at all remains -> 3 (Approved / For Receiving)
+            let nextStatus: number;
+            if (hasAnyPosted || hasAnyRemainingReceipts) {
+                nextStatus = 9; // Partially Received
+            } else {
+                nextStatus = 3; // Approved / For Receiving
+            }
+
+            const poUpdate: Record<string, unknown> = {
+                inventory_status: nextStatus,
+            };
+            // Clear date_received only if nothing remains
+            if (!hasAnyRemainingReceipts && !hasAnyPosted) {
+                poUpdate.date_received = null;
+            }
+
+            try {
+                await patchPO(base, poId, poUpdate);
+            } catch {}
+
+            return ok({
+                ok: true,
+                revertedAt: nowISO(),
+                receiptNo,
+                revertedCount: targetRows.length,
+                newStatus: nextStatus,
+            });
+        }
+
         return bad("Unknown action.", 400);
     } catch (e: unknown) {
         const err = e as Error;

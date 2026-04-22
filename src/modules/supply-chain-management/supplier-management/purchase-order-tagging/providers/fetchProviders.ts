@@ -131,7 +131,7 @@ export function directusHeaders(): Record<string, string> {
     };
 }
 
-export async function directusFetch<T = any>(
+export async function directusFetch<T = unknown>(
     url: string,
     init?: RequestInit
 ): Promise<T> {

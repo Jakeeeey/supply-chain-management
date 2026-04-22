@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Camera, PackageSearch, X, PlusCircle } from "lucide-react";
+import { Camera, PackageSearch, PlusCircle } from "lucide-react";
 import { useReceivingProducts } from "../providers/ReceivingProductsProvider";
 import { toast } from "sonner";
 
@@ -79,6 +79,7 @@ export function AddExtraProductModal({ isOpen, onClose }: AddExtraProductModalPr
                 toast.error("Product not found with that barcode");
             }
         } catch (error) {
+            console.error("Lookup error:", error);
             toast.error("Lookup failed. Please check your connection.");
         } finally {
             setIsLoading(false);

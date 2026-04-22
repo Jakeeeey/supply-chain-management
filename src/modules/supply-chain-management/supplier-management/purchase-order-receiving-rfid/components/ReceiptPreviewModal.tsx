@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Download, FileText, X } from "lucide-react";
 import { ReceiptSavedInfo } from "../providers/ReceivingProductsProvider";
-import { generateOfficialSupplierReceiptV5, ReceiptData } from "../utils/printUtils";
+import { generateOfficialSupplierReceiptV5 } from "../utils/printUtils";
 
 interface ReceiptPreviewModalProps {
     isOpen: boolean;

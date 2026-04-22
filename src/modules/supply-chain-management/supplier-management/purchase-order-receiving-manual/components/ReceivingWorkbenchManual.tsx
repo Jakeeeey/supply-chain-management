@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { useReceivingProductsManual } from "../providers/ReceivingProductsManualProvider";
-import { ScanPOStep } from "./steps/ScanPOStep";
 import { ReceiptDetailsStep } from "./steps/ReceiptDetailsStep";
 import ScanBarcodeStep from "./steps/ScanBarcodeStep";
 import { ManualProductsStep } from "./steps/ManualProductsStep";

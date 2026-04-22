@@ -34,7 +34,6 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
         savingReceipt,
         saveError,
         receiptSaved,
-        clearReceiptSaved,
         lots,
         verifiedBarcodes,
     } = useReceivingProductsManual();
@@ -61,27 +60,27 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
 
         setLotNumbers(prev => ({ ...newLots, ...prev }));
         setExpiryDates(prev => ({ ...newExpiries, ...prev }));
-    }, [selectedPO?.id]);
+    }, [selectedPO?.allocations]);
 
     React.useEffect(() => {
         if (!receiptSaved) return;
         toast.success(`Receipt ${receiptSaved.receiptNo} saved successfully.`);
         setClientSaveError("");
-    }, [receiptSaved?.savedAt]);
+    }, [receiptSaved]);
 
-    const safeCounts: Record<string, number> = manualCounts || {};
+    const safeCounts: Record<string, number> = React.useMemo(() => manualCounts || {}, [manualCounts]);
 
     const allItems = React.useMemo(() => {
         const allocs = Array.isArray(selectedPO?.allocations) ? selectedPO!.allocations : [];
         return allocs.flatMap((a) => {
             const items = Array.isArray(a?.items) ? a.items : [];
             return items
-                .map((it) => ({
+                .map((it: ReceivingPOItem) => ({
                     ...it,
                     id: String(it.id),
                     branchName: a?.branch?.name ?? "Unassigned",
                 }))
-                .filter((it) => verifiedBarcodes.includes(it.productId)) as Array<ReceivingPOItem & { branchName: string }>;
+                .filter((it: ReceivingPOItem & { branchName: string }) => verifiedBarcodes.includes(it.productId)) as Array<ReceivingPOItem & { branchName: string }>;
         });
     }, [selectedPO, verifiedBarcodes]);
 
@@ -108,7 +107,7 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
         }
 
         const missingLotOrExpiry: string[] = [];
-        allItems.forEach(it => {
+        allItems.forEach((it: ReceivingPOItem) => {
             const porId = String(it.id);
             const count = safeCounts[porId] ?? 0;
             if (count > 0) {
@@ -124,7 +123,7 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
         }
 
         // Check if any count is entered
-        const hasAnyCounts = allItems.some(it => {
+        const hasAnyCounts = allItems.some((it: ReceivingPOItem) => {
             const porId = String(it.id);
             return (safeCounts[porId] ?? 0) > 0;
         });
@@ -136,7 +135,7 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
         setClientSaveError("");
 
         // ✅ Check if Incomplete
-        const isPartial = allItems.some((it) => {
+        const isPartial = allItems.some((it: ReceivingPOItem) => {
             const porId = String(it.id);
             const count = safeCounts[porId] ?? 0;
             const expected = Number(it.expectedQty || 0);
@@ -160,16 +159,16 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
         });
 
         await saveReceipt(metaData);
-    }, [saveReceipt, selectedPO?.status, allItems, safeCounts, lotNumbers, expiryDates]);
+    }, [saveReceipt, selectedPO?.status, allItems, safeCounts, lotNumbers, expiryDates, lots]);
 
-    const totalEntered = Object.values(safeCounts).reduce((a, b) => a + Number(b), 0);
-    const totalExpected = allItems.reduce((a, b) => a + Number(b.expectedQty || 0), 0);
+    const totalEntered = Object.values(safeCounts).reduce((a: number, b: number) => a + Number(b), 0);
+    const totalExpected = allItems.reduce((a: number, b: ReceivingPOItem) => a + Number(b.expectedQty || 0), 0);
 
     const financials = React.useMemo(() => {
         let gross = 0;
         let discount = 0;
 
-        allItems.forEach((it) => {
+        allItems.forEach((it: ReceivingPOItem) => {
             const porId = String(it.id);
             const count = safeCounts[porId] ?? 0;
             const price = Number(it.unitPrice || 0);
@@ -236,7 +235,7 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {allItems.map((it) => {
+                                {allItems.map((it: ReceivingPOItem) => {
                                     const porId = String(it.id);
                                     const count = safeCounts[porId] ?? 0;
                                     const expected = Number(it.expectedQty || 0);
@@ -254,7 +253,7 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
                                             <TableCell className="min-w-[120px]">
                                                 <select className="h-8 w-full rounded-md border border-input bg-background px-2 text-[11px]" value={lotNumbers[porId] || ""} onChange={(e) => setLotNumbers(prev => ({ ...prev, [porId]: e.target.value }))}>
                                                     <option value="">Select Lot</option>
-                                                    {lots.map(l => <option key={l.lot_id} value={String(l.lot_id)}>{l.lot_name}</option>)}
+                                                    {lots.map((l: { lot_id: string | number; lot_name: string }) => <option key={l.lot_id} value={String(l.lot_id)}>{l.lot_name}</option>)}
                                                 </select>
                                             </TableCell>
                                             <TableCell className="min-w-[130px]">

@@ -1,10 +1,12 @@
+import type { PendingApprovalPO, PurchaseOrderDetail } from "../types";
+
 type Envelope<T> = { data: T };
 
 async function fetchData<T>(url: string, init?: RequestInit): Promise<T> {
     const res = await fetch(url, {
         cache: "no-store",
         ...init,
-        headers: { "Content-Type": "application/json", ...(init?.headers as any) },
+        headers: { "Content-Type": "application/json", ...(init?.headers as Record<string, string>) },
     });
     if (!res.ok) {
         const text = await res.text().catch(() => "");
@@ -17,16 +19,16 @@ async function fetchData<T>(url: string, init?: RequestInit): Promise<T> {
 
 const BASE = "/api/scm/supplier-management/approval-of-purchase-order";
 
-export async function fetchPendingApprovalPOs() {
-    return fetchData<any[]>(BASE);
+export async function fetchPendingApprovalPOs(): Promise<PendingApprovalPO[]> {
+    return fetchData<PendingApprovalPO[]>(BASE);
 }
 
-export async function fetchPurchaseOrderDetail(id: string | number) {
-    return fetchData<any>(`${BASE}?id=${id}`);
+export async function fetchPurchaseOrderDetail(id: string | number): Promise<PurchaseOrderDetail> {
+    return fetchData<PurchaseOrderDetail>(`${BASE}?id=${id}`);
 }
 
-export async function approvePurchaseOrder(payload: { id: string | number; [key: string]: any }) {
-    return fetchData<any>(BASE, { method: "POST", body: JSON.stringify(payload) });
+export async function approvePurchaseOrder(payload: { id: string | number; [key: string]: unknown }): Promise<unknown> {
+    return fetchData<unknown>(BASE, { method: "POST", body: JSON.stringify(payload) });
 }
 
 

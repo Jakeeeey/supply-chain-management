@@ -316,7 +316,16 @@ function isFullyReceived(poId: number, lines: any[], porRows: any[], taggedCount
         const expected = toNum(ln.ordered_quantity);
         if (expected <= 0) continue;
         const k = keyLine(poId, toNum(ln.product_id), toNum(ln.branch_id));
+        
+        // 1. Check if the physical tags match the expected quantity
         if ((taggedCountByKey.get(k) ?? 0) < expected) return false;
+
+        // 2. Check if the official receipt (saved quantity) matches the expected quantity
+        const received = porRows
+            .filter((r) => toNum(r.product_id) === toNum(ln.product_id) && toNum(r.branch_id) === toNum(ln.branch_id))
+            .reduce((sum, r) => sum + effectiveReceivedQty(r), 0);
+        
+        if (received < expected) return false;
     }
     return true;
 }

@@ -10,7 +10,6 @@ import { useKeyboardScanner } from "../../hooks/useKeyboardScanner";
 export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
     const {
         selectedPO,
-        rfid,
         setRfid,
         scanRFID,
         scanError,
@@ -61,8 +60,8 @@ export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
         });
     }, [selectedPO, verifiedBarcodes]);
 
-    const safeCounts: Record<string, number> =
-        scannedCountByPorId && typeof scannedCountByPorId === "object" ? scannedCountByPorId : {};
+    const safeCounts: Record<string, number> = React.useMemo(() =>
+        scannedCountByPorId && typeof scannedCountByPorId === "object" ? scannedCountByPorId : {}, [scannedCountByPorId]);
 
     // Ensure all verified products have at least their expected quantity or 1 RFID scanned (if extra).
     const isTaggingComplete = React.useMemo(() => {
@@ -82,8 +81,7 @@ export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
         return true;
     }, [activeProducts, safeCounts]);
 
-    const okMatches = React.useMemo(() => (activity || []).filter(a => a.status === "ok"), [activity]);
-    const currentMatch = okMatches[0]; // just show the latest
+
 
     // Pagination
     const activityPaginated = React.useMemo(() => {
@@ -164,9 +162,9 @@ export function TagRFIDStep({ onContinue }: { onContinue: () => void }) {
         );
     }
 
-    const activeExpected = Number((activeItem as any)?.expectedQty || 0);
+    const activeExpected = Number((activeItem as ReceivingPOItem)?.expectedQty || 0);
     const activeTarget = activeExpected > 0 ? activeExpected : 1;
-    const activeScanned = safeCounts[(activeItem as any)?.porId] || 0;
+    const activeScanned = safeCounts[String((activeItem as ReceivingPOItem)?.porId || "")] || 0;
     const activeDone = activeScanned >= activeTarget;
 
     return (

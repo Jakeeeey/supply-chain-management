@@ -176,9 +176,9 @@ const API_URL = "/api/scm/supplier-management/purchase-order-receiving-manual";
 
 const playBeep = (type: "success" | "error" = "success") => {
     try {
-        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-        if (!AudioContext) return;
-        const ctx = new AudioContext();
+        const AudioCtor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        if (!AudioCtor) return;
+        const ctx = new AudioCtor();
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.connect(gain);
@@ -200,7 +200,7 @@ const playBeep = (type: "success" | "error" = "success") => {
             osc.stop(ctx.currentTime + 0.3);
         }
     } catch {
-        // Ignored if audio is blocked or unsupported
+        // Ignored
     }
 };
 
@@ -628,28 +628,25 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
 
             // ✅ gather items for printing
             const allocs = Array.isArray(detail?.allocations) ? detail.allocations : [];
-            const allItems = allocs.flatMap((a: unknown) => {
-                const aObj = a as Record<string, unknown>;
-                return Array.isArray(aObj?.items) ? aObj.items : [];
+            const allItems = allocs.flatMap((a: { items: ReceivingPOItem[] }) => {
+                return Array.isArray(a?.items) ? a.items : [];
             });
 
             // Calculate if fully received
             const countsMap = counts || {};
-            const isFullyReceivedNow = allItems.every((it: unknown) => {
-                const itObj = it as ReceivingPOItem;
-                const scannedNow = Number(countsMap[itObj.id] || 0);
-                return (Number(itObj.receivedQty) + scannedNow) >= Number(itObj.expectedQty);
+            const isFullyReceivedNow = allItems.every((it: ReceivingPOItem) => {
+                const scannedNow = Number(countsMap[it.id] || 0);
+                return (Number(it.receivedQty) + scannedNow) >= Number(it.expectedQty);
             });
 
-            const savedItems: SavedItem[] = allItems.map((it: unknown) => {
-                const itObj = it as ReceivingPOItem;
-                const scannedNow = Number(countsMap[itObj.id] || 0);
+            const savedItems: SavedItem[] = allItems.map((it: ReceivingPOItem) => {
+                const scannedNow = Number(countsMap[it.id] || 0);
                 return {
-                    productId: String(itObj.productId),
-                    name: String(itObj.name),
-                    barcode: String(itObj.barcode),
-                    expectedQty: Number(itObj.expectedQty),
-                    receivedQtyAtStart: Number(itObj.receivedQty) - scannedNow,
+                    productId: String(it.productId),
+                    name: String(it.name),
+                    barcode: String(it.barcode),
+                    expectedQty: Number(it.expectedQty),
+                    receivedQtyAtStart: Number(it.receivedQty) - scannedNow,
                     receivedQtyNow: scannedNow,
                     rfids: []
                 };
