@@ -268,7 +268,7 @@ export function useStockTransferReceive() {
         return;
       }
       
-      const targetQty = itemInOrder.ordered_quantity || 0;
+      const targetQty = itemInOrder.allocated_quantity || 0;
       if (itemInOrder.receivedQty >= targetQty) {
         pushError(`Already Complete for ${match.productName}`, "Over-scan");
         return;

@@ -63,7 +63,7 @@ export default function StockTransferDispatchView() {
     
     const items = selectedGroup.items;
     const totalItems = items.length;
-    const totalUnits = items.reduce((acc, i) => acc + Math.max(0, i.allocated_quantity ?? i.ordered_quantity ?? 0), 0);
+    const totalUnits = items.reduce((acc, i) => acc + Math.max(0, i.allocated_quantity ?? 0), 0);
     const pickedUnits = items.reduce((acc, i) => acc + (i.scannedQty || 0), 0);
     const progress = totalUnits > 0 ? Math.round((pickedUnits / totalUnits) * 100) : 0;
 
@@ -103,7 +103,7 @@ export default function StockTransferDispatchView() {
   }, [selectedOrderNo, isScanning, handleScanRFID]);
 
   const isAllScanned = selectedGroup?.items.every((i: OrderGroupItem) => {
-    const targetQty = Math.max(0, i.allocated_quantity ?? i.ordered_quantity ?? 0);
+    const targetQty = Math.max(0, i.allocated_quantity ?? 0);
     return (i.scannedQty || 0) >= targetQty;
   });
 
@@ -253,7 +253,7 @@ export default function StockTransferDispatchView() {
                     </TableHeader>
                     <TableBody>
                       {paginatedItems.map((item: OrderGroupItem) => {
-                        const targetQty = Math.max(0, item.allocated_quantity ?? item.ordered_quantity ?? 0);
+                        const targetQty = Math.max(0, item.allocated_quantity ?? 0);
                         const complete = (item.scannedQty || 0) >= targetQty;
                         const product = typeof item.product_id === 'object' && item.product_id !== null ? (item.product_id as ProductRow) : null;
                         const productName = product?.product_name || `PRD-${item.product_id}`;

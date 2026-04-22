@@ -83,7 +83,7 @@ export default function StockTransferReceiveView() {
     return () => window.removeEventListener('keydown', handleGlobalKey);
   }, [selectedOrderNo, isScanning, handleScanRFID]);
 
-  const isAllReceived = selectedGroup?.items.every((i: OrderGroupItem) => (i.receivedQty || 0) >= i.ordered_quantity);
+  const isAllReceived = selectedGroup?.items.every((i: OrderGroupItem) => (i.receivedQty || 0) >= (i.allocated_quantity ?? 0));
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 p-4 md:p-8 pt-6 min-h-[calc(100vh-4rem)] bg-muted/5">
@@ -186,8 +186,9 @@ export default function StockTransferReceiveView() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedItems.map((item: OrderGroupItem) => {
-                    const progress = item.ordered_quantity > 0 ? (item.receivedQty || 0) / item.ordered_quantity : 0;
+                    {paginatedItems.map((item: OrderGroupItem) => {
+                      const targetQty = item.allocated_quantity ?? 0;
+                      const progress = targetQty > 0 ? (item.receivedQty || 0) / targetQty : 0;
                     const complete = progress >= 1;
                     const product = typeof item.product_id === 'object' ? (item.product_id as ProductRow) : null;
                     const productName = product?.product_name || `PRD-${item.product_id}`;
@@ -220,12 +221,12 @@ export default function StockTransferReceiveView() {
                               : 'PCS'}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-center font-mono font-bold text-sm">{item.ordered_quantity}</TableCell>
+                        <TableCell className="text-center font-mono font-bold text-sm">{item.allocated_quantity ?? 0}</TableCell>
                         <TableCell className="text-center">
                           {item.isLoosePack ? (
                             <QuantityStepper 
                               value={item.receivedQty || 0}
-                              max={item.ordered_quantity || 0}
+                              max={item.allocated_quantity ?? 0}
                               onChange={(val) => updateManualQty(Number(product?.product_id || item.product_id), val)}
                               className="h-8 w-fit mx-auto"
                               size="sm"

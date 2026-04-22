@@ -92,11 +92,13 @@ export function useStockTransferDispatchManual() {
           if (res.ok) {
             const data = await res.json();
             const list = Array.isArray(data) ? data : (data.data || []);
-            const inventoryList = list.filter((inv: { productId: string | number; branchId: string | number; runningInventory: number }) => 
-               String(inv.productId) === String(pid) && 
-               String(inv.branchId) === String(sourceBranch)
+            // Handle both camelCase (productId) and snake_case (product_id) from Spring API
+            const inventoryList = list.filter((inv: Record<string, string | number>) => 
+               String(inv.productId ?? inv.product_id) === String(pid) && 
+               String(inv.branchId ?? inv.branch_id) === String(sourceBranch)
             );
-            const availableCount = inventoryList.reduce((acc: number, inv: { runningInventory: number }) => acc + Number(inv.runningInventory || 0), 0);
+            
+            const availableCount = inventoryList.reduce((acc: number, inv: Record<string, string | number>) => acc + Number(inv.runningInventory ?? inv.running_inventory ?? 0), 0);
             const unitCount = Number(product?.unit_of_measurement_count || 1) || 1;
             return { pid: pid as number, available: Math.max(0, Math.floor(availableCount / unitCount)) };
           }

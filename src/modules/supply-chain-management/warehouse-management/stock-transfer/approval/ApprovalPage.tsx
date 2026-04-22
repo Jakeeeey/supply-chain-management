@@ -252,18 +252,13 @@ export default function StockTransferApprovalView() {
                           <TableCell className="text-sm text-center">
                             {fetchingAvailable ? (
                               <span className="text-muted-foreground/30">—</span>
-                            ) : (availableQtys[item.id] ?? 0) === 0 ? (
-                              <Input
-                                type="number"
-                                className="h-8 w-16 text-center mx-auto text-xs bg-muted border-border opacity-50 cursor-not-allowed"
-                                value={0}
-                                disabled
-                              />
                             ) : (
                               <QuantityStepper 
-                                value={allocatedQtys[item.id] ?? item.ordered_quantity}
+                                value={allocatedQtys[item.id] ?? 0}
                                 max={Math.min(item.ordered_quantity || 0, availableQtys[item.id] || 0)}
-                                onChange={(val) => updateAllocatedQty(item.id, val, Math.min(item.ordered_quantity || 0, availableQtys[item.id] || 0))}
+                                onChange={(val) => {
+                                  updateAllocatedQty(item.id, val, Math.min(item.ordered_quantity || 0, availableQtys[item.id] || 0));
+                                }}
                                 className="h-8 w-fit mx-auto"
                                 size="sm"
                               />

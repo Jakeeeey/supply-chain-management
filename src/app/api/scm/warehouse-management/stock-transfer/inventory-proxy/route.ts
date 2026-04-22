@@ -50,18 +50,26 @@ export async function GET(request: NextRequest) {
       aggregateData = data;
       
       // Check if we found the product with non-zero inventory
+      // Handle both camelCase (productId) and snake_case (product_id) from Spring API
       const list = Array.isArray(data) ? data : (data.data || []);
       const productId = searchParams.get('productId');
-      const found = list.find((inv: Record<string, unknown>) => String(inv.productId) === productId);
+      const found = list.find((inv: Record<string, unknown>) => 
+        String(inv.productId ?? inv.product_id) === productId
+      );
       
       if (found) {
-        console.log(`[Proxy] Found aggregate inventory for product ${productId}: ${found.runningInventory}`);
+        const inventory = found.runningInventory ?? found.running_inventory;
+        console.log(`[Proxy] Found aggregate inventory for product ${productId}: ${inventory}`);
         return NextResponse.json(data);
       }
     } else {
       const errText = await response.text();
       console.error(`[Proxy] 8087 API returned ${response.status}:`, errText);
       console.error(`[Proxy] Sent headers: Authorization: Bearer ${token ? 'PRESENT' : 'MISSING'}, Cookie: ${token ? 'PRESENT' : 'MISSING'}`);
+    }
+
+    if (aggregateData) {
+      return NextResponse.json(aggregateData);
     }
 
     // ── 2. Fallback to Tag Count (v_rfid_onhand) if aggregate is 0 or missing ──

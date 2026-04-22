@@ -74,22 +74,28 @@ export function useStockTransferApproval() {
             if (res.ok) {
               const data = await res.json();
               const list = Array.isArray(data) ? data : (data.data || []);
-              const inventoryList = list.filter((inv: { productId: string | number; branchId: string | number; runningInventory: number }) => 
-                 String(inv.productId) === String(pid) && 
-                 String(inv.branchId) === String(group.sourceBranch)
+              // Handle both camelCase (productId) and snake_case (product_id) from Spring API
+              const inventoryList = list.filter((inv: Record<string, string | number>) => 
+                 String(inv.productId ?? inv.product_id) === String(pid) && 
+                 String(inv.branchId ?? inv.branch_id) === String(group.sourceBranch)
               );
               
-              const availableCount = inventoryList.reduce((acc: number, inv: { runningInventory: number }) => acc + Number(inv.runningInventory || 0), 0);
+              const availableCount = inventoryList.reduce((acc: number, inv: Record<string, string | number>) => acc + Number(inv.runningInventory ?? inv.running_inventory ?? 0), 0);
               const unitCount = Number(product?.unit_of_measurement_count || 1) || 1;
-              const finalAvailable = Math.max(0, Math.floor(availableCount / unitCount));
+              const realAvailable = Math.max(0, Math.floor(availableCount / unitCount));
 
-              newAvailable[item.id] = finalAvailable;
-              newAllocated[item.id] = Math.min(item.ordered_quantity || 0, finalAvailable);
+              newAvailable[item.id] = realAvailable;
+              
+              // Strict Enforcement: Allocation cannot exceed available stock.
+              // If available is 0, allocation is 0.
+              newAllocated[item.id] = Math.min(item.ordered_quantity || 0, realAvailable);
             } else {
+              // API Error - block allocation for safety
               newAvailable[item.id] = 0;
               newAllocated[item.id] = 0;
             }
           } catch {
+            // Network Error - block allocation for safety
             newAvailable[item.id] = 0;
             newAllocated[item.id] = 0;
           }

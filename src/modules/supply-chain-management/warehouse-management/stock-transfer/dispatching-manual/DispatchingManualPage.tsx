@@ -62,7 +62,7 @@ export default function StockTransferDispatchManualView() {
   ) || [];
 
   const isAllScanned = selectedGroup?.items.every((i: OrderGroupItem) => {
-    const targetQty = Math.max(0, i.allocated_quantity ?? i.ordered_quantity ?? 0);
+    const targetQty = Math.max(0, i.allocated_quantity ?? 0);
     return (scannedQtys[i.id] ?? 0) >= targetQty;
   }) ?? false;
 
@@ -169,7 +169,7 @@ export default function StockTransferDispatchManualView() {
                   </TableHeader>
                   <TableBody>
                     {paginatedItems.map((item: OrderGroupItem) => {
-                      const targetQty = Math.max(0, item.allocated_quantity ?? item.ordered_quantity ?? 0);
+                      const targetQty = Math.max(0, item.allocated_quantity ?? 0);
                       const currentQty = scannedQtys[item.id] ?? 0;
                       const complete = currentQty >= targetQty;
                       const product = typeof item.product_id === 'object' && item.product_id !== null ? item.product_id : null;
@@ -194,8 +194,8 @@ export default function StockTransferDispatchManualView() {
                           <TableCell className="print:hidden text-center">
                             <QuantityStepper 
                               value={currentQty}
-                              max={targetQty}
-                              onChange={(val) => updateScannedQty(item.id, val, targetQty)}
+                              max={Math.min(targetQty, Math.max(0, item.qtyAvailable ?? 0))}
+                              onChange={(val) => updateScannedQty(item.id, val, Math.min(targetQty, Math.max(0, item.qtyAvailable ?? 0)))}
                               disabled={selectedGroup?.status !== 'For Picking'}
                               className="h-8 w-fit mx-auto"
                               size="sm"
