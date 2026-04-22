@@ -101,7 +101,7 @@ const SUB_WRAP_L3 = cn(
 );
 
 const ROW = "flex w-full min-w-0 flex-nowrap items-center overflow-hidden";
-const LABEL = "min-w-0 flex-1 truncate !whitespace-nowrap";
+const LABEL = "min-w-0 w-0 flex-1 truncate !whitespace-nowrap";
 
 /* ----------------------------- pill (hover + active) ------------------------ */
 
@@ -221,7 +221,7 @@ function TruncatedLabel({
                 <TooltipTrigger asChild onMouseEnter={checkTruncation}>
                     <span 
                         ref={textRef} 
-                        className={cn("inline-block max-w-full truncate !whitespace-nowrap", className)}
+                        className={cn("min-w-0 flex-1 truncate !whitespace-nowrap", className)}
                     >
                         <HighlightMatch text={text} term={term} />
                     </span>
@@ -308,8 +308,7 @@ function RecursiveNavItem({
 
 
     const nestedClass = cn(
-        "group relative w-full flex items-center min-w-0 overflow-hidden cursor-pointer rounded-md",
-        depth > 2 ? "h-8 text-sm pr-2" : (depth === 1 ? "h-8 text-sm pl-7 pr-2" : "h-8 text-sm pl-12 pr-2"),
+        "group relative w-full flex items-center min-w-0 overflow-hidden cursor-pointer rounded-md h-8 text-sm pr-2",
         getPaddingClass(depth),
         node.status === "comingSoon" && "opacity-60 cursor-not-allowed",
         /* THE L-SHAPE CONNECTOR (Dashed Style) */
