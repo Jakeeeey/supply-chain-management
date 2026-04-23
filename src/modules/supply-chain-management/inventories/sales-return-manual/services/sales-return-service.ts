@@ -88,7 +88,7 @@ async function buildDiscountPercentMap(): Promise<Map<number, number>> {
 export async function fetchReturns(
   page: number = 1,
   limit: number = 10,
-  filters: { salesman?: string; customer?: string; status?: string } = {},
+  filters: { salesman?: string; customer?: string; status?: string; invoiceNo?: string } = {},
 ): Promise<{ data: SalesReturn[]; total: number }> {
   const result = await repo.getRawReturns(page, limit, filters);
 

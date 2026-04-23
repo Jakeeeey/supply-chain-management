@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useSearchParams } from "next/navigation";
 import {
   SalesReturnItem,
   API_LineDiscount,
@@ -59,6 +60,8 @@ interface SalesReturnGroup {
 }
 
 export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
+  const searchParams = useSearchParams();
+  const fromClearance = searchParams.get("fromClearance");
   // --- 1. FORM STATE ---
   const [returnDate, setReturnDate] = useState(
     new Date().toISOString().split("T")[0],
@@ -254,6 +257,65 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       setInvoiceOptions([]);
     }
   }, [selectedSalesmanId, customerCode, handleSelectSalesman, handleSelectCustomer]);
+  
+  // --- 5c. PRE-FILL FROM CLEARANCE ---
+  useEffect(() => {
+    if (isOpen && fromClearance === "true" && customers.length > 0) {
+      const storedData = localStorage.getItem('scm_dispatch_return_data');
+      if (storedData) {
+        try {
+          const data = JSON.parse(storedData);
+
+          // 1. Find and set Customer (DO THIS FIRST as it clears other fields)
+          const foundCustomer = customers.find(c =>
+            (data.customerCode && c.code === data.customerCode) ||
+            (data.customerName && c.name === data.customerName)
+          );
+
+          if (foundCustomer) {
+            handleSelectCustomer(foundCustomer);
+          } else {
+            setCustomerCode(data.customerCode || "");
+            setCustomerSearch(data.customerName || "");
+          }
+
+          // 1.5 Find and set Salesman
+          const foundSalesman = salesmen.find(s =>
+            (data.salesmanId && s.id === data.salesmanId) ||
+            (data.salesmanCode && s.code === data.salesmanCode) ||
+            (data.salesmanName && s.name === data.salesmanName)
+          );
+          if (foundSalesman) {
+            handleSelectSalesman(foundSalesman);
+          } else {
+            setSelectedSalesmanId(data.salesmanId || "");
+            setSalesmanCode(data.salesmanCode || "");
+            setSalesmanSearch(data.salesmanName || "");
+          }
+
+          // 2. Set Invoice & Order
+          setInvoiceNo(data.invoiceNo || "");
+          setInvoiceSearch(data.invoiceNo || "");
+          setOrderNo(data.orderNo || "");
+          setOrderSearch(data.orderNo || "");
+
+          // 2.5 Set Branch (Override if foundSalesman sets it)
+          if (data.branchName) {
+            setBranchName(data.branchName);
+          }
+
+          // 4. Cleanup to prevent re-triggering
+          localStorage.removeItem('scm_dispatch_return_data');
+          // Clear query param from URL without reloading
+          const url = new URL(window.location.href);
+          url.searchParams.delete('fromClearance');
+          window.history.replaceState({}, '', url.toString());
+        } catch (e) {
+          console.error("Failed to parse clearance return data", e);
+        }
+      }
+    }
+  }, [isOpen, fromClearance, customers, salesmen, handleSelectCustomer, handleSelectSalesman]);
 
   // --- 6. CLICK OUTSIDE HANDLERS ---
   useEffect(() => {
