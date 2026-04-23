@@ -77,6 +77,7 @@ export async function GET(req: NextRequest) {
           salesman: url.searchParams.get("salesman") || undefined,
           customer: url.searchParams.get("customer") || undefined,
           status: url.searchParams.get("status") || undefined,
+          invoiceNo: url.searchParams.get("invoiceNo") || undefined,
         };
         const data = await fetchReturns(page, limit, filters);
         return json({ data: data.data, total: data.total });
