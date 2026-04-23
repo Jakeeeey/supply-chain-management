@@ -444,6 +444,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
           setInvoiceSearch(data.invoiceNo || "");
           setOrderNo(data.orderNo || "");
           setOrderSearch(data.orderNo || "");
+          setRemarks(data.remarks || "");
 
           // 2.5 Set Branch (Override if foundSalesman sets it)
           if (data.branchName) {
