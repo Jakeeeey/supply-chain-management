@@ -463,7 +463,7 @@ export async function POST(req: NextRequest) {
             const branchesMap = await fetchBranchesMap(base, lines.map(l => toNum(l.branch_id ?? 0)));
             const supplierMap = await fetchSupplierNames(base, [toNum(po.supplier_name)]);
             const porIdsByKey = buildPorIdsByKey(porRows);
-            let discountPercent = pickNum(po, ["discount_percent", "discountPercent"]);
+            let discountPercent = pickNum(po as unknown as Record<string, unknown>, ["discount_percent", "discountPercent"]);
             const dType = po.discount_type;
             const dLines = dType?.line_per_discount_type || [];
             if (dLines.length > 0) discountPercent = calculateDiscountFromLines(dLines);
