@@ -120,16 +120,17 @@ export function UpdateSalesReturnModal({
 
   // 🟢 Effect to pre-fill remarks from Clearance if redirected
   useEffect(() => {
-    if (prefillRemarks && headerData) {
-      const currentRemarks = headerData.remarks || "";
-      if (!currentRemarks.includes(prefillRemarks)) {
-        setHeaderData((prev) => ({
+    if (prefillRemarks) {
+      setHeaderData((prev) => {
+        const currentRemarks = prev?.remarks || "";
+        if (currentRemarks.includes(prefillRemarks)) return prev;
+        return {
           ...prev,
           remarks: currentRemarks
             ? `${currentRemarks}\n\n[From Clearance]: ${prefillRemarks}`
             : prefillRemarks,
-        }));
-      }
+        };
+      });
       
       // Clean up URL to prevent re-applying on refresh
       const url = new URL(window.location.href);
