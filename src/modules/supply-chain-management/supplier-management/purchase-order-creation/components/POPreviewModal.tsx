@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
 import { Printer, Download, Package } from "lucide-react";
-import { generatePurchaseOrderPDF } from "../../purchase-order-receiving-rfid/utils/printUtils";
+import { printPOCreationPdf } from "../utils/printPoPdf";
 import { cn, buildMoneyFormatter } from "../utils/calculations";
 
 interface POPreviewModalProps {
@@ -65,13 +65,17 @@ export function POPreviewModal({
                 // Trigger save and wait for it
                 await onConfirmSave();
                 // If it didn't throw, download the PDF
-                generatePurchaseOrderPDF({ ...data, isInvoice: !!isInvoice });
+                await printPOCreationPdf({ ...data, isInvoice: !!isInvoice });
             } catch (err) {
                 // parent usually handles the toast for error
-                console.error("Failed to save PO:", err);
+                console.error("Failed to save PO or generate PDF:", err);
             }
         } else {
-            generatePurchaseOrderPDF({ ...data, isInvoice: !!isInvoice });
+            try {
+                await printPOCreationPdf({ ...data, isInvoice: !!isInvoice });
+            } catch (err) {
+                console.error("Failed to generate PDF:", err);
+            }
         }
     };
 
@@ -228,6 +232,25 @@ export function POPreviewModal({
                         >
                             Back to Order
                         </Button>
+
+                        {!locked && (
+                            <Button 
+                                variant="outline"
+                                onClick={async () => {
+                                    try {
+                                        await printPOCreationPdf({ ...data, isInvoice: !!isInvoice });
+                                    } catch (err) {
+                                        console.error("Draft PDF failed:", err);
+                                    }
+                                }}
+                                disabled={isSubmitting}
+                                className="px-8 h-12 font-black uppercase tracking-widest text-[11px] rounded-2xl border-2 border-primary/20 hover:bg-primary/5 text-primary transition-all active:scale-95 flex items-center gap-2"
+                            >
+                                <Download className="h-4 w-4" />
+                                Download Draft
+                            </Button>
+                        )}
+
                         <Button 
                             onClick={handleSaveAndDownload} 
                             disabled={isSubmitting || (locked && !onConfirmSave)}
@@ -250,7 +273,7 @@ export function POPreviewModal({
                             ) : (
                                 <>
                                     <Download className="h-4 w-4" />
-                                    Save & Download PDF
+                                    Post & Download PDF
                                 </>
                             )}
                         </Button>

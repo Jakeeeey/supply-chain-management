@@ -395,7 +395,7 @@ export default function PurchaseOrderSummaryModule({
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Search</label>
             <div className="relative">
-              {isLoading ? (
+              {isInitialLoad ? (
                 <Skeleton className="h-11 w-full" />
               ) : (
                 <Input 
@@ -412,7 +412,7 @@ export default function PurchaseOrderSummaryModule({
             <label className="text-[10px] font-bold uppercase text-muted-foreground mb-3 block">Filter By</label>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Supplier - Searchable */}
-              {isLoading ? (
+              {isInitialLoad ? (
                 <div className="space-y-1.5"><Skeleton className="h-10 w-full" /></div>
               ) : (
                 <SearchableFilter
@@ -427,7 +427,7 @@ export default function PurchaseOrderSummaryModule({
               {/* Transaction Type */}
               <div className="space-y-1.5">
                 <span className="text-[9px] font-bold uppercase text-muted-foreground/70 ml-1">Transaction Type</span>
-                {isLoading ? (
+                {isInitialLoad ? (
                   <Skeleton className="h-10 w-full" />
                 ) : (
                   <Select value={filterTransType} onValueChange={(v) => { handleFilterChange(() => setFilterTransType(v)); }}>
@@ -444,7 +444,7 @@ export default function PurchaseOrderSummaryModule({
               </div>
 
               {/* Inventory Status - Searchable */}
-              {isLoading ? (
+              {isInitialLoad ? (
                 <div className="space-y-1.5"><Skeleton className="h-10 w-full" /></div>
               ) : (
                 <SearchableFilter
@@ -457,7 +457,7 @@ export default function PurchaseOrderSummaryModule({
               )}
 
               {/* Payment Status - Searchable */}
-              {isLoading ? (
+              {isInitialLoad ? (
                 <div className="space-y-1.5"><Skeleton className="h-10 w-full" /></div>
               ) : (
                 <SearchableFilter
@@ -472,7 +472,7 @@ export default function PurchaseOrderSummaryModule({
               {/* Date Requested Range */}
               <div className="space-y-1.5 lg:col-span-2">
                 <span className="text-[9px] font-bold uppercase text-muted-foreground/70 ml-1">Date Requested (From - To)</span>
-                {isLoading ? (
+                {isInitialLoad ? (
                   <div className="flex items-center gap-2">
                     <Skeleton className="h-10 w-full flex-1" />
                     <div className="text-muted-foreground text-xs">—</div>

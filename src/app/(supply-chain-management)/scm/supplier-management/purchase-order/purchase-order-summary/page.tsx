@@ -115,14 +115,23 @@ async function getData() {
             const isApproved = po.date_approved || po.approver_id;
 
             let effectiveStatus = dbStatus;
-            // Only override if status is stale (still 1="For Approval" but activity proves otherwise)
-            if (dbStatus === 1) {
-                if (hasReceipt && totalOrdered > 0 && totalReceived >= totalOrdered) {
-                    effectiveStatus = 6; // Received
-                } else if (hasReceipt) {
-                    effectiveStatus = 9; // Partially Received
-                } else if (isApproved) {
-                    effectiveStatus = 3; // For Receiving (approved but no receipts)
+            
+            // Only override if not permanently closed (14) or cancelled (7)
+            if (dbStatus !== 14 && dbStatus !== 7) {
+                // If there's receiving activity, it takes precedence
+                if (hasReceipt) {
+                    const fullyReceived = totalOrdered > 0 && totalReceived >= totalOrdered;
+                    if (fullyReceived) {
+                        // Keep as Received (6) or Closed (14) if it was already closed
+                        effectiveStatus = 6;
+                    } else {
+                        // It has some receiving activity but not fully received
+                        effectiveStatus = 9; // Partially Received
+                    }
+                } 
+                // If no receiving activity but is approved, switch to For Receiving (3)
+                else if (isApproved && (dbStatus === 1 || dbStatus === 0)) {
+                    effectiveStatus = 3; 
                 }
             }
 

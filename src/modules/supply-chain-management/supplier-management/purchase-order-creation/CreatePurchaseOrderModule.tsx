@@ -907,11 +907,8 @@ export default function CreatePurchaseOrderModule() {
             console.log("PO RESPONSE:", (json as any)?.data ?? json);
             setIsLocked(true);
             toast.success("Purchase Order created successfully!", {
-                description: `PO ${poNumber} has been saved. The page will now refresh for the next transaction.`,
+                description: `PO ${poNumber} has been saved and locked.`,
             });
-            setTimeout(() => {
-                window.location.reload();
-            }, 2000);
             return json;
         } catch (e: unknown) {
             const err = e as Error;
@@ -1134,6 +1131,7 @@ export default function CreatePurchaseOrderModule() {
                 isInvoice={isInvoice}
                 setIsInvoice={setIsInvoice}
                 isLocked={isLocked}
+                onReset={() => window.location.reload()}
             />
 
             <ProductPickerDialog

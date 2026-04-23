@@ -415,6 +415,7 @@ type PoHeaderRow = {
     is_invoice?: boolean | number | null;
     isInvoice?: boolean | number | null;
     receiving_type?: number | null;
+    user_created?: unknown;
 };
 
 async function fetchPendingPOs(base: string): Promise<PoHeaderRow[]> {
@@ -428,7 +429,9 @@ async function fetchPendingPOs(base: string): Promise<PoHeaderRow[]> {
         "payment_status",
         "approver_id",
         "date_approved",
-        "receiving_type", // ✅ Persistent field for is_invoice (2=Invoice, 3=PO)
+        "receiving_type",
+        "user_created.first_name",
+        "user_created.last_name",
     ].join(",");
 
     const url = `${base}/items/${PO_COLLECTION}?limit=-1&sort=-date_encoded&fields=${fields}&filter[date_approved][_null]=true&filter[approver_id][_null]=true`;
@@ -526,7 +529,7 @@ async function fetchProductSupplierLinks(base: string, productIds: number[]) {
 // DETAIL BUILDER
 // =====================
 async function buildPurchaseOrderDetail(base: string, poId: number) {
-    const fields = encodeURIComponent("*,discount_type.*,discount_type.line_per_discount_type.line_id.*");
+    const fields = encodeURIComponent("*,discount_type.*,discount_type.line_per_discount_type.line_id.*,user_created.first_name,user_created.last_name");
     const headerUrl = `${base}/items/${PO_COLLECTION}/${encodeURIComponent(String(poId))}?fields=${fields}`;
     const headerJ = await fetchJson(headerUrl) as { data: Record<string, unknown> };
     const header = (headerJ?.data as Record<string, unknown>) ?? null;
@@ -776,6 +779,11 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
 
         total_amount: total,
         total: total,
+
+        // Preparer info
+        preparer_name: (typeof header?.user_created === "object" && header.user_created)
+            ? [(header.user_created as any).first_name, (header.user_created as any).last_name].filter(Boolean).join(" ")
+            : "—",
     };
 }
 
@@ -853,6 +861,10 @@ export async function GET(req: NextRequest) {
                 currency: "PHP",
                 // derives is_invoice from receiving_type (2=Invoice, 3=PO) (robust check)
                 is_invoice: (Number(h.receiving_type) === 2) || (String(h.is_invoice ?? h.isInvoice).toLowerCase() === "true") || !!(h.is_invoice ?? h.isInvoice),
+
+                preparer_name: (typeof h.user_created === "object" && h.user_created)
+                    ? [(h.user_created as any).first_name, (h.user_created as any).last_name].filter(Boolean).join(" ")
+                    : "—",
             };
         });
 

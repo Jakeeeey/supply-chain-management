@@ -51,6 +51,7 @@ export function PurchaseOrderSummary(props: {
     isInvoice: boolean;
     setIsInvoice: (v: boolean) => void;
     isLocked?: boolean;
+    onReset?: () => void;
 }) {
     // ✅ ALL HOOKS MUST BE ABOVE ANY CONDITIONAL RETURN
     const money = React.useMemo(() => buildMoneyFormatter(), []);
@@ -245,7 +246,7 @@ export function PurchaseOrderSummary(props: {
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                 {/* LEFT COLUMN: Order Details (4 cols) */}
-                <div className="lg:col-span-4 flex flex-col h-auto lg:h-[650px] border border-border rounded-xl bg-muted/5 overflow-hidden shadow-inner order-2 lg:order-1">
+                <div className="lg:col-span-4 flex flex-col h-auto border border-border rounded-xl bg-muted/5 overflow-hidden shadow-inner order-2 lg:order-1">
                     <div className="px-4 py-3 border-b border-border bg-muted/30 shrink-0 flex items-center gap-2">
                         <Info className="w-4 h-4 text-muted-foreground" />
                         <p className="text-xs font-black text-foreground uppercase tracking-tight">
@@ -354,7 +355,7 @@ export function PurchaseOrderSummary(props: {
                 </div>
 
                 {/* RIGHT COLUMN: Products & Financials (8 cols) */}
-                <div className="lg:col-span-8 flex flex-col h-auto lg:h-[650px] space-y-6 order-1 lg:order-2">
+                <div className="lg:col-span-8 flex flex-col h-auto space-y-6 order-1 lg:order-2">
                     {/* Products Table with Enriched Columns */}
                     <div className="flex-1 flex flex-col border border-border rounded-xl bg-card overflow-hidden shadow-lg min-h-[400px]">
                         <div className="px-5 py-4 border-b border-border bg-muted/40 shrink-0 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
@@ -523,9 +524,7 @@ export function PurchaseOrderSummary(props: {
 
                                 <div className="flex justify-between items-center text-[11px]">
                                     <span className="text-foreground/70 font-black uppercase tracking-widest">Discount</span>
-                                    <span className="font-black text-emerald-600 dark:text-emerald-400 text-sm">
-                                        {money.format(discountTotal)}
-                                    </span>
+                                    <span className="font-black text-emerald-600 dark:text-emerald-400 text-sm">{money.format(discountTotal)}</span>
                                 </div>
 
                                 <div className="flex justify-between items-center text-[11px] pt-1.5 border-t border-border/60">
@@ -635,6 +634,16 @@ export function PurchaseOrderSummary(props: {
                                         </AlertDialogFooter>
                                     </AlertDialogContent>
                                 </AlertDialog>
+
+                                {locked && props.onReset && (
+                                    <Button
+                                        onClick={props.onReset}
+                                        className="w-full h-10 sm:h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase tracking-widest rounded-xl shadow-lg shadow-emerald-500/20 border-b-4 border-emerald-800 transition-all active:border-b-0 active:translate-y-1 animate-in fade-in slide-in-from-bottom-2 duration-500"
+                                    >
+                                        <CheckCircle2 className="mr-2 h-4 w-4" />
+                                        New Transaction
+                                    </Button>
+                                )}
                             </div>
                         </div>
                     </div>

@@ -184,11 +184,21 @@ export default function PurchaseOrderReviewPanel(props: {
 
     const [currentPage, setCurrentPage] = React.useState(1);
     const [pageSize, setPageSize] = React.useState(10);
+    const [companyData, setCompanyData] = React.useState<any>(null);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const poAny: any = React.useMemo(() => unwrap(props.po), [props.po]);
 
     React.useEffect(() => {
+        // Fetch company data for PDF
+        fetch("/api/pdf/company")
+            .then(res => res.json())
+            .then(data => {
+                const company = data?.data?.[0] || (Array.isArray(data.data) ? null : data.data);
+                setCompanyData(company);
+            })
+            .catch(err => console.error("Failed to fetch company data:", err));
+
         setMarkAsInvoice(!!(poAny?.is_invoice ?? poAny?.isInvoice ?? false));
         setPaymentTerm("cash_on_delivery");
         setTermsDays(30);
@@ -672,8 +682,15 @@ export default function PurchaseOrderReviewPanel(props: {
                                             type="button"
                                             variant="outline"
                                             className="h-10 rounded-xl font-black uppercase tracking-wider"
-                                            disabled={!poAny?.purchase_order_id}
-                                            onClick={() => generatePurchaseOrderPdf(poAny, branchLabel, supplierName)}
+                                            disabled={!poAny?.purchase_order_id || !companyData}
+                                            onClick={async () => {
+                                                try {
+                                                    await generatePurchaseOrderPdf(poAny, branchLabel, supplierName, companyData);
+                                                } catch (err) {
+                                                    console.error("PDF Generation failed:", err);
+                                                    toast.error("Failed to generate PDF.");
+                                                }
+                                            }}
                                         >
                                             <Printer className="mr-2 h-4 w-4" />
                                             Print PO
