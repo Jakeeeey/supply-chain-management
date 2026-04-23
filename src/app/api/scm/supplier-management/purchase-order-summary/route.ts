@@ -1,38 +1,57 @@
 import { NextResponse } from 'next/server';
 
-export async function GET() {
-  // Kunin ang base URL at Token mula sa .env
-  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
-  const staticToken = process.env.DIRECTUS_STATIC_TOKEN;
+// =====================
+// DIRECTUS HELPERS
+// =====================
+function getDirectusBase(): string {
+    const raw = process.env.DIRECTUS_URL || process.env.NEXT_PUBLIC_DIRECTUS_URL || process.env.NEXT_PUBLIC_API_BASE_URL || "";
+    const cleaned = raw.trim().replace(/\/$/, "");
+    if (!cleaned) throw new Error("DIRECTUS_URL is not set.");
+    return /^https?:\/\//i.test(cleaned) ? cleaned : `http://${cleaned}`;
+}
 
-  // Error handling kung sakaling hindi nabasa ang .env
-  if (!baseUrl) {
-    return NextResponse.json({ error: "API Base URL is not defined" }, { status: 500 });
-  }
+function getDirectusToken(): string {
+    const token = (process.env.DIRECTUS_STATIC_TOKEN || process.env.DIRECTUS_TOKEN || "").trim();
+    if (!token) throw new Error("DIRECTUS_STATIC_TOKEN is not set.");
+    return token;
+}
 
-  try {
-    // Pag-construct ng URL gamit ang env variable
-    const apiUrl = `${baseUrl}/items/purchase_order?limit=-1`;
+function directusHeaders(): Record<string, string> {
+    return {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getDirectusToken()}`,
+    };
+}
 
-    const res = await fetch(apiUrl, {
-      method: 'GET',
-      headers: {
-        // Idagdag ang Static Token para sa authorization (kung kailangan ng Directus mo)
-        'Authorization': `Bearer ${staticToken}`,
-        'Content-Type': 'application/json',
-      },
-      cache: 'no-store'
+async function fetchJson<T = unknown>(url: string, init?: RequestInit): Promise<T> {
+    const res = await fetch(url, {
+        ...init,
+        headers: { ...directusHeaders(), ...(init?.headers as Record<string, string> | undefined) },
+        cache: "no-store",
     });
-
+    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) {
-      throw new Error(`Failed to fetch: ${res.statusText}`);
+        const errors = json?.errors as Array<{ message: string }> | undefined;
+        const msg = errors?.[0]?.message || (json?.error as string) || `Directus error ${res.status} ${res.statusText}`;
+        throw new Error(msg);
     }
+    return json as T;
+}
 
-    const data = await res.json();
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+export async function GET() {
+  try {
+    const base = getDirectusBase();
+    const apiUrl = `${base}/items/purchase_order?limit=-1`;
+
+    const data = await fetchJson(apiUrl);
     return NextResponse.json(data);
 
-  } catch (error) {
-    console.error("Route Error:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("Route Error:", err);
+    return NextResponse.json({ error: err?.message || "Internal Server Error" }, { status: 500 });
   }
 }

@@ -3,11 +3,13 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { type StockConversionProduct, type StockConversionPayload } from "../types";
+import { type InventoryFilters } from "../services/stock-conversion";
 
 // --- IN-MEMORY CACHE FOR INSTANT NAVIGATION ---
 // This safely preserves data when moving between modules without refetching.
 let cachedData: StockConversionProduct[] | null = null;
 let cachedTotalCount: number = 0;
+let hasBeganGlobalFetch: boolean = false;
 // ----------------------------------------------
 
 export function useStockConversion(branchId?: number) {
@@ -32,6 +34,10 @@ export function useStockConversion(branchId?: number) {
       setData(cachedData);
       setTotalCount(cachedTotalCount);
       setIsLoading(false);
+      if (!hasBeganGlobalFetch) {
+        hasBeganGlobalFetch = true;
+        loadInventory();
+      }
       return;
     }
 
@@ -56,34 +62,37 @@ export function useStockConversion(branchId?: number) {
       setData(products);
       setTotalCount(total);
       setIsLoading(false);
+
+      if (!hasBeganGlobalFetch || forceRefresh) {
+        hasBeganGlobalFetch = true;
+        loadInventory();
+      }
     } catch (e: unknown) {
       const err = e as Error;
       setError(err?.message ?? "An error occurred");
       setIsLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 2. Targeted Inventory Fetch: Triggered by UI/Filters
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const loadInventory = useCallback(async (filters?: any) => {
-    console.log("[useStockConversion] Triggering inventory fetch. Filters:", filters);
+  const loadInventory = useCallback(async (filters?: InventoryFilters) => {
+    console.log("[useStockConversion] Triggering targeted background inventory fetch...", filters);
     
     // Set loading state for products matching these filters
-    // If we have filters, we might not know which products match yet locally,
-    // so we set all to loading if it's a "big refresh" or just the specific ones if known.
-    setData(prev => prev.map(p => ({ ...p, inventoryLoaded: false })));
+    setData(prev => prev.map(p => p.inventoryLoaded !== true ? { ...p, inventoryLoaded: false } : p));
 
     try {
       const sp = new URLSearchParams();
       sp.set("type", "inventory");
       if (branchId !== undefined) sp.set("branchId", String(branchId));
-      
+
       if (filters) {
-        if (filters.supplierShortcut && filters.supplierShortcut !== "all") sp.set("supplierShortcut", filters.supplierShortcut);
-        if (filters.productCategory && filters.productCategory !== "all") sp.set("productCategory", filters.productCategory);
-        if (filters.unitName && filters.unitName !== "all") sp.set("unitName", filters.unitName);
-        if (filters.productBrand && filters.productBrand !== "all") sp.set("productBrand", filters.productBrand);
-        if (filters.productIds && filters.productIds.length > 0) sp.set("productIds", filters.productIds.join(","));
+          if (filters.supplierShortcut && filters.supplierShortcut !== "all") sp.set("supplierShortcut", filters.supplierShortcut);
+          if (filters.productCategory && filters.productCategory !== "all") sp.set("productCategory", filters.productCategory);
+          if (filters.unitName && filters.unitName !== "all") sp.set("unitName", filters.unitName);
+          if (filters.productBrand && filters.productBrand !== "all") sp.set("productBrand", filters.productBrand);
+          if (filters.productIds && filters.productIds.length > 0) sp.set("productIds", filters.productIds.join(","));
       }
 
       const invUrl = `/api/scm/transfers/stock-conversion?${sp.toString()}`;
@@ -96,15 +105,15 @@ export function useStockConversion(branchId?: number) {
       setData(prev => {
         const next = prev.map(p => {
           const qty = invMap[p.productId];
-          if (qty !== undefined) {
-            return {
-                ...p,
-                quantity: qty,
-                totalAmount: Number((qty * (p.pricePerUnit || 0)).toFixed(2)),
-                inventoryLoaded: true
-            };
-          }
-          return p;
+          const rawQty = qty !== undefined ? qty : 0;
+          const finalQty = Math.floor(rawQty / (p.conversionFactor || 1));
+          return {
+              ...p,
+              quantity: finalQty,
+              totalAmount: Number((finalQty * (p.pricePerUnit || 0)).toFixed(2)),
+              inventoryLoaded: true,
+              inventoryError: false
+          };
         });
         
         cachedData = next; // sync cache
@@ -112,12 +121,13 @@ export function useStockConversion(branchId?: number) {
       });
     } catch (e: unknown) {
         const err = e as Error;
-        console.error("Inventory fetch failed:", err);
-        setData(prev => prev.map(p => ({ ...p, inventoryLoaded: true })));
+        console.warn("[Caught] Inventory fetch failed:", err.message);
+        hasBeganGlobalFetch = false;
+        setData(prev => prev.map(p => p.inventoryLoaded === false ? { ...p, inventoryLoaded: true, inventoryError: true } : p));
         // Surface auth errors as a critical error on the page
         if (err?.message?.includes("session") || err?.message?.includes("expired") || err?.message?.includes("401") || err?.message?.includes("403")) {
             setError(err.message);
-        } else {
+        } else if (!err?.message?.toLowerCase().includes("aborted") && !err?.message?.toLowerCase().includes("fetch failed")) {
             toast.error(`Inventory failed: ${err.message}`);
         }
     }
@@ -139,7 +149,7 @@ export function useStockConversion(branchId?: number) {
       const next = prev.map(p => {
         if (fetchableIds.includes(p.productId) && p.inventoryLoaded !== false) {
            changed = true;
-           return { ...p, inventoryLoaded: false };
+           return { ...p, inventoryLoaded: false, inventoryError: false };
         }
         return p;
       });
@@ -161,12 +171,14 @@ export function useStockConversion(branchId?: number) {
         const next = prev.map(p => {
           if (fetchableIds.includes(p.productId)) {
             const qty = invMap[p.productId];
-            const finalQty = qty !== undefined ? qty : 0;
+            const rawQty = qty !== undefined ? qty : 0;
+            const finalQty = Math.floor(rawQty / (p.conversionFactor || 1));
             return {
               ...p,
               quantity: finalQty,
               totalAmount: Number((finalQty * (p.pricePerUnit || 0)).toFixed(2)),
-              inventoryLoaded: true
+              inventoryLoaded: true,
+              inventoryError: false
             };
           }
           return p;
@@ -177,15 +189,13 @@ export function useStockConversion(branchId?: number) {
       });
     } catch (e: unknown) {
       const err = e as Error;
-      console.error("Batch inventory fetch failed:", err);
+      console.warn("[Caught] Batch inventory fetch failed:", err.message);
       // Surface auth errors as critical
       if (err?.message?.includes("session") || err?.message?.includes("expired") || err?.message?.includes("401") || err?.message?.includes("403")) {
           setError(err.message);
-      } else {
-          toast.error(`Batch Inventory failed: ${err.message}`);
       }
       setData(prev => prev.map(p => 
-        fetchableIds.includes(p.productId) ? { ...p, inventoryLoaded: true } : p
+        fetchableIds.includes(p.productId) ? { ...p, inventoryLoaded: true, inventoryError: true } : p
       ));
     } finally {
       // Remove from tracking ref
@@ -247,6 +257,34 @@ export function useStockConversion(branchId?: number) {
     refresh();
   }, [refresh]);
 
+  const checkProductRfids = async (productId: number, activeBranchId: number): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/scm/transfers/stock-conversion/validate-rfid?action=check_product_rfids&branchId=${activeBranchId}&productId=${productId}`);
+      if (!res.ok) return false;
+      const data = await res.json();
+      return data.hasRfids || false;
+    } catch {
+      return false;
+    }
+  };
+
+  const validateDuplicateTag = async (rfid: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/scm/transfers/stock-conversion/validate-rfid?action=validate_tag&rfid=${encodeURIComponent(rfid)}`);
+      if (!res.ok) return false;
+      const data = await res.json();
+      return data.exists || false;
+    } catch {
+      return false;
+    }
+  };
+
+  useEffect(() => {
+    if (hasBeganGlobalFetch && branchId !== undefined) {
+      loadInventory();
+    }
+  }, [branchId, loadInventory]);
+
   return {
     data,
     totalCount,
@@ -261,5 +299,7 @@ export function useStockConversion(branchId?: number) {
     loadInventory,
     loadProductsInventory,
     convertStock: convertStockAction,
+    checkProductRfids,
+    validateDuplicateTag,
   };
 }

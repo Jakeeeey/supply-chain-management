@@ -53,8 +53,11 @@ function decodeJwtPayload(token: string): any {
 function getUserIdFromToken(token: string | undefined): number | null {
   if (!token) return null;
   const payload = decodeJwtPayload(token);
-  if (!payload || !payload.id) return null;
-  return Number(payload.id);
+  if (!payload) return null;
+  const idValue = payload.id ?? payload.sub ?? payload.userId ?? payload.user_id;
+  if (idValue === undefined || idValue === null) return null;
+  const num = Number(idValue);
+  return isNaN(num) ? null : num;
 }
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -149,7 +152,10 @@ export async function GET(req: NextRequest) {
           );
         }
 
-        const rfidToken = req.cookies.get("vos_access_token")?.value;
+        let rfidToken = req.cookies.get("vos_access_token")?.value;
+        if (!rfidToken && process.env.NEXT_PUBLIC_AUTH_DISABLED === "true") {
+          rfidToken = "dev-mode-token"; // Placeholder when auth is disabled
+        }
         if (!rfidToken) {
           return json(
             { error: "Unauthorized: Missing access token" },
@@ -176,8 +182,11 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const token = req.cookies.get("vos_access_token")?.value;
-    const userId = getUserIdFromToken(token);
+    let userId = getUserIdFromToken(token);
     
+    if (!userId && process.env.NEXT_PUBLIC_AUTH_DISABLED === "true") {
+      userId = 1; // Default system user when auth is disabled
+    }
     if (!userId) {
       return json({ error: "Unauthorized: Invalid or missing session" }, 401);
     }
@@ -217,8 +226,11 @@ export async function PATCH(req: NextRequest) {
 
     // Default: full update
     const token = req.cookies.get("vos_access_token")?.value;
-    const userId = getUserIdFromToken(token);
+    let userId = getUserIdFromToken(token);
     
+    if (!userId && process.env.NEXT_PUBLIC_AUTH_DISABLED === "true") {
+      userId = 1; // Default system user when auth is disabled
+    }
     if (!userId) {
       return json({ error: "Unauthorized: Invalid or missing session" }, 401);
     }

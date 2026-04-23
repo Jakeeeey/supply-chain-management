@@ -1,9 +1,10 @@
 "use client";
 
 import * as React from "react";
+import { toast } from "sonner";
 
 import type { PendingApprovalPO, PurchaseOrderDetail, PaymentTerm } from "./types";
-import * as provider from "./providers/approvalPurchaseOrderProvider";
+import * as provider from "./providers/fetchProviders";
 
 import PendingApprovalList from "./components/PendingApprovalList";
 import PurchaseOrderReviewPanel from "./components/PurchaseOrderReviewPanel";
@@ -24,7 +25,11 @@ export default function ApprovalPurchaseOrderModule() {
             const data = await provider.fetchPendingApprovalPOs();
             setPending(data);
         } catch (e: unknown) {
-            setError(String(e instanceof Error ? e.message : e));
+            const msg = String(e instanceof Error ? e.message : e);
+            if (msg.trim().toLowerCase() !== "fetch failed") {
+                setError(msg);
+                toast.error(`Load failed: ${msg}`);
+            }
         } finally {
             setLoadingList(false);
         }
@@ -42,7 +47,11 @@ export default function ApprovalPurchaseOrderModule() {
             const d = await provider.fetchPurchaseOrderDetail(id);
             setDetail(d);
         } catch (e: unknown) {
-            setError(String(e instanceof Error ? e.message : e));
+            const msg = e instanceof Error ? e.message : String(e);
+            if (msg.trim().toLowerCase() !== "fetch failed") {
+                setError(msg);
+                toast.error(`Failed to load PO detail: ${msg}`);
+            }
         } finally {
             setLoadingDetail(false);
         }
@@ -73,15 +82,17 @@ export default function ApprovalPurchaseOrderModule() {
                     termsDays: opts.termsDays,
                 });
 
-                // remove from list + clear selection
-                setPending((prev) => prev.filter((x) => x.id !== selectedId));
+                // Refresh list and clear selection
+                await refreshList();
                 setSelectedId(null);
                 setDetail(null);
             } catch (e: unknown) {
-                setError(String(e instanceof Error ? e.message : e));
+                const msg = String(e instanceof Error ? e.message : e);
+                setError(msg);
+                toast.error(`Approval failed: ${msg}`);
             }
         },
-        [selectedId]
+        [selectedId, refreshList]
     );
 
     return (
