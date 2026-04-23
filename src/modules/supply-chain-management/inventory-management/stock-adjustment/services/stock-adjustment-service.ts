@@ -221,7 +221,7 @@ export const stockAdjustmentService = {
   async fetchProductInventory(productId: number, branchId: number, token: string): Promise<number> {
     try {
       const url = `${SPRING_API_URL}/api/view-running-inventory/all?branch_id=${branchId}`;
-
+      
       const res = await fetch(url, {
         headers: {
           "Authorization": `Bearer ${token}`
@@ -280,7 +280,7 @@ export const stockAdjustmentService = {
   async checkRFIDStatus(productId: number, branchId: number, token: string): Promise<RfidStatusItem | null> {
     try {
       const url = `${SPRING_API_URL}/api/view-rfid-onhand?branchId=${branchId}`;
-
+      
       const res = await fetch(url, {
         headers: {
           "Authorization": `Bearer ${token}`
