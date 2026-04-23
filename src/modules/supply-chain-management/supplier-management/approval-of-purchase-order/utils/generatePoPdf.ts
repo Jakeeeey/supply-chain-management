@@ -1,7 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { PdfEngine } from "@/components/pdf-layout-design/PdfEngine";
-import { CompanyData } from "@/components/pdf-layout-design/types";
+import { CompanyData, PdfElementConfig } from "@/components/pdf-layout-design/types";
 import { renderElement } from "@/components/pdf-layout-design/PdfGenerator";
 import { pdfTemplateService } from "@/components/pdf-layout-design/services/pdf-template";
 
@@ -31,61 +31,6 @@ function safeStr(v: unknown, fallback = "—") {
 // ==========================================
 // 2. MODULAR RENDERERS
 // ==========================================
-
-/**
- * Compact Header Renderer - optimized for space saving
- */
-function renderHeader(
-    doc: jsPDF,
-    data: {
-        companyName: string;
-        poNumber: string;
-        date: string;
-        supplierName: string;
-        branchLabel: string;
-    }
-) {
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const margin = 10;
-    const rightColX = pageWidth - margin;
-
-    // Compact header - single line for company and PO info
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(15, 23, 42);
-    doc.text(data.companyName, margin, 15);
-
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(100, 116, 139);
-    doc.text("PURCHASE ORDER", margin, 20);
-
-    // PO Details - compact single line
-    doc.setFontSize(8);
-    doc.setTextColor(15, 23, 42);
-    doc.setFont("helvetica", "bold");
-    doc.text(`PO: ${data.poNumber} | Date: ${data.date}`, rightColX, 15, { align: "right" });
-
-    // Compact divider
-    doc.setDrawColor(200, 200, 200);
-    doc.setLineWidth(0.3);
-    doc.line(margin, 23, pageWidth - margin, 23);
-
-    // Supplier & Delivery - compact single line each
-    doc.setFontSize(7);
-    doc.setTextColor(15, 23, 42);
-    doc.setFont("helvetica", "bold");
-    doc.text("Supplier:", margin, 28);
-    doc.setFont("helvetica", "normal");
-    doc.text(data.supplierName, margin + 20, 28);
-
-    doc.setFont("helvetica", "bold");
-    doc.text("Deliver To:", margin, 32);
-    doc.setFont("helvetica", "normal");
-    doc.text(data.branchLabel, margin + 20, 32);
-
-    return 36;
-}
 
 /**
  * Compact Signature Renderer - minimal space usage
@@ -240,7 +185,7 @@ export async function generatePurchaseOrderPdf(
                 // Repeat header on subsequent pages
                 if (data.pageNumber > 1 && config.elements) {
                     Object.values(config.elements).forEach(el => {
-                        renderElement(doc, el as any, companyData);
+                        renderElement(doc, el as PdfElementConfig, companyData);
                     });
                 }
             },
@@ -248,7 +193,7 @@ export async function generatePurchaseOrderPdf(
         });
 
         // 3. Compact Financial Summary
-        let finalY = (doc as any).lastAutoTable.finalY + 8;
+        let finalY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
         if (finalY + 60 > pageHeight) {
             doc.addPage();
             PdfEngine.applyTemplate(doc, templateName, companyData); // Re-apply header to new page using resolved name

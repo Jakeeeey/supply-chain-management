@@ -23,7 +23,7 @@ function directusHeaders(): Record<string, string> {
     };
 }
 
-async function directusFetch<T = any>(url: string, init?: RequestInit): Promise<T> {
+async function directusFetch<T = unknown>(url: string, init?: RequestInit): Promise<T> {
     const res = await fetch(url, {
         ...init,
         headers: { ...directusHeaders(), ...(init?.headers as Record<string, string> | undefined) },
@@ -596,7 +596,7 @@ export async function GET() {
         const base = getDirectusBase();
 
         const rows = await fetchApprovedPOs(base) as Record<string, unknown>[];
-        const poIds = rows.map((r: any) => toNum(r?.purchase_order_id)).filter(Boolean);
+        const poIds = rows.map((r: Record<string, unknown>) => toNum(r?.purchase_order_id)).filter(Boolean);
 
         const poProducts = await fetchPOProductsByPOIds(base, poIds);
 
@@ -750,7 +750,7 @@ export async function POST(req: NextRequest) {
 
             // do not exceed expected qty
             const currentDetail = await buildDetail(base, poId);
-            const currentItem = currentDetail.items.find((x: any) => x.id === String(popId));
+            const currentItem = currentDetail.items.find((x: TaggingPOItem) => x.id === String(popId));
             const expectedQty = currentItem?.expectedQty ?? 0;
             const taggedQty = currentItem?.taggedQty ?? 0;
 
@@ -782,12 +782,12 @@ export async function POST(req: NextRequest) {
             // we will manually inject it into the result so the UI updates instantly.
             const updated = await buildDetail(base, poId);
 
-            const isPresent = updated.activity.some((a: any) => a.rfid === rfid);
+            const isPresent = updated.activity.some((a: TaggingActivity) => a.rfid === rfid);
             if (!isPresent) {
                 if (DEBUG) dlog(`Optimistically injecting tag ${rfid} for SKU ${sku}`);
                 
                 // Find the line that should receive this tag
-                const line = updated.items.find((it: any) => it.sku === sku);
+                const line = updated.items.find((it: TaggingPOItem) => it.sku === sku);
                 if (line) {
                     // Only increment if not already "full" in the returned state
                     // (if it's already full, Directus might have actually returned it and it's just a duplicate activity check)

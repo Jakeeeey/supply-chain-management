@@ -23,7 +23,7 @@ function directusHeaders(): Record<string, string> {
     };
 }
 
-async function fetchJson<T = any>(url: string, init?: RequestInit): Promise<T> {
+async function fetchJson<T = unknown>(url: string, init?: RequestInit): Promise<T> {
     const res = await fetch(url, {
         ...init,
         headers: { ...directusHeaders(), ...(init?.headers as Record<string, string> | undefined) },

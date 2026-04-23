@@ -23,7 +23,7 @@ function directusHeaders(): Record<string, string> {
     };
 }
 
-async function fetchJson<T = any>(url: string, init?: RequestInit): Promise<T> {
+async function fetchJson<T = unknown>(url: string, init?: RequestInit): Promise<T> {
     const res = await fetch(url, {
         ...init,
         headers: { ...directusHeaders(), ...(init?.headers as Record<string, string> | undefined) },
@@ -49,8 +49,9 @@ export async function GET() {
     const data = await fetchJson(apiUrl);
     return NextResponse.json(data);
 
-  } catch (error: any) {
-    console.error("Route Error:", error);
-    return NextResponse.json({ error: error?.message || "Internal Server Error" }, { status: 500 });
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("Route Error:", err);
+    return NextResponse.json({ error: err?.message || "Internal Server Error" }, { status: 500 });
   }
 }

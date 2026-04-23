@@ -23,7 +23,7 @@ function directusHeaders(): Record<string, string> {
     };
 }
 
-async function fetchJson<T = any>(url: string, init?: RequestInit): Promise<T> {
+async function fetchJson<T = unknown>(url: string, init?: RequestInit): Promise<T> {
     const res = await fetch(url, {
         ...init,
         headers: { ...directusHeaders(), ...(init?.headers as Record<string, string> | undefined) },
@@ -42,14 +42,25 @@ async function fetchJson<T = any>(url: string, init?: RequestInit): Promise<T> {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+interface DiscountLine {
+    id?: string | number;
+    description?: string;
+    percentage?: string | number;
+    line_id?: {
+        id?: string | number;
+        description?: string;
+        percentage?: string | number;
+    };
+}
+
 /**
- * Robust relational calculation.
+ * Robust relational calculation. 
  * If multiple lines exist, they compound: 1 - Π(1 - pi/100)
  */
-function calculateDiscountFromLines(lines: any[]): number {
+function calculateDiscountFromLines(lines: DiscountLine[]): number {
     if (!lines?.length) return 0;
-    const factor = lines.reduce((acc: number, line: any) => {
-        const p = toNum(line?.line_id?.percentage ?? line?.percentage ?? 0);
+    const factor = lines.reduce((acc: number, line: DiscountLine) => {
+        const p = Number(line?.line_id?.percentage ?? line?.percentage ?? 0);
         return acc * (1 - p / 100);
     }, 1);
     const total = (1 - factor) * 100;
@@ -111,6 +122,10 @@ function pickNum(obj: Record<string, unknown> | null | undefined, keys: string[]
         }
     }
     return 0;
+}
+
+function chunk<T>(arr: T[], size: number): T[][] {
+    return Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
 }
 
 
@@ -411,11 +426,13 @@ type PoHeaderRow = {
     purchase_order_no?: string | null;
     date?: string | null;
     date_encoded?: string | null;
+    date_received?: string | null;
+    inventory_status?: string | number | null;
     supplier_name?: unknown;
     is_invoice?: boolean | number | null;
     isInvoice?: boolean | number | null;
     receiving_type?: number | null;
-    user_created?: unknown;
+    user_created?: string | number | { first_name?: string; last_name?: string } | null;
 };
 
 async function fetchPendingPOs(base: string): Promise<PoHeaderRow[]> {
@@ -451,17 +468,22 @@ type PoProductRow = {
     approved_price?: string | number | null;
 };
 
+interface PoLineRow {
+    purchase_order_id: string | number;
+    ordered_quantity: string | number;
+    unit_price: string | number;
+    branch_id: string | number;
+}
+
 async function fetchPOProductsByPOIds(base: string, poIds: number[]) {
-    if (!poIds.length) return [] as PoProductRow[];
-
-    // ✅ include unit_price (fixes blank price per item)
-    const url =
-        `${base}/items/${PO_PRODUCTS_COLLECTION}?limit=-1` +
-        `&filter[purchase_order_id][_in]=${encodeURIComponent(poIds.join(","))}` +
-        `&fields=*,product_id.*,branch_id.*`;
-
-    const j = await fetchJson(url) as { data: PoProductRow[] };
-    return (j?.data ?? []) as PoProductRow[];
+    if (!poIds.length) return [] as PoLineRow[];
+    const rows: PoLineRow[] = [];
+    for (const ids of chunk(uniqNums(poIds), 250)) {
+        const url = `${base}/items/purchase_order_products?limit=-1&filter[purchase_order_id][_in]=${encodeURIComponent(ids.join(","))}&fields=purchase_order_id,ordered_quantity,unit_price,branch_id`;
+        const j = await fetchJson(url) as { data: PoLineRow[] };
+        rows.push(...(Array.isArray(j?.data) ? j.data : []));
+    }
+    return rows;
 }
 
 async function fetchPOProductsByPOId(base: string, poId: number) {
@@ -479,7 +501,13 @@ async function fetchDiscountTypesMap(base: string) {
     try {
         const fields = encodeURIComponent("id,discount_type,total_percent,line_per_discount_type.line_id.*");
         const url = `${base}/items/discount_type?limit=-1&fields=${fields}`;
-        const j = await fetchJson(url) as { data: any[] };
+        interface DiscountTypeResponse {
+            id: string | number;
+            discount_type: string;
+            total_percent: string | number;
+            line_per_discount_type?: DiscountLine[];
+        }
+        const j = await fetchJson<{ data: DiscountTypeResponse[] }>(url);
         for (const dt of (j?.data ?? [])) {
             const id = String(dt.id);
             const rawPct = toNum(dt.total_percent);
@@ -782,7 +810,7 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
 
         // Preparer info
         preparer_name: (typeof header?.user_created === "object" && header.user_created)
-            ? [(header.user_created as any).first_name, (header.user_created as any).last_name].filter(Boolean).join(" ")
+            ? [(header.user_created as { first_name?: string }).first_name, (header.user_created as { last_name?: string }).last_name].filter(Boolean).join(" ")
             : "—",
     };
 }
@@ -863,7 +891,10 @@ export async function GET(req: NextRequest) {
                 is_invoice: (Number(h.receiving_type) === 2) || (String(h.is_invoice ?? h.isInvoice).toLowerCase() === "true") || !!(h.is_invoice ?? h.isInvoice),
 
                 preparer_name: (typeof h.user_created === "object" && h.user_created)
-                    ? [(h.user_created as any).first_name, (h.user_created as any).last_name].filter(Boolean).join(" ")
+                    ? [
+                        (h.user_created as { first_name?: string }).first_name, 
+                        (h.user_created as { last_name?: string }).last_name
+                    ].filter(Boolean).join(" ")
                     : "—",
             };
         });

@@ -23,7 +23,7 @@ function directusHeaders(): Record<string, string> {
     };
 }
 
-async function fetchJson<T = any>(url: string, init?: RequestInit): Promise<T> {
+async function fetchJson<T = unknown>(url: string, init?: RequestInit): Promise<T> {
     const res = await fetch(url, {
         ...init,
         headers: { ...directusHeaders(), ...(init?.headers as Record<string, string> | undefined) },
@@ -52,9 +52,20 @@ function toStr(v: unknown, fb = "") {
     return s ? s : fb;
 }
 
-function calculateDiscountFromLines(lines: any[]): number {
+interface DiscountLine {
+    id?: string | number;
+    description?: string;
+    percentage?: string | number;
+    line_id?: {
+        id?: string | number;
+        description?: string;
+        percentage?: string | number;
+    };
+}
+
+function calculateDiscountFromLines(lines: DiscountLine[]): number {
     if (!lines?.length) return 0;
-    const factor = lines.reduce((acc: number, line: any) => {
+    const factor = lines.reduce((acc: number, line: DiscountLine) => {
         const p = toNum(line?.line_id?.percentage ?? line?.percentage ?? 0);
         return acc * (1 - p / 100);
     }, 1);
@@ -73,15 +84,22 @@ function deriveDiscountPercentFromCode(codeRaw: string): number {
     return Number(((1 - factor) * 100).toFixed(4));
 }
 
+interface DiscountTypeRow {
+    id: string | number;
+    discount_type: string;
+    total_percent: string | number;
+    line_per_discount_type?: DiscountLine[];
+}
+
 export async function GET() {
     try {
         const base = getDirectusBase();
         const fields = encodeURIComponent("id,discount_type,total_percent,line_per_discount_type.line_id.*");
         const url = `${base}/items/discount_type?limit=-1&fields=${fields}`;
 
-        const json = await fetchJson(url) as any;
+        const json = await fetchJson<{ data: DiscountTypeRow[] }>(url);
 
-        const mapped = (json?.data ?? []).map((dt: any) => {
+        const mapped = (json?.data ?? []).map((dt: DiscountTypeRow) => {
             const rawPct = toNum(dt.total_percent);
             const lines = dt.line_per_discount_type ?? [];
             

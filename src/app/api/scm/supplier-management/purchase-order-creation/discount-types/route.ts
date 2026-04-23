@@ -23,7 +23,7 @@ function directusHeaders(): Record<string, string> {
     };
 }
 
-async function fetchJson<T = any>(url: string, init?: RequestInit): Promise<T> {
+async function fetchJson<T = unknown>(url: string, init?: RequestInit): Promise<T> {
     const res = await fetch(url, {
         ...init,
         headers: { ...directusHeaders(), ...(init?.headers as Record<string, string> | undefined) },
@@ -42,13 +42,24 @@ async function fetchJson<T = any>(url: string, init?: RequestInit): Promise<T> {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+interface DiscountLine {
+    id?: string | number;
+    description?: string;
+    percentage?: string | number;
+    line_id?: {
+        id?: string | number;
+        description?: string;
+        percentage?: string | number;
+    };
+}
+
 /**
  * Robust relational calculation.
  * If multiple lines exist, they compound: 1 - Π(1 - pi/100)
  */
-function calculateDiscountFromLines(lines: any[]): number {
+function calculateDiscountFromLines(lines: DiscountLine[]): number {
     if (!lines?.length) return 0;
-    const factor = lines.reduce((acc, line) => {
+    const factor = lines.reduce((acc: number, line: DiscountLine) => {
         const p = Number(line?.line_id?.percentage ?? line?.percentage ?? 0);
         return acc * (1 - p / 100);
     }, 1);
@@ -70,6 +81,13 @@ function deriveDiscountPercentFromCode(codeRaw: string): number {
     return Number(((1 - factor) * 100).toFixed(4));
 }
 
+interface DiscountTypeRow {
+    id: string | number;
+    discount_type: string;
+    total_percent: string | number;
+    line_per_discount_type?: DiscountLine[];
+}
+
 export async function GET() {
     try {
         const base = getDirectusBase();
@@ -78,7 +96,7 @@ export async function GET() {
         const fields = encodeURIComponent("id,discount_type,total_percent,line_per_discount_type.line_id.*");
         const url = `${base}/items/discount_type?limit=-1&fields=${fields}`;
 
-        const json = await fetchJson<{ data: any[] }>(url);
+        const json = await fetchJson<{ data: DiscountTypeRow[] }>(url);
 
         const mapped = (json?.data ?? []).map((d) => {
             const rawPct = Number.parseFloat(String(d?.total_percent ?? "0")) || 0;
@@ -101,7 +119,7 @@ export async function GET() {
                 id: d?.id,
                 name: d?.discount_type,
                 percent: computed,
-                lines: lines.map((l: any) => ({
+                lines: lines.map((l: DiscountLine) => ({
                     id: l?.line_id?.id,
                     description: l?.line_id?.description,
                     percentage: Number(l?.line_id?.percentage ?? 0),

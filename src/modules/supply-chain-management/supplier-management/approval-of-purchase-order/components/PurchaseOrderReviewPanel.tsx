@@ -40,6 +40,7 @@ import {
 import { cn } from "@/lib/utils";
 
 import type { PurchaseOrderDetail, PaymentTerm } from "../types";
+import type { CompanyData } from "@/components/pdf-layout-design/types";
 
 import { toast } from "sonner";
 
@@ -184,7 +185,7 @@ export default function PurchaseOrderReviewPanel(props: {
 
     const [currentPage, setCurrentPage] = React.useState(1);
     const [pageSize, setPageSize] = React.useState(10);
-    const [companyData, setCompanyData] = React.useState<any>(null);
+    const [companyData, setCompanyData] = React.useState<CompanyData | null>(null);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const poAny: any = React.useMemo(() => unwrap(props.po), [props.po]);
@@ -685,7 +686,7 @@ export default function PurchaseOrderReviewPanel(props: {
                                             disabled={!poAny?.purchase_order_id || !companyData}
                                             onClick={async () => {
                                                 try {
-                                                    await generatePurchaseOrderPdf(poAny, branchLabel, supplierName, companyData);
+                                                    await generatePurchaseOrderPdf(poAny, branchLabel, supplierName, companyData as CompanyData);
                                                 } catch (err) {
                                                     console.error("PDF Generation failed:", err);
                                                     toast.error("Failed to generate PDF.");

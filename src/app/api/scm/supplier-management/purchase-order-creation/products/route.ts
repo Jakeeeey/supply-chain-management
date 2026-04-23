@@ -23,20 +23,7 @@ function directusHeaders(): Record<string, string> {
     };
 }
 
-async function directusFetch<T = any>(url: string, init?: RequestInit): Promise<T> {
-    const res = await fetch(url, {
-        ...init,
-        headers: { ...directusHeaders(), ...(init?.headers as Record<string, string> | undefined) },
-        cache: "no-store",
-    });
-    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-    if (!res.ok) {
-        const errors = json?.errors as Array<{ message: string }> | undefined;
-        const msg = errors?.[0]?.message || (json?.error as string) || `Directus error ${res.status} ${res.statusText}`;
-        throw new Error(msg);
-    }
-    return json as T;
-}
+// REMOVED: unused directusFetch helper
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
