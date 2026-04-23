@@ -45,6 +45,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { useSearchParams } from "next/navigation";
 
 import { SalesReturnProvider } from "../providers/fetchProviders";
 import {
@@ -111,8 +112,32 @@ export function UpdateSalesReturnModal({
   onClose,
   onSuccess,
 }: Props) {
+  const searchParams = useSearchParams();
+  const prefillRemarks = searchParams.get("prefillRemarks");
+
   // --- STATE ---
   const [headerData, setHeaderData] = useState<SalesReturn>(initialData);
+
+  // 🟢 Effect to pre-fill remarks from Clearance if redirected
+  useEffect(() => {
+    if (prefillRemarks && headerData) {
+      const currentRemarks = headerData.remarks || "";
+      if (!currentRemarks.includes(prefillRemarks)) {
+        setHeaderData((prev) => ({
+          ...prev,
+          remarks: currentRemarks
+            ? `${currentRemarks}\n\n[From Clearance]: ${prefillRemarks}`
+            : prefillRemarks,
+        }));
+      }
+      
+      // Clean up URL to prevent re-applying on refresh
+      const url = new URL(window.location.href);
+      url.searchParams.delete('prefillRemarks');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [prefillRemarks]);
+
   const [details, setDetails] = useState<SalesReturnItem[]>([]);
   const [statusCardData, setStatusCardData] =
     useState<SalesReturnStatusCard | null>(null);
