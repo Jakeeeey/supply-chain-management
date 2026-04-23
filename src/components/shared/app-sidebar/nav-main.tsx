@@ -101,7 +101,7 @@ const SUB_WRAP_L3 = cn(
 );
 
 const ROW = "flex w-full min-w-0 flex-nowrap items-center overflow-hidden";
-const LABEL = "min-w-0 flex-1 truncate !whitespace-nowrap";
+const LABEL = "min-w-0 w-0 flex-1 truncate !whitespace-nowrap";
 
 /* ----------------------------- pill (hover + active) ------------------------ */
 
@@ -196,14 +196,14 @@ function HighlightMatch({ text, term }: { text: string; term?: string }) {
     );
 }
 
-function TruncatedLabel({ 
-    text, 
-    term, 
-    className 
-}: { 
-    text: string; 
-    term?: string; 
-    className?: string 
+function TruncatedLabel({
+                            text,
+                            term,
+                            className
+                        }: {
+    text: string;
+    term?: string;
+    className?: string
 }) {
     const [isTruncated, setIsTruncated] = React.useState(false);
     const textRef = React.useRef<HTMLSpanElement>(null);
@@ -219,16 +219,16 @@ function TruncatedLabel({
         <TooltipProvider delayDuration={300}>
             <Tooltip>
                 <TooltipTrigger asChild onMouseEnter={checkTruncation}>
-                    <span 
-                        ref={textRef} 
-                        className={cn("inline-block max-w-full truncate !whitespace-nowrap", className)}
+                    <span
+                        ref={textRef}
+                        className={cn("min-w-0 flex-1 truncate !whitespace-nowrap", className)}
                     >
                         <HighlightMatch text={text} term={term} />
                     </span>
                 </TooltipTrigger>
                 {isTruncated && (
-                    <TooltipContent 
-                        side="right" 
+                    <TooltipContent
+                        side="right"
                         align="center"
                         sideOffset={8}
                         className="max-w-[280px] break-words font-bold px-3 py-1.5 text-[11px] shadow-2xl border-none bg-zinc-900 text-zinc-50 dark:bg-zinc-50 dark:text-zinc-900 animate-in fade-in zoom-in-95"
@@ -256,16 +256,16 @@ interface RecursiveNavItemProps {
     isLast?: boolean;
 }
 
-function RecursiveNavItem({ 
-    node, 
-    depth, 
-    pathname, 
-    searchTerm, 
-    openMap, 
-    toggleOpen,
-    parentKey,
-    isLast
-}: RecursiveNavItemProps) {
+function RecursiveNavItem({
+                              node,
+                              depth,
+                              pathname,
+                              searchTerm,
+                              openMap,
+                              toggleOpen,
+                              parentKey,
+                              isLast
+                          }: RecursiveNavItemProps) {
     const hasChildren = !!node.items?.length;
     const isExact = isRouteActiveExact(pathname, node.url);
     const key = parentKey ? `${parentKey}::${node.title}` : node.title;
@@ -278,7 +278,7 @@ function RecursiveNavItem({
         if (d === 1) return "pl-7";
         if (d === 2) return "pl-12";
         // For d > 2, we can't use tailwind classes easily without JIT or dynamic style
-        return ""; 
+        return "";
     };
 
     const dynamicPadding = depth > 2 ? { paddingLeft: `${depth * 1.25 + 0.5}rem` } : {};
@@ -293,7 +293,7 @@ function RecursiveNavItem({
                 if (depth === 1) return <L2Icon node={node} kind={hasChildren ? "parent" : "leaf"} />;
                 return <L3Icon node={node} />;
             })()}
-                <TruncatedLabel text={node.title} term={searchTerm} className={LABEL} />
+            <TruncatedLabel text={node.title} term={searchTerm} className={LABEL} />
             {node.status === "comingSoon" && <SoonBadge />}
 
             {hasChildren && (
@@ -308,8 +308,7 @@ function RecursiveNavItem({
 
 
     const nestedClass = cn(
-        "group relative w-full flex items-center min-w-0 overflow-hidden cursor-pointer rounded-md",
-        depth > 2 ? "h-8 text-sm pr-2" : (depth === 1 ? "h-8 text-sm pl-7 pr-2" : "h-8 text-sm pl-12 pr-2"),
+        "group relative w-full flex items-center min-w-0 overflow-hidden cursor-pointer rounded-md h-8 text-sm pr-2",
         getPaddingClass(depth),
         node.status === "comingSoon" && "opacity-60 cursor-not-allowed",
         /* THE L-SHAPE CONNECTOR (Dashed Style) */
@@ -364,7 +363,7 @@ function RecursiveNavItem({
                                 {renderButtonContent}
                             </Link>
                         ) : (
-                            <div 
+                            <div
                                 className={cn(ROW, node.status === "comingSoon" && "opacity-60 cursor-not-allowed")}
                                 onClick={() => {
                                     if (node.status === "comingSoon") {
@@ -384,7 +383,7 @@ function RecursiveNavItem({
                 /* NESTED ITEMS: Direct Button/Link to avoid shadcn backgrounds (The Grey Box) */
                 hasChildren ? (
                     <CollapsibleTrigger asChild>
-                        <div 
+                        <div
                             className={nestedClass}
                             style={dynamicStyle}
                             data-active={isExact}
@@ -396,8 +395,8 @@ function RecursiveNavItem({
                     </CollapsibleTrigger>
                 ) : (
                     isClickable && node.status !== "comingSoon" ? (
-                        <Link 
-                            href={node.url} 
+                        <Link
+                            href={node.url}
                             className={nestedClass}
                             style={dynamicStyle}
                             data-active={isExact}
@@ -407,7 +406,7 @@ function RecursiveNavItem({
                             </div>
                         </Link>
                     ) : (
-                        <div 
+                        <div
                             className={nestedClass}
                             style={dynamicStyle}
                             data-active={isExact}
@@ -438,9 +437,9 @@ function RecursiveNavItem({
                                 depth >= 2 && "mx-0 px-0 translate-x-0 border-l-0 w-full min-w-0 overflow-hidden relative py-0.5"
                             )}>
                                 {node.items!.map((child, idx) => (
-                                    <RecursiveNavItem 
+                                    <RecursiveNavItem
                                         key={child.title}
-                                        node={child} 
+                                        node={child}
                                         parentKey={key}
                                         depth={depth + 1}
                                         pathname={pathname}
@@ -530,7 +529,7 @@ export function NavMain({ items, searchTerm }: { items: NavItem[]; searchTerm?: 
             // Check if state actually changed to avoid infinite loop
             const keys = Object.keys(nextState);
             if (keys.length === 0 && Object.keys(prev).length === 0) return prev;
-            
+
             let changed = false;
             for (const k of keys) {
                 if (!prev[k]) {
@@ -567,10 +566,10 @@ export function NavMain({ items, searchTerm }: { items: NavItem[]; searchTerm?: 
                     </div>
                 ) : (
                     items.map((l1) => (
-                        <RecursiveNavItem 
-                            key={l1.title} 
-                            node={l1} 
-                            depth={0} 
+                        <RecursiveNavItem
+                            key={l1.title}
+                            node={l1}
+                            depth={0}
                             pathname={pathname}
                             searchTerm={searchTerm}
                             openMap={openMap}
