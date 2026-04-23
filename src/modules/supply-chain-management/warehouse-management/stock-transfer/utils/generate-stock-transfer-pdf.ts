@@ -12,20 +12,12 @@ export interface StockTransferPDFData {
   companyData: CompanyData | null;
 }
 
-export function generateStockTransferPDF(data: StockTransferPDFData): jsPDF {
-  const { orderNo, status, sourceBranchLabel, targetBranchLabel, leadDate, scannedItems, companyData } = data;
-
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'legal' });
-
-  const pageW   = doc.internal.pageSize.getWidth();
-  const pageH   = doc.internal.pageSize.getHeight();
-  const margin  = 16;
-  const contentW = pageW - margin * 2;
+// ── Corporate Header Helper ────────────────────────────────────
+function drawCorporateHeader(doc: jsPDF, companyData: CompanyData | null, margin: number, pageW: number): number {
   let y = 14;
+  const contentW = pageW - margin * 2;
 
-  // ── Corporate Header ──────────────────────────────────────────
   if (companyData) {
-    // 1. Logo
     if (companyData.company_logo) {
       try {
         doc.addImage(companyData.company_logo, 'PNG', margin, y, 28, 16, undefined, 'FAST');
@@ -36,13 +28,15 @@ export function generateStockTransferPDF(data: StockTransferPDFData): jsPDF {
 
     const headerTextX = margin + 32;
     
-    // 2. Company Name
-    doc.setFontSize(18);
+    doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(0, 0, 0);
-    doc.text(companyData.company_name.toUpperCase(), headerTextX, y + 5);
+    const companyNameLines = doc.splitTextToSize(companyData.company_name.toUpperCase(), contentW - 35);
+    doc.text(companyNameLines, headerTextX, y + 5);
+    
+    const nameHeight = companyNameLines.length * 6;
+    const currentHeaderY = y + 5 + nameHeight;
 
-    // 3. Address details
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(60, 60, 60);
@@ -50,15 +44,13 @@ export function generateStockTransferPDF(data: StockTransferPDFData): jsPDF {
        companyData.company_address,
        `${companyData.company_brgy}, ${companyData.company_city}, ${companyData.company_province} - ${companyData.company_zipCode}`
     ].filter(Boolean).join(', ');
-    doc.text(address, headerTextX, y + 10);
+    doc.text(address, headerTextX, currentHeaderY);
 
-    // 4. Contact info
     const contactInfo = `Contact: ${companyData.company_contact}  |  Email: ${companyData.company_email}`;
-    doc.text(contactInfo, headerTextX, y + 15);
+    doc.text(contactInfo, headerTextX, currentHeaderY + 5);
 
-    y += 22;
+    y = currentHeaderY + 12;
   } else {
-    // Fallback: Simple system label
     doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(150, 150, 150);
@@ -66,11 +58,25 @@ export function generateStockTransferPDF(data: StockTransferPDFData): jsPDF {
     y += 8;
   }
 
-  // ── Divider ──
   doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.5);
   doc.line(margin, y, pageW - margin, y);
   y += 10;
+
+  return y;
+}
+
+export function generateStockTransferPDF(data: StockTransferPDFData): jsPDF {
+  const { orderNo, status, sourceBranchLabel, targetBranchLabel, leadDate, scannedItems, companyData } = data;
+
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'legal' });
+
+  const pageW   = doc.internal.pageSize.getWidth();
+  const pageH   = doc.internal.pageSize.getHeight();
+  const margin  = 16;
+  const contentW = pageW - margin * 2;
+  
+  let y = drawCorporateHeader(doc, companyData, margin, pageW);
 
   // ── Document Title & Metadata ──
   doc.setFontSize(14);
@@ -130,27 +136,22 @@ export function generateStockTransferPDF(data: StockTransferPDFData): jsPDF {
 
   // ── Table ─────────────────────────────────────────────────────
   const grandTotal = scannedItems.reduce((sum, i) => sum + i.totalAmount, 0);
-  const rows = scannedItems.map((item, i) => [
-    String(i + 1),
-    item.rfid || 'N/A',
-    item.productName,
-    item.description,
+  const rows = scannedItems.map((item) => [
     item.brandName || 'N/A',
+    item.productName,
     item.unit,
-    String(item.qtyAvailable),
     String(item.unitQty),
-    String((item as unknown as Record<string, unknown>).allocated_quantity ?? item.unitQty),
     `PHP ${item.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
   ]);
 
   autoTable(doc, {
     startY: y,
     margin: { left: margin, right: margin },
-    head: [['#', 'RFID', 'Product Name', 'Description', 'Brand', 'Unit', 'Qty Avail', 'Qty Ord', 'Qty Alloc', 'Amount']],
-    body: rows.length > 0 ? rows : [['', 'No items scanned.', '', '', '', '', '', '', '', '']],
+    head: [['Brand', 'Product Name', 'Unit', 'Order Quantity', 'Total']],
+    body: rows.length > 0 ? rows : [['No items found.', '', '', '', '']],
     foot: rows.length > 0
       ? [[
-          { content: '', colSpan: 8, styles: { fillColor: [255, 255, 255] as [number, number, number], lineColor: [210, 210, 210] as [number, number, number] } },
+          { content: '', colSpan: 3, styles: { fillColor: [255, 255, 255] as [number, number, number], lineColor: [210, 210, 210] as [number, number, number] } },
           { content: 'GRAND TOTAL', colSpan: 1, styles: { halign: 'right' as const, fontStyle: 'bold' as const, fontSize: 7.5, fillColor: [255, 255, 255] as [number, number, number], textColor: [0, 0, 0] as [number, number, number], lineColor: [210, 210, 210] as [number, number, number] } },
           { content: `PHP ${grandTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, colSpan: 1, styles: { halign: 'right' as const, fontStyle: 'bold' as const, fontSize: 7.5, fillColor: [255, 255, 255] as [number, number, number], textColor: [0, 0, 0] as [number, number, number], lineColor: [210, 210, 210] as [number, number, number] } },
         ]]
@@ -184,16 +185,11 @@ export function generateStockTransferPDF(data: StockTransferPDFData): jsPDF {
       fillColor: [255, 255, 255] as [number, number, number],
     },
     columnStyles: {
-      0: { cellWidth: 7,  halign: 'center', textColor: [150, 150, 150] as [number, number, number] },
-      1: { cellWidth: 26, fontStyle: 'bold', fontSize: 6.5 },
-      2: { cellWidth: 38 },
-      3: { cellWidth: 28, fontStyle: 'italic', textColor: [100, 100, 100] as [number, number, number], fontSize: 6.5 },
-      4: { cellWidth: 16 },
-      5: { cellWidth: 10, halign: 'center' },
-      6: { cellWidth: 12, halign: 'right' },
-      7: { cellWidth: 12, halign: 'right' },
-      8: { cellWidth: 16, halign: 'right', fontStyle: 'bold' },
-      9: { cellWidth: 26, halign: 'right', fontStyle: 'bold' },
+      0: { cellWidth: 35 },
+      1: { cellWidth: 'auto' },
+      2: { cellWidth: 25, halign: 'center' },
+      3: { cellWidth: 30, halign: 'center' },
+      4: { cellWidth: 40, halign: 'right', fontStyle: 'bold' },
     },
   });
 
@@ -240,3 +236,230 @@ export function generateStockTransferPDF(data: StockTransferPDFData): jsPDF {
 
   return doc;
 }
+
+// ── Picklist Types ────────────────────────────────────────────
+
+export interface PicklistPDFData {
+  orderNo: string;
+  pickerName: string;
+  date: string;
+  items: any[]; 
+  companyData: CompanyData | null;
+}
+
+export interface ReceivingPDFData {
+  orderNo: string;
+  checkedBy: string;
+  date: string;
+  items: any[];
+  companyData: CompanyData | null;
+  sourceBranch?: string;
+  targetBranch?: string;
+}
+
+/**
+ * Generates a Picklist PDF for warehouse picking.
+ * Grouped by Supplier/Brand and includes checkboxes.
+ */
+export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
+  const { orderNo, pickerName, date, items, companyData } = data;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'legal' });
+
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 16;
+  const contentW = pageW - margin * 2;
+
+  let y = drawCorporateHeader(doc, companyData, margin, pageW);
+
+  // ── Title & Picker Info ───────────────────────────────────────
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 0, 0);
+  doc.text(orderNo.toUpperCase(), margin, y);
+  
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.text(date, pageW - margin, y, { align: 'right' });
+  y += 6;
+
+  doc.setFontSize(10);
+  doc.text(`Picker: ${pickerName.toUpperCase()}`, margin, y);
+  y += 10;
+
+  // ── Table Header ──────────────────────────────────────────────
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.3);
+  doc.line(margin, y, pageW - margin, y);
+  y += 5;
+
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text('PRODUCT DESCRIPTION', margin + 12, y);
+  doc.text('UNIT', pageW - margin - 35, y, { align: 'center' });
+  doc.text('QTY', pageW - margin - 10, y, { align: 'center' });
+  y += 3;
+  
+  doc.line(margin, y, pageW - margin, y);
+  y += 8;
+
+  // ── Grouping & Body ───────────────────────────────────────────
+  // Group by Brand/Supplier
+  const groups: Record<string, any[]> = {};
+  items.forEach(item => {
+    const product = typeof item.product_id === 'object' ? item.product_id : {};
+    const brand = typeof product.product_brand === 'object' ? product.product_brand?.brand_name : 'No Brand';
+    const supplierObj = product.product_per_supplier?.[0]?.supplier_id;
+    const supplier = typeof supplierObj === 'object' ? supplierObj.supplier_shortcut : (supplierObj || 'N/A');
+    
+    const groupKey = `${supplier} | ${brand}`;
+    if (!groups[groupKey]) groups[groupKey] = [];
+    groups[groupKey].push(item);
+  });
+
+  Object.entries(groups).forEach(([groupTitle, groupItems]) => {
+    // Check for page break
+    if (y > pageH - 40) {
+      doc.addPage();
+      y = 20;
+    }
+
+    // Group Title (Supplier | Brand)
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0, 0, 0);
+    doc.text(groupTitle.toUpperCase(), margin, y);
+    y += 4;
+    
+    doc.setDrawColor(230, 230, 230);
+    doc.setLineWidth(0.1);
+    doc.line(margin, y, pageW - margin, y);
+    y += 6;
+
+    // Items in Group
+    groupItems.forEach(item => {
+      if (y > pageH - 30) {
+        doc.addPage();
+        y = 20;
+      }
+
+      const product = typeof item.product_id === 'object' ? item.product_id : {};
+      const productName = product.product_name || `ID: ${item.product_id}`;
+      const unit = (typeof product.unit_of_measurement === 'object' ? product.unit_of_measurement?.unit_name : 'PCS') || 'PCS';
+      const qty = item.allocated_quantity ?? item.ordered_quantity ?? 0;
+
+      // Checkbox
+      doc.setDrawColor(100, 100, 100);
+      doc.setLineWidth(0.2);
+      doc.rect(margin, y - 3.5, 4, 4);
+
+      // Product Info
+      doc.setFontSize(8.5);
+      doc.setFont('helvetica', 'normal');
+      doc.text(productName, margin + 12, y);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.text(unit, pageW - margin - 35, y, { align: 'center' });
+      doc.text(String(qty), pageW - margin - 10, y, { align: 'center' });
+      
+      y += 4;
+      doc.setDrawColor(245, 245, 245);
+      doc.line(margin + 12, y, pageW - margin, y);
+      y += 6;
+    });
+    
+    y += 4; // Gap between groups
+  });
+
+  // ── Signature Section ─────────────────────────────────────────
+  const sigY = Math.max(y + 10, pageH - 40);
+  const sigW = (contentW - 40) / 2;
+
+  // Picker Confirmation
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.4);
+  doc.line(margin, sigY, margin + sigW, sigY);
+  
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.text(pickerName.toUpperCase(), margin, sigY - 2);
+  
+  doc.setFontSize(7);
+  doc.text('PICKER CONFIRMATION', margin, sigY + 5);
+
+  // Verification Officer
+  doc.line(pageW - margin - sigW, sigY, pageW - margin, sigY);
+  doc.text('VERIFICATION OFFICER', pageW - margin, sigY + 5, { align: 'right' });
+
+  return doc;
+}
+
+/**
+ * Generates a Receiving Checklist PDF.
+ */
+export function generateStockTransferReceivingPDF(data: ReceivingPDFData): jsPDF {
+  const { orderNo, checkedBy, date, items, companyData, sourceBranch, targetBranch } = data;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'legal' });
+
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 16;
+  const contentW = pageW - margin * 2;
+
+  let y = drawCorporateHeader(doc, companyData, margin, pageW);
+
+  // ── Title & Metadata ───────────────────────────────────────
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('CHECKLIST (PER DISPATCH PLAN)', margin, y);
+  
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.text(date, pageW - margin, y, { align: 'right' });
+  y += 6;
+
+  // Secondary Info
+  doc.setFontSize(9);
+  doc.text(`TR#: ${orderNo}`, margin, y);
+  doc.text(`Checked By: ${checkedBy.toUpperCase()}`, pageW - margin, y, { align: 'right' });
+  y += 5;
+
+  if (sourceBranch || targetBranch) {
+    doc.text(`Source: ${sourceBranch || 'N/A'}`, margin, y);
+    doc.text(`Target: ${targetBranch || 'N/A'}`, pageW - margin, y, { align: 'right' });
+    y += 5;
+  }
+  y += 5;
+
+  // ── Table ─────────────────────────────────────────────────────
+  const rows = items.map((item) => {
+    const product = typeof item.product_id === 'object' ? item.product_id : {};
+    return [
+      product.product_name || `ID: ${item.product_id}`,
+      (typeof product.unit_of_measurement === 'object' ? product.unit_of_measurement?.unit_name : 'PCS') || 'PCS',
+      product.product_code || '---',
+      String(item.receivedQty || 0),
+      String(item.allocated_quantity || 0),
+    ];
+  });
+
+  autoTable(doc, {
+    startY: y,
+    margin: { left: margin, right: margin },
+    head: [['Product', 'Unit', 'Barcode', 'Received', 'Expected']],
+    body: rows,
+    styles: {
+      fontSize: 8,
+      cellPadding: 3,
+      lineColor: [210, 210, 210],
+      lineWidth: 0.1,
+    },
+    headStyles: {
+      fillColor: [240, 240, 240],
+      textColor: [0, 0, 0],
+      fontStyle: 'bold',
+    },
+  });
+
+  return doc;
+}

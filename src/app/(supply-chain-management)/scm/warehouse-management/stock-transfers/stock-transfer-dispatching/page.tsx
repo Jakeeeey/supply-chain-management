@@ -57,7 +57,7 @@ export default async function Page() {
             </header>
 
             <ScrollArea className="min-h-0 flex-1">
-                <StockTransferDispatchView />
+                <StockTransferDispatchView currentUser={headerUser} />
             </ScrollArea>
         </div>
     )

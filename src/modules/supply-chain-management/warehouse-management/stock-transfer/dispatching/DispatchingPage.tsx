@@ -6,7 +6,8 @@ import { Truck, Printer, ScanLine, Loader2, CheckCircle2, Radar, Edit2 } from 'l
 import { useStockTransferDispatch } from './hooks/use-stock-transfer-dispatch';
 import { cn } from '@/lib/utils';
 import { ScanHistorySidebar } from '../shared/components/ScanHistorySidebar';
-import type { OrderGroupItem, ProductRow, UnitOfMeasurement } from '../types/stock-transfer.types';
+import type { OrderGroupItem, ProductRow, UnitOfMeasurement, CurrentUser } from '../types/stock-transfer.types';
+import { StockTransferPicklistPreview } from '../shared/components/StockTransferPicklistPreview';
 
 // Shared components
 import { OrderSelectionModal } from '../shared/components/OrderSelectionModal';
@@ -21,7 +22,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 
-export default function StockTransferDispatchView() {
+export default function StockTransferDispatchView({ currentUser }: { currentUser: CurrentUser }) {
   const {
     orderGroups,
     selectedGroup,
@@ -43,6 +44,7 @@ export default function StockTransferDispatchView() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
+  const [showPicklist, setShowPicklist] = useState(false);
 
   // Reset page when group changes
   React.useEffect(() => {
@@ -135,8 +137,7 @@ export default function StockTransferDispatchView() {
         <div className="flex items-center justify-between space-y-2 print:hidden">
           <h2 className="text-3xl font-bold tracking-tight text-foreground">Stock Withdrawal (RFID)</h2>
           <Button
-            variant="outline"
-            onClick={() => window.print()}
+            onClick={() => setShowPicklist(true)}
             disabled={!selectedGroup}
             className="gap-2 border-border shadow-none"
           >
@@ -372,6 +373,17 @@ export default function StockTransferDispatchView() {
           onClear={clearHistory}
         />
       </aside>
+
+      {/* Picklist Preview */}
+      {selectedGroup && (
+        <StockTransferPicklistPreview
+          open={showPicklist}
+          onClose={() => setShowPicklist(false)}
+          orderNo={selectedGroup.orderNo}
+          pickerName={currentUser.name}
+          items={selectedGroup.items}
+        />
+      )}
     </div>
   );
 }

@@ -288,3 +288,10 @@ export interface CompanyData {
   company_email: string;
   company_logo: string;
 }
+
+/** Logged-in user information for metadata and signatures. */
+export interface CurrentUser {
+  name: string;
+  email: string;
+  avatar?: string;
+}

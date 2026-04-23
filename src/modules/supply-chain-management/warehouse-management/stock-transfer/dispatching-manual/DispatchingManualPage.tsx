@@ -4,8 +4,9 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Truck, Printer, Loader2, CheckCircle2, ChevronLeft, ChevronRight, Hand } from 'lucide-react';
 import { useStockTransferDispatchManual } from './hooks/use-stock-transfer-dispatch-manual';
-import { OrderGroupItem } from '../types/stock-transfer.types';
+import { OrderGroupItem, CurrentUser } from '../types/stock-transfer.types';
 import { cn } from '@/lib/utils';
+import { StockTransferPicklistPreview } from '../shared/components/StockTransferPicklistPreview';
 
 // Shared components
 import { OrderSelectionModal } from '../shared/components/OrderSelectionModal';
@@ -29,7 +30,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
-export default function StockTransferDispatchManualView() {
+export default function StockTransferDispatchManualView({ currentUser }: { currentUser: CurrentUser }) {
   const {
     orderGroups,
     selectedGroup,
@@ -48,6 +49,7 @@ export default function StockTransferDispatchManualView() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [showPicklist, setShowPicklist] = useState(false);
 
   // Reset page when group changes
   React.useEffect(() => {
@@ -72,7 +74,7 @@ export default function StockTransferDispatchManualView() {
         <h2 className="text-3xl font-bold tracking-tight text-foreground">Stock Withdrawal (Manual)</h2>
         <Button
           variant="outline"
-          onClick={() => window.print()}
+          onClick={() => setShowPicklist(true)}
           disabled={!selectedGroup}
           className="gap-2 border-border shadow-none"
         >
@@ -287,6 +289,16 @@ export default function StockTransferDispatchManualView() {
           )}
         </CardContent>
       </Card>
+      {/* Picklist Preview */}
+      {selectedGroup && (
+        <StockTransferPicklistPreview
+          open={showPicklist}
+          onClose={() => setShowPicklist(false)}
+          orderNo={selectedGroup.orderNo}
+          pickerName={currentUser.name}
+          items={selectedGroup.items}
+        />
+      )}
     </div>
   );
 }

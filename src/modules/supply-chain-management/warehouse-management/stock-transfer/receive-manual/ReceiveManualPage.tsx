@@ -4,8 +4,9 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PackageOpen, Printer, Loader2, ChevronLeft, ChevronRight, Hand } from 'lucide-react';
 import { useStockTransferReceiveManual } from './hooks/use-stock-transfer-receive-manual';
-import { OrderGroupItem, UnitOfMeasurement } from '../types/stock-transfer.types';
+import { OrderGroupItem, UnitOfMeasurement, CurrentUser } from '../types/stock-transfer.types';
 import { cn } from '@/lib/utils';
+import { StockTransferReceivingPreview } from '../shared/components/StockTransferReceivingPreview';
 
 // Shared components
 import { OrderSelectionModal } from '../shared/components/OrderSelectionModal';
@@ -30,7 +31,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
-export default function StockTransferReceiveManualView() {
+export default function StockTransferReceiveManualView({ currentUser }: { currentUser: CurrentUser }) {
   const {
     orderGroups,
     selectedGroup,
@@ -47,6 +48,7 @@ export default function StockTransferReceiveManualView() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [showPrintPreview, setShowPrintPreview] = useState(false);
 
   // Reset page when group changes
   React.useEffect(() => {
@@ -71,7 +73,7 @@ export default function StockTransferReceiveManualView() {
         <h2 className="text-3xl font-bold tracking-tight text-foreground">Stock Deposit (Manual)</h2>
         <Button
           variant="outline"
-          onClick={() => window.print()}
+          onClick={() => setShowPrintPreview(true)}
           disabled={!selectedGroup}
           className="gap-2 border-border shadow-none"
         >
@@ -268,6 +270,18 @@ export default function StockTransferReceiveManualView() {
           )}
         </CardContent>
       </Card>
+      {/* Receiving Preview */}
+      {selectedGroup && (
+        <StockTransferReceivingPreview
+          open={showPrintPreview}
+          onClose={() => setShowPrintPreview(false)}
+          orderNo={selectedGroup.orderNo}
+          checkedBy={currentUser.name}
+          items={selectedGroup.items}
+          sourceBranch={getBranchName(selectedGroup.sourceBranch)}
+          targetBranch={getBranchName(selectedGroup.targetBranch)}
+        />
+      )}
     </div>
   );
 }

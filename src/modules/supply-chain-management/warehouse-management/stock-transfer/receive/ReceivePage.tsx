@@ -4,9 +4,10 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PackageOpen, Printer, ScanLine, Loader2, CheckCircle2, Radar, Edit2 } from 'lucide-react';
 import { useStockTransferReceive } from './hooks/use-stock-transfer-receive';
+import { OrderGroupItem, ProductRow, CurrentUser } from '../types/stock-transfer.types';
 import { cn } from '@/lib/utils';
 import { ScanHistorySidebar } from '../shared/components/ScanHistorySidebar';
-import type { OrderGroupItem, ProductRow } from '../types/stock-transfer.types';
+import { StockTransferReceivingPreview } from '../shared/components/StockTransferReceivingPreview';
 
 // Shared components
 import { OrderSelectionModal } from '../shared/components/OrderSelectionModal';
@@ -22,7 +23,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 
-export default function StockTransferReceiveView() {
+export default function StockTransferReceiveView({ currentUser }: { currentUser: CurrentUser }) {
   const {
     orderGroups,
     selectedGroup,
@@ -40,6 +41,7 @@ export default function StockTransferReceiveView() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
+  const [showPrintPreview, setShowPrintPreview] = useState(false);
 
   // Reset page when group changes
   React.useEffect(() => {
@@ -121,7 +123,7 @@ export default function StockTransferReceiveView() {
           <div className="flex gap-2">
             <Button 
               variant="outline" 
-              onClick={() => window.print()} 
+              onClick={() => setShowPrintPreview(true)} 
               disabled={!selectedGroup}
               className="gap-2 border-border shadow-sm bg-background"
             >
@@ -278,6 +280,18 @@ export default function StockTransferReceiveView() {
           onClear={clearHistory}
         />
       </aside>
+
+      {selectedGroup && (
+        <StockTransferReceivingPreview
+          open={showPrintPreview}
+          onClose={() => setShowPrintPreview(false)}
+          orderNo={selectedGroup.orderNo}
+          checkedBy={currentUser.name}
+          items={selectedGroup.items}
+          sourceBranch={getBranchName(selectedGroup.sourceBranch)}
+          targetBranch={getBranchName(selectedGroup.targetBranch)}
+        />
+      )}
     </div>
   );
 }
