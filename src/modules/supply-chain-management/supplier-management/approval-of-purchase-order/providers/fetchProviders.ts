@@ -27,8 +27,19 @@ export async function fetchPurchaseOrderDetail(id: string | number): Promise<Pur
     return fetchData<PurchaseOrderDetail>(`${BASE}?id=${id}`);
 }
 
-export async function approvePurchaseOrder(payload: { id: string | number; [key: string]: unknown }): Promise<unknown> {
-    return fetchData<unknown>(BASE, { method: "POST", body: JSON.stringify(payload) });
+export async function approvePurchaseOrder(payload: {
+    id: string | number;
+    approverId?: number;
+    [key: string]: unknown;
+}): Promise<unknown> {
+    const { approverId, ...rest } = payload;
+    return fetchData<unknown>(BASE, {
+        method: "POST",
+        body: JSON.stringify({
+            ...rest,
+            approver_id: approverId,
+        }),
+    });
 }
 
 

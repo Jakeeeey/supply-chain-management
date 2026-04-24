@@ -9,7 +9,7 @@ import * as provider from "./providers/fetchProviders";
 import PendingApprovalList from "./components/PendingApprovalList";
 import PurchaseOrderReviewPanel from "./components/PurchaseOrderReviewPanel";
 
-export default function ApprovalPurchaseOrderModule() {
+export default function ApprovalPurchaseOrderModule({ approverId }: { approverId?: number }) {
     const [loadingList, setLoadingList] = React.useState(true);
     const [loadingDetail, setLoadingDetail] = React.useState(false);
     const [error, setError] = React.useState("");
@@ -80,6 +80,7 @@ export default function ApprovalPurchaseOrderModule() {
                     markAsInvoice: opts.markAsInvoice,
                     paymentTerm: opts.paymentTerm,
                     termsDays: opts.termsDays,
+                    approverId: approverId,
                 });
 
                 // Refresh list and clear selection
