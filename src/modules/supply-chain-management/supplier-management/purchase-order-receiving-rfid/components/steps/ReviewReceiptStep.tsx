@@ -37,6 +37,7 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
         lots,
         verifiedBarcodes,
         activity,
+        setMetaDataByPorId,
     } = useReceivingProducts();
 
     const [clientSaveError, setClientSaveError] = React.useState("");
@@ -46,26 +47,58 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
     const [previewOpen, setPreviewOpen] = React.useState(false);
     const [isPartialModalOpen, setIsPartialModalOpen] = React.useState(false);
 
+    const { metaDataByPorId: draftMetaData } = useReceivingProducts();
+
     // Initial Sync
     React.useEffect(() => {
-        if (!selectedPO?.allocations) return;
         const newLots: Record<string, string> = {};
         const newBatches: Record<string, string> = {};
         const newExpiries: Record<string, string> = {};
+        let syncReady = true;
 
-        selectedPO.allocations.forEach(a => {
-            a.items.forEach((it: ReceivingPOItem) => {
-                const porId = String(it.porId || it.id);
-                if (it.lot_id) newLots[porId] = String(it.lot_id);
-                if (it.batch_no) newBatches[porId] = it.batch_no;
-                if (it.expiry_date) newExpiries[porId] = it.expiry_date;
+        if (selectedPO?.allocations) {
+            selectedPO.allocations.forEach(a => {
+                a.items.forEach((it: ReceivingPOItem) => {
+                    const porId = String(it.porId || it.id);
+                    if (it.lot_id) newLots[porId] = String(it.lot_id);
+                    if (it.batch_no) newBatches[porId] = it.batch_no;
+                    if (it.expiry_date) newExpiries[porId] = it.expiry_date;
+                });
             });
+        }
+
+        // Overlay draft data (crucial for reloading page)
+        if (draftMetaData) {
+            Object.entries(draftMetaData).forEach(([porId, meta]) => {
+                if (meta.lotId) newLots[porId] = meta.lotId;
+                if (meta.batchNo) newBatches[porId] = meta.batchNo;
+                if (meta.expiryDate) newExpiries[porId] = meta.expiryDate;
+            });
+        }
+
+        if (syncReady) {
+            setLotIds(prev => ({ ...newLots, ...prev }));
+            setBatchNos(prev => ({ ...newBatches, ...prev }));
+            setExpiryDates(prev => ({ ...newExpiries, ...prev }));
+        }
+
+        return () => { syncReady = false; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedPO?.id]);
+
+    React.useEffect(() => {
+        const metaData: Record<string, { lotId: string; batchNo: string; expiryDate: string }> = {};
+        let hasData = false;
+        
+        Object.keys(lotIds).forEach(id => {
+            metaData[id] = { lotId: lotIds[id] || "", batchNo: batchNos[id] || "", expiryDate: expiryDates[id] || "" };
+            hasData = true;
         });
 
-        setLotIds(prev => ({ ...newLots, ...prev }));
-        setBatchNos(prev => ({ ...newBatches, ...prev }));
-        setExpiryDates(prev => ({ ...newExpiries, ...prev }));
-    }, [selectedPO?.id, selectedPO?.allocations]);
+        if (hasData) {
+            setMetaDataByPorId(metaData);
+        }
+    }, [lotIds, batchNos, expiryDates, setMetaDataByPorId]);
 
     React.useEffect(() => {
         if (!receiptSaved) return;
@@ -338,7 +371,13 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
                             name: it.name,
                             barcode: it.barcode,
                             productId: it.productId || "",
-                            expectedQty: Number(it.taggedQty) || 0,
+                            uom: it.uom || "",
+                            unitPrice: Number(it.unitPrice) || 0,
+                            discountAmount: Number(it.discountAmount) || 0,
+                            batchNo: batchNos[String(it.porId || it.id)] || "",
+                            lotId: lotIds[String(it.porId || it.id)] || "",
+                            expiryDate: expiryDates[String(it.porId || it.id)] || "",
+                            expectedQty: Number(it.expectedQty) || 0,
                             receivedQtyAtStart: 0,
                             receivedQtyNow: safeCounts[String(it.porId || it.id)] ?? 0,
                             rfids: (activity || []).filter((a: ActivityRow) => a.productId === it.productId && a.status === "ok").map((a: ActivityRow) => a.rfid)
@@ -346,6 +385,7 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
                     }}
                     poNumber={selectedPO?.poNumber || "N/A"}
                     supplierName={selectedPO?.supplier?.name || "N/A"}
+                    priceType={selectedPO?.priceType || "VAT Inclusive"}
                 />
             )}
  

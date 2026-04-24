@@ -80,6 +80,12 @@ export type SavedItem = {
     expectedQty: number;
     receivedQtyAtStart: number;
     receivedQtyNow: number;
+    unitPrice?: number;
+    discountAmount?: number;
+    batchNo?: string;
+    lotId?: string;
+    expiryDate?: string;
+    uom?: string;
     rfids?: string[];
 };
 
@@ -146,6 +152,10 @@ type Ctx = {
     lookupProduct: (barcode: string) => Promise<{ productId: string; name: string; barcode: string; unitPrice: number } | null>;
     addExtraProductLocally: (item: { productId: string; name: string; barcode: string; branchId: string; branchName: string; unitPrice?: number }) => void;
 
+    // ✅ METADATA (Batch, Lot, Expiry)
+    metaDataByPorId: Record<string, { batchNo?: string; lotNo?: string; lotId?: string; expiryDate?: string }>;
+    setMetaDataByPorId: React.Dispatch<React.SetStateAction<Record<string, { batchNo?: string; lotNo?: string; lotId?: string; expiryDate?: string }>>>;
+
     // ✅ LOTS
     lots: LotOption[];
     lotsLoading: boolean;
@@ -185,6 +195,7 @@ type DraftState = {
     receiptNo: string;
     receiptType: string;
     receiptDate: string;
+    metaDataByPorId?: Record<string, { batchNo?: string; lotNo?: string; lotId?: string; expiryDate?: string }>;
     savedAt: number;
 };
 
@@ -261,6 +272,9 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
     const [verifiedBarcodes, setVerifiedBarcodes] = React.useState<string[]>([]);
     const [activeProductId, setActiveProductId] = React.useState<string | null>(null);
     const [scanError, setScanError] = React.useState("");
+
+    // ✅ METADATA
+    const [metaDataByPorId, setMetaDataByPorId] = React.useState<Record<string, { batchNo?: string; lotNo?: string; lotId?: string; expiryDate?: string }>>({});
 
     // ✅ LOTS
     const [lots, setLots] = React.useState<LotOption[]>([]);
@@ -356,9 +370,10 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
             receiptNo,
             receiptType,
             receiptDate,
+            metaDataByPorId,
             savedAt: Date.now(),
         });
-    }, [selectedPO?.id, manualCounts, verifiedBarcodes, receiptNo, receiptType, receiptDate]);
+    }, [selectedPO?.id, manualCounts, verifiedBarcodes, receiptNo, receiptType, receiptDate, metaDataByPorId]);
 
     const openPOById = React.useCallback(
         async (poId: string) => {
@@ -388,12 +403,14 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
                 const draft = detail?.id ? loadDraft(detail.id) : null;
                 const hasDraftData = draft ? (
                     Object.keys(draft.manualCounts || {}).length > 0 ||
-                    (draft.verifiedBarcodes && draft.verifiedBarcodes.length > 0)
+                    (draft.verifiedBarcodes && draft.verifiedBarcodes.length > 0) ||
+                    Object.keys(draft.metaDataByPorId || {}).length > 0
                 ) : false;
 
                 if (hasDraftData && draft) {
                     setManualCounts(draft.manualCounts || {});
                     setVerifiedBarcodes(draft.verifiedBarcodes || []);
+                    setMetaDataByPorId(draft.metaDataByPorId || {});
                     setReceiptNo(draft.receiptNo || "");
                     setReceiptType(draft.receiptType || "");
                     setReceiptDate(draft.receiptDate || todayYMD());
@@ -794,6 +811,9 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
         saveReceipt,
         savingReceipt,
         saveError,
+
+        metaDataByPorId,
+        setMetaDataByPorId,
 
         // ✅ NEW
         verifiedBarcodes,

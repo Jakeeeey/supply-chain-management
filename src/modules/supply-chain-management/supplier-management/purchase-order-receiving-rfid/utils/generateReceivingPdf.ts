@@ -78,6 +78,7 @@ export type ReceivingPdfData = {
     supplierName: string;
     branchLabel: string;
     isFullyReceived: boolean;
+    priceType: string;
     items: Array<{
         name: string;
         barcode: string;
@@ -247,6 +248,24 @@ export async function generateReceivingPdf(
         const labelX = pageWidth - 80;
         const lineHeight = 6;
 
+        const isExclusive = data.priceType?.toUpperCase() === "VAT EXCLUSIVE";
+
+        let vatAmount = 0;
+        let whtAmount = 0;
+        let grandTotal = 0;
+
+        if (isExclusive) {
+            vatAmount = sumNet * 0.12;
+            whtAmount = sumNet * 0.01;
+            grandTotal = sumNet + vatAmount - whtAmount;
+        } else {
+            // VAT Inclusive
+            const vatableAmount = sumNet / 1.12;
+            vatAmount = sumNet - vatableAmount;
+            whtAmount = vatableAmount * 0.01;
+            grandTotal = sumNet - whtAmount;
+        }
+
         doc.setFontSize(8);
         doc.setTextColor(50, 50, 50);
         doc.setFont("helvetica", "normal");
@@ -262,13 +281,32 @@ export async function generateReceivingPdf(
         doc.line(labelX, finalY + lineHeight + 3, rightColX, finalY + lineHeight + 3);
 
         doc.setTextColor(50, 50, 50);
-        doc.setFontSize(9);
+        doc.setFontSize(8);
         doc.setFont("helvetica", "bold");
         doc.text("Net Total:", labelX, finalY + lineHeight * 2 + 3);
-        doc.text(`PHP ${formatMoney(sumNet)}`, rightColX, finalY + lineHeight * 2 + 3, { align: "right" });
+        doc.text(`${formatMoney(sumNet)}`, rightColX, finalY + lineHeight * 2 + 3, { align: "right" });
+
+        // Add VAT and EWT
+        doc.setFont("helvetica", "normal");
+        doc.text("VAT Details:", labelX, finalY + lineHeight * 3 + 3);
+        doc.text(`${isExclusive ? "+" : ""}${formatMoney(vatAmount)}`, rightColX, finalY + lineHeight * 3 + 3, { align: "right" });
+
+        doc.text("EWT (1%):", labelX, finalY + lineHeight * 4 + 3);
+        doc.setTextColor(150, 50, 50);
+        doc.text(`-${formatMoney(whtAmount)}`, rightColX, finalY + lineHeight * 4 + 3, { align: "right" });
+
+        doc.setDrawColor(180, 180, 180);
+        doc.setLineWidth(0.5);
+        doc.line(labelX, finalY + lineHeight * 4 + 5, rightColX, finalY + lineHeight * 4 + 5);
+
+        doc.setTextColor(50, 50, 50);
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "bold");
+        doc.text("Grand Total:", labelX, finalY + lineHeight * 5 + 6);
+        doc.text(`PHP ${formatMoney(grandTotal)}`, rightColX, finalY + lineHeight * 5 + 6, { align: "right" });
 
         // 5. Signatures
-        renderSignatures(doc, finalY + 35, "");
+        renderSignatures(doc, finalY + lineHeight * 5 + 25, "");
     });
 
     doc.save(`Receiving_${receiptNo}.pdf`);

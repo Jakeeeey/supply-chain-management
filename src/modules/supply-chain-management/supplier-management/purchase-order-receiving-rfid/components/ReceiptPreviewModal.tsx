@@ -22,6 +22,7 @@ interface ReceiptPreviewModalProps {
     data: ReceiptSavedInfo;
     poNumber: string;
     supplierName: string;
+    priceType: string;
 }
 
 export function ReceiptPreviewModal({
@@ -30,6 +31,7 @@ export function ReceiptPreviewModal({
     data,
     poNumber,
     supplierName,
+    priceType,
 }: ReceiptPreviewModalProps) {
     const [companyData, setCompanyData] = React.useState<CompanyData | null>(null);
 
@@ -55,14 +57,18 @@ export function ReceiptPreviewModal({
             receiptType: data.receiptType,
             branchLabel: "All Branches",
             isFullyReceived: data.isFullyReceived,
+            priceType: priceType,
             items: data.items.map((it) => ({
                 name: it.name,
                 barcode: it.barcode,
                 expectedQty: it.expectedQty,
                 receivedQtyNow: it.receivedQtyNow,
+                unitPrice: it.unitPrice || 0,
+                discountAmount: it.discountAmount || 0,
                 batchNo: it.batchNo,
                 lotId: it.lotId,
                 expiryDate: it.expiryDate,
+                uom: it.uom,
             })),
         }, companyData);
     };
@@ -162,12 +168,12 @@ export function ReceiptPreviewModal({
                                                             )}
                                                         </div>
                                                         <div className="flex flex-wrap gap-1 mt-2">
-                                                            {it.rfids.map((code, ri) => (
+                                                            {(it.rfids || []).map((code, ri) => (
                                                                 <span key={ri} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-muted/50 border border-primary/5 text-muted-foreground">
                                                                     {code}
                                                                 </span>
                                                             ))}
-                                                            {it.rfids.length === 0 && (
+                                                            {(it.rfids || []).length === 0 && (
                                                                 <span className="text-[10px] italic text-muted-foreground">Waiting for verification...</span>
                                                             )}
                                                         </div>

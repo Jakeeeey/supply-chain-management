@@ -98,10 +98,13 @@ export type SavedItem = {
     expectedQty: number;
     receivedQtyAtStart: number;
     receivedQtyNow: number;
-    rfids: string[];
-    lotId?: string;
+    unitPrice?: number;
+    discountAmount?: number;
     batchNo?: string;
+    lotId?: string;
     expiryDate?: string;
+    uom?: string;
+    rfids?: string[];
 };
 
 export type ReceiptSavedInfo = {
@@ -189,6 +192,10 @@ type Ctx = {
     lookupProduct: (barcode: string) => Promise<{ productId: string; name: string; barcode: string; unitPrice: number } | null>;
     addExtraProductLocally: (item: { productId: string; name: string; barcode: string; branchId: string; branchName: string; unitPrice?: number }) => void;
 
+    // ✅ METADATA (Batch, Lot, Expiry)
+    metaDataByPorId: Record<string, { batchNo?: string; lotNo?: string; lotId?: string; expiryDate?: string }>;
+    setMetaDataByPorId: React.Dispatch<React.SetStateAction<Record<string, { batchNo?: string; lotNo?: string; lotId?: string; expiryDate?: string }>>>;
+
     // ✅ NEW FLOW: Product Barcode Verification
     verifiedBarcodes: string[];
     verifyBarcode: (barcode: string) => Promise<boolean>;
@@ -241,6 +248,7 @@ type DraftState = {
     receiptNo: string;
     receiptType: string;
     receiptDate: string;
+    metaDataByPorId?: Record<string, { batchNo?: string; lotNo?: string; lotId?: string; expiryDate?: string }>;
     savedAt: number;
 };
 
@@ -335,6 +343,10 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
     // ✅ NEW FLOW: Product Barcode Verification State
     const [verifiedBarcodes, setVerifiedBarcodes] = React.useState<string[]>([]);
     const [activeProductId, setActiveProductId] = React.useState<string | null>(null);
+    const [unitNameMap, setUnitNameMap] = React.useState<Record<string, string>>({});
+
+    // ✅ METADATA
+    const [metaDataByPorId, setMetaDataByPorId] = React.useState<Record<string, { batchNo?: string; lotNo?: string; lotId?: string; expiryDate?: string }>>({});
 
     const refreshList = React.useCallback(async () => {
         setListLoading(true);
@@ -428,9 +440,10 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
             receiptNo,
             receiptType,
             receiptDate,
+            metaDataByPorId,
             savedAt: Date.now(),
         });
-    }, [selectedPO?.id, localScannedRfids, activity, scannedCountByPorId, verifiedBarcodes, receiptNo, receiptType, receiptDate]);
+    }, [selectedPO?.id, localScannedRfids, activity, scannedCountByPorId, verifiedBarcodes, receiptNo, receiptType, receiptDate, metaDataByPorId]);
 
     const openPOById = React.useCallback(
         async (poId: string, options?: { silent?: boolean }) => {
@@ -466,7 +479,8 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
                     const hasDraftData = draft ? (
                         draft.localScannedRfids.length > 0 ||
                         Object.keys(draft.scannedCountByPorId || {}).length > 0 ||
-                        (draft.verifiedBarcodes && draft.verifiedBarcodes.length > 0)
+                        (draft.verifiedBarcodes && draft.verifiedBarcodes.length > 0) ||
+                        Object.keys(draft.metaDataByPorId || {}).length > 0
                     ) : false;
 
                     if (hasDraftData && draft) {
@@ -474,6 +488,7 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
                         setActivity(draft.activity);
                         setScannedCountByPorId(draft.scannedCountByPorId);
                         setVerifiedBarcodes(draft.verifiedBarcodes);
+                        setMetaDataByPorId(draft.metaDataByPorId || {});
                         setReceiptNo(draft.receiptNo || "");
                         setReceiptType(draft.receiptType || "");
                         setReceiptDate(draft.receiptDate || todayYMD());
@@ -1110,7 +1125,8 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
         savingReceipt,
         saveError,
 
-
+        metaDataByPorId,
+        setMetaDataByPorId,
 
         lookupProduct,
         addExtraProductLocally,

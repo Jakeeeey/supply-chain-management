@@ -21,6 +21,7 @@ interface ReceiptPreviewModalProps {
     data: ReceiptSavedInfo;
     poNumber: string;
     supplierName: string;
+    priceType: string;
 }
 
 export function ReceiptPreviewModal({
@@ -29,6 +30,7 @@ export function ReceiptPreviewModal({
     data,
     poNumber,
     supplierName,
+    priceType,
 }: ReceiptPreviewModalProps) {
     if (!data) return null;
 
@@ -40,12 +42,19 @@ export function ReceiptPreviewModal({
             receiptDate: data.receiptDate,
             receiptType: data.receiptType,
             isFullyReceived: data.isFullyReceived,
+            priceType: priceType,
             items: data.items.map((it) => ({
                 name: it.name,
                 barcode: it.barcode,
                 expectedQty: it.expectedQty,
                 receivedQtyAtStart: it.receivedQtyAtStart,
                 receivedQtyNow: it.receivedQtyNow,
+                unitPrice: it.unitPrice || 0,
+                discountAmount: it.discountAmount || 0,
+                batchNo: it.batchNo,
+                lotId: it.lotId,
+                expiryDate: it.expiryDate,
+                uom: it.uom,
                 rfids: (it.rfids || []) as string[],
             })),
         });
