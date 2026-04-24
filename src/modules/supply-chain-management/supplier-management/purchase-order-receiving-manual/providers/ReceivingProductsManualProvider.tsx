@@ -36,6 +36,7 @@ export type ReceivingPOItem = {
     discountAmount?: number;
     netAmount?: number;
     lot_no?: string;
+    batch_no?: string;
     expiry_date?: string;
     isExtra?: boolean;
 };
@@ -174,6 +175,33 @@ function todayYMD() {
 
 const API_URL = "/api/scm/supplier-management/purchase-order-receiving-manual";
 
+// ✅ PERSISTENCE: localStorage helpers
+const DRAFT_KEY_PREFIX = "scm_manual_draft_";
+function getDraftKey(poId: string) { return `${DRAFT_KEY_PREFIX}${poId}`; }
+
+type DraftState = {
+    manualCounts: Record<string, number>;
+    verifiedBarcodes: string[];
+    receiptNo: string;
+    receiptType: string;
+    receiptDate: string;
+    savedAt: number;
+};
+
+function saveDraft(poId: string, state: DraftState) {
+    try { localStorage.setItem(getDraftKey(poId), JSON.stringify(state)); } catch { /* quota exceeded, ignore */ }
+}
+function loadDraft(poId: string): DraftState | null {
+    try {
+        const raw = localStorage.getItem(getDraftKey(poId));
+        if (!raw) return null;
+        return JSON.parse(raw) as DraftState;
+    } catch { return null; }
+}
+function clearDraft(poId: string) {
+    try { localStorage.removeItem(getDraftKey(poId)); } catch { /* ignore */ }
+}
+
 const playBeep = (type: "success" | "error" = "success") => {
     try {
         const AudioCtor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -305,13 +333,32 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
         })();
     }, []);
 
-    const resetSession = React.useCallback(() => {
+    const resetSession = React.useCallback((opts?: { clearStorage?: boolean; poId?: string }) => {
         setSaveError("");
         setScanError("");
         setManualCounts({});
         setVerifiedBarcodes([]);
         setActiveProductId(null);
+        if (opts?.clearStorage && opts?.poId) {
+            clearDraft(opts.poId);
+        }
     }, []);
+
+    // ✅ PERSISTENCE: Auto-save draft to localStorage whenever count/state changes
+    React.useEffect(() => {
+        const poId = selectedPO?.id;
+        if (!poId) return;
+        // Only save if there's meaningful data
+        if (Object.keys(manualCounts).length === 0 && verifiedBarcodes.length === 0) return;
+        saveDraft(poId, {
+            manualCounts,
+            verifiedBarcodes,
+            receiptNo,
+            receiptType,
+            receiptDate,
+            savedAt: Date.now(),
+        });
+    }, [selectedPO?.id, manualCounts, verifiedBarcodes, receiptNo, receiptType, receiptDate]);
 
     const openPOById = React.useCallback(
         async (poId: string) => {
@@ -337,9 +384,25 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
                 const detail = (j?.data ?? null) as ReceivingPODetail | null;
                 setSelectedPO(detail);
 
-                setReceiptDate(todayYMD());
-                setReceiptNo("");
-                setReceiptType("");
+                // ✅ PERSISTENCE: Restore draft if available
+                const draft = detail?.id ? loadDraft(detail.id) : null;
+                const hasDraftData = draft ? (
+                    Object.keys(draft.manualCounts || {}).length > 0 ||
+                    (draft.verifiedBarcodes && draft.verifiedBarcodes.length > 0)
+                ) : false;
+
+                if (hasDraftData && draft) {
+                    setManualCounts(draft.manualCounts || {});
+                    setVerifiedBarcodes(draft.verifiedBarcodes || []);
+                    setReceiptNo(draft.receiptNo || "");
+                    setReceiptType(draft.receiptType || "");
+                    setReceiptDate(draft.receiptDate || todayYMD());
+                    toast.info("Draft restored from previous session.");
+                } else {
+                    setReceiptDate(todayYMD());
+                    setReceiptNo("");
+                    setReceiptType("");
+                }
 
                 setPoBarcode(detail?.poNumber ?? "");
             } catch (e: unknown) {
@@ -380,9 +443,25 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
                 const detail = (j?.data ?? null) as ReceivingPODetail | null;
                 setSelectedPO(detail);
 
-                setReceiptDate(todayYMD());
-                setReceiptNo("");
-                setReceiptType("");
+                // ✅ PERSISTENCE: Restore draft if available
+                const draft = detail?.id ? loadDraft(detail.id) : null;
+                const hasDraftData = draft ? (
+                    Object.keys(draft.manualCounts || {}).length > 0 ||
+                    (draft.verifiedBarcodes && draft.verifiedBarcodes.length > 0)
+                ) : false;
+
+                if (hasDraftData && draft) {
+                    setManualCounts(draft.manualCounts || {});
+                    setVerifiedBarcodes(draft.verifiedBarcodes || []);
+                    setReceiptNo(draft.receiptNo || "");
+                    setReceiptType(draft.receiptType || "");
+                    setReceiptDate(draft.receiptDate || todayYMD());
+                    toast.info("Draft restored from previous session.");
+                } else {
+                    setReceiptDate(todayYMD());
+                    setReceiptNo("");
+                    setReceiptType("");
+                }
 
                 setPoBarcode(code);
             } catch (e: unknown) {
@@ -666,7 +745,7 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
             });
 
             refreshList();
-            resetSession();
+            resetSession({ clearStorage: true, poId: String(poId) });
 
             // ✅ prepare a new receipt immediately
             setReceiptDate(todayYMD());

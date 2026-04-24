@@ -40,6 +40,7 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
 
     const [clientSaveError, setClientSaveError] = React.useState("");
     const [lotNumbers, setLotNumbers] = React.useState<Record<string, string>>({});
+    const [batchNumbers, setBatchNumbers] = React.useState<Record<string, string>>({});
     const [expiryDates, setExpiryDates] = React.useState<Record<string, string>>({});
     const [previewOpen, setPreviewOpen] = React.useState(false);
     const [isPartialModalOpen, setIsPartialModalOpen] = React.useState(false);
@@ -48,19 +49,22 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
     React.useEffect(() => {
         if (!selectedPO?.allocations) return;
         const newLots: Record<string, string> = {};
+        const newBatches: Record<string, string> = {};
         const newExpiries: Record<string, string> = {};
 
         selectedPO.allocations.forEach(a => {
             a.items.forEach((it: ReceivingPOItem) => {
                 const porId = String(it.id);
                 if (it.lot_no) newLots[porId] = it.lot_no;
+                if (it.batch_no) newBatches[porId] = it.batch_no;
                 if (it.expiry_date) newExpiries[porId] = it.expiry_date;
             });
         });
 
         setLotNumbers(prev => ({ ...newLots, ...prev }));
+        setBatchNumbers(prev => ({ ...newBatches, ...prev }));
         setExpiryDates(prev => ({ ...newExpiries, ...prev }));
-    }, [selectedPO?.allocations]);
+    }, [selectedPO?.id, selectedPO?.allocations]);
 
     React.useEffect(() => {
         if (!receiptSaved) return;
@@ -87,11 +91,9 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
     const executeSave = async () => {
         const metaData: Record<string, { lotNo: string; batchNo?: string; expiryDate: string }> = {};
         Object.keys(lotNumbers).forEach(id => {
-            const lotId = lotNumbers[id];
-            const lotObj = lots.find(l => String(l.lot_id) === lotId);
             metaData[id] = { 
-                lotNo: lotId || "", 
-                batchNo: lotObj?.lot_name || "",
+                lotNo: lotNumbers[id] || "", 
+                batchNo: batchNumbers[id] || "",
                 expiryDate: expiryDates[id] || "" 
             };
         });
@@ -149,17 +151,15 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
 
         const metaData: Record<string, { lotNo: string; batchNo?: string; expiryDate: string }> = {};
         Object.keys(lotNumbers).forEach(id => {
-            const lotId = lotNumbers[id];
-            const lotObj = lots.find(l => String(l.lot_id) === lotId);
             metaData[id] = { 
-                lotNo: lotId || "", 
-                batchNo: lotObj?.lot_name || "",
+                lotNo: lotNumbers[id] || "", 
+                batchNo: batchNumbers[id] || "",
                 expiryDate: expiryDates[id] || "" 
             };
         });
 
         await saveReceipt(metaData);
-    }, [saveReceipt, selectedPO?.status, allItems, safeCounts, lotNumbers, expiryDates, lots]);
+    }, [saveReceipt, selectedPO?.status, allItems, safeCounts, lotNumbers, batchNumbers, expiryDates, lots]);
 
     const totalEntered = Object.values(safeCounts).reduce((a: number, b: number) => a + Number(b), 0);
     const totalExpected = allItems.reduce((a: number, b: ReceivingPOItem) => a + Number(b.expectedQty || 0), 0);
@@ -224,6 +224,7 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
                             <TableHeader className="bg-muted">
                                 <TableRow>
                                     <TableHead className="text-[10px] uppercase">Product Name</TableHead>
+                                    <TableHead className="text-[10px] uppercase">Batch</TableHead>
                                     <TableHead className="text-[10px] uppercase">Lot</TableHead>
                                     <TableHead className="text-[10px] uppercase">Expiry</TableHead>
                                     <TableHead className="text-[10px] uppercase text-right">Unit Price</TableHead>
@@ -250,6 +251,9 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
                                                 <div className="font-bold text-xs truncate max-w-[200px]">{it.name}</div>
                                                 <div className="text-[9px] text-muted-foreground font-mono">SKU: {it.barcode} | UOM: {it.uom}</div>
                                             </TableCell>
+                                            <TableCell className="min-w-[100px]">
+                                                <Input className="h-8 text-[11px] font-bold" placeholder="Batch #" value={batchNumbers[porId] || ""} onChange={(e) => setBatchNumbers(prev => ({ ...prev, [porId]: e.target.value }))} />
+                                            </TableCell>
                                             <TableCell className="min-w-[120px]">
                                                 <select className="h-8 w-full rounded-md border border-input bg-background px-2 text-[11px]" value={lotNumbers[porId] || ""} onChange={(e) => setLotNumbers(prev => ({ ...prev, [porId]: e.target.value }))}>
                                                     <option value="">Select Lot</option>
@@ -273,7 +277,7 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
                             </TableBody>
                             <TableFooter className="bg-muted/10">
                                 <TableRow>
-                                    <TableCell colSpan={6} className="text-right text-[10px] font-bold uppercase">Subtotal</TableCell>
+                                    <TableCell colSpan={7} className="text-right text-[10px] font-bold uppercase">Subtotal</TableCell>
                                     <TableCell className="text-right font-black text-slate-800">{formatPHP(financials.gross)}</TableCell>
                                     <TableCell className="text-center font-bold">{totalExpected}</TableCell>
                                     <TableCell className="text-center font-black">{totalEntered}</TableCell>
@@ -317,7 +321,14 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
                         </div>
                     )}
 
-                    <div className="mt-4 flex justify-end">
+                    <div className="mt-4 flex justify-end gap-3">
+                        <Button
+                            variant="outline"
+                            className="h-10 px-6 text-xs font-black uppercase tracking-widest border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                            onClick={() => setPreviewOpen(true)}
+                        >
+                            Print Preview / Export PDF
+                        </Button>
                         <Button
                             className="bg-indigo-600 hover:bg-indigo-700 h-10 px-8 text-xs font-black uppercase tracking-widest"
                             onClick={handleSaveReceipt}

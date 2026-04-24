@@ -920,7 +920,8 @@ export async function POST(req: NextRequest) {
         const patch: Record<string, unknown> = { 
             date_approved: new Date().toISOString(),
             receiving_type: Boolean(body?.markAsInvoice) ? 2 : 3, // Persistent flag for "Mark as Invoice"
-            inventory_status: 3 // ✅ For Receiving
+            inventory_status: 3, // ✅ For Receiving
+            approver_id: body?.approver_id ?? body?.approverId ?? null, // ✅ Track who approved
         };
         if (Boolean(body?.markAsInvoice)) patch.payment_status = 2;
 

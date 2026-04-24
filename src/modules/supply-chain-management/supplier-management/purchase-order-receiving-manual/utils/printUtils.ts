@@ -1,7 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-// force-update-v5-final-maayos
+import { PdfEngine } from "@/components/pdf-layout-design/PdfEngine";
+import { renderElement } from "@/components/pdf-layout-design/PdfGenerator";
+import { pdfTemplateService } from "@/components/pdf-layout-design/services/pdf-template";
+import { CompanyData, PdfElementConfig } from "@/components/pdf-layout-design/types";
 
 
 
@@ -30,115 +33,149 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
         return;
     }
 
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-
-    // Title
-    doc.setFontSize(22);
-    const statusText = data.isFullyReceived ? "FULLY RECEIVED" : "PARTIALLY RECEIVED";
-    doc.setTextColor(data.isFullyReceived ? 46 : 230, data.isFullyReceived ? 125 : 126, data.isFullyReceived ? 50 : 34); // Green or Orange
-    doc.text(statusText, pageWidth / 2, 20, { align: "center" });
-
-    doc.setFontSize(14);
-    doc.setTextColor(100, 100, 100);
-    doc.text("RECEIVING RECEIPT", pageWidth / 2, 28, { align: "center" });
-
-    // Metadata
-    doc.setFontSize(9);
-    doc.setTextColor(120, 120, 120);
-    doc.text(`Generated on: ${new Date().toLocaleString()}`, pageWidth - 15, 10, { align: "right" });
-
-    // Header Info Box
-    doc.setDrawColor(220, 220, 220);
-    doc.line(15, 33, pageWidth - 15, 33);
-
-    doc.setFontSize(11);
-    doc.setTextColor(0, 0, 0);
-    doc.setFont("helvetica", "bold");
-    doc.text("PO Number:", 15, 42);
-    doc.setFont("helvetica", "normal");
-    doc.text(data.poNumber || "N/A", 45, 42);
-
-    doc.setFont("helvetica", "bold");
-    doc.text("Supplier:", 15, 49);
-    doc.setFont("helvetica", "normal");
-    doc.text(data.supplierName || "N/A", 45, 49);
-
-    doc.setFont("helvetica", "bold");
-    doc.text("Receipt No:", 110, 42);
-    doc.setFont("helvetica", "normal");
-    doc.text(data.receiptNo || "N/A", 140, 42);
-
-    doc.setFont("helvetica", "bold");
-    doc.text("Date:", 110, 49);
-    doc.setFont("helvetica", "normal");
-    doc.text(data.receiptDate || "N/A", 140, 49);
-
-    doc.setFont("helvetica", "bold");
-    doc.text("Type:", 110, 56);
-    doc.setFont("helvetica", "normal");
-    doc.text(data.receiptType || "N/A", 140, 56);
-
-    doc.line(15, 62, pageWidth - 15, 62);
-
-    // Items Table
-    const tableRows: any[] = [];
-    data.items.forEach((it) => {
-        const now = it.receivedQtyNow ?? 0;
-        const tot = it.expectedQty ?? 0;
+    try {
+        const response = await fetch("/api/pdf/company");
+        let companyData: CompanyData | null = null;
         
-        const qtyText = `${now} / ${tot}`;
-        const isPending = now === 0;
-        const rfids = it.rfids || [];
-
-        // First row for the item
-        tableRows.push([
-            { 
-                content: it.name || "Unknown Product", 
-                styles: { fontStyle: isPending ? "italic" : "normal", textColor: isPending ? [150, 150, 150] : [0, 0, 0] } 
-            },
-            it.barcode || "N/A",
-            {
-                content: qtyText,
-                styles: { halign: "center", fontStyle: "bold" }
-            },
-            rfids[0] || (isPending ? "(Not Received)" : "N/A")
-        ]);
-
-        // Subsequent rows for additional RFIDs
-        for (let i = 1; i < rfids.length; i++) {
-            tableRows.push(["", "", "", rfids[i]]);
+        if (response.ok) {
+            const body = await response.json();
+            companyData = body?.data?.[0] || (Array.isArray(body?.data) ? null : body?.data);
         }
-    });
+        
+        if (!companyData) {
+            companyData = {} as CompanyData;
+        }
 
-    if (tableRows.length === 0) {
-        tableRows.push([{ content: "No items recorded in this receipt summary.", colSpan: 4, styles: { halign: "center", fontStyle: "italic" } }]);
+        const templates = await pdfTemplateService.fetchTemplates();
+        const template = templates.find(t => t.name === "MEN2") || templates.find(t => t.name.toLowerCase().includes("men2")) || templates[0];
+        const templateName = template?.name || "MEN2";
+
+        const doc = await PdfEngine.generateWithFrame(templateName, companyData, (doc, startY, config) => {
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+
+            // Render PO Details (Supplier, Document Info)
+            const detailsY = startY + 5;
+            doc.setFontSize(8);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(50, 50, 50);
+
+            // Left Column
+            doc.text("Supplier:", 10, detailsY);
+            doc.setFont("helvetica", "normal");
+            doc.text(data.supplierName || "—", 30, detailsY);
+
+            doc.setFont("helvetica", "bold");
+            doc.text("Receipt Type:", 10, detailsY + 5);
+            doc.setFont("helvetica", "normal");
+            doc.text(data.receiptType || "—", 30, detailsY + 5);
+
+            doc.setFont("helvetica", "bold");
+            doc.text("Status:", 10, detailsY + 10);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(data.isFullyReceived ? 46 : 230, data.isFullyReceived ? 125 : 126, data.isFullyReceived ? 50 : 34);
+            doc.text(data.isFullyReceived ? "FULLY RECEIVED" : "PARTIALLY RECEIVED", 30, detailsY + 10);
+            doc.setTextColor(50, 50, 50);
+
+            // Right Column
+            const rightMarginX = pageWidth - 10;
+            doc.setFont("helvetica", "bold");
+            doc.text("PO Number:", rightMarginX - 70, detailsY);
+            doc.setFont("helvetica", "normal");
+            doc.text(data.poNumber || "—", rightMarginX, detailsY, { align: "right" });
+
+            doc.setFont("helvetica", "bold");
+            doc.text("Receipt No:", rightMarginX - 70, detailsY + 5);
+            doc.setFont("helvetica", "normal");
+            doc.text(data.receiptNo || "—", rightMarginX, detailsY + 5, { align: "right" });
+
+            doc.setFont("helvetica", "bold");
+            doc.text("Date:", rightMarginX - 70, detailsY + 10);
+            doc.setFont("helvetica", "normal");
+            doc.text(data.receiptDate || "—", rightMarginX, detailsY + 10, { align: "right" });
+
+            // Items Table
+            const tableRows: any[] = [];
+            data.items.forEach((it: any) => {
+                const now = it.receivedQtyNow ?? 0;
+                const tot = it.expectedQty ?? 0;
+                const qtyText = `${now} / ${tot}`;
+                const isPending = now === 0;
+                const rfids = it.rfids || [];
+
+                const metaInfo = [
+                    it.batchNo ? `Batch: ${it.batchNo}` : "",
+                    it.lotId ? `Lot: ${it.lotId}` : "",
+                    it.expiryDate ? `Exp: ${it.expiryDate}` : ""
+                ].filter(Boolean).join(" | ");
+
+                // First row for the item
+                tableRows.push([
+                    { 
+                        content: it.name || "Unknown Product", 
+                        styles: { fontStyle: isPending ? "italic" : "normal", textColor: isPending ? [150, 150, 150] : [0, 0, 0] } 
+                    },
+                    {
+                        content: `${it.barcode || "—"}${metaInfo ? "\n" + metaInfo : ""}`,
+                    },
+                    {
+                        content: String(tot),
+                        styles: { halign: "right", fontStyle: "bold" }
+                    },
+                    {
+                        content: String(now),
+                        styles: { halign: "right", fontStyle: "bold" }
+                    },
+                    rfids[0] || (isPending ? "(Not Received)" : "—")
+                ]);
+
+                // Subsequent rows for additional RFIDs
+                for (let i = 1; i < rfids.length; i++) {
+                    tableRows.push(["", "", "", "", rfids[i]]);
+                }
+            });
+
+            if (tableRows.length === 0) {
+                tableRows.push([{ content: "No items recorded in this receipt summary.", colSpan: 5, styles: { halign: "center", fontStyle: "italic" } }]);
+            }
+
+            autoTable(doc, {
+                startY: detailsY + 15,
+                margin: { left: 10, right: 10 },
+                head: [["Product Name", "SKU / Barcode", "Exp. Qty", "Recv. Qty", "Verified RFIDs"]],
+                body: tableRows,
+                theme: "grid",
+                headStyles: { fillColor: [100, 100, 100], textColor: [255, 255, 255], fontSize: 7, fontStyle: "bold", halign: "center" },
+                bodyStyles: { fontSize: 7, textColor: [50, 50, 50] },
+                columnStyles: {
+                    0: { cellWidth: 50 },
+                    1: { cellWidth: 35 },
+                    2: { cellWidth: 20, halign: "right" },
+                    3: { cellWidth: 20, halign: "right" },
+                    4: { cellWidth: "auto", font: "courier" }
+                },
+                didDrawPage: (data) => {
+                    if (data.pageNumber > 1 && config.elements) {
+                        Object.values(config.elements).forEach(el => {
+                            renderElement(doc, el as PdfElementConfig, companyData as CompanyData);
+                        });
+                    }
+                },
+                styles: { cellPadding: 2, fontSize: 7, lineColor: [200, 200, 200] }
+            });
+
+            // Metadata tag at the very bottom
+            const pageCount = (doc as any).internal.getNumberOfPages();
+            doc.setPage(pageCount);
+            doc.setFontSize(7);
+            doc.setTextColor(150, 150, 150);
+            doc.text(`Generated on: ${new Date().toLocaleString()}`, pageWidth - 10, pageHeight - 10, { align: "right" });
+        });
+
+        doc.save(`Receipt_${data.receiptNo}.pdf`);
+    } catch (error) {
+        console.error("Failed to generate PDF", error);
     }
-
-    autoTable(doc, {
-        startY: 68,
-        head: [["Product Name", "SKU / Barcode", "Qty / Total", "Verified RFIDs"]],
-        body: tableRows,
-        theme: "grid",
-        headStyles: { fillColor: [40, 40, 40], textColor: 255, fontSize: 10, halign: 'left' },
-        styles: { fontSize: 9, cellPadding: 3, valign: "middle" },
-        columnStyles: {
-            0: { cellWidth: 50 },
-            1: { cellWidth: 35 },
-            2: { cellWidth: 25, halign: "center" },
-            3: { cellWidth: "auto", font: "courier" }
-        }
-    });
-
-
-    // Footer
-    const lastY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY : 150;
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "italic");
-    doc.text("Thank you for your service.", pageWidth / 2, lastY + 20, { align: "center" });
-
-    // Save/Download
-    doc.save(`Receipt_${data.receiptNo}.pdf`);
 }
 
 export async function generatePurchaseOrderPDF(data: {

@@ -229,6 +229,35 @@ function genReceiptNo() {
 
 const API_URL = "/api/scm/supplier-management/purchase-order-receiving-rfid";
 
+// ✅ PERSISTENCE: localStorage helpers
+const DRAFT_KEY_PREFIX = "scm_rfid_draft_";
+function getDraftKey(poId: string) { return `${DRAFT_KEY_PREFIX}${poId}`; }
+
+type DraftState = {
+    localScannedRfids: Ctx["localScannedRfids"];
+    activity: ActivityRow[];
+    scannedCountByPorId: Record<string, number>;
+    verifiedBarcodes: string[];
+    receiptNo: string;
+    receiptType: string;
+    receiptDate: string;
+    savedAt: number;
+};
+
+function saveDraft(poId: string, state: DraftState) {
+    try { localStorage.setItem(getDraftKey(poId), JSON.stringify(state)); } catch { /* quota exceeded, ignore */ }
+}
+function loadDraft(poId: string): DraftState | null {
+    try {
+        const raw = localStorage.getItem(getDraftKey(poId));
+        if (!raw) return null;
+        return JSON.parse(raw) as DraftState;
+    } catch { return null; }
+}
+function clearDraft(poId: string) {
+    try { localStorage.removeItem(getDraftKey(poId)); } catch { /* ignore */ }
+}
+
 const playBeep = (type: "success" | "error" = "success") => {
     try {
         const AudioCtor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -370,7 +399,7 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
         })();
     }, []);
 
-    const resetSession = React.useCallback(() => {
+    const resetSession = React.useCallback((opts?: { clearStorage?: boolean; poId?: string }) => {
         setScanError("");
         setSaveError("");
         setLastMatched(null);
@@ -380,7 +409,28 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
         setLocalScannedRfids([]);
         setVerifiedBarcodes([]);
         setActiveProductId(null);
+        if (opts?.clearStorage && opts?.poId) {
+            clearDraft(opts.poId);
+        }
     }, []);
+
+    // ✅ PERSISTENCE: Auto-save draft to localStorage whenever tagging state changes
+    React.useEffect(() => {
+        const poId = selectedPO?.id;
+        if (!poId) return;
+        // Only save if there's meaningful data
+        if (localScannedRfids.length === 0 && activity.length === 0 && verifiedBarcodes.length === 0) return;
+        saveDraft(poId, {
+            localScannedRfids,
+            activity,
+            scannedCountByPorId,
+            verifiedBarcodes,
+            receiptNo,
+            receiptType,
+            receiptDate,
+            savedAt: Date.now(),
+        });
+    }, [selectedPO?.id, localScannedRfids, activity, scannedCountByPorId, verifiedBarcodes, receiptNo, receiptType, receiptDate]);
 
     const openPOById = React.useCallback(
         async (poId: string, options?: { silent?: boolean }) => {
@@ -410,10 +460,29 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
                 setSelectedPO(detail);
 
                 if (!silent) {
-                    setReceiptDate(todayYMD());
-                    setReceiptNo("");
-                    setReceiptType("");
                     setPoBarcode(detail?.poNumber ?? "");
+                    // ✅ PERSISTENCE: Restore draft if available
+                    const draft = detail?.id ? loadDraft(detail.id) : null;
+                    const hasDraftData = draft ? (
+                        draft.localScannedRfids.length > 0 ||
+                        Object.keys(draft.scannedCountByPorId || {}).length > 0 ||
+                        (draft.verifiedBarcodes && draft.verifiedBarcodes.length > 0)
+                    ) : false;
+
+                    if (hasDraftData && draft) {
+                        setLocalScannedRfids(draft.localScannedRfids);
+                        setActivity(draft.activity);
+                        setScannedCountByPorId(draft.scannedCountByPorId);
+                        setVerifiedBarcodes(draft.verifiedBarcodes);
+                        setReceiptNo(draft.receiptNo || "");
+                        setReceiptType(draft.receiptType || "");
+                        setReceiptDate(draft.receiptDate || todayYMD());
+                        toast.info("Draft restored from previous session.");
+                    } else {
+                        setReceiptDate(todayYMD());
+                        setReceiptNo("");
+                        setReceiptType("");
+                    }
                 }
             } catch (e: unknown) {
                 const msg = e instanceof Error ? e.message : String(e);
@@ -457,10 +526,29 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
                 setSelectedPO(detail);
 
                 if (!silent) {
-                    setReceiptDate(todayYMD());
-                    setReceiptNo("");
-                    setReceiptType("");
                     setPoBarcode(code);
+                    // ✅ PERSISTENCE: Restore draft if available
+                    const draft = detail?.id ? loadDraft(detail.id) : null;
+                    const hasDraftData = draft ? (
+                        draft.localScannedRfids.length > 0 ||
+                        Object.keys(draft.scannedCountByPorId || {}).length > 0 ||
+                        (draft.verifiedBarcodes && draft.verifiedBarcodes.length > 0)
+                    ) : false;
+
+                    if (hasDraftData && draft) {
+                        setLocalScannedRfids(draft.localScannedRfids);
+                        setActivity(draft.activity);
+                        setScannedCountByPorId(draft.scannedCountByPorId);
+                        setVerifiedBarcodes(draft.verifiedBarcodes);
+                        setReceiptNo(draft.receiptNo || "");
+                        setReceiptType(draft.receiptType || "");
+                        setReceiptDate(draft.receiptDate || todayYMD());
+                        toast.info("Draft restored from previous session.");
+                    } else {
+                        setReceiptDate(todayYMD());
+                        setReceiptNo("");
+                        setReceiptType("");
+                    }
                 }
             } catch (e: unknown) {
                 const msg = e instanceof Error ? e.message : String(e);
@@ -854,9 +942,6 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
         // Add to verified list
         setVerifiedBarcodes(prev => [...prev, matchingItem!.productId]);
         
-        // Automatically make it the active product for the next screen
-        setActiveProductId(matchingItem.productId);
-        
         playBeep("success");
         setScanError("");
         return true;
@@ -965,6 +1050,8 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
             });
 
             refreshList();
+            // ✅ PERSISTENCE: Clear draft on successful save
+            clearDraft(String(poId));
             resetSession();
 
             // ✅ IMPORTANT: prepare a new receipt immediately (supports multiple receipts)

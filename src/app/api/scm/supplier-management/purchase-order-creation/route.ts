@@ -414,6 +414,10 @@ export async function POST(req: NextRequest) {
 
             branch_id: input?.branch_id ?? input?.branchId ?? null,
             price_type_id: input?.price_type_id ?? null,
+
+            // ✅ User relationship & discount fields
+            encoder_id: input?.encoder_id ?? input?.encoderId ?? null,
+            discount_type: input?.discount_type ?? input?.discountType ?? input?.discountTypeId ?? null,
         };
 
         for (const k of Object.keys(payload)) {
