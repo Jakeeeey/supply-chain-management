@@ -343,7 +343,6 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
     // ✅ NEW FLOW: Product Barcode Verification State
     const [verifiedBarcodes, setVerifiedBarcodes] = React.useState<string[]>([]);
     const [activeProductId, setActiveProductId] = React.useState<string | null>(null);
-    const [unitNameMap, setUnitNameMap] = React.useState<Record<string, string>>({});
 
     // ✅ METADATA
     const [metaDataByPorId, setMetaDataByPorId] = React.useState<Record<string, { batchNo?: string; lotNo?: string; lotId?: string; expiryDate?: string }>>({});
@@ -1081,7 +1080,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
         } finally {
             setSavingReceipt(false);
         }
-    }, [selectedPO, receiptNo, receiptType, receiptDate, scannedCountByPorId, refreshList, resetSession, localScannedRfids, activity]);
+    }, [selectedPO, receiptNo, receiptType, receiptDate, scannedCountByPorId, refreshList, resetSession, localScannedRfids, activity, receiverId]);
 
     const value: Ctx = {
         list,

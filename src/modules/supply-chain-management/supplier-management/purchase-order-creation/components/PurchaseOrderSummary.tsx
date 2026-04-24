@@ -98,7 +98,7 @@ export function PurchaseOrderSummary(props: {
         });
     }, [props.allItemsFlat, discountTypeById]);
 
-    const consolidatedColumns: ColumnDef<ConsolidatedRow, any>[] = React.useMemo(() => [
+    const consolidatedColumns: ColumnDef<ConsolidatedRow>[] = React.useMemo(() => [
         {
             id: "index",
             header: "#",
@@ -182,7 +182,7 @@ export function PurchaseOrderSummary(props: {
                 </div>
             ),
         },
-    ], [money, discountTypeById]);
+    ], [money]);
 
     // =========================
     // ✅ ALLOCATED BRANCHES PAGINATION (NEW)
@@ -467,13 +467,10 @@ export function PurchaseOrderSummary(props: {
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-auto custom-scrollbar bg-background p-4">
+                        <div className="flex-1 overflow-auto custom-scrollbar bg-background p-4 [&_button:has(svg.lucide-settings-2)]:hidden">
                             <DataTable
                                 columns={consolidatedColumns}
                                 data={consolidatedRows}
-                                hideViewOptions
-                                hideRowSelection
-                                hideRowsPerPage
                                 emptyTitle="No items"
                                 emptyDescription="Add products to your purchase order."
                             />

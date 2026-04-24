@@ -125,9 +125,6 @@ export function BranchAllocations(props: {
                                 <span className="font-black text-foreground tracking-tight uppercase group-hover:text-primary transition-colors text-[10px]">
                                     {row.original.name}
                                 </span>
-                                <span className="text-[8px] text-muted-foreground font-mono">
-                                    ID: {row.original.id}
-                                </span>
                             </div>
                         ),
                     },
@@ -324,13 +321,10 @@ export function BranchAllocations(props: {
                                 </button>
                             ) : (
                                 <div className="space-y-4 w-full min-w-0">
-                                    <div className="w-full overflow-x-auto">
+                                    <div className="w-full overflow-x-auto [&_button:has(svg.lucide-settings-2)]:hidden">
                                         <DataTable
                                             columns={columns}
                                             data={flatItems}
-                                            hideViewOptions
-                                            hideRowSelection
-                                            hideRowsPerPage
                                             emptyTitle="No products"
                                             emptyDescription="Add products to this branch."
                                         />

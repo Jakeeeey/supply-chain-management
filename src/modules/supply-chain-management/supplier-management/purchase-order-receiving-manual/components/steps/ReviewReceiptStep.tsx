@@ -198,7 +198,7 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
         });
 
         await saveReceipt(metaData);
-    }, [saveReceipt, selectedPO?.status, allItems, safeCounts, lotNumbers, batchNumbers, expiryDates, lots]);
+    }, [saveReceipt, selectedPO?.status, allItems, safeCounts, lotNumbers, batchNumbers, expiryDates]);
 
     const totalEntered = Object.values(safeCounts).reduce((a: number, b: number) => a + Number(b), 0);
     const totalExpected = allItems.reduce((a: number, b: ReceivingPOItem) => a + Number(b.expectedQty || 0), 0);
@@ -277,7 +277,6 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
                             <TableBody>
                                 {(() => {
                                     const PAGE_SIZE = 10;
-                                    const totalPages = Math.max(1, Math.ceil(allItems.length / PAGE_SIZE));
                                     const paginatedItems = allItems.slice((reviewPage - 1) * PAGE_SIZE, reviewPage * PAGE_SIZE);
                                     return paginatedItems.map((it: ReceivingPOItem) => {
                                         const porId = String(it.id);

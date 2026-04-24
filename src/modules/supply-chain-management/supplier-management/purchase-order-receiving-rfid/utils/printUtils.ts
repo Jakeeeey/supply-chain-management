@@ -102,7 +102,6 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
             data.items.forEach((it: any) => {
                 const now = it.receivedQtyNow ?? 0;
                 const tot = it.expectedQty ?? 0;
-                const qtyText = `${now} / ${tot}`;
                 const isPending = now === 0;
                 const rfids = it.rfids || [];
 

@@ -52,7 +52,8 @@ function toNum(v: unknown) { const n = parseFloat(String(v ?? "").replace(/,/g, 
 function ensureId(v: unknown): number | null {
     if (v === null || v === undefined) return null;
     if (typeof v === "object") {
-        const id = (v as any)?.id ?? (v as any)?.purchase_order_product_id ?? (v as any)?.product_id;
+        const obj = v as Record<string, unknown>;
+        const id = obj?.id ?? obj?.purchase_order_product_id ?? obj?.product_id;
         const n = toNum(id);
         return n > 0 ? n : null;
     }
@@ -60,15 +61,7 @@ function ensureId(v: unknown): number | null {
     return n > 0 ? n : null;
 }
 
-function pickNum(obj: Record<string, unknown> | null | undefined, keys: string[]) {
-    for (const k of keys) {
-        if (obj && obj[k] !== undefined && obj[k] !== null) {
-            const n = toNum(obj[k]);
-            if (n !== 0) return n;
-        }
-    }
-    return 0;
-}
+
 
 function deriveDiscountPercentFromCode(codeRaw: string): number {
     const code = String(codeRaw ?? "").trim().toUpperCase();
@@ -266,9 +259,6 @@ async function fetchProductSupplierLinks(base: string, productIds: number[], sup
     const map = new Map<number, { supplier_id: number; discount_type: unknown }>();
     const ids = Array.from(new Set(productIds));
     if (!ids.length) return map;
-    
-    let urlBase = `${base}/items/${PRODUCT_SUPPLIER_COLLECTION}?limit=-1&filter[product_id][_in]=${encodeURIComponent(ids.join(","))}&fields=*`;
-    if (supplierId) urlBase += `&filter[supplier_id][_eq]=${supplierId}`;
 
     for (const chunkIds of chunk(ids, 250)) {
         const url = supplierId 
@@ -424,7 +414,7 @@ export async function POST(req: NextRequest) {
             if (dLines.length > 0) headerDiscountPercent = calculateDiscountFromLines(dLines);
             else headerDiscountPercent = deriveDiscountPercentFromCode(toStr(dType?.discount_type || dType?.name));
 
-            const allocationsMap = new Map<number, any[]>();
+            const allocationsMap = new Map<number, unknown[]>();
             for (const ln of lines) {
                 const pid = toNum(ln.product_id);
                 const bid = toNum(ln.branch_id ?? 0);
@@ -433,7 +423,7 @@ export async function POST(req: NextRequest) {
                 const pors = porIdsByKey.get(k) || [];
                 const receivedQty = pors.reduce((sum, id) => sum + effectiveReceivedQty(porRows.find(r => toNum(r.purchase_order_product_id) === id)), 0);
 
-                let lineDiscountTypeId = productLinksMap.get(pid)?.discount_type;
+                const lineDiscountTypeId = productLinksMap.get(pid)?.discount_type;
                 let lineDiscountPercent = headerDiscountPercent;
                 let lineDiscountTypeStr = dType ? toStr(dType.discount_type || dType.name, "Standard") : "Standard";
                 const resId = ensureId(lineDiscountTypeId);
@@ -520,7 +510,7 @@ export async function POST(req: NextRequest) {
                         uPrice = toNum(pj2?.data?.cost_per_unit || 0);
                     }
 
-                    let lineTypeId = linksMap.get(pid)?.discount_type;
+                    const lineTypeId = linksMap.get(pid)?.discount_type;
                     let linePct = poDiscountPercent;
                     let resolvedId = ensureId(lineTypeId);
                     if (resolvedId) {
@@ -554,12 +544,12 @@ export async function POST(req: NextRequest) {
 
                 const dAmt = Number((uPrice * (linePct / 100)).toFixed(2));
                 const net = uPrice - dAmt, newQty = toNum(pr?.received_quantity || 0) + qty;
-                const patch = {
+                const patch: Record<string, unknown> = {
                     receipt_no: receiptNo, receipt_date: receiptDate, received_quantity: newQty, received_date: nowISO(), isPosted: 0,
                     discount_type: dtId || null, discounted_amount: Number((dAmt * newQty).toFixed(2)),
                     vat_amount: Number((net * 0.12 * newQty).toFixed(2)), withholding_amount: Number((net * 0.01 * newQty).toFixed(2)),
                     total_amount: Number((net * 1.12 * newQty).toFixed(2))
-                } as any;
+                };
                 if (m.lotNo) patch.lot_id = toNum(m.lotNo);
                 if (m.batchNo) patch.batch_no = m.batchNo;
                 if (m.expiryDate) patch.expiry_date = m.expiryDate;
@@ -572,7 +562,7 @@ export async function POST(req: NextRequest) {
             const hasRec = fPors.some(r => toStr(r.receipt_no) || toNum(r.received_quantity) > 0);
             const nextStatus = fully ? 13 : (hasRec ? 9 : po.inventory_status);
 
-            const patchPO: any = { inventory_status: nextStatus };
+            const patchPO: Record<string, unknown> = { inventory_status: nextStatus };
             if (receiverId) patchPO.receiver_id = receiverId;
             if (fully) patchPO.date_received = nowISO();
             await fetchJson(`${base}/items/${PO_COLLECTION}/${thePoId}`, { method: "PATCH", body: JSON.stringify(patchPO) }).catch(() => {});

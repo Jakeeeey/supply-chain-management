@@ -61,7 +61,8 @@ function toNum(v: unknown) {
 function ensureId(v: unknown): number | null {
     if (v === null || v === undefined) return null;
     if (typeof v === "object") {
-        const id = (v as any)?.id ?? (v as any)?.purchase_order_product_id ?? (v as any)?.product_id;
+        const obj = v as Record<string, unknown>;
+        const id = obj?.id ?? obj?.purchase_order_product_id ?? obj?.product_id;
         const n = toNum(id);
         return n > 0 ? n : null;
     }
@@ -553,7 +554,7 @@ export async function POST(req: NextRequest) {
                 const receivedQty = pors.reduce((sum, id) => sum + effectiveReceivedQty(porRows.find(r => toNum(r.purchase_order_product_id) === id)!), 0);
                 
                 // Determine line-level discount
-                let lineDiscountTypeId = productLinksMap.get(pid)?.discount_type;
+                const lineDiscountTypeId = productLinksMap.get(pid)?.discount_type;
                 let lineDiscountPercent = 0;
                 let lineDiscountTypeStr = "Standard";
                 
@@ -745,7 +746,7 @@ export async function POST(req: NextRequest) {
              const productLinksMap = await fetchProductSupplierLinks(base, [productId], toNum(po?.supplier_name));
              const discountMap = await fetchDiscountTypesMap(base);
              
-             let lineDiscountTypeId = productLinksMap.get(productId)?.discount_type;
+             const lineDiscountTypeId = productLinksMap.get(productId)?.discount_type;
              let discountPercent = 0;
              let discountTypeId = null;
 
@@ -805,7 +806,7 @@ export async function POST(req: NextRequest) {
              const receiptNo = toStr(body.receiptNo);
              const receiptDate = toStr(body.receiptDate);
              const porCounts = body.porCounts as Record<string, number>;
-             const porMetaData = body.porMetaData as Record<string, any>;
+             const porMetaData = body.porMetaData as Record<string, Record<string, unknown>>;
              const receiverId = body.receiverId;
              const items = body.items as Array<{ porId: number; qty: number }>; // legacy fallback
 
@@ -834,7 +835,6 @@ export async function POST(req: NextRequest) {
                  porRows.forEach(r => productIdsSet.add(toNum(r.product_id)));
                  Object.keys(porCounts).forEach(k => { if (k.includes("-")) productIdsSet.add(toNum(k.split("-")[0])); });
                  
-                 const linksMap = await fetchProductSupplierLinks(base, Array.from(productIdsSet), toNum(po?.supplier_name));
                  
                  for (const [porIdString, qtyNum] of Object.entries(porCounts)) {
                      const porId = porIdString;
@@ -850,7 +850,7 @@ export async function POST(req: NextRequest) {
 
                      // Re-calculate financials for this specific quantity
                      let discountPercent = poDiscountPercent;
-                     let discountTypeId = ensureId(pr?.discount_type);
+                     const discountTypeId = ensureId(pr?.discount_type);
                      if (discountTypeId) {
                          const dt = discountMap.get(String(discountTypeId));
                          if (dt) discountPercent = dt.pct;
@@ -958,12 +958,12 @@ export async function POST(req: NextRequest) {
                      
                      // Only patch if we are truly upgrading the status
                      if (nextStatus === 13 || nextStatus === 9) {
-                         const patch: Record<string, any> = (() => {
+                         const patch: Record<string, unknown> = (() => {
                              const headerDiscTotal = porRows.reduce((s, r) => s + toNum((r as unknown as Record<string, unknown>).discounted_amount), 0);
                              const headerVatTotal = porRows.reduce((s, r) => s + toNum((r as unknown as Record<string, unknown>).vat_amount), 0);
                              const headerWhtTotal = porRows.reduce((s, r) => s + toNum((r as unknown as Record<string, unknown>).withholding_amount), 0);
                              const headerTotalAmt = porRows.reduce((s, r) => s + toNum((r as unknown as Record<string, unknown>).total_amount), 0);
-                             const p: Record<string, any> = {
+                             const p: Record<string, unknown> = {
                                  inventory_status: nextStatus,
                                  discounted_amount: Number(headerDiscTotal.toFixed(2)),
                                  vat_amount: Number(headerVatTotal.toFixed(2)),

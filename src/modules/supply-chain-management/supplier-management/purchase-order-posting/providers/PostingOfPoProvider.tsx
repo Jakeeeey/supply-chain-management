@@ -61,7 +61,7 @@ export function PostingOfPoProvider({ children }: { children: React.ReactNode })
 
     const [q, setQ] = React.useState("");
     const [page, setPage] = React.useState(1);
-    const [pageSize, setPageSize] = React.useState<number>(5);
+    const [pageSize, setPageSize] = React.useState<number>(10);
 
     const [posting, setPosting] = React.useState(false);
     const [postError, setPostError] = React.useState("");

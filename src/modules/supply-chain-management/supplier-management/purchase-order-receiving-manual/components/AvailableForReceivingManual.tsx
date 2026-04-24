@@ -10,11 +10,6 @@ import { cn } from "@/lib/utils";
 import { RefreshCw, Package, ChevronRight, ChevronLeft } from "lucide-react";
 import { useReceivingProductsManual } from "../providers/ReceivingProductsManualProvider";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
 } from "@/components/ui/select";
 
 function statusBadge(status: string) {

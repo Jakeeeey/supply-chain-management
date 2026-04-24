@@ -1,18 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { RefreshCw, FileCheck2, ChevronRight, ChevronLeft } from "lucide-react";
 import { usePostingOfPo } from "../providers/PostingOfPoProvider";
@@ -50,7 +42,6 @@ export function PostingPOList() {
         page,
         setPage,
         pageSize,
-        setPageSize,
     } = usePostingOfPo();
 
     const filtered = React.useMemo(() => {
@@ -79,12 +70,14 @@ export function PostingPOList() {
     }, [filtered, page, pageSize]);
 
     return (
-        <Card className="p-4">
-            <div className="flex items-start justify-between gap-3">
-                <div>
-                    <div className="text-base font-semibold">Received Purchase Orders</div>
-                    <div className="text-xs text-muted-foreground">
-                        Select a PO then post receipts
+        <div className="min-w-0 border border-border rounded-xl bg-background shadow-sm overflow-hidden flex flex-col sticky top-4 self-start">
+            <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center justify-between gap-3 shrink-0">
+                <div className="min-w-0">
+                    <div className="text-sm font-black text-foreground uppercase tracking-tight">
+                        Received Purchase Orders
+                    </div>
+                    <div className="text-[11px] text-muted-foreground whitespace-nowrap">
+                        {filtered.length} filtered / {list?.length ?? 0} total
                     </div>
                 </div>
 
@@ -92,83 +85,70 @@ export function PostingPOList() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="h-8 gap-2"
+                    className="h-8 gap-2 text-[10px] font-black uppercase"
                     onClick={refreshList}
                 >
-                    <RefreshCw className="h-4 w-4" />
+                    <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
                     Refresh
                 </Button>
             </div>
 
-            <div className="mt-4 space-y-3">
+            <div className="p-3 border-b border-border/50 bg-background/50 backdrop-blur-sm sticky top-0 z-10 shrink-0">
                 <Input
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
                     placeholder="Search PO number or supplier..."
+                    className="h-10 rounded-xl shadow-sm border-border bg-background text-xs"
                 />
 
-                <div className="flex items-center justify-between gap-3">
+                <div className="mt-3 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-black uppercase text-muted-foreground whitespace-nowrap">
-                            Rows per page
+                        <span className="text-[10px] font-black uppercase text-muted-foreground whitespace-nowrap bg-muted/50 px-2 py-0.5 rounded border border-border/50">
+                            10 Rows per page
                         </span>
-                        <Select
-                            value={String(pageSize)}
-                            onValueChange={(v) => {
-                                setPageSize(Number(v));
-                                setPage(1);
-                            }}
-                            disabled={listLoading}
-                        >
-                            <SelectTrigger className="h-8 w-[70px] text-[10px] font-bold rounded-xl border-border bg-background">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {[5, 10, 20, 50].map((size) => (
-                                    <SelectItem key={size} value={String(size)} className="text-[10px] font-bold">
-                                        {size}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight mr-2">
+                        <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight mr-1">
                             {page} of {totalPages}
                         </div>
 
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-8 w-8 p-0"
-                            disabled={page <= 1}
-                            onClick={() => setPage((p) => Math.max(1, p - 1))}
-                        >
-                            <ChevronLeft className="h-4 w-4" />
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-8 w-8 p-0"
-                            disabled={page >= totalPages}
-                            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                        >
-                            <ChevronRight className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-7 w-7 p-0 rounded-lg"
+                                disabled={page <= 1}
+                                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                            >
+                                <ChevronLeft className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-7 w-7 p-0 rounded-lg"
+                                disabled={page >= totalPages}
+                                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                            >
+                                <ChevronRight className="h-3.5 w-3.5" />
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {listError ? (
-                <div className="mt-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
-                    {listError}
-                </div>
-            ) : null}
+            <div className={cn(
+                "p-3 space-y-2",
+                listLoading ? "opacity-70 pointer-events-none" : ""
+            )}>
+                {listError ? (
+                    <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
+                        {listError}
+                    </div>
+                ) : null}
 
-            <div className="mt-4 space-y-2">
                 {listLoading ? (
                     <>
                         {Array.from({ length: pageSize }).map((_, i) => (
@@ -186,7 +166,7 @@ export function PostingPOList() {
                     </>
                 ) : pageItems.length === 0 ? (
                     <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                        No received purchase orders to post.
+                        No received purchase orders.
                     </div>
                 ) : (
                     pageItems.map((po) => {
@@ -207,68 +187,50 @@ export function PostingPOList() {
                                 className={cn(
                                     "w-full text-left rounded-xl border border-border p-3 transition outline-none",
                                     "hover:bg-muted/40",
-                                    active ? "ring-2 ring-primary/25 bg-muted/30" : "bg-background"
+                                    active ? "ring-2 ring-primary/40 border-primary/50 bg-muted/30 shadow-sm" : "bg-background"
                                 )}
                             >
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="min-w-0">
                                         <div className="flex items-center gap-2">
-                                            <div className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
+                                            <div className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-muted shrink-0">
                                                 <FileCheck2 className="h-4 w-4 text-muted-foreground" />
                                             </div>
                                             <div className="min-w-0">
-                                                <div className="truncate text-sm font-semibold text-foreground">
+                                                <div className="truncate text-[13px] font-black text-foreground uppercase tracking-tight">
                                                     {po.poNumber}
                                                 </div>
-                                                <div className="truncate text-xs text-muted-foreground">
+                                                <div className="truncate text-[11px] text-muted-foreground font-medium">
                                                     {po.supplierName}
                                                 </div>
                                             </div>
                                         </div>
 
-                                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground uppercase font-black">
                                             <Badge
                                                 variant="secondary"
-                                                className={cn("text-[10px] font-bold", statusBadge(po.status))}
+                                                className={cn("text-[9px] font-black uppercase tracking-tight", statusBadge(po.status))}
                                             >
                                                 {statusLabel(po.status)}
                                             </Badge>
-                                            <span>
-                                                Items:{" "}
-                                                <span className="font-semibold text-foreground">
-                                                    {po.itemsCount}
-                                                </span>
+                                            <span className="bg-muted/50 px-1.5 py-0.5 rounded border border-border/50">
+                                                {po.itemsCount} ITEMS
                                             </span>
-                                            <span>
-                                                Branches:{" "}
-                                                <span className="font-semibold text-foreground">
-                                                    {po.branchesCount}
-                                                </span>
-                                            </span>
-                                            <span>
-                                                Receipts:{" "}
-                                                <span className="font-semibold text-foreground">
-                                                    {po.receiptsCount}
-                                                </span>
-                                            </span>
-                                            <span>
-                                                Unposted:{" "}
-                                                <span className="font-semibold text-foreground">
-                                                    {po.unpostedReceiptsCount}
-                                                </span>
+                                            <span className="bg-muted/50 px-1.5 py-0.5 rounded border border-border/50 text-primary">
+                                                {po.unpostedReceiptsCount} UNPOSTED
                                             </span>
                                         </div>
 
-                                        {/* Hint for PARTIAL_POSTED: remind user more receipts can still be posted */}
                                         {po.status === "PARTIAL_POSTED" && (
-                                            <div className="mt-1.5 text-[11px] text-blue-600 dark:text-blue-400">
-                                                Partially posted — awaiting full receiving
+                                            <div className="mt-2 text-[9px] font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                                                <div className="h-1 w-1 rounded-full bg-current animate-pulse" />
+                                                PARTIALLY POSTED — AWAITING RECEIVING
                                             </div>
                                         )}
                                     </div>
 
-                                    <div className="flex items-center gap-2 shrink-0">
-                                        <ChevronRight className="h-4 w-4 text-muted-foreground mt-1" />
+                                    <div className="flex items-center h-9 self-center">
+                                        <ChevronRight className={cn("h-4 w-4 transition-transform", active ? "text-primary translate-x-0.5" : "text-muted-foreground")} />
                                     </div>
                                 </div>
                             </div>
@@ -276,6 +238,12 @@ export function PostingPOList() {
                     })
                 )}
             </div>
-        </Card>
+            
+            <div className="px-4 py-2 border-t border-border bg-muted/20">
+                <div className="text-[9px] font-black uppercase text-muted-foreground text-center tracking-widest">
+                    Showing {Math.min(filtered.length, (page - 1) * pageSize + 1)}–{Math.min(page * pageSize, filtered.length)} of {filtered.length} total POs
+                </div>
+            </div>
+        </div>
     );
 }
