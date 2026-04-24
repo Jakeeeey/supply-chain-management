@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import type { BranchAllocation, CartItem, Supplier, DiscountType } from "../types";
+import type { BranchAllocation, CartItem, Supplier, DiscountType, PaymentTerm } from "../types";
 import { buildMoneyFormatter, cn, deriveDiscountPercentFromCode } from "../utils/calculations";
 import { toast } from "sonner";
 import { ColumnDef } from "@tanstack/react-table";
@@ -24,8 +24,16 @@ import {
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-import { Info, CheckCircle2, AlertTriangle, Package, Building2, TrendingUp, Tags } from "lucide-react";
+import { Info, CheckCircle2, AlertTriangle, Package, Building2, TrendingUp, Tags, CreditCard, ChevronDown } from "lucide-react";
 import { POPreviewModal } from "./POPreviewModal";
+
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 type Notice = {
     variant: "success" | "error" | "info";
@@ -52,6 +60,9 @@ export function PurchaseOrderSummary(props: {
     discountTypes: DiscountType[];
     isInvoice: boolean;
     setIsInvoice: (v: boolean) => void;
+    paymentTerms: PaymentTerm[];
+    selectedPaymentTermId: number | null;
+    setSelectedPaymentTermId: (id: number | null) => void;
     isLocked?: boolean;
     onReset?: () => void;
 }) {
@@ -382,6 +393,38 @@ export function PurchaseOrderSummary(props: {
                                 <div className="flex flex-col">
                                     <span className="text-[10px] font-medium text-muted-foreground mb-1 uppercase tracking-wider">Entity Name</span>
                                     <p className="text-sm font-black text-foreground tracking-tight">{props.supplier?.name || "—"}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+                                <CreditCard className="w-3 h-3" />
+                                Payment Terms
+                            </p>
+                            <div className="rounded-lg border border-border bg-card text-card-foreground p-5 shadow-sm space-y-3">
+                                <div className="flex flex-col space-y-2">
+                                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Select Term</span>
+                                    <Select
+                                        value={props.selectedPaymentTermId ? String(props.selectedPaymentTermId) : ""}
+                                        onValueChange={(v) => props.setSelectedPaymentTermId(Number(v))}
+                                        disabled={props.isLocked}
+                                    >
+                                        <SelectTrigger className="h-10 rounded-xl border-border bg-muted/20 font-bold text-xs uppercase">
+                                            <SelectValue placeholder="No term selected" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {props.paymentTerms.map((term) => (
+                                                <SelectItem 
+                                                    key={term.id} 
+                                                    value={String(term.id)}
+                                                    className="text-xs font-bold uppercase"
+                                                >
+                                                    {term.payment_name} {term.payment_days > 0 ? `(${term.payment_days} Days)` : ""}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                             </div>
                         </div>

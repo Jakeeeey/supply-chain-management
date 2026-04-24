@@ -645,7 +645,7 @@ export async function POST(req: NextRequest) {
                 supplier: { id: String(po.supplier_name), name: supplierMap.get(toNum(po.supplier_name)) || "Supplier Name" },
                 status: receivingStatusFrom(poId, lines, porRows),
                 allocations: Array.from(allocationsMap.entries()).map(([branchId, items]) => ({ branch: { id: String(branchId || "0"), name: branchesMap.get(branchId) || `Branch ${branchId}` }, items })),
-                priceType: toStr(po.price_type, "General Receive Price"),
+                priceType: toStr(po.price_type, "Cost Per Unit"),
                 createdAt: po.date_encoded ? new Date(po.date_encoded).toISOString() : new Date().toISOString(),
                 history
             });

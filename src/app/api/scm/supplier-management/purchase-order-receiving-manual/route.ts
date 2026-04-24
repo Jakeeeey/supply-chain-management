@@ -378,7 +378,7 @@ export async function GET() {
                 totalAmount: toNum(po.total_amount), currency: "PHP",
                 itemsCount: new Set(lines.map(l => l.product_id)).size,
                 branchesCount: new Set(lines.map(l => l.branch_id)).size,
-                priceType: toStr(po.price_type, "General Receive Price")
+                priceType: toStr(po.price_type, "Cost Per Unit")
             };
         }).filter(Boolean);
         return ok(list);
@@ -454,7 +454,7 @@ export async function POST(req: NextRequest) {
                 supplier: { id: String(po.supplier_name), name: supplierMap.get(toNum(po.supplier_name)) || "Supplier" },
                 status: receivingStatusFrom(toNum(po.purchase_order_id), lines, porRows),
                 allocations: Array.from(allocationsMap.entries()).map(([bid, items]) => ({ branch: { id: String(bid), name: branchesMap.get(bid) || `Branch ${bid}` }, items })),
-                priceType: toStr(po.price_type, "General Receive Price"),
+                priceType: toStr(po.price_type, "Cost Per Unit"),
                 createdAt: po.date_encoded ? new Date(po.date_encoded).toISOString() : new Date().toISOString(),
                 history
             });

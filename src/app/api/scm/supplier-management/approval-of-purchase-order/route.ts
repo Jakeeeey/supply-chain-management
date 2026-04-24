@@ -111,6 +111,10 @@ function toNum(v: unknown) {
     const n = Number(String(v ?? "").replace(/,/g, ""));
     return Number.isFinite(n) ? n : 0;
 }
+function toFixedMoney(v: unknown) {
+    const n = toNum(v);
+    return n.toFixed(2);
+}
 function uniqNums(arr: (number | string | null | undefined)[]) {
     return Array.from(new Set(arr.map((x) => toNum(x)).filter((n) => Number.isFinite(n) && n > 0)));
 }
@@ -466,6 +470,7 @@ type PoProductRow = {
     total_amount?: string | number | null;
     discounted_price?: string | number | null;
     approved_price?: string | number | null;
+    discount_type?: string | number | null;
 };
 
 interface PoLineRow {
@@ -795,6 +800,8 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
 
         discount_type: headerDiscTypeName,
         discountType: headerDiscTypeName,
+
+        payment_type: header?.payment_type ?? null,
         
         // derives is_invoice from receiving_type (2=Invoice, 3=PO) (robust check)
         is_invoice: (Number(header?.receiving_type) === 2) || (String(header?.is_invoice ?? header?.isInvoice).toLowerCase() === "true") || !!(header?.is_invoice ?? header?.isInvoice),
@@ -813,6 +820,56 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
             ? [(header.user_created as { first_name?: string }).first_name, (header.user_created as { last_name?: string }).last_name].filter(Boolean).join(" ")
             : "—",
     };
+}
+
+async function syncPoProductFinancialsOnApproval(base: string, poId: number) {
+    try {
+        // Fetch header to get fallback discount_type
+        const headerUrl = `${base}/items/${PO_COLLECTION}/${poId}?fields=discount_type`;
+        const headerJson = await fetchJson<{ data: { discount_type: any } }>(headerUrl);
+        const headerDtId = headerJson?.data?.discount_type ? String(headerJson.data.discount_type) : null;
+
+        const lines = await fetchPOProductsByPOId(base, poId);
+        const discountMap = await fetchDiscountTypesMap(base);
+        
+        for (const l of lines) {
+            const lid = toNum(l.purchase_order_product_id);
+            if (!lid) continue;
+
+            const qty = toNum(l.ordered_quantity);
+            const unitPrice = toNum(l.unit_price);
+            
+            // Financial Calculations (VAT-Inclusive Logic)
+            // Fallback to header discount if line item discount is missing
+            const dtId = (l.discount_type ? String(l.discount_type) : null) || headerDtId;
+            const discPercent = dtId ? (discountMap.get(dtId)?.pct ?? 0) : 0;
+            
+            const lineGross = qty * unitPrice;
+            const discAmtTotal = Number((lineGross * (discPercent / 100)).toFixed(2));
+            const lineNet = lineGross - discAmtTotal;
+            
+            const vatExcl = Number((lineNet / 1.12).toFixed(2));
+            const vatAmt = Number((lineNet - vatExcl).toFixed(2));
+            const ewtAmt = Number((vatExcl * 0.01).toFixed(2));
+            
+            const discountedPricePerUnit = qty > 0 ? Number((lineNet / qty).toFixed(2)) : 0;
+
+            const patch = {
+                approved_price: toStr(toFixedMoney(unitPrice)),
+                discounted_price: toStr(toFixedMoney(discountedPricePerUnit)),
+                vat_amount: toStr(toFixedMoney(vatAmt)),
+                withholding_amount: toStr(toFixedMoney(ewtAmt)),
+                total_amount: toStr(toFixedMoney(lineNet)), // Total is Net (VAT-inclusive)
+                discount_type: dtId, // Sync/Lock the discount type
+                received: 0, // Reset/Init to 0 on approval
+            };
+
+            const url = `${base}/items/${PO_PRODUCTS_COLLECTION}/${lid}`;
+            await fetchJson(url, { method: "PATCH", body: JSON.stringify(patch) });
+        }
+    } catch (e: unknown) {
+        console.error("[approval-po] Failed to sync product financials:", (e as Error).message);
+    }
 }
 
 // =====================
@@ -922,11 +979,26 @@ export async function POST(req: NextRequest) {
             receiving_type: Boolean(body?.markAsInvoice) ? 2 : 3, // Persistent flag for "Mark as Invoice"
             inventory_status: 3, // ✅ For Receiving
             approver_id: body?.approver_id ?? body?.approverId ?? null, // ✅ Track who approved
+            payment_type: body?.payment_type ?? body?.paymentType ?? null, // ✅ Update payment terms
+
+            // ✅ Expanded financial tracking
+            gross_amount: body?.gross_amount !== undefined ? toNum(body.gross_amount) : undefined,
+            discounted_amount: body?.discounted_amount !== undefined ? toNum(body.discounted_amount) : undefined,
+            vat_amount: body?.vat_amount !== undefined ? toNum(body.vat_amount) : undefined,
+            withholding_tax_amount: (body?.withholding_tax_amount ?? body?.withholdingTaxAmount ?? body?.ewtGoods) !== undefined ? toNum(body.withholding_tax_amount ?? body.withholdingTaxAmount ?? body.ewtGoods) : undefined,
+            total_amount: body?.total_amount !== undefined ? toNum(body.total_amount) : undefined,
+
+            // ✅ Expanded relationship mapping
+            receiver_id: (body?.receiver_id ?? body?.receiverId) !== undefined ? (toNum(body.receiver_id ?? body.receiverId) || null) : undefined,
+            branch_id: (body?.branch_id ?? body?.branchId) !== undefined ? (toNum(body.branch_id ?? body.branchId) || undefined) : undefined,
         };
         if (Boolean(body?.markAsInvoice)) patch.payment_status = 2;
 
         const url = `${base}/items/${PO_COLLECTION}/${encodeURIComponent(String(poId))}`;
         await fetchJson(url, { method: "PATCH", body: JSON.stringify(patch) });
+
+        // ✅ Sync line items financials
+        await syncPoProductFinancialsOnApproval(base, poId);
 
         return ok({ ok: true });
     } catch (e: unknown) {

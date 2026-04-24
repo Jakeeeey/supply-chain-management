@@ -11,6 +11,7 @@ import type {
     Product,
     Supplier,
     DiscountType,
+    PaymentTerm,
 } from "./types";
 
 import {
@@ -477,6 +478,8 @@ export default function CreatePurchaseOrderModule({ encoderId }: { encoderId?: n
     const [branches, setBranches] = React.useState<Array<{ id: string; code: string; name: string }>>([]);
 
     const [discountTypes, setDiscountTypes] = React.useState<DiscountType[]>([]);
+    const [paymentTerms, setPaymentTerms] = React.useState<PaymentTerm[]>([]);
+    const [selectedPaymentTermId, setSelectedPaymentTermId] = React.useState<number | null>(null);
 
     const [selectedSupplier, setSelectedSupplier] = React.useState<Supplier | null>(null);
     const [selectedBranchIds, setSelectedBranchIds] = React.useState<string[]>([]);
@@ -527,6 +530,7 @@ export default function CreatePurchaseOrderModule({ encoderId }: { encoderId?: n
                     provider.fetchSuppliers(),
                     provider.fetchBranches(),
                     provider.fetchDiscountTypes(),
+                    provider.fetchPaymentTerms(),
                 ]);
 
                 if (!alive) return;
@@ -545,6 +549,13 @@ export default function CreatePurchaseOrderModule({ encoderId }: { encoderId?: n
                 } else {
                     setDiscountTypes([]);
                     console.warn("Discount types failed:", results[2].reason);
+                }
+
+                if (results[3].status === "fulfilled") {
+                    setPaymentTerms(results[3].value ?? []);
+                } else {
+                    setPaymentTerms([]);
+                    console.warn("Payment terms failed:", results[3].reason);
                 }
             } catch (e: unknown) {
                 if (!alive) return;
@@ -860,6 +871,7 @@ export default function CreatePurchaseOrderModule({ encoderId }: { encoderId?: n
                 purchase_order_no: poNumber,
                 supplier_name: Number(selectedSupplier.id),
                 is_invoice: isInvoice,
+                payment_type: selectedPaymentTermId,
 
                 date: dateOnly,
                 date_encoded: nowISO,
@@ -1131,6 +1143,9 @@ export default function CreatePurchaseOrderModule({ encoderId }: { encoderId?: n
                 discountTypes={discountTypes}
                 isInvoice={isInvoice}
                 setIsInvoice={setIsInvoice}
+                paymentTerms={paymentTerms}
+                selectedPaymentTermId={selectedPaymentTermId}
+                setSelectedPaymentTermId={setSelectedPaymentTermId}
                 isLocked={isLocked}
                 onReset={() => window.location.reload()}
             />

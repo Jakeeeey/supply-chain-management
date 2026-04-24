@@ -17,13 +17,18 @@ export default function ApprovalPurchaseOrderModule({ approverId }: { approverId
     const [pending, setPending] = React.useState<PendingApprovalPO[]>([]);
     const [selectedId, setSelectedId] = React.useState<string | null>(null);
     const [detail, setDetail] = React.useState<PurchaseOrderDetail | null>(null);
+    const [paymentTerms, setPaymentTerms] = React.useState<PaymentTerm[]>([]);
 
     const refreshList = React.useCallback(async () => {
         try {
             setLoadingList(true);
             setError("");
-            const data = await provider.fetchPendingApprovalPOs();
+            const [data, terms] = await Promise.all([
+                provider.fetchPendingApprovalPOs(),
+                provider.fetchPaymentTerms(),
+            ]);
             setPending(data);
+            setPaymentTerms(terms);
         } catch (e: unknown) {
             const msg = String(e instanceof Error ? e.message : e);
             if (msg.trim().toLowerCase() !== "fetch failed") {
@@ -68,8 +73,15 @@ export default function ApprovalPurchaseOrderModule({ approverId }: { approverId
     const onApprove = React.useCallback(
         async (opts: {
             markAsInvoice: boolean;
-            paymentTerm: PaymentTerm;
+            payment_type: number | null;
             termsDays?: number;
+            gross_amount?: number;
+            discounted_amount?: number;
+            vat_amount?: number;
+            withholding_tax_amount?: number;
+            total_amount?: number;
+            branch_id?: number | null;
+            receiver_id?: number | null;
         }) => {
             if (!selectedId) return;
 
@@ -77,9 +89,7 @@ export default function ApprovalPurchaseOrderModule({ approverId }: { approverId
                 setError("");
                 await provider.approvePurchaseOrder({
                     id: selectedId,
-                    markAsInvoice: opts.markAsInvoice,
-                    paymentTerm: opts.paymentTerm,
-                    termsDays: opts.termsDays,
+                    ...opts,
                     approverId: approverId,
                 });
 
@@ -123,6 +133,7 @@ export default function ApprovalPurchaseOrderModule({ approverId }: { approverId
                     po={detail}
                     loading={loadingDetail}
                     disabled={loadingList}
+                    paymentTerms={paymentTerms}
                     onApprove={onApprove}
                 />
             </div>

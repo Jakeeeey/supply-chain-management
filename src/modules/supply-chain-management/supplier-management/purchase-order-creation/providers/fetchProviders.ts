@@ -1,4 +1,4 @@
-import type { Supplier, Branch, Product, DiscountType } from "../types";
+import type { Supplier, Branch, Product, DiscountType, PaymentTerm } from "../types";
 
 type Envelope<T> = { data: T };
 
@@ -62,6 +62,10 @@ export async function fetchProductSupplierLinks(supplierId: string | number): Pr
 
 export async function fetchDiscountTypes(): Promise<DiscountType[]> {
     return fetchData<DiscountType[]>(`${BASE}/discount-types`);
+}
+
+export async function fetchPaymentTerms(): Promise<PaymentTerm[]> {
+    return fetchData<PaymentTerm[]>("/api/scm/supplier-management/payment-terms");
 }
 
 /** ✅ Save PO to API route */

@@ -1,4 +1,4 @@
-import type { PendingApprovalPO, PurchaseOrderDetail } from "../types";
+import type { PendingApprovalPO, PurchaseOrderDetail, PaymentTerm } from "../types";
 
 type Envelope<T> = { data: T };
 
@@ -40,6 +40,10 @@ export async function approvePurchaseOrder(payload: {
             approver_id: approverId,
         }),
     });
+}
+
+export async function fetchPaymentTerms(): Promise<PaymentTerm[]> {
+    return fetchData<PaymentTerm[]>("/api/scm/supplier-management/payment-terms");
 }
 
 

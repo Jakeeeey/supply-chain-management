@@ -168,16 +168,24 @@ export default function PurchaseOrderReviewPanel(props: {
     po: PurchaseOrderDetail | null;
     loading: boolean;
     disabled?: boolean;
+    paymentTerms: PaymentTerm[];
     onApprove: (opts: {
         markAsInvoice: boolean;
-        paymentTerm: PaymentTerm;
+        payment_type: number | null;
         termsDays?: number;
+        gross_amount?: number;
+        discounted_amount?: number;
+        vat_amount?: number;
+        withholding_tax_amount?: number;
+        total_amount?: number;
+        branch_id?: number | null;
+        receiver_id?: number | null;
     }) => void | Promise<void>;
 }) {
     const fmt = React.useMemo(() => money(), []);
 
     const [markAsInvoice, setMarkAsInvoice] = React.useState(false);
-    const [paymentTerm, setPaymentTerm] = React.useState<PaymentTerm>("cash_on_delivery");
+    const [selectedPaymentTermId, setSelectedPaymentTermId] = React.useState<number | null>(null);
     const [termsDays, setTermsDays] = React.useState<number>(30);
 
     const [confirmOpen, setConfirmOpen] = React.useState(false);
@@ -201,13 +209,13 @@ export default function PurchaseOrderReviewPanel(props: {
             .catch(err => console.error("Failed to fetch company data:", err));
 
         setMarkAsInvoice(!!(poAny?.is_invoice ?? poAny?.isInvoice ?? false));
-        setPaymentTerm("cash_on_delivery");
+        setSelectedPaymentTermId(Number(poAny?.payment_type) || null);
         setTermsDays(30);
 
         setConfirmOpen(false);
         setSubmitting(false);
         setCurrentPage(1);
-    }, [poAny?.purchase_order_id, poAny?.id, poAny?.is_invoice, poAny?.isInvoice]);
+    }, [poAny?.purchase_order_id, poAny?.id, poAny?.is_invoice, poAny?.isInvoice, poAny?.payment_type]);
 
     const branchLabel = React.useMemo(() => {
         const helperName = pickText(poAny?.branch_name_text ?? poAny?.branchNameText ?? poAny?.branchName ?? "");
@@ -251,23 +259,33 @@ export default function PurchaseOrderReviewPanel(props: {
         return lines.slice(start, start + pageSize);
     }, [lines, currentPage, pageSize]);
 
-    const grossDirect = toNum(poAny?.gross_amount ?? poAny?.grossAmount);
-    const discountAmount = toNum(poAny?.discounted_amount ?? poAny?.discountAmount);
-    const vatAmount = toNum(poAny?.vat_amount ?? poAny?.vatAmount);
-    const ewtDirect = toNum(poAny?.withholding_tax_amount ?? poAny?.ewtGoods);
-    const totalDirect = toNum(poAny?.total_amount ?? poAny?.total);
+    const discountAmountHeader = toNum(poAny?.discounted_amount ?? poAny?.discountAmount);
+    
+    const summaryGross = React.useMemo(() => {
+        return lines.reduce((acc, l) => acc + (toNum(l.price) * toNum(l.qty)), 0);
+    }, [lines]);
+
+    const summaryDiscountLines = React.useMemo(() => {
+        return lines.reduce((acc, l) => {
+            const unit = toNum(l.price);
+            const qty = toNum(l.qty);
+            const discPrice = toNum(l.total) / (qty || 1); // discounted price is total / qty in this context
+            if (discPrice > 0 && discPrice < unit) {
+                return acc + ((unit - discPrice) * qty);
+            }
+            return acc;
+        }, 0);
+    }, [lines]);
+
+    const discountAmount = React.useMemo(() => {
+        return summaryDiscountLines > 0 ? summaryDiscountLines : discountAmountHeader;
+    }, [summaryDiscountLines, discountAmountHeader]);
 
     const netAmount = React.useMemo(() => {
-        if (grossDirect > 0) return Math.max(0, grossDirect - discountAmount);
-        if (totalDirect > 0) return totalDirect;
-        return 0;
-    }, [grossDirect, discountAmount, totalDirect]);
+        return Math.max(0, summaryGross - discountAmount);
+    }, [summaryGross, discountAmount]);
 
-    const grossAmount = React.useMemo(() => {
-        if (grossDirect > 0) return grossDirect;
-        if (netAmount > 0 || discountAmount > 0) return Math.max(0, netAmount + discountAmount);
-        return 0;
-    }, [grossDirect, netAmount, discountAmount]);
+    const grossAmount = summaryGross;
 
     const vatExclusive = React.useMemo(() => {
         return netAmount / 1.12;
@@ -278,21 +296,17 @@ export default function PurchaseOrderReviewPanel(props: {
     }, [netAmount, vatExclusive]);
 
     const ewtGoods = React.useMemo(() => {
-        if (ewtDirect > 0) return ewtDirect;
-        return vatExclusive > 0 ? vatExclusive * 0.01 : 0;
-    }, [ewtDirect, vatExclusive]);
+        return vatExclusive * 0.01;
+    }, [vatExclusive]);
 
-    const totalAmount = React.useMemo(() => {
-        if (totalDirect > 0) return totalDirect;
-        return netAmount;
-    }, [totalDirect, netAmount]);
+    const totalAmount = netAmount;
 
     const paymentStatusLabel = React.useMemo(() => {
-        if (paymentTerm === "cash_on_delivery") return "Payment Due on Delivery";
-        if (paymentTerm === "cash_with_order") return "Payment Due with Order";
-        if (paymentTerm === "terms") return `Payment Due in ${Math.max(1, termsDays)} Day(s)`;
-        return "—";
-    }, [paymentTerm, termsDays]);
+        if (!selectedPaymentTermId) return "No Payment Term Selected";
+        const term = props.paymentTerms.find(t => t.id === selectedPaymentTermId);
+        if (!term) return "Unknown Payment Term";
+        return term.payment_description || term.payment_name;
+    }, [selectedPaymentTermId, props.paymentTerms]);
 
     const approveDisabled =
         props.disabled || props.loading || submitting || !poAny?.purchase_order_id;
@@ -306,8 +320,19 @@ export default function PurchaseOrderReviewPanel(props: {
             await Promise.resolve(
                 props.onApprove({
                     markAsInvoice,
-                    paymentTerm,
-                    termsDays: paymentTerm === "terms" ? Math.max(1, termsDays) : undefined,
+                    payment_type: selectedPaymentTermId,
+                    termsDays: undefined, // removed explicit days override for now as it's in the term
+                    // Financial totals
+                    gross_amount: grossAmount,
+                    discounted_amount: discountAmount,
+                    vat_amount: vatAmountComputed,
+                    withholding_tax_amount: ewtGoods,
+                    total_amount: totalAmount,
+                    // Relationship IDs
+                    branch_id: toNum(poAny?.branch_id?.id ?? poAny?.branch_id) || 
+                              toNum(poAny?.allocations?.[0]?.branch?.id ?? poAny?.allocations?.[0]?.branch) || 
+                              null,
+                    receiver_id: toNum(poAny?.receiver_id?.id ?? poAny?.receiver_id) || null,
                 })
             );
 
@@ -584,7 +609,7 @@ export default function PurchaseOrderReviewPanel(props: {
                                     <>
                                         <div className="flex justify-between text-xs">
                                             <span className="text-muted-foreground font-medium uppercase">VAT (12%)</span>
-                                            <span className="font-bold text-foreground">{fmt.format(vatAmount || vatAmountComputed)}</span>
+                                            <span className="font-bold text-foreground">{fmt.format(vatAmountComputed)}</span>
                                         </div>
 
                                         <div className="flex justify-between text-xs">
@@ -639,43 +664,25 @@ export default function PurchaseOrderReviewPanel(props: {
 
                                     <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground">
                                         <div className="flex flex-wrap items-center gap-1.5 bg-muted/40 p-1 rounded-xl border border-border/40">
-                                            {[
-                                                { id: "cash_with_order", label: "Cash With Order" },
-                                                { id: "cash_on_delivery", label: "Cash On Delivery" },
-                                                { id: "terms", label: "Terms" },
-                                            ].map((term) => {
-                                                const active = paymentTerm === term.id;
-                                                return (
-                                                    <button
-                                                        key={term.id}
-                                                        type="button"
-                                                        onClick={() => setPaymentTerm(term.id as PaymentTerm)}
-                                                        className={cn(
-                                                            "px-3 h-8 text-[10px] font-black uppercase tracking-tight rounded-lg transition-all duration-200",
-                                                            active
-                                                                ? "bg-primary text-primary-foreground shadow-sm scale-[1.02]"
-                                                                : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                                                        )}
-                                                    >
-                                                        {term.label}
-                                                    </button>
-                                                );
-                                            })}
-
-                                            {paymentTerm === "terms" ? (
-                                                <div className="flex items-center gap-2 ml-2 pl-2 border-l border-border/50">
-                                                    <div className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
-                                                        Days
-                                                    </div>
-                                                    <Input
-                                                        type="number"
-                                                        min={1}
-                                                        value={String(termsDays)}
-                                                        onChange={(e) => setTermsDays(Math.max(1, toNum(e.target.value)))}
-                                                        className="h-8 w-[80px] rounded-lg text-xs font-bold"
-                                                    />
-                                                </div>
-                                            ) : null}
+                                            <Select
+                                                value={selectedPaymentTermId ? String(selectedPaymentTermId) : ""}
+                                                onValueChange={(v) => setSelectedPaymentTermId(Number(v))}
+                                            >
+                                                <SelectTrigger className="h-9 w-[240px] text-[10px] font-black uppercase tracking-tight rounded-lg bg-background border-border/50">
+                                                    <SelectValue placeholder="Select Payment Term" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {props.paymentTerms.map((term) => (
+                                                        <SelectItem 
+                                                            key={term.id} 
+                                                            value={String(term.id)}
+                                                            className="text-[10px] font-black uppercase"
+                                                        >
+                                                            {term.payment_name}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
                                         </div>
 
                                         {/* Added the Print button here */}

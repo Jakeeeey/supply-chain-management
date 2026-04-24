@@ -1,4 +1,9 @@
-export type PaymentTerm = "cash_with_order" | "cash_on_delivery" | "terms";
+export type PaymentTerm = {
+    id: number;
+    payment_name: string;
+    payment_days: number;
+    payment_description?: string;
+};
 
 export type PendingApprovalPO = {
     id: string;
