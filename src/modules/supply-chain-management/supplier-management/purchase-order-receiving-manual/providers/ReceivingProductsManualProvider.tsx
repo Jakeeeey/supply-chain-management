@@ -243,7 +243,7 @@ const playBeep = (type: "success" | "error" = "success") => {
     }
 };
 
-export function ReceivingProductsManualProvider({ children }: { children: React.ReactNode }) {
+export function ReceivingProductsManualProvider({ children, receiverId }: { children: React.ReactNode, receiverId?: number }) {
     const [list, setList] = React.useState<ReceivingListItem[]>([]);
     const [listLoading, setListLoading] = React.useState(false);
     const [listError, setListError] = React.useState("");
@@ -706,6 +706,7 @@ export function ReceivingProductsManualProvider({ children }: { children: React.
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     action: "save_receipt",
+                    receiverId,
                     poId,
                     receiptNo: oldReceiptNo,
                     receiptType: receiptType.trim(),

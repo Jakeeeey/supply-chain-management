@@ -1,5 +1,5 @@
 import React from "react";
-import { Search, Loader2, CheckCircle2, Box, PlusCircle } from "lucide-react";
+import { Search, Loader2, CheckCircle2, Box, PlusCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { useReceivingProducts, ReceivingPODetail, ReceivingPOItem } from "../../providers/ReceivingProductsProvider";
 import { useKeyboardScanner } from "../../hooks/useKeyboardScanner";
 import { AddExtraProductModal } from "../AddExtraProductModal";
@@ -53,6 +53,15 @@ export default function ScanBarcodeStep({ poDetail, onContinue }: ScanBarcodeSte
     });
 
     const verifiedItems = boxItemsInPO.filter((it: ReceivingPOItem) => verifiedBarcodes.includes(it.productId));
+
+    // Pagination state
+    const PAGE_SIZE = 10;
+    const [currentPage, setCurrentPage] = React.useState(1);
+    const totalPages = Math.max(1, Math.ceil(boxItemsInPO.length / PAGE_SIZE));
+    const paginatedItems = boxItemsInPO.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+    // Reset to page 1 when items change
+    React.useEffect(() => { setCurrentPage(1); }, [boxItemsInPO.length]);
 
     return (
         <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-300">
@@ -136,7 +145,7 @@ export default function ScanBarcodeStep({ poDetail, onContinue }: ScanBarcodeSte
                                 </div>
                             ) : (
                                 <div className="divide-y divide-slate-100">
-                                    {boxItemsInPO.map((item) => {
+                                    {paginatedItems.map((item) => {
                                         const isVerified = verifiedBarcodes.includes(item.productId);
                                         return (
                                             <div key={item.productId} className={`flex items-center p-4 transition-colors ${isVerified ? "bg-emerald-50/30" : "hover:bg-slate-50/50"}`}>
@@ -170,6 +179,33 @@ export default function ScanBarcodeStep({ poDetail, onContinue }: ScanBarcodeSte
                                 </div>
                             )}
                         </div>
+                        {/* Pagination Controls */}
+                        {totalPages > 1 && (
+                            <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/30 flex items-center justify-between text-xs text-slate-500 shrink-0">
+                                <span className="font-medium">
+                                    Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, boxItemsInPO.length)} of {boxItemsInPO.length} items
+                                </span>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                        disabled={currentPage === 1}
+                                        className="h-7 w-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        <ChevronLeft className="w-4 h-4" />
+                                    </button>
+                                    <span className="font-bold text-slate-700 px-2">
+                                        Page {currentPage} of {totalPages}
+                                    </span>
+                                    <button
+                                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                        disabled={currentPage === totalPages}
+                                        className="h-7 w-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        <ChevronRight className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                         <div className="p-4 border-t border-slate-100 bg-slate-50/50 shrink-0 flex justify-end">
                             <button
                                 onClick={() => {

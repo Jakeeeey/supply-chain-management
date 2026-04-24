@@ -31,8 +31,8 @@ type Props = {
     disabled?: boolean;
 };
 
-// ✅ default to 5 per page
-const DEFAULT_PAGE_SIZE = 5;
+// ✅ default to 10 per page
+const DEFAULT_PAGE_SIZE = 10;
 
 function safeStr(v: unknown, fallback = "—") {
     const s = String(v ?? "").trim();
@@ -102,7 +102,7 @@ function supplierLabelFromRow(row: any) {
 }
 
 function getPaginationModel(totalPages: number, currentPage: number) {
-    if (totalPages <= 7) {
+    if (totalPages <= 5) {
         return Array.from({ length: totalPages }, (_, i) => i + 1) as Array<
             number | "ellipsis"
         >;
@@ -111,8 +111,8 @@ function getPaginationModel(totalPages: number, currentPage: number) {
     const items: Array<number | "ellipsis"> = [];
     items.push(1);
 
-    const left = Math.max(2, currentPage - 1);
-    const right = Math.min(totalPages - 1, currentPage + 1);
+    const left = Math.max(2, currentPage);
+    const right = Math.min(totalPages - 1, currentPage);
 
     if (left > 2) items.push("ellipsis");
 
@@ -132,7 +132,7 @@ export default function PendingApprovalList({
 }: Props) {
     const [searchQuery, setSearchQuery] = React.useState("");
     const [page, setPage] = React.useState(1);
-    const [pageSize, setPageSize] = React.useState(DEFAULT_PAGE_SIZE);
+    const pageSize = DEFAULT_PAGE_SIZE;
 
     // ✅ Filtered list based on search
     const filteredItems = React.useMemo(() => {
@@ -189,7 +189,7 @@ export default function PendingApprovalList({
     }, [isDisabled, totalPages]);
 
     return (
-        <div className="min-w-0 border border-border rounded-xl bg-background shadow-sm overflow-hidden">
+        <div className="min-w-0 border border-border rounded-xl bg-background shadow-sm overflow-hidden flex flex-col sticky top-4 self-start">
             <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center justify-between gap-3">
                 <div className="min-w-0">
                     <div className="text-sm font-black text-foreground uppercase tracking-tight">
@@ -217,7 +217,7 @@ export default function PendingApprovalList({
                 </div>
             </div>
 
-            <div className={cn("p-3 space-y-2", isDisabled ? "opacity-70 pointer-events-none" : "")}>
+            <div className={cn("p-3 space-y-2 overflow-y-auto", isDisabled ? "opacity-70 pointer-events-none" : "")}>
                 {paginated.length === 0 ? (
                     <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
                         No pending purchase orders.
@@ -273,33 +273,12 @@ export default function PendingApprovalList({
             {items.length > 0 ? (
                 <div className="px-4 py-3 border-t border-border bg-muted/20 space-y-3">
                     <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-black uppercase text-muted-foreground whitespace-nowrap">
-                                Rows per page
-                            </span>
-                            <Select
-                                value={String(pageSize)}
-                                onValueChange={(v) => {
-                                    setPageSize(Number(v));
-                                    setPage(1);
-                                }}
-                                disabled={isDisabled}
-                            >
-                                <SelectTrigger className="h-7 w-[70px] text-[10px] font-bold rounded-lg border-border bg-background">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {[5, 10, 20, 50].map((size) => (
-                                        <SelectItem key={size} value={String(size)} className="text-[10px] font-bold">
-                                            {size}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                        <div className="text-[10px] font-black uppercase text-muted-foreground whitespace-nowrap">
+                            Showing {Math.min(filteredItems.length, (page - 1) * pageSize + 1)}–{Math.min(page * pageSize, filteredItems.length)} of {filteredItems.length}
                         </div>
 
                         <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">
-                            {page} of {totalPages}
+                            Page {page} of {totalPages}
                         </div>
                     </div>
 

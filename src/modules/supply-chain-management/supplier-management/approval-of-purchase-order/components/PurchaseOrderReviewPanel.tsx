@@ -460,8 +460,8 @@ export default function PurchaseOrderReviewPanel(props: {
                                         </div>
 
                                         <div className="border-t border-border p-3 flex flex-col sm:flex-row items-center justify-between gap-4 bg-muted/20">
-                                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                                <span>Rows per page:</span>
+                                            <div className="flex items-center gap-3 text-xs text-muted-foreground whitespace-nowrap">
+                                                <span className="font-bold">Rows per page:</span>
                                                 <Select
                                                     value={String(pageSize)}
                                                     onValueChange={(v) => {
@@ -469,18 +469,18 @@ export default function PurchaseOrderReviewPanel(props: {
                                                         setCurrentPage(1);
                                                     }}
                                                 >
-                                                    <SelectTrigger className="h-8 w-[70px]">
+                                                    <SelectTrigger className="h-8 w-[85px] font-bold">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
                                                         {[10, 20, 30, 50, 100].map((size) => (
-                                                            <SelectItem key={size} value={String(size)}>
+                                                            <SelectItem key={size} value={String(size)} className="font-bold">
                                                                 {size}
                                                             </SelectItem>
                                                         ))}
                                                     </SelectContent>
                                                 </Select>
-                                                <span className="ml-2">
+                                                <span className="ml-2 font-medium">
                                                     Showing {(currentPage - 1) * pageSize + 1} to{" "}
                                                     {Math.min(currentPage * pageSize, lines.length)} of{" "}
                                                     {lines.length} items

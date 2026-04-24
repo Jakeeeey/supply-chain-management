@@ -806,6 +806,7 @@ export async function POST(req: NextRequest) {
              const receiptDate = toStr(body.receiptDate);
              const porCounts = body.porCounts as Record<string, number>;
              const porMetaData = body.porMetaData as Record<string, any>;
+             const receiverId = body.receiverId;
              const items = body.items as Array<{ porId: number; qty: number }>; // legacy fallback
 
              if (!poId) return bad("Missing poId.");
@@ -969,6 +970,7 @@ export async function POST(req: NextRequest) {
                                  withholding_tax_amount: Number(headerWhtTotal.toFixed(2)),
                                  total_amount: Number(headerTotalAmt.toFixed(2)),
                              };
+                             if (receiverId) p.receiver_id = receiverId;
                              // ✅ Only set completion date if fully received
                              if (nextStatus === 13) {
                                  p.date_received = nowISO();

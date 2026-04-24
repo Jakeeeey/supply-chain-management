@@ -481,7 +481,7 @@ export async function POST(req: NextRequest) {
         }
 
         if (action === "save_receipt") {
-            const { poId, receiptNo, receiptDate, porCounts, porMetaData } = body;
+            const { poId, receiptNo, receiptDate, porCounts, porMetaData, receiverId } = body;
             const thePoId = toNum(poId);
             if (!thePoId) return bad("Missing PO ID");
 
@@ -573,6 +573,7 @@ export async function POST(req: NextRequest) {
             const nextStatus = fully ? 13 : (hasRec ? 9 : po.inventory_status);
 
             const patchPO: any = { inventory_status: nextStatus };
+            if (receiverId) patchPO.receiver_id = receiverId;
             if (fully) patchPO.date_received = nowISO();
             await fetchJson(`${base}/items/${PO_COLLECTION}/${thePoId}`, { method: "PATCH", body: JSON.stringify(patchPO) }).catch(() => {});
 

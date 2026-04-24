@@ -296,7 +296,7 @@ const playBeep = (type: "success" | "error" = "success") => {
     }
 };
 
-export function ReceivingProductsProvider({ children }: { children: React.ReactNode }) {
+export function ReceivingProductsProvider({ children, receiverId }: { children: React.ReactNode, receiverId?: number }) {
     const [list, setList] = React.useState<ReceivingListItem[]>([]);
     const [listLoading, setListLoading] = React.useState(false);
     const [listError, setListError] = React.useState("");
@@ -1000,6 +1000,7 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     action: "save_receipt",
+                    receiverId,
                     poId,
                     receiptNo: oldReceiptNo,
                     receiptType: receiptType.trim(),

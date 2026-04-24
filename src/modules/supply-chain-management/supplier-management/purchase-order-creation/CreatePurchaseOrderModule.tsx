@@ -468,7 +468,7 @@ function BranchMultiSelect(props: {
     );
 }
 
-export default function CreatePurchaseOrderModule() {
+export default function CreatePurchaseOrderModule({ encoderId }: { encoderId?: number }) {
     const [isLoading, setIsLoading] = React.useState(true);
     const [isSaving, setIsSaving] = React.useState(false);
     const [error, setError] = React.useState<string>("");
@@ -872,6 +872,7 @@ export default function CreatePurchaseOrderModule() {
                 total_amount: financials.total,
 
                 inventory_status: 1,
+                encoder_id: encoderId,
 
                 poNumber,
                 poDate,

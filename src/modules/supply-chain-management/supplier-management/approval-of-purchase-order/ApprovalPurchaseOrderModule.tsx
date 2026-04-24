@@ -110,7 +110,7 @@ export default function ApprovalPurchaseOrderModule() {
                 </div>
             ) : null}
 
-            <div className="grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-4 min-w-0">
+            <div className="grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-4 min-w-0 items-start">
                 <PendingApprovalList
                     items={pending}
                     selectedId={selectedId}

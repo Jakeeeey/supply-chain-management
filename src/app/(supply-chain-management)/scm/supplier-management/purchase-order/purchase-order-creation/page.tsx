@@ -78,6 +78,8 @@ function buildHeaderUserFromToken(token: string | null | undefined) {
 export default async function Page() {
     const cookieStore = await cookies();
     const token = cookieStore.get(COOKIE_NAME)?.value ?? null;
+    const payload = token ? decodeJwtPayload(token) : null;
+    const encoderId = Number(payload?.sub) || undefined;
 
     const headerUser = buildHeaderUserFromToken(token);
 
@@ -117,7 +119,7 @@ export default async function Page() {
 
             <ScrollArea className="min-h-0 flex-1">
                 <div className="p-4">
-                    <CreatePurchaseOrderModule />
+                    <CreatePurchaseOrderModule encoderId={encoderId} />
                 </div>
             </ScrollArea>
         </div>
