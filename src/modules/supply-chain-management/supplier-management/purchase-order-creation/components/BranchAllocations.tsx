@@ -2,11 +2,12 @@
 "use client";
 
 import * as React from "react";
-import { Building2, Minus, Plus, Store, Trash2 } from "lucide-react";
+import { Building2, Minus, Plus, Search, Store, Trash2, X } from "lucide-react";
 import { ColumnDef } from "@tanstack/react-table";
 import type { BranchAllocation, DiscountType } from "../types";
 import { cn, buildMoneyFormatter } from "../utils/calculations";
 import { DataTable } from "@/components/ui/new-data-table";
+import { Input } from "@/components/ui/input";
 
 type FlatItem = {
     id: string;
@@ -43,6 +44,13 @@ export function BranchAllocations(props: {
         for (const d of props.discountTypes) m.set(String(d.id), d);
         return m;
     }, [props.discountTypes]);
+    
+    // Per-branch search queries
+    const [searchQueries, setSearchQueries] = React.useState<Record<string, string>>({});
+
+    const updateSearch = (bid: string, q: string) => {
+        setSearchQueries(prev => ({ ...prev, [bid]: q }));
+    };
 
     if (props.branches.length === 0) {
         return (
@@ -321,12 +329,41 @@ export function BranchAllocations(props: {
                                 </button>
                             ) : (
                                 <div className="space-y-4 w-full min-w-0">
+                                    {/* ✅ Search Filter within Branch */}
+                                    <div className="relative group/search max-w-sm">
+                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within/search:text-primary transition-colors">
+                                            <Search className="w-3.5 h-3.5" />
+                                        </div>
+                                        <Input
+                                            placeholder="Search items in this branch..."
+                                            value={searchQueries[branch.branchId] || ""}
+                                            onChange={(e) => updateSearch(branch.branchId, e.target.value)}
+                                            className="h-8 pl-9 text-[11px] font-medium bg-background border-border/60 focus:border-primary/50 focus:ring-primary/20 transition-all rounded-lg"
+                                        />
+                                        {searchQueries[branch.branchId] && (
+                                            <button
+                                                onClick={() => updateSearch(branch.branchId, "")}
+                                                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-muted text-muted-foreground transition-colors"
+                                            >
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                        )}
+                                    </div>
+
                                     <div className="w-full overflow-x-auto [&_button:has(svg.lucide-settings-2)]:hidden">
                                         <DataTable
                                             columns={columns}
-                                            data={flatItems}
-                                            emptyTitle="No products"
-                                            emptyDescription="Add products to this branch."
+                                            data={flatItems.filter(item => {
+                                                const q = (searchQueries[branch.branchId] || "").toLowerCase().trim();
+                                                if (!q) return true;
+                                                return (
+                                                    item.name.toLowerCase().includes(q) ||
+                                                    item.brand.toLowerCase().includes(q) ||
+                                                    item.category.toLowerCase().includes(q)
+                                                );
+                                            })}
+                                            emptyTitle="No matches"
+                                            emptyDescription="Try a different search term."
                                         />
                                     </div>
 
