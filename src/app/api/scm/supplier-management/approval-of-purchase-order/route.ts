@@ -826,7 +826,7 @@ async function syncPoProductFinancialsOnApproval(base: string, poId: number) {
     try {
         // Fetch header to get fallback discount_type
         const headerUrl = `${base}/items/${PO_COLLECTION}/${poId}?fields=discount_type`;
-        const headerJson = await fetchJson<{ data: { discount_type: any } }>(headerUrl);
+        const headerJson = await fetchJson<{ data: { discount_type: string | number | null } }>(headerUrl);
         const headerDtId = headerJson?.data?.discount_type ? String(headerJson.data.discount_type) : null;
 
         const lines = await fetchPOProductsByPOId(base, poId);

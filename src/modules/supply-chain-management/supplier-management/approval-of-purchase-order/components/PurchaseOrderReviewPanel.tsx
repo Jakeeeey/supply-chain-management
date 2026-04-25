@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { generatePurchaseOrderPdf } from "../utils/generatePoPdf";
 import { Printer } from "lucide-react";
 
@@ -245,7 +244,17 @@ export default function PurchaseOrderReviewPanel(props: {
         setConfirmOpen(false);
         setSubmitting(false);
         setCurrentPage(1);
-    }, [poAny?.purchase_order_id, poAny?.id, poAny?.is_invoice, poAny?.isInvoice, poAny?.payment_type]);
+    }, [
+        poAny?.purchase_order_id, 
+        poAny?.id, 
+        poAny?.is_invoice, 
+        poAny?.isInvoice, 
+        poAny?.payment_type, 
+        poAny?.supplier_name?.payment_terms, 
+        poAny?.supplier?.payment_terms, 
+        poAny?.supplier_terms, 
+        props.paymentTerms
+    ]);
 
     const branchLabel = React.useMemo(() => {
         const helperName = pickText(poAny?.branch_name_text ?? poAny?.branchNameText ?? poAny?.branchName ?? "");

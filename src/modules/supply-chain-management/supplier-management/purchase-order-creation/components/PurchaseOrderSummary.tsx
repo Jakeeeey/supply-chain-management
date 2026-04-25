@@ -24,7 +24,7 @@ import {
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-import { Info, CheckCircle2, AlertTriangle, Package, Building2, TrendingUp, Tags, CreditCard, ChevronDown } from "lucide-react";
+import { Info, CheckCircle2, AlertTriangle, Package, Building2, TrendingUp, Tags, CreditCard } from "lucide-react";
 import { POPreviewModal } from "./POPreviewModal";
 
 import {
@@ -298,7 +298,7 @@ export function PurchaseOrderSummary(props: {
             setIsSubmitting(false);
             setConfirmOpen(false);
         }
-    }, [disabled, onSave]);
+    }, [disabled, onSave, props.selectedPaymentTermId]);
 
     const NoticeIcon = React.useMemo(() => {
         if (!notice) return null;

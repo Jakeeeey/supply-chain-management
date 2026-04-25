@@ -220,7 +220,12 @@ async function fetchDiscountTypesMap(base: string) {
         const url = `${base}/items/discount_type?limit=-1&fields=${fields}`;
         const j = await directusFetch(url, { method: "GET" });
         const json = await safeJson(j);
-        const data = (json.json?.data as any[]) || [];
+        const data = (json.json?.data as Array<{
+            id: string | number;
+            discount_type: string;
+            total_percent?: number | string;
+            line_per_discount_type?: DiscountLine[];
+        }>) || [];
         
         for (const dt of data) {
             const id = String(dt.id);
@@ -341,7 +346,7 @@ async function createManyPurchaseOrderProducts(base: string, lines: Record<strin
     return { ok: false, json: parsed.json, message: msg, status: r.status };
 }
 
-async function ensurePoProducts(base: string, poId: number, input: any) {
+async function ensurePoProducts(base: string, poId: number, input: { allocations?: Allocation[] }) {
     const discountMap = await fetchDiscountTypesMap(base);
     const lines = buildPoProductLines(input, poId, discountMap);
 

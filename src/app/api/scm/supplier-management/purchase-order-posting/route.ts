@@ -459,7 +459,6 @@ function buildReceiptSummary(porRows: PORRow[]) {
         let disc = 0;
         let vat = 0;
         let wht = 0;
-        let net = 0;
 
         for (const r of rows) {
             const porId = toNum(r?.purchase_order_product_id);
@@ -473,14 +472,12 @@ function buildReceiptSummary(porRows: PORRow[]) {
             total += effectiveReceivedQty(r);
             if (toNum(r?.isPosted) !== 1) allPosted = false;
 
-            const netPriceTotal = toNum(r?.total_amount || 0); // total_amount in POR is Net
             const whtTotal = toNum(r?.withholding_amount || 0);
             
             gross += toNum(r?.unit_price || 0) * toNum(r?.received_quantity || 0);
             disc += toNum(r?.discounted_amount || 0);
             vat += toNum(r?.vat_amount || 0);
             wht += whtTotal;
-            net += netPriceTotal - whtTotal; // Posting Net is Net - EWT
         }
 
         receipts.push({
