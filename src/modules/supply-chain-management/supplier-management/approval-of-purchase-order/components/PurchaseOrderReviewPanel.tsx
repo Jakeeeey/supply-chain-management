@@ -153,13 +153,23 @@ function normalizeLines(rawItems: any[]): NormalizedLine[] {
         const brand = safeStr(it?.brand ?? "—");
         const category = safeStr(it?.category ?? "—");
         const uom = safeStr(it?.uom ?? it?.unit ?? "—");
-        const qty = Math.max(0, toNum(it?.qty ?? it?.quantity ?? 0));
+        
+        // Use exact DB column names as primary source
+        const qty = Math.max(0, toNum(it?.ordered_quantity ?? it?.qty ?? it?.quantity ?? 0));
         const price = Math.max(0, toNum(it?.unit_price ?? it?.price ?? 0));
+        
         const gross = toNum(it?.gross) || Math.max(0, qty * price);
         const discountType = safeStr(it?.discount_type ?? "—");
-        const discountAmount = Math.abs(toNum(it?.discount_amount ?? 0));
-        const net = toNum(it?.net) || Math.max(0, gross - discountAmount);
-        const total = toNum(it?.line_total) || net;
+        
+        // Calculate discount amount from unit_price vs discounted_price
+        const discPriceLine = toNum(it?.discounted_price);
+        const discountAmount = discPriceLine > 0 && discPriceLine < price 
+            ? Number(((price - discPriceLine) * qty).toFixed(2))
+            : Math.abs(toNum(it?.discount_amount ?? 0));
+
+        const net = toNum(it?.total_amount ?? it?.net ?? (gross - discountAmount));
+        const total = toNum(it?.total_amount ?? it?.line_total ?? net);
+        
         return { key, name, brand, category, uom, qty, price, gross, discountType, discountAmount, net, total };
     });
 }
@@ -260,46 +270,48 @@ export default function PurchaseOrderReviewPanel(props: {
     }, [lines, currentPage, pageSize]);
 
     const discountAmountHeader = toNum(poAny?.discounted_amount ?? poAny?.discountAmount);
-    
+    const grossAmountDirect = toNum(poAny?.gross_amount ?? poAny?.grossAmount);
+    const vatAmountDirect = toNum(poAny?.vat_amount ?? poAny?.vatAmount);
+    const ewtAmountDirect = toNum(poAny?.withholding_tax_amount ?? poAny?.withholding_amount);
+    const totalAmountDirect = toNum(poAny?.total_amount ?? poAny?.total);
+
     const summaryGross = React.useMemo(() => {
         return lines.reduce((acc, l) => acc + (toNum(l.price) * toNum(l.qty)), 0);
     }, [lines]);
 
     const summaryDiscountLines = React.useMemo(() => {
-        return lines.reduce((acc, l) => {
-            const unit = toNum(l.price);
-            const qty = toNum(l.qty);
-            const discPrice = toNum(l.total) / (qty || 1); // discounted price is total / qty in this context
-            if (discPrice > 0 && discPrice < unit) {
-                return acc + ((unit - discPrice) * qty);
-            }
-            return acc;
-        }, 0);
+        return lines.reduce((acc, l) => toNum(acc) + toNum(l.discountAmount), 0);
     }, [lines]);
 
     const discountAmount = React.useMemo(() => {
-        return summaryDiscountLines > 0 ? summaryDiscountLines : discountAmountHeader;
+        if (summaryDiscountLines > 0) return summaryDiscountLines;
+        return discountAmountHeader;
     }, [summaryDiscountLines, discountAmountHeader]);
 
-    const netAmount = React.useMemo(() => {
-        return Math.max(0, summaryGross - discountAmount);
-    }, [summaryGross, discountAmount]);
+    const grossAmount = React.useMemo(() => {
+        return grossAmountDirect || summaryGross;
+    }, [grossAmountDirect, summaryGross]);
 
-    const grossAmount = summaryGross;
+    const netAmount = React.useMemo(() => {
+        if (totalAmountDirect > 0) return totalAmountDirect;
+        return Math.max(0, grossAmount - discountAmount);
+    }, [totalAmountDirect, grossAmount, discountAmount]);
 
     const vatExclusive = React.useMemo(() => {
         return netAmount / 1.12;
     }, [netAmount]);
 
     const vatAmountComputed = React.useMemo(() => {
+        if (vatAmountDirect > 0) return vatAmountDirect;
         return Math.max(0, netAmount - vatExclusive);
-    }, [netAmount, vatExclusive]);
+    }, [vatAmountDirect, netAmount, vatExclusive]);
 
     const ewtGoods = React.useMemo(() => {
+        if (ewtAmountDirect > 0) return ewtAmountDirect;
         return vatExclusive * 0.01;
-    }, [vatExclusive]);
+    }, [ewtAmountDirect, vatExclusive]);
 
-    const totalAmount = netAmount;
+    const totalAmount = totalAmountDirect || netAmount;
 
     const paymentStatusLabel = React.useMemo(() => {
         if (!selectedPaymentTermId) return "No Payment Term Selected";
@@ -618,17 +630,17 @@ export default function PurchaseOrderReviewPanel(props: {
                                         </div>
 
                                         <div className="rounded-md bg-background/60 border border-border/60 px-3 py-2 text-[11px] text-amber-600 dark:text-amber-400 font-bold italic">
-                                            Note: VAT and EWT are shown for display purposes. EWT (1%) is calculated from the VAT-exclusive amount (Net / 1.12).
+                                            Note: VAT and EWT figures are for reference and have not been deducted from the total.
                                         </div>
                                     </>
                                 ) : null}
 
                                 <div className="flex justify-between items-center pt-2 border-t border-border/50 mt-2">
                                     <span className="font-black text-foreground uppercase tracking-tighter text-sm">
-                                        Total
+                                        Grand Total
                                     </span>
                                     <span className="font-black text-2xl text-primary tracking-tighter">
-                                        {fmt.format(totalAmount)}
+                                        {fmt.format(netAmount)}
                                     </span>
                                 </div>
 

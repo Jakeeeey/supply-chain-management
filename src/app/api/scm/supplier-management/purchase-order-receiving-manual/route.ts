@@ -336,11 +336,15 @@ async function ensureOpenReceivingRow(args: {
 
     const discountedSum = Number((unitPrice * (discountPercent / 100)).toFixed(2));
     const net = unitPrice - discountedSum;
+    const vatExcl = Number((net / 1.12).toFixed(2));
+    const vatAmt = Number((net - vatExcl).toFixed(2));
+    const ewtAmt = Number((vatExcl * 0.01).toFixed(2));
+
     const insertPayload: Record<string, unknown> = {
         purchase_order_id: poId, product_id: productId, branch_id: branchId,
         received_quantity: 0, unit_price: unitPrice, discounted_amount: discountedSum,
-        discount_type: discountTypeId, vat_amount: Number((net * 0.12).toFixed(2)),
-        withholding_amount: Number((net * 0.01).toFixed(2)), total_amount: Number((net * 1.12).toFixed(2)),
+        discount_type: discountTypeId, vat_amount: vatAmt,
+        withholding_amount: ewtAmt, total_amount: Number(net.toFixed(2)),
         isPosted: 0, receipt_no: null, receipt_date: null, received_date: null
     };
 
@@ -543,12 +547,19 @@ export async function POST(req: NextRequest) {
                 }
 
                 const dAmt = Number((uPrice * (linePct / 100)).toFixed(2));
-                const net = uPrice - dAmt, newQty = toNum(pr?.received_quantity || 0) + qty;
+                const net = uPrice - dAmt;
+                const newQty = toNum(pr?.received_quantity || 0) + qty;
+                
+                const netTotal = net * newQty;
+                const vatExclTotal = Number((netTotal / 1.12).toFixed(2));
+                const vatAmtTotal = Number((netTotal - vatExclTotal).toFixed(2));
+                const ewtAmtTotal = Number((vatExclTotal * 0.01).toFixed(2));
+
                 const patch: Record<string, unknown> = {
                     receipt_no: receiptNo, receipt_date: receiptDate, received_quantity: newQty, received_date: nowISO(), isPosted: 0,
                     discount_type: dtId || null, discounted_amount: Number((dAmt * newQty).toFixed(2)),
-                    vat_amount: Number((net * 0.12 * newQty).toFixed(2)), withholding_amount: Number((net * 0.01 * newQty).toFixed(2)),
-                    total_amount: Number((net * 1.12 * newQty).toFixed(2))
+                    vat_amount: vatAmtTotal, withholding_amount: ewtAmtTotal,
+                    total_amount: Number(netTotal.toFixed(2))
                 };
                 if (m.lotNo) patch.lot_id = toNum(m.lotNo);
                 if (m.batchNo) patch.batch_no = m.batchNo;

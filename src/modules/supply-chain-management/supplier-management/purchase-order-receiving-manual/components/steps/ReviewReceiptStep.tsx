@@ -228,13 +228,13 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
         if (isExclusive) {
             vatAmount = net * 0.12;
             whtAmount = net * 0.01;
-            grandTotal = net + vatAmount - whtAmount;
+            grandTotal = net;
         } else {
             // VAT Inclusive
             const vatableAmount = net / 1.12;
             vatAmount = net - vatableAmount;
             whtAmount = vatableAmount * 0.01;
-            grandTotal = net - whtAmount;
+            grandTotal = net;
         }
 
         return { gross, discount, net, vatAmount, whtAmount, grandTotal, isExclusive };
@@ -375,6 +375,9 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
                                 <span className="font-black text-sm uppercase tracking-widest text-slate-900 underline decoration-indigo-500 underline-offset-4">Grand Total:</span>
                                 <span className="font-black text-xl text-indigo-600 drop-shadow-sm">{formatPHP(financials.grandTotal)}</span>
                             </div>
+                            <p className="text-[10px] text-muted-foreground mt-2 italic leading-tight text-right">
+                                Note: VAT and EWT figures are for reference and have not been deducted from the total.
+                            </p>
                         </div>
                     </div>
 

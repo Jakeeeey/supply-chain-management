@@ -219,13 +219,13 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
             if (isExclusive) {
                 vatAmount = sumNet * 0.12;
                 whtAmount = sumNet * 0.01;
-                grandTotal = sumNet + vatAmount - whtAmount;
+                grandTotal = sumNet;
             } else {
                 // VAT Inclusive
                 const vatableAmount = sumNet / 1.12;
                 vatAmount = sumNet - vatableAmount;
                 whtAmount = vatableAmount * 0.01;
-                grandTotal = sumNet - whtAmount;
+                grandTotal = sumNet;
             }
 
             doc.setFontSize(8);
@@ -266,6 +266,12 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
             doc.setFont("helvetica", "bold");
             doc.text("Grand Total:", labelX, finalY + lineHeight * 5 + 6);
             doc.text(`PHP ${formatMoney(grandTotal)}`, rightColX, finalY + lineHeight * 5 + 6, { align: "right" });
+
+            // Standardized Footnote
+            doc.setFont("helvetica", "italic");
+            doc.setFontSize(7);
+            doc.setTextColor(100, 100, 100);
+            doc.text("Note: VAT and EWT figures are for reference and have not been deducted from the total.", labelX - 20, finalY + lineHeight * 5 + 12);
 
             // 5. Signatures
             const signatureWidth = 50;

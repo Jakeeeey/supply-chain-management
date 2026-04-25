@@ -236,6 +236,13 @@ export function generatePostingPOPrint(data: PrintData): jsPDF {
   doc.setFontSize(10);
   addLine('GRAND TOTAL:', po.totalAmount || 0, true);
 
+  // Standardized Footnote
+  y += 2;
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'italic');
+  doc.setTextColor(100, 100, 100);
+  doc.text('Note: VAT and EWT figures are for reference and have not been deducted from the total.', summaryX - 25, y);
+
   /* ── Document Footer ─────────────────────────────────────── */
   const footerY = doc.internal.pageSize.getHeight() - 8;
   doc.setFontSize(7);

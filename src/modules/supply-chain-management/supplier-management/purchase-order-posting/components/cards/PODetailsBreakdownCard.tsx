@@ -161,8 +161,11 @@ export function PODetailsBreakdownCard() {
                 )}
                 <div className="flex justify-between items-center font-bold text-base mt-2 pt-2 border-t border-border/30">
                     <span>Grand Total:</span>
-                    <span>{money(selectedPO.totalAmount || 0, selectedPO.currency || "PHP")}</span>
+                    <span>{money(Number(selectedPO.grossAmount || 0) - Number(selectedPO.discountAmount || 0), selectedPO.currency || "PHP")}</span>
                 </div>
+                <p className="text-[10px] text-muted-foreground mt-2 italic leading-tight">
+                    Note: VAT and EWT figures are for reference and have not been deducted from the total.
+                </p>
             </div>
         </Card>
     );

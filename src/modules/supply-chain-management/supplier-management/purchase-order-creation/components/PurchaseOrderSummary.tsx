@@ -574,7 +574,7 @@ export function PurchaseOrderSummary(props: {
                                             <span className="font-black text-foreground text-sm">{money.format(ewtGoods)}</span>
                                         </div>
                                         <p className="text-[9px] text-amber-600 dark:text-amber-400 font-bold italic text-right mt-0.5">
-                                            Note: EWT is not yet deducted
+                                            Note: VAT and EWT figures are for reference and have not been deducted from the total.
                                         </p>
                                     </>
                                 )}

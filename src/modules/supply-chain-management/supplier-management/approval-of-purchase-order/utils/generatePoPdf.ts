@@ -226,10 +226,33 @@ export async function generatePurchaseOrderPdf(
         doc.line(labelX, finalY + lineHeight + 3, rightColX, finalY + lineHeight + 3);
 
         doc.setTextColor(50, 50, 50);
+        const vatAmount = totalAmount - (totalAmount / 1.12);
+        const ewtAmount = (totalAmount / 1.12) * 0.01;
+
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "normal");
+        doc.text("VAT Details (12%):", labelX, finalY + lineHeight * 2 + 3);
+        doc.text(formatMoney(vatAmount), rightColX, finalY + lineHeight * 2 + 3, { align: "right" });
+
+        doc.text("EWT (1%):", labelX, finalY + lineHeight * 3 + 3);
+        doc.setTextColor(150, 50, 50);
+        doc.text(`-${formatMoney(ewtAmount)}`, rightColX, finalY + lineHeight * 3 + 3, { align: "right" });
+
+        doc.setDrawColor(180, 180, 180);
+        doc.setLineWidth(0.5);
+        doc.line(labelX, finalY + lineHeight * 3 + 5, rightColX, finalY + lineHeight * 3 + 5);
+
+        doc.setTextColor(50, 50, 50);
         doc.setFontSize(9);
         doc.setFont("helvetica", "bold");
-        doc.text("Total:", labelX, finalY + lineHeight * 2 + 3);
-        doc.text(`PHP ${formatMoney(totalAmount)}`, rightColX, finalY + lineHeight * 2 + 3, { align: "right" });
+        doc.text("Grand Total:", labelX, finalY + lineHeight * 4 + 6);
+        doc.text(`PHP ${formatMoney(totalAmount)}`, rightColX, finalY + lineHeight * 4 + 6, { align: "right" });
+
+        // Standardized Footnote
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(7);
+        doc.setTextColor(100, 100, 100);
+        doc.text("Note: VAT and EWT figures are for reference and have not been deducted from the total.", labelX - 25, finalY + lineHeight * 4 + 11);
 
         // 4. Compact Signatures
         renderSignatures(doc, finalY + 40, preparerName);

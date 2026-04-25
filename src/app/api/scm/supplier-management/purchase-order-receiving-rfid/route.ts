@@ -456,9 +456,10 @@ async function ensureOpenReceivingRow(args: {
     }
     const discountedAmount = Number((unitPrice * (discountPercent / 100)).toFixed(2));
     const netPrice = unitPrice - discountedAmount;
-    const vatAmount = Number((netPrice * 0.12).toFixed(2));
-    const withholdingAmount = Number((netPrice * 0.01).toFixed(2));
-    const totalAmount = Number((netPrice + vatAmount).toFixed(2));
+    const vatExcl = Number((netPrice / 1.12).toFixed(2));
+    const vatAmount = Number((netPrice - vatExcl).toFixed(2));
+    const withholdingAmount = Number((vatExcl * 0.01).toFixed(2));
+    const totalAmount = Number(netPrice.toFixed(2));
     const insertUrl = `${base}/items/${POR_COLLECTION}`;
     const payload: Record<string, unknown> = {
         purchase_order_id: poId,
@@ -858,9 +859,10 @@ export async function POST(req: NextRequest) {
 
                      const dAmount = Number((uPrice * (discountPercent / 100)).toFixed(2));
                      const nPrice = uPrice - dAmount;
-                     const vAmount = Number((nPrice * 0.12).toFixed(2));
-                     const wAmount = Number((nPrice * 0.01).toFixed(2));
-                     const tAmount = Number((nPrice + vAmount).toFixed(2));
+                     const vatExcl = Number((nPrice / 1.12).toFixed(2));
+                     const vAmount = Number((nPrice - vatExcl).toFixed(2));
+                     const wAmount = Number((vatExcl * 0.01).toFixed(2));
+                     const tAmount = Number(nPrice.toFixed(2));
 
                      const patch: Record<string, unknown> = {
                          receipt_no: receiptNo,
@@ -906,9 +908,10 @@ export async function POST(req: NextRequest) {
 
                      const dAmount = Number((uPrice * (discountPercent / 100)).toFixed(2));
                      const nPrice = uPrice - dAmount;
-                     const vAmount = Number((nPrice * 0.12).toFixed(2));
-                     const wAmount = Number((nPrice * 0.01).toFixed(2));
-                     const tAmount = Number((nPrice + vAmount).toFixed(2));
+                     const vatExcl = Number((nPrice / 1.12).toFixed(2));
+                     const vAmount = Number((nPrice - vatExcl).toFixed(2));
+                     const wAmount = Number((vatExcl * 0.01).toFixed(2));
+                     const tAmount = Number(nPrice.toFixed(2));
 
                      const patch: Record<string, unknown> = { 
                           receipt_no: receiptNo, 

@@ -114,6 +114,7 @@ interface PORRow {
     discounted_amount: number | string;
     vat_amount: number | string;
     withholding_amount: number | string;
+    unit_price: number | string;
     total_amount: number | string;
 }
 interface ReceivingItem {
@@ -125,7 +126,7 @@ interface ReceivingItem {
 }
 
 const POR_SAFE_FIELDS =
-    "purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted,discounted_amount,vat_amount,withholding_amount,total_amount";
+    "purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted,discounted_amount,vat_amount,withholding_amount,total_amount,unit_price";
 
 // =====================
 // FETCHERS
@@ -472,13 +473,14 @@ function buildReceiptSummary(porRows: PORRow[]) {
             total += effectiveReceivedQty(r);
             if (toNum(r?.isPosted) !== 1) allPosted = false;
 
-            gross += toNum(r?.total_amount || 0); // Note: total_amount in POR is Gross + VAT
+            const netPriceTotal = toNum(r?.total_amount || 0); // total_amount in POR is Net
+            const whtTotal = toNum(r?.withholding_amount || 0);
+            
+            gross += toNum(r?.unit_price || 0) * toNum(r?.received_quantity || 0);
             disc += toNum(r?.discounted_amount || 0);
             vat += toNum(r?.vat_amount || 0);
-            wht += toNum(r?.withholding_amount || 0);
-            
-            // Reconstruct net based on formula: Total - Disc - WHT
-            net += toNum(r?.total_amount || 0) - toNum(r?.discounted_amount || 0) - toNum(r?.withholding_amount || 0);
+            wht += whtTotal;
+            net += netPriceTotal - whtTotal; // Posting Net is Net - EWT
         }
 
         receipts.push({
@@ -491,7 +493,7 @@ function buildReceiptSummary(porRows: PORRow[]) {
             discountAmount: disc,
             vatAmount: vat,
             withholdingTaxAmount: wht,
-            totalAmount: net,
+            totalAmount: gross - disc, // Grand Total is Net (Gross - Discount)
         });
     }
 
@@ -940,51 +942,44 @@ export async function POST(req: NextRequest) {
             let detailTotal = 0;
 
             if (hasUnposted) {
-                const porGross = unpostedRows.reduce((sum, r) => sum + toNum(r.total_amount), 0);
-                const porDisc = unpostedRows.reduce((sum, r) => sum + toNum(r.discounted_amount), 0);
-                const porVat = unpostedRows.reduce((sum, r) => sum + toNum(r.vat_amount), 0);
+                const porLinesNet = unpostedRows.reduce((sum, r) => sum + toNum(r.total_amount), 0);
                 const porWht = unpostedRows.reduce((sum, r) => sum + toNum(r.withholding_amount), 0);
 
-                // ✅ Fallback: if POR rows have zero financial data (old records),
-                // recalculate from line items × received qty × discount
-                if (porGross === 0 && unpostedRows.length > 0) {
+                if (porLinesNet === 0 && unpostedRows.length > 0) {
                     for (const r of unpostedRows) {
                         const pid = toNum(r.product_id);
                         const bid = toNum(r.branch_id);
                         const qty = effectiveReceivedQty(r);
-                        // Find matching PO line for unit price
+                        
                         const matchLine = lines.find(l => toNum(l.product_id) === pid && toNum(l.branch_id) === bid);
                         const uPrice = matchLine ? toNum(matchLine.unit_price) : 0;
                         const lineGross = uPrice * qty;
                         const lineDisc = lineGross * (poDiscountPercent / 100);
                         const lineNet = lineGross - lineDisc;
-                        const lineVat = Number((lineNet * 0.12).toFixed(2));
-                        const lineWht = Number((lineNet * 0.01).toFixed(2));
+                        
+                        const lineVatExcl = Number((lineNet / 1.12).toFixed(2));
+                        const lineVat = Number((lineNet - lineVatExcl).toFixed(2));
+                        const lineWht = Number((lineVatExcl * 0.01).toFixed(2));
 
                         detailGross += Number(lineGross.toFixed(2));
                         detailDisc += Number(lineDisc.toFixed(2));
                         detailVat += lineVat;
                         detailWht += lineWht;
                     }
-                    detailTotal = Number(((detailGross - detailDisc) + detailVat - detailWht).toFixed(2));
+                    detailTotal = Number((detailGross - detailDisc).toFixed(2));
                 } else {
-                    detailGross = porGross;
-                    detailDisc = porDisc;
-                    detailVat = porVat;
+                    detailGross = unpostedRows.reduce((sum, r) => sum + (toNum(r.unit_price) * effectiveReceivedQty(r)), 0);
+                    detailDisc = unpostedRows.reduce((sum, r) => sum + toNum(r.discounted_amount), 0);
+                    detailVat = unpostedRows.reduce((sum, r) => sum + toNum(r.vat_amount), 0);
                     detailWht = porWht;
-                    detailTotal = porGross - porDisc - porWht;
+                    detailTotal = porLinesNet;
                 }
             } else {
                 detailGross = toNum(po?.gross_amount);
                 detailDisc = toNum(po?.discounted_amount);
                 detailVat = toNum(po?.vat_amount);
                 detailWht = toNum(po?.withholding_tax_amount);
-                detailTotal = toNum(po?.total_amount);
-
-                // ✅ Ensure total matches components if it was stored incorrectly
-                if (detailTotal === detailGross - detailWht && detailDisc > 0) {
-                    detailTotal = detailGross - detailDisc - detailWht;
-                }
+                detailTotal = toNum(po?.total_amount); // DB total is already Net
             }
 
             const detail: PostingPODetail = {
