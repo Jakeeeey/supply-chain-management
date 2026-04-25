@@ -214,7 +214,10 @@ function SupplierSelect(props: {
     return (
         <div className="space-y-1.5 w-full min-w-0">
             <div className="flex items-center justify-between gap-2 text-xs font-bold uppercase text-muted-foreground tracking-tight">
-                <span>Supplier</span>
+                <div className="flex items-center gap-2">
+                    <span>Supplier</span>
+                    <Badge variant="outline" className="text-[9px] font-black uppercase bg-primary/5 text-primary border-primary/20 px-1.5 h-4 flex items-center leading-none">Trade Only</Badge>
+                </div>
                 {props.value ? (
                     <button
                         type="button"
@@ -487,7 +490,6 @@ export default function CreatePurchaseOrderModule({ encoderId }: { encoderId?: n
 
     const [allProducts, setAllProducts] = React.useState<Product[]>([]);
 
-    const [selectedSupplierType, setSelectedSupplierType] = React.useState<"ALL" | "TRADE" | "NON-TRADE">("TRADE");
 
     const [pickerOpen, setPickerOpen] = React.useState(false);
     const [pickerBranchId, setPickerBranchId] = React.useState<string>("");
@@ -573,9 +575,8 @@ export default function CreatePurchaseOrderModule({ encoderId }: { encoderId?: n
     }, []);
 
     const filteredSuppliers = React.useMemo(() => {
-        if (selectedSupplierType === "ALL") return suppliers;
-        return suppliers.filter((s) => s.supplierType === selectedSupplierType.toUpperCase());
-    }, [suppliers, selectedSupplierType]);
+        return suppliers.filter((s) => s.supplierType === "TRADE");
+    }, [suppliers]);
 
     // supplier change: fetch products + product_per_supplier links then merge discountTypeId
     React.useEffect(() => {
@@ -999,45 +1000,10 @@ export default function CreatePurchaseOrderModule({ encoderId }: { encoderId?: n
 
             <Separator />
 
-            {/* ✅ Optimized 3-Column Layout */}
+            {/* ✅ Optimized 2-Column Layout */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-end w-full min-w-0">
-                {/* 1) SUPPLIER TYPE FILTER (3/12) */}
-                <div className="lg:col-span-3 min-w-0 space-y-1.5 flex flex-col justify-end">
-                    <div className="text-[10px] font-black uppercase text-muted-foreground tracking-widest ml-1">
-                        Supplier Type
-                    </div>
-                    <div className="flex gap-1 bg-muted/40 p-1 rounded-xl border border-border/40 h-11 items-center backdrop-blur-sm">
-                        {["TRADE", "NON-TRADE", "ALL"].map((type) => {
-                            const active = selectedSupplierType === type;
-                            return (
-                                <button
-                                    key={type}
-                                    type="button"
-                                    onClick={() => {
-                                         
-                                        setSelectedSupplierType(type as any);
-                                        if (selectedSupplier && type !== "ALL" && selectedSupplier.supplierType !== type) {
-                                            setSelectedSupplier(null);
-                                            setAllocations([]);
-                                            setSelectedBranchIds([]);
-                                        }
-                                    }}
-                                    className={cn(
-                                        "flex-1 h-full px-2 text-[9px] font-black uppercase tracking-tighter rounded-lg transition-all duration-200",
-                                        active
-                                            ? "bg-primary text-primary-foreground shadow-md scale-[1.02]"
-                                            : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                                    )}
-                                >
-                                    {type.replace("-", " ")}
-                                </button>
-                            );
-                        })}
-                    </div>
-                </div>
-
-                {/* 2) SUPPLIER SELECT (4/12) */}
-                <div className="lg:col-span-4 min-w-0">
+                {/* 1) SUPPLIER SELECT (5/12) */}
+                <div className="lg:col-span-5 min-w-0">
                     <SupplierSelect
                         suppliers={filteredSuppliers}
                         value={selectedSupplier}
@@ -1068,8 +1034,8 @@ export default function CreatePurchaseOrderModule({ encoderId }: { encoderId?: n
                     />
                 </div>
 
-                {/* 3) DELIVERY BRANCHES (5/12) */}
-                <div className="lg:col-span-5 min-w-0">
+                {/* 2) DELIVERY BRANCHES (7/12) */}
+                <div className="lg:col-span-7 min-w-0">
                     <BranchMultiSelect
                         branches={branches}
                         value={selectedBranchIds}

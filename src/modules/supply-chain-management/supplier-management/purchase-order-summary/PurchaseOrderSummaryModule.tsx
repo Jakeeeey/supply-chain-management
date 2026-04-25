@@ -50,7 +50,7 @@ export default function PurchaseOrderSummaryModule({
   const [filterSupplier, setFilterSupplier] = useState("all");
   const [filterInvStatus, setFilterInvStatus] = useState("all");
   const [filterPayStatus, setFilterPayStatus] = useState("all");
-  const [filterTransType, setFilterTransType] = useState("all");
+  const [filterTransType, setFilterTransType] = useState("1");
   
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -259,7 +259,12 @@ export default function PurchaseOrderSummaryModule({
     );
   }
 
-  const supplierOptions = useMemo(() => suppliers.map(s => ({ id: s.id.toString(), label: s.supplier_name })), [suppliers]);
+  const supplierOptions = useMemo(() => 
+    suppliers
+      .filter(s => s.supplier_type?.toUpperCase() === "TRADE")
+      .map(s => ({ id: s.id.toString(), label: s.supplier_name })), 
+    [suppliers]
+  );
   const invStatusOptions = useMemo(() => transactionStatuses.map(s => ({ id: s.id.toString(), label: s.status })), [transactionStatuses]);
   const payStatusOptions = useMemo(() => paymentStatuses.map(s => ({ id: s.id.toString(), label: s.status })), [paymentStatuses]);
 
@@ -435,9 +440,7 @@ export default function PurchaseOrderSummaryModule({
                       <SelectValue placeholder="All Types" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Types</SelectItem>
                       <SelectItem value="1">Trade</SelectItem>
-                      <SelectItem value="0">Non-Trade</SelectItem>
                     </SelectContent>
                   </Select>
                 )}

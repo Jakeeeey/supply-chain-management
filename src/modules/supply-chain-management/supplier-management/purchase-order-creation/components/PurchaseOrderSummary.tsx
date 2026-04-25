@@ -27,13 +27,7 @@ import {
 import { Info, CheckCircle2, AlertTriangle, Package, Building2, TrendingUp, Tags, CreditCard } from "lucide-react";
 import { POPreviewModal } from "./POPreviewModal";
 
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 
 type Notice = {
     variant: "success" | "error" | "info";
@@ -412,31 +406,20 @@ export function PurchaseOrderSummary(props: {
                             <div className="rounded-lg border border-border bg-card text-card-foreground p-5 shadow-sm space-y-3">
                                 <div className="flex flex-col space-y-2">
                                     <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Select Term</span>
-                                    <Select
+                                    <SearchableSelect
+                                        options={props.paymentTerms.map((t) => ({
+                                            value: String(t.id),
+                                            label: `${t.payment_name}${t.payment_days > 0 ? ` (${t.payment_days} Days)` : ""}`,
+                                        }))}
                                         value={props.selectedPaymentTermId ? String(props.selectedPaymentTermId) : ""}
                                         onValueChange={(v) => props.setSelectedPaymentTermId(Number(v))}
+                                        placeholder="No term selected"
                                         disabled={props.isLocked}
-                                    >
-                                        <SelectTrigger 
-                                            className={cn(
-                                                "h-10 rounded-xl border-border bg-muted/20 font-bold text-xs uppercase",
-                                                !props.selectedPaymentTermId && "border-red-500 ring-1 ring-red-500"
-                                            )}
-                                        >
-                                            <SelectValue placeholder="No term selected" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {props.paymentTerms.map((term) => (
-                                                <SelectItem 
-                                                    key={term.id} 
-                                                    value={String(term.id)}
-                                                    className="text-xs font-bold uppercase"
-                                                >
-                                                    {term.payment_name} {term.payment_days > 0 ? `(${term.payment_days} Days)` : ""}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                        className={cn(
+                                            "h-10 rounded-xl border-border bg-muted/20 font-bold text-xs uppercase",
+                                            !props.selectedPaymentTermId && "border-red-500 ring-1 ring-red-500"
+                                        )}
+                                    />
                                 </div>
                             </div>
                         </div>

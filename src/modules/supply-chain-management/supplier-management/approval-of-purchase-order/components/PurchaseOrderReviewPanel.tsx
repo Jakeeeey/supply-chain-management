@@ -16,6 +16,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -712,30 +713,19 @@ export default function PurchaseOrderReviewPanel(props: {
 
                                     <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground">
                                         <div className="flex flex-wrap items-center gap-1.5 bg-muted/40 p-1 rounded-xl border border-border/40">
-                                            <Select
+                                            <SearchableSelect
+                                                options={props.paymentTerms.map((t) => ({
+                                                    value: String(t.id),
+                                                    label: String(t.payment_name),
+                                                }))}
                                                 value={selectedPaymentTermId ? String(selectedPaymentTermId) : ""}
                                                 onValueChange={(v) => setSelectedPaymentTermId(Number(v))}
-                                            >
-                                                <SelectTrigger 
-                                                    className={cn(
-                                                        "h-9 w-[240px] text-[10px] font-black uppercase tracking-tight rounded-lg bg-background border-border/50",
-                                                        !selectedPaymentTermId && "border-red-500 ring-1 ring-red-500"
-                                                    )}
-                                                >
-                                                    <SelectValue placeholder="Select Payment Term" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {props.paymentTerms.map((term) => (
-                                                        <SelectItem 
-                                                            key={term.id} 
-                                                            value={String(term.id)}
-                                                            className="text-[10px] font-black uppercase"
-                                                        >
-                                                            {term.payment_name}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
+                                                placeholder="Select Payment Term"
+                                                className={cn(
+                                                    "h-9 w-[240px] text-[10px] font-black uppercase tracking-tight rounded-lg bg-background border-border/50",
+                                                    !selectedPaymentTermId && "border-red-500 ring-1 ring-red-500"
+                                                )}
+                                            />
                                         </div>
 
                                         {/* Added the Print button here */}
