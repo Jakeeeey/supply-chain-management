@@ -219,7 +219,27 @@ export default function PurchaseOrderReviewPanel(props: {
             .catch(err => console.error("Failed to fetch company data:", err));
 
         setMarkAsInvoice(!!(poAny?.is_invoice ?? poAny?.isInvoice ?? false));
-        setSelectedPaymentTermId(Number(poAny?.payment_type) || null);
+        const existingType = Number(poAny?.payment_type) || null;
+        if (existingType) {
+            setSelectedPaymentTermId(existingType);
+        } else {
+            // Fallback: try to match supplier's terms string from the expanded supplier data
+            const supplierTerms = String(
+                poAny?.supplier_name?.payment_terms ?? 
+                poAny?.supplier?.payment_terms ?? 
+                poAny?.supplier_terms ?? 
+                ""
+            ).toLowerCase().trim();
+
+            if (supplierTerms) {
+                const matched = props.paymentTerms.find(pt => 
+                    pt.payment_name.toLowerCase().trim() === supplierTerms
+                );
+                setSelectedPaymentTermId(matched?.id || null);
+            } else {
+                setSelectedPaymentTermId(null);
+            }
+        }
         setTermsDays(30);
 
         setConfirmOpen(false);
@@ -324,6 +344,13 @@ export default function PurchaseOrderReviewPanel(props: {
         props.disabled || props.loading || submitting || !poAny?.purchase_order_id;
 
     async function runApprove() {
+        if (!selectedPaymentTermId) {
+            toast.error("Required Field Missing", {
+                description: "Please select a payment term before approving.",
+            });
+            return;
+        }
+
         if (approveDisabled) return;
 
         try {
@@ -680,7 +707,12 @@ export default function PurchaseOrderReviewPanel(props: {
                                                 value={selectedPaymentTermId ? String(selectedPaymentTermId) : ""}
                                                 onValueChange={(v) => setSelectedPaymentTermId(Number(v))}
                                             >
-                                                <SelectTrigger className="h-9 w-[240px] text-[10px] font-black uppercase tracking-tight rounded-lg bg-background border-border/50">
+                                                <SelectTrigger 
+                                                    className={cn(
+                                                        "h-9 w-[240px] text-[10px] font-black uppercase tracking-tight rounded-lg bg-background border-border/50",
+                                                        !selectedPaymentTermId && "border-red-500 ring-1 ring-red-500"
+                                                    )}
+                                                >
                                                     <SelectValue placeholder="Select Payment Term" />
                                                 </SelectTrigger>
                                                 <SelectContent>

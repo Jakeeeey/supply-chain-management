@@ -1043,6 +1043,21 @@ export default function CreatePurchaseOrderModule({ encoderId }: { encoderId?: n
                         value={selectedSupplier}
                         onChange={(s) => {
                             setSelectedSupplier(s);
+                            
+                            // Auto-resolve payment term from supplier string
+                            if (s?.terms) {
+                                const matched = paymentTerms.find(pt => 
+                                    pt.payment_name.toLowerCase().trim() === s.terms.toLowerCase().trim()
+                                );
+                                if (matched) {
+                                    setSelectedPaymentTermId(matched.id);
+                                } else {
+                                    setSelectedPaymentTermId(null);
+                                }
+                            } else {
+                                setSelectedPaymentTermId(null);
+                            }
+
                             setAllocations([]);
                             setSelectedBranchIds([]);
                             setPickerOpen(false);

@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFoo
 import { Badge } from "@/components/ui/badge";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useReceivingProductsManual, ReceivingPOItem } from "../../providers/ReceivingProductsManualProvider";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { ReceiptPreviewModal } from "../ReceiptPreviewModal";
 import {
@@ -47,6 +48,7 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
     const [previewOpen, setPreviewOpen] = React.useState(false);
     const [isPartialModalOpen, setIsPartialModalOpen] = React.useState(false);
     const [reviewPage, setReviewPage] = React.useState(1);
+    const [showErrors, setShowErrors] = React.useState(false);
 
     const { metaDataByPorId: draftMetaData } = useReceivingProductsManual();
 
@@ -152,14 +154,18 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
             const porId = String(it.id);
             const count = safeCounts[porId] ?? 0;
             if (count > 0) {
+                const batch = batchNumbers[porId] || "";
                 const lot = lotNumbers[porId] || "";
                 const exp = expiryDates[porId] || "";
-                if (!lot.trim() || !exp.trim()) missingLotOrExpiry.push(it.name);
+                if (!batch.trim() || !lot.trim() || !exp.trim()) missingLotOrExpiry.push(it.name);
             }
         });
 
         if (missingLotOrExpiry.length > 0) {
-            setClientSaveError("Lot and Expiry Date are required for all items with entered quantities.");
+            setShowErrors(true);
+            toast.error("Required Fields Missing", {
+                description: "Batch, Lot and Expiry Date are required for all items with entered quantities."
+            });
             return;
         }
 
@@ -294,19 +300,42 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
                                                     <div className="text-[9px] text-muted-foreground font-mono">SKU: {it.barcode} | UOM: {it.uom}</div>
                                                 </TableCell>
                                                 <TableCell className="min-w-[100px]">
-                                                    <Input className="h-8 text-[11px] font-bold" placeholder="Batch #" value={batchNumbers[porId] || ""} onChange={(e) => setBatchNumbers(prev => ({ ...prev, [porId]: e.target.value }))} />
+                                                    <Input 
+                                                        className={cn(
+                                                            "h-8 text-[11px] font-bold",
+                                                            showErrors && count > 0 && !(batchNumbers[porId] || "").trim() && "border-red-500 ring-1 ring-red-500"
+                                                        )}
+                                                        placeholder="Batch #" 
+                                                        value={batchNumbers[porId] || ""} 
+                                                        onChange={(e) => setBatchNumbers(prev => ({ ...prev, [porId]: e.target.value }))} 
+                                                    />
                                                 </TableCell>
                                                 <TableCell className="min-w-[120px]">
-                                                    <select className="h-8 w-full rounded-md border border-input bg-background px-2 text-[11px]" value={lotNumbers[porId] || ""} onChange={(e) => setLotNumbers(prev => ({ ...prev, [porId]: e.target.value }))}>
+                                                    <select 
+                                                        className={cn(
+                                                            "h-8 w-full rounded-md border border-input bg-background px-2 text-[11px]",
+                                                            showErrors && count > 0 && !(lotNumbers[porId] || "").trim() && "border-red-500 ring-1 ring-red-500"
+                                                        )}
+                                                        value={lotNumbers[porId] || ""} 
+                                                        onChange={(e) => setLotNumbers(prev => ({ ...prev, [porId]: e.target.value }))}
+                                                    >
                                                         <option value="">Select Lot</option>
                                                         {lots.map((l: { lot_id: string | number; lot_name: string }) => <option key={l.lot_id} value={String(l.lot_id)}>{l.lot_name}</option>)}
                                                     </select>
                                                 </TableCell>
                                                 <TableCell className="min-w-[130px]">
-                                                    <Input type="date" className="h-8 text-[11px]" value={expiryDates[porId] || ""} onChange={(e) => setExpiryDates(prev => ({ ...prev, [porId]: e.target.value }))} />
+                                                    <Input 
+                                                        type="date" 
+                                                        className={cn(
+                                                            "h-8 text-[11px]",
+                                                            showErrors && count > 0 && !(expiryDates[porId] || "").trim() && "border-red-500 ring-1 ring-red-500"
+                                                        )}
+                                                        value={expiryDates[porId] || ""} 
+                                                        onChange={(e) => setExpiryDates(prev => ({ ...prev, [porId]: e.target.value }))} 
+                                                    />
                                                 </TableCell>
                                                 <TableCell className="text-right text-xs">{formatPHP(unitP)}</TableCell>
-                                                <TableCell className="text-center text-[10px] text-muted-foreground">{it.discountType === "Standard" && discA > 0 ? `${((discA/unitP)*100).toFixed(1)}%` : it.discountType}</TableCell>
+                                                <TableCell className="text-center text-[10px] text-muted-foreground">{it.discountType}</TableCell>
                                                 <TableCell className="text-right text-xs text-red-600 font-medium">{(discA || 0) > 0 ? `${formatPHP(discA)}` : "—"}</TableCell>
                                                 <TableCell className="text-right font-bold text-xs">{formatPHP(lineTotal)}</TableCell>
                                                 <TableCell className="text-center font-bold text-xs">{expected}</TableCell>

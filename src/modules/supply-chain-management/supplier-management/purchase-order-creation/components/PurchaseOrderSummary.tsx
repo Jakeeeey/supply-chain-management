@@ -95,7 +95,7 @@ export function PurchaseOrderSummary(props: {
             const dt = dtId ? discountTypeById.get(dtId) : undefined;
             const code = dt?.name ?? "";
             const pct = Number(dt?.percent ?? 0) > 0 ? Number(dt?.percent) : deriveDiscountPercentFromCode(code);
-            const discountLabel = code && pct > 0 ? `${code} (${pct.toFixed(2)}%)` : code || "—";
+            const discountLabel = code || "—";
             const gross = x.item.price * x.item.orderQty;
             const net = gross * (1 - pct / 100);
             return {
@@ -241,6 +241,13 @@ export function PurchaseOrderSummary(props: {
     const { onSave } = props;
 
     const runSave = React.useCallback(async () => {
+        if (!props.selectedPaymentTermId) {
+            toast.error("Required Field Missing", {
+                description: "Please select a payment term before saving.",
+            });
+            return;
+        }
+
         if (disabled) return;
 
         setNotice(null);
@@ -410,7 +417,12 @@ export function PurchaseOrderSummary(props: {
                                         onValueChange={(v) => props.setSelectedPaymentTermId(Number(v))}
                                         disabled={props.isLocked}
                                     >
-                                        <SelectTrigger className="h-10 rounded-xl border-border bg-muted/20 font-bold text-xs uppercase">
+                                        <SelectTrigger 
+                                            className={cn(
+                                                "h-10 rounded-xl border-border bg-muted/20 font-bold text-xs uppercase",
+                                                !props.selectedPaymentTermId && "border-red-500 ring-1 ring-red-500"
+                                            )}
+                                        >
                                             <SelectValue placeholder="No term selected" />
                                         </SelectTrigger>
                                         <SelectContent>

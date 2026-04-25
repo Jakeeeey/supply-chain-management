@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,7 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
     const [previewOpen, setPreviewOpen] = React.useState(false);
     const [isPartialModalOpen, setIsPartialModalOpen] = React.useState(false);
     const [reviewPage, setReviewPage] = React.useState(1);
+    const [showErrors, setShowErrors] = React.useState(false);
 
     const { metaDataByPorId: draftMetaData } = useReceivingProducts();
 
@@ -145,14 +147,18 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
             const porId = String(it.porId || it.id);
             const scanned = safeCounts[porId] ?? 0;
             if (scanned > 0) {
+                const batch = batchNos[porId] || "";
                 const lot = lotIds[porId] || "";
                 const exp = expiryDates[porId] || "";
-                if (!lot.trim() || !exp.trim()) missingLotOrExpiry.push(it.name);
+                if (!batch.trim() || !lot.trim() || !exp.trim()) missingLotOrExpiry.push(it.name);
             }
         });
 
         if (missingLotOrExpiry.length > 0) {
-            setClientSaveError("Lot and Expiry Date are required for all tagged items.");
+            setShowErrors(true);
+            toast.error("Required Fields Missing", {
+                description: "Batch, Lot and Expiry Date are required for all tagged items."
+            });
             return;
         }
 
@@ -273,19 +279,42 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
                                                     <div className="text-[9px] text-muted-foreground font-mono">SKU: {it.barcode} | UOM: {it.uom}</div>
                                                 </TableCell>
                                                 <TableCell className="min-w-[100px]">
-                                                    <Input className="h-8 text-[11px] font-bold" placeholder="Batch #" value={batchNos[porId] || ""} onChange={(e) => setBatchNos(prev => ({ ...prev, [porId]: e.target.value }))} />
+                                                    <Input 
+                                                        className={cn(
+                                                            "h-8 text-[11px] font-bold",
+                                                            showErrors && scanned > 0 && !(batchNos[porId] || "").trim() && "border-red-500 ring-1 ring-red-500"
+                                                        )}
+                                                        placeholder="Batch #" 
+                                                        value={batchNos[porId] || ""} 
+                                                        onChange={(e) => setBatchNos(prev => ({ ...prev, [porId]: e.target.value }))} 
+                                                    />
                                                 </TableCell>
                                                 <TableCell className="min-w-[120px]">
-                                                    <select className="h-8 w-full rounded-md border border-input bg-background px-2 text-[11px]" value={lotIds[porId] || ""} onChange={(e) => setLotIds(prev => ({ ...prev, [porId]: e.target.value }))}>
+                                                    <select 
+                                                        className={cn(
+                                                            "h-8 w-full rounded-md border border-input bg-background px-2 text-[11px]",
+                                                            showErrors && scanned > 0 && !(lotIds[porId] || "").trim() && "border-red-500 ring-1 ring-red-500"
+                                                        )}
+                                                        value={lotIds[porId] || ""} 
+                                                        onChange={(e) => setLotIds(prev => ({ ...prev, [porId]: e.target.value }))}
+                                                    >
                                                         <option value="">Select Lot</option>
                                                         {lots.map((l: { lot_id: string | number; lot_name: string }) => <option key={l.lot_id} value={String(l.lot_id)}>{l.lot_name}</option>)}
                                                     </select>
                                                 </TableCell>
                                                 <TableCell className="min-w-[130px]">
-                                                    <Input type="date" className="h-8 text-[11px]" value={expiryDates[porId] || ""} onChange={(e) => setExpiryDates(prev => ({ ...prev, [porId]: e.target.value }))} />
+                                                    <Input 
+                                                        type="date" 
+                                                        className={cn(
+                                                            "h-8 text-[11px]",
+                                                            showErrors && scanned > 0 && !(expiryDates[porId] || "").trim() && "border-red-500 ring-1 ring-red-500"
+                                                        )}
+                                                        value={expiryDates[porId] || ""} 
+                                                        onChange={(e) => setExpiryDates(prev => ({ ...prev, [porId]: e.target.value }))} 
+                                                    />
                                                 </TableCell>
                                                 <TableCell className="text-right text-xs">{formatPHP(unitP)}</TableCell>
-                                                <TableCell className="text-center text-[10px] text-muted-foreground">{it.discountType === "Standard" && discA > 0 ? `${((discA/unitP)*100).toFixed(1)}%` : it.discountType}</TableCell>
+                                                <TableCell className="text-center text-[10px] text-muted-foreground">{it.discountType}</TableCell>
                                                 <TableCell className="text-right text-xs text-red-600 font-medium">{(discA || 0) > 0 ? `${formatPHP(discA)}` : "—"}</TableCell>
                                                 <TableCell className="text-right font-bold text-xs">{formatPHP(lineTotal)}</TableCell>
                                                 <TableCell className="text-center font-bold text-xs">{expected}</TableCell>
