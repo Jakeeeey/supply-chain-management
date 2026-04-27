@@ -115,6 +115,7 @@ export type ReceiptSavedInfo = {
     items: SavedItem[];
     isFullyReceived: boolean;
     savedAt: number;
+    receiverName?: string;
 };
 
 // ✅ MERGED: Types for on-the-fly tagging modal

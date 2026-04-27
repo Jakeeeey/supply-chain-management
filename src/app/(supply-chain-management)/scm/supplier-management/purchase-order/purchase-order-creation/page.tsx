@@ -119,7 +119,7 @@ export default async function Page() {
 
             <ScrollArea className="min-h-0 flex-1">
                 <div className="p-4">
-                    <CreatePurchaseOrderModule encoderId={encoderId} />
+                    <CreatePurchaseOrderModule encoderId={encoderId} preparerName={headerUser.name} />
                 </div>
             </ScrollArea>
         </div>

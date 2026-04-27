@@ -30,6 +30,7 @@ type ReceiptData = {
         rfids: string[];
     }>;
     priceType: string;
+    receiverName?: string;
 };
 
 export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
@@ -288,7 +289,7 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
             const receivedByX = startX;
             doc.text("Received By:", receivedByX, sigY);
             doc.setFont("helvetica", "bold");
-            doc.text("—", receivedByX, sigY + 4);
+            doc.text(data.receiverName || "—", receivedByX, sigY + 4);
 
             doc.setDrawColor(150, 150, 150);
             doc.line(receivedByX, sigY + 8, receivedByX + signatureWidth, sigY + 8);
@@ -321,113 +322,3 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
     }
 }
 
-export async function generatePurchaseOrderPDF(data: {
-    poNumber: string;
-    poDate: string;
-    supplierName: string;
-    isInvoice?: boolean;
-    items: Array<{
-        name: string;
-        brand: string;
-        category: string;
-        barcode: string;
-        orderQty: number;
-        uom: string;
-        price: number;
-        grossAmount: number;
-        discountType: string;
-        discountAmount: number;
-        netAmount: number;
-        branchName: string;
-    }>;
-    subtotal: number;
-    discount: number;
-    vat: number;
-    ewt: number;
-    total: number;
-}) {
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    
-    // PDF-safe currency formatter
-    const formatMoney = (val: number) => {
-        const formatted = new Intl.NumberFormat("en-PH", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-        }).format(val);
-        return `P${formatted}`;
-    };
-
-    // Title
-    doc.setFontSize(22);
-    doc.setTextColor(37, 99, 235); // Blue
-    // ✅ Updated: Always show "PURCHASE ORDER"
-    const title = "PURCHASE ORDER";
-    doc.text(title, pageWidth / 2, 20, { align: "center" });
-
-    doc.setFontSize(9);
-    doc.setTextColor(120, 120, 120);
-    doc.text(`Generated on: ${new Date().toLocaleString()}`, pageWidth - 15, 10, { align: "right" });
-
-    // Header Info Box
-    doc.setDrawColor(220, 220, 220);
-    doc.line(15, 30, pageWidth - 15, 30);
-
-    doc.setFontSize(11);
-    doc.setTextColor(0, 0, 0);
-    doc.setFont("helvetica", "bold");
-    // ✅ Updated label
-    doc.text("Purchase Order Number:", 15, 40);
-    doc.setFont("helvetica", "normal");
-    doc.text(data.poNumber || "N/A", 65, 40); // Shifted a bit for longer label
-
-    doc.setFont("helvetica", "bold");
-    doc.text("Supplier:", 15, 47);
-    doc.setFont("helvetica", "normal");
-    doc.text(data.supplierName || "N/A", 65, 47);
-
-    // ✅ Added Branch Info
-    const uniqueBranches = Array.from(new Set(data.items.map(it => it.branchName).filter(Boolean)));
-    const branchText = uniqueBranches.length > 0 ? uniqueBranches.join(", ") : "N/A";
-    doc.setFont("helvetica", "bold");
-    doc.text("Branch:", 15, 54);
-    doc.setFont("helvetica", "normal");
-    doc.text(branchText, 65, 54);
-
-    doc.setFont("helvetica", "bold");
-    doc.text("Date:", 130, 40);
-    doc.setFont("helvetica", "normal");
-    doc.text(data.poDate || "N/A", 150, 40);
-
-    doc.line(15, 60, pageWidth - 15, 60); // Adjusted line position
-
-    // Items Table
-    const tableRows = data.items.map(it => [
-        it.brand || "—",
-        it.category || "—",
-        it.name,
-        formatMoney(it.price).replace("P", ""),
-        it.uom,
-        it.orderQty,
-    ]);
-
-    autoTable(doc, {
-        startY: 68,
-        head: [["Brand", "Category", "Product Name", "Price", "UOM", "Qty"]],
-        body: tableRows,
-        theme: "grid",
-        headStyles: { fillColor: [37, 99, 235], textColor: 255, fontSize: 7, halign: 'left' },
-        styles: { fontSize: 6.5, cellPadding: 1.5 },
-        columnStyles: {
-            0: { cellWidth: 20 },
-            1: { cellWidth: 20 },
-            2: { cellWidth: 105 },
-            3: { cellWidth: 15, halign: "right" },
-            4: { cellWidth: 12, halign: "center" },
-            5: { cellWidth: 10, halign: "center" }
-        }
-    });
-
-
-    doc.save(`PO_${data.poNumber}.pdf`);
-}

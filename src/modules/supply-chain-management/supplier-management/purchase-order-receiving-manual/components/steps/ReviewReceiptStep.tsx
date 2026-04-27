@@ -28,7 +28,7 @@ const formatPHP = (val: number) =>
         currency: "PHP",
     }).format(val || 0);
 
-export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
+export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void; receiverName?: string }) {
     const {
         selectedPO,
         manualCounts,
@@ -439,13 +439,14 @@ export function ReviewReceiptStep({ onBack }: { onBack: () => void }) {
                 <ReceiptPreviewModal
                     isOpen={previewOpen}
                     onClose={() => setPreviewOpen(false)}
-                    data={receiptSaved || {
+                    data={receiptSaved ? { ...receiptSaved, receiverName } : {
                         poId: selectedPO?.id || "",
                         receiptNo: "PREVIEW",
                         receiptDate: "PREVIEW",
                         receiptType: "PREVIEW",
                         isFullyReceived: totalEntered >= totalExpected,
                         savedAt: 0,
+                        receiverName,
                         items: allItems.map(it => ({
                             name: it.name,
                             barcode: it.barcode,

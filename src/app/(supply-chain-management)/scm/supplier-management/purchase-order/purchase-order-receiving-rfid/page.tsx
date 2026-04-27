@@ -127,7 +127,7 @@ export default async function Page() {
             <ScrollArea className="min-h-0 flex-1">
                 <div className="p-4">
                     {/* ✅ Purchase Order UI (Create / Approval / Receiving / Posting) */}
-                    <ReceivingProductsModule receiverId={receiverId} />
+                    <ReceivingProductsModule receiverId={receiverId} receiverName={headerUser.name} />
                 </div>
             </ScrollArea>
         </div>

@@ -9,7 +9,7 @@ import * as provider from "./providers/fetchProviders";
 import PendingApprovalList from "./components/PendingApprovalList";
 import PurchaseOrderReviewPanel from "./components/PurchaseOrderReviewPanel";
 
-export default function ApprovalPurchaseOrderModule({ approverId }: { approverId?: number }) {
+export default function ApprovalPurchaseOrderModule({ approverId, approverName }: { approverId?: number; approverName?: string; }) {
     const [loadingList, setLoadingList] = React.useState(true);
     const [loadingDetail, setLoadingDetail] = React.useState(false);
     const [error, setError] = React.useState("");
@@ -135,6 +135,7 @@ export default function ApprovalPurchaseOrderModule({ approverId }: { approverId
                     disabled={loadingList}
                     paymentTerms={paymentTerms}
                     onApprove={onApprove}
+                    approverName={approverName}
                 />
             </div>
         </div>

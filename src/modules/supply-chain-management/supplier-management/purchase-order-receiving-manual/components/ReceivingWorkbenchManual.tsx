@@ -18,7 +18,7 @@ function StepDot({ active }: { active: boolean }) {
     );
 }
 
-export function ReceivingWorkbenchManual() {
+export function ReceivingWorkbenchManual({ receiverName }: { receiverName?: string }) {
     const { selectedPO, receiptSaved } = useReceivingProductsManual();
     const [step, setStep] = React.useState(0);
 
@@ -74,7 +74,7 @@ export function ReceivingWorkbenchManual() {
                 ) : step === 2 ? (
                     <ManualProductsStep onContinue={() => setStep(3)} onBack={() => setStep(0)} />
                 ) : step === 3 ? (
-                    <ReviewReceiptStep onBack={() => setStep(2)} />
+                    <ReviewReceiptStep onBack={() => setStep(2)} receiverName={receiverName} />
                 ) : null}
             </div>
         </Card>

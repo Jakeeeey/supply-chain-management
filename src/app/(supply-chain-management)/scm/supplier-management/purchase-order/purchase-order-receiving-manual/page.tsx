@@ -129,7 +129,7 @@ export default async function ReceivingProductsManualPage() {
             {/* ===== Content ===== */}
             <ScrollArea className="min-h-0 flex-1">
                 <div className="p-4">
-                    <ReceivingProductsManualModule receiverId={receiverId} />
+                    <ReceivingProductsManualModule receiverId={receiverId} receiverName={headerUser.name} />
                 </div>
             </ScrollArea>
         </div>

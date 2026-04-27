@@ -35,7 +35,7 @@ function safeStr(v: unknown, fallback = "—") {
 /**
  * Compact Signature Renderer - minimal space usage
  */
-function renderSignatures(doc: jsPDF, startY: number, preparerName: string) {
+function renderSignatures(doc: jsPDF, startY: number, preparerName: string, approverName: string) {
     const pageWidth = doc.internal.pageSize.getWidth();
     const signatureWidth = 50;
     const spacing = 20;
@@ -64,6 +64,8 @@ function renderSignatures(doc: jsPDF, startY: number, preparerName: string) {
     doc.setFontSize(7);
     doc.setTextColor(15, 23, 42);
     doc.text("Approved:", approvedByX, startY);
+    doc.setFont("helvetica", "bold underline");
+    doc.text(approverName || "—", approvedByX, startY + 4);
     doc.line(approvedByX, startY + 8, approvedByX + signatureWidth, startY + 8);
     doc.setFontSize(6);
     doc.setTextColor(150, 150, 150);
@@ -78,13 +80,14 @@ export async function generatePurchaseOrderPdf(
     po: Record<string, unknown> | null, 
     branchLabel: string, 
     supplierName: string,
-    companyData: CompanyData
+    companyData: CompanyData,
+    approverName: string = "—"
 ) {
     if (!po) return;
 
     const poNumber = safeStr(po.purchase_order_no ?? po.poNumber, "N/A");
     const date = safeStr(po.date ?? po.date_encoded, "N/A");
-    const preparerName = safeStr(po.preparer_name ?? "—");
+    const preparerName = safeStr(po.preparer_name ?? po.preparerName ?? "—");
 
     // --- FIND BEST MATCH TEMPLATE (Robust fallback to match pdf-test) ---
     const templates = await pdfTemplateService.fetchTemplates();
@@ -254,8 +257,8 @@ export async function generatePurchaseOrderPdf(
         doc.setTextColor(100, 100, 100);
         doc.text("Note: VAT and EWT figures are for reference and have not been deducted from the total.", labelX - 25, finalY + lineHeight * 4 + 11);
 
-        // 4. Compact Signatures
-        renderSignatures(doc, finalY + 40, preparerName);
+        // 4. Compact Signatures with increased vertical spacing
+        renderSignatures(doc, finalY + 60, preparerName, approverName);
     });
 
     const poNumberStr = String(poNumber);

@@ -105,7 +105,7 @@ export default async function Page() {
 
             <ScrollArea className="min-h-0 flex-1">
                 <div className="p-4">
-                    <ApprovalPurchaseOrderModule approverId={approverId} />
+                    <ApprovalPurchaseOrderModule approverId={approverId} approverName={headerUser.name} />
                 </div>
             </ScrollArea>
         </div>

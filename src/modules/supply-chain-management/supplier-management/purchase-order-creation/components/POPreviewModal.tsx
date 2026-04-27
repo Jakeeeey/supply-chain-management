@@ -45,6 +45,7 @@ interface POPreviewModalProps {
         vat: number;
         ewt: number;
         total: number;
+        preparerName?: string;
     };
 }
 

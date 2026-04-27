@@ -59,6 +59,7 @@ export function PurchaseOrderSummary(props: {
     setSelectedPaymentTermId: (id: number | null) => void;
     isLocked?: boolean;
     onReset?: () => void;
+    preparerName?: string;
 }) {
     // ✅ ALL HOOKS MUST BE ABOVE ANY CONDITIONAL RETURN
     const money = React.useMemo(() => buildMoneyFormatter(), []);
@@ -687,6 +688,7 @@ export function PurchaseOrderSummary(props: {
                     poNumber: props.poNumber,
                     poDate: props.poDate,
                     supplierName: props.supplier?.name || "N/A",
+                    preparerName: props.preparerName || "—",
                     items: props.allItemsFlat.map(x => {
                         const dt = discountTypeById.get(x.item.discountTypeId || "");
                         const gross = x.item.price * x.item.orderQty;

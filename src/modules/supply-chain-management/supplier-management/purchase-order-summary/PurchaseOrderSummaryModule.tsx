@@ -982,8 +982,8 @@ export default function PurchaseOrderSummaryModule({
             <Button
               size="sm"
               disabled={filteredData.length === 0}
-              onClick={() => {
-                generatePOSummaryPDF(filteredData, suppliers);
+              onClick={async () => {
+                await generatePOSummaryPDF(filteredData, suppliers);
                 setIsPreviewOpen(false);
               }}
               className="text-xs font-semibold gap-1.5"

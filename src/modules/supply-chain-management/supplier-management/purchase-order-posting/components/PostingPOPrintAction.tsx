@@ -9,16 +9,16 @@ import { generatePostingPOPrint } from "../utils/generatePostingPOPrint";
 export function PostingPOPrintAction() {
     const { selectedPO, discountTypes } = usePostingOfPo();
 
-    const handlePrint = React.useCallback(() => {
+    const handlePrint = React.useCallback(async () => {
         if (!selectedPO) return;
-        const doc = generatePostingPOPrint({ po: selectedPO, discountTypes });
+        const doc = await generatePostingPOPrint({ po: selectedPO, discountTypes });
         doc.autoPrint();
         window.open(doc.output("bloburl"), "_blank");
     }, [selectedPO, discountTypes]);
 
-    const handlePreview = React.useCallback(() => {
+    const handlePreview = React.useCallback(async () => {
         if (!selectedPO) return;
-        const doc = generatePostingPOPrint({ po: selectedPO, discountTypes });
+        const doc = await generatePostingPOPrint({ po: selectedPO, discountTypes });
         window.open(doc.output("bloburl"), "_blank");
     }, [selectedPO, discountTypes]);
 

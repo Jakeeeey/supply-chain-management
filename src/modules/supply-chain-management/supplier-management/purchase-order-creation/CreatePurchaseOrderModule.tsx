@@ -472,7 +472,7 @@ function BranchMultiSelect(props: {
     );
 }
 
-export default function CreatePurchaseOrderModule({ encoderId }: { encoderId?: number }) {
+export default function CreatePurchaseOrderModule({ encoderId, preparerName }: { encoderId?: number; preparerName?: string; }) {
     const [isLoading, setIsLoading] = React.useState(true);
     const [isSaving, setIsSaving] = React.useState(false);
     const [error, setError] = React.useState<string>("");
@@ -1129,6 +1129,7 @@ export default function CreatePurchaseOrderModule({ encoderId }: { encoderId?: n
                 setSelectedPaymentTermId={setSelectedPaymentTermId}
                 isLocked={isLocked}
                 onReset={() => window.location.reload()}
+                preparerName={preparerName}
             />
 
             <ProductPickerDialog

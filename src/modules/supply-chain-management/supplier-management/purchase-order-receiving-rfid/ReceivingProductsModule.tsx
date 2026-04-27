@@ -5,7 +5,7 @@ import { ReceivingProductsProvider } from "./providers/ReceivingProductsProvider
 import { AvailableForReceiving } from "./components/AvailableForReceiving";
 import { ReceivingWorkbench } from "./components/ReceivingWorkbench";
 
-export function ReceivingProductsModule({ receiverId }: { receiverId?: number }) {
+export function ReceivingProductsModule({ receiverId, receiverName }: { receiverId?: number; receiverName?: string }) {
     return (
         <ReceivingProductsProvider receiverId={receiverId}>
             <div className="w-full px-6 py-8">
@@ -20,7 +20,7 @@ export function ReceivingProductsModule({ receiverId }: { receiverId?: number })
 
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-[380px_1fr] items-start">
                     <AvailableForReceiving />
-                    <ReceivingWorkbench />
+                    <ReceivingWorkbench receiverName={receiverName} />
                 </div>
             </div>
         </ReceivingProductsProvider>
