@@ -141,17 +141,14 @@ type Ctx = {
     savingReceipt: boolean;
     saveError: string;
 
-    // ✅ NEW: Barcode Verification
-    verifiedBarcodes: string[];
-    verifyBarcode: (barcode: string) => Promise<boolean>;
-    markProductAsVerified: (productId: string) => void;
-    activeProductId: string | null;
-    setActiveProductId: (id: string | null) => void;
-    scanError: string;
-
+    // ✅ NEW: Verification/Checklist
+    verifiedProductIds: string[];
+    toggleProductVerification: (productId: string) => void;
+    
     // ✅ NEW: Extra Product
-    lookupProduct: (barcode: string) => Promise<{ productId: string; name: string; barcode: string; unitPrice: number } | null>;
-    addExtraProductLocally: (item: { productId: string; name: string; barcode: string; branchId: string; branchName: string; unitPrice?: number }) => void;
+    getSupplierProducts: (supplierId: string) => Promise<{ productId: string; name: string; sku: string; barcode: string; unitPrice: number; uom: string; }[]>;
+    addExtraProductLocally: (item: { productId: string; name: string; barcode: string; branchId: string; branchName: string; unitPrice?: number }) => boolean;
+    removeExtraProductLocally: (productId: string) => void;
 
     // ✅ METADATA (Batch, Lot, Expiry)
     metaDataByPorId: Record<string, { batchNo?: string; lotNo?: string; lotId?: string; expiryDate?: string }>;
@@ -192,7 +189,7 @@ function getDraftKey(poId: string) { return `${DRAFT_KEY_PREFIX}${poId}`; }
 
 type DraftState = {
     manualCounts: Record<string, number>;
-    verifiedBarcodes: string[];
+    verifiedProductIds: string[];
     receiptNo: string;
     receiptType: string;
     receiptDate: string;
@@ -268,11 +265,7 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
     // ✅ NEW: success signal for UI
     const [receiptSaved, setReceiptSaved] = React.useState<ReceiptSavedInfo | null>(null);
     const clearReceiptSaved = React.useCallback(() => setReceiptSaved(null), []);
-
-    // ✅ NEW: Barcode Verification State
-    const [verifiedBarcodes, setVerifiedBarcodes] = React.useState<string[]>([]);
-    const [activeProductId, setActiveProductId] = React.useState<string | null>(null);
-    const [scanError, setScanError] = React.useState("");
+    const [verifiedProductIds, setVerifiedProductIds] = React.useState<string[]>([]);
 
     // ✅ METADATA
     const [metaDataByPorId, setMetaDataByPorId] = React.useState<Record<string, { batchNo?: string; lotNo?: string; lotId?: string; expiryDate?: string }>>({});
@@ -350,10 +343,8 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
 
     const resetSession = React.useCallback((opts?: { clearStorage?: boolean; poId?: string }) => {
         setSaveError("");
-        setScanError("");
         setManualCounts({});
-        setVerifiedBarcodes([]);
-        setActiveProductId(null);
+        setVerifiedProductIds([]);
         if (opts?.clearStorage && opts?.poId) {
             clearDraft(opts.poId);
         }
@@ -364,17 +355,17 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
         const poId = selectedPO?.id;
         if (!poId) return;
         // Only save if there's meaningful data
-        if (Object.keys(manualCounts).length === 0 && verifiedBarcodes.length === 0) return;
+        if (Object.keys(manualCounts).length === 0) return;
         saveDraft(poId, {
             manualCounts,
-            verifiedBarcodes,
+            verifiedProductIds,
             receiptNo,
             receiptType,
             receiptDate,
             metaDataByPorId,
             savedAt: Date.now(),
         });
-    }, [selectedPO?.id, manualCounts, verifiedBarcodes, receiptNo, receiptType, receiptDate, metaDataByPorId]);
+    }, [selectedPO?.id, manualCounts, verifiedProductIds, receiptNo, receiptType, receiptDate, metaDataByPorId]);
 
     const openPOById = React.useCallback(
         async (poId: string) => {
@@ -404,13 +395,13 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
                 const draft = detail?.id ? loadDraft(detail.id) : null;
                 const hasDraftData = draft ? (
                     Object.keys(draft.manualCounts || {}).length > 0 ||
-                    (draft.verifiedBarcodes && draft.verifiedBarcodes.length > 0) ||
+                    (draft.verifiedProductIds && draft.verifiedProductIds.length > 0) ||
                     Object.keys(draft.metaDataByPorId || {}).length > 0
                 ) : false;
 
                 if (hasDraftData && draft) {
                     setManualCounts(draft.manualCounts || {});
-                    setVerifiedBarcodes(draft.verifiedBarcodes || []);
+                    setVerifiedProductIds(draft.verifiedProductIds || []);
                     setMetaDataByPorId(draft.metaDataByPorId || {});
                     setReceiptNo(draft.receiptNo || "");
                     setReceiptType(draft.receiptType || "");
@@ -465,12 +456,12 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
                 const draft = detail?.id ? loadDraft(detail.id) : null;
                 const hasDraftData = draft ? (
                     Object.keys(draft.manualCounts || {}).length > 0 ||
-                    (draft.verifiedBarcodes && draft.verifiedBarcodes.length > 0)
+                    (draft.verifiedProductIds && draft.verifiedProductIds.length > 0)
                 ) : false;
 
                 if (hasDraftData && draft) {
                     setManualCounts(draft.manualCounts || {});
-                    setVerifiedBarcodes(draft.verifiedBarcodes || []);
+                    setVerifiedProductIds(draft.verifiedProductIds || []);
                     setReceiptNo(draft.receiptNo || "");
                     setReceiptType(draft.receiptType || "");
                     setReceiptDate(draft.receiptDate || todayYMD());
@@ -555,8 +546,9 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
         }
     }, []);
 
-    // ✅ NEW: Add extra product locally
+    // ✅ NEW: Add extra product locally with duplicate check
     const addExtraProductLocally = React.useCallback((item: { productId: string; name: string; barcode: string; branchId: string; branchName: string; unitPrice?: number }) => {
+        let added = false;
         setSelectedPO(prev => {
             if (!prev) return prev;
             const updated = { ...prev };
@@ -590,88 +582,64 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
                     netAmount: 0,
                     isExtra: true
                 }];
+                added = true;
             }
 
             updated.allocations = allocs;
             return updated;
         });
+        
+        // Auto-verify if added
+        if (added) {
+            setVerifiedProductIds(prev => [...new Set([...prev, item.productId])]);
+        }
+        return added;
     }, []);
 
-    // ✅ NEW: Barcode verification (for both existing and extra products)
-    const verifyBarcode = React.useCallback(async (barcode: string) => {
-        if (!selectedPO) return false;
-
-        const code = String(barcode).trim().toLowerCase();
-        if (!code) return false;
-
-        const allocs = Array.isArray(selectedPO.allocations) ? selectedPO.allocations : [];
-        let matchingItem: ReceivingPOItem | null = null;
-
-        // Find matching item in PO
-        for (const alloc of allocs) {
-            for (const item of alloc.items) {
-                if (
-                    String(item.barcode).toLowerCase() === code ||
-                    String(item.productId) === code
-                ) {
-                    matchingItem = item;
-                    break;
-                }
-            }
-            if (matchingItem) break;
-        }
-
-        if (!matchingItem) {
-            // ✅ EXTRA PRODUCT LOGIC
-            setScanError("");
-            playBeep("success");
-            const extraMatch = await lookupProduct(code);
-            if (!extraMatch) {
-                playBeep("error");
-                setScanError(`Product not found in this Purchase Order, and not found in Master Catalog.`);
-                return false;
-            }
-
-            const branchId = selectedPO.allocations[0]?.branch?.id || "0";
-            const branchName = selectedPO.allocations[0]?.branch?.name || "Unassigned";
-
-            addExtraProductLocally({
-                productId: extraMatch.productId,
-                name: extraMatch.name,
-                barcode: extraMatch.barcode,
-                branchId,
-                branchName,
-                unitPrice: extraMatch.unitPrice
+    const removeExtraProductLocally = React.useCallback((productId: string) => {
+        setSelectedPO(prev => {
+            if (!prev) return prev;
+            const updated = { ...prev };
+            updated.allocations = updated.allocations.map(a => ({
+                ...a,
+                items: a.items.filter(i => i.productId !== productId || !i.isExtra)
+            }));
+            return updated;
+        });
+        setVerifiedProductIds(prev => prev.filter(id => id !== productId));
+        setManualCounts(prev => {
+            const next = { ...prev };
+            // Find all instances across branches (unlikely for extra but safe)
+            delete next[productId]; 
+            // In manual receiving, IDs in manualCounts are often productId or productId-branchId
+            // Let's just clear anything matching
+            Object.keys(next).forEach(k => {
+                if (k.startsWith(`${productId}-`)) delete next[k];
             });
+            return next;
+        });
+    }, []);
 
-            matchingItem = { productId: extraMatch.productId } as ReceivingPOItem;
-        }
-
-        // Ensure not already verified
-        if (verifiedBarcodes.includes(matchingItem.productId)) {
-            playBeep("error");
-            setScanError("Product already verified for this session.");
-            return false;
-        }
-
-        if (matchingItem) {
-            setVerifiedBarcodes((prev) => [...new Set([...prev, matchingItem!.productId])]);
-            setActiveProductId(matchingItem.productId);
-            toast.info(`Product Verified: ${matchingItem.name}`);
-            playBeep("success");
-            setScanError("");
-            return true;
-        }
-
-        return false;
-    }, [selectedPO, verifiedBarcodes, lookupProduct, addExtraProductLocally]);
-
-    const markProductAsVerified = React.useCallback((productId: string) => {
-        setVerifiedBarcodes(prev => {
-            if (prev.includes(productId)) return prev;
+    const toggleProductVerification = React.useCallback((productId: string) => {
+        setVerifiedProductIds(prev => {
+            if (prev.includes(productId)) return prev.filter(id => id !== productId);
             return [...prev, productId];
         });
-        setActiveProductId(productId);
+    }, []);
+
+    // ✅ NEW: Supplier Products Fetching
+    const getSupplierProducts = React.useCallback(async (supplierId: string) => {
+        try {
+            const r = await fetch(API_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "get_supplier_products", supplierId }),
+            });
+            const j = await asJson(r);
+            return j?.data || [];
+        } catch {
+            return [];
+        }
     }, []);
 
     const saveReceipt = React.useCallback(async (porMetaData?: Record<string, { lotNo: string; batchNo?: string; expiryDate: string }>) => {
@@ -746,6 +714,12 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
                     expectedQty: Number(it.expectedQty),
                     receivedQtyAtStart: Number(it.receivedQty) - scannedNow,
                     receivedQtyNow: scannedNow,
+                    unitPrice: Number(it.unitPrice) || 0,
+                    discountAmount: Number(it.discountAmount) || 0,
+                    uom: String(it.uom || ""),
+                    batchNo: porMetaData?.[it.id]?.batchNo || "",
+                    lotId: porMetaData?.[it.id]?.lotNo || "",
+                    expiryDate: porMetaData?.[it.id]?.expiryDate || "",
                     rfids: []
                 };
             });
@@ -818,15 +792,11 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
         setMetaDataByPorId,
 
         // ✅ NEW
-        verifiedBarcodes,
-        verifyBarcode,
-        markProductAsVerified,
-        activeProductId,
-        setActiveProductId,
-        scanError,
-
-        lookupProduct,
+        verifiedProductIds,
+        toggleProductVerification,
+        getSupplierProducts,
         addExtraProductLocally,
+        removeExtraProductLocally,
 
         lots,
         lotsLoading,

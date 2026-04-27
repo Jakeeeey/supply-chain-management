@@ -86,7 +86,14 @@ export async function generatePurchaseOrderPdf(
     if (!po) return;
 
     const poNumber = safeStr(po.purchase_order_no ?? po.poNumber, "N/A");
-    const date = safeStr(po.date ?? po.date_encoded, "N/A");
+    const rawDate = safeStr(po.date ?? po.date_encoded, "N/A");
+    // Format date to M/D/YYYY for consistency
+    const date = (() => {
+        if (rawDate === "N/A") return rawDate;
+        const d = new Date(rawDate);
+        if (isNaN(d.getTime())) return rawDate;
+        return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
+    })();
     const preparerName = safeStr(po.preparer_name ?? po.preparerName ?? "—");
 
     // --- FIND BEST MATCH TEMPLATE (Robust fallback to match pdf-test) ---

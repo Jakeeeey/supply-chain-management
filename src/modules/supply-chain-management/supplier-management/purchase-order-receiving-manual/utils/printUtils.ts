@@ -303,8 +303,13 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
             doc.setFontSize(7);
             doc.setTextColor(15, 23, 42);
             doc.text("Checked By:", checkedByX, sigY);
+            doc.setFont("helvetica", "bold");
+            doc.text(data.receiverName || "—", checkedByX, sigY + 4);
+
+            doc.setDrawColor(150, 150, 150);
             doc.line(checkedByX, sigY + 8, checkedByX + signatureWidth, sigY + 8);
             doc.setFontSize(6);
+            doc.setFont("helvetica", "normal");
             doc.setTextColor(150, 150, 150);
             doc.text("Signature", checkedByX, sigY + 11);
 

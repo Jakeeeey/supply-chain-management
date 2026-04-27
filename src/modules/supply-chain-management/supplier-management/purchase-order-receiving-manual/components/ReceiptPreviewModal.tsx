@@ -43,6 +43,7 @@ export function ReceiptPreviewModal({
             receiptType: data.receiptType,
             isFullyReceived: data.isFullyReceived,
             priceType: priceType,
+            receiverName: data.receiverName,
             items: data.items.map((it) => ({
                 name: it.name,
                 barcode: it.barcode,
@@ -62,7 +63,7 @@ export function ReceiptPreviewModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="w-[95vw] max-w-6xl max-h-[90vh] flex flex-col p-0 overflow-hidden shadow-2xl border-primary/20 scale-[0.98] sm:scale-100">
+            <DialogContent className="w-[98vw] max-w-none sm:!max-w-[95vw] lg:!max-w-[1400px] h-[95vh] max-h-[95vh] flex flex-col p-0 overflow-hidden shadow-2xl border-primary/20">
                 <DialogHeader className="p-6 border-b bg-muted/30">
                     <div className="flex items-center justify-between">
                         <DialogTitle className="flex items-center gap-3 text-2xl font-black tracking-tight">
@@ -109,7 +110,7 @@ export function ReceiptPreviewModal({
                     </div>
                 </div>
 
-                <ScrollArea className="flex-1 px-8 py-6">
+                <div className="flex-1 px-8 py-6 overflow-y-auto min-h-0 scrollbar-thin">
                     <div className="space-y-6 max-w-6xl mx-auto">
 
                         {/* Items List - Ultra Compact 1-Row Style */}
@@ -158,7 +159,7 @@ export function ReceiptPreviewModal({
                             </div>
                         </div>
                     </div>
-                </ScrollArea>
+                </div>
 
                 <DialogFooter className="p-8 border-t bg-muted/20 flex flex-row items-center justify-center sm:justify-center gap-4">
                     <Button variant="outline" onClick={onClose} className="px-8 h-11 font-black uppercase tracking-widest text-[10px] shadow-sm border-muted-foreground/20 hover:bg-muted transition-colors">

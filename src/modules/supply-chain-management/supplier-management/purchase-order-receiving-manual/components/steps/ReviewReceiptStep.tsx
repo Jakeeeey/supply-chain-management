@@ -37,7 +37,6 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
         saveError,
         receiptSaved,
         lots,
-        verifiedBarcodes,
         setMetaDataByPorId,
     } = useReceivingProductsManual();
 
@@ -124,10 +123,9 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                     ...it,
                     id: String(it.id),
                     branchName: a?.branch?.name ?? "Unassigned",
-                }))
-                .filter((it: ReceivingPOItem & { branchName: string }) => verifiedBarcodes.includes(it.productId)) as Array<ReceivingPOItem & { branchName: string }>;
+                })) as Array<ReceivingPOItem & { branchName: string }>;
         });
-    }, [selectedPO, verifiedBarcodes]);
+    }, [selectedPO]);
 
     const executeSave = async () => {
         const metaData: Record<string, { lotNo: string; batchNo?: string; expiryDate: string }> = {};

@@ -581,6 +581,34 @@ export async function POST(req: NextRequest) {
             return ok({ success: true });
         }
 
+        if (action === "get_supplier_products") {
+            const supplierId = toNum(body.supplierId);
+            if (!supplierId) return bad("Missing Supplier ID", 400);
+
+            // First get the product IDs linked to the supplier
+            const linksUrl = `${base}/items/${PRODUCT_SUPPLIER_COLLECTION}?limit=-1&filter[supplier_id][_eq]=${supplierId}&fields=product_id`;
+            const lj = await fetchJson<{ data: Record<string, unknown>[] }>(linksUrl);
+            const pids = (lj?.data ?? []).map(r => toNum(r.product_id)).filter(id => id > 0);
+            
+            if (!pids.length) return ok([]);
+
+            // Then get the full product details (only BOX items)
+            const map = await fetchProductsMap(base, pids);
+            
+            const results = Array.from(map.values())
+                .filter(p => Number(p.unit_of_measurement?.unit_id ?? p.unit_of_measurement) === 11) // Strict BOX UOM
+                .map(p => ({
+                    productId: String(p.product_id),
+                    name: String(p.product_name),
+                    sku: String(p.barcode || p.product_code),
+                    barcode: String(p.barcode || p.product_code),
+                    unitPrice: toNum(p.cost_per_unit),
+                    uom: "BOX"
+                }));
+
+            return ok(results);
+        }
+
         if (action === "get_lots") {
             const url = `${base}/items/${LOTS_COLLECTION}?limit=-1&sort=lot_name&fields=lot_id,lot_name`;
             const j = await fetchJson<{ data: Record<string, unknown>[] }>(url);

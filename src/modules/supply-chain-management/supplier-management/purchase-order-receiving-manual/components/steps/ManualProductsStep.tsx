@@ -14,27 +14,27 @@ export function ManualProductsStep({ onContinue, onBack }: { onContinue: () => v
         selectedPO,
         manualCounts,
         setManualCounts,
-        verifiedBarcodes,
+        verifiedProductIds,
     } = useReceivingProductsManual();
 
     // ✅ Pagination state
     const [receivingPage, setReceivingPage] = React.useState(1);
     const ITEMS_PER_PAGE = 10;
 
-    // ✅ Only show verified items (verified in Step 2 - Barcode Scan)
-    const allItems = React.useMemo(() => {
+    // ✅ Show only verified items
+    const filteredItems = React.useMemo(() => {
         const allocs = Array.isArray(selectedPO?.allocations) ? selectedPO!.allocations : [];
-        return allocs.flatMap((a) => {
+        const flattened = allocs.flatMap((a) => {
             const items = Array.isArray(a?.items) ? a.items : [];
-            return items
-                .map((it) => ({
-                    ...it,
-                    id: String(it.id),
-                    branchName: a?.branch?.name ?? "Unassigned",
-                }))
-                .filter((it) => verifiedBarcodes.includes(it.productId));
+            return items.map((it) => ({
+                ...it,
+                id: String(it.id),
+                branchName: a?.branch?.name ?? "Unassigned",
+            }));
         });
-    }, [selectedPO, verifiedBarcodes]);
+        
+        return flattened.filter(it => verifiedProductIds.includes(it.productId));
+    }, [selectedPO, verifiedProductIds]);
 
     const totalEntered = React.useMemo(() => {
         return Object.values(manualCounts).reduce((a, b) => a + (Number(b) || 0), 0);
@@ -54,7 +54,7 @@ export function ManualProductsStep({ onContinue, onBack }: { onContinue: () => v
                 <div className="flex flex-col items-center justify-center py-4 gap-2">
                     <div className="text-center space-y-1">
                         <div className="text-xl font-black uppercase tracking-wide text-primary">
-                            Manual Quantity Entry
+                            Step 3: Manual Quantity Entry
                         </div>
                         <div className="text-sm text-foreground max-w-[450px]">
                             Enter the physical quantity received for each verified product below.
@@ -65,18 +65,18 @@ export function ManualProductsStep({ onContinue, onBack }: { onContinue: () => v
 
             <Card className="p-4 overflow-hidden shadow-sm">
                 <div className="mb-4 flex items-center justify-between">
-                    <div className="text-base font-semibold text-primary uppercase tracking-wider">Item Receiving Grid</div>
+                    <div className="text-base font-semibold text-primary uppercase tracking-wider">Verified Items List</div>
                     <div className="flex items-center gap-3">
                         <Badge variant="outline" className="font-mono bg-background shadow-xs">
-                            Items: {allItems.length} / Entered: {totalEntered}
+                            Items: {filteredItems.length} / Entered: {totalEntered}
                         </Badge>
                     </div>
                 </div>
 
                 {(() => {
-                    const rcvTotalPages = Math.max(1, Math.ceil(allItems.length / ITEMS_PER_PAGE));
+                    const rcvTotalPages = Math.max(1, Math.ceil(filteredItems.length / ITEMS_PER_PAGE));
                     const rcvStart = (receivingPage - 1) * ITEMS_PER_PAGE;
-                    const rcvPageItems = allItems.slice(rcvStart, rcvStart + ITEMS_PER_PAGE);
+                    const rcvPageItems = filteredItems.slice(rcvStart, rcvStart + ITEMS_PER_PAGE);
 
                     return (
                         <>
@@ -86,8 +86,7 @@ export function ManualProductsStep({ onContinue, onBack }: { onContinue: () => v
                                         <TableRow>
                                             <TableHead className="text-[10px] h-9 font-black uppercase tracking-wider bg-muted/50 text-left">Product / SKU</TableHead>
                                             <TableHead className="text-[10px] h-9 font-black uppercase tracking-wider text-center bg-muted/50 w-24">Ordered</TableHead>
-                                            <TableHead className="text-[10px] h-9 font-black uppercase tracking-wider text-center bg-muted/50 w-24">Received</TableHead>
-                                            <TableHead className="text-[10px] h-9 font-black uppercase tracking-wider text-center bg-muted/50 w-28 text-primary">Receive Qty</TableHead>
+                                            <TableHead className="text-[10px] h-9 font-black uppercase tracking-wider text-center bg-muted/50 w-24 text-primary">Receive Qty</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -95,23 +94,19 @@ export function ManualProductsStep({ onContinue, onBack }: { onContinue: () => v
                                             const itemObj = it as Record<string, unknown>;
                                             const id = String(itemObj.id);
                                             const expected = Number(itemObj.expectedQty || 0);
-                                            const receivedSoFar = Number(itemObj.receivedQty || 0);
-                                            const remaining = expected - receivedSoFar;
                                             const currentEntry = manualCounts[id] || "";
 
                                             return (
                                                 <TableRow key={id}>
-                                                    <TableCell className="max-w-[220px] overflow-hidden align-middle">
-                                                        <div className="truncate text-sm font-bold text-foreground" title={it.name}>{it.name}</div>
+                                                    <TableCell className="max-w-[300px] overflow-hidden align-middle">
+                                                        <div className="truncate text-sm font-bold text-foreground" title={it.name}>
+                                                            {it.name}
+                                                            {it.isExtra && <Badge className="ml-2 text-[8px] bg-amber-50 text-amber-600 border-amber-200 uppercase font-black px-1.5 h-4">Extra</Badge>}
+                                                        </div>
                                                         <div className="truncate text-[10px] text-muted-foreground font-mono" title={`SKU: ${it.barcode}`}>SKU: {it.barcode}</div>
-                                                        {it.isExtra && <Badge variant="secondary" className="text-[8px] mt-1 bg-amber-100 text-amber-700">EXTRA</Badge>}
                                                     </TableCell>
                                                     <TableCell className="text-center align-middle">
                                                         <div className="font-bold text-sm">{expected}</div>
-                                                        <div className="text-[10px] text-muted-foreground">Rem: {remaining}</div>
-                                                    </TableCell>
-                                                    <TableCell className="text-center align-middle">
-                                                        <div className="font-bold text-sm text-muted-foreground">{receivedSoFar}</div>
                                                     </TableCell>
                                                     <TableCell className="align-middle">
                                                         <div className="relative">
@@ -130,8 +125,8 @@ export function ManualProductsStep({ onContinue, onBack }: { onContinue: () => v
                                         })}
                                         {rcvPageItems.length === 0 && (
                                             <TableRow>
-                                                <TableCell colSpan={4} className="h-24 text-center">
-                                                    No verified items. Go back and scan product barcodes first.
+                                                <TableCell colSpan={3} className="h-24 text-center">
+                                                    No verified items found. Go back and check items from the PO first.
                                                 </TableCell>
                                             </TableRow>
                                         )}
@@ -139,7 +134,7 @@ export function ManualProductsStep({ onContinue, onBack }: { onContinue: () => v
                                 </Table>
                             </div>
 
-                            {allItems.length > ITEMS_PER_PAGE && (
+                            {filteredItems.length > ITEMS_PER_PAGE && (
                                 <div className="flex items-center justify-between mt-4">
                                     <div className="text-xs font-medium text-muted-foreground">
                                         Page {receivingPage} of {rcvTotalPages}
@@ -181,7 +176,7 @@ export function ManualProductsStep({ onContinue, onBack }: { onContinue: () => v
                 })()}
 
                 <div className="mt-6 flex justify-between">
-                    <Button variant="ghost" onClick={onBack}>← Back to Barcode Scan</Button>
+                    <Button variant="ghost" onClick={onBack}>← Back to Checklist</Button>
                     <Button
                         className="h-10 px-6 text-sm font-black uppercase tracking-widest"
                         onClick={onContinue}

@@ -768,7 +768,7 @@ export default function PurchaseOrderReviewPanel(props: {
                                             disabled={!poAny?.purchase_order_id || !companyData}
                                             onClick={async () => {
                                                 try {
-                                                    await generatePurchaseOrderPdf(poAny, branchLabel, supplierName, companyData as CompanyData);
+                                                    await generatePurchaseOrderPdf(poAny, branchLabel, supplierName, companyData as CompanyData, props.approverName || "—");
                                                 } catch (err) {
                                                     console.error("PDF Generation failed:", err);
                                                     toast.error("Failed to generate PDF.");

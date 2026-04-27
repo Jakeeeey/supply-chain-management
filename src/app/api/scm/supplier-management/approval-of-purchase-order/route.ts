@@ -437,6 +437,7 @@ type PoHeaderRow = {
     isInvoice?: boolean | number | null;
     receiving_type?: number | null;
     user_created?: string | number | { first_name?: string; last_name?: string } | null;
+    encoder_id?: string | number | { first_name?: string; last_name?: string } | null;
 };
 
 async function fetchPendingPOs(base: string): Promise<PoHeaderRow[]> {
@@ -453,6 +454,8 @@ async function fetchPendingPOs(base: string): Promise<PoHeaderRow[]> {
         "receiving_type",
         "user_created.first_name",
         "user_created.last_name",
+        "encoder_id.first_name",
+        "encoder_id.last_name",
     ].join(",");
 
     const url = `${base}/items/${PO_COLLECTION}?limit=-1&sort=-date_encoded&fields=${fields}&filter[date_approved][_null]=true&filter[approver_id][_null]=true`;
@@ -562,7 +565,7 @@ async function fetchProductSupplierLinks(base: string, productIds: number[]) {
 // DETAIL BUILDER
 // =====================
 async function buildPurchaseOrderDetail(base: string, poId: number) {
-    const fields = encodeURIComponent("*,discount_type.*,discount_type.line_per_discount_type.line_id.*,user_created.first_name,user_created.last_name");
+    const fields = encodeURIComponent("*,discount_type.*,discount_type.line_per_discount_type.line_id.*,user_created.first_name,user_created.last_name,encoder_id.first_name,encoder_id.last_name");
     const headerUrl = `${base}/items/${PO_COLLECTION}/${encodeURIComponent(String(poId))}?fields=${fields}`;
     const headerJ = await fetchJson(headerUrl) as { data: Record<string, unknown> };
     const header = (headerJ?.data as Record<string, unknown>) ?? null;
@@ -770,6 +773,37 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
     const ewt = ewtHeader || 0;
     const total = totalHeader || headerGross - headerDiscAmount + vat - ewt;
 
+    // Preparer info - resolve from encoder_id (best) or user_created (fallback)
+    let preparerName = "—";
+    
+    // 1) Try encoder_id (Object or expanded)
+    const encoder = header?.encoder_id;
+    if (typeof encoder === "object" && encoder) {
+        preparerName = [(encoder as any).first_name, (encoder as any).last_name].filter(Boolean).join(" ");
+    }
+    
+    // 2) Try user_created (Object or expanded)
+    if (!preparerName || preparerName === "—") {
+        const creator = header?.user_created;
+        if (typeof creator === "object" && creator) {
+            preparerName = [(creator as any).first_name, (creator as any).last_name].filter(Boolean).join(" ");
+        }
+    }
+
+    // 3) Fallback: Fetch by ID string
+    if (!preparerName || preparerName === "—") {
+        const userId = String(header?.encoder_id || header?.user_created || "");
+        if (userId && userId !== "—" && userId.length > 5) { // basic UUID check
+            try {
+                const userUrl = `${base}/users/${encodeURIComponent(userId)}?fields=first_name,last_name`;
+                const userJ = await fetchJson(userUrl) as { data: { first_name?: string; last_name?: string } };
+                preparerName = [userJ?.data?.first_name, userJ?.data?.last_name].filter(Boolean).join(" ");
+            } catch { /* skip */ }
+        }
+    }
+    
+    if (!preparerName) preparerName = "—";
+
     return {
         id: String(poId),
         purchase_order_id: poId,
@@ -815,10 +849,7 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
         total_amount: total,
         total: total,
 
-        // Preparer info
-        preparer_name: (typeof header?.user_created === "object" && header.user_created)
-            ? [(header.user_created as { first_name?: string }).first_name, (header.user_created as { last_name?: string }).last_name].filter(Boolean).join(" ")
-            : "—",
+        preparer_name: preparerName,
     };
 }
 
@@ -917,6 +948,27 @@ export async function GET(req: NextRequest) {
         const supplierIds = uniqNums(headers.map((h) => h.supplier_name as string | number | null | undefined));
         const suppliersMap = await fetchSuppliersMapByIds(base, supplierIds);
 
+        // 1) Batch resolve all possible preparers (encoder_id or user_created)
+        const allUserIds = new Set<string>();
+        for (const h of headers) {
+            const eid = typeof h.encoder_id === "string" ? h.encoder_id : "";
+            const ucid = typeof h.user_created === "string" ? h.user_created : "";
+            if (eid && eid.length > 5) allUserIds.add(eid);
+            if (ucid && ucid.length > 5) allUserIds.add(ucid);
+        }
+
+        const userNamesMap = new Map<string, string>();
+        if (allUserIds.size > 0) {
+            try {
+                const ids = Array.from(allUserIds).join(",");
+                const userUrl = `${base}/users?fields=id,first_name,last_name&filter[id][_in]=${encodeURIComponent(ids)}`;
+                const userJ = await fetchJson(userUrl) as { data: Array<{ id: string; first_name?: string; last_name?: string }> };
+                for (const u of userJ?.data ?? []) {
+                    userNamesMap.set(u.id, [u.first_name, u.last_name].filter(Boolean).join(" ") || "—");
+                }
+            } catch { /* skip batch fetch fail */ }
+        }
+
         const list = headers.map((h) => {
             const poId = toNum(h.purchase_order_id);
             const sid = toNum(h.supplier_name);
@@ -924,6 +976,20 @@ export async function GET(req: NextRequest) {
             const bset = branchesByPo.get(poId);
             const branchIds = bset ? Array.from(bset.values()) : [];
             const bs = branchSummary(branchIds, branchesMap);
+
+            const getPreparer = () => {
+                const enc = h.encoder_id;
+                const uc = h.user_created;
+                // a) Try expanded objects
+                if (typeof enc === "object" && enc) return [(enc as any).first_name, (enc as any).last_name].filter(Boolean).join(" ") || "—";
+                if (typeof uc === "object" && uc) return [(uc as any).first_name, (uc as any).last_name].filter(Boolean).join(" ") || "—";
+                // b) Try mapped names from IDs
+                const eid = typeof enc === "string" ? enc : "";
+                const ucid = typeof uc === "string" ? uc : "";
+                if (userNamesMap.has(eid)) return userNamesMap.get(eid);
+                if (userNamesMap.has(ucid)) return userNamesMap.get(ucid);
+                return "—";
+            };
 
             return {
                 id: String(poId),
@@ -944,15 +1010,9 @@ export async function GET(req: NextRequest) {
 
                 totalAmount: totalByPo.get(poId) ?? 0,
                 currency: "PHP",
-                // derives is_invoice from receiving_type (2=Invoice, 3=PO) (robust check)
                 is_invoice: (Number(h.receiving_type) === 2) || (String(h.is_invoice ?? h.isInvoice).toLowerCase() === "true") || !!(h.is_invoice ?? h.isInvoice),
 
-                preparer_name: (typeof h.user_created === "object" && h.user_created)
-                    ? [
-                        (h.user_created as { first_name?: string }).first_name, 
-                        (h.user_created as { last_name?: string }).last_name
-                    ].filter(Boolean).join(" ")
-                    : "—",
+                preparer_name: getPreparer(),
             };
         });
 
