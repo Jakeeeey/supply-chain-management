@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PackageOpen, Printer, ScanLine, Loader2, CheckCircle2, Radar, Edit2 } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { PackageOpen, Printer, Loader2, CheckCircle2, Radar, Edit2 } from 'lucide-react';
 import { useStockTransferReceive } from './hooks/use-stock-transfer-receive';
 import { OrderGroupItem, ProductRow, CurrentUser } from '../types/stock-transfer.types';
 import { cn } from '@/lib/utils';

@@ -392,7 +392,7 @@ function MetricCard({ label, value, subValue, icon: Icon, color }: {
   label: string;
   value: string | number;
   subValue: string;
-  icon: any;
+  icon: React.ElementType;
   color: string;
 }) {
   return (

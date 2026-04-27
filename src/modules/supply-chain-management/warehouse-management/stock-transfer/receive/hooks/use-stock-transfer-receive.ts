@@ -288,7 +288,7 @@ export function useStockTransferReceive() {
       }));
       
       playSuccessSound();
-    } catch (error: unknown) {
+    } catch {
       pushError('Tag not found in inventory', 'Not Found');
     }
   };

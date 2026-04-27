@@ -3,10 +3,11 @@
 import { useState, useEffect, useRef, useCallback, memo } from "react";
 import { toast } from "sonner";
 import { useStockConversion } from "./hooks/useStockConversion";
+import { useRFIDScanner } from "./hooks/useRFIDScanner";
 import { StockConversionTable } from "./components/StockConversionTable";
 import { StockConversionModal } from "./components/StockConversionModal";
 import { RFIDManagementModal } from "./components/RFIDManagementModal";
-import { StockConversionProduct, RFIDTag } from "./types";
+import type { StockConversionProduct, RFIDTag } from "./types/stock-conversion.types";
 import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import ErrorPage from "@/components/shared/ErrorPage";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -27,50 +28,24 @@ interface StockConversionModuleProps {
 export default function StockConversionModule({
   userId = 0,
   userBranchId = 0,
-  userName = "User",
-  userEmail = "",
-  userAvatar = "/avatars/shadcn.jpg",
 }: StockConversionModuleProps) {
-  // ── User data in a ref: never triggers re-renders ────────────────────────
-  const userRef = useRef({
-    id: userId,
-    branchId: userBranchId,
-    name: userName,
-    email: userEmail,
-    avatar: userAvatar,
-  });
+  // ── User data in a ref ───────────────────────────────────────────────────
+  const userRef = useRef({ id: userId, branchId: userBranchId });
   userRef.current.id = userId;
   userRef.current.branchId = userBranchId;
-  userRef.current.name = userName;
-  userRef.current.email = userEmail;
-  userRef.current.avatar = userAvatar;
 
   // ── Core state ────────────────────────────────────────────────────────────
-  const [selectedBranchId, setSelectedBranchId] = useState<number>(
-    userBranchId > 0 ? userBranchId : 0
-  );
+  const [selectedBranchId, setSelectedBranchId] = useState<number>(userBranchId);
   const [branches, setBranches] = useState<{ id: number; branch_name: string }[]>([]);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/scm/inventory-management/branch-management");
-        const json = await res.json();
-        if (!cancelled && Array.isArray(json.branches)) {
-          setBranches(json.branches);
-        }
-      } catch (err) {
-        console.error("Failed to fetch branches", err);
-      }
-    })();
-    return () => { cancelled = true; };
+    fetch("/api/scm/inventory-management/branch-management")
+      .then(res => res.json())
+      .then(json => {
+        if (Array.isArray(json.branches)) setBranches(json.branches);
+      })
+      .catch(err => console.error("Failed to fetch branches", err));
   }, []);
-
-  // ── Scanner UI State ──────────────────────────────────────────────────────
-  const [isScanning, setIsScanning] = useState(false);
-  const [scannedSourceRfid, setScannedSourceRfid] = useState<string | null>(null);
-  const rfidBuffer = useRef("");
 
   const {
     data,
@@ -79,16 +54,16 @@ export default function StockConversionModule({
     pageSize,
     setPage,
     setPageSize,
+    options,
     isLoading,
+    convertingId,
     error,
     refresh,
-    loadInventory,
     loadProductsInventory,
     convertStock,
-    checkProductRfids,
     validateDuplicateTag,
+    setFilters,
   } = useStockConversion(selectedBranchId > 0 ? selectedBranchId : undefined);
-
 
   const [selectedProduct, setSelectedProduct] = useState<StockConversionProduct | null>(null);
   const [isUnitModalOpen, setIsUnitModalOpen] = useState(false);
@@ -96,6 +71,7 @@ export default function StockConversionModule({
   const [isSourceRfidModalOpen, setIsSourceRfidModalOpen] = useState(false);
   const [manualSourceRfid, setManualSourceRfid] = useState("");
   const [pendingSourceProduct, setPendingSourceProduct] = useState<StockConversionProduct | null>(null);
+  const [scannedSourceRfid, setScannedSourceRfid] = useState<string | null>(null);
   const [pendingConversion, setPendingConversion] = useState<{
     qtyToConvert: number;
     targetUnitId: number;
@@ -104,20 +80,9 @@ export default function StockConversionModule({
   } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // ── State mirror refs (for use inside stable callbacks) ───────────────────
-  const selectedProductRef = useRef(selectedProduct);
-  selectedProductRef.current = selectedProduct;
-
-  const pendingConversionRef = useRef(pendingConversion);
-  pendingConversionRef.current = pendingConversion;
-
-  const selectedBranchIdRef = useRef(selectedBranchId);
-  selectedBranchIdRef.current = selectedBranchId;
-
-  // ── Stable callbacks ──────────────────────────────────────────────────────
+  // ── Logic ─────────────────────────────────────────────────────────────────
 
   const handleOpenConversion = useCallback(async (product: StockConversionProduct, preScannedRfid?: string) => {
-    // 1. If we already scanned a source RFID or it's provided, proceed to open conversion modal
     if (preScannedRfid) {
        setSelectedProduct(product);
        setPendingConversion(null);
@@ -125,48 +90,32 @@ export default function StockConversionModule({
        return;
     }
 
-    const branchId = selectedBranchIdRef.current > 0 ? selectedBranchIdRef.current : userRef.current.branchId;
-
-    // 2. Determine if it's a Box to Pieces conversion (source unit is Box)
     const isBoxSource = product.currentUnit?.toLowerCase().includes("box");
 
     if (isBoxSource) {
-       // Demand source RFID for Box
        setPendingSourceProduct(product);
        setManualSourceRfid("");
        setIsSourceRfidModalOpen(true);
        return;
     }
 
-    // 3. General Validation: Ensure the product has AT LEAST ONE RFID in the warehouse
-    setIsSubmitting(true);
-    try {
-      const hasRfid = await checkProductRfids(product.productId, branchId);
-      if (!hasRfid) {
-        toast.error("Validation Failed", {
-          description: "Cannot convert: No existing RFID tags detected for this product in this branch. Inventory mismatch."
-        });
-        return;
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-
+    // For non-box sources (Ties, Pieces, etc.), we don't strictly require 
+    // an existing RFID in v_rfid_onhand to start the conversion process.
     setSelectedProduct(product);
     setPendingConversion(null);
     setIsUnitModalOpen(true);
-  }, [checkProductRfids]);
+  }, []);
 
   const handleManualSourceRfidSubmit = async () => {
      if (!manualSourceRfid.trim() || !pendingSourceProduct) return;
      
      setIsSubmitting(true);
      try {
-       const branchId = selectedBranchIdRef.current > 0 ? selectedBranchIdRef.current : userRef.current.branchId;
+       const branchId = selectedBranchId > 0 ? selectedBranchId : userRef.current.branchId;
        const res = await fetch(`/api/scm/warehouse-management/stock-transfer?action=lookup_rfid&rfid=${encodeURIComponent(manualSourceRfid.trim())}&branch_id=${branchId}`);
        
        if (!res.ok) {
-         toast.error("Invalid Source RFID", { description: "The scanned Box RFID does not exist in the warehouse." });
+         toast.error("Invalid Source RFID", { description: "The scanned Box RFID does not exist." });
          return;
        }
        
@@ -176,7 +125,6 @@ export default function StockConversionModule({
          return;
        }
 
-       // Success: proceed
        setScannedSourceRfid(manualSourceRfid.trim());
        setIsSourceRfidModalOpen(false);
        setSelectedProduct(pendingSourceProduct);
@@ -189,88 +137,37 @@ export default function StockConversionModule({
      }
   };
 
-  const handleCloseUnitModal = useCallback(() => {
-    setIsUnitModalOpen(false);
-    setScannedSourceRfid(null);
-  }, []);
-  
-  const handleCloseRfidModal = useCallback(() => {
-    setIsRfidModalOpen(false);
-    setScannedSourceRfid(null);
-  }, []);
-
-  // ── Global RFID listener ────────────────────────────────────────────────
-  useEffect(() => {
-    // We bind the listener globally, but exit early if busy.
-    const handleGlobalKey = async (e: globalThis.KeyboardEvent) => {
-      if (e.ctrlKey || e.altKey || e.metaKey) return;
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-
-      if (e.key === 'Enter') {
-        const val = rfidBuffer.current.trim();
-        rfidBuffer.current = "";
-        
-        // Prevent action if modals are open or we're busy
-        if (!val || isScanning || isSubmitting || isUnitModalOpen || isRfidModalOpen) return;
-
-        setIsScanning(true);
-        try {
-          const branchId = selectedBranchIdRef.current > 0 ? selectedBranchIdRef.current : userRef.current.branchId;
-          const res = await fetch(`/api/scm/warehouse-management/stock-transfer?action=lookup_rfid&rfid=${encodeURIComponent(val)}&branch_id=${branchId}`);
-          
-          if (!res.ok) {
-            toast.error("RFID tags not recognized or not available.");
-            return;
-          }
-          
-          const match = await res.json();
-          const pId = Number(match.productId);
-
-          // Find product in current data table
-          const product = data.find(p => p.productId === pId);
-          if (product) {
-            toast.success(`Scanned: ${product.productName || 'Product'}`, {
-              description: "Select target unit to convert to."
-            });
-            setScannedSourceRfid(val);
-            handleOpenConversion(product, val);
-          } else {
-            toast.error("Scanned product not loaded in the list.", {
-              description: "Please load the product's inventory first."
-            });
-          }
-        } catch {
-          toast.error("Network error reading RFID.");
-        } finally {
-          setIsScanning(false);
+  // ── RFID Scanner Hook ─────────────────────────────────────────────────────
+  useRFIDScanner({
+    enabled: !isLoading && !isSubmitting && !isUnitModalOpen && !isRfidModalOpen && !isSourceRfidModalOpen,
+    onScan: async (val) => {
+      try {
+        const branchId = selectedBranchId > 0 ? selectedBranchId : userRef.current.branchId;
+        const res = await fetch(`/api/scm/warehouse-management/stock-transfer?action=lookup_rfid&rfid=${encodeURIComponent(val)}&branch_id=${branchId}`);
+        if (!res.ok) {
+          toast.error("RFID tag not recognized or unavailable.");
+          return;
         }
-      } else if (e.key.length === 1) {
-        rfidBuffer.current += e.key;
+        const match = await res.json();
+        const product = data.find(p => p.productId === Number(match.productId));
+        if (product) {
+          toast.success(`Scanned: ${product.productName}`);
+          setScannedSourceRfid(val);
+          handleOpenConversion(product, val);
+        } else {
+          toast.error("Scanned product not found in current list.");
+        }
+      } catch {
+        toast.error("Error reading RFID scanner.");
       }
-    };
-
-    window.addEventListener('keydown', handleGlobalKey);
-    return () => window.removeEventListener('keydown', handleGlobalKey);
-  }, [data, isScanning, isSubmitting, isUnitModalOpen, isRfidModalOpen, handleOpenConversion]);
-
-  // ✅ Fix: onBranchChange expects (branchId: number | undefined) => void
-  // but setSelectedBranchId is Dispatch<SetStateAction<number>> which rejects undefined.
-  // Wrap it so undefined maps to 0 (meaning "no branch selected").
-  const handleBranchChange = useCallback((branchId: number | undefined) => {
-    setSelectedBranchId(branchId ?? 0);
-  }, []);
+    }
+  });
 
   const handleConfirmUnitConversion = useCallback(async (
     qtyToConvert: number,
-    targetUnit: { unitId: number; targetProductId?: number },
+    targetUnit: { unitId: number; targetProductId?: number; name?: string },
     convertedQuantity: number
   ) => {
-    console.log("[StockConversionModule] Confirming unit conversion:", {
-      qtyToConvert,
-      targetUnit,
-      convertedQuantity,
-    });
-
     setPendingConversion({
       qtyToConvert,
       targetUnitId: targetUnit.unitId,
@@ -279,39 +176,30 @@ export default function StockConversionModule({
     });
     setIsUnitModalOpen(false);
 
-    const current = selectedProductRef.current;
-    if (!current) return;
+    if (!selectedProduct) return;
 
-    const targetUnitRecord = current.availableUnits?.find(
-      (u) => u.unitId === targetUnit.unitId
-    );
-    const isBoxInvolved =
-      current.currentUnit?.toLowerCase().includes("box") ||
-      targetUnitRecord?.name?.toLowerCase().includes("box");
+    // Logic: 
+    // 1. If TARGET is a Box, we NEED to assign new RFIDs.
+    // 2. If TARGET is NOT a box, but SOURCE WAS a box, we just use the scannedSourceRfid.
+    const isTargetBox = targetUnit.name?.toLowerCase().includes("box");
 
-    if (isBoxInvolved) {
-      setTimeout(() => {
-        console.log("[StockConversionModule] Opening RFID Modal...");
-        setIsRfidModalOpen(true);
-      }, 150);
+    if (isTargetBox) {
+      setTimeout(() => setIsRfidModalOpen(true), 150);
       return;
     }
 
-    const user = userRef.current;
-    const branchId = selectedBranchIdRef.current > 0
-      ? selectedBranchIdRef.current
-      : user.branchId > 0 ? user.branchId : 190;
-
+    // Execution for non-box targets (including Box -> Piece)
+    const branchId = selectedBranchId > 0 ? selectedBranchId : (userRef.current.branchId || 190);
     const payload = {
-      productId: current.productId,
-      sourceUnitId: current.currentUnitId ?? 11,
+      productId: selectedProduct.productId,
+      sourceUnitId: selectedProduct.currentUnitId ?? 11,
       targetUnitId: targetUnit.unitId,
-      targetProductId: targetUnit.targetProductId ?? current.productId,
+      targetProductId: targetUnit.targetProductId ?? selectedProduct.productId,
       quantityToConvert: qtyToConvert,
       convertedQuantity,
-      pricePerUnit: current.pricePerUnit ?? 0,
+      pricePerUnit: selectedProduct.pricePerUnit,
       branchId,
-      userId: user.id > 0 ? user.id : 24,
+      userId: userRef.current.id || 24,
       rfidTags: [] as RFIDTag[],
       sourceRfidTags: scannedSourceRfid ? [scannedSourceRfid] : undefined,
     };
@@ -322,39 +210,28 @@ export default function StockConversionModule({
       setSelectedProduct(null);
       setPendingConversion(null);
       setScannedSourceRfid(null);
-    } catch (e) {
-      console.error(e);
     } finally {
       setIsSubmitting(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [convertStock]);
+  }, [selectedProduct, selectedBranchId, scannedSourceRfid, convertStock]);
 
   const handleConfirmRFID = useCallback(async (tags: RFIDTag[]) => {
-    const currentProduct = selectedProductRef.current;
-    const currentPending = pendingConversionRef.current;
-    if (!currentProduct || !currentPending) return;
+    if (!selectedProduct || !pendingConversion) return;
 
-    const user = userRef.current;
-    const branchId = selectedBranchIdRef.current > 0
-      ? selectedBranchIdRef.current
-      : user.branchId > 0 ? user.branchId : 190;
-
+    const branchId = selectedBranchId > 0 ? selectedBranchId : (userRef.current.branchId || 190);
     const payload = {
-      productId: currentProduct.productId,
-      sourceUnitId: currentProduct.currentUnitId ?? 11,
-      targetUnitId: currentPending.targetUnitId,
-      targetProductId: currentPending.targetProductId ?? currentProduct.productId,
-      quantityToConvert: currentPending.qtyToConvert,
-      convertedQuantity: currentPending.convertedQuantity,
-      pricePerUnit: currentProduct.pricePerUnit ?? 0,
+      productId: selectedProduct.productId,
+      sourceUnitId: selectedProduct.currentUnitId ?? 11,
+      targetUnitId: pendingConversion.targetUnitId,
+      targetProductId: pendingConversion.targetProductId || selectedProduct.productId,
+      quantityToConvert: pendingConversion.qtyToConvert,
+      convertedQuantity: pendingConversion.convertedQuantity,
+      pricePerUnit: selectedProduct.pricePerUnit,
       branchId,
-      userId: user.id > 0 ? user.id : 24,
+      userId: userRef.current.id || 24,
       rfidTags: tags,
       sourceRfidTags: scannedSourceRfid ? [scannedSourceRfid] : undefined,
     };
-
-    console.log("[StockConversion] Confirming with payload:", payload);
 
     setIsSubmitting(true);
     try {
@@ -363,38 +240,17 @@ export default function StockConversionModule({
       setSelectedProduct(null);
       setPendingConversion(null);
       setScannedSourceRfid(null);
-    } catch (e) {
-      console.error(e);
     } finally {
       setIsSubmitting(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [convertStock]);
-
-  // ── Render ─────────────────────────────────────────────────────────────────
-
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setMounted(true);
-    }, 0);
-    return () => clearTimeout(timer);
-  }, []);
-
-  if (!mounted) {
-    return <ModuleSkeleton hasActions={false} rowCount={8} />;
-  }
+  }, [selectedProduct, pendingConversion, selectedBranchId, scannedSourceRfid, convertStock]);
 
   if (error) {
-    return (
-      <ErrorPage
-        code="Error Fetching Stock"
-        title="Conversion Data Unreachable"
-        message={error}
-        reset={refresh}
-      />
-    );
+    return <ErrorPage code="500" title="Fetch Error" message={error} reset={refresh} />;
+  }
+
+  if (isLoading && data.length === 0) {
+    return <ModuleSkeleton rowCount={10} />;
   }
 
   return (
@@ -407,18 +263,21 @@ export default function StockConversionModule({
         setPage={setPage}
         setPageSize={setPageSize}
         onConvertClick={handleOpenConversion}
-        onRefresh={loadInventory}
+        onRefresh={refresh}
+        options={options}
+        convertingId={convertingId}
+        onFilterChange={setFilters}
         loadProductsInventory={loadProductsInventory}
         isLoading={isLoading}
         branches={branches}
         selectedBranchId={selectedBranchId > 0 ? selectedBranchId : undefined}
-        onBranchChange={handleBranchChange}
+        onBranchChange={val => setSelectedBranchId(val ?? 0)}
       />
 
       <StockConversionModal
         product={selectedProduct}
         isOpen={isUnitModalOpen}
-        onClose={handleCloseUnitModal}
+        onClose={() => setIsUnitModalOpen(false)}
         onConfirm={handleConfirmUnitConversion}
       />
 
@@ -426,7 +285,7 @@ export default function StockConversionModule({
         product={selectedProduct}
         conversionDetails={pendingConversion}
         isOpen={isRfidModalOpen}
-        onClose={handleCloseRfidModal}
+        onClose={() => setIsRfidModalOpen(false)}
         onSubmit={handleConfirmRFID}
         isSubmitting={isSubmitting}
         validateTag={validateDuplicateTag}
@@ -440,7 +299,7 @@ export default function StockConversionModule({
               Scan Source Box RFID
             </DialogTitle>
             <DialogDescription>
-              You are converting a Box into pieces. Please scan or enter the specific RFID of the box you wish to convert.
+              Scan or enter the specific RFID of the box you wish to convert.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-4">
@@ -454,12 +313,7 @@ export default function StockConversionModule({
                 disabled={isSubmitting}
                 className="w-full text-center font-bold tracking-widest text-lg"
                 autoFocus
-                onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleManualSourceRfidSubmit();
-                  }
-                }}
+                onKeyDown={e => { if (e.key === 'Enter') handleManualSourceRfidSubmit(); }}
              />
           </div>
           <DialogFooter>

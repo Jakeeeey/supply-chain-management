@@ -111,7 +111,7 @@ export function useStockTransferDispatchManual() {
           }
         }
         
-        if (results.some((r: any) => r.status === 'fulfilled')) setScannedInventory(newAvailable);
+        if (results.some((r) => r.status === 'fulfilled')) setScannedInventory(newAvailable);
       } catch (err) {
         console.error('Failed to fetch initial available quantities:', err);
       } finally {

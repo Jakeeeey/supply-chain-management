@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { ScannedItem, CompanyData } from '../types/stock-transfer.types';
+import { ScannedItem, CompanyData, OrderGroupItem, ProductRow } from '../types/stock-transfer.types';
 
 export interface StockTransferPDFData {
   orderNo: string;
@@ -194,8 +194,7 @@ export function generateStockTransferPDF(data: StockTransferPDFData): jsPDF {
   });
 
   // ── Signature section ─────────────────────────────────────────
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const afterTableY = (doc as Record<string, any>).lastAutoTable?.finalY ?? y + 40;
+  const afterTableY = (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y + 40;
   const sigY  = afterTableY + 16;
   const sigW  = (contentW - 20) / 3;
   const sigGap = 10;
@@ -243,7 +242,7 @@ export interface PicklistPDFData {
   orderNo: string;
   pickerName: string;
   date: string;
-  items: any[]; 
+  items: OrderGroupItem[]; 
   companyData: CompanyData | null;
 }
 
@@ -251,7 +250,7 @@ export interface ReceivingPDFData {
   orderNo: string;
   checkedBy: string;
   date: string;
-  items: any[];
+  items: OrderGroupItem[];
   companyData: CompanyData | null;
   sourceBranch?: string;
   targetBranch?: string;
@@ -305,11 +304,11 @@ export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
 
   // ── Grouping & Body ───────────────────────────────────────────
   // Group by Brand/Supplier
-  const groups: Record<string, any[]> = {};
+  const groups: Record<string, OrderGroupItem[]> = {};
   items.forEach(item => {
-    const product = typeof item.product_id === 'object' ? item.product_id : {};
-    const brand = typeof product.product_brand === 'object' ? product.product_brand?.brand_name : 'No Brand';
-    const supplierObj = product.product_per_supplier?.[0]?.supplier_id;
+    const product = typeof item.product_id === 'object' ? (item.product_id as ProductRow) : null;
+    const brand = typeof product?.product_brand === 'object' ? product.product_brand?.brand_name : 'No Brand';
+    const supplierObj = product?.product_per_supplier?.[0]?.supplier_id;
     const supplier = typeof supplierObj === 'object' ? supplierObj.supplier_shortcut : (supplierObj || 'N/A');
     
     const groupKey = `${supplier} | ${brand}`;
@@ -343,9 +342,9 @@ export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
         y = 20;
       }
 
-      const product = typeof item.product_id === 'object' ? item.product_id : {};
-      const productName = product.product_name || `ID: ${item.product_id}`;
-      const unit = (typeof product.unit_of_measurement === 'object' ? product.unit_of_measurement?.unit_name : 'PCS') || 'PCS';
+      const product = typeof item.product_id === 'object' ? (item.product_id as ProductRow) : null;
+      const productName = product?.product_name || `ID: ${item.product_id}`;
+      const unit = (typeof product?.unit_of_measurement === 'object' ? product.unit_of_measurement?.unit_name : 'PCS') || 'PCS';
       const qty = item.allocated_quantity ?? item.ordered_quantity ?? 0;
 
       // Checkbox
@@ -402,9 +401,7 @@ export function generateStockTransferReceivingPDF(data: ReceivingPDFData): jsPDF
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'legal' });
 
   const pageW = doc.internal.pageSize.getWidth();
-  const pageH = doc.internal.pageSize.getHeight();
   const margin = 16;
-  const contentW = pageW - margin * 2;
 
   let y = drawCorporateHeader(doc, companyData, margin, pageW);
 
@@ -433,11 +430,11 @@ export function generateStockTransferReceivingPDF(data: ReceivingPDFData): jsPDF
 
   // ── Table ─────────────────────────────────────────────────────
   const rows = items.map((item) => {
-    const product = typeof item.product_id === 'object' ? item.product_id : {};
+    const product = typeof item.product_id === 'object' ? (item.product_id as ProductRow) : null;
     return [
-      product.product_name || `ID: ${item.product_id}`,
-      (typeof product.unit_of_measurement === 'object' ? product.unit_of_measurement?.unit_name : 'PCS') || 'PCS',
-      product.product_code || '---',
+      product?.product_name || `ID: ${item.product_id}`,
+      (typeof product?.unit_of_measurement === 'object' ? product.unit_of_measurement?.unit_name : 'PCS') || 'PCS',
+      product?.product_code || '---',
       String(item.receivedQty || 0),
       String(item.allocated_quantity || 0),
     ];

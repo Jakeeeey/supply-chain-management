@@ -29,7 +29,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 
 export default function StockTransferReceiveManualView({ currentUser }: { currentUser: CurrentUser }) {
   const {
@@ -154,7 +153,6 @@ export default function StockTransferReceiveManualView({ currentUser }: { curren
                     {paginatedItems.map((item: OrderGroupItem) => {
                       const targetQty = Math.max(0, item.allocated_quantity ?? 0);
                       const currentQty = receivedQtys[item.id] ?? 0;
-                      const complete = currentQty >= targetQty;
                       const product = typeof item.product_id === 'object' && item.product_id !== null ? item.product_id : null;
                       const productName = product?.product_name || `PRD-${item.product_id}`;
 

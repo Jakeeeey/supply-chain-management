@@ -12,7 +12,6 @@ import {
   TableRow,
   TableFooter,
 } from '@/components/ui/table';
-import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,

@@ -108,7 +108,6 @@ export function useStockTransferDispatch() {
         // Mark as loose pack if unit is pieces, tie, pcs, or loose (these don't need RFID scanning)
         const loosePack = unitName.includes('loose') || unitName.includes('pieces') || unitName.includes('pcs') || unitName.includes('tie') || unitId === 4;
         
-        const targetQty = Math.max(0, st.allocated_quantity ?? 0);
         const rawAvailable = scannedInventory[pid as number] ?? (st as OrderGroupItem).qtyAvailable ?? 0;
         
         const manualQty = (manualQtysState[group.orderNo] || {})[pid as number] || 0;
@@ -385,9 +384,9 @@ export function useStockTransferDispatch() {
       if (selectedGroup.status === 'For Picking') {
         await updateOrderStatus(base.selectedOrderNo!, 'Picking');
       }
-    } catch (error: unknown) {
-      pushError('Tag not found in inventory', 'Not Found');
-    }
+      } catch {
+        pushError('Tag not found in inventory', 'Not Found');
+      }
   };
 
   const markAsPicked = async (orderNo: string) => {

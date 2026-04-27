@@ -100,7 +100,9 @@ export async function fetchProducts(search?: string): Promise<ProductRow[]> {
   };
 
   if (search) {
-    params["filter[product_name][_icontains]"] = search;
+    params["filter[_or][0][product_name][_icontains]"] = search;
+    params["filter[_or][1][product_code][_icontains]"] = search;
+    params["filter[_or][2][barcode][_icontains]"] = search;
   }
 
   const res = await fetchItems<ProductRow>("items/products", params);
