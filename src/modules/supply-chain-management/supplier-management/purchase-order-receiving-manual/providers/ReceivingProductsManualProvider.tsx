@@ -666,6 +666,13 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
             return setSaveError(err);
         }
 
+        // ✅ SNAPSHOT items and counts BEFORE the API call so they survive state resets
+        const snapshotAllocs = Array.isArray(selectedPO?.allocations) ? selectedPO!.allocations : [];
+        const snapshotItems = snapshotAllocs.flatMap((a: { items: ReceivingPOItem[] }) =>
+            Array.isArray(a?.items) ? a.items : []
+        );
+        const snapshotCounts = { ...counts };
+
         setSavingReceipt(true);
         try {
             const oldReceiptNo = receiptNo.trim();
@@ -692,34 +699,36 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
                 setPoBarcode(detail?.poNumber ?? "");
             }
 
-            // ✅ gather items for printing
-            const allocs = Array.isArray(detail?.allocations) ? detail.allocations : [];
-            const allItems = allocs.flatMap((a: { items: ReceivingPOItem[] }) => {
-                return Array.isArray(a?.items) ? a.items : [];
-            });
+            // ✅ Build saved items from API detail if available, else fallback to snapshot
+            const sourceAllocs = detail?.allocations ?? snapshotAllocs;
+            const sourceItems = (Array.isArray(sourceAllocs) ? sourceAllocs : []).flatMap(
+                (a: { items: ReceivingPOItem[] }) => Array.isArray(a?.items) ? a.items : []
+            );
+            const itemsToUse = sourceItems.length > 0 ? sourceItems : snapshotItems;
 
             // Calculate if fully received
-            const countsMap = counts || {};
-            const isFullyReceivedNow = allItems.every((it: ReceivingPOItem) => {
-                const scannedNow = Number(countsMap[it.id] || 0);
+            const isFullyReceivedNow = itemsToUse.every((it: ReceivingPOItem) => {
+                const scannedNow = Number(snapshotCounts[it.id] || 0);
                 return (Number(it.receivedQty) + scannedNow) >= Number(it.expectedQty);
             });
 
-            const savedItems: SavedItem[] = allItems.map((it: ReceivingPOItem) => {
-                const scannedNow = Number(countsMap[it.id] || 0);
+            const savedItems: SavedItem[] = itemsToUse.map((it: ReceivingPOItem) => {
+                // ✅ Try literal ID first, then fallback to productId-branchId key
+                const scannedNow = Number(snapshotCounts[it.id] || snapshotCounts[`${it.productId}-${it.branchId}`] || 0);
+
                 return {
                     productId: String(it.productId),
                     name: String(it.name),
                     barcode: String(it.barcode),
                     expectedQty: Number(it.expectedQty),
-                    receivedQtyAtStart: Number(it.receivedQty) - scannedNow,
+                    receivedQtyAtStart: Number(it.receivedQty || 0),
                     receivedQtyNow: scannedNow,
                     unitPrice: Number(it.unitPrice) || 0,
                     discountAmount: Number(it.discountAmount) || 0,
                     uom: String(it.uom || ""),
-                    batchNo: porMetaData?.[it.id]?.batchNo || "",
-                    lotId: porMetaData?.[it.id]?.lotNo || "",
-                    expiryDate: porMetaData?.[it.id]?.expiryDate || "",
+                    batchNo: porMetaData?.[it.id]?.batchNo || porMetaData?.[`${it.productId}-${it.branchId}`]?.batchNo || "",
+                    lotId: porMetaData?.[it.id]?.lotNo || porMetaData?.[`${it.productId}-${it.branchId}`]?.lotNo || "",
+                    expiryDate: porMetaData?.[it.id]?.expiryDate || porMetaData?.[`${it.productId}-${it.branchId}`]?.expiryDate || "",
                     rfids: []
                 };
             });

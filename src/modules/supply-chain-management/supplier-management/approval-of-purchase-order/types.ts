@@ -113,6 +113,8 @@ export type PurchaseOrderDetail = {
 
     is_invoice?: boolean | number;
     isInvoice?: boolean | number;
+    preparer_name?: string;
+    encoder_id?: unknown;
 };
 export type Supplier = {
     id: string;

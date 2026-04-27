@@ -454,6 +454,9 @@ async function fetchPendingPOs(base: string): Promise<PoHeaderRow[]> {
         "receiving_type",
         "user_created.first_name",
         "user_created.last_name",
+        "encoder_id.user_id",
+        "encoder_id.user_fname",
+        "encoder_id.user_lname",
         "encoder_id.first_name",
         "encoder_id.last_name",
     ].join(",");
@@ -565,7 +568,7 @@ async function fetchProductSupplierLinks(base: string, productIds: number[]) {
 // DETAIL BUILDER
 // =====================
 async function buildPurchaseOrderDetail(base: string, poId: number) {
-    const fields = encodeURIComponent("*,discount_type.*,discount_type.line_per_discount_type.line_id.*,user_created.first_name,user_created.last_name,encoder_id.first_name,encoder_id.last_name");
+    const fields = encodeURIComponent("*,discount_type.*,discount_type.line_per_discount_type.line_id.*,user_created.first_name,user_created.last_name,encoder_id.user_id,encoder_id.user_fname,encoder_id.user_lname,encoder_id.first_name,encoder_id.last_name");
     const headerUrl = `${base}/items/${PO_COLLECTION}/${encodeURIComponent(String(poId))}?fields=${fields}`;
     const headerJ = await fetchJson(headerUrl) as { data: Record<string, unknown> };
     const header = (headerJ?.data as Record<string, unknown>) ?? null;
@@ -779,25 +782,43 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
     // 1) Try encoder_id (Object or expanded)
     const encoder = header?.encoder_id;
     if (typeof encoder === "object" && encoder) {
-        preparerName = [(encoder as any).first_name, (encoder as any).last_name].filter(Boolean).join(" ");
+        preparerName = [
+            (encoder as any).user_fname ?? (encoder as any).first_name, 
+            (encoder as any).user_lname ?? (encoder as any).last_name
+        ].filter(Boolean).join(" ");
     }
     
     // 2) Try user_created (Object or expanded)
     if (!preparerName || preparerName === "—") {
         const creator = header?.user_created;
         if (typeof creator === "object" && creator) {
-            preparerName = [(creator as any).first_name, (creator as any).last_name].filter(Boolean).join(" ");
+            preparerName = [
+                (creator as any).user_fname ?? (creator as any).first_name, 
+                (creator as any).user_lname ?? (creator as any).last_name
+            ].filter(Boolean).join(" ");
         }
     }
 
-    // 3) Fallback: Fetch by ID string
+    // 3) Fallback: Fetch by ID string from custom 'user' collection OR 'directus_users'
     if (!preparerName || preparerName === "—") {
         const userId = String(header?.encoder_id || header?.user_created || "");
-        if (userId && userId !== "—" && userId.length > 5) { // basic UUID check
+        if (userId && userId !== "—" && userId !== "[object Object]") {
             try {
-                const userUrl = `${base}/users/${encodeURIComponent(userId)}?fields=first_name,last_name`;
-                const userJ = await fetchJson(userUrl) as { data: { first_name?: string; last_name?: string } };
-                preparerName = [userJ?.data?.first_name, userJ?.data?.last_name].filter(Boolean).join(" ");
+                // Try custom 'user' collection first (numeric IDs usually stay here)
+                const isNumeric = /^\d+$/.test(userId);
+                const userUrl = isNumeric
+                    ? `${base}/items/user?filter[user_id][_eq]=${userId}&fields=user_fname,user_lname`
+                    : `${base}/users/${encodeURIComponent(userId)}?fields=first_name,last_name`;
+                
+                const userJ = await fetchJson(userUrl) as { data: any };
+                const u = Array.isArray(userJ?.data) ? userJ.data[0] : userJ?.data;
+                
+                if (u) {
+                    preparerName = [
+                        u.user_fname || u.first_name,
+                        u.user_lname || u.last_name
+                    ].filter(Boolean).join(" ");
+                }
             } catch { /* skip */ }
         }
     }
@@ -951,20 +972,35 @@ export async function GET(req: NextRequest) {
         // 1) Batch resolve all possible preparers (encoder_id or user_created)
         const allUserIds = new Set<string>();
         for (const h of headers) {
-            const eid = typeof h.encoder_id === "string" ? h.encoder_id : "";
-            const ucid = typeof h.user_created === "string" ? h.user_created : "";
-            if (eid && eid.length > 5) allUserIds.add(eid);
-            if (ucid && ucid.length > 5) allUserIds.add(ucid);
+            const eid = typeof h.encoder_id === "object" && h.encoder_id ? String((h.encoder_id as any).user_id || (h.encoder_id as any).id || "") : String(h.encoder_id || "");
+            const ucid = typeof h.user_created === "object" && h.user_created ? String((h.user_created as any).id || "") : String(h.user_created || "");
+            if (eid && eid !== "undefined" && eid !== "null" && eid !== "[object Object]") allUserIds.add(eid);
+            if (ucid && ucid !== "undefined" && ucid !== "null" && ucid !== "[object Object]") allUserIds.add(ucid);
         }
 
         const userNamesMap = new Map<string, string>();
         if (allUserIds.size > 0) {
             try {
-                const ids = Array.from(allUserIds).join(",");
-                const userUrl = `${base}/users?fields=id,first_name,last_name&filter[id][_in]=${encodeURIComponent(ids)}`;
-                const userJ = await fetchJson(userUrl) as { data: Array<{ id: string; first_name?: string; last_name?: string }> };
-                for (const u of userJ?.data ?? []) {
-                    userNamesMap.set(u.id, [u.first_name, u.last_name].filter(Boolean).join(" ") || "—");
+                const IDs = Array.from(allUserIds);
+                const numericIds = IDs.filter(id => /^\d+$/.test(id));
+                const uuidIds = IDs.filter(id => !/^\d+$/.test(id));
+
+                // A) Fetch from custom 'user' collection
+                if (numericIds.length > 0) {
+                    const uUrl = `${base}/items/user?fields=user_id,user_fname,user_lname&filter[user_id][_in]=${encodeURIComponent(numericIds.join(","))}`;
+                    const uJ = await fetchJson(uUrl) as { data: any[] };
+                    for (const u of uJ?.data ?? []) {
+                        userNamesMap.set(String(u.user_id), [u.user_fname, u.user_lname].filter(Boolean).join(" ") || "—");
+                    }
+                }
+
+                // B) Fetch from standard 'directus_users'
+                if (uuidIds.length > 0) {
+                    const uUrl = `${base}/users?fields=id,first_name,last_name&filter[id][_in]=${encodeURIComponent(uuidIds.join(","))}`;
+                    const uJ = await fetchJson(uUrl) as { data: any[] };
+                    for (const u of uJ?.data ?? []) {
+                        userNamesMap.set(String(u.id), [u.first_name, u.last_name].filter(Boolean).join(" ") || "—");
+                    }
                 }
             } catch { /* skip batch fetch fail */ }
         }
@@ -981,8 +1017,18 @@ export async function GET(req: NextRequest) {
                 const enc = h.encoder_id;
                 const uc = h.user_created;
                 // a) Try expanded objects
-                if (typeof enc === "object" && enc) return [(enc as any).first_name, (enc as any).last_name].filter(Boolean).join(" ") || "—";
-                if (typeof uc === "object" && uc) return [(uc as any).first_name, (uc as any).last_name].filter(Boolean).join(" ") || "—";
+                if (typeof enc === "object" && enc) {
+                    return [
+                        (enc as any).user_fname ?? (enc as any).first_name, 
+                        (enc as any).user_lname ?? (enc as any).last_name
+                    ].filter(Boolean).join(" ") || "—";
+                }
+                if (typeof uc === "object" && uc) {
+                    return [
+                        (uc as any).user_fname ?? (uc as any).first_name, 
+                        (uc as any).user_lname ?? (uc as any).last_name
+                    ].filter(Boolean).join(" ") || "—";
+                }
                 // b) Try mapped names from IDs
                 const eid = typeof enc === "string" ? enc : "";
                 const ucid = typeof uc === "string" ? uc : "";

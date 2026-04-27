@@ -479,7 +479,7 @@ export async function POST(req: NextRequest) {
             const thePoId = toNum(poId);
             if (!thePoId) return bad("Missing PO ID");
 
-            const poUrl = `${base}/items/${PO_COLLECTION}/${thePoId}?fields=supplier_name,discount_type.*,discount_type.line_per_discount_type.line_id.*`;
+            const poUrl = `${base}/items/${PO_COLLECTION}/${thePoId}?fields=purchase_order_id,purchase_order_no,supplier_name,discount_type.*,discount_type.line_per_discount_type.line_id.*,inventory_status,price_type,date_encoded`;
             const pj = await fetchJson<{ data: POHeaderRow }>(poUrl);
             const po = pj?.data;
             let poDiscountPercent = 0;
@@ -578,7 +578,52 @@ export async function POST(req: NextRequest) {
             if (fully) patchPO.date_received = nowISO();
             await fetchJson(`${base}/items/${PO_COLLECTION}/${thePoId}`, { method: "PATCH", body: JSON.stringify(patchPO) }).catch(() => {});
 
-            return ok({ success: true });
+            // ✅ Return the full updated PO detail so the frontend can render the Receipt Preview
+            const updatedProductIds = fLines.map(l => toNum(l.product_id));
+            const updatedProductsMap = await fetchProductsMap(base, updatedProductIds);
+            const updatedBranchesMap = await fetchBranchesMap(base, fLines.map(l => toNum(l.branch_id ?? 0)));
+            const updatedSupplierMap = await fetchSupplierNames(base, [toNum(po.supplier_name)]);
+            const updatedPorIdsByKey = buildPorIdsByKey(fPors);
+
+            const updatedAllocationsMap = new Map<number, unknown[]>();
+            for (const ln of fLines) {
+                const pid = toNum(ln.product_id);
+                const bid = toNum(ln.branch_id ?? 0);
+                const k = keyLine(thePoId, pid, bid);
+                const p = updatedProductsMap.get(pid);
+                const pors = updatedPorIdsByKey.get(k) || [];
+                const recQty = pors.reduce((sum, id) => sum + effectiveReceivedQty(fPors.find(r => toNum(r.purchase_order_product_id) === id)), 0);
+
+                const lineDiscountTypeId = linksMap.get(pid)?.discount_type;
+                let lineDiscountPercent = poDiscountPercent;
+                let lineDiscountTypeStr = dType ? toStr(dType.discount_type || dType.name, "Standard") : "Standard";
+                const resId = ensureId(lineDiscountTypeId);
+                if (resId) {
+                    const dt = discountMap.get(String(resId));
+                    if (dt) { lineDiscountPercent = dt.pct; lineDiscountTypeStr = dt.name; }
+                }
+
+                const dAmt = toNum(ln.unit_price) * (lineDiscountPercent / 100);
+                updatedAllocationsMap.set(bid, [...(updatedAllocationsMap.get(bid) ?? []), {
+                    id: pors[0] ? String(pors[0]) : `${pid}-${bid}`, porId: String(pors[0] || ""),
+                    productId: String(pid), branchId: String(bid), name: toStr(p?.product_name, `Product #${pid}`),
+                    barcode: productDisplayCode(p, pid), uom: String(p?.unit_of_measurement?.unit_shortcut ?? "BOX").toUpperCase(),
+                    expectedQty: toNum(ln.ordered_quantity), receivedQty: recQty, requiresRfid: false,
+                    isReceived: recQty >= toNum(ln.ordered_quantity), unitPrice: toNum(ln.unit_price),
+                    discountType: lineDiscountTypeStr, discountAmount: dAmt, netAmount: recQty * (toNum(ln.unit_price) - dAmt)
+                }]);
+            }
+
+            const detail = {
+                id: String(thePoId), poNumber: toStr(po.purchase_order_no),
+                supplier: { id: String(po.supplier_name), name: updatedSupplierMap.get(toNum(po.supplier_name)) || "Supplier" },
+                status: receivingStatusFrom(thePoId, fLines, fPors),
+                allocations: Array.from(updatedAllocationsMap.entries()).map(([bid, items]) => ({ branch: { id: String(bid), name: updatedBranchesMap.get(bid) || `Branch ${bid}` }, items })),
+                priceType: toStr(po.price_type, "Cost Per Unit"),
+                createdAt: po.date_encoded ? new Date(po.date_encoded).toISOString() : new Date().toISOString(),
+            };
+
+            return ok({ success: true, detail });
         }
 
         if (action === "get_supplier_products") {
