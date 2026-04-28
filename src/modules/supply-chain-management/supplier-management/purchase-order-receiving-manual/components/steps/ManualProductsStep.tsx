@@ -8,6 +8,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { useReceivingProductsManual } from "../../providers/ReceivingProductsManualProvider";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { AlertTriangle } from "lucide-react";
 
 export function ManualProductsStep({ onContinue, onBack }: { onContinue: () => void; onBack: () => void }) {
     const {
@@ -20,6 +31,9 @@ export function ManualProductsStep({ onContinue, onBack }: { onContinue: () => v
     // ✅ Pagination state
     const [receivingPage, setReceivingPage] = React.useState(1);
     const ITEMS_PER_PAGE = 10;
+
+    // ✅ Verification Modal state
+    const [isOverReceivingModalOpen, setIsOverReceivingModalOpen] = React.useState(false);
 
     // ✅ Show only verified items
     const filteredItems = React.useMemo(() => {
@@ -46,6 +60,24 @@ export function ManualProductsStep({ onContinue, onBack }: { onContinue: () => v
         if (validVal < 0) validVal = 0;
 
         setManualCounts(prev => ({ ...prev, [id]: validVal }));
+    };
+
+    const isOverReceiving = React.useMemo(() => {
+        return filteredItems.some(it => {
+            const id = String(it.id);
+            const expected = Number(it.expectedQty || 0);
+            const receivedAtStart = Number(it.receivedQty || 0); // Quantity already received in previous saved receipts
+            const currentEntry = Number(manualCounts[id] || 0);
+            return (currentEntry + receivedAtStart) > expected && currentEntry > 0;
+        });
+    }, [filteredItems, manualCounts]);
+
+    const handleContinueClick = () => {
+        if (isOverReceiving) {
+            setIsOverReceivingModalOpen(true);
+        } else {
+            onContinue();
+        }
     };
 
     return (
@@ -94,10 +126,15 @@ export function ManualProductsStep({ onContinue, onBack }: { onContinue: () => v
                                             const itemObj = it as Record<string, unknown>;
                                             const id = String(itemObj.id);
                                             const expected = Number(itemObj.expectedQty || 0);
+                                            const receivedAtStart = Number(itemObj.receivedQty || 0);
                                             const currentEntry = manualCounts[id] || "";
+                                            const currentEntryNum = Number(currentEntry || 0);
+                                            
+                                            // Validate Over Receiving
+                                            const isOver = (currentEntryNum + receivedAtStart) > expected && currentEntryNum > 0;
 
                                             return (
-                                                <TableRow key={id}>
+                                                <TableRow key={id} className={isOver ? "bg-red-50/50" : ""}>
                                                     <TableCell className="max-w-[300px] overflow-hidden align-middle">
                                                         <div className="truncate text-sm font-bold text-foreground" title={it.name}>
                                                             {it.name}
@@ -106,18 +143,34 @@ export function ManualProductsStep({ onContinue, onBack }: { onContinue: () => v
                                                         <div className="truncate text-[10px] text-muted-foreground font-mono" title={`SKU: ${it.barcode}`}>SKU: {it.barcode}</div>
                                                     </TableCell>
                                                     <TableCell className="text-center align-middle">
-                                                        <div className="font-bold text-sm">{expected}</div>
+                                                        <div className="font-bold text-sm">
+                                                            {expected}
+                                                            {receivedAtStart > 0 && (
+                                                                <div className="text-[10px] font-normal text-muted-foreground whitespace-nowrap">
+                                                                    (Prev rec: {receivedAtStart})
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </TableCell>
                                                     <TableCell className="align-middle">
-                                                        <div className="relative">
+                                                        <div className="relative flex flex-col items-center">
                                                             <Input
                                                                 type="number"
                                                                 min="0"
                                                                 placeholder="0"
                                                                 value={currentEntry}
                                                                 onChange={(e) => handleCountChange(id, e.target.value)}
-                                                                className="h-9 w-full text-center font-black text-sm border-2 focus-visible:border-primary focus-visible:ring-0 shadow-none transition-colors"
+                                                                className={`h-9 w-full text-center font-black text-sm border-2 focus-visible:ring-0 shadow-none transition-colors ${
+                                                                    isOver 
+                                                                    ? "border-red-500 text-red-700 bg-red-50 focus-visible:border-red-600 focus-visible:ring-red-100" 
+                                                                    : "focus-visible:border-primary"
+                                                                }`}
                                                             />
+                                                            {isOver && (
+                                                                <div className="absolute -bottom-4 text-[9px] font-bold text-red-600 flex items-center whitespace-nowrap">
+                                                                    <AlertTriangle className="w-2.5 h-2.5 mr-0.5 inline" /> Over Receiving
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </TableCell>
                                                 </TableRow>
@@ -175,11 +228,11 @@ export function ManualProductsStep({ onContinue, onBack }: { onContinue: () => v
                     );
                 })()}
 
-                <div className="mt-6 flex justify-between">
+                <div className="mt-6 flex justify-between pt-2">
                     <Button variant="ghost" onClick={onBack}>← Back to Checklist</Button>
                     <Button
                         className="h-10 px-6 text-sm font-black uppercase tracking-widest"
-                        onClick={onContinue}
+                        onClick={handleContinueClick}
                         disabled={totalEntered <= 0}
                         type="button"
                     >
@@ -187,6 +240,29 @@ export function ManualProductsStep({ onContinue, onBack }: { onContinue: () => v
                     </Button>
                 </div>
             </Card>
+
+            {/* ✅ Verify Over Receiving Modal */}
+            <AlertDialog open={isOverReceivingModalOpen} onOpenChange={setIsOverReceivingModalOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+                            <AlertTriangle className="h-5 w-5" />
+                            Over-Receiving Detected
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            One or more items exceed the expected ordered quantity. 
+                            <br /><br />
+                            Are you sure you want to continue to the review step? The system will still allow you to save this, but it will be recorded as over-receiving.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Review Quantities</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => { setIsOverReceivingModalOpen(false); onContinue(); }} className="bg-red-600 hover:bg-red-700 focus:ring-red-600">
+                            Yes, Continue
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

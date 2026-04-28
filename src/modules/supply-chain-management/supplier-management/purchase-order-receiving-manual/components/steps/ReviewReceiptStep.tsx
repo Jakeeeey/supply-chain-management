@@ -286,22 +286,30 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                                         const porId = String(it.id);
                                         const count = safeCounts[porId] ?? 0;
                                         const expected = Number(it.expectedQty || 0);
+                                        const receivedAtStart = Number(it.receivedQty || 0);
                                         const unitP = Number(it.unitPrice || 0);
                                         const discA = Number(it.discountAmount || 0);
                                         const effectivePrice = Math.max(0, unitP - discA);
                                         const lineTotal = count * effectivePrice;
 
+                                        // Validate Over Receiving
+                                        const isOver = (count + receivedAtStart) > expected && count > 0;
+
                                         return (
-                                            <TableRow key={porId}>
+                                            <TableRow key={porId} className={isOver ? "bg-red-50/50" : ""}>
                                                 <TableCell>
-                                                    <div className="font-bold text-xs truncate max-w-[200px]">{it.name}</div>
+                                                    <div className="font-bold text-xs truncate max-w-[200px]">
+                                                        {it.name}
+                                                        {isOver && <span className="text-[10px] text-red-600 ml-2 uppercase font-black tracking-tighter" title="Quantity exceeds ordered amount">⚠️ OVER</span>}
+                                                    </div>
                                                     <div className="text-[9px] text-muted-foreground font-mono">SKU: {it.barcode} | UOM: {it.uom}</div>
                                                 </TableCell>
                                                 <TableCell className="min-w-[100px]">
                                                     <Input 
                                                         className={cn(
                                                             "h-8 text-[11px] font-bold",
-                                                            showErrors && count > 0 && !(batchNumbers[porId] || "").trim() && "border-red-500 ring-1 ring-red-500"
+                                                            showErrors && count > 0 && !(batchNumbers[porId] || "").trim() && "border-red-500 ring-1 ring-red-500",
+                                                            isOver && "border-red-200"
                                                         )}
                                                         placeholder="Batch #" 
                                                         value={batchNumbers[porId] || ""} 
@@ -312,7 +320,8 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                                                     <select 
                                                         className={cn(
                                                             "h-8 w-full rounded-md border border-input bg-background px-2 text-[11px]",
-                                                            showErrors && count > 0 && !(lotNumbers[porId] || "").trim() && "border-red-500 ring-1 ring-red-500"
+                                                            showErrors && count > 0 && !(lotNumbers[porId] || "").trim() && "border-red-500 ring-1 ring-red-500",
+                                                            isOver && "border-red-200"
                                                         )}
                                                         value={lotNumbers[porId] || ""} 
                                                         onChange={(e) => setLotNumbers(prev => ({ ...prev, [porId]: e.target.value }))}
@@ -326,7 +335,8 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                                                         type="date" 
                                                         className={cn(
                                                             "h-8 text-[11px]",
-                                                            showErrors && count > 0 && !(expiryDates[porId] || "").trim() && "border-red-500 ring-1 ring-red-500"
+                                                            showErrors && count > 0 && !(expiryDates[porId] || "").trim() && "border-red-500 ring-1 ring-red-500",
+                                                            isOver && "border-red-200"
                                                         )}
                                                         value={expiryDates[porId] || ""} 
                                                         onChange={(e) => setExpiryDates(prev => ({ ...prev, [porId]: e.target.value }))} 
@@ -336,9 +346,14 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                                                 <TableCell className="text-center text-[10px] text-muted-foreground">{it.discountType}</TableCell>
                                                 <TableCell className="text-right text-xs text-red-600 font-medium">{(discA || 0) > 0 ? `${formatPHP(discA)}` : "—"}</TableCell>
                                                 <TableCell className="text-right font-bold text-xs">{formatPHP(lineTotal)}</TableCell>
-                                                <TableCell className="text-center font-bold text-xs">{expected}</TableCell>
+                                                <TableCell className="text-center font-bold text-xs">
+                                                    {expected}
+                                                    {receivedAtStart > 0 && <div className="text-[9px] font-normal text-muted-foreground">(Prev: {receivedAtStart})</div>}
+                                                </TableCell>
                                                 <TableCell className="text-center">
-                                                    <Badge variant="default" className="h-5">{count}</Badge>
+                                                    <Badge variant={isOver ? "destructive" : "default"} className={cn("h-5", isOver && "bg-red-600")}>
+                                                        {count}
+                                                    </Badge>
                                                 </TableCell>
                                             </TableRow>
                                         )
