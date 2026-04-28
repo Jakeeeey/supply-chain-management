@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { PdfEngine } from "@/components/pdf-layout-design/PdfEngine";
 import { renderElement } from "@/components/pdf-layout-design/PdfGenerator";

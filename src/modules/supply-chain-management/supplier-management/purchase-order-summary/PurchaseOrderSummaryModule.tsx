@@ -130,7 +130,7 @@ export default function PurchaseOrderSummaryModule({
           const first = json?.data?.receipts?.[0]?.receiptNo;
           if (first) setExpandedReceipts(new Set([first]));
         }
-      } catch (err) {
+      } catch {
         if (!cancelled) {
           setAllocations([]);
           setReceipts([]);

@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PackageSearch, PlusCircle, Search } from "lucide-react";
-import { useReceivingProductsManual } from "../providers/ReceivingProductsManualProvider";
+import { useReceivingProductsManual, ReceivingPOItem } from "../providers/ReceivingProductsManualProvider";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -121,7 +121,7 @@ export function AddExtraProductModal({ isOpen, onClose }: AddExtraProductModalPr
     const isAlreadyAdded = (productId: string) => {
         if (!selectedPO?.allocations) return false;
         return selectedPO.allocations.some(a => 
-            a.items.some((i: any) => i.productId === productId)
+            a.items.some((i: ReceivingPOItem) => i.productId === productId)
         );
     };
 

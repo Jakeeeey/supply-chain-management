@@ -52,14 +52,15 @@ function bad(error: string, status = 400) {
 }
 function toStr(v: unknown, fb = "") {
     if (v && typeof v === "object") {
-        return toStr((v as any).name ?? (v as any).discount_type ?? (v as any).discount_code ?? (v as any).value ?? fb);
+        const obj = v as Record<string, unknown>;
+        return toStr(obj.name ?? obj.discount_type ?? obj.discount_code ?? obj.value ?? fb);
     }
     const s = String(v ?? "").trim();
     return s ? s : fb;
 }
 function toNum(v: unknown): number {
     if (v && typeof v === "object") {
-        const obj = v as any;
+        const obj = v as Record<string, unknown>;
         return toNum(obj.id ?? obj.value ?? obj.product_id ?? obj.supplier_id ?? obj.branch_id ?? 0);
     }
     const s = String(v ?? "").replace(/,/g, "").trim();
@@ -79,18 +80,19 @@ function deriveDiscountPercentFromCode(codeRaw: string): number {
     return Number(((1 - f) * 100).toFixed(4));
 }
 
-function calculateDiscountFromLines(lines: any[]): number {
+function calculateDiscountFromLines(lines: Array<Record<string, unknown>>): number {
     if (!lines || !lines.length) return 0;
-    const factor = lines.reduce((acc: number, l: any) => {
-        const p = toNum(l?.line_id?.percentage ?? l?.percentage ?? 0);
+    const factor = lines.reduce((acc: number, l: Record<string, unknown>) => {
+        const pidObj = l?.line_id as Record<string, unknown> | undefined;
+        const p = toNum(pidObj?.percentage ?? l?.percentage ?? 0);
         return acc * (1 - p / 100);
     }, 1);
     return Number(((1 - factor) * 100).toFixed(4));
 }
 
-function resolveDiscountPercent(dt: any): number {
+function resolveDiscountPercent(dt: Record<string, unknown> | null | undefined): number {
     if (!dt) return 0;
-    const lines = dt.line_per_discount_type ?? [];
+    const lines = (dt.line_per_discount_type as Array<Record<string, unknown>>) ?? [];
     const totalPct = toNum(dt.total_percent);
     const name = toStr(dt.discount_type || dt.name);
 
@@ -140,7 +142,7 @@ interface POHeader {
     discounted_amount: number | string;
     vat_amount: number | string;
     withholding_tax_amount?: number | string;
-    discount_type?: any;
+    discount_type?: string | number | Record<string, unknown> | null;
 }
 interface PORRow {
     purchase_order_product_id: number;
@@ -338,9 +340,9 @@ async function fetchProductSupplierLinks(base: string, supplierId: number) {
         `${base}/items/product_per_supplier?limit=-1` +
         `&filter[supplier_id][_eq]=${encodeURIComponent(String(supplierId))}` +
         `&fields=${fields}`;
-    const j = await fetchJson(url) as { data: any[] };
+    const j = await fetchJson(url) as { data: Array<Record<string, unknown>> };
     const rows = Array.isArray(j?.data) ? j.data : [];
-    const map = new Map<number, any>();
+    const map = new Map<number, Record<string, unknown>>();
     for (const r of rows) {
         const pid = toNum(r?.product_id);
         if (pid) map.set(pid, r);
@@ -791,7 +793,7 @@ export async function GET() {
             if (unpostedRows.length > 0) {
                 const sid = toNum(po?.supplier_name);
                 const psl = sid ? await fetchProductSupplierLinks(base, sid) : new Map();
-                const poDType = po?.discount_type as any;
+                const poDType = po?.discount_type as Record<string, unknown> | null | undefined;
                 const poDiscPct = resolveDiscountPercent(poDType);
 
                 for (const r of unpostedRows) {
@@ -966,7 +968,7 @@ export async function POST(req: NextRequest) {
 
                 // Priority 1: Product-Supplier Link
                 if (psl) {
-                    const linkDt = psl.discount_type as any;
+                    const linkDt = psl.discount_type as Record<string, unknown> | null | undefined;
                     const linkName = toStr(linkDt?.discount_type || linkDt?.name);
                     const linkId = toNum(linkDt?.id || linkDt);
                     itemDiscPct = resolveDiscountPercent(linkDt);
@@ -1198,7 +1200,7 @@ export async function POST(req: NextRequest) {
             const poIsInvoice = (toNum(po?.receiving_type) === 2) || (toNum(po?.vat_amount) > 0) || (toNum(po?.withholding_tax_amount) > 0);
 
             // PO Global Discount
-            const poDType = po?.discount_type as any;
+            const poDType = po?.discount_type as Record<string, unknown> | null | undefined;
             const poDiscountPercent = resolveDiscountPercent(poDType);
 
             const psl = sid ? await fetchProductSupplierLinks(base, sid) : new Map();
@@ -1214,7 +1216,7 @@ export async function POST(req: NextRequest) {
         const pid = toNum(row.productId);
         const link = psl.get(pid);
         if (link) {
-            const linkDt = link.discount_type as any;
+            const linkDt = link.discount_type as Record<string, unknown> | null | undefined;
             const linkName = toStr(linkDt?.discount_type || linkDt?.name);
             const linkId = toNum(linkDt?.id || linkDt);
 
@@ -1322,7 +1324,7 @@ export async function POST(req: NextRequest) {
             if (toPost.length > 0) {
                 const sid = toNum(po?.supplier_name);
                 const psl = sid ? await fetchProductSupplierLinks(base, sid) : new Map();
-                const poDType = po?.discount_type as any;
+                const poDType = po?.discount_type as Record<string, unknown> | null | undefined;
                 const poDiscPct = resolveDiscountPercent(poDType);
                 const productIds = Array.from(new Set(toPost.map(r => toNum(r.product_id)).filter(Boolean)));
                 const productsMap = await fetchProductsMap(base, productIds);
@@ -1341,7 +1343,7 @@ export async function POST(req: NextRequest) {
                     let discTypeId = null;
 
                     if (link) {
-                        const linkDt = link.discount_type as any;
+                        const linkDt = link.discount_type as Record<string, unknown> | null | undefined;
                         discPct = resolveDiscountPercent(linkDt);
                         discTypeId = linkDt?.id || linkDt;
                     } else if (poDiscPct > 0) {

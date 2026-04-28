@@ -257,7 +257,6 @@ function BranchTable({
             ),
             enableHiding: false,
         },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     ], [branch.branchId, onUpdateQty, onRemoveItem, disabled, discountTypeById, money]);
 
     return (

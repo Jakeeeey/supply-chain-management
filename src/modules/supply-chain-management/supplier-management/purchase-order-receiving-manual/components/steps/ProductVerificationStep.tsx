@@ -82,7 +82,7 @@ export function ProductVerificationStep({ onContinue }: { onContinue: () => void
                             {allItems.length === 0 ? (
                                 <TableRow>
                                     <TableCell colSpan={3} className="h-24 text-center text-muted-foreground italic">
-                                        No items in this Purchase Order. Click "Add Extra Product" to begin.
+                                        No items in this Purchase Order. Click &quot;Add Extra Product&quot; to begin.
                                     </TableCell>
                                 </TableRow>
                             ) : (

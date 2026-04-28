@@ -213,35 +213,6 @@ function clearDraft(poId: string) {
     try { localStorage.removeItem(getDraftKey(poId)); } catch { /* ignore */ }
 }
 
-const playBeep = (type: "success" | "error" = "success") => {
-    try {
-        const AudioCtor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-        if (!AudioCtor) return;
-        const ctx = new AudioCtor();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        if (type === "success") {
-            osc.type = "sine";
-            osc.frequency.setValueAtTime(800, ctx.currentTime);
-            osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.1);
-            gain.gain.setValueAtTime(0.1, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
-            osc.start(ctx.currentTime);
-            osc.stop(ctx.currentTime + 0.1);
-        } else {
-            osc.type = "square";
-            osc.frequency.setValueAtTime(300, ctx.currentTime);
-            gain.gain.setValueAtTime(0.1, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-            osc.start(ctx.currentTime);
-            osc.stop(ctx.currentTime + 0.3);
-        }
-    } catch {
-        // Ignored
-    }
-};
 
 export function ReceivingProductsManualProvider({ children, receiverId }: { children: React.ReactNode, receiverId?: number }) {
     const [list, setList] = React.useState<ReceivingListItem[]>([]);
@@ -533,21 +504,6 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
         }
     }, [openPOByBarcode, poBarcode]);
 
-    // ✅ NEW: Product lookup for extra products
-    const lookupProduct = React.useCallback(async (barcode: string) => {
-        try {
-            const sid = selectedPO?.supplier?.id;
-            const r = await fetch(API_URL, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action: "lookup_product", barcode, supplierId: sid }),
-            });
-            const j = await asJson(r);
-            return j?.data || null;
-        } catch {
-            return null;
-        }
-    }, [selectedPO?.supplier?.id]);
 
     // ✅ NEW: Add extra product locally with duplicate check
     const addExtraProductLocally = React.useCallback((item: { productId: string; name: string; barcode: string; branchId: string; branchName: string; unitPrice?: number; discountType?: string; discountPercent?: number; uom?: string; sku?: string; }) => {

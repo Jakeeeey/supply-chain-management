@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { Card } from "@/components/ui/card";
-import { Pencil } from "lucide-react";
 import {
     Table,
     TableBody,
@@ -89,7 +88,7 @@ export function PODetailsBreakdownCard() {
                                             const gross = uprice * qty;
 
                                             let discountDisplay = "—";
-                                            let discountAmt = it.discountAmount ?? 0;
+                                            const discountAmt = it.discountAmount ?? 0;
 
                                             if (it.discountLabel && discountAmt > 0) {
                                                 discountDisplay = `${it.discountLabel} ${money(discountAmt, selectedPO.currency || "PHP")}`;

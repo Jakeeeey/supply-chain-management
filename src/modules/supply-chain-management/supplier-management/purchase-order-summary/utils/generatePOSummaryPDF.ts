@@ -1,4 +1,3 @@
-import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { PurchaseOrder, Supplier } from "../types";
 import { PdfEngine } from "@/components/pdf-layout-design/PdfEngine";
@@ -28,9 +27,8 @@ export const generatePOSummaryPDF = async (data: PurchaseOrder[], suppliers: Sup
   // --- 2. GENERATE PDF WITH FRAME ---
   // Note: We use the engine but we will force landscape if the template doesn't specify it, 
   // or rely on the engine's ability to handle orientation from config.
-  return await PdfEngine.generateWithFrame(templateName, companyData, (doc, startY, config) => {
+  return await PdfEngine.generateWithFrame(templateName, companyData, (doc, startY) => {
     const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
 
     // Section Title
     doc.setFontSize(16);

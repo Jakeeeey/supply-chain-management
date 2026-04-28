@@ -48,7 +48,8 @@ function ok(data: unknown, status = 200) { return NextResponse.json({ data }, { 
 function bad(error: string, status = 400) { return NextResponse.json({ error }, { status }); }
 function toStr(v: unknown, fb = "") { const s = String(v ?? "").trim(); return s ? s : fb; }
 function toNum(v: unknown) { const n = parseFloat(String(v ?? "").replace(/,/g, "")); return Number.isFinite(n) ? n : 0; }
-function getVal(obj: any, ...keys: string[]) {
+function getVal(obj: Record<string, unknown> | null | undefined, ...keys: string[]) {
+    if (!obj) return undefined;
     for (const k of keys) {
         if (obj[k] !== undefined && obj[k] !== null) return obj[k];
     }
@@ -139,6 +140,7 @@ interface POHeaderRow {
         name?: string;
         line_per_discount_type?: DiscountLine[];
     } | null;
+    [key: string]: unknown;
 }
 
 interface ProductRow {
@@ -177,6 +179,7 @@ interface POProductRow {
     unit_price: string | number;
     total_amount?: string | number;
     discount_type?: string | number | null;
+    [key: string]: unknown;
 }
 
 // =====================
@@ -337,9 +340,8 @@ function receivingStatusFrom(poId: number, lines: POProductRow[], porRows: PORow
 async function ensureOpenReceivingRow(args: {
     base: string; poId: number; productId: number; branchId: number;
     unitPrice: number; discountTypeId: number | null; discountPercent: number;
-    isExclusive: boolean;
 }) {
-    const { base, poId, productId, branchId, unitPrice, discountTypeId, discountPercent, isExclusive } = args;
+    const { base, poId, productId, branchId, unitPrice, discountTypeId, discountPercent } = args;
 
     const findUrl = `${base}/items/${POR_COLLECTION}?limit=1&sort=-purchase_order_product_id&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&filter[product_id][_eq]=${encodeURIComponent(String(productId))}&filter[branch_id][_eq]=${encodeURIComponent(String(branchId))}&filter[isPosted][_eq]=0&fields=purchase_order_product_id,received_quantity,receipt_no`;
     const found = await fetchJson<{ data: Record<string, unknown>[] }>(findUrl);
@@ -500,12 +502,12 @@ export async function POST(req: NextRequest) {
 
             if (sid) {
                 const linkUrl = `${base}/items/${PRODUCT_SUPPLIER_COLLECTION}?limit=1&filter[product_id][_eq]=${p.product_id}&filter[supplier_id][_eq]=${sid}&fields=discount_type.*,discount_type.line_per_discount_type.line_id.*`;
-                const lj = await fetchJson<{ data: any[] }>(linkUrl).catch(() => ({ data: [] }));
+                const lj = await fetchJson<{ data: Array<Record<string, unknown>> }>(linkUrl).catch(() => ({ data: [] }));
                 const link = lj?.data?.[0];
-                if (link?.discount_type) {
-                    const dt = link.discount_type;
+                const dt = link?.discount_type as Record<string, unknown> | null | undefined;
+                if (dt) {
                     discTypeStr = toStr(dt.discount_type || dt.name, "Standard");
-                    const lines = dt.line_per_discount_type || [];
+                    const lines = (dt.line_per_discount_type as DiscountLine[]) || [];
                     if (lines.length > 0) discPct = calculateDiscountFromLines(lines);
                     else if (toNum(dt.total_percent) > 0) discPct = toNum(dt.total_percent);
                     else discPct = deriveDiscountPercentFromCode(discTypeStr);
@@ -572,10 +574,9 @@ export async function POST(req: NextRequest) {
                         if (dt) { linePct = dt.pct; }
                     } else resolvedId = ensureId(dType);
 
-                    const priceTypeHeader = toStr(getVal(po, "price_type", "priceType"), "Cost Per Unit");
-                    const isExclLine = priceTypeHeader.toUpperCase() === "VAT EXCLUSIVE";
+                    // ✅ Removed unused isExclLine
 
-                    const ensured = await ensureOpenReceivingRow({ base, poId: thePoId, productId: pid, branchId: bid, unitPrice: uPrice, discountTypeId: resolvedId, discountPercent: linePct, isExclusive: isExclLine });
+                    const ensured = await ensureOpenReceivingRow({ base, poId: thePoId, productId: pid, branchId: bid, unitPrice: uPrice, discountTypeId: resolvedId, discountPercent: linePct });
                     porCounts[String(ensured.porId)] = qty;
                     delete porCounts[key];
                     if (porMetaData?.[key]) { porMetaData[String(ensured.porId)] = porMetaData[key]; delete porMetaData[key]; }
@@ -676,7 +677,7 @@ export async function POST(req: NextRequest) {
                 const ordered = toNum(ln.ordered_quantity);
                 
                 const shouldBeReceived = (totalRec >= ordered && totalRec > 0) || (ordered === 0 && totalRec > 0);
-                const currentReceived = toNum((ln as any).received || 0);
+                const currentReceived = toNum((ln as Record<string, unknown>).received || 0);
 
                 if (shouldBeReceived && currentReceived !== 1) {
                     await fetchJson(`${base}/items/${PO_PRODUCTS_COLLECTION}/${ln.purchase_order_product_id}`, {
@@ -796,7 +797,7 @@ export async function POST(req: NextRequest) {
 
             // Fetch links with expanded discount info
             const linksUrl = `${base}/items/${PRODUCT_SUPPLIER_COLLECTION}?limit=-1&filter[supplier_id][_eq]=${supplierId}&fields=product_id,discount_type.*,discount_type.line_per_discount_type.line_id.*`;
-            const lj = await fetchJson<{ data: any[] }>(linksUrl);
+            const lj = await fetchJson<{ data: Array<Record<string, unknown>> }>(linksUrl);
             const links = lj?.data ?? [];
             if (!links.length) return ok([]);
 
@@ -812,13 +813,12 @@ export async function POST(req: NextRequest) {
                 if (!p) return null;
                 if (Number(p.unit_of_measurement?.unit_id ?? p.unit_of_measurement) !== 11) return null;
 
-                const dt = link.discount_type;
+                const dt = link.discount_type as Record<string, unknown> | null | undefined;
                 let discTypeStr = "Standard";
                 let discPct = 0;
-
                 if (dt) {
                     discTypeStr = toStr(dt.discount_type || dt.name, "Standard");
-                    const lines = dt.line_per_discount_type || [];
+                    const lines = (dt.line_per_discount_type as DiscountLine[]) || [];
                     if (lines.length > 0) discPct = calculateDiscountFromLines(lines);
                     else if (toNum(dt.total_percent) > 0) discPct = toNum(dt.total_percent);
                     else discPct = deriveDiscountPercentFromCode(discTypeStr);
