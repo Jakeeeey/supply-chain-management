@@ -148,8 +148,8 @@ type Ctx = {
     toggleProductVerification: (productId: string) => void;
     
     // ✅ NEW: Extra Product
-    getSupplierProducts: (supplierId: string) => Promise<{ productId: string; name: string; sku: string; barcode: string; unitPrice: number; uom: string; }[]>;
-    addExtraProductLocally: (item: { productId: string; name: string; barcode: string; branchId: string; branchName: string; unitPrice?: number }) => boolean;
+    getSupplierProducts: (supplierId: string) => Promise<{ productId: string; name: string; sku: string; barcode: string; unitPrice: number; uom: string; discountType: string; discountPercent: number; }[]>;
+    addExtraProductLocally: (item: { productId: string; name: string; barcode: string; branchId: string; branchName: string; unitPrice?: number; discountType?: string; discountPercent?: number; }) => boolean;
     removeExtraProductLocally: (productId: string) => void;
 
     // ✅ METADATA (Batch, Lot, Expiry)
@@ -536,20 +536,21 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
     // ✅ NEW: Product lookup for extra products
     const lookupProduct = React.useCallback(async (barcode: string) => {
         try {
+            const sid = selectedPO?.supplier?.id;
             const r = await fetch(API_URL, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action: "lookup_product", barcode }),
+                body: JSON.stringify({ action: "lookup_product", barcode, supplierId: sid }),
             });
             const j = await asJson(r);
             return j?.data || null;
         } catch {
             return null;
         }
-    }, []);
+    }, [selectedPO?.supplier?.id]);
 
     // ✅ NEW: Add extra product locally with duplicate check
-    const addExtraProductLocally = React.useCallback((item: { productId: string; name: string; barcode: string; branchId: string; branchName: string; unitPrice?: number }) => {
+    const addExtraProductLocally = React.useCallback((item: { productId: string; name: string; barcode: string; branchId: string; branchName: string; unitPrice?: number; discountType?: string; discountPercent?: number; }) => {
         let added = false;
         setSelectedPO(prev => {
             if (!prev) return prev;
@@ -564,6 +565,10 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
 
             const existingItem = branchAlloc.items.find(i => i.productId === item.productId);
             if (!existingItem) {
+                const uPrice = item.unitPrice || 0;
+                const dPct = item.discountPercent || 0;
+                const dAmt = Number((uPrice * (dPct / 100)).toFixed(2));
+                
                 branchAlloc.items = [...branchAlloc.items, {
                     id: `${item.productId}-${item.branchId}`,
                     porId: "",
@@ -578,9 +583,9 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
                     taggedQty: 0,
                     rfids: [],
                     isReceived: false,
-                    unitPrice: item.unitPrice || 0,
-                    discountType: "Standard",
-                    discountAmount: 0,
+                    unitPrice: uPrice,
+                    discountType: item.discountType || "Standard",
+                    discountAmount: dAmt,
                     netAmount: 0,
                     isExtra: true
                 }];

@@ -488,12 +488,38 @@ export async function POST(req: NextRequest) {
 
         if (action === "lookup_product") {
             const code = toStr(body.barcode).trim();
+            const sid = toNum(body.supplierId);
             const url = `${base}/items/${PRODUCTS_COLLECTION}?limit=1&filter[_or][0][barcode][_eq]=${encodeURIComponent(code)}&filter[_or][1][product_code][_eq]=${encodeURIComponent(code)}&fields=product_id,product_name,barcode,product_code,cost_per_unit,unit_of_measurement.*,unit_of_measurement_count`;
             const j = await fetchJson<{ data: ProductRow[] }>(url);
             const p = j?.data?.[0];
             if (!p) return bad("Product not found", 404);
             if (Number(p.unit_of_measurement?.unit_id ?? p.unit_of_measurement) !== 11) return bad("Only 'Box' UOM allowed", 400);
-            return ok({ productId: String(p.product_id), name: String(p.product_name), barcode: String(p.barcode || p.product_code), unitPrice: toNum(p.cost_per_unit) });
+
+            let discTypeStr = "Standard";
+            let discPct = 0;
+
+            if (sid) {
+                const linkUrl = `${base}/items/${PRODUCT_SUPPLIER_COLLECTION}?limit=1&filter[product_id][_eq]=${p.product_id}&filter[supplier_id][_eq]=${sid}&fields=discount_type.*,discount_type.line_per_discount_type.line_id.*`;
+                const lj = await fetchJson<{ data: any[] }>(linkUrl).catch(() => ({ data: [] }));
+                const link = lj?.data?.[0];
+                if (link?.discount_type) {
+                    const dt = link.discount_type;
+                    discTypeStr = toStr(dt.discount_type || dt.name, "Standard");
+                    const lines = dt.line_per_discount_type || [];
+                    if (lines.length > 0) discPct = calculateDiscountFromLines(lines);
+                    else if (toNum(dt.total_percent) > 0) discPct = toNum(dt.total_percent);
+                    else discPct = deriveDiscountPercentFromCode(discTypeStr);
+                }
+            }
+
+            return ok({ 
+                productId: String(p.product_id), 
+                name: String(p.product_name), 
+                barcode: String(p.barcode || p.product_code), 
+                unitPrice: toNum(p.cost_per_unit),
+                discountType: discTypeStr,
+                discountPercent: discPct
+            });
         }
 
         if (action === "save_receipt") {
@@ -766,26 +792,47 @@ export async function POST(req: NextRequest) {
             const supplierId = toNum(body.supplierId);
             if (!supplierId) return bad("Missing Supplier ID", 400);
 
-            // First get the product IDs linked to the supplier
-            const linksUrl = `${base}/items/${PRODUCT_SUPPLIER_COLLECTION}?limit=-1&filter[supplier_id][_eq]=${supplierId}&fields=product_id`;
-            const lj = await fetchJson<{ data: Record<string, unknown>[] }>(linksUrl);
-            const pids = (lj?.data ?? []).map(r => toNum(r.product_id)).filter(id => id > 0);
-            
+            // Fetch links with expanded discount info
+            const linksUrl = `${base}/items/${PRODUCT_SUPPLIER_COLLECTION}?limit=-1&filter[supplier_id][_eq]=${supplierId}&fields=product_id,discount_type.*,discount_type.line_per_discount_type.line_id.*`;
+            const lj = await fetchJson<{ data: any[] }>(linksUrl);
+            const links = lj?.data ?? [];
+            if (!links.length) return ok([]);
+
+            const pids = links.map(r => toNum(r.product_id)).filter(id => id > 0);
             if (!pids.length) return ok([]);
 
             // Then get the full product details (only BOX items)
             const map = await fetchProductsMap(base, pids);
             
-            const results = Array.from(map.values())
-                .filter(p => Number(p.unit_of_measurement?.unit_id ?? p.unit_of_measurement) === 11) // Strict BOX UOM
-                .map(p => ({
+            const results = links.map(link => {
+                const pid = toNum(link.product_id);
+                const p = map.get(pid);
+                if (!p) return null;
+                if (Number(p.unit_of_measurement?.unit_id ?? p.unit_of_measurement) !== 11) return null;
+
+                const dt = link.discount_type;
+                let discTypeStr = "Standard";
+                let discPct = 0;
+
+                if (dt) {
+                    discTypeStr = toStr(dt.discount_type || dt.name, "Standard");
+                    const lines = dt.line_per_discount_type || [];
+                    if (lines.length > 0) discPct = calculateDiscountFromLines(lines);
+                    else if (toNum(dt.total_percent) > 0) discPct = toNum(dt.total_percent);
+                    else discPct = deriveDiscountPercentFromCode(discTypeStr);
+                }
+
+                return {
                     productId: String(p.product_id),
                     name: String(p.product_name),
                     sku: String(p.barcode || p.product_code),
                     barcode: String(p.barcode || p.product_code),
                     unitPrice: toNum(p.cost_per_unit),
-                    uom: "BOX"
-                }));
+                    uom: "BOX",
+                    discountType: discTypeStr,
+                    discountPercent: discPct
+                };
+            }).filter(Boolean);
 
             return ok(results);
         }

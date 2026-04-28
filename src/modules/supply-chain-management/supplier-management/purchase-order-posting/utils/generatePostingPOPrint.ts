@@ -114,7 +114,7 @@ export async function generatePostingPOPrint(data: PrintData): Promise<jsPDF> {
 
         const rows = alloc.items.map((item, i) => {
             const uprice = item.unitPrice || 0;
-            const qty = item.expectedQty || 0;
+            const qty = item.expectedQty > 0 && item.receivedQty === 0 ? item.expectedQty : (item.receivedQty || item.expectedQty || 0);
             const gross = item.grossAmount || (uprice * qty);
 
             let discountDisplay = "—";
@@ -206,8 +206,8 @@ export async function generatePostingPOPrint(data: PrintData): Promise<jsPDF> {
       const computedTotalDiscount = (po.allocations || []).reduce((sum, alloc) => {
           return sum + alloc.items.reduce((itemSum, it) => {
               const uprice = it.unitPrice || 0;
-              const qty = it.expectedQty || 0;
-              const gross = uprice * qty;
+              const qty = it.receivedQty || it.expectedQty || 0;
+              const gross = it.grossAmount || (uprice * qty);
               
               if (!it.discountTypeId || it.discountTypeId === "null") return itemSum;
               const dt = discountTypes.find(d => String(d.id) === String(it.discountTypeId) || String(d.name) === String(it.discountTypeId));

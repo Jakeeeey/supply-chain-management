@@ -23,7 +23,16 @@ interface AddExtraProductModalProps {
     onClose: () => void;
 }
 
-type SupplierProduct = { productId: string; name: string; sku: string; barcode: string; unitPrice: number; uom: string; };
+type SupplierProduct = { 
+    productId: string; 
+    name: string; 
+    sku: string; 
+    barcode: string; 
+    unitPrice: number; 
+    uom: string; 
+    discountType: string; 
+    discountPercent: number; 
+};
 
 export function AddExtraProductModal({ isOpen, onClose }: AddExtraProductModalProps) {
     const { getSupplierProducts, addExtraProductLocally, selectedPO } = useReceivingProductsManual();
@@ -85,7 +94,6 @@ export function AddExtraProductModal({ isOpen, onClose }: AddExtraProductModalPr
             return;
         }
 
-        // If no branches exist, use a default fallback
         if (!targetBranch) {
             targetBranch = { id: "0", name: "Unassigned" };
         }
@@ -96,7 +104,9 @@ export function AddExtraProductModal({ isOpen, onClose }: AddExtraProductModalPr
             barcode: product.sku || product.barcode,
             unitPrice: product.unitPrice,
             branchId: String(targetBranch.id),
-            branchName: targetBranch.name
+            branchName: targetBranch.name,
+            discountType: product.discountType,
+            discountPercent: product.discountPercent
         });
 
         if (added) {
@@ -189,6 +199,7 @@ export function AddExtraProductModal({ isOpen, onClose }: AddExtraProductModalPr
                                                     <div className="font-bold text-sm leading-tight line-clamp-2" title={p.name}>{p.name}</div>
                                                     <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mt-1 flex items-center gap-2">
                                                         SKU: {p.sku}
+                                                        {p.discountPercent > 0 && <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 hover:bg-indigo-50 border-indigo-100 px-1.5 h-4 text-[9px] font-bold">{p.discountType} ({p.discountPercent}%)</Badge>}
                                                         {added && <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-none px-1 h-3.5 text-[8px] font-black tracking-tighter">IN LIST</Badge>}
                                                     </div>
                                                 </div>
