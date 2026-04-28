@@ -298,7 +298,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                                         return (
                                             <TableRow key={porId} className={cn(isOver && "bg-red-50/50 dark:bg-red-950/20")}>
                                                 <TableCell>
-                                                    <div className="font-bold text-xs truncate max-w-[200px]">
+                                                    <div className="font-bold text-xs">
                                                         {it.name}
                                                         {isOver && <span className="text-[10px] text-red-600 dark:text-red-400 ml-2 uppercase font-black tracking-tighter" title="Quantity exceeds ordered amount">⚠️ OVER</span>}
                                                     </div>
@@ -344,7 +344,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                                                 </TableCell>
                                                 <TableCell className="text-right text-xs">{formatPHP(unitP)}</TableCell>
                                                 <TableCell className="text-center text-[10px] text-muted-foreground">{it.discountType}</TableCell>
-                                                <TableCell className="text-right text-xs text-red-600 dark:text-red-400 font-medium">{(discA || 0) > 0 ? `${formatPHP(discA)}` : "—"}</TableCell>
+                                                <TableCell className="text-right text-xs text-red-600 dark:text-red-400 font-medium">{(discA || 0) > 0 ? `${formatPHP(discA * count)}` : "—"}</TableCell>
                                                 <TableCell className="text-right font-bold text-xs">{formatPHP(lineTotal)}</TableCell>
                                                 <TableCell className="text-center font-bold text-xs">
                                                     {expected}

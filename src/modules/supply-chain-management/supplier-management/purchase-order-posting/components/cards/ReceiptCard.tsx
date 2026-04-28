@@ -45,7 +45,7 @@ export function ReceiptCard({ receipt }: { receipt: PostingReceipt }) {
         <Card className="p-3">
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                    <div className="text-sm font-semibold truncate">
+                    <div className="text-sm font-semibold">
                         {safeText(receipt.receiptNo)}
                     </div>
                     <div className="mt-1 text-xs text-muted-foreground">

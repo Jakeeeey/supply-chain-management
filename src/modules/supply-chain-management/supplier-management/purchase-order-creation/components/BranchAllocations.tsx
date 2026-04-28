@@ -267,7 +267,7 @@ function BranchTable({
             <div className="sticky top-0 z-10 px-4 sm:px-5 py-3 border-b border-border bg-background/95 backdrop-blur-sm flex justify-between items-center gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                     <Building2 className="w-4 h-4 text-primary shrink-0" />
-                    <span className="text-sm font-black text-foreground uppercase tracking-tight truncate">
+                    <span className="text-sm font-black text-foreground uppercase tracking-tight">
                         {branch.branchName}
                     </span>
                     <span className="text-[10px] bg-primary/10 text-primary px-2.5 py-0.5 rounded-full font-black tracking-widest uppercase border border-primary/20 shrink-0">

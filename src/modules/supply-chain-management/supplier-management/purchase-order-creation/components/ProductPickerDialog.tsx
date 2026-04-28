@@ -143,7 +143,7 @@ export function ProductPickerDialog(props: {
                                             <div className="p-4 flex-1 flex flex-col">
                                                 <div className="flex justify-between items-start gap-2 mb-2">
                                                     <div className="min-w-0">
-                                                        <h3 className="text-xs font-bold text-foreground line-clamp-2 leading-snug h-8">
+                                                        <h3 className="text-xs font-bold text-foreground leading-snug">
                                                             {product.name}
                                                         </h3>
                                                         <p className="text-[10px] font-mono text-muted-foreground mt-1 uppercase tracking-tighter">
@@ -240,7 +240,7 @@ export function ProductPickerDialog(props: {
 
                                         <div className="p-3 pt-4">
                                             <div className="pr-6">
-                                                <p className="text-[11px] font-black text-foreground leading-tight line-clamp-1 uppercase tracking-tight">
+                                                <p className="text-[11px] font-black text-foreground leading-tight uppercase tracking-tight">
                                                     {item.name}
                                                 </p>
                                                 <div className="flex flex-col gap-0.5 mt-1.5">

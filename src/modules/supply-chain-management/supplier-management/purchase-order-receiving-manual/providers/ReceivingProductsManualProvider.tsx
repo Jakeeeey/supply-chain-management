@@ -149,7 +149,7 @@ type Ctx = {
     
     // ✅ NEW: Extra Product
     getSupplierProducts: (supplierId: string) => Promise<{ productId: string; name: string; sku: string; barcode: string; unitPrice: number; uom: string; discountType: string; discountPercent: number; }[]>;
-    addExtraProductLocally: (item: { productId: string; name: string; barcode: string; branchId: string; branchName: string; unitPrice?: number; discountType?: string; discountPercent?: number; }) => boolean;
+    addExtraProductLocally: (item: { productId: string; name: string; barcode: string; branchId: string; branchName: string; unitPrice?: number; discountType?: string; discountPercent?: number; uom?: string; sku?: string; }) => boolean;
     removeExtraProductLocally: (productId: string) => void;
 
     // ✅ METADATA (Batch, Lot, Expiry)
@@ -550,7 +550,7 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
     }, [selectedPO?.supplier?.id]);
 
     // ✅ NEW: Add extra product locally with duplicate check
-    const addExtraProductLocally = React.useCallback((item: { productId: string; name: string; barcode: string; branchId: string; branchName: string; unitPrice?: number; discountType?: string; discountPercent?: number; }) => {
+    const addExtraProductLocally = React.useCallback((item: { productId: string; name: string; barcode: string; branchId: string; branchName: string; unitPrice?: number; discountType?: string; discountPercent?: number; uom?: string; sku?: string; }) => {
         let added = false;
         setSelectedPO(prev => {
             if (!prev) return prev;
@@ -575,8 +575,8 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
                     productId: String(item.productId),
                     branchId: String(item.branchId),
                     name: item.name,
-                    barcode: item.barcode,
-                    uom: "—",
+                    barcode: item.sku || item.barcode,
+                    uom: item.uom || "—",
                     expectedQty: 0,
                     receivedQty: 0,
                     requiresRfid: true,

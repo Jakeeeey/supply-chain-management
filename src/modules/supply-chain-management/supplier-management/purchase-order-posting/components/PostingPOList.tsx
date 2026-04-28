@@ -197,10 +197,10 @@ export function PostingPOList() {
                                                 <FileCheck2 className="h-4 w-4 text-muted-foreground" />
                                             </div>
                                             <div className="min-w-0">
-                                                <div className="truncate text-[13px] font-black text-foreground uppercase tracking-tight">
+                                                <div className="text-[13px] font-black text-foreground uppercase tracking-tight text-wrap">
                                                     {po.poNumber}
                                                 </div>
-                                                <div className="truncate text-[11px] text-muted-foreground font-medium">
+                                                <div className="text-[11px] text-muted-foreground font-medium text-wrap">
                                                     {po.supplierName}
                                                 </div>
                                             </div>

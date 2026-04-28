@@ -377,7 +377,7 @@ export function PurchaseOrderSummary(props: {
                                 <div className="absolute top-0 right-0 w-16 h-16 bg-primary/5 -mr-8 -mt-8 rounded-full transition-transform group-hover:scale-110" />
                                 <div className="flex justify-between items-center gap-4 relative">
                                     <span className="text-muted-foreground font-medium text-[10px] uppercase tracking-wider shrink-0">PO Number:</span>
-                                    <span className="font-mono font-black text-primary text-sm sm:text-base underline decoration-dotted underline-offset-4 truncate">{props.poNumber}</span>
+                                    <span className="font-mono font-black text-primary text-sm sm:text-base underline decoration-dotted underline-offset-4">{props.poNumber}</span>
                                 </div>
                                 <div className="flex justify-between items-center gap-4 relative">
                                     <span className="text-muted-foreground font-medium text-[10px] uppercase tracking-wider shrink-0">Transaction Date:</span>

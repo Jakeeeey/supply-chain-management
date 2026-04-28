@@ -518,7 +518,9 @@ export async function POST(req: NextRequest) {
                 barcode: String(p.barcode || p.product_code), 
                 unitPrice: toNum(p.cost_per_unit),
                 discountType: discTypeStr,
-                discountPercent: discPct
+                discountPercent: discPct,
+                uom: "BOX",
+                sku: String(p.barcode || p.product_code)
             });
         }
 

@@ -239,7 +239,7 @@ function SupplierSelect(props: {
                         disabled={props.disabled}
                     >
                         <div className="flex items-center gap-2 min-w-0">
-              <span className="truncate text-xs font-bold">
+              <span className="text-xs font-bold text-wrap">
                 {props.value?.name ?? "Select supplier"}
               </span>
                             {props.value?.id ? (
@@ -291,7 +291,7 @@ function SupplierSelect(props: {
                                                         </div>
 
                                                         <div className="min-w-0 flex-1">
-                                                            <div className="text-xs font-bold truncate">
+                                                            <div className="text-xs font-bold text-wrap">
                                                                 {s.name}
                                                             </div>
                                                         </div>
@@ -373,7 +373,7 @@ function BranchMultiSelect(props: {
                         className="w-full justify-between h-11 rounded-xl min-w-0"
                         disabled={props.disabled}
                     >
-                        <span className="truncate text-xs font-bold">{label}</span>
+                        <span className="text-xs font-bold text-wrap">{label}</span>
                         <ChevronDown className="w-4 h-4 opacity-60 shrink-0" />
                     </Button>
                 </PopoverTrigger>
@@ -451,10 +451,10 @@ function BranchMultiSelect(props: {
                                                         </div>
 
                                                         <div className="min-w-0 flex-1">
-                                                            <div className="text-xs font-black truncate">
+                                                            <div className="text-xs font-black text-wrap">
                                                                 {b.code}
                                                             </div>
-                                                            <div className="text-[10px] text-muted-foreground truncate">
+                                                            <div className="text-[10px] text-muted-foreground text-wrap">
                                                                 {b.name}
                                                             </div>
                                                         </div>

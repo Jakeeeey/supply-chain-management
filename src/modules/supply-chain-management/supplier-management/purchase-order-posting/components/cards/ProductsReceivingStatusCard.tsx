@@ -40,8 +40,8 @@ export function ProductsReceivingStatusCard() {
                                             return (
                                                 <div key={it.id} className="flex items-start justify-between gap-3 text-xs">
                                                     <div className="min-w-0">
-                                                        <div className="truncate font-medium">{it.name}</div>
-                                                        <div className="truncate text-muted-foreground">{it.barcode}</div>
+                                                        <div className="font-medium text-wrap">{it.name}</div>
+                                                        <div className="text-muted-foreground text-wrap">{it.barcode}</div>
                                                     </div>
                                                     <div className="shrink-0 flex items-center gap-2">
                                                         <Badge variant={ok ? "outline" : "secondary"}>

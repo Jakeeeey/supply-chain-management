@@ -647,7 +647,7 @@ export default function PurchaseOrderSummaryModule({
                           <TableCell className="text-xs font-bold text-muted-foreground whitespace-nowrap px-4 uppercase">
                             {selectedPO.transaction_type === 1 ? "Trade" : "Non-Trade"}
                           </TableCell>
-                          <TableCell className="text-xs font-black text-foreground max-w-[180px] truncate px-4 uppercase tracking-tight">
+                          <TableCell className="text-xs font-black text-foreground max-w-[180px] px-4 uppercase tracking-tight">
                             {supplierName}
                           </TableCell>
                           <TableCell className="text-xs font-bold text-muted-foreground whitespace-nowrap px-4">
@@ -736,10 +736,10 @@ export default function PurchaseOrderSummaryModule({
 
                               return (
                                 <TableRow key={item.id} className="border-border hover:bg-muted/20 transition-colors">
-                                  <TableCell className="text-xs font-black text-foreground uppercase tracking-tight px-4 py-3 max-w-[250px] truncate">
+                                  <TableCell className="text-xs font-black text-foreground uppercase tracking-tight px-4 py-3 max-w-[250px]">
                                     {item.productName}
                                   </TableCell>
-                                  <TableCell className="text-[10px] text-muted-foreground font-semibold px-3 truncate">
+                                  <TableCell className="text-[10px] text-muted-foreground font-semibold px-3">
                                     {item.branchName}
                                   </TableCell>
                                   <TableCell className="text-[11px] font-black text-center px-2 font-mono">
@@ -848,7 +848,7 @@ export default function PurchaseOrderSummaryModule({
                                       {receipt.items.map((item, idx) => (
                                         <TableRow key={idx} className="border-border hover:bg-muted/20">
                                           <TableCell className="text-[10px] font-bold text-foreground uppercase tracking-tight px-4 py-2.5 max-w-[220px]">
-                                            <div className="truncate">{item.productName}</div>
+                                            <div className="">{item.productName}</div>
                                             {(item.batchNo || item.expiryDate) && (
                                               <div className="flex gap-2 mt-0.5">
                                                 {item.batchNo && <span className="text-[8px] text-muted-foreground">Batch: {item.batchNo}</span>}

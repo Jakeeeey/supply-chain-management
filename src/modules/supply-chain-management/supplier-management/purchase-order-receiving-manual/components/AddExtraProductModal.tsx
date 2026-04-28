@@ -101,12 +101,14 @@ export function AddExtraProductModal({ isOpen, onClose }: AddExtraProductModalPr
         const added = addExtraProductLocally({
             productId: product.productId,
             name: product.name,
-            barcode: product.sku || product.barcode,
+            barcode: product.barcode,
             unitPrice: product.unitPrice,
             branchId: String(targetBranch.id),
             branchName: targetBranch.name,
             discountType: product.discountType,
-            discountPercent: product.discountPercent
+            discountPercent: product.discountPercent,
+            uom: product.uom,
+            sku: product.sku
         });
 
         if (added) {
@@ -196,7 +198,7 @@ export function AddExtraProductModal({ isOpen, onClose }: AddExtraProductModalPr
                                         )}>
                                             <div className="flex justify-between items-start mb-2 gap-2">
                                                 <div className="min-w-0">
-                                                    <div className="font-bold text-sm leading-tight line-clamp-2" title={p.name}>{p.name}</div>
+                                                    <div className="font-bold text-sm leading-tight" title={p.name}>{p.name}</div>
                                                     <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mt-1 flex items-center gap-2">
                                                         SKU: {p.sku}
                                                         {p.discountPercent > 0 && <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 hover:bg-indigo-50 border-indigo-100 px-1.5 h-4 text-[9px] font-bold">{p.discountType} ({p.discountPercent}%)</Badge>}

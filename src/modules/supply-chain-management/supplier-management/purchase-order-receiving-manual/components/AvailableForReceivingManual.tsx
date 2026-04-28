@@ -175,10 +175,10 @@ export function AvailableForReceivingManual() {
                                                 <Package className="h-4 w-4 text-muted-foreground" />
                                             </div>
                                             <div className="min-w-0">
-                                                <div className="truncate text-sm font-semibold text-foreground">
+                                                <div className="text-sm font-semibold text-foreground">
                                                     {po.poNumber}
                                                 </div>
-                                                <div className="truncate text-xs text-muted-foreground">
+                                                <div className="text-xs text-muted-foreground">
                                                     {po.supplierName}
                                                 </div>
                                             </div>
