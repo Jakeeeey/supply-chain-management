@@ -75,22 +75,25 @@ export function PdpListSidebar({
               const pId = Number(p.dispatch_id);
               const isSelected = selectedPlanIds.includes(pId);
               const planWeight = Number(p.total_weight || 0);
+              const isNotSelectable = !p.is_selectable;
               const wouldExceed =
                 !isSelected &&
                 vehicleCapacity > 0 &&
                 currentTotalWeight + planWeight > vehicleCapacity;
 
+              const isDisabled = wouldExceed || isNotSelectable;
+
               return (
                 <button
                   type="button"
                   key={pId}
-                  onClick={() => !wouldExceed && onPlanSelect(String(pId))}
-                  disabled={wouldExceed}
+                  onClick={() => !isDisabled && onPlanSelect(String(pId))}
+                  disabled={isDisabled}
                   className={cn(
                     "w-full text-left p-3 rounded-lg border text-sm transition-all duration-150",
                     isSelected
                       ? "border-primary bg-primary/5 shadow-sm"
-                      : wouldExceed
+                      : isDisabled
                         ? "border-border/40 bg-muted/20 opacity-60 cursor-not-allowed"
                         : "border-border/50 bg-background hover:border-border hover:bg-muted/30",
                   )}
@@ -99,17 +102,17 @@ export function PdpListSidebar({
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <Badge
-                          variant={wouldExceed ? "outline" : "default"}
+                          variant={isDisabled ? "outline" : "default"}
                           className={cn(
                             "text-[9px] font-medium tracking-wide px-1.5 py-0 h-4 rounded-full",
-                            wouldExceed && "border-destructive/30 text-destructive/70"
+                            isDisabled && "border-destructive/30 text-destructive/70"
                           )}
                         >
-                          {wouldExceed ? "Limit Reached" : p.status}
+                          {wouldExceed ? "Limit Reached" : isNotSelectable ? "Not Ready" : p.status}
                         </Badge>
                         <p className={cn(
                           "font-semibold text-xs truncate",
-                          wouldExceed ? "text-muted-foreground" : "text-foreground"
+                          isDisabled ? "text-muted-foreground" : "text-foreground"
                         )}>
                           {p.dispatch_no}
                         </p>
@@ -127,7 +130,7 @@ export function PdpListSidebar({
                       ) : (
                         <div className={cn(
                           "w-4 h-4 rounded-full border-2",
-                          wouldExceed ? "border-muted/30" : "border-border"
+                          isDisabled ? "border-muted/30" : "border-border"
                         )} />
                       )}
                     </div>
@@ -135,7 +138,7 @@ export function PdpListSidebar({
                   <div className="flex items-center justify-between mt-2">
                     <p className={cn(
                       "text-xs font-semibold",
-                      wouldExceed ? "text-muted-foreground" : "text-foreground"
+                      isDisabled ? "text-muted-foreground" : "text-foreground"
                     )}>
                       ₱
                       {Number(p.total_amount || 0).toLocaleString(undefined, {
@@ -144,7 +147,7 @@ export function PdpListSidebar({
                     </p>
                     <p className={cn(
                       "text-[10px] font-medium",
-                      wouldExceed ? "text-destructive/60" : "text-muted-foreground"
+                      isDisabled ? "text-destructive/60" : "text-muted-foreground"
                     )}>
                       {planWeight.toLocaleString(undefined, { maximumFractionDigits: 2 })} kg
                     </p>

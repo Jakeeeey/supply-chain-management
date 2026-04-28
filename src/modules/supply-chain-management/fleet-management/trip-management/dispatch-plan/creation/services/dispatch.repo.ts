@@ -433,15 +433,21 @@ export async function fetchApprovedPreDispatchPlans(
     }
 
     const soWeightMap = new Map<number, number>();
+    const soReadyMap = new Map<number, boolean>(); // Track if each SO is ready
+
     soDetails.forEach((sd) => {
       const soId = Number(sd.order_id);
-      // ONLY COUNT WEIGHT IF THE SO STATUS IS READY
       const status = orderStatusMap.get(soId) || "";
-      if (READY_STATUSES.includes(status)) {
-        const weight = prodWeightMap.get(Number(sd.product_id)) || 0;
-        const qty = Number(sd.allocated_quantity || sd.ordered_quantity || 0);
-        soWeightMap.set(soId, (soWeightMap.get(soId) || 0) + weight * qty);
+      const isReady = READY_STATUSES.includes(status);
+      
+      // Store readiness for later is_selectable check
+      if (!soReadyMap.has(soId) || !isReady) {
+        soReadyMap.set(soId, isReady);
       }
+
+      const weight = prodWeightMap.get(Number(sd.product_id)) || 0;
+      const qty = Number(sd.allocated_quantity || sd.ordered_quantity || 0);
+      soWeightMap.set(soId, (soWeightMap.get(soId) || 0) + weight * qty);
     });
 
     details.forEach((d) => {
@@ -469,33 +475,38 @@ export async function fetchApprovedPreDispatchPlans(
   );
 
   const detailCountMap = new Map<number, number>();
+  const planReadyMap = new Map<number, boolean>(); // Track if entire plan is selectable
+
   details.forEach((d) => {
     const dPlanId = d.dispatch_id;
     if (!dPlanId) return;
 
-    // For currently linked PDPs (edit mode), count ALL items regardless of status
-    if (currentPlanIdSet.has(dPlanId)) {
-      detailCountMap.set(dPlanId, (detailCountMap.get(dPlanId) || 0) + 1);
-      return;
+    // Count ALL items
+    detailCountMap.set(dPlanId, (detailCountMap.get(dPlanId) || 0) + 1);
+
+    // Check readiness of the plan
+    const soId = Number(d.sales_order_id);
+    const isSoReady = orderStatusMap.has(soId) ? READY_STATUSES.includes(orderStatusMap.get(soId)!) : false;
+    
+    if (!planReadyMap.has(dPlanId)) {
+        planReadyMap.set(dPlanId, true);
     }
-
-    const orderStatus = orderStatusMap.get(Number(d.sales_order_id)) || "";
-
-    // ONLY show counts for items that are READY (to match weight logic)
-    if (READY_STATUSES.includes(orderStatus)) {
-      detailCountMap.set(dPlanId, (detailCountMap.get(dPlanId) || 0) + 1);
+    if (!isSoReady) {
+        planReadyMap.set(dPlanId, false);
     }
   });
 
   const enrichedData = plans
-    .map((p) => ({
-      ...p,
-      cluster_name: clusterMap.get(p.cluster_id || -1) || "Unassigned",
-      total_items: detailCountMap.get(p.dispatch_id) || 0,
-      total_weight: planWeightMap.get(p.dispatch_id) || 0,
-    }))
-    // Keep linked PDPs even if they have 0 ready items
-    .filter((p) => p.total_items > 0 || currentPlanIdSet.has(p.dispatch_id));
+    .map((p) => {
+        const total_items = detailCountMap.get(p.dispatch_id) || 0;
+        return {
+          ...p,
+          cluster_name: clusterMap.get(p.cluster_id || -1) || "Unassigned",
+          total_items,
+          total_weight: planWeightMap.get(p.dispatch_id) || 0,
+          is_selectable: total_items > 0 && (planReadyMap.get(p.dispatch_id) ?? false),
+        };
+    });
 
   return { data: enrichedData };
 }
@@ -692,11 +703,6 @@ export async function fetchPlanDetails(
       }
 
       const orderStatus = order.order_status || "—";
-      const isReady = READY_STATUSES.includes(orderStatus);
-      const isAlreadyLinked = invId > 0 && currentlyLinkedInvIds.has(invId);
-
-      if (!isReady && !isAlreadyLinked) return null;
-
       const customer = order.customer_code
         ? customerMap.get(String(order.customer_code))
         : undefined;
