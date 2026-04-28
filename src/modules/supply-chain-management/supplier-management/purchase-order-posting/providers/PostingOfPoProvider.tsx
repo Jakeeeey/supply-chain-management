@@ -224,7 +224,7 @@ export function PostingOfPoProvider({ children }: { children: React.ReactNode })
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ action: "revert_receipt", poId, receiptNo }),
                 });
-                await asJson(r);
+                const data = await asJson(r);
 
                 toast.success("Receipt reverted successfully!", {
                     description: `Receipt ${receiptNo} has been returned to receiving.`,
@@ -232,8 +232,17 @@ export function PostingOfPoProvider({ children }: { children: React.ReactNode })
 
                 setSuccessMsg(`Receipt ${receiptNo} reverted to receiving.`);
 
+                // If no remaining receipts, clear selection so the module "reloads"
+                if (data?.noRemainingReceipts) {
+                    setSelectedPO(null);
+                    toast.info("PO has no more receipts. Returning to list.");
+                }
+
                 await refreshList();
-                await openPO(poId);
+                // Only re-open PO if it still has receipts
+                if (!data?.noRemainingReceipts) {
+                    await openPO(poId);
+                }
             } catch (e: unknown) {
                 const err = e as Error;
                 const msg = String(err?.message ?? err);

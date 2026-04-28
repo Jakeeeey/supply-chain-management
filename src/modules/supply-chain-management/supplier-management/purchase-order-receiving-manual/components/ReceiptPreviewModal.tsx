@@ -22,6 +22,7 @@ interface ReceiptPreviewModalProps {
     poNumber: string;
     supplierName: string;
     priceType: string;
+    isInvoice?: boolean;
 }
 
 export function ReceiptPreviewModal({
@@ -31,6 +32,7 @@ export function ReceiptPreviewModal({
     poNumber,
     supplierName,
     priceType,
+    isInvoice,
 }: ReceiptPreviewModalProps) {
     if (!data) return null;
 
@@ -43,6 +45,7 @@ export function ReceiptPreviewModal({
             receiptType: data.receiptType,
             isFullyReceived: data.isFullyReceived,
             priceType: priceType,
+            isInvoice: isInvoice ?? false,
             receiverName: data.receiverName,
             items: data.items.map((it) => ({
                 name: it.name,

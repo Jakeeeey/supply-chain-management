@@ -48,6 +48,12 @@ function ok(data: unknown, status = 200) { return NextResponse.json({ data }, { 
 function bad(error: string, status = 400) { return NextResponse.json({ error }, { status }); }
 function toStr(v: unknown, fb = "") { const s = String(v ?? "").trim(); return s ? s : fb; }
 function toNum(v: unknown) { const n = parseFloat(String(v ?? "").replace(/,/g, "")); return Number.isFinite(n) ? n : 0; }
+function getVal(obj: any, ...keys: string[]) {
+    for (const k of keys) {
+        if (obj[k] !== undefined && obj[k] !== null) return obj[k];
+    }
+    return undefined;
+}
 
 function ensureId(v: unknown): number | null {
     if (v === null || v === undefined) return null;
@@ -119,7 +125,11 @@ interface POHeaderRow {
     date_received?: string;
     supplier_name?: string | number;
     total_amount?: string | number;
+    gross_amount?: string | number;
+    vat_amount?: string | number;
+    withholding_tax_amount?: string | number;
     price_type?: string;
+    receiving_type?: string | number;
     discount_percentage?: string | number;
     discount_percent?: string | number;
     discount_type?: {
@@ -327,15 +337,18 @@ function receivingStatusFrom(poId: number, lines: POProductRow[], porRows: PORow
 async function ensureOpenReceivingRow(args: {
     base: string; poId: number; productId: number; branchId: number;
     unitPrice: number; discountTypeId: number | null; discountPercent: number;
+    isExclusive: boolean;
 }) {
-    const { base, poId, productId, branchId, unitPrice, discountTypeId, discountPercent } = args;
+    const { base, poId, productId, branchId, unitPrice, discountTypeId, discountPercent, isExclusive } = args;
+
     const findUrl = `${base}/items/${POR_COLLECTION}?limit=1&sort=-purchase_order_product_id&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&filter[product_id][_eq]=${encodeURIComponent(String(productId))}&filter[branch_id][_eq]=${encodeURIComponent(String(branchId))}&filter[isPosted][_eq]=0&fields=purchase_order_product_id,received_quantity,receipt_no`;
     const found = await fetchJson<{ data: Record<string, unknown>[] }>(findUrl);
     const row = Array.isArray(found?.data) ? found.data[0] : null;
     if (row?.purchase_order_product_id) return { porId: toNum(row.purchase_order_product_id), receivedQty: toNum(row.received_quantity), created: false };
 
-    const discountedSum = Number((unitPrice * (discountPercent / 100)).toFixed(2));
-    const net = unitPrice - discountedSum;
+    const lineGross = unitPrice; // qty=0 at creation, so gross = unitPrice × 1 for per-unit seed
+    const discountedSum = Number((lineGross * (discountPercent / 100)).toFixed(2));
+    const net = lineGross - discountedSum;
     const vatExcl = Number((net / 1.12).toFixed(2));
     const vatAmt = Number((net - vatExcl).toFixed(2));
     const ewtAmt = Number((vatExcl * 0.01).toFixed(2));
@@ -437,14 +450,20 @@ export async function POST(req: NextRequest) {
                 }
 
                 const dAmt = toNum(ln.unit_price) * (lineDiscountPercent / 100);
-                allocationsMap.set(bid, [...(allocationsMap.get(bid) ?? []), {
-                    id: pors[0] ? String(pors[0]) : `${pid}-${bid}`, porId: String(pors[0] || ""),
-                    productId: String(pid), branchId: String(bid), name: toStr(p?.product_name, `Product #${pid}`),
-                    barcode: productDisplayCode(p, pid), uom: String(p?.unit_of_measurement?.unit_shortcut ?? "BOX").toUpperCase(),
-                    expectedQty: toNum(ln.ordered_quantity), receivedQty, requiresRfid: false,
-                    isReceived: receivedQty >= toNum(ln.ordered_quantity), unitPrice: toNum(ln.unit_price),
-                    discountType: lineDiscountTypeStr, discountAmount: dAmt, netAmount: receivedQty * (toNum(ln.unit_price) - dAmt)
-                }]);
+                const remainingQty = Math.max(0, toNum(ln.ordered_quantity) - receivedQty);
+
+                // ✅ Only include if there is still a balance to receive, or if user wants to see all (User said "show products not yet received")
+                if (remainingQty > 0) {
+                    const existing = allocationsMap.get(bid) || [];
+                    allocationsMap.set(bid, [...existing, {
+                        id: pors[0] ? String(pors[0]) : `${pid}-${bid}`, porId: String(pors[0] || ""),
+                        productId: String(pid), branchId: String(bid), name: toStr(p?.product_name, `Product #${pid}`),
+                        barcode: productDisplayCode(p, pid), uom: String(p?.unit_of_measurement?.unit_shortcut ?? "BOX").toUpperCase(),
+                        expectedQty: remainingQty, receivedQty: 0, requiresRfid: false,
+                        isReceived: false, unitPrice: toNum(ln.unit_price),
+                        discountType: lineDiscountTypeStr, discountAmount: dAmt, netAmount: 0 // Net amount for THIS session
+                    }]);
+                }
             }
 
             const uniqueReceipts = Array.from(new Set(porRows.map(r => r.receipt_no).filter(Boolean)));
@@ -458,7 +477,10 @@ export async function POST(req: NextRequest) {
                 supplier: { id: String(po.supplier_name), name: supplierMap.get(toNum(po.supplier_name)) || "Supplier" },
                 status: receivingStatusFrom(toNum(po.purchase_order_id), lines, porRows),
                 allocations: Array.from(allocationsMap.entries()).map(([bid, items]) => ({ branch: { id: String(bid), name: branchesMap.get(bid) || `Branch ${bid}` }, items })),
-                priceType: toStr(po.price_type, "Cost Per Unit"),
+                priceType: toStr(getVal(po, "price_type", "priceType"), "Cost Per Unit"),
+                isInvoice: (Number(getVal(po, "receiving_type", "receivingType")) === 2) || 
+                          (toNum(getVal(po, "vat_amount", "vatAmount", "val_amount", "valAmount")) > 0) || 
+                          (toNum(getVal(po, "withholding_tax_amount", "withholdingTaxAmount")) > 0),
                 createdAt: po.date_encoded ? new Date(po.date_encoded).toISOString() : new Date().toISOString(),
                 history
             });
@@ -479,7 +501,7 @@ export async function POST(req: NextRequest) {
             const thePoId = toNum(poId);
             if (!thePoId) return bad("Missing PO ID");
 
-            const poUrl = `${base}/items/${PO_COLLECTION}/${thePoId}?fields=purchase_order_id,purchase_order_no,supplier_name,discount_type.*,discount_type.line_per_discount_type.line_id.*,inventory_status,price_type,date_encoded`;
+            const poUrl = `${base}/items/${PO_COLLECTION}/${thePoId}?fields=purchase_order_id,purchase_order_no,supplier_name,discount_type.*,discount_type.line_per_discount_type.line_id.*,inventory_status,price_type,date_encoded,receiving_type,vat_amount,withholding_tax_amount`;
             const pj = await fetchJson<{ data: POHeaderRow }>(poUrl);
             const po = pj?.data;
             let poDiscountPercent = 0;
@@ -522,7 +544,10 @@ export async function POST(req: NextRequest) {
                         if (dt) { linePct = dt.pct; }
                     } else resolvedId = ensureId(dType);
 
-                    const ensured = await ensureOpenReceivingRow({ base, poId: thePoId, productId: pid, branchId: bid, unitPrice: uPrice, discountTypeId: resolvedId, discountPercent: linePct });
+                    const priceTypeHeader = toStr(getVal(po, "price_type", "priceType"), "Cost Per Unit");
+                    const isExclLine = priceTypeHeader.toUpperCase() === "VAT EXCLUSIVE";
+
+                    const ensured = await ensureOpenReceivingRow({ base, poId: thePoId, productId: pid, branchId: bid, unitPrice: uPrice, discountTypeId: resolvedId, discountPercent: linePct, isExclusive: isExclLine });
                     porCounts[String(ensured.porId)] = qty;
                     delete porCounts[key];
                     if (porMetaData?.[key]) { porMetaData[String(ensured.porId)] = porMetaData[key]; delete porMetaData[key]; }
@@ -546,20 +571,19 @@ export async function POST(req: NextRequest) {
                     if (!dtId) dtId = ensureId(dType);
                 }
 
-                const dAmt = Number((uPrice * (linePct / 100)).toFixed(2));
-                const net = uPrice - dAmt;
                 const newQty = toNum(pr?.received_quantity || 0) + qty;
-                
-                const netTotal = net * newQty;
-                const vatExclTotal = Number((netTotal / 1.12).toFixed(2));
-                const vatAmtTotal = Number((netTotal - vatExclTotal).toFixed(2));
+                const lineGross = uPrice * newQty;
+                const lineDisc = Number((lineGross * (linePct / 100)).toFixed(2));
+                const lineNet = lineGross - lineDisc;
+                const vatExclTotal = Number((lineNet / 1.12).toFixed(2));
+                const vatAmtTotal = Number((lineNet - vatExclTotal).toFixed(2));
                 const ewtAmtTotal = Number((vatExclTotal * 0.01).toFixed(2));
 
                 const patch: Record<string, unknown> = {
                     receipt_no: receiptNo, receipt_date: receiptDate, received_quantity: newQty, received_date: nowISO(), isPosted: 0,
-                    discount_type: dtId || null, discounted_amount: Number((dAmt * newQty).toFixed(2)),
+                    discount_type: dtId || null, discounted_amount: lineDisc,
                     vat_amount: vatAmtTotal, withholding_amount: ewtAmtTotal,
-                    total_amount: Number(netTotal.toFixed(2))
+                    total_amount: Number(lineGross.toFixed(2))
                 };
                 if (m.lotNo) patch.lot_id = toNum(m.lotNo);
                 if (m.batchNo) patch.batch_no = m.batchNo;
@@ -569,30 +593,109 @@ export async function POST(req: NextRequest) {
             }
 
             const fLines = await fetchPOProductsByPOId(base, thePoId), fPors = await fetchPORByPOIds(base, [thePoId]);
+            const updatedPorIdsByKey = buildPorIdsByKey(fPors);
+
             const fully = isFullyReceived(thePoId, fLines, fPors);
             const hasRec = fPors.some(r => toStr(r.receipt_no) || toNum(r.received_quantity) > 0);
             const nextStatus = fully ? 13 : (hasRec ? 9 : po.inventory_status);
 
+            // ✅ Determine isInvoice status
+            const poIsInvoice = (Number(getVal(po, "receiving_type", "receivingType")) === 2) || 
+                          (toNum(getVal(po, "vat_amount", "vatAmount")) > 0) || 
+                          (toNum(getVal(po, "withholding_tax_amount", "withholdingTaxAmount")) > 0);
+
+            // ✅ Recalculate PO header totals from all receiving rows
+            let poGross = 0, poDiscount = 0;
+            for (const r of fPors) {
+                const rQty = toNum(r.received_quantity);
+                const rPrice = toNum(r.unit_price);
+                poGross += rQty * rPrice;
+                // Use the POR's own discount data if available
+                const rPid = toNum(r.product_id);
+                const rDtId = ensureId(r.discount_type);
+                let rPct = poDiscountPercent;
+                if (rDtId) { const dt = discountMap.get(String(rDtId)); if (dt) rPct = dt.pct; }
+                else { const linkId = ensureId(linksMap.get(rPid)?.discount_type); if (linkId) { const dt = discountMap.get(String(linkId)); if (dt) rPct = dt.pct; } }
+                poDiscount += rQty * Number((rPrice * (rPct / 100)).toFixed(2));
+            }
+            const poNet = Math.max(0, poGross - poDiscount);
+            const priceType = toStr(getVal(po, "price_type", "priceType"), "Cost Per Unit");
+            const isExclusive = priceType.toUpperCase() === "VAT EXCLUSIVE";
+
             const patchPO: Record<string, unknown> = { inventory_status: nextStatus };
             if (receiverId) patchPO.receiver_id = receiverId;
             if (fully) patchPO.date_received = nowISO();
+
+            // ✅ Only apply VAT/EWT totals if the PO is an Invoice
+            if (poIsInvoice) {
+                let vatTotal = 0, ewtTotal = 0;
+                if (isExclusive) { vatTotal = poNet * 0.12; ewtTotal = poNet * 0.01; }
+                else { const vatableAmt = poNet / 1.12; vatTotal = poNet - vatableAmt; ewtTotal = vatableAmt * 0.01; }
+                patchPO.vat_amount = Number(vatTotal.toFixed(2));
+                patchPO.withholding_tax_amount = Number(ewtTotal.toFixed(2));
+            }
+            patchPO.total_amount = Number(poNet.toFixed(2));
+
             await fetchJson(`${base}/items/${PO_COLLECTION}/${thePoId}`, { method: "PATCH", body: JSON.stringify(patchPO) }).catch(() => {});
 
-            // ✅ Return the full updated PO detail so the frontend can render the Receipt Preview
-            const updatedProductIds = fLines.map(l => toNum(l.product_id));
-            const updatedProductsMap = await fetchProductsMap(base, updatedProductIds);
-            const updatedBranchesMap = await fetchBranchesMap(base, fLines.map(l => toNum(l.branch_id ?? 0)));
-            const updatedSupplierMap = await fetchSupplierNames(base, [toNum(po.supplier_name)]);
-            const updatedPorIdsByKey = buildPorIdsByKey(fPors);
-
-            const updatedAllocationsMap = new Map<number, unknown[]>();
+            // ✅ Sync the "received" flag in purchase_order_products for each line
             for (const ln of fLines) {
                 const pid = toNum(ln.product_id);
                 const bid = toNum(ln.branch_id ?? 0);
                 const k = keyLine(thePoId, pid, bid);
+                const pors = updatedPorIdsByKey.get(k) || [];
+                const totalRec = pors.reduce((sum, id) => sum + effectiveReceivedQty(fPors.find(r => toNum(r.purchase_order_product_id) === id)), 0);
+                const ordered = toNum(ln.ordered_quantity);
+                
+                const shouldBeReceived = (totalRec >= ordered && totalRec > 0) || (ordered === 0 && totalRec > 0);
+                const currentReceived = toNum((ln as any).received || 0);
+
+                if (shouldBeReceived && currentReceived !== 1) {
+                    await fetchJson(`${base}/items/${PO_PRODUCTS_COLLECTION}/${ln.purchase_order_product_id}`, {
+                        method: "PATCH", body: JSON.stringify({ received: 1 })
+                    }).catch(() => {});
+                } else if (!shouldBeReceived && currentReceived === 1) {
+                    await fetchJson(`${base}/items/${PO_PRODUCTS_COLLECTION}/${ln.purchase_order_product_id}`, {
+                        method: "PATCH", body: JSON.stringify({ received: 0 })
+                    }).catch(() => {});
+                }
+            }
+
+            // ✅ Return the full updated PO detail so the frontend can render the Receipt Preview
+            // Include ALL product IDs: from PO lines AND from receiving rows (for extra products)
+            const allProductIdsSet = new Set<number>();
+            fLines.forEach(l => allProductIdsSet.add(toNum(l.product_id)));
+            fPors.forEach(r => allProductIdsSet.add(toNum(r.product_id)));
+            const updatedProductIds = Array.from(allProductIdsSet);
+            const updatedProductsMap = await fetchProductsMap(base, updatedProductIds);
+            const allBranchIdsSet = new Set<number>();
+            fLines.forEach(l => allBranchIdsSet.add(toNum(l.branch_id ?? 0)));
+            fPors.forEach(r => allBranchIdsSet.add(toNum(r.branch_id)));
+            const updatedBranchesMap = await fetchBranchesMap(base, Array.from(allBranchIdsSet));
+            const updatedSupplierMap = await fetchSupplierNames(base, [toNum(po.supplier_name)]);
+            
+            const updatedAllocationsMap = new Map<number, unknown[]>();
+            const processedLinesSet = new Set<string>();
+
+            // 1. Process standard PO lines
+            for (const ln of fLines) {
+                const pid = toNum(ln.product_id);
+                const bid = toNum(ln.branch_id ?? 0);
+                const k = keyLine(thePoId, pid, bid);
+                processedLinesSet.add(k);
                 const p = updatedProductsMap.get(pid);
                 const pors = updatedPorIdsByKey.get(k) || [];
-                const recQty = pors.reduce((sum, id) => sum + effectiveReceivedQty(fPors.find(r => toNum(r.purchase_order_product_id) === id)), 0);
+                const allRows = pors.map(id => fPors.find(r => toNum(r.purchase_order_product_id) === id)).filter(Boolean);
+                
+                const currentRows = allRows.filter(r => toStr(r!.receipt_no) === toStr(receiptNo));
+                const previousRows = allRows.filter(r => toStr(r!.receipt_no) !== toStr(receiptNo));
+                
+                const prevRecQty = previousRows.reduce((sum, r) => sum + effectiveReceivedQty(r!), 0);
+                const currRecQty = currentRows.reduce((sum, r) => sum + effectiveReceivedQty(r!), 0);
+                const ordered = toNum(ln.ordered_quantity);
+                const startingBalance = Math.max(0, ordered - prevRecQty);
+
+                if (currRecQty <= 0 && startingBalance <= 0) continue; // Skip if nothing happened and nothing expected
 
                 const lineDiscountTypeId = linksMap.get(pid)?.discount_type;
                 let lineDiscountPercent = poDiscountPercent;
@@ -608,9 +711,41 @@ export async function POST(req: NextRequest) {
                     id: pors[0] ? String(pors[0]) : `${pid}-${bid}`, porId: String(pors[0] || ""),
                     productId: String(pid), branchId: String(bid), name: toStr(p?.product_name, `Product #${pid}`),
                     barcode: productDisplayCode(p, pid), uom: String(p?.unit_of_measurement?.unit_shortcut ?? "BOX").toUpperCase(),
-                    expectedQty: toNum(ln.ordered_quantity), receivedQty: recQty, requiresRfid: false,
-                    isReceived: recQty >= toNum(ln.ordered_quantity), unitPrice: toNum(ln.unit_price),
-                    discountType: lineDiscountTypeStr, discountAmount: dAmt, netAmount: recQty * (toNum(ln.unit_price) - dAmt)
+                    expectedQty: startingBalance, receivedQty: currRecQty, requiresRfid: false,
+                    isReceived: currRecQty >= startingBalance && startingBalance > 0, unitPrice: toNum(ln.unit_price),
+                    discountType: lineDiscountTypeStr, discountAmount: dAmt, netAmount: currRecQty * (toNum(ln.unit_price) - dAmt)
+                }]);
+            }
+
+            // 2. Process extra POR rows that aren't in fLines
+            for (const r of fPors) {
+                if (toStr(r.receipt_no) !== toStr(receiptNo)) continue; // ONLY show items from THIS receipt
+                
+                const pid = toNum(r.product_id);
+                const bid = toNum(r.branch_id);
+                const k = keyLine(thePoId, pid, bid);
+                if (processedLinesSet.has(k)) continue;
+                processedLinesSet.add(k);
+
+                const p = updatedProductsMap.get(pid);
+                const recQty = toNum(r.received_quantity);
+                const lineDiscountTypeId = linksMap.get(pid)?.discount_type;
+                let lineDiscountPercent = poDiscountPercent;
+                let lineDiscountTypeStr = "Standard";
+                const resId = ensureId(lineDiscountTypeId);
+                if (resId) {
+                    const dt = discountMap.get(String(resId));
+                    if (dt) { lineDiscountPercent = dt.pct; lineDiscountTypeStr = dt.name; }
+                }
+
+                const dAmt = toNum(r.unit_price) * (lineDiscountPercent / 100);
+                updatedAllocationsMap.set(bid, [...(updatedAllocationsMap.get(bid) ?? []), {
+                    id: String(r.purchase_order_product_id), porId: String(r.purchase_order_product_id),
+                    productId: String(pid), branchId: String(bid), name: toStr(p?.product_name, `Product #${pid}`),
+                    barcode: productDisplayCode(p, pid), uom: String(p?.unit_of_measurement?.unit_shortcut ?? "BOX").toUpperCase(),
+                    expectedQty: 0, receivedQty: recQty, requiresRfid: false,
+                    isReceived: true, unitPrice: toNum(r.unit_price),
+                    discountType: lineDiscountTypeStr, discountAmount: dAmt, netAmount: recQty * (toNum(r.unit_price) - dAmt)
                 }]);
             }
 
@@ -619,7 +754,8 @@ export async function POST(req: NextRequest) {
                 supplier: { id: String(po.supplier_name), name: updatedSupplierMap.get(toNum(po.supplier_name)) || "Supplier" },
                 status: receivingStatusFrom(thePoId, fLines, fPors),
                 allocations: Array.from(updatedAllocationsMap.entries()).map(([bid, items]) => ({ branch: { id: String(bid), name: updatedBranchesMap.get(bid) || `Branch ${bid}` }, items })),
-                priceType: toStr(po.price_type, "Cost Per Unit"),
+                priceType: toStr(getVal(po, "price_type", "priceType"), "Cost Per Unit"),
+                isInvoice: poIsInvoice,
                 createdAt: po.date_encoded ? new Date(po.date_encoded).toISOString() : new Date().toISOString(),
             };
 

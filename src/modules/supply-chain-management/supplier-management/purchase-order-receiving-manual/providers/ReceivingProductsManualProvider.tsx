@@ -71,6 +71,7 @@ export type ReceivingPODetail = {
     }>;
     createdAt: string;
     priceType?: string;
+    isInvoice?: boolean;
 };
 
 export type SavedItem = {
@@ -98,6 +99,7 @@ export type ReceiptSavedInfo = {
     isFullyReceived: boolean;
     savedAt: number;
     receiverName?: string;
+    isInvoice?: boolean;
 };
 
 type Ctx = {
@@ -743,7 +745,8 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
                 receiptDate: receiptDate.trim(),
                 items: savedItems,
                 isFullyReceived: isFullyReceivedNow,
-                savedAt: Date.now()
+                savedAt: Date.now(),
+                isInvoice: detail?.isInvoice ?? selectedPO?.isInvoice
             });
 
             refreshList();

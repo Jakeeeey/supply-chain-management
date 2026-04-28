@@ -30,6 +30,7 @@ type ReceiptData = {
         rfids: string[];
     }>;
     priceType: string;
+    isInvoice?: boolean;
     receiverName?: string;
 };
 
@@ -124,6 +125,7 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
             items.forEach((it: any) => {
                 const name = (it.name || "—").trim();
                 const uom = (it.uom || "—").trim();
+                const barcode = (it.barcode || "—").trim();
                 const expected = Math.max(0, toNum(it.expectedQty));
                 const received = Math.max(0, toNum(it.receivedQtyNow));
                 const price = Math.max(0, toNum(it.unitPrice));
@@ -138,17 +140,17 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
                 sumDiscount += (received * discountAmount);
                 sumNet += net;
 
-                const metaInfo = [
+                // Batch/Lot/Exp as separate lines in one column
+                const batchExpLines = [
                     it.batchNo ? `Batch: ${it.batchNo}` : "",
                     it.lotId ? `Lot: ${it.lotId}` : "",
                     it.expiryDate ? `Exp: ${it.expiryDate}` : ""
-                ].filter(Boolean).join(" | ");
-
-                const barcodeStr = `${it.barcode || "—"}${metaInfo ? "\n" + metaInfo : ""}`;
+                ].filter(Boolean).join("\n");
 
                 tableRows.push([
+                   barcode,
                    name,
-                   barcodeStr,
+                   batchExpLines || "—",
                    uom,
                    String(expected),
                    String(received),
@@ -165,10 +167,10 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
             autoTable(doc, {
                 startY: detailsY + 15,
                 margin: { left: 10, right: 10 },
-                head: [["Product", "Barcode", "UOM", "Expected", "Received", "Price", "Disc", "Net"]],
+                head: [["Barcode", "Product", "Batch/Exp", "UOM", "Order Qty", "Received", "Unit Price", "Disc Amt", "Net Amt"]],
                 body: tableRows,
                 foot: [[
-                    { content: "TOTALS", colSpan: 3, styles: { halign: "right", fillColor: [245, 245, 245], fontSize: 7, textColor: [50, 50, 50], fontStyle: "bold" } },
+                    { content: "TOTALS", colSpan: 4, styles: { halign: "right", fillColor: [245, 245, 245], fontSize: 7, textColor: [50, 50, 50], fontStyle: "bold" } },
                     { content: String(sumExpected), styles: { halign: "right", fillColor: [245, 245, 245], fontSize: 7, textColor: [50, 50, 50], fontStyle: "bold" } },
                     { content: String(sumReceived), styles: { halign: "right", fillColor: [245, 245, 245], fontSize: 7, textColor: [50, 50, 50], fontStyle: "bold" } },
                     { content: "—", styles: { halign: "right", fillColor: [245, 245, 245], fontSize: 7, textColor: [50, 50, 50], fontStyle: "bold" } },
@@ -180,14 +182,15 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
                 headStyles: { fillColor: [100, 100, 100], textColor: [255, 255, 255], fontSize: 7, fontStyle: "bold", halign: "center" },
                 bodyStyles: { fontSize: 7, textColor: [50, 50, 50] },
                 columnStyles: {
-                    0: { cellWidth: "auto" },
-                    1: { cellWidth: 22 },
-                    2: { cellWidth: 12 },
-                    3: { halign: "right", cellWidth: 16 },
-                    4: { halign: "right", cellWidth: 16 },
-                    5: { halign: "right", cellWidth: 18 },
+                    0: { cellWidth: 20 },
+                    1: { cellWidth: "auto" },
+                    2: { cellWidth: 28, fontSize: 6 },
+                    3: { cellWidth: 12 },
+                    4: { halign: "right", cellWidth: 14 },
+                    5: { halign: "right", cellWidth: 14 },
                     6: { halign: "right", cellWidth: 18 },
-                    7: { halign: "right", cellWidth: 20, fontStyle: "bold" },
+                    7: { halign: "right", cellWidth: 18 },
+                    8: { halign: "right", cellWidth: 20, fontStyle: "bold" },
                 },
                 didDrawPage: (data) => {
                     if (data.pageNumber > 1 && config.elements) {
@@ -212,22 +215,9 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
             const lineHeight = 6;
 
             const isExclusive = data.priceType?.toUpperCase() === "VAT EXCLUSIVE";
+            const isInvoice = Boolean(data.isInvoice);
 
-            let vatAmount = 0;
-            let whtAmount = 0;
-            let grandTotal = 0;
-
-            if (isExclusive) {
-                vatAmount = sumNet * 0.12;
-                whtAmount = sumNet * 0.01;
-                grandTotal = sumNet;
-            } else {
-                // VAT Inclusive
-                const vatableAmount = sumNet / 1.12;
-                vatAmount = sumNet - vatableAmount;
-                whtAmount = vatableAmount * 0.01;
-                grandTotal = sumNet;
-            }
+            let currentY = finalY + lineHeight + 3; // After Discount Line
 
             doc.setFontSize(8);
             doc.setTextColor(50, 50, 50);
@@ -243,43 +233,58 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
             doc.setLineWidth(0.5);
             doc.line(labelX, finalY + lineHeight + 3, rightColX, finalY + lineHeight + 3);
 
-            doc.setTextColor(50, 50, 50);
-            doc.setFontSize(8);
-            doc.setFont("helvetica", "bold");
-            doc.text("Net Total:", labelX, finalY + lineHeight * 2 + 3);
-            doc.text(`${formatMoney(sumNet)}`, rightColX, finalY + lineHeight * 2 + 3, { align: "right" });
+            if (isInvoice) {
+                let vatAmount = 0;
+                let whtAmount = 0;
 
-            // Add VAT and EWT
-            doc.setFont("helvetica", "normal");
-            doc.text("VAT Details:", labelX, finalY + lineHeight * 3 + 3);
-            doc.text(`${isExclusive ? "+" : ""}${formatMoney(vatAmount)}`, rightColX, finalY + lineHeight * 3 + 3, { align: "right" });
+                if (isExclusive) {
+                    vatAmount = sumNet * 0.12;
+                    whtAmount = sumNet * 0.01;
+                } else {
+                    const vatableAmount = sumNet / 1.12;
+                    vatAmount = sumNet - vatableAmount;
+                    whtAmount = vatableAmount * 0.01;
+                }
 
-            doc.text("EWT (1%):", labelX, finalY + lineHeight * 4 + 3);
-            doc.setTextColor(150, 50, 50);
-            doc.text(`-${formatMoney(whtAmount)}`, rightColX, finalY + lineHeight * 4 + 3, { align: "right" });
+                doc.setFont("helvetica", "normal");
+                doc.text("VAT Details:", labelX, currentY + lineHeight);
+                doc.text(`${isExclusive ? "+" : ""}${formatMoney(vatAmount)}`, rightColX, currentY + lineHeight, { align: "right" });
 
-            doc.setDrawColor(180, 180, 180);
-            doc.setLineWidth(0.5);
-            doc.line(labelX, finalY + lineHeight * 4 + 5, rightColX, finalY + lineHeight * 4 + 5);
+                doc.text("EWT (1%):", labelX, currentY + lineHeight * 2);
+                doc.setTextColor(150, 50, 50);
+                doc.text(`-${formatMoney(whtAmount)}`, rightColX, currentY + lineHeight * 2, { align: "right" });
+
+                doc.setDrawColor(180, 180, 180);
+                doc.setLineWidth(0.5);
+                doc.line(labelX, currentY + lineHeight * 2 + 2, rightColX, currentY + lineHeight * 2 + 2);
+
+                currentY = currentY + lineHeight * 2 + 6;
+            }
+
+            const grandTotal = sumNet;
 
             doc.setTextColor(50, 50, 50);
             doc.setFontSize(10);
             doc.setFont("helvetica", "bold");
-            doc.text("Grand Total:", labelX, finalY + lineHeight * 5 + 6);
-            doc.text(`PHP ${formatMoney(grandTotal)}`, rightColX, finalY + lineHeight * 5 + 6, { align: "right" });
+            doc.text("Grand Total:", labelX, currentY + lineHeight);
+            doc.text(`PHP ${formatMoney(grandTotal)}`, rightColX, currentY + lineHeight, { align: "right" });
 
-            // Standardized Footnote
-            doc.setFont("helvetica", "italic");
-            doc.setFontSize(7);
-            doc.setTextColor(100, 100, 100);
-            doc.text("Note: VAT and EWT figures are for reference and have not been deducted from the total.", labelX - 20, finalY + lineHeight * 5 + 12);
+            let sigY = currentY + lineHeight + 10;
+
+            if (isInvoice) {
+                // Standardized Footnote
+                doc.setFont("helvetica", "italic");
+                doc.setFontSize(7);
+                doc.setTextColor(100, 100, 100);
+                doc.text("Note: VAT and EWT figures are for reference and have not been deducted from the total.", labelX - 20, currentY + lineHeight + 6);
+                sigY = currentY + lineHeight + 15;
+            }
 
             // 5. Signatures
             const signatureWidth = 50;
             const spacing = 20;
             const totalWidth = signatureWidth * 2 + spacing;
             const startX = (pageWidth - totalWidth) / 2;
-            const sigY = finalY + lineHeight * 5 + 25;
 
             doc.setFont("helvetica", "normal");
             doc.setFontSize(7);
@@ -298,18 +303,15 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
             doc.setTextColor(150, 150, 150);
             doc.text("Signature", receivedByX, sigY + 11);
 
-            // Checked By
+            // Checked By (empty — no name)
             const checkedByX = startX + signatureWidth + spacing;
             doc.setFontSize(7);
             doc.setTextColor(15, 23, 42);
             doc.text("Checked By:", checkedByX, sigY);
-            doc.setFont("helvetica", "bold");
-            doc.text(data.receiverName || "—", checkedByX, sigY + 4);
 
             doc.setDrawColor(150, 150, 150);
             doc.line(checkedByX, sigY + 8, checkedByX + signatureWidth, sigY + 8);
             doc.setFontSize(6);
-            doc.setFont("helvetica", "normal");
             doc.setTextColor(150, 150, 150);
             doc.text("Signature", checkedByX, sigY + 11);
 

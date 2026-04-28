@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Card } from "@/components/ui/card";
+import { Pencil } from "lucide-react";
 import {
     Table,
     TableBody,
@@ -11,36 +12,39 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { usePostingOfPo } from "../../providers/PostingOfPoProvider";
 import { money } from "../../utils/format";
 
+import { usePostingOfPo } from "../../providers/PostingOfPoProvider";
+
 export function PODetailsBreakdownCard() {
-    const { selectedPO, discountTypes } = usePostingOfPo();
+    const { selectedPO } = usePostingOfPo();
 
     if (!selectedPO) return null;
 
     const allocations = selectedPO.allocations || [];
     if (allocations.length === 0) return null;
 
-    const computedDiscount = allocations.reduce((sum, alloc) => {
-        return sum + alloc.items.reduce((itemSum, it) => {
-            const uprice = it.unitPrice || 0;
-            const qty = it.receivedQty || it.expectedQty || 0;
-            const gross = uprice * qty;
+    const isInvoice = Number(selectedPO.vatAmount) > 0 || Number(selectedPO.withholdingTaxAmount) > 0;
 
-            if (!it.discountTypeId || it.discountTypeId === "null") return itemSum;
-            const dt = discountTypes.find(d => String(d.id) === String(it.discountTypeId) || String(d.name) === String(it.discountTypeId));
-            if (dt) return itemSum + ((dt.percent / 100) * gross);
-            const nums = (it.discountTypeId.match(/\d+(?:\.\d+)?/g) ?? []).map(Number).filter(n => Number.isFinite(n) && n > 0 && n <= 100);
-            if (nums.length) {
-                const factor = nums.reduce((a, p) => a * (1 - p / 100), 1);
-                return itemSum + (gross * (1 - factor));
-            }
-            return itemSum;
+    // Use backend-provided discount amounts directly (already calculated with full precision)
+    const totalDiscount = allocations.reduce((sum, alloc) => {
+        return sum + alloc.items.reduce((itemSum, it) => {
+            return itemSum + (it.discountAmount ?? 0);
         }, 0);
     }, 0);
 
-    const finalDiscount = Number(selectedPO.discountAmount) > 0 ? Number(selectedPO.discountAmount) : computedDiscount;
+    const finalDiscount = Number(totalDiscount.toFixed(2));
+
+    // Compute live gross from allocations for accurate totals
+    const liveGross = allocations.reduce((sum, alloc) => {
+        return sum + alloc.items.reduce((s, it) => {
+            const qty = it.receivedQty || it.expectedQty || 0;
+            return s + (it.unitPrice || 0) * qty;
+        }, 0);
+    }, 0);
+
+    const liveGrandTotal = Number((liveGross - finalDiscount).toFixed(2));
+
 
     return (
         <Card className="flex flex-col border border-border bg-card shadow-sm p-4 w-full">
@@ -85,46 +89,27 @@ export function PODetailsBreakdownCard() {
                                             const gross = uprice * qty;
 
                                             let discountDisplay = "—";
-                                            if (it.discountTypeId && it.discountTypeId !== "null") {
-                                                // First, try to find it in the fetched discount types
-                                                const dt = discountTypes.find(d => String(d.id) === String(it.discountTypeId) || String(d.name) === String(it.discountTypeId));
-                                                if (dt) {
-                                                    const discAmt = (dt.percent / 100) * gross;
-                                                    discountDisplay = `${dt.name} ${money(discAmt, selectedPO.currency || "PHP")}`;
-                                                } else {
-                                                    // discountTypeId is already the name (e.g., "L3/L1.5")
-                                                    // Try to derive percent from the name to show the amount
-                                                    const nums = (it.discountTypeId.match(/\d+(?:\.\d+)?/g) ?? []).map(Number).filter(n => Number.isFinite(n) && n > 0 && n <= 100);
-                                                    if (nums.length) {
-                                                        const factor = nums.reduce((a, p) => a * (1 - p / 100), 1);
-                                                        const discAmt = gross * (1 - factor);
-                                                        discountDisplay = `${it.discountTypeId} ${money(discAmt, selectedPO.currency || "PHP")}`;
-                                                    } else {
-                                                        discountDisplay = it.discountTypeId;
-                                                    }
-                                                }
+                                            let discountAmt = it.discountAmount ?? 0;
+
+                                            if (it.discountLabel && discountAmt > 0) {
+                                                discountDisplay = `${it.discountLabel} ${money(discountAmt, selectedPO.currency || "PHP")}`;
+                                            } else if (discountAmt > 0) {
+                                                discountDisplay = money(discountAmt, selectedPO.currency || "PHP");
                                             }
 
-                                            const netTotal = gross - ((() => {
-                                                if (!it.discountTypeId || it.discountTypeId === "null") return 0;
-                                                const dt = discountTypes.find(d => String(d.id) === String(it.discountTypeId) || String(d.name) === String(it.discountTypeId));
-                                                if (dt) return (dt.percent / 100) * gross;
-                                                const nums = (it.discountTypeId.match(/\d+(?:\.\d+)?/g) ?? []).map(Number).filter(n => Number.isFinite(n) && n > 0 && n <= 100);
-                                                if (nums.length) {
-                                                    const factor = nums.reduce((a, p) => a * (1 - p / 100), 1);
-                                                    return gross * (1 - factor);
-                                                }
-                                                return 0;
-                                            })());
+                                            const netTotal = it.netAmount ?? (gross - discountAmt);
 
                                             return (
                                                 <TableRow key={it.productId} className="border-border transition-colors hover:bg-muted/30">
                                                     <TableCell className="h-8 py-1 align-middle text-muted-foreground">{it.barcode}</TableCell>
-                                                    <TableCell className="h-8 py-1 align-middle font-medium truncate max-w-[200px]" title={it.name}>{it.name}</TableCell>
+                                                    <TableCell className="h-8 py-1 align-middle font-medium" title={it.name}>{it.name}</TableCell>
                                                     <TableCell className="h-8 py-1 align-middle text-right">{qty}</TableCell>
-                                                    <TableCell className="h-8 py-1 align-middle text-right">{money(uprice, selectedPO.currency || "PHP")}</TableCell>
+                                                    <TableCell className="h-8 py-1 align-middle text-right">
+                                                        {money(uprice, selectedPO.currency || "PHP")}
+                                                    </TableCell>
                                                     <TableCell className="h-8 py-1 align-middle text-right text-muted-foreground">{discountDisplay}</TableCell>
                                                     <TableCell className="h-8 py-1 align-middle text-right font-medium">{money(netTotal, selectedPO.currency || "PHP")}</TableCell>
+
                                                 </TableRow>
                                             );
                                         })}
@@ -139,7 +124,7 @@ export function PODetailsBreakdownCard() {
             <div className="mt-6 border-t border-border/50 pt-4 flex flex-col gap-2 w-full max-w-sm ml-auto text-sm">
                 <div className="flex justify-between items-center text-muted-foreground">
                     <span>Gross Amount:</span>
-                    <span>{money(selectedPO.grossAmount || 0, selectedPO.currency || "PHP")}</span>
+                    <span>{money(liveGross || selectedPO.grossAmount || 0, selectedPO.currency || "PHP")}</span>
                 </div>
                 {finalDiscount > 0 && (
                     <div className="flex justify-between items-center text-red-500/80 dark:text-red-400">
@@ -147,13 +132,13 @@ export function PODetailsBreakdownCard() {
                         <span>-{money(finalDiscount, selectedPO.currency || "PHP")}</span>
                     </div>
                 )}
-                {Number(selectedPO.vatAmount) > 0 && (
+                {isInvoice && Number(selectedPO.vatAmount) > 0 && (
                     <div className="flex justify-between items-center text-muted-foreground">
                         <span>VAT Details:</span>
                         <span>{money(selectedPO.vatAmount || 0, selectedPO.currency || "PHP")}</span>
                     </div>
                 )}
-                {Number(selectedPO.withholdingTaxAmount) > 0 && (
+                {isInvoice && Number(selectedPO.withholdingTaxAmount) > 0 && (
                     <div className="flex justify-between items-center text-red-500/80 dark:text-red-400">
                         <span>EWT:</span>
                         <span>{money(selectedPO.withholdingTaxAmount || 0, selectedPO.currency || "PHP")}</span>
@@ -161,7 +146,7 @@ export function PODetailsBreakdownCard() {
                 )}
                 <div className="flex justify-between items-center font-bold text-base mt-2 pt-2 border-t border-border/30">
                     <span>Grand Total:</span>
-                    <span>{money(Number(selectedPO.grossAmount || 0) - Number(selectedPO.discountAmount || 0), selectedPO.currency || "PHP")}</span>
+                    <span>{money(liveGrandTotal || Number(selectedPO.grossAmount || 0) - Number(selectedPO.discountAmount || 0), selectedPO.currency || "PHP")}</span>
                 </div>
                 <p className="text-[10px] text-muted-foreground mt-2 italic leading-tight">
                     Note: VAT and EWT figures are for reference and have not been deducted from the total.

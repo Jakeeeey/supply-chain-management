@@ -296,11 +296,11 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                                         const isOver = (count + receivedAtStart) > expected && count > 0;
 
                                         return (
-                                            <TableRow key={porId} className={isOver ? "bg-red-50/50" : ""}>
+                                            <TableRow key={porId} className={cn(isOver && "bg-red-50/50 dark:bg-red-950/20")}>
                                                 <TableCell>
                                                     <div className="font-bold text-xs truncate max-w-[200px]">
                                                         {it.name}
-                                                        {isOver && <span className="text-[10px] text-red-600 ml-2 uppercase font-black tracking-tighter" title="Quantity exceeds ordered amount">⚠️ OVER</span>}
+                                                        {isOver && <span className="text-[10px] text-red-600 dark:text-red-400 ml-2 uppercase font-black tracking-tighter" title="Quantity exceeds ordered amount">⚠️ OVER</span>}
                                                     </div>
                                                     <div className="text-[9px] text-muted-foreground font-mono">SKU: {it.barcode} | UOM: {it.uom}</div>
                                                 </TableCell>
@@ -309,7 +309,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                                                         className={cn(
                                                             "h-8 text-[11px] font-bold",
                                                             showErrors && count > 0 && !(batchNumbers[porId] || "").trim() && "border-red-500 ring-1 ring-red-500",
-                                                            isOver && "border-red-200"
+                                                            isOver && "border-red-200 dark:border-red-900"
                                                         )}
                                                         placeholder="Batch #" 
                                                         value={batchNumbers[porId] || ""} 
@@ -321,7 +321,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                                                         className={cn(
                                                             "h-8 w-full rounded-md border border-input bg-background px-2 text-[11px]",
                                                             showErrors && count > 0 && !(lotNumbers[porId] || "").trim() && "border-red-500 ring-1 ring-red-500",
-                                                            isOver && "border-red-200"
+                                                            isOver && "border-red-200 dark:border-red-900"
                                                         )}
                                                         value={lotNumbers[porId] || ""} 
                                                         onChange={(e) => setLotNumbers(prev => ({ ...prev, [porId]: e.target.value }))}
@@ -336,7 +336,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                                                         className={cn(
                                                             "h-8 text-[11px]",
                                                             showErrors && count > 0 && !(expiryDates[porId] || "").trim() && "border-red-500 ring-1 ring-red-500",
-                                                            isOver && "border-red-200"
+                                                            isOver && "border-red-200 dark:border-red-900"
                                                         )}
                                                         value={expiryDates[porId] || ""} 
                                                         onChange={(e) => setExpiryDates(prev => ({ ...prev, [porId]: e.target.value }))} 
@@ -344,14 +344,14 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                                                 </TableCell>
                                                 <TableCell className="text-right text-xs">{formatPHP(unitP)}</TableCell>
                                                 <TableCell className="text-center text-[10px] text-muted-foreground">{it.discountType}</TableCell>
-                                                <TableCell className="text-right text-xs text-red-600 font-medium">{(discA || 0) > 0 ? `${formatPHP(discA)}` : "—"}</TableCell>
+                                                <TableCell className="text-right text-xs text-red-600 dark:text-red-400 font-medium">{(discA || 0) > 0 ? `${formatPHP(discA)}` : "—"}</TableCell>
                                                 <TableCell className="text-right font-bold text-xs">{formatPHP(lineTotal)}</TableCell>
                                                 <TableCell className="text-center font-bold text-xs">
                                                     {expected}
                                                     {receivedAtStart > 0 && <div className="text-[9px] font-normal text-muted-foreground">(Prev: {receivedAtStart})</div>}
                                                 </TableCell>
                                                 <TableCell className="text-center">
-                                                    <Badge variant={isOver ? "destructive" : "default"} className={cn("h-5", isOver && "bg-red-600")}>
+                                                    <Badge variant={isOver ? "destructive" : "default"} className={cn("h-5", isOver && "bg-red-600 dark:bg-red-700")}>
                                                         {count}
                                                     </Badge>
                                                 </TableCell>
@@ -405,21 +405,27 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                                 <span className="text-[11px] font-bold uppercase tracking-wider">Net Amount:</span>
                                 <span className="font-bold text-slate-700">{formatPHP(financials.net)}</span>
                             </div>
-                            <div className="flex justify-between items-center text-slate-600">
-                                <span className="text-[11px] font-bold uppercase tracking-wider">VAT Details:</span>
-                                <span className="font-bold text-slate-700">{financials.isExclusive ? "+" : ""}{formatPHP(financials.vatAmount)}</span>
-                            </div>
-                            <div className="flex justify-between items-center text-red-600 pb-2 border-b">
-                                <span className="text-[11px] font-bold uppercase tracking-wider">EWT:</span>
-                                <span className="font-bold">{formatPHP(financials.whtAmount)}</span>
-                            </div>
+                            {selectedPO?.isInvoice && (
+                                <>
+                                    <div className="flex justify-between items-center text-slate-600">
+                                        <span className="text-[11px] font-bold uppercase tracking-wider">VAT Details:</span>
+                                        <span className="font-bold text-slate-700">{financials.isExclusive ? "+" : ""}{formatPHP(financials.vatAmount)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-red-600 pb-2 border-b">
+                                        <span className="text-[11px] font-bold uppercase tracking-wider">EWT:</span>
+                                        <span className="font-bold">{formatPHP(financials.whtAmount)}</span>
+                                    </div>
+                                </>
+                            )}
                             <div className="flex justify-between items-center pt-4">
                                 <span className="font-black text-sm uppercase tracking-widest text-slate-900 underline decoration-indigo-500 underline-offset-4">Grand Total:</span>
                                 <span className="font-black text-xl text-indigo-600 drop-shadow-sm">{formatPHP(financials.grandTotal)}</span>
                             </div>
-                            <p className="text-[10px] text-muted-foreground mt-2 italic leading-tight text-right">
-                                Note: VAT and EWT figures are for reference and have not been deducted from the total.
-                            </p>
+                            {selectedPO?.isInvoice && (
+                                <p className="text-[10px] text-muted-foreground mt-2 italic leading-tight text-right">
+                                    Note: VAT and EWT figures are for reference and have not been deducted from the total.
+                                </p>
+                            )}
                         </div>
                     </div>
 
@@ -479,6 +485,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                     poNumber={selectedPO?.poNumber || "N/A"}
                     supplierName={selectedPO?.supplier?.name || "N/A"}
                     priceType={selectedPO?.priceType || "VAT Inclusive"}
+                    isInvoice={receiptSaved?.isInvoice ?? selectedPO?.isInvoice ?? false}
                 />
             )}
 

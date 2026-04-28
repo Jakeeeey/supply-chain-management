@@ -39,7 +39,10 @@ export type POItem = {
     requiresRfid?: boolean;
     unitPrice?: number;
     grossAmount?: number;
+    discountAmount?: number;
+    netAmount?: number;
     discountTypeId?: string;
+    discountLabel?: string;
 };
 
 export type POBranchAllocation = {
