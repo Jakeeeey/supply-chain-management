@@ -40,16 +40,17 @@ export function StockConversionModal({
   );
 
   const isSourceBoxOrPack = product?.currentUnit?.toLowerCase().includes("box") || product?.currentUnit?.toLowerCase().includes("pack");
+  const isRfidLocked = isSourceBoxOrPack && !!sourceQuantity;
 
   useEffect(() => {
     if (isOpen && product) {
       const timer = setTimeout(() => {
-        setQtyToConvert(isSourceBoxOrPack ? (sourceQuantity || 1) : "");
+        setQtyToConvert(isRfidLocked ? (sourceQuantity || 1) : "");
         setSelectedTargetUnit(null);
       }, 0);
       return () => clearTimeout(timer);
     }
-  }, [isOpen, product, isSourceBoxOrPack, sourceQuantity]);
+  }, [isOpen, product, isRfidLocked, sourceQuantity]);
 
   if (!product) return null;
 
@@ -142,7 +143,7 @@ export function StockConversionModal({
               className="text-xs font-bold text-muted-foreground uppercase tracking-tight flex items-center gap-2"
             >
               Quantity to Convert
-              {isSourceBoxOrPack && (
+              {isRfidLocked && (
                 <span className="text-[9px] bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded border border-amber-500/20 lowercase font-normal">
                   Fixed for RFID batch ({sourceQuantity || 1})
                 </span>
@@ -155,14 +156,14 @@ export function StockConversionModal({
                 min={1}
                 max={product.quantity}
                 value={qtyToConvert}
-                disabled={isSourceBoxOrPack}
+                disabled={isRfidLocked}
                 onChange={(e) =>
                   setQtyToConvert(e.target.value ? Number(e.target.value) : "")
                 }
-                placeholder={isSourceBoxOrPack ? String(sourceQuantity || 1) : "Enter quantity"}
-                className={`bg-background border-input focus-visible:ring-blue-500 ${isSourceBoxOrPack ? "bg-muted/50 font-bold text-blue-600 cursor-not-allowed" : ""}`}
+                placeholder={isRfidLocked ? String(sourceQuantity || 1) : "Enter quantity"}
+                className={`bg-background border-input focus-visible:ring-blue-500 ${isRfidLocked ? "bg-muted/50 font-bold text-blue-600 cursor-not-allowed" : ""}`}
               />
-              {isSourceBoxOrPack && (
+              {isRfidLocked && (
                 <div className="absolute right-3 top-1/2 -translate-y-1/2">
                    <AlertCircle className="w-4 h-4 text-amber-500/50" />
                 </div>
