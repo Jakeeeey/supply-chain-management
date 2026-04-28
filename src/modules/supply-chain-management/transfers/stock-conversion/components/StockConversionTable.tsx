@@ -6,13 +6,6 @@ import { StockConversionProduct } from "../types/stock-conversion.types";
 import { getColumns } from "./columns";
 import { DataTable } from "@/components/ui/new-data-table";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { SearchableCombobox } from "@/modules/supply-chain-management/warehouse-management/stock-transfer/shared/components/searchable-combobox";
@@ -59,10 +52,10 @@ export function StockConversionTable({
   options,
   convertingId,
 }: StockConversionTableProps) {
-  const [brandFilter, setBrandFilter] = useState("all");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [unitFilter, setUnitFilter] = useState("all");
-  const [supplierFilter, setSupplierFilter] = useState("all");
+  const [brandFilter, setBrandFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [unitFilter, setUnitFilter] = useState("");
+  const [supplierFilter, setSupplierFilter] = useState("");
   const [hasStockFilter, setHasStockFilter] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [localBranchId, setLocalBranchId] = useState<number | undefined>(selectedBranchId);
@@ -133,14 +126,14 @@ export function StockConversionTable({
     // onClick={handleApplyFilters} passes the event object, which we must ignore.
     const activeSearch = (typeof searchOverride === 'string') ? searchOverride : searchQuery;
 
-    if (supplierFilter !== "all") {
+    if (supplierFilter) {
       // Find by name OR shortcut to be safe
       const found = uniqueSuppliers.find(s => s.name === supplierFilter || s.shortcut === supplierFilter);
       filterPayload.supplierShortcut = found?.shortcut || supplierFilter;
     }
-    if (brandFilter !== "all") filterPayload.productBrand = brandFilter;
-    if (categoryFilter !== "all") filterPayload.productCategory = categoryFilter;
-    if (unitFilter !== "all") filterPayload.unitName = unitFilter;
+    if (brandFilter) filterPayload.productBrand = brandFilter;
+    if (categoryFilter) filterPayload.productCategory = categoryFilter;
+    if (unitFilter) filterPayload.unitName = unitFilter;
     if (activeSearch && typeof activeSearch === 'string' && activeSearch.trim()) {
       filterPayload.search = activeSearch.trim();
     }
@@ -152,17 +145,23 @@ export function StockConversionTable({
   };
 
   // Filters now only apply when the "Apply" button is clicked, per user preference.
-  // Search query remains reactive for a better user experience.
+  // Search query remains reactive but debounced for a better user experience.
   useEffect(() => {
-    if (searchQuery.trim()) handleApplyFilters();
+    const handler = setTimeout(() => {
+      // Apply filters if there is a search query OR if the search query was just cleared
+      // This ensures that deleting the search string actually resets the list.
+      handleApplyFilters();
+    }, 400);
+
+    return () => clearTimeout(handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery]);
 
   const handleClearFilters = () => {
-    setBrandFilter("all");
-    setCategoryFilter("all");
-    setUnitFilter("all");
-    setSupplierFilter("all");
+    setBrandFilter("");
+    setCategoryFilter("");
+    setUnitFilter("");
+    setSupplierFilter("");
     setHasStockFilter(false);
     setSearchQuery("");
     setLocalBranchId(selectedBranchId);
@@ -177,8 +176,10 @@ export function StockConversionTable({
   );
 
   const filterActions = (
-    <div className="flex flex-wrap items-center gap-2">
-      <div className="min-w-[180px]">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+      {/* Primary Controls: Branch & Convertible Toggle */}
+      <div className="flex items-center gap-2">
+        <div className="w-[170px]">
         <SearchableCombobox
           options={branches?.map((b) => ({
             value: String(b.id),
@@ -198,45 +199,72 @@ export function StockConversionTable({
           onCheckedChange={(checked) => setHasStockFilter(!!checked)} 
           disabled={!localBranchId}
         />
-        <Label 
-          htmlFor="convertible-only" 
-          className={`text-xs font-bold cursor-pointer uppercase tracking-tight ${!localBranchId ? "text-muted-foreground opacity-50" : "text-blue-600 dark:text-blue-400"}`}
-        >
-          Convertible Only
-        </Label>
+          <Label 
+            htmlFor="convertible-only" 
+            className={`text-[10px] font-bold cursor-pointer uppercase tracking-tight ${!localBranchId ? "text-muted-foreground opacity-50" : "text-blue-600 dark:text-blue-400"}`}
+          >
+            Convertible Only
+          </Label>
+        </div>
       </div>
 
-      <Select value={supplierFilter} onValueChange={setSupplierFilter}>
-        <SelectTrigger className="w-[140px] h-9 text-xs"><SelectValue placeholder="Supplier" /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All Suppliers</SelectItem>
-          {uniqueSuppliers.map((s, idx) => <SelectItem key={`sup-${s.id || idx}-${s.name}`} value={s.name || "Unknown"}>{s.name || "Unknown"}</SelectItem>)}
-        </SelectContent>
-      </Select>
+      {/* Divider */}
+      <div className="hidden xl:block w-px h-6 bg-slate-200 dark:bg-slate-800" />
 
-      <Select value={brandFilter} onValueChange={setBrandFilter}>
-        <SelectTrigger className="w-[120px] h-9 text-xs"><SelectValue placeholder="Brand" /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All Brands</SelectItem>
-          {uniqueBrands.map((b, idx) => <SelectItem key={`brand-${b.id || idx}-${b.name}`} value={b.name || "Unknown"}>{b.name || "Unknown"}</SelectItem>)}
-        </SelectContent>
-      </Select>
+      {/* Secondary Filters Group */}
+      <div className="flex flex-wrap items-center gap-2">
 
-      <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-        <SelectTrigger className="w-[130px] h-9 text-xs"><SelectValue placeholder="Category" /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All Categories</SelectItem>
-          {uniqueCategories.map((c, idx) => <SelectItem key={`cat-${c.id || idx}-${c.name}`} value={c.name || "Unknown"}>{c.name || "Unknown"}</SelectItem>)}
-        </SelectContent>
-      </Select>
+        <div className="w-[145px]">
+        <SearchableCombobox
+          options={uniqueSuppliers.map(s => ({
+            value: s.name || "Unknown",
+            label: s.name || "Unknown",
+          }))}
+          value={supplierFilter}
+          onValueChange={setSupplierFilter}
+          placeholder="All Suppliers"
+          className="h-9"
+        />
+      </div>
 
-      <Select value={unitFilter} onValueChange={setUnitFilter}>
-        <SelectTrigger className="w-[100px] h-9 text-xs"><SelectValue placeholder="Unit" /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All Units</SelectItem>
-          {uniqueUnits.map((u, idx) => <SelectItem key={`unit-${u.id || idx}-${u.name}`} value={u.name || "Unknown"}>{u.name || "Unknown"}</SelectItem>)}
-        </SelectContent>
-      </Select>
+        <div className="w-[120px]">
+        <SearchableCombobox
+          options={uniqueBrands.map(b => ({
+            value: b.name || "Unknown",
+            label: b.name || "Unknown",
+          }))}
+          value={brandFilter}
+          onValueChange={setBrandFilter}
+          placeholder="All Brands"
+          className="h-9"
+        />
+      </div>
+
+        <div className="w-[130px]">
+        <SearchableCombobox
+          options={uniqueCategories.map(c => ({
+            value: c.name || "Unknown",
+            label: c.name || "Unknown",
+          }))}
+          value={categoryFilter}
+          onValueChange={setCategoryFilter}
+          placeholder="All Categories"
+          className="h-9"
+        />
+      </div>
+
+        <div className="w-[105px]">
+        <SearchableCombobox
+          options={uniqueUnits.map(u => ({
+            value: u.name || "Unknown",
+            label: u.name || "Unknown",
+          }))}
+          value={unitFilter}
+          onValueChange={setUnitFilter}
+          placeholder="All Units"
+          className="h-9"
+        />
+      </div>
 
       <div className="flex items-center gap-1 ml-1">
         <Button 
@@ -266,6 +294,7 @@ export function StockConversionTable({
         >
           <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
         </Button>
+        </div>
       </div>
     </div>
   );

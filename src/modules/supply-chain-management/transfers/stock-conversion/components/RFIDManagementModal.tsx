@@ -15,7 +15,8 @@ interface RFIDManagementModalProps {
   onClose: () => void;
   onSubmit: (tags: RFIDTag[]) => void;
   isSubmitting: boolean;
-  validateTag?: (tag: string) => Promise<boolean>;
+  validateTag?: (tag: string) => Promise<{ exists: boolean; reason?: string }>;
+  sourceRfidTags?: string[];
 }
 
 export function RFIDManagementModal({ 
@@ -25,7 +26,8 @@ export function RFIDManagementModal({
   onClose, 
   onSubmit, 
   isSubmitting,
-  validateTag
+  validateTag,
+  sourceRfidTags = []
 }: RFIDManagementModalProps) {
   const [rfidInput, setRfidInput] = useState("");
   const [assignedTags, setAssignedTags] = useState<RFIDTag[]>([]);
@@ -62,13 +64,23 @@ export function RFIDManagementModal({
       return;
     }
 
+    // CROSS-CHECK: Block if this is the same tag being converted (Source)
+    if (sourceRfidTags.includes(rfidInput.trim())) {
+      alert(`RFID ${rfidInput.trim()} is currently being converted from the source unit. You must use a DIFFERENT tag for the new unit.`);
+      setRfidInput("");
+      return;
+    }
+
     setIsValidating(true);
     try {
       // Validate with database
       if (validateTag) {
-        const exists = await validateTag(rfidInput.trim());
-        if (exists) {
-          alert(`RFID ${rfidInput.trim()} already exists in the warehouse. Duplicates are not allowed.`);
+        const result = await validateTag(rfidInput.trim());
+        if (result.exists) {
+          const message = result.reason === "onhand" 
+            ? `RFID ${rfidInput.trim()} is already on-hand in the warehouse.`
+            : `RFID ${rfidInput.trim()} has been used previously (found in history).`;
+          alert(`${message} Duplicates are not allowed.`);
           setRfidInput("");
           return;
         }

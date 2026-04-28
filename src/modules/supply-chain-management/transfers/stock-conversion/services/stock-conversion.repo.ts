@@ -1,4 +1,5 @@
 import { AppError } from "../utils/error-handler";
+import { getCached, setCache } from "../utils/cache";
 
 export const DIRECTUS_API = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "");
 export const DIRECTUS_TOKEN = process.env.DIRECTUS_STATIC_TOKEN;
@@ -41,7 +42,7 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout 
 export const stockConversionRepo = {
   async fetchProducts(limit: number, offset: number, filters?: string) {
     const headers = getHeaders();
-    const url = `${DIRECTUS_API}/items/products?limit=${limit}&offset=${offset}&meta=filter_count&fields=product_id,product_name,description,product_code,parent_id,unit_of_measurement,unit_of_measurement_count,product_brand,product_category,cost_per_unit,price_per_unit${filters ? `&${filters}` : ""}`;
+    const url = `${DIRECTUS_API}/items/products?limit=${limit}&offset=${offset}&meta=filter_count&fields=product_id,product_name,description,product_code,parent_id,unit_of_measurement,unit_of_measurement_count,product_brand,product_category,cost_per_unit,price_per_unit,product_supplier.supplier_name,product_supplier.supplier_shortcut,product_per_supplier.supplier_id.supplier_name,product_per_supplier.supplier_id.supplier_shortcut&sort=product_name${filters ? `&${filters}` : ""}`;
     
     console.log(`[Repo] Fetching products from Directus: ${url}`);
     const res = await fetchWithTimeout(url, { headers, cache: "no-store" });
@@ -52,7 +53,7 @@ export const stockConversionRepo = {
     return res.json();
   },
 
-  async fetchItemsInChunks<T>(endpoint: string, field: string, ids: (number | string)[], fields: string = "*") {
+  async fetchItemsInChunks<T>(endpoint: string, field: string, ids: (number | string)[], fields: string = "*", sort?: string) {
     const headers = getHeaders();
     const uniqueIds = [...new Set(ids)].filter(Boolean);
     if (!uniqueIds.length) return [];
@@ -61,7 +62,9 @@ export const stockConversionRepo = {
     const chunkSize = 50;
     for (let i = 0; i < uniqueIds.length; i += chunkSize) {
       const chunk = uniqueIds.slice(i, i + chunkSize);
-      const url = `${DIRECTUS_API}/items/${endpoint}?filter[${field}][_in]=${chunk.join(",")}&fields=${fields}&limit=-1`;
+      const filter = JSON.stringify({ [field]: { "_in": chunk } });
+      const sortParam = sort ? `&sort=${sort}` : "";
+      const url = `${DIRECTUS_API}/items/${endpoint}?filter=${filter}&fields=${fields}&limit=-1${sortParam}`;
       const res = await fetchWithTimeout(url, { headers });
       if (res.ok) {
         const json = await res.json();
@@ -72,6 +75,12 @@ export const stockConversionRepo = {
   },
 
   async fetchFilterOptions() {
+    const CACHE_KEY = "filter_options";
+    const TTL = 5 * 60 * 1000; // 5 minutes — brands/categories/units rarely change
+
+    const cached = getCached<{ brands: { id: number; name: string }[]; categories: { id: number; name: string }[]; units: { id: number; name: string }[]; suppliers: { id: number; name: string; shortcut: string }[] }>(CACHE_KEY);
+    if (cached) return cached;
+
     const headers = getHeaders();
     const [brands, categoriesRes, suppliers, units] = await Promise.all([
       fetchWithTimeout(`${DIRECTUS_API}/items/brand?limit=-1&fields=*`, { headers }),
@@ -80,7 +89,7 @@ export const stockConversionRepo = {
       fetchWithTimeout(`${DIRECTUS_API}/items/units?limit=-1&fields=*`, { headers })
     ]);
 
-    return {
+    const result = {
       brands: brands.ok ? (await brands.json()).data.map((b: { brand_id?: number; id?: number; brand_name?: string; name?: string }) => ({ 
         id: b.brand_id || b.id || 0, 
         name: b.brand_name || b.name || "Unknown" 
@@ -99,6 +108,9 @@ export const stockConversionRepo = {
         shortcut: s.supplier_shortcut || s.shortcut || "" 
       })) : []
     };
+
+    setCache(CACHE_KEY, result, TTL);
+    return result;
   },
 
   async fetchUnits() {
@@ -109,6 +121,19 @@ export const stockConversionRepo = {
 
   async fetchInventory(token?: string, branchId?: number, queryParams?: string) {
     if (!SPRING_API) return {};
+
+    // Cache inventory per branch for 60 seconds to prevent redundant slow Spring calls
+    const CACHE_KEY = `inventory_${branchId ?? "all"}`;
+    const TTL = 60 * 1000; // 60 seconds
+
+    // Only use cache for branch-level fetches (not product-specific queries)
+    if (!queryParams) {
+      const cached = getCached<Record<number, number>>(CACHE_KEY);
+      if (cached) {
+        console.log(`[Repo] Inventory cache HIT for branch ${branchId}`);
+        return cached;
+      }
+    }
     
     let url = "";
     if (queryParams || branchId !== undefined) {
@@ -150,6 +175,11 @@ export const stockConversionRepo = {
       if (!isNaN(pId)) invMap[pId] = (invMap[pId] || 0) + qty;
     });
 
+    // Cache branch-level results
+    if (!queryParams) {
+      setCache(CACHE_KEY, invMap, TTL);
+    }
+
     return invMap;
   },
 
@@ -185,21 +215,45 @@ export const stockConversionRepo = {
     return res.json();
   },
 
-  async updateRfidStatus(rfidTags: string[], status: 'active' | 'inactive') {
+  async insertStockAdjustmentRfids(entries: { rfid_tag: string, stock_adjustment_id: number, created_by: number }[]) {
+    if (entries.length === 0) return;
     const headers = getHeaders();
-    // In Directus, we find the IDs of the tags first or use a filter update
-    // For simplicity, we use the specific action if available, or a patch to the rfid_tags table
-    const searchUrl = `${DIRECTUS_API}/items/rfid_tags?filter[rfid_tag][_in]=${rfidTags.join(",")}&fields=id`;
+    const res = await fetch(`${DIRECTUS_API}/items/stock_adjustment_rfid`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(entries),
+    });
+    if (!res.ok) throw new Error("Failed to insert stock adjustment RFIDs");
+    return res.json();
+  },
+
+  async updateRfidStatus(rfidTags: string[], status: 'active' | 'inactive') {
+    if (rfidTags.length === 0) return;
+    const headers = getHeaders();
+    
+    // 1. Find the database IDs for these tags
+    // We check both possible field names for robustness
+    const filter = JSON.stringify({
+      _or: [
+        { rfid_tag: { _in: rfidTags } },
+        { rfid: { _in: rfidTags } }
+      ]
+    });
+    
+    const searchUrl = `${DIRECTUS_API}/items/rfid_tags?filter=${encodeURIComponent(filter)}&fields=id`;
     const searchRes = await fetch(searchUrl, { headers });
     const { data } = await searchRes.json();
     
     if (data && data.length > 0) {
-      const ids = data.map((item: { id: number }) => item.id);
+      const ids = data.map((item: { id: number | string }) => item.id);
       await fetch(`${DIRECTUS_API}/items/rfid_tags`, {
         method: "PATCH",
         headers,
         body: JSON.stringify({ keys: ids, data: { status } })
       });
+      console.log(`[Repo] Successfully marked ${ids.length} tags as ${status}`);
+    } else {
+      console.warn(`[Repo] No tags found to update status: ${rfidTags.join(", ")}`);
     }
   }
 };

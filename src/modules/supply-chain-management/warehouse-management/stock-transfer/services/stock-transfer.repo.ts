@@ -1,4 +1,5 @@
-import { fetchItems, createItems, updateItem } from "./api";
+import { fetchItems, createItems, updateItem, bulkUpdateItems } from "./api";
+import { getCached, setCache } from "../../../transfers/stock-conversion/utils/cache";
 import type { 
   BranchRow, 
   StockTransferRow, 
@@ -77,7 +78,7 @@ export async function fetchDispatchedRfids(transferIds: number[]): Promise<Stock
 /**
  * Fetches products for the transfer request view, including relational fields.
  */
-export async function fetchProducts(search?: string): Promise<ProductRow[]> {
+export async function fetchProducts(search?: string, limit: number = 100, offset: number = 0): Promise<ProductRow[]> {
   const params: Record<string, unknown> = {
     fields: [
       "product_id",
@@ -96,7 +97,8 @@ export async function fetchProducts(search?: string): Promise<ProductRow[]> {
       "product_category.category_name",
       "product_per_supplier.supplier_id.supplier_shortcut",
     ].join(","),
-    limit: -1,
+    limit,
+    offset,
   };
 
   if (search) {
@@ -144,9 +146,19 @@ export async function fetchProductById(id: number): Promise<ProductRow | null> {
 
 /**
  * Fetches real-time inventory from the Spring Boot API.
+ * Cached for 60 seconds per branch to prevent redundant slow calls.
  */
 export async function fetchBranchInventory(branchId: number, token?: string): Promise<Record<string, unknown>[]> {
   if (!SPRING_API_BASE_URL) return [];
+
+  // Check cache first
+  const CACHE_KEY = `st_inventory_${branchId}`;
+  const TTL = 60 * 1000; // 60 seconds
+  const cached = getCached<Record<string, unknown>[]>(CACHE_KEY);
+  if (cached) {
+    console.log(`[Stock Transfer Repo] Inventory cache HIT for branch ${branchId}`);
+    return cached;
+  }
 
   const url = `${SPRING_API_BASE_URL}/api/view-rfid-onhand?branch_id=${branchId}`;
   
@@ -160,7 +172,10 @@ export async function fetchBranchInventory(branchId: number, token?: string): Pr
 
     if (!res.ok) return [];
     const data = await res.json();
-    return Array.isArray(data) ? data : (data.data || []);
+    const result = Array.isArray(data) ? data : (data.data || []);
+    
+    setCache(CACHE_KEY, result, TTL);
+    return result;
   } catch (err) {
     console.error("[Stock Transfer Repo] Spring Inventory Fetch Failed:", err);
     return [];
@@ -179,12 +194,23 @@ export async function createStockTransfers(payloads: StockTransferInsertPayload[
  * Updates status and allocated quantity for a batch of items.
  */
 export async function updateTransfersStatus(items: { id: number; status: string; allocated_quantity?: number }[]): Promise<void> {
+  if (items.length === 0) return;
+
+  // Group items by their update payload shape so we can batch them
+  const grouped: Record<string, number[]> = {};
+  items.forEach((item) => {
+    const key = JSON.stringify({
+      status: item.status,
+      ...(item.allocated_quantity !== undefined ? { allocated_quantity: item.allocated_quantity } : {}),
+    });
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(item.id);
+  });
+
+  // Execute one bulk PATCH per unique payload shape
   await Promise.all(
-    items.map((item) =>
-      updateItem("items/stock_transfer", item.id, {
-        status: item.status,
-        ...(item.allocated_quantity !== undefined ? { allocated_quantity: item.allocated_quantity } : {}),
-      })
+    Object.entries(grouped).map(([dataJson, ids]) =>
+      bulkUpdateItems("items/stock_transfer", ids, JSON.parse(dataJson) as Record<string, unknown>)
     )
   );
 }
@@ -202,6 +228,29 @@ export async function updateTransfer(id: number, data: Partial<StockTransferRow>
 export async function insertRfidTracking(entries: { stock_transfer_id: number; rfid_tag: string; scan_type: string }[]): Promise<void> {
   if (entries.length === 0) return;
   await createItems("items/stock_transfer_rfid", entries);
+}
+
+/**
+ * Fetches stock transfers filtered by specific IDs.
+ * Avoids fetching the entire table when only a subset is needed.
+ */
+export async function fetchStockTransfersByIds(ids: number[]): Promise<StockTransferRow[]> {
+  if (ids.length === 0) return [];
+
+  const CHUNK_SIZE = 100;
+  const allRows: StockTransferRow[] = [];
+
+  for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+    const chunk = ids.slice(i, i + CHUNK_SIZE);
+    const res = await fetchItems<StockTransferRow>("items/stock_transfer", {
+      "filter[id][_in]": chunk.join(","),
+      fields: "*,product_id.product_id,product_id.product_name",
+      limit: -1,
+    });
+    allRows.push(...res.data);
+  }
+
+  return allRows;
 }
 
 /**

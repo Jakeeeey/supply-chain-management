@@ -2,9 +2,9 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
-import type { StockConversionProduct, StockConversionPayload } from "../types/stock-conversion.types";
+import type { StockConversionProduct, StockConversionPayload } from "../types/stock-conversion-manual.types";
 
-export function useStockConversion(branchId?: number) {
+export function useStockConversionManual(branchId?: number) {
   const [data, setData] = useState<StockConversionProduct[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -33,7 +33,6 @@ export function useStockConversion(branchId?: number) {
     
     fetchableIds.forEach(id => loadingProductsRef.current.add(id));
 
-    // Keep current quantities if they exist to avoid flicker
     setData(prev => prev.map(p => 
       fetchableIds.includes(p.productId) ? { ...p, inventoryLoaded: p.inventoryLoaded ?? false } : p
     ));
@@ -48,7 +47,7 @@ export function useStockConversion(branchId?: number) {
 
       const invMap = invJson.data || {};
       setData(prev => {
-        const newData = prev.map(p => {
+        return prev.map(p => {
           if (!fetchableIds.includes(p.productId)) return p;
           const rawQty = invMap[p.productId] ?? 0;
           const finalQty = Math.floor(rawQty / (p.conversionFactor || 1));
@@ -60,10 +59,10 @@ export function useStockConversion(branchId?: number) {
             inventoryError: false,
           };
         });
-        return newData;
       });
     } catch (e: unknown) {
-      console.warn("Inventory fetch failed:", (e as Error).message);
+      const message = e instanceof Error ? e.message : "Unknown error";
+      console.warn("Inventory fetch failed:", message);
       setData(prev => prev.map(p => 
         fetchableIds.includes(p.productId) ? { ...p, inventoryLoaded: true, inventoryError: true } : p
       ));
@@ -95,40 +94,32 @@ export function useStockConversion(branchId?: number) {
       setTotalCount(json.totalCount || 0);
       if (json.options) setOptions(json.options);
       
-      // Auto-trigger inventory load for the new page
       if (newData.length && !newData[0].inventoryLoaded) {
         loadProductsInventory(newData.map((p: StockConversionProduct) => p.productId));
       }
     } catch (e: unknown) {
-      setError((e as Error).message);
+      const message = e instanceof Error ? e.message : "Unknown error";
+      setError(message);
     } finally {
       setIsLoading(false);
     }
   }, [page, pageSize, filters, branchId, loadProductsInventory]);
 
-  // Trigger inventory reload for ALL currently visible products when branchId changes
-  useEffect(() => {
-    if (data.length > 0) {
-      loadProductsInventory(data.map(p => p.productId));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branchId, loadProductsInventory]);
 
   const convertStockAction = async (payload: StockConversionPayload) => {
     setIsUpdating(true);
     setConvertingId(payload.productId);
     try {
-      const res = await fetch("/api/scm/transfers/stock-conversion", {
+      const res = await fetch("/api/scm/transfers/stock-conversion-manual", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to convert stock");
+      const resData = await res.json();
+      if (!res.ok) throw new Error(resData.error || "Failed to convert stock");
 
-      toast.success("Stock conversion complete!");
+      toast.success("Manual stock conversion complete!");
       
-      // Optimistic Update: payload quantities are already in unit terms
       setData(prev => prev.map(p => {
         if (p.productId === payload.productId) {
           const newQty = Math.max(0, p.quantity - payload.quantityToConvert);
@@ -141,34 +132,14 @@ export function useStockConversion(branchId?: number) {
         return p;
       }));
 
-      return data;
+      return resData;
     } catch (e: unknown) {
-      toast.error((e as Error).message);
+      const message = e instanceof Error ? e.message : "Unknown error";
+      toast.error(message);
       throw e;
     } finally {
       setIsUpdating(false);
       setConvertingId(null);
-    }
-  };
-
-  const checkProductRfids = async (productId: number, activeBranchId: number): Promise<boolean> => {
-    try {
-      const res = await fetch(`/api/scm/transfers/stock-conversion/validate-rfid?action=check_product_rfids&branchId=${activeBranchId}&productId=${productId}`);
-      const data = await res.json();
-      return !!data.hasRfids;
-    } catch {
-      return false;
-    }
-  };
-
-  const validateDuplicateTag = async (rfid: string, mode: "source" | "target" = "target"): Promise<{ exists: boolean; reason?: string }> => {
-    try {
-      const res = await fetch(`/api/scm/transfers/stock-conversion/validate-rfid?action=validate_tag&rfid=${encodeURIComponent(rfid)}&mode=${mode}`);
-      const data = await res.json();
-      return { exists: !!data.exists, reason: data.reason };
-    } catch (e) {
-      console.error("Validation error:", e);
-      return { exists: true, reason: "error" };
     }
   };
 
@@ -197,7 +168,5 @@ export function useStockConversion(branchId?: number) {
       });
     },
     convertStock: convertStockAction,
-    checkProductRfids,
-    validateDuplicateTag,
   };
 }

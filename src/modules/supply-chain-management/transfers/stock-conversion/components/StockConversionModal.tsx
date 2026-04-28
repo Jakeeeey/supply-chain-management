@@ -24,6 +24,7 @@ interface StockConversionModalProps {
     targetUnit: { unitId: number; targetProductId?: number },
     convertedQuantity: number,
   ) => void;
+  sourceQuantity?: number;
 }
 
 export function StockConversionModal({
@@ -31,21 +32,24 @@ export function StockConversionModal({
   isOpen,
   onClose,
   onConfirm,
+  sourceQuantity,
 }: StockConversionModalProps) {
   const [qtyToConvert, setQtyToConvert] = useState<number | "">("");
   const [selectedTargetUnit, setSelectedTargetUnit] = useState<number | null>(
     null,
   );
 
+  const isSourceBoxOrPack = product?.currentUnit?.toLowerCase().includes("box") || product?.currentUnit?.toLowerCase().includes("pack");
+
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && product) {
       const timer = setTimeout(() => {
-        setQtyToConvert("");
+        setQtyToConvert(isSourceBoxOrPack ? (sourceQuantity || 1) : "");
         setSelectedTargetUnit(null);
       }, 0);
       return () => clearTimeout(timer);
     }
-  }, [isOpen]);
+  }, [isOpen, product, isSourceBoxOrPack, sourceQuantity]);
 
   if (!product) return null;
 
@@ -135,22 +139,35 @@ export function StockConversionModal({
           <div className="space-y-2">
             <Label
               htmlFor="qtyToConvert"
-              className="text-xs font-bold text-muted-foreground uppercase tracking-tight"
+              className="text-xs font-bold text-muted-foreground uppercase tracking-tight flex items-center gap-2"
             >
               Quantity to Convert
+              {isSourceBoxOrPack && (
+                <span className="text-[9px] bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded border border-amber-500/20 lowercase font-normal">
+                  Fixed for RFID batch ({sourceQuantity || 1})
+                </span>
+              )}
             </Label>
-            <Input
-              id="qtyToConvert"
-              type="number"
-              min={1}
-              max={product.quantity}
-              value={qtyToConvert}
-              onChange={(e) =>
-                setQtyToConvert(e.target.value ? Number(e.target.value) : "")
-              }
-              placeholder="Enter quantity"
-              className="bg-background border-input focus-visible:ring-blue-500"
-            />
+            <div className="relative">
+              <Input
+                id="qtyToConvert"
+                type="number"
+                min={1}
+                max={product.quantity}
+                value={qtyToConvert}
+                disabled={isSourceBoxOrPack}
+                onChange={(e) =>
+                  setQtyToConvert(e.target.value ? Number(e.target.value) : "")
+                }
+                placeholder={isSourceBoxOrPack ? String(sourceQuantity || 1) : "Enter quantity"}
+                className={`bg-background border-input focus-visible:ring-blue-500 ${isSourceBoxOrPack ? "bg-muted/50 font-bold text-blue-600 cursor-not-allowed" : ""}`}
+              />
+              {isSourceBoxOrPack && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                   <AlertCircle className="w-4 h-4 text-amber-500/50" />
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -169,9 +186,12 @@ export function StockConversionModal({
                   onClick={() => setSelectedTargetUnit(u.unitId)}
                 >
                   <div
-                    className={`font-bold ${selectedTargetUnit === u.unitId ? "text-blue-600 dark:text-blue-400" : "text-foreground"}`}
+                    className={`font-bold flex items-center justify-between ${selectedTargetUnit === u.unitId ? "text-blue-600 dark:text-blue-400" : "text-foreground"}`}
                   >
-                    {u.name}
+                    <span>{u.name}</span>
+                    {(u.name?.toLowerCase().includes("box") || u.name?.toLowerCase().includes("pack")) && (
+                       <Cuboid className="w-3.5 h-3.5 opacity-50" />
+                    )}
                   </div>
                   <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-tighter">
                     UoM Count: {u.conversionFactor}
@@ -187,20 +207,20 @@ export function StockConversionModal({
             </div>
           </div>
 
-            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-md p-3 flex flex-col gap-2 animate-in fade-in slide-in-from-top-1">
+            <div className={`border rounded-md p-3 flex flex-col gap-2 animate-in fade-in slide-in-from-top-1 transition-colors ${wholeUnits > 0 ? "bg-emerald-500/10 border-emerald-500/20" : "bg-muted/30 border-dashed border-muted-foreground/30"}`}>
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-tight">
+                  <div className={`text-[10px] font-bold uppercase tracking-tight ${wholeUnits > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
                     Converted Result
                   </div>
-                  <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
-                    {wholeUnits}
+                  <div className={`text-2xl font-black ${wholeUnits > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/50"}`}>
+                    {wholeUnits || "0"}
                   </div>
-                  <div className="text-xs font-bold text-emerald-600/80 uppercase tracking-tighter">
-                    {targetUnit?.name}(S)
+                  <div className={`text-xs font-bold uppercase tracking-tighter ${wholeUnits > 0 ? "text-emerald-600/80" : "text-muted-foreground/40"}`}>
+                    {targetUnit?.name || "Select Unit"}(S)
                   </div>
                 </div>
-                <div className="bg-emerald-500/20 p-2 rounded-full text-emerald-600 dark:text-emerald-400">
+                <div className={`p-2 rounded-full transition-colors ${wholeUnits > 0 ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400" : "bg-muted/50 text-muted-foreground/30"}`}>
                   <ArrowRight className="w-5 h-5" />
                 </div>
               </div>
@@ -209,7 +229,7 @@ export function StockConversionModal({
                 <div className="mt-1 pt-2 border-t border-emerald-500/10">
                   <div className="text-[10px] text-amber-600 dark:text-amber-400 font-bold uppercase flex items-center gap-1.5 leading-none">
                     <AlertCircle className="w-3 h-3" />
-                    Remaining stock: {remainderSourceUnits} {product.currentUnit}(s) will stay in inventory
+                    Remaining stock: {remainderSourceUnits.toFixed(2)} {product.currentUnit}(s) will stay in inventory
                   </div>
                 </div>
               )}

@@ -21,30 +21,73 @@ export async function GET(req: NextRequest) {
     const headers: Record<string, string> = { Accept: "application/json" };
     if (token) headers["Authorization"] = `Bearer ${token}`;
 
+    const directusToken = process.env.DIRECTUS_STATIC_TOKEN || process.env.DIRECTUS_TOKEN || token || "";
+    const directusHeaders: Record<string, string> = { 
+      Accept: "application/json",
+      Authorization: `Bearer ${directusToken}`
+    };
+
+    const mode = searchParams.get("mode") || "target"; // "source" or "target"
+
     if (action === "validate_tag" && rfid) {
-      // Check if a specific RFID exists in the warehouse (for preventing duplicates)
-      const targetUrl = new URL(`${springApiUrl}/api/view-rfid-onhand`);
-      targetUrl.searchParams.set("rfid", rfid);
+      const onHandUrl = new URL(`${springApiUrl}/api/view-rfid-onhand`);
+      onHandUrl.searchParams.set("rfid", rfid);
+      
+      const directusApi = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "");
       
       try {
-        const onHandRes = await fetch(targetUrl.toString(), { method: "GET", headers, cache: "no-store" });
+        const queries = [
+           fetch(onHandUrl.toString(), { method: "GET", headers, cache: "no-store" }),
+           fetch(`${directusApi}/items/stock_adjustment_rfid?filter[rfid_tag][_eq]=${encodeURIComponent(rfid)}&fields=stock_adjustment_id.type&limit=5`, { headers: directusHeaders, cache: "no-store" }),
+           fetch(`${directusApi}/items/rfid_tags?filter[rfid_tag][_eq]=${encodeURIComponent(rfid)}&fields=status&limit=1`, { headers: directusHeaders, cache: "no-store" })
+        ];
+
+        const [onHandRes, historyRes, masterRes] = await Promise.all(queries);
+
+        let existsInOnHand = false;
+        let hasOutMovement = false;
+        let isInactive = false;
+        let hasAnyHistory = false;
+
         if (onHandRes.ok) {
-          const payload = await onHandRes.json();
-          const items = Array.isArray(payload) ? payload : (payload ? [payload] : []);
-          
-          const exists = items.some((item: Record<string, unknown>) => item.rfid === rfid || item.rfid_tag === rfid);
-          return NextResponse.json({ exists });
+          const items = await onHandRes.json();
+          existsInOnHand = (Array.isArray(items) ? items : [items]).some(i => i && String(i.rfid || i.rfid_tag) === rfid);
         }
-        // If not ok, assume it doesn't exist
-        return NextResponse.json({ exists: false });
-      } catch (e) {
-         console.warn("[Validation] Fallback, assuming does not exist", e);
-         return NextResponse.json({ exists: false });
+
+        if (historyRes.ok) {
+          const payload = await historyRes.json();
+          const records = (payload.data || []) as Array<{ stock_adjustment_id?: { type?: string } }>;
+          hasAnyHistory = records.length > 0;
+          hasOutMovement = records.some((r) => r.stock_adjustment_id?.type === "OUT");
+        }
+
+        if (masterRes.ok) {
+          const payload = await masterRes.json();
+          isInactive = (payload.data?.[0] as { status?: string })?.status === "inactive";
+        }
+
+        let isBlocked = false;
+        let reason = null;
+
+        if (mode === "target") {
+          if (hasAnyHistory || existsInOnHand) {
+            isBlocked = true;
+            reason = hasAnyHistory ? "history" : "onhand";
+          }
+        } else {
+          if (!existsInOnHand || hasOutMovement || isInactive) {
+            isBlocked = true;
+            reason = (hasOutMovement || isInactive) ? "history" : "not_found";
+          }
+        }
+        
+        return NextResponse.json({ exists: isBlocked, reason });
+      } catch {
+         return NextResponse.json({ exists: true, reason: "error" });
       }
     }
 
     if (action === "check_product_rfids" && branchId && productId) {
-      // Check if the product has ANY RFIDs in the specific branch
       const targetUrl = new URL(`${springApiUrl}/api/view-rfid-onhand`);
       targetUrl.searchParams.set("branchId", branchId);
       
@@ -53,13 +96,11 @@ export async function GET(req: NextRequest) {
         if (onHandRes.ok) {
            const payload = await onHandRes.json();
            const items = Array.isArray(payload) ? payload : (payload.data && Array.isArray(payload.data) ? payload.data : []);
-           
            const hasRfids = items.some((item: Record<string, unknown>) => String(item.productId || item.product_id) === String(productId));
            return NextResponse.json({ hasRfids });
         }
         return NextResponse.json({ hasRfids: false });
-      } catch (e) {
-         console.warn("[Validation] Fallback, assuming no RFIDs", e);
+      } catch {
          return NextResponse.json({ hasRfids: false });
       }
     }

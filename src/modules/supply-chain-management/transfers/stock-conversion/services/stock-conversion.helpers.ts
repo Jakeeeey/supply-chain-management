@@ -1,7 +1,8 @@
 /**
  * Normalizes product names by removing unit suffixes to identify "Family" groups.
  */
-export const normalizeProductName = (name: string): string => {
+export const normalizeProductName = (name: string | null | undefined): string => {
+  if (!name || typeof name !== 'string') return "";
   return name
     .replace(/x\s*\d+\s*(box|pack|tie|pcs|pieces)?/gi, '')
     .replace(/\s+\d+\s*(box|pack|tie|pcs|pieces)\b/gi, '')
