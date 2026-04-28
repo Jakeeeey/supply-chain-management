@@ -851,8 +851,8 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
     }, [allItemsFlat, discountTypeById, defaultNoDiscountId]);
 
     const financials = React.useMemo(() => {
-        return calculateVatExclusiveFromAmounts(grossAmount, discountAmount);
-    }, [grossAmount, discountAmount]);
+        return calculateVatExclusiveFromAmounts(grossAmount, discountAmount, undefined, undefined, isInvoice);
+    }, [grossAmount, discountAmount, isInvoice]);
 
     const canSave = Boolean(selectedSupplier?.id) && allItemsFlat.length > 0 && !isSaving;
 
@@ -880,8 +880,8 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
                 gross_amount: financials.grossAmount,
                 discounted_amount: financials.discountAmount,
 
-                vat_amount: financials.vatAmount,
-                withholding_tax_amount: financials.ewtGoods,
+                vat_amount: isInvoice ? financials.vatAmount : null,
+                withholding_tax_amount: isInvoice ? financials.ewtGoods : null,
                 total_amount: financials.total,
 
                 inventory_status: 1,
@@ -894,8 +894,8 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
                 grossAmount: financials.grossAmount,
                 discountAmount: financials.discountAmount,
                 netAmount: financials.netAmount,
-                vatAmount: financials.vatAmount,
-                ewtGoods: financials.ewtGoods,
+                vatAmount: isInvoice ? financials.vatAmount : null,
+                ewtGoods: isInvoice ? financials.ewtGoods : null,
                 total: financials.total,
 
                 allocations,

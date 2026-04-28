@@ -62,7 +62,10 @@ export async function printPOCreationPdf(data: POCreationPrintData) {
             })),
             grossAmount: data.subtotal,
             discountAmount: data.discount,
-            total: data.total
+            total: data.total,
+            is_invoice: data.isInvoice,
+            vat_amount: data.vat,
+            withholding_tax_amount: data.ewt
         };
 
         // Determine branch label by checking unique branches in items

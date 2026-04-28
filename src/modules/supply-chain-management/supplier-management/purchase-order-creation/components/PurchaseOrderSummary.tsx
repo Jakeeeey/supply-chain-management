@@ -311,8 +311,8 @@ export function PurchaseOrderSummary(props: {
 
     // Recalculate based on user's manual edit in calculations.ts
     const vatExclusive = netTotal / 1.12;
-    const vatTotal = Math.max(0, netTotal - vatExclusive);
-    const ewtGoods = Math.max(0, vatExclusive * 0.01);
+    const vatTotal = props.isInvoice ? Math.max(0, netTotal - vatExclusive) : 0;
+    const ewtGoods = props.isInvoice ? Math.max(0, vatExclusive * 0.01) : 0;
 
     // ✅ Updated: Total Payable is always netTotal. VAT/EWT are hidden and don't subtract anymore.
     const totalPayable = netTotal;
