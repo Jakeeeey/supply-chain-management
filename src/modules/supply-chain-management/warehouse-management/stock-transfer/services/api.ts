@@ -130,6 +130,7 @@ export async function updateItem<T>(
     body: JSON.stringify(payload),
   });
 }
+<<<<<<< HEAD
 
 /**
  * Bulk-update multiple items in a Directus collection using the
@@ -149,3 +150,5 @@ export async function bulkUpdateItems<T>(
     body: JSON.stringify({ keys: ids, data }),
   });
 }
+=======
+>>>>>>> origin/master

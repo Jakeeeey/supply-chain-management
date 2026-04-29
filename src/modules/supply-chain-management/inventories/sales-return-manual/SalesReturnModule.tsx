@@ -10,9 +10,16 @@ import { useSalesReturnList } from "./hooks/useSalesReturnList";
 import { SalesReturnHistory } from "./components/SalesReturnHistory";
 import { CreateSalesReturnModal } from "./components/CreateSalesReturnModal";
 import { UpdateSalesReturnModal } from "./components/UpdateSalesReturnModal";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { SalesReturn } from "./type";
 
 export default function SalesReturnModule() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const fromClearance = searchParams.get("fromClearance");
+  const editReturnNo = searchParams.get("editReturnNo");
+
   const {
     data,
     loading,
@@ -32,6 +39,37 @@ export default function SalesReturnModule() {
   const [selectedReturn, setSelectedReturn] = useState<SalesReturn | null>(
     null,
   );
+
+  const handleCloseModal = () => {
+    setSelectedReturn(null);
+    setCreateOpen(false);
+    
+    // 🟢 Clear search parameters from URL so the auto-open triggered by fromClearance/editReturnNo doesn't re-run
+    if (searchParams.toString()) {
+      router.push(pathname);
+    }
+  };
+
+  React.useEffect(() => {
+    if (fromClearance === "true") {
+      if (editReturnNo) {
+        // If editing/linking, we should wait for data and find it
+        setSearch(editReturnNo);
+      } else {
+        setCreateOpen(true);
+      }
+    }
+  }, [fromClearance, editReturnNo, setSearch, setCreateOpen]);
+
+  // Auto-open selected return when data loads and editReturnNo is present
+  React.useEffect(() => {
+    if (editReturnNo && data.length > 0 && !selectedReturn) {
+      const match = data.find(r => r.returnNo === editReturnNo);
+      if (match) {
+        setSelectedReturn(match);
+      }
+    }
+  }, [data, editReturnNo, selectedReturn, setSelectedReturn]);
 
   return (
     <div className="space-y-6 p-4 md:p-8 w-full bg-background min-h-screen animate-in fade-in duration-300">
@@ -75,7 +113,7 @@ export default function SalesReturnModule() {
       {/* MODALS */}
       <CreateSalesReturnModal
         isOpen={isCreateOpen}
-        onClose={() => setCreateOpen(false)}
+        onClose={handleCloseModal}
         onSuccess={refresh}
       />
 
@@ -83,7 +121,7 @@ export default function SalesReturnModule() {
         <UpdateSalesReturnModal
           returnId={selectedReturn.id}
           initialData={selectedReturn}
-          onClose={() => setSelectedReturn(null)}
+          onClose={handleCloseModal}
           onSuccess={refresh}
         />
       )}

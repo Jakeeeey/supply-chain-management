@@ -89,7 +89,7 @@ async function directusMutate<T>(
 export async function getRawReturns(
   page: number = 1,
   limit: number = 10,
-  filters: { salesman?: string; customer?: string; status?: string } = {},
+  filters: { salesman?: string; customer?: string; status?: string; invoiceNo?: string } = {},
 ) {
   const allowedFields =
     "return_id,return_number,invoice_no,customer_code,salesman_id,total_amount,status,return_date,remarks,order_id,isThirdParty,created_at,price_type";
@@ -102,6 +102,8 @@ export async function getRawReturns(
     url += `&filter[customer_code][_eq]=${encodeURIComponent(filters.customer)}`;
   if (filters.status && filters.status !== "All")
     url += `&filter[status][_eq]=${filters.status}`;
+  if (filters.invoiceNo)
+    url += `&filter[invoice_no][_eq]=${encodeURIComponent(filters.invoiceNo)}`;
 
   return directusGet<{ data: Record<string, unknown>[]; meta?: { filter_count?: number } }>(url);
 }

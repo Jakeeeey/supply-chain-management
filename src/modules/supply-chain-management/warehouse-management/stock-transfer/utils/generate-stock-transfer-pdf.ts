@@ -459,4 +459,4 @@ export function generateStockTransferReceivingPDF(data: ReceivingPDFData): jsPDF
   });
 
   return doc;
-}
+}

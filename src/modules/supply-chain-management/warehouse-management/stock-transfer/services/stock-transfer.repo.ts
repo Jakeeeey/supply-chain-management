@@ -1,5 +1,9 @@
+<<<<<<< HEAD
 import { fetchItems, createItems, updateItem, bulkUpdateItems } from "./api";
 import { getCached, setCache } from "../../../transfers/stock-conversion/utils/cache";
+=======
+import { fetchItems, createItems, updateItem } from "./api";
+>>>>>>> origin/master
 import type { 
   BranchRow, 
   StockTransferRow, 
@@ -22,8 +26,11 @@ export async function fetchStockTransfers(status?: string): Promise<StockTransfe
       "product_id.description",
       "product_id.barcode",
       "product_id.product_code",
+<<<<<<< HEAD
       "product_id.cost_per_unit",
       "product_id.price_per_unit",
+=======
+>>>>>>> origin/master
       "product_id.unit_of_measurement.unit_id",
       "product_id.unit_of_measurement.unit_name",
       "product_id.unit_of_measurement_count",
@@ -78,7 +85,11 @@ export async function fetchDispatchedRfids(transferIds: number[]): Promise<Stock
 /**
  * Fetches products for the transfer request view, including relational fields.
  */
+<<<<<<< HEAD
 export async function fetchProducts(search?: string, limit: number = 100, offset: number = 0): Promise<ProductRow[]> {
+=======
+export async function fetchProducts(search?: string): Promise<ProductRow[]> {
+>>>>>>> origin/master
   const params: Record<string, unknown> = {
     fields: [
       "product_id",
@@ -86,8 +97,11 @@ export async function fetchProducts(search?: string, limit: number = 100, offset
       "description",
       "barcode",
       "product_code",
+<<<<<<< HEAD
       "cost_per_unit",
       "price_per_unit",
+=======
+>>>>>>> origin/master
       "unit_of_measurement.unit_id",
       "unit_of_measurement.unit_name",
       "unit_of_measurement_count",
@@ -97,6 +111,7 @@ export async function fetchProducts(search?: string, limit: number = 100, offset
       "product_category.category_name",
       "product_per_supplier.supplier_id.supplier_shortcut",
     ].join(","),
+<<<<<<< HEAD
     limit,
     offset,
   };
@@ -105,6 +120,13 @@ export async function fetchProducts(search?: string, limit: number = 100, offset
     params["filter[_or][0][product_name][_icontains]"] = search;
     params["filter[_or][1][product_code][_icontains]"] = search;
     params["filter[_or][2][barcode][_icontains]"] = search;
+=======
+    limit: 100,
+  };
+
+  if (search) {
+    params["filter[product_name][_icontains]"] = search;
+>>>>>>> origin/master
   }
 
   const res = await fetchItems<ProductRow>("items/products", params);
@@ -112,6 +134,7 @@ export async function fetchProducts(search?: string, limit: number = 100, offset
 }
 
 /**
+<<<<<<< HEAD
  * Fetches a single product by its ID with full details.
  */
 export async function fetchProductById(id: number): Promise<ProductRow | null> {
@@ -147,10 +170,14 @@ export async function fetchProductById(id: number): Promise<ProductRow | null> {
 /**
  * Fetches real-time inventory from the Spring Boot API.
  * Cached for 60 seconds per branch to prevent redundant slow calls.
+=======
+ * Fetches real-time inventory from the Spring Boot API.
+>>>>>>> origin/master
  */
 export async function fetchBranchInventory(branchId: number, token?: string): Promise<Record<string, unknown>[]> {
   if (!SPRING_API_BASE_URL) return [];
 
+<<<<<<< HEAD
   // Check cache first
   const CACHE_KEY = `st_inventory_${branchId}`;
   const TTL = 60 * 1000; // 60 seconds
@@ -160,6 +187,8 @@ export async function fetchBranchInventory(branchId: number, token?: string): Pr
     return cached;
   }
 
+=======
+>>>>>>> origin/master
   const url = `${SPRING_API_BASE_URL}/api/view-rfid-onhand?branch_id=${branchId}`;
   
   try {
@@ -172,10 +201,14 @@ export async function fetchBranchInventory(branchId: number, token?: string): Pr
 
     if (!res.ok) return [];
     const data = await res.json();
+<<<<<<< HEAD
     const result = Array.isArray(data) ? data : (data.data || []);
     
     setCache(CACHE_KEY, result, TTL);
     return result;
+=======
+    return Array.isArray(data) ? data : (data.data || []);
+>>>>>>> origin/master
   } catch (err) {
     console.error("[Stock Transfer Repo] Spring Inventory Fetch Failed:", err);
     return [];
@@ -194,6 +227,7 @@ export async function createStockTransfers(payloads: StockTransferInsertPayload[
  * Updates status and allocated quantity for a batch of items.
  */
 export async function updateTransfersStatus(items: { id: number; status: string; allocated_quantity?: number }[]): Promise<void> {
+<<<<<<< HEAD
   if (items.length === 0) return;
 
   // Group items by their update payload shape so we can batch them
@@ -211,6 +245,14 @@ export async function updateTransfersStatus(items: { id: number; status: string;
   await Promise.all(
     Object.entries(grouped).map(([dataJson, ids]) =>
       bulkUpdateItems("items/stock_transfer", ids, JSON.parse(dataJson) as Record<string, unknown>)
+=======
+  await Promise.all(
+    items.map((item) =>
+      updateItem("items/stock_transfer", item.id, {
+        status: item.status,
+        ...(item.allocated_quantity !== undefined ? { allocated_quantity: item.allocated_quantity } : {}),
+      })
+>>>>>>> origin/master
     )
   );
 }
@@ -231,6 +273,7 @@ export async function insertRfidTracking(entries: { stock_transfer_id: number; r
 }
 
 /**
+<<<<<<< HEAD
  * Fetches stock transfers filtered by specific IDs.
  * Avoids fetching the entire table when only a subset is needed.
  */
@@ -254,6 +297,8 @@ export async function fetchStockTransfersByIds(ids: number[]): Promise<StockTran
 }
 
 /**
+=======
+>>>>>>> origin/master
  * Fallback for RFID lookup using Directus receiving records when Spring Boot is unavailable.
  */
 export async function fallbackRfidLookup(rfid: string): Promise<ProductRow | null> {

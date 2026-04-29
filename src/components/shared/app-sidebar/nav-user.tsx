@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import {
     ChevronsUpDown,
     LogOut,
@@ -38,16 +38,20 @@ type NavUserProps = {
         avatar?: string
     }
     /**
-     * Optional override. If not provided, NavUser will perform:
-     * POST /api/auth/logout -> router.replace("/login") -> router.refresh()
+     * Optional subsystem slug (e.g., "hrm", "scm"). 
+     * If not provided, it will be automatically detected from the URL.
      */
+    subsystemSlug?: string
     onLogout?: () => void
 }
 
-export function NavUser({ user, onLogout }: NavUserProps) {
+export function NavUser({ user, onLogout, subsystemSlug }: NavUserProps) {
     const { isMobile } = useSidebar()
     const router = useRouter()
+    const pathname = usePathname()
     const [loggingOut, setLoggingOut] = React.useState(false)
+
+    const currentSlug = subsystemSlug || pathname.split("/")[1] || "hrm"
 
     // ✅ theme toggle support
     const { theme, setTheme, systemTheme } = useTheme()
@@ -141,28 +145,28 @@ export function NavUser({ user, onLogout }: NavUserProps) {
                             </DropdownMenuItem>
 
                             <DropdownMenuItem asChild>
-                                <Link href="/hrm/my-profile" className="cursor-pointer">
+                                <Link href={`/${currentSlug}/my-profile`} className="cursor-pointer">
                                     <User className="mr-2 size-4" />
                                     My Profile
                                 </Link>
                             </DropdownMenuItem>
 
                             <DropdownMenuItem asChild>
-                                <Link href="/hrm/change-password" className="cursor-pointer">
+                                <Link href={`/${currentSlug}/change-password`} className="cursor-pointer">
                                     <KeyRound className="mr-2 size-4" />
                                     Change Password
                                 </Link>
                             </DropdownMenuItem>
 
                             <DropdownMenuItem asChild>
-                                <Link href="/hrm/login-activity" className="cursor-pointer">
+                                <Link href={`/${currentSlug}/login-activity`} className="cursor-pointer">
                                     <ShieldCheck className="mr-2 size-4" />
                                     Login Activity
                                 </Link>
                             </DropdownMenuItem>
 
                             <DropdownMenuItem asChild>
-                                <Link href="/hrm/settings" className="cursor-pointer">
+                                <Link href={`/${currentSlug}/settings`} className="cursor-pointer">
                                     <Settings className="mr-2 size-4" />
                                     Settings
                                 </Link>

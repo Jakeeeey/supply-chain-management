@@ -208,6 +208,7 @@ export function StockConversionModal({
             </div>
           </div>
 
+<<<<<<< HEAD
             <div className={`border rounded-md p-3 flex flex-col gap-2 animate-in fade-in slide-in-from-top-1 transition-colors ${wholeUnits > 0 ? "bg-emerald-500/10 border-emerald-500/20" : "bg-muted/30 border-dashed border-muted-foreground/30"}`}>
               <div className="flex items-center justify-between">
                 <div>
@@ -222,6 +223,22 @@ export function StockConversionModal({
                   </div>
                 </div>
                 <div className={`p-2 rounded-full transition-colors ${wholeUnits > 0 ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400" : "bg-muted/50 text-muted-foreground/30"}`}>
+=======
+            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-md p-3 flex flex-col gap-2 animate-in fade-in slide-in-from-top-1">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-tight">
+                    Converted Result
+                  </div>
+                  <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                    {wholeUnits}
+                  </div>
+                  <div className="text-xs font-bold text-emerald-600/80 uppercase tracking-tighter">
+                    {targetUnit?.name}(S)
+                  </div>
+                </div>
+                <div className="bg-emerald-500/20 p-2 rounded-full text-emerald-600 dark:text-emerald-400">
+>>>>>>> origin/master
                   <ArrowRight className="w-5 h-5" />
                 </div>
               </div>
@@ -230,7 +247,11 @@ export function StockConversionModal({
                 <div className="mt-1 pt-2 border-t border-emerald-500/10">
                   <div className="text-[10px] text-amber-600 dark:text-amber-400 font-bold uppercase flex items-center gap-1.5 leading-none">
                     <AlertCircle className="w-3 h-3" />
+<<<<<<< HEAD
                     Remaining stock: {remainderSourceUnits.toFixed(2)} {product.currentUnit}(s) will stay in inventory
+=======
+                    Remaining stock: {remainderSourceUnits} {product.currentUnit}(s) will stay in inventory
+>>>>>>> origin/master
                   </div>
                 </div>
               )}

@@ -22,7 +22,7 @@ export function useThemeTransition() {
 // ─────────────────────────────────────────────
 // Config
 // ─────────────────────────────────────────────
-const BAND_COUNT = 5
+const BAND_COUNT = 4
 const STAGGER = 0.045    // delay between each band
 const SWEEP_DURATION = 1.2//how fast each band travels
 
