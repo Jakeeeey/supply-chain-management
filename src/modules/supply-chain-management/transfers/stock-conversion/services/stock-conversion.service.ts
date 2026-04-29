@@ -17,7 +17,8 @@ interface DirectusProduct {
   product_brand?: string | number | { brand_id: string | number } | null;
   product_category?: string | number | { category_id: string | number } | null;
   description?: string | null;
-  product_per_supplier?: Array<{ supplier_id?: number | { id?: number; supplier_name?: string; supplier_shortcut?: string } }>;
+  product_per_supplier?: Array<{ supplier_id?: number | { id?: number; supplier_id?: number; supplier_name?: string; supplier_shortcut?: string } }>;
+  product_supplier?: number | { id?: number; supplier_id?: number; supplier_name?: string; supplier_shortcut?: string };
 }
 
 interface DirectusLookup {
@@ -179,7 +180,7 @@ export const stockConversionService = {
       "product_per_supplier", 
       "product_id", 
       allFamilyProductIds, 
-      "product_id,supplier_id.supplier_name,supplier_id.supplier_shortcut"
+      "product_id,supplier_id.id,supplier_id.supplier_name,supplier_id.supplier_shortcut"
     );
 
     // 5. Build Lookup Maps (reuse allOptions instead of re-fetching)
@@ -195,8 +196,8 @@ export const stockConversionService = {
     const productSupplierMap = new Map<number, number[]>();
     supplierMappings.forEach((m: DirectusLookup) => {
       // Handle potential relational objects for product_id and supplier_id
-      const pId = typeof m.product_id === 'object' ? Number((m.product_id as Record<string, unknown>)?.id || 0) : Number(m.product_id);
-      const sId = typeof m.supplier_id === 'object' ? Number((m.supplier_id as Record<string, unknown>)?.id || 0) : Number(m.supplier_id);
+      const pId = typeof m.product_id === 'object' ? Number((m.product_id as Record<string, unknown>)?.id || (m.product_id as Record<string, unknown>)?.product_id || 0) : Number(m.product_id);
+      const sId = typeof m.supplier_id === 'object' ? Number((m.supplier_id as Record<string, unknown>)?.id || (m.supplier_id as Record<string, unknown>)?.supplier_id || 0) : Number(m.supplier_id);
       
       if (!isNaN(pId) && !isNaN(sId)) {
         if (!productSupplierMap.has(pId)) productSupplierMap.set(pId, []);
@@ -267,7 +268,7 @@ export const stockConversionService = {
           const firstSup = expanded[0]?.supplier_id;
           if (typeof firstSup === 'object' && firstSup !== null) {
             const s = firstSup as Record<string, unknown>;
-            const sId = Number(s.id || 0);
+            const sId = Number(s.id || s.supplier_id || 0);
             return { 
                 name: String(s.supplier_name || supplierNameMap.get(sId)?.name || "No Supplier"), 
                 shortcut: String(s.supplier_shortcut || supplierNameMap.get(sId)?.shortcut || "") 

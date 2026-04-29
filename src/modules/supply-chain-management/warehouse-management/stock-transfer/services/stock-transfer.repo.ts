@@ -148,16 +148,18 @@ export async function fetchProductById(id: number): Promise<ProductRow | null> {
  * Fetches real-time inventory from the Spring Boot API.
  * Cached for 60 seconds per branch to prevent redundant slow calls.
  */
-export async function fetchBranchInventory(branchId: number, token?: string): Promise<Record<string, unknown>[]> {
+export async function fetchBranchInventory(branchId: number, token?: string, bypassCache: boolean = false): Promise<Record<string, unknown>[]> {
   if (!SPRING_API_BASE_URL) return [];
 
   // Check cache first
   const CACHE_KEY = `st_inventory_${branchId}`;
   const TTL = 60 * 1000; // 60 seconds
-  const cached = getCached<Record<string, unknown>[]>(CACHE_KEY);
-  if (cached) {
-    console.log(`[Stock Transfer Repo] Inventory cache HIT for branch ${branchId}`);
-    return cached;
+  if (!bypassCache) {
+    const cached = getCached<Record<string, unknown>[]>(CACHE_KEY);
+    if (cached) {
+      console.log(`[Stock Transfer Repo] Inventory cache HIT for branch ${branchId}`);
+      return cached;
+    }
   }
 
   const url = `${SPRING_API_BASE_URL}/api/view-rfid-onhand?branch_id=${branchId}`;
@@ -257,13 +259,28 @@ export async function fetchStockTransfersByIds(ids: number[]): Promise<StockTran
  * Fallback for RFID lookup using Directus receiving records when Spring Boot is unavailable.
  */
 export async function fallbackRfidLookup(rfid: string): Promise<ProductRow | null> {
-  interface ReceivingItem {
-    product_id: ProductRow;
+  interface DirectusRfidRecord {
+    product_id?: ProductRow;
+    stock_adjustment_id?: { product_id?: ProductRow };
   }
-  const res = await fetchItems<ReceivingItem>("items/purchase_order_receiving_items", {
+
+  // 1. Check Receiving records
+  const receivingRes = await fetchItems<DirectusRfidRecord>("items/purchase_order_receiving_items", {
     "filter[rfid_tag][_eq]": rfid,
     fields: "product_id.*",
     limit: 1,
   });
-  return (res.data?.[0]?.product_id as ProductRow) || null;
+  if (receivingRes.data?.[0]?.product_id) return receivingRes.data[0].product_id as ProductRow;
+
+  // 2. Check Stock Adjustment records (from conversions)
+  const adjustmentRes = await fetchItems<DirectusRfidRecord>("items/stock_adjustment_rfid", {
+    "filter[rfid_tag][_eq]": rfid,
+    fields: "stock_adjustment_id.product_id.*",
+    limit: 1,
+  });
+  if (adjustmentRes.data?.[0]?.stock_adjustment_id?.product_id) {
+    return adjustmentRes.data[0].stock_adjustment_id.product_id as ProductRow;
+  }
+
+  return null;
 }

@@ -140,8 +140,12 @@ export function StockConversionTable({
     if (hasStockFilter) filterPayload.hasStock = "true";
 
     setPage(1);
+    const finalPayload = { 
+      ...filterPayload, 
+      branchId: localBranchId ? String(localBranchId) : "" 
+    };
     onBranchChange?.(localBranchId);
-    onFilterChange(filterPayload);
+    onFilterChange(finalPayload);
   };
 
   // Filters now only apply when the "Apply" button is clicked, per user preference.
@@ -318,7 +322,7 @@ export function StockConversionTable({
           setSearchQuery(val);
           // useEffect handles the filter trigger
         }}
-        searchKey="product_name"
+        searchKey="productName"
         isLoading={isLoading}
         actionComponent={filterActions}
         emptyTitle={!selectedBranchId ? "Select a Branch to start" : "No products found"}

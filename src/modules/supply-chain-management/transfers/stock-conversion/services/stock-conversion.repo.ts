@@ -42,7 +42,7 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout 
 export const stockConversionRepo = {
   async fetchProducts(limit: number, offset: number, filters?: string) {
     const headers = getHeaders();
-    const url = `${DIRECTUS_API}/items/products?limit=${limit}&offset=${offset}&meta=filter_count&fields=product_id,product_name,description,product_code,parent_id,unit_of_measurement,unit_of_measurement_count,product_brand,product_category,cost_per_unit,price_per_unit,product_supplier.supplier_name,product_supplier.supplier_shortcut,product_per_supplier.supplier_id.supplier_name,product_per_supplier.supplier_id.supplier_shortcut&sort=product_name${filters ? `&${filters}` : ""}`;
+    const url = `${DIRECTUS_API}/items/products?limit=${limit}&offset=${offset}&meta=filter_count&fields=product_id,product_name,description,product_code,parent_id,unit_of_measurement,unit_of_measurement_count,product_brand,product_category,cost_per_unit,price_per_unit,product_supplier.id,product_supplier.supplier_name,product_supplier.supplier_shortcut,product_per_supplier.supplier_id.id,product_per_supplier.supplier_id.supplier_name,product_per_supplier.supplier_id.supplier_shortcut&sort=product_name${filters ? `&${filters}` : ""}`;
     
     console.log(`[Repo] Fetching products from Directus: ${url}`);
     const res = await fetchWithTimeout(url, { headers, cache: "no-store" });

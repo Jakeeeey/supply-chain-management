@@ -63,7 +63,14 @@ export default function StockConversionModule({
     convertStock,
     validateDuplicateTag,
     setFilters,
-  } = useStockConversion(selectedBranchId > 0 ? selectedBranchId : undefined);
+  } = useStockConversion();
+  
+  // Initialize filters with branchId if available
+  useEffect(() => {
+    if (selectedBranchId > 0) {
+      setFilters((prev: Record<string, string>) => ({ ...prev, branchId: String(selectedBranchId) }));
+    }
+  }, [selectedBranchId, setFilters]);
 
   const [selectedProduct, setSelectedProduct] = useState<StockConversionProduct | null>(null);
   const [isUnitModalOpen, setIsUnitModalOpen] = useState(false);

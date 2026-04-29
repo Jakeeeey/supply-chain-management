@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import type { StockConversionProduct, StockConversionPayload } from "../types/stock-conversion.types";
 
-export function useStockConversion(branchId?: number) {
+export function useStockConversion() {
   const [data, setData] = useState<StockConversionProduct[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -68,7 +68,8 @@ export function useStockConversion(branchId?: number) {
 
     try {
       const sp = new URLSearchParams({ type: "inventory", productIds: fetchableIds.join(",") });
-      if (branchId !== undefined) sp.set("branchId", String(branchId));
+      const activeBranchId = filters.branchId || "";
+      if (activeBranchId !== undefined && activeBranchId !== "") sp.set("branchId", String(activeBranchId));
 
       const res = await fetch(`/api/scm/transfers/stock-conversion?${sp.toString()}`, { cache: "no-store" });
       const invJson = await res.json();
@@ -98,7 +99,7 @@ export function useStockConversion(branchId?: number) {
     } finally {
       fetchableIds.forEach(id => loadingProductsRef.current.delete(id));
     }
-  }, [branchId]);
+  }, [filters.branchId]);
 
   /**
    * Fetch paginated product list with filters
@@ -107,12 +108,13 @@ export function useStockConversion(branchId?: number) {
     setIsLoading(true);
     setError(null);
     try {
+      const activeBranchId = filters.branchId || "";
       const sp = new URLSearchParams({
         page: String(page),
         limit: String(pageSize),
         ...filters,
       });
-      if (branchId) sp.set("branchId", String(branchId));
+      if (activeBranchId) sp.set("branchId", String(activeBranchId));
 
       const res = await fetch(`/api/scm/transfers/stock-conversion?${sp.toString()}`, { cache: "no-store" });
       const json = await res.json();
@@ -128,11 +130,12 @@ export function useStockConversion(branchId?: number) {
       }
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : "Unknown error";
+      setIsLoading(false);
       setError(message);
     } finally {
       setIsLoading(false);
     }
-  }, [page, pageSize, filters, branchId, loadProductsInventory]);
+  }, [page, pageSize, filters, loadProductsInventory]);
 
   /**
    * Convert stock action
@@ -194,10 +197,11 @@ export function useStockConversion(branchId?: number) {
     loadProductsInventory,
     validateDuplicateTag,
     checkProductRfids,
-    setFilters: (newFilters: Record<string, string>) => {
+    setFilters: (update: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>)) => {
       setFilters(prev => {
-        if (JSON.stringify(prev) === JSON.stringify(newFilters)) return prev;
-        return newFilters;
+        const next = typeof update === 'function' ? update(prev) : update;
+        if (JSON.stringify(prev) === JSON.stringify(next)) return prev;
+        return next;
       });
     },
     convertStock: convertStockAction,
