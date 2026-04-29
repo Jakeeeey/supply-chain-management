@@ -1094,7 +1094,6 @@ export async function POST(req: NextRequest) {
         const patch: Record<string, unknown> = { 
             date_approved: new Date().toISOString(),
             receiving_type: Boolean(body?.markAsInvoice) ? 2 : 3, // Persistent flag for "Mark as Invoice"
-            is_invoice: Boolean(body?.markAsInvoice), // ✅ Explicitly sync boolean column
             inventory_status: 3, // ✅ For Receiving
             approver_id: body?.approver_id ?? body?.approverId ?? null, // ✅ Track who approved
             payment_type: body?.payment_type ?? body?.paymentType ?? null, // ✅ Update payment terms

@@ -195,6 +195,36 @@ export default function PurchaseOrderReviewPanel(props: {
 }) {
     const fmt = React.useMemo(() => money(), []);
 
+    const printPO = React.useCallback(async () => {
+        if (!props.po) return;
+        try {
+            // Fetch company data REQUIRED by MEN2 engine
+            let companyData: CompanyData = {} as CompanyData;
+            try {
+                const res = await fetch("/api/pdf/company");
+                if (res.ok) {
+                    const body = await res.json();
+                    companyData = Array.isArray(body?.data) ? body.data[0] : body?.data || {};
+                }
+            } catch (err) {
+                console.warn("Failed to fetch company data for PDF:", err);
+            }
+
+            // Using the new generated PDF engine
+            await generatePurchaseOrderPdf(
+                props.po as unknown as Record<string, unknown>,
+                "Approved Purchase Order",
+                supplierName,
+                companyData,
+                props.approverName || "—"
+            );
+        } catch (e: unknown) {
+            console.error("Print PO Failed", e);
+            toast.error("Failed to generate PDF.", {
+                description: String(e instanceof Error ? e.message : e)
+            });
+        }
+    }, [props.po, props.approverName]);
 
     const [markAsInvoice, setMarkAsInvoice] = React.useState(false);
     const [selectedPaymentTermId, setSelectedPaymentTermId] = React.useState<number | null>(null);
@@ -355,36 +385,6 @@ export default function PurchaseOrderReviewPanel(props: {
     const approveDisabled =
         props.disabled || props.loading || submitting || !poAny?.purchase_order_id;
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const printPO = React.useCallback(async () => {
-        if (!props.po) return;
-        try {
-            let cd: CompanyData = {} as CompanyData;
-            try {
-                const res = await fetch("/api/pdf/company");
-                if (res.ok) {
-                    const body = await res.json();
-                    cd = Array.isArray(body?.data) ? body.data[0] : body?.data || {};
-                }
-            } catch (err) {
-                console.warn("Failed to fetch company data for PDF:", err);
-            }
-
-            const poForPdf = {
-                ...(props.po as unknown as Record<string, unknown>),
-                is_invoice: markAsInvoice,
-                vat_amount: markAsInvoice ? vatAmountComputed : 0,
-                withholding_tax_amount: markAsInvoice ? ewtGoods : 0,
-            };
-            await generatePurchaseOrderPdf(poForPdf, branchLabel, supplierName, cd, props.approverName || "—");
-        } catch (e: unknown) {
-            console.error("Print PO Failed", e);
-            toast.error("Failed to generate PDF.", {
-                description: String(e instanceof Error ? e.message : e)
-            });
-        }
-    }, [props.po, props.approverName, markAsInvoice, vatAmountComputed, ewtGoods, branchLabel, supplierName]);
-
     async function runApprove() {
         if (!selectedPaymentTermId) {
             toast.error("Required Field Missing", {
@@ -406,8 +406,8 @@ export default function PurchaseOrderReviewPanel(props: {
                     // Financial totals
                     gross_amount: grossAmount,
                     discounted_amount: discountAmount,
-                    vat_amount: markAsInvoice ? vatAmountComputed : 0,
-                    withholding_tax_amount: markAsInvoice ? ewtGoods : 0,
+                    vat_amount: vatAmountComputed,
+                    withholding_tax_amount: ewtGoods,
                     total_amount: totalAmount,
                     // Relationship IDs
                     branch_id: toNum(poAny?.branch_id?.id ?? poAny?.branch_id) || 
@@ -768,14 +768,7 @@ export default function PurchaseOrderReviewPanel(props: {
                                             disabled={!poAny?.purchase_order_id || !companyData}
                                             onClick={async () => {
                                                 try {
-                                                    // Merge current toggle state into the PO data for the PDF
-                                                    const poForPdf = {
-                                                        ...poAny,
-                                                        is_invoice: markAsInvoice,
-                                                        vat_amount: markAsInvoice ? vatAmountComputed : 0,
-                                                        withholding_tax_amount: markAsInvoice ? ewtGoods : 0,
-                                                    };
-                                                    await generatePurchaseOrderPdf(poForPdf, branchLabel, supplierName, companyData as CompanyData, props.approverName || "—");
+                                                    await generatePurchaseOrderPdf(poAny, branchLabel, supplierName, companyData as CompanyData, props.approverName || "—");
                                                 } catch (err) {
                                                     console.error("PDF Generation failed:", err);
                                                     toast.error("Failed to generate PDF.");

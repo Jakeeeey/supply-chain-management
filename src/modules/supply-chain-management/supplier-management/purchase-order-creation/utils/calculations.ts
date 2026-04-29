@@ -371,18 +371,16 @@ export function calculateVatExclusiveFromAmounts(
     grossAmount: number,
     discountAmount: number,
     vatRate: number = TAX_RATES.VAT,
-    ewtGoodsRate: number = TAX_RATES.EWT_GOODS,
-    isInvoice: boolean = true // ✅ NEW: added flag to skip taxes if not an invoice
+    ewtGoodsRate: number = TAX_RATES.EWT_GOODS
 ) {
     const gross = Number(grossAmount || 0);
     const disc = Math.max(0, Number(discountAmount || 0));
 
     const netAmount = Math.max(0, gross - disc); // ✅ your "Net Amount" basis
     const vatExclusive = netAmount / (1 + vatRate); // ✅ Net / 1.12
-    
-    // ✅ If not an invoice, VAT and EWT are 0
-    const vatAmount = isInvoice ? Math.max(0, netAmount - vatExclusive) : 0;
-    const ewtGoods = isInvoice ? Math.max(0, vatExclusive * ewtGoodsRate) : 0;
+    const vatAmount = Math.max(0, netAmount - vatExclusive); // ✅ Net - VAT Exclusive
+
+    const ewtGoods = Math.max(0,vatExclusive * ewtGoodsRate); // ✅ 1% of Net
 
     const totalInvoice = netAmount; // ✅ total = net (do NOT add VAT again)
     const payableToSupplier = Math.max(0, totalInvoice - ewtGoods);

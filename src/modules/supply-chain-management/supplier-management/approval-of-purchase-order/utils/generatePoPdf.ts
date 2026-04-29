@@ -233,62 +233,39 @@ export async function generatePurchaseOrderPdf(
 
         doc.setDrawColor(180, 180, 180);
         doc.setLineWidth(0.5);
-        doc.line(labelX, finalY + lineHeight + 2, rightColX, finalY + lineHeight + 2);
-
-        // ✅ Check if PO is an invoice. Handle multiple naming conventions from different stages.
-        const isInvoice = Boolean(po.is_invoice ?? po.isInvoice ?? false);
+        doc.line(labelX, finalY + lineHeight + 3, rightColX, finalY + lineHeight + 3);
 
         doc.setTextColor(50, 50, 50);
-        let currentY = finalY + lineHeight + 6; // Start below the separator line
+        const vatAmount = totalAmount - (totalAmount / 1.12);
+        const ewtAmount = (totalAmount / 1.12) * 0.01;
 
-        if (isInvoice) {
-            const vatAmount = toNum(po.vat_amount ?? po.vatAmount) || (totalAmount - (totalAmount / 1.12));
-            const ewtAmount = toNum(po.withholding_tax_amount ?? po.withholding_amount) || ((totalAmount / 1.12) * 0.01);
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "normal");
+        doc.text("VAT Details (12%):", labelX, finalY + lineHeight * 2 + 3);
+        doc.text(formatMoney(vatAmount), rightColX, finalY + lineHeight * 2 + 3, { align: "right" });
 
-            doc.setFontSize(8);
-            doc.setFont("helvetica", "normal");
-            doc.setTextColor(50, 50, 50);
-            doc.text("VAT Details (12%):", labelX, currentY);
-            doc.text(formatMoney(vatAmount), rightColX, currentY, { align: "right" });
+        doc.text("EWT (1%):", labelX, finalY + lineHeight * 3 + 3);
+        doc.setTextColor(150, 50, 50);
+        doc.text(`-${formatMoney(ewtAmount)}`, rightColX, finalY + lineHeight * 3 + 3, { align: "right" });
 
-            doc.text("EWT (1%):", labelX, currentY + lineHeight);
-            doc.setTextColor(150, 50, 50);
-            doc.text(`-${formatMoney(ewtAmount)}`, rightColX, currentY + lineHeight, { align: "right" });
+        doc.setDrawColor(180, 180, 180);
+        doc.setLineWidth(0.5);
+        doc.line(labelX, finalY + lineHeight * 3 + 5, rightColX, finalY + lineHeight * 3 + 5);
 
-            doc.setDrawColor(180, 180, 180);
-            doc.setLineWidth(0.5);
-            doc.line(labelX, currentY + lineHeight + 3, rightColX, currentY + lineHeight + 3);
-            
-            currentY += lineHeight + 7; // Move past EWT line + separator
-        }
-
-        // Grand Total
         doc.setTextColor(50, 50, 50);
         doc.setFontSize(9);
         doc.setFont("helvetica", "bold");
-        doc.text("Grand Total:", labelX, currentY);
-        doc.text(`PHP ${formatMoney(totalAmount)}`, rightColX, currentY, { align: "right" });
+        doc.text("Grand Total:", labelX, finalY + lineHeight * 4 + 6);
+        doc.text(`PHP ${formatMoney(totalAmount)}`, rightColX, finalY + lineHeight * 4 + 6, { align: "right" });
 
-        let signatureY = currentY + 8;
+        // Standardized Footnote
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(7);
+        doc.setTextColor(100, 100, 100);
+        doc.text("Note: VAT and EWT figures are for reference and have not been deducted from the total.", labelX - 25, finalY + lineHeight * 4 + 11);
 
-        if (isInvoice) {
-            // Standardized Footnote
-            doc.setFont("helvetica", "italic");
-            doc.setFontSize(7);
-            doc.setTextColor(100, 100, 100);
-            doc.text("Note: VAT and EWT figures are for reference and have not been deducted from the total.", labelX - 25, currentY + 5);
-            signatureY = currentY + 12;
-        }
-
-        // 4. Signatures — ensure they fit on the page, add new page if needed
-        const sigSpaceNeeded = 18; // Signature block height
-        if (signatureY + sigSpaceNeeded + 20 > pageHeight) {
-            doc.addPage();
-            PdfEngine.applyTemplate(doc, templateName, companyData);
-            signatureY = (config?.bodyStart ?? 35) + 10;
-        }
-
-        renderSignatures(doc, signatureY + 20, preparerName, approverName);
+        // 4. Compact Signatures with increased vertical spacing
+        renderSignatures(doc, finalY + 60, preparerName, approverName);
     });
 
     const poNumberStr = String(poNumber);
