@@ -69,3 +69,10 @@ export type BranchAllocation = {
 export type CartLineItem = CartItem & {
     branchId: number;
 };
+
+export type PaymentTerm = {
+    id: number;
+    payment_name: string;
+    payment_days: number;
+    payment_description?: string;
+};

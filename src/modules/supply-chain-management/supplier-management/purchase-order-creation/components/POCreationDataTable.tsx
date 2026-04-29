@@ -128,9 +128,10 @@ interface DataTableProps<TData, TValue> {
   emptyDescription?: string;
   onSelectionChange?: (selectedRows: TData[]) => void;
   actionComponent?: React.ReactNode;
+  autoResetPageIndex?: boolean;
 }
 
-export function DataTable<TData, TValue>({
+export function POCreationDataTable<TData, TValue>({
   columns,
   data,
   pageCount,
@@ -147,6 +148,7 @@ export function DataTable<TData, TValue>({
   emptyDescription,
   onSelectionChange,
   actionComponent,
+  autoResetPageIndex = true,
 }: DataTableProps<TData, TValue>) {
   "use no memo"
   const [internalSorting, setInternalSorting] = React.useState<SortingState>(
@@ -204,6 +206,7 @@ export function DataTable<TData, TValue>({
     pageCount: pageCount,
     manualPagination: manualPagination,
     manualSorting: manualSorting,
+    autoResetPageIndex: autoResetPageIndex,
     state: {
       sorting: actualSorting,
       columnFilters,

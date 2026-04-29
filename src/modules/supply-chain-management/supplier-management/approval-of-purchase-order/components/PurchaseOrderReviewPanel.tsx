@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { generatePurchaseOrderPdf } from "../utils/generatePoPdf";
 import { Printer } from "lucide-react";
 
@@ -17,6 +16,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -153,31 +153,51 @@ function normalizeLines(rawItems: any[]): NormalizedLine[] {
         const brand = safeStr(it?.brand ?? "—");
         const category = safeStr(it?.category ?? "—");
         const uom = safeStr(it?.uom ?? it?.unit ?? "—");
-        const qty = Math.max(0, toNum(it?.qty ?? it?.quantity ?? 0));
+        
+        // Use exact DB column names as primary source
+        const qty = Math.max(0, toNum(it?.ordered_quantity ?? it?.qty ?? it?.quantity ?? 0));
         const price = Math.max(0, toNum(it?.unit_price ?? it?.price ?? 0));
+        
         const gross = toNum(it?.gross) || Math.max(0, qty * price);
         const discountType = safeStr(it?.discount_type ?? "—");
-        const discountAmount = Math.abs(toNum(it?.discount_amount ?? 0));
-        const net = toNum(it?.net) || Math.max(0, gross - discountAmount);
-        const total = toNum(it?.line_total) || net;
+        
+        // Calculate discount amount from unit_price vs discounted_price
+        const discPriceLine = toNum(it?.discounted_price);
+        const discountAmount = discPriceLine > 0 && discPriceLine < price 
+            ? Number(((price - discPriceLine) * qty).toFixed(2))
+            : Math.abs(toNum(it?.discount_amount ?? 0));
+
+        const net = toNum(it?.total_amount ?? it?.net ?? (gross - discountAmount));
+        const total = toNum(it?.total_amount ?? it?.line_total ?? net);
+        
         return { key, name, brand, category, uom, qty, price, gross, discountType, discountAmount, net, total };
     });
 }
 
 export default function PurchaseOrderReviewPanel(props: {
     po: PurchaseOrderDetail | null;
-    loading: boolean;
+    loading?: boolean;
     disabled?: boolean;
-    onApprove: (opts: {
+    paymentTerms: PaymentTerm[];
+    onApprove?: (opts: {
         markAsInvoice: boolean;
-        paymentTerm: PaymentTerm;
+        payment_type: number | null;
         termsDays?: number;
+        gross_amount?: number;
+        discounted_amount?: number;
+        vat_amount?: number;
+        withholding_tax_amount?: number;
+        total_amount?: number;
+        branch_id?: number | null;
+        receiver_id?: number | null;
     }) => void | Promise<void>;
+    approverName?: string;
 }) {
     const fmt = React.useMemo(() => money(), []);
 
+
     const [markAsInvoice, setMarkAsInvoice] = React.useState(false);
-    const [paymentTerm, setPaymentTerm] = React.useState<PaymentTerm>("cash_on_delivery");
+    const [selectedPaymentTermId, setSelectedPaymentTermId] = React.useState<number | null>(null);
     const [termsDays, setTermsDays] = React.useState<number>(30);
 
     const [confirmOpen, setConfirmOpen] = React.useState(false);
@@ -201,13 +221,43 @@ export default function PurchaseOrderReviewPanel(props: {
             .catch(err => console.error("Failed to fetch company data:", err));
 
         setMarkAsInvoice(!!(poAny?.is_invoice ?? poAny?.isInvoice ?? false));
-        setPaymentTerm("cash_on_delivery");
+        const existingType = Number(poAny?.payment_type) || null;
+        if (existingType) {
+            setSelectedPaymentTermId(existingType);
+        } else {
+            // Fallback: try to match supplier's terms string from the expanded supplier data
+            const supplierTerms = String(
+                poAny?.supplier_name?.payment_terms ?? 
+                poAny?.supplier?.payment_terms ?? 
+                poAny?.supplier_terms ?? 
+                ""
+            ).toLowerCase().trim();
+
+            if (supplierTerms) {
+                const matched = props.paymentTerms.find(pt => 
+                    pt.payment_name.toLowerCase().trim() === supplierTerms
+                );
+                setSelectedPaymentTermId(matched?.id || null);
+            } else {
+                setSelectedPaymentTermId(null);
+            }
+        }
         setTermsDays(30);
 
         setConfirmOpen(false);
         setSubmitting(false);
         setCurrentPage(1);
-    }, [poAny?.purchase_order_id, poAny?.id, poAny?.is_invoice, poAny?.isInvoice]);
+    }, [
+        poAny?.purchase_order_id, 
+        poAny?.id, 
+        poAny?.is_invoice, 
+        poAny?.isInvoice, 
+        poAny?.payment_type, 
+        poAny?.supplier_name?.payment_terms, 
+        poAny?.supplier?.payment_terms, 
+        poAny?.supplier_terms, 
+        props.paymentTerms
+    ]);
 
     const branchLabel = React.useMemo(() => {
         const helperName = pickText(poAny?.branch_name_text ?? poAny?.branchNameText ?? poAny?.branchName ?? "");
@@ -251,63 +301,89 @@ export default function PurchaseOrderReviewPanel(props: {
         return lines.slice(start, start + pageSize);
     }, [lines, currentPage, pageSize]);
 
-    const grossDirect = toNum(poAny?.gross_amount ?? poAny?.grossAmount);
-    const discountAmount = toNum(poAny?.discounted_amount ?? poAny?.discountAmount);
-    const vatAmount = toNum(poAny?.vat_amount ?? poAny?.vatAmount);
-    const ewtDirect = toNum(poAny?.withholding_tax_amount ?? poAny?.ewtGoods);
-    const totalDirect = toNum(poAny?.total_amount ?? poAny?.total);
+    const discountAmountHeader = toNum(poAny?.discounted_amount ?? poAny?.discountAmount);
+    const grossAmountDirect = toNum(poAny?.gross_amount ?? poAny?.grossAmount);
+    const vatAmountDirect = toNum(poAny?.vat_amount ?? poAny?.vatAmount);
+    const ewtAmountDirect = toNum(poAny?.withholding_tax_amount ?? poAny?.withholding_amount);
+    const totalAmountDirect = toNum(poAny?.total_amount ?? poAny?.total);
 
-    const netAmount = React.useMemo(() => {
-        if (grossDirect > 0) return Math.max(0, grossDirect - discountAmount);
-        if (totalDirect > 0) return totalDirect;
-        return 0;
-    }, [grossDirect, discountAmount, totalDirect]);
+    const summaryGross = React.useMemo(() => {
+        return lines.reduce((acc, l) => acc + (toNum(l.price) * toNum(l.qty)), 0);
+    }, [lines]);
+
+    const summaryDiscountLines = React.useMemo(() => {
+        return lines.reduce((acc, l) => toNum(acc) + toNum(l.discountAmount), 0);
+    }, [lines]);
+
+    const discountAmount = React.useMemo(() => {
+        if (summaryDiscountLines > 0) return summaryDiscountLines;
+        return discountAmountHeader;
+    }, [summaryDiscountLines, discountAmountHeader]);
 
     const grossAmount = React.useMemo(() => {
-        if (grossDirect > 0) return grossDirect;
-        if (netAmount > 0 || discountAmount > 0) return Math.max(0, netAmount + discountAmount);
-        return 0;
-    }, [grossDirect, netAmount, discountAmount]);
+        return grossAmountDirect || summaryGross;
+    }, [grossAmountDirect, summaryGross]);
+
+    const netAmount = React.useMemo(() => {
+        if (totalAmountDirect > 0) return totalAmountDirect;
+        return Math.max(0, grossAmount - discountAmount);
+    }, [totalAmountDirect, grossAmount, discountAmount]);
 
     const vatExclusive = React.useMemo(() => {
         return netAmount / 1.12;
     }, [netAmount]);
 
     const vatAmountComputed = React.useMemo(() => {
+        if (vatAmountDirect > 0) return vatAmountDirect;
         return Math.max(0, netAmount - vatExclusive);
-    }, [netAmount, vatExclusive]);
+    }, [vatAmountDirect, netAmount, vatExclusive]);
 
     const ewtGoods = React.useMemo(() => {
-        if (ewtDirect > 0) return ewtDirect;
-        return vatExclusive > 0 ? vatExclusive * 0.01 : 0;
-    }, [ewtDirect, vatExclusive]);
+        if (ewtAmountDirect > 0) return ewtAmountDirect;
+        return vatExclusive * 0.01;
+    }, [ewtAmountDirect, vatExclusive]);
 
-    const totalAmount = React.useMemo(() => {
-        if (totalDirect > 0) return totalDirect;
-        return netAmount;
-    }, [totalDirect, netAmount]);
+    const totalAmount = totalAmountDirect || netAmount;
 
     const paymentStatusLabel = React.useMemo(() => {
-        if (paymentTerm === "cash_on_delivery") return "Payment Due on Delivery";
-        if (paymentTerm === "cash_with_order") return "Payment Due with Order";
-        if (paymentTerm === "terms") return `Payment Due in ${Math.max(1, termsDays)} Day(s)`;
-        return "—";
-    }, [paymentTerm, termsDays]);
+        if (!selectedPaymentTermId) return "No Payment Term Selected";
+        const term = props.paymentTerms.find(t => t.id === selectedPaymentTermId);
+        if (!term) return "Unknown Payment Term";
+        return term.payment_description || term.payment_name;
+    }, [selectedPaymentTermId, props.paymentTerms]);
 
     const approveDisabled =
         props.disabled || props.loading || submitting || !poAny?.purchase_order_id;
 
     async function runApprove() {
+        if (!selectedPaymentTermId) {
+            toast.error("Required Field Missing", {
+                description: "Please select a payment term before approving.",
+            });
+            return;
+        }
+
         if (approveDisabled) return;
 
         try {
             setSubmitting(true);
 
             await Promise.resolve(
-                props.onApprove({
+                props.onApprove?.({
                     markAsInvoice,
-                    paymentTerm,
-                    termsDays: paymentTerm === "terms" ? Math.max(1, termsDays) : undefined,
+                    payment_type: selectedPaymentTermId,
+                    termsDays: undefined, // removed explicit days override for now as it's in the term
+                    // Financial totals
+                    gross_amount: grossAmount,
+                    discounted_amount: discountAmount,
+                    vat_amount: vatAmountComputed,
+                    withholding_tax_amount: ewtGoods,
+                    total_amount: totalAmount,
+                    // Relationship IDs
+                    branch_id: toNum(poAny?.branch_id?.id ?? poAny?.branch_id) || 
+                              toNum(poAny?.allocations?.[0]?.branch?.id ?? poAny?.allocations?.[0]?.branch) || 
+                              null,
+                    receiver_id: toNum(poAny?.receiver_id?.id ?? poAny?.receiver_id) || null,
                 })
             );
 
@@ -460,8 +536,8 @@ export default function PurchaseOrderReviewPanel(props: {
                                         </div>
 
                                         <div className="border-t border-border p-3 flex flex-col sm:flex-row items-center justify-between gap-4 bg-muted/20">
-                                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                                <span>Rows per page:</span>
+                                            <div className="flex items-center gap-3 text-xs text-muted-foreground whitespace-nowrap">
+                                                <span className="font-bold">Rows per page:</span>
                                                 <Select
                                                     value={String(pageSize)}
                                                     onValueChange={(v) => {
@@ -469,18 +545,18 @@ export default function PurchaseOrderReviewPanel(props: {
                                                         setCurrentPage(1);
                                                     }}
                                                 >
-                                                    <SelectTrigger className="h-8 w-[70px]">
+                                                    <SelectTrigger className="h-8 w-[85px] font-bold">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
                                                         {[10, 20, 30, 50, 100].map((size) => (
-                                                            <SelectItem key={size} value={String(size)}>
+                                                            <SelectItem key={size} value={String(size)} className="font-bold">
                                                                 {size}
                                                             </SelectItem>
                                                         ))}
                                                     </SelectContent>
                                                 </Select>
-                                                <span className="ml-2">
+                                                <span className="ml-2 font-medium">
                                                     Showing {(currentPage - 1) * pageSize + 1} to{" "}
                                                     {Math.min(currentPage * pageSize, lines.length)} of{" "}
                                                     {lines.length} items
@@ -584,7 +660,7 @@ export default function PurchaseOrderReviewPanel(props: {
                                     <>
                                         <div className="flex justify-between text-xs">
                                             <span className="text-muted-foreground font-medium uppercase">VAT (12%)</span>
-                                            <span className="font-bold text-foreground">{fmt.format(vatAmount || vatAmountComputed)}</span>
+                                            <span className="font-bold text-foreground">{fmt.format(vatAmountComputed)}</span>
                                         </div>
 
                                         <div className="flex justify-between text-xs">
@@ -593,17 +669,17 @@ export default function PurchaseOrderReviewPanel(props: {
                                         </div>
 
                                         <div className="rounded-md bg-background/60 border border-border/60 px-3 py-2 text-[11px] text-amber-600 dark:text-amber-400 font-bold italic">
-                                            Note: VAT and EWT are shown for display purposes. EWT (1%) is calculated from the VAT-exclusive amount (Net / 1.12).
+                                            Note: VAT and EWT figures are for reference and have not been deducted from the total.
                                         </div>
                                     </>
                                 ) : null}
 
                                 <div className="flex justify-between items-center pt-2 border-t border-border/50 mt-2">
                                     <span className="font-black text-foreground uppercase tracking-tighter text-sm">
-                                        Total
+                                        Grand Total
                                     </span>
                                     <span className="font-black text-2xl text-primary tracking-tighter">
-                                        {fmt.format(totalAmount)}
+                                        {fmt.format(netAmount)}
                                     </span>
                                 </div>
 
@@ -639,43 +715,19 @@ export default function PurchaseOrderReviewPanel(props: {
 
                                     <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground">
                                         <div className="flex flex-wrap items-center gap-1.5 bg-muted/40 p-1 rounded-xl border border-border/40">
-                                            {[
-                                                { id: "cash_with_order", label: "Cash With Order" },
-                                                { id: "cash_on_delivery", label: "Cash On Delivery" },
-                                                { id: "terms", label: "Terms" },
-                                            ].map((term) => {
-                                                const active = paymentTerm === term.id;
-                                                return (
-                                                    <button
-                                                        key={term.id}
-                                                        type="button"
-                                                        onClick={() => setPaymentTerm(term.id as PaymentTerm)}
-                                                        className={cn(
-                                                            "px-3 h-8 text-[10px] font-black uppercase tracking-tight rounded-lg transition-all duration-200",
-                                                            active
-                                                                ? "bg-primary text-primary-foreground shadow-sm scale-[1.02]"
-                                                                : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                                                        )}
-                                                    >
-                                                        {term.label}
-                                                    </button>
-                                                );
-                                            })}
-
-                                            {paymentTerm === "terms" ? (
-                                                <div className="flex items-center gap-2 ml-2 pl-2 border-l border-border/50">
-                                                    <div className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
-                                                        Days
-                                                    </div>
-                                                    <Input
-                                                        type="number"
-                                                        min={1}
-                                                        value={String(termsDays)}
-                                                        onChange={(e) => setTermsDays(Math.max(1, toNum(e.target.value)))}
-                                                        className="h-8 w-[80px] rounded-lg text-xs font-bold"
-                                                    />
-                                                </div>
-                                            ) : null}
+                                            <SearchableSelect
+                                                options={props.paymentTerms.map((t) => ({
+                                                    value: String(t.id),
+                                                    label: String(t.payment_name),
+                                                }))}
+                                                value={selectedPaymentTermId ? String(selectedPaymentTermId) : ""}
+                                                onValueChange={(v) => setSelectedPaymentTermId(Number(v))}
+                                                placeholder="Select Payment Term"
+                                                className={cn(
+                                                    "h-9 w-[240px] text-[10px] font-black uppercase tracking-tight rounded-lg bg-background border-border/50",
+                                                    !selectedPaymentTermId && "border-red-500 ring-1 ring-red-500"
+                                                )}
+                                            />
                                         </div>
 
                                         {/* Added the Print button here */}
@@ -686,7 +738,7 @@ export default function PurchaseOrderReviewPanel(props: {
                                             disabled={!poAny?.purchase_order_id || !companyData}
                                             onClick={async () => {
                                                 try {
-                                                    await generatePurchaseOrderPdf(poAny, branchLabel, supplierName, companyData as CompanyData);
+                                                    await generatePurchaseOrderPdf(poAny, branchLabel, supplierName, companyData as CompanyData, props.approverName || "—");
                                                 } catch (err) {
                                                     console.error("PDF Generation failed:", err);
                                                     toast.error("Failed to generate PDF.");

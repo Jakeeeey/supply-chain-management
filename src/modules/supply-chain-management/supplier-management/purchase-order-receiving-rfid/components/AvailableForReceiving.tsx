@@ -10,11 +10,6 @@ import { cn } from "@/lib/utils";
 import { RefreshCw, Package, ChevronRight, ChevronLeft } from "lucide-react";
 import { useReceivingProducts } from "../providers/ReceivingProductsProvider";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
 } from "@/components/ui/select";
 
 function statusBadge(status: string) {
@@ -42,8 +37,8 @@ export function AvailableForReceiving() {
 
     const [q, setQ] = React.useState("");
 
-    // ✅ pagination state (dynamic)
-    const [pageSize, setPageSize] = React.useState<number>(5);
+    // ✅ pagination state (locked to 10)
+    const pageSize = 10;
     const [page, setPage] = React.useState(1);
 
     const filtered = React.useMemo(() => {
@@ -59,10 +54,10 @@ export function AvailableForReceiving() {
     const totalItems = filtered.length;
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
 
-    // ✅ reset to page 1 when search or pageSize changes
+    // ✅ reset to page 1 when search changes
     React.useEffect(() => {
         setPage(1);
-    }, [q, pageSize]);
+    }, [q]);
 
     // ✅ clamp page if list shrinks
     React.useEffect(() => {
@@ -76,7 +71,7 @@ export function AvailableForReceiving() {
     }, [filtered, startIndex, endIndex]);
 
     return (
-        <Card className="p-4">
+        <Card className="p-4 sticky top-4 self-start">
             <div className="flex items-start justify-between gap-3">
                 <div>
                     <div className="text-base font-semibold">Available for Receiving</div>
@@ -131,23 +126,7 @@ export function AvailableForReceiving() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <div className="text-[10px] font-black uppercase text-muted-foreground whitespace-nowrap">Per page:</div>
-                    <Select
-                        value={String(pageSize)}
-                        onValueChange={(v) => setPageSize(Number(v))}
-                        disabled={listLoading}
-                    >
-                        <SelectTrigger className="h-8 w-[70px] text-[10px] font-bold rounded-xl border-border bg-background">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {[5, 10, 20, 50].map((size) => (
-                                <SelectItem key={size} value={String(size)} className="text-[10px] font-bold">
-                                    {size}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                    {/* Size selection removed as per user request */}
                 </div>
             </div>
 

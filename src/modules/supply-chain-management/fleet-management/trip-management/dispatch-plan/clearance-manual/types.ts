@@ -57,7 +57,6 @@ export interface PostDispatchInvoice {
   status: string;
   sequence: number | null;
   invoiceAt: number;
-  isCleared: number | null;
 }
 
 export interface SalesInvoice {
@@ -98,7 +97,6 @@ export interface ReconciliationRow {
   customerName: string;
   amount: number;
   remarks?: string;
-  isCleared?: boolean;
   missingQtys?: Record<string | number, number>;
   scannedQtys?: Record<string | number, number>;
   scannedRFIDs?: Record<string | number, string[]>;
