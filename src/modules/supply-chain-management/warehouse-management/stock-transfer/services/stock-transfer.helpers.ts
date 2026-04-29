@@ -59,6 +59,8 @@ export function groupByOrderNo(transfers: StockTransferRow[]): OrderGroup[] {
       ...st,
       scannedQty: 0,
       receivedQty: 0,
+      scannedRfids: [],
+      receivedRfids: [],
       qtyAvailable: 0,
       isLoosePack: false,
     };

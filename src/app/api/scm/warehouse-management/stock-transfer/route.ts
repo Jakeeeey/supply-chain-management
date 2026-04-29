@@ -45,8 +45,9 @@ export async function GET(request: NextRequest) {
       if (cached) return NextResponse.json(cached);
 
       // Try Spring Boot lookup through repo
-      const springMatch = await repo.fetchBranchInventory(Number(branchId), token);
-      const match = Array.isArray(springMatch) ? springMatch.find((i: Record<string, unknown>) => i.rfid === rfid) : null;
+      const bypassCache = !!searchParams.get("_t");
+      const springMatch = await repo.fetchBranchInventory(Number(branchId), token, bypassCache);
+      const match = Array.isArray(springMatch) ? springMatch.find((i: Record<string, unknown>) => String(i.rfid || i.rfid_tag) === rfid) : null;
 
       let productId: number | null = null;
       let branchIdMatch = branchId;
@@ -64,10 +65,9 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "RFID not found" }, { status: 404 });
       }
 
-      // Fetch full product details
-      const products = await repo.fetchProducts(); // We can filter here if repo supported it, but fetching all for lookup is what original did
-      const product = products.find(p => p.product_id === productId);
-
+      // Fetch full product details directly by ID
+      const product = await repo.fetchProductById(productId);
+      
       if (!product) {
         return NextResponse.json({ error: "Product details not found" }, { status: 404 });
       }

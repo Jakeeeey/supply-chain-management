@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { AppError } from "@/modules/supply-chain-management/transfers/stock-conversion/utils/error-handler";
-import { StockConversionPayload, StockConversionProduct } from "../types/stock-conversion.schema";
+import { StockConversionPayload, StockConversionProduct } from "../types/stock-conversion.types";
+
 
 const DIRECTUS_API = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "");
 const DIRECTUS_TOKEN = process.env.DIRECTUS_STATIC_TOKEN;
