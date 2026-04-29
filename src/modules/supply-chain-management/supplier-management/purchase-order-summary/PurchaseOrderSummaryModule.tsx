@@ -1,10 +1,6 @@
 "use client";
 
-<<<<<<< HEAD
-import React, { useState, useMemo, useRef, useEffect } from "react";
-=======
 import React, { useState, useMemo, useRef, useEffect, useTransition } from "react";
->>>>>>> origin/master
 import {
   Table,
   TableBody,
@@ -21,11 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-<<<<<<< HEAD
-import { ChevronRight, ChevronLeft, FilterX, ListFilter, Printer, Calendar, Search, ChevronDown, X } from "lucide-react";
-=======
 import { FilterX, ListFilter, Printer, Calendar, Search, ChevronDown, X } from "lucide-react";
->>>>>>> origin/master
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -163,8 +155,6 @@ export default function PurchaseOrderSummaryModule({
     });
   };
 
-<<<<<<< HEAD
-=======
   // Helper to wrap state updates with transition for pulse loading effect
   const handleFilterChange = (updater: () => void) => {
     startTransition(() => {
@@ -172,7 +162,6 @@ export default function PurchaseOrderSummaryModule({
     });
   };
 
->>>>>>> origin/master
   // ── Searchable Filter Dropdown Component ──
   function SearchableFilter({ 
     label, value, onChange, options, allLabel 
@@ -216,11 +205,7 @@ export default function PurchaseOrderSummaryModule({
             <div className="flex items-center gap-1 shrink-0 ml-2">
               {value !== "all" && (
                 <span 
-<<<<<<< HEAD
-                  onClick={(e) => { e.stopPropagation(); onChange("all"); setCurrentPage(1); }}
-=======
                   onClick={(e) => { e.stopPropagation(); handleFilterChange(() => onChange("all")); }}
->>>>>>> origin/master
                   className="p-0.5 rounded hover:bg-destructive/10 hover:text-destructive transition-colors cursor-pointer"
                 >
                   <X className="w-3 h-3" />
@@ -248,11 +233,7 @@ export default function PurchaseOrderSummaryModule({
               <div className="max-h-[200px] overflow-y-auto p-1">
                 <button
                   type="button"
-<<<<<<< HEAD
-                  onClick={() => { onChange("all"); setCurrentPage(1); setOpen(false); }}
-=======
                   onClick={() => { handleFilterChange(() => onChange("all")); setOpen(false); }}
->>>>>>> origin/master
                   className={`w-full text-left px-3 py-2 text-xs rounded-md transition-colors ${value === "all" ? "bg-primary/10 text-primary font-bold" : "hover:bg-muted/50 text-foreground"}`}
                 >
                   {allLabel}
@@ -261,11 +242,7 @@ export default function PurchaseOrderSummaryModule({
                   <button
                     key={o.id}
                     type="button"
-<<<<<<< HEAD
-                    onClick={() => { onChange(o.id); setCurrentPage(1); setOpen(false); }}
-=======
                     onClick={() => { handleFilterChange(() => onChange(o.id)); setOpen(false); }}
->>>>>>> origin/master
                     className={`w-full text-left px-3 py-2 text-xs rounded-md transition-colors ${value === o.id ? "bg-primary/10 text-primary font-bold" : "hover:bg-muted/50 text-foreground"}`}
                   >
                     {o.label}
@@ -286,8 +263,6 @@ export default function PurchaseOrderSummaryModule({
   const invStatusOptions = useMemo(() => transactionStatuses.map(s => ({ id: s.id.toString(), label: s.status })), [transactionStatuses]);
   const payStatusOptions = useMemo(() => paymentStatuses.map(s => ({ id: s.id.toString(), label: s.status })), [paymentStatuses]);
 
-<<<<<<< HEAD
-=======
   const isLoading = isInitialLoad || isPending;
 
   // ── DataTable Columns Definition ──
@@ -386,7 +361,6 @@ export default function PurchaseOrderSummaryModule({
   }
 
 
->>>>>>> origin/master
   return (
     <div className="space-y-6">
       {/* FILTER PANEL - MATCHED UI WITH image_45f077.png */}
@@ -438,15 +412,6 @@ export default function PurchaseOrderSummaryModule({
             <label className="text-[10px] font-bold uppercase text-muted-foreground mb-3 block">Filter By</label>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Supplier - Searchable */}
-<<<<<<< HEAD
-              <SearchableFilter
-                label="Supplier"
-                value={filterSupplier}
-                onChange={setFilterSupplier}
-                options={supplierOptions}
-                allLabel="All Suppliers"
-              />
-=======
               {isInitialLoad ? (
                 <div className="space-y-1.5"><Skeleton className="h-10 w-full" /></div>
               ) : (
@@ -458,7 +423,6 @@ export default function PurchaseOrderSummaryModule({
                   allLabel="All Suppliers"
                 />
               )}
->>>>>>> origin/master
 
               {/* Transaction Type */}
               <div className="space-y-1.5">
@@ -480,24 +444,6 @@ export default function PurchaseOrderSummaryModule({
               </div>
 
               {/* Inventory Status - Searchable */}
-<<<<<<< HEAD
-              <SearchableFilter
-                label="Inventory Status"
-                value={filterInvStatus}
-                onChange={setFilterInvStatus}
-                options={invStatusOptions}
-                allLabel="All Statuses"
-              />
-
-              {/* Payment Status - Searchable */}
-              <SearchableFilter
-                label="Payment Status"
-                value={filterPayStatus}
-                onChange={setFilterPayStatus}
-                options={payStatusOptions}
-                allLabel="All Statuses"
-              />
-=======
               {isInitialLoad ? (
                 <div className="space-y-1.5"><Skeleton className="h-10 w-full" /></div>
               ) : (
@@ -522,7 +468,6 @@ export default function PurchaseOrderSummaryModule({
                   allLabel="All Statuses"
                 />
               )}
->>>>>>> origin/master
 
               {/* Date Requested Range */}
               <div className="space-y-1.5 lg:col-span-2">

@@ -32,10 +32,7 @@ function statusBadge(status: string) {
 
 function statusLabel(status: string) {
     const s = String(status || "").toUpperCase();
-<<<<<<< HEAD:src/modules/supply-chain-management/supplier-management/posting-of-po/components/PostingPOList.tsx
-=======
     if (s === "FOR_POSTING" || s === "FOR POSTING") return "FOR POSTING";
->>>>>>> origin/master:src/modules/supply-chain-management/supplier-management/purchase-order-posting/components/PostingPOList.tsx
     if (s === "PARTIAL_POSTED") return "PARTIAL POSTED";
     return s;
 }

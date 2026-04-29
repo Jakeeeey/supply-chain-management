@@ -157,16 +157,6 @@ export function ProductPickerDialog(props: {
                                                     )}
                                                 </div>
 
-<<<<<<< HEAD:src/modules/supply-chain-management/supplier-management/create-of-purchase-order/components/ProductPickerDialog.tsx
-                                                <div className="mt-2 py-2 border-t border-border/50 space-y-1">
-                                                    <div className="flex items-baseline gap-1">
-                            <span className="text-lg font-black text-primary">
-                              {money.format(product.price)}
-                            </span>
-                                                        <span className="text-[10px] font-bold text-muted-foreground uppercase">
-                              / {product.uom}
-                            </span>
-=======
                                                 <div className="mt-2 py-2 border-t border-border/50 space-y-0.5">
                                                     <div className="flex flex-col">
                                                         <span className="text-lg font-black text-primary leading-tight">
@@ -175,7 +165,6 @@ export function ProductPickerDialog(props: {
                                                         <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
                                                             / {product.uom}
                                                         </span>
->>>>>>> origin/master:src/modules/supply-chain-management/supplier-management/purchase-order-creation/components/ProductPickerDialog.tsx
                                                     </div>
                                                     {Number((product as any)?.unitsPerBox ?? 1) > 1 ? (
                                                         <div className="text-[10px] text-muted-foreground font-bold">
@@ -254,14 +243,7 @@ export function ProductPickerDialog(props: {
                                                 <p className="text-[11px] font-black text-foreground leading-tight line-clamp-1 uppercase tracking-tight">
                                                     {item.name}
                                                 </p>
-<<<<<<< HEAD:src/modules/supply-chain-management/supplier-management/create-of-purchase-order/components/ProductPickerDialog.tsx
-                                                <div className="flex items-center gap-2 mt-1.5">
-                          <span className="text-[9px] px-1.5 py-0.5 bg-muted text-muted-foreground rounded font-mono font-bold uppercase">
-                            {item.uom}
-                          </span>
-=======
                                                 <div className="flex flex-col gap-0.5 mt-1.5">
->>>>>>> origin/master:src/modules/supply-chain-management/supplier-management/purchase-order-creation/components/ProductPickerDialog.tsx
                                                     <span className="text-[10px] font-bold text-primary/80">
                                                         {money.format(item.price)}
                                                     </span>

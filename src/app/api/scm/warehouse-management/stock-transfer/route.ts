@@ -64,18 +64,6 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "RFID not found" }, { status: 404 });
       }
 
-<<<<<<< HEAD
-      // Fetch full product details directly by ID
-      const product = await repo.fetchProductById(productId);
-      
-      if (!product) {
-        return NextResponse.json({ error: "Product details not found" }, { status: 404 });
-      }
-
-      const inventory = await repo.fetchBranchInventory(Number(branchIdMatch), token);
-      const invCount = Array.isArray(inventory) ? inventory.filter((i: Record<string, unknown>) => (i.productId || i.product_id) === productId).length : 0;
-
-=======
       // Fetch full product details
       const products = await repo.fetchProducts(); // We can filter here if repo supported it, but fetching all for lookup is what original did
       const product = products.find(p => p.product_id === productId);
@@ -87,7 +75,6 @@ export async function GET(request: NextRequest) {
       const inventory = await repo.fetchBranchInventory(Number(branchIdMatch), token);
       const invCount = Array.isArray(inventory) ? inventory.filter((i: Record<string, unknown>) => (i.productId || i.product_id) === productId).length : 0;
 
->>>>>>> origin/master
       const result = {
         rfid,
         productId: product.product_id,

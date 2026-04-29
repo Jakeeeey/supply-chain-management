@@ -28,10 +28,7 @@ export default function ApprovalPurchaseOrderModule() {
             const msg = String(e instanceof Error ? e.message : e);
             if (msg.trim().toLowerCase() !== "fetch failed") {
                 setError(msg);
-<<<<<<< HEAD
-=======
                 toast.error(`Load failed: ${msg}`);
->>>>>>> origin/master
             }
         } finally {
             setLoadingList(false);
@@ -50,16 +47,10 @@ export default function ApprovalPurchaseOrderModule() {
             const d = await provider.fetchPurchaseOrderDetail(id);
             setDetail(d);
         } catch (e: unknown) {
-<<<<<<< HEAD
-            const msg = String(e instanceof Error ? e.message : e);
-            if (msg.trim().toLowerCase() !== "fetch failed") {
-                setError(msg);
-=======
             const msg = e instanceof Error ? e.message : String(e);
             if (msg.trim().toLowerCase() !== "fetch failed") {
                 setError(msg);
                 toast.error(`Failed to load PO detail: ${msg}`);
->>>>>>> origin/master
             }
         } finally {
             setLoadingDetail(false);

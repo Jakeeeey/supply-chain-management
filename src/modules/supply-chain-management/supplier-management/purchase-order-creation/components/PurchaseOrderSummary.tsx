@@ -51,10 +51,7 @@ export function PurchaseOrderSummary(props: {
     isInvoice: boolean;
     setIsInvoice: (v: boolean) => void;
     isLocked?: boolean;
-<<<<<<< HEAD:src/modules/supply-chain-management/supplier-management/create-of-purchase-order/components/PurchaseOrderSummary.tsx
-=======
     onReset?: () => void;
->>>>>>> origin/master:src/modules/supply-chain-management/supplier-management/purchase-order-creation/components/PurchaseOrderSummary.tsx
 }) {
     // ✅ ALL HOOKS MUST BE ABOVE ANY CONDITIONAL RETURN
     const money = React.useMemo(() => buildMoneyFormatter(), []);

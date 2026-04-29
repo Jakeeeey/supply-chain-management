@@ -294,7 +294,6 @@ export default function TaggingOfPOModule() {
         if (!selectedId) return;
         try {
             setLoadingDetail(true);
-<<<<<<< HEAD:src/modules/supply-chain-management/supplier-management/tagging-of-po/TaggingOfPOModule.tsx
             const res = await fetch("/api/scm/supplier-management/tagging-of-po", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -304,10 +303,6 @@ export default function TaggingOfPOModule() {
             if (!res.ok) throw new Error(j?.error || "Failed to update status.");
 
             if (j?.data) onDetailChange(j.data);
-=======
-            const data = await provider.updateTaggingStatus(selectedId, "send_partially_tagged");
-            if (data) onDetailChange(data);
->>>>>>> origin/master:src/modules/supply-chain-management/supplier-management/purchase-order-tagging/TaggingOfPOModule.tsx
             
             toast.success("Ready for Receiving", {
                 description: "This PO status is now updated and visible in Receiving Products."

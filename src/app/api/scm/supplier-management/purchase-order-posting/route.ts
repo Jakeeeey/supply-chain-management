@@ -769,11 +769,7 @@ export async function GET() {
                     // Only flag PARTIAL_POSTED when not fully received
                     hasAnyPosted: !fully && hasAnyPosted,
                 }),
-<<<<<<< HEAD:src/app/api/scm/supplier-management/posting-of-po/route.ts
-                totalAmount: toNum(po?.total_amount ?? 0),
-=======
                 totalAmount: listTotal,
->>>>>>> origin/master:src/app/api/scm/supplier-management/purchase-order-posting/route.ts
                 currency: "PHP",
                 itemsCount: products.size,
                 branchesCount: branches.size,
@@ -909,13 +905,7 @@ export async function POST(req: NextRequest) {
                     isReceived,
                     unitPrice: toNum(ln.unit_price),
                     grossAmount: toNum(ln.total_amount),
-<<<<<<< HEAD:src/app/api/scm/supplier-management/posting-of-po/route.ts
-                    discountTypeId: productSupplierLinks.get(pid)?.discount_type
-                        ? String(productSupplierLinks.get(pid)?.discount_type)
-                        : undefined,
-=======
                     discountTypeId: itemDiscountId,
->>>>>>> origin/master:src/app/api/scm/supplier-management/purchase-order-posting/route.ts
                 };
 
                 const arr = itemsByBranch.get(bid) ?? [];
@@ -1007,11 +997,7 @@ export async function POST(req: NextRequest) {
                     fullyReceived,
                     hasAnyPosted: !fully && hasAnyPosted,
                 }),
-<<<<<<< HEAD:src/app/api/scm/supplier-management/posting-of-po/route.ts
-                totalAmount: toNum(po?.total_amount ?? 0),
-=======
                 totalAmount: detailTotal,
->>>>>>> origin/master:src/app/api/scm/supplier-management/purchase-order-posting/route.ts
                 currency: "PHP",
                 branchName,
                 allocations,
@@ -1022,17 +1008,10 @@ export async function POST(req: NextRequest) {
                 postingReady: true,
                 latestReceiptNo: lr.receipt_no || undefined,
                 latestReceiptDate: lr.received_date || lr.receipt_date || undefined,
-<<<<<<< HEAD:src/app/api/scm/supplier-management/posting-of-po/route.ts
-                grossAmount: toNum(po?.gross_amount),
-                discountAmount: toNum(po?.discounted_amount),
-                vatAmount: toNum(po?.vat_amount),
-                withholdingTaxAmount: toNum(po?.withholding_tax_amount),
-=======
                 grossAmount: detailGross,
                 discountAmount: detailDisc,
                 vatAmount: detailVat,
                 withholdingTaxAmount: detailWht,
->>>>>>> origin/master:src/app/api/scm/supplier-management/purchase-order-posting/route.ts
             };
 
             return ok(detail);
@@ -1188,8 +1167,6 @@ export async function POST(req: NextRequest) {
                 partialPost: !fully,
                 postedCount: toPost.length,
             });
-<<<<<<< HEAD:src/app/api/scm/supplier-management/posting-of-po/route.ts
-=======
         }
 
         // -------------------------
@@ -1311,7 +1288,6 @@ export async function POST(req: NextRequest) {
                 revertedCount: targetRows.length,
                 newStatus: nextStatus,
             });
->>>>>>> origin/master:src/app/api/scm/supplier-management/purchase-order-posting/route.ts
         }
 
         return bad("Unknown action.", 400);

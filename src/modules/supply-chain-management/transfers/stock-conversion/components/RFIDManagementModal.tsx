@@ -15,12 +15,8 @@ interface RFIDManagementModalProps {
   onClose: () => void;
   onSubmit: (tags: RFIDTag[]) => void;
   isSubmitting: boolean;
-<<<<<<< HEAD
   validateTag?: (tag: string) => Promise<{ exists: boolean; reason?: string }>;
   sourceRfidTags?: string[];
-=======
-  validateTag?: (tag: string) => Promise<boolean>;
->>>>>>> origin/master
 }
 
 export function RFIDManagementModal({ 
@@ -30,12 +26,8 @@ export function RFIDManagementModal({
   onClose, 
   onSubmit, 
   isSubmitting,
-<<<<<<< HEAD
   validateTag,
   sourceRfidTags = []
-=======
-  validateTag
->>>>>>> origin/master
 }: RFIDManagementModalProps) {
   const [rfidInput, setRfidInput] = useState("");
   const [assignedTags, setAssignedTags] = useState<RFIDTag[]>([]);
@@ -72,7 +64,6 @@ export function RFIDManagementModal({
       return;
     }
 
-<<<<<<< HEAD
     // CROSS-CHECK: Block if this is the same tag being converted (Source)
     if (sourceRfidTags.includes(rfidInput.trim())) {
       alert(`RFID ${rfidInput.trim()} is currently being converted from the source unit. You must use a DIFFERENT tag for the new unit.`);
@@ -95,20 +86,6 @@ export function RFIDManagementModal({
         }
       }
 
-=======
-    setIsValidating(true);
-    try {
-      // Validate with database
-      if (validateTag) {
-        const exists = await validateTag(rfidInput.trim());
-        if (exists) {
-          alert(`RFID ${rfidInput.trim()} already exists in the warehouse. Duplicates are not allowed.`);
-          setRfidInput("");
-          return;
-        }
-      }
-
->>>>>>> origin/master
       const newTag: RFIDTag = {
         id: uuidv4(),
         rfid_tag: rfidInput.trim(),

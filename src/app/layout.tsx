@@ -3,16 +3,10 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-<<<<<<< HEAD
-import ThemeProvider from "@/components/theme/ThemeProvider";
-import ThemeSettingsProvider from "@/components/theme/ThemeSettingsProvider";
-import { Toaster } from "@/components/ui/sonner";
-=======
 import ThemeProvider from "@/components/theme/ThemeProvider"
 import ThemeSettingsProvider from "@/components/theme/ThemeSettingsProvider"
 import { ThemeTransitionProvider } from "@/components/theme/ThemeTransitionOverlay"
 import { Toaster } from "@/components/ui/sonner"
->>>>>>> origin/master
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,19 +26,6 @@ export const metadata: Metadata = {
 export default function RootLayout({
   children,
 }: Readonly<{
-<<<<<<< HEAD
-  children: React.ReactNode;
-}>) {
-  return (
-    <html lang="en" suppressHydrationWarning>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-        suppressHydrationWarning
-      >
-        <ThemeProvider>
-          <ThemeSettingsProvider>
-            {children}
-=======
   children: React.ReactNode
 }>) {
   return (
@@ -55,7 +36,6 @@ export default function RootLayout({
             <ThemeTransitionProvider>
               {children}
             </ThemeTransitionProvider>
->>>>>>> origin/master
           </ThemeSettingsProvider>
 
           {/* Global toast host (Sonner / shadcn) */}
@@ -63,9 +43,5 @@ export default function RootLayout({
         </ThemeProvider>
       </body>
     </html>
-<<<<<<< HEAD
-  );
-=======
   )
->>>>>>> origin/master
 }

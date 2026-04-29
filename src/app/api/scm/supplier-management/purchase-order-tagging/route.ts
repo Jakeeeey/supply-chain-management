@@ -782,20 +782,12 @@ export async function POST(req: NextRequest) {
             // we will manually inject it into the result so the UI updates instantly.
             const updated = await buildDetail(base, poId);
 
-<<<<<<< HEAD:src/app/api/scm/supplier-management/tagging-of-po/route.ts
-            const isPresent = updated.activity.some((a) => a.rfid === rfid);
-=======
             const isPresent = updated.activity.some((a: TaggingActivity) => a.rfid === rfid);
->>>>>>> origin/master:src/app/api/scm/supplier-management/purchase-order-tagging/route.ts
             if (!isPresent) {
                 if (DEBUG) dlog(`Optimistically injecting tag ${rfid} for SKU ${sku}`);
                 
                 // Find the line that should receive this tag
-<<<<<<< HEAD:src/app/api/scm/supplier-management/tagging-of-po/route.ts
-                const line = updated.items.find((it) => it.sku === sku);
-=======
                 const line = updated.items.find((it: TaggingPOItem) => it.sku === sku);
->>>>>>> origin/master:src/app/api/scm/supplier-management/purchase-order-tagging/route.ts
                 if (line) {
                     // Only increment if not already "full" in the returned state
                     // (if it's already full, Directus might have actually returned it and it's just a duplicate activity check)

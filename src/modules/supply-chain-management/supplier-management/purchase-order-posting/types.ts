@@ -8,11 +8,7 @@
 //   *both PARTIAL_POSTED and RECEIVED map to DB status 13;
 //    the difference is determined by isFullyReceived() in the API
 // CLOSED         → inventory_status 14    (fully received AND all posted)
-<<<<<<< HEAD:src/modules/supply-chain-management/supplier-management/posting-of-po/types.ts
-export type POStatus = "OPEN" | "PARTIAL" | "PARTIAL_POSTED" | "RECEIVED" | "CLOSED";
-=======
 export type POStatus = "OPEN" | "PARTIAL" | "PARTIAL_POSTED" | "FOR POSTING" | "CLOSED";
->>>>>>> origin/master:src/modules/supply-chain-management/supplier-management/purchase-order-posting/types.ts
 
 export type POListItem = {
     id: string;
