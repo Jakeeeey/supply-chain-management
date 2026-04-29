@@ -165,7 +165,7 @@ export default function StockConversionModule({
           return;
         }
         const match = await res.json();
-        const product = data.find(p => p.productId === Number(match.productId));
+        const product = data.find((p: StockConversionProduct) => p.productId === Number(match.productId));
         if (product) {
           // Double-check history for background scans too
           const historyCheck = await validateDuplicateTag(val, "source");

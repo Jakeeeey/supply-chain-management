@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import type { StockConversionProduct, StockConversionPayload } from "../types/stock-conversion.types";
 
-export function useStockConversionManual(branchId?: number) {
+export function useStockConversion(branchId?: number) {
   const [data, setData] = useState<StockConversionProduct[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -23,6 +23,35 @@ export function useStockConversionManual(branchId?: number) {
   }>({ brands: [], categories: [], units: [], suppliers: [] });
 
   const loadingProductsRef = useRef<Set<number>>(new Set());
+
+  /**
+   * Validate if an RFID tag is already used or exists in history
+   */
+  const validateDuplicateTag = useCallback(async (rfid: string, mode: "source" | "target" = "target"): Promise<{ exists: boolean; reason?: string }> => {
+    try {
+      const sp = new URLSearchParams({ action: "validate_tag", rfid, mode });
+      const res = await fetch(`/api/scm/transfers/stock-conversion/validate-rfid?${sp.toString()}`, { cache: "no-store" });
+      if (!res.ok) throw new Error("Validation failed");
+      const data = await res.json();
+      return { exists: !!data.exists, reason: data.reason };
+    } catch (e: unknown) {
+      console.error("Tag validation error:", e);
+      return { exists: true, reason: "error" };
+    }
+  }, []);
+
+  /**
+   * Check if a product has any active RFIDs in a specific branch
+   */
+  const checkProductRfids = useCallback(async (productId: number, activeBranchId: number): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/scm/transfers/stock-conversion/validate-rfid?action=check_product_rfids&branchId=${activeBranchId}&productId=${productId}`);
+      const data = await res.json();
+      return !!data.hasRfids;
+    } catch {
+      return false;
+    }
+  }, []);
 
   /**
    * Fetch inventory balances for specific products
@@ -105,12 +134,14 @@ export function useStockConversionManual(branchId?: number) {
     }
   }, [page, pageSize, filters, branchId, loadProductsInventory]);
 
-
+  /**
+   * Convert stock action
+   */
   const convertStockAction = async (payload: StockConversionPayload) => {
     setIsUpdating(true);
     setConvertingId(payload.productId);
     try {
-      const res = await fetch("/api/scm/transfers/stock-conversion-manual", {
+      const res = await fetch("/api/scm/transfers/stock-conversion", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -118,7 +149,7 @@ export function useStockConversionManual(branchId?: number) {
       const resData = await res.json();
       if (!res.ok) throw new Error(resData.error || "Failed to convert stock");
 
-      toast.success("Manual stock conversion complete!");
+      toast.success("Stock conversion complete!");
       
       setData(prev => prev.map(p => {
         if (p.productId === payload.productId) {
@@ -161,6 +192,8 @@ export function useStockConversionManual(branchId?: number) {
     error,
     refresh,
     loadProductsInventory,
+    validateDuplicateTag,
+    checkProductRfids,
     setFilters: (newFilters: Record<string, string>) => {
       setFilters(prev => {
         if (JSON.stringify(prev) === JSON.stringify(newFilters)) return prev;
