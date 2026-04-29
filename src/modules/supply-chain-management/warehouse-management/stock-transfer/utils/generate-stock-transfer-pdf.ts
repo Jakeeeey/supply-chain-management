@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { ScannedItem } from '../types/stock-transfer.types';
+import { ScannedItem, CompanyData, OrderGroupItem, ProductRow } from '../types/stock-transfer.types';
 
 export interface StockTransferPDFData {
   orderNo: string;
@@ -9,197 +9,454 @@ export interface StockTransferPDFData {
   targetBranchLabel: string;
   leadDate: string;
   scannedItems: ScannedItem[];
+  companyData: CompanyData | null;
 }
 
-/**
- * Generates a jsPDF document for the Stock Transfer Slip.
- * Returns the jsPDF instance so callers can save, print, or get a blob URL.
- */
-export function generateStockTransferPDF(data: StockTransferPDFData): jsPDF {
-  const {
-    orderNo,
-    status,
-    sourceBranchLabel,
-    targetBranchLabel,
-    leadDate,
-    scannedItems,
-  } = data;
-
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'legal' });
-
-  const pageW = doc.internal.pageSize.getWidth();
-  const margin = 14;
-  const contentW = pageW - margin * 2;
+// ── Corporate Header Helper ────────────────────────────────────
+function drawCorporateHeader(doc: jsPDF, companyData: CompanyData | null, margin: number, pageW: number): number {
   let y = 14;
+  const contentW = pageW - margin * 2;
 
-  /* ── Header ─────────────────────────────────────────────── */
-  doc.setFontSize(8);
-  doc.setTextColor(120, 120, 120);
-  doc.text('VOS WEB — SUPPLY CHAIN MANAGEMENT', pageW / 2, y, { align: 'center' });
-  y += 6;
+  if (companyData) {
+    if (companyData.company_logo) {
+      try {
+        doc.addImage(companyData.company_logo, 'PNG', margin, y, 28, 16, undefined, 'FAST');
+      } catch (e) {
+        console.error('Error adding logo to PDF:', e);
+      }
+    }
 
-  doc.setFontSize(18);
-  doc.setTextColor(0, 0, 0);
-  doc.setFont('helvetica', 'bold');
-  doc.text('STOCK TRANSFER SLIP', pageW / 2, y, { align: 'center' });
-  y += 5;
-
-  if (orderNo) {
-    doc.setFontSize(12);
+    const headerTextX = margin + 32;
+    
+    doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
-    doc.text(orderNo, pageW / 2, y, { align: 'center' });
-    y += 5;
+    doc.setTextColor(0, 0, 0);
+    const companyNameLines = doc.splitTextToSize(companyData.company_name.toUpperCase(), contentW - 35);
+    doc.text(companyNameLines, headerTextX, y + 5);
+    
+    const nameHeight = companyNameLines.length * 6;
+    const currentHeaderY = y + 5 + nameHeight;
+
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(60, 60, 60);
+    const address = [
+       companyData.company_address,
+       `${companyData.company_brgy}, ${companyData.company_city}, ${companyData.company_province} - ${companyData.company_zipCode}`
+    ].filter(Boolean).join(', ');
+    doc.text(address, headerTextX, currentHeaderY);
+
+    const contactInfo = `Contact: ${companyData.company_contact}  |  Email: ${companyData.company_email}`;
+    doc.text(contactInfo, headerTextX, currentHeaderY + 5);
+
+    y = currentHeaderY + 12;
+  } else {
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(150, 150, 150);
+    doc.text('VOS WEB — SUPPLY CHAIN MANAGEMENT', pageW / 2, y, { align: 'center' });
+    y += 8;
   }
 
-  /* ── Divider ─────────────────────────────────────────────── */
-  y += 2;
   doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.5);
   doc.line(margin, y, pageW - margin, y);
+  y += 10;
+
+  return y;
+}
+
+export function generateStockTransferPDF(data: StockTransferPDFData): jsPDF {
+  const { orderNo, status, sourceBranchLabel, targetBranchLabel, leadDate, scannedItems, companyData } = data;
+
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'legal' });
+
+  const pageW   = doc.internal.pageSize.getWidth();
+  const pageH   = doc.internal.pageSize.getHeight();
+  const margin  = 16;
+  const contentW = pageW - margin * 2;
+  
+  let y = drawCorporateHeader(doc, companyData, margin, pageW);
+
+  // ── Document Title & Metadata ──
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 0, 0);
+  doc.text('STOCK TRANSFER SLIP', margin, y);
+
+  if (orderNo) {
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 100, 100);
+    doc.text(`NO: ${orderNo}`, pageW - margin, y, { align: 'right' });
+  }
+
+  y += 8;
+
+  // ── Info grid — outline box only, no fill ─────────────────────
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(margin, y - 3, contentW, 28, 1.5, 1.5, 'S'); // 'S' = stroke only
+
+  const col1x = margin + 5;
+  const col2x = pageW / 2 + 5;
+
+  // Row 1 labels
+  doc.setFontSize(6.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(150, 150, 150);
+  doc.text('SOURCE BRANCH', col1x, y + 2);
+  doc.text('TARGET BRANCH', col2x, y + 2);
   y += 6;
 
-  /* ── Info Grid (2 columns) ───────────────────────────────── */
-  const col1x = margin;
-  const col2x = pageW / 2 + 4;
-
-  // Row 1: Source Branch | Target Branch
-  doc.setFontSize(7);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(120, 120, 120);
-  doc.text('SOURCE BRANCH', col1x, y);
-  doc.text('TARGET BRANCH', col2x, y);
-  y += 4;
-
-  doc.setFontSize(11);
+  // Row 1 values
+  doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(0, 0, 0);
   doc.text(sourceBranchLabel || '—', col1x, y);
   doc.text(targetBranchLabel || '—', col2x, y);
   y += 8;
 
-  // Row 2: Date Requested | Status
-  doc.setFontSize(7);
+  // Row 2 labels
+  doc.setFontSize(6.5);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(120, 120, 120);
+  doc.setTextColor(150, 150, 150);
   doc.text('DATE REQUESTED', col1x, y);
   doc.text('STATUS', col2x, y);
-  y += 4; 
+  y += 5;
 
-  // Left value: Date Requested
-  doc.setFontSize(11);
+  // Row 2 values
+  doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(0, 0, 0);
   doc.text(leadDate || '—', col1x, y);
+  doc.text((status || 'PENDING').toUpperCase(), col2x, y);
 
-  // Status badge
-  const isReceived = status?.toLowerCase() === 'received';
-  const badgeText = status || 'Pending';
-  const badgePad = { x: 3, y: 1.5 };
-  const badgeW = doc.getTextWidth(badgeText) + badgePad.x * 2;
-  const badgeH = 6;
-  const badgeX = col2x;
-  const badgeY = y - 1;
+  y += 12;
 
-  doc.setFillColor(isReceived ? 209 : 254, isReceived ? 250 : 249, isReceived ? 229 : 195);
-  doc.setDrawColor(isReceived ? 6 : 113, isReceived ? 95 : 63, isReceived ? 70 : 18);
-  doc.setLineWidth(0.3);
-  doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 1.5, 1.5, 'FD');
-  doc.setFontSize(9);
-  doc.setTextColor(isReceived ? 6 : 113, isReceived ? 95 : 63, isReceived ? 70 : 18);
-  doc.text(badgeText, badgeX + badgePad.x, badgeY + badgeH - 1.8);
-
-  y += 8;
-
-  /* ── Items Table ─────────────────────────────────────────── */
+  // ── Table ─────────────────────────────────────────────────────
   const grandTotal = scannedItems.reduce((sum, i) => sum + i.totalAmount, 0);
-  const rows = scannedItems.map((item, i) => [
-    String(i + 1),
-    item.rfid || 'N/A',
-    item.productName,
-    item.description,
+  const rows = scannedItems.map((item) => [
     item.brandName || 'N/A',
+    item.productName,
     item.unit,
-    String(item.qtyAvailable),
     String(item.unitQty),
-    String((item as unknown as Record<string, unknown>).allocated_quantity ?? item.unitQty),
     `PHP ${item.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
   ]);
 
   autoTable(doc, {
     startY: y,
     margin: { left: margin, right: margin },
-    head: [['No.', 'RFID', 'Product Name', 'Description', 'Brand', 'Unit', 'Qty Avail', 'Qty (Ord)', 'Qty (Alloc)', 'Total Amount']],
-    body: rows.length > 0 ? rows : [['', 'No items scanned.', '', '', '', '', '', '', '', '']],
+    head: [['Brand', 'Product Name', 'Unit', 'Order Quantity', 'Total']],
+    body: rows.length > 0 ? rows : [['No items found.', '', '', '', '']],
     foot: rows.length > 0
-      ? [['', '', '', '', '', '', '', '', 'GRAND TOTAL', `PHP ${grandTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`]]
+      ? [[
+          { content: '', colSpan: 3, styles: { fillColor: [255, 255, 255] as [number, number, number], lineColor: [210, 210, 210] as [number, number, number] } },
+          { content: 'GRAND TOTAL', colSpan: 1, styles: { halign: 'right' as const, fontStyle: 'bold' as const, fontSize: 7.5, fillColor: [255, 255, 255] as [number, number, number], textColor: [0, 0, 0] as [number, number, number], lineColor: [210, 210, 210] as [number, number, number] } },
+          { content: `PHP ${grandTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, colSpan: 1, styles: { halign: 'right' as const, fontStyle: 'bold' as const, fontSize: 7.5, fillColor: [255, 255, 255] as [number, number, number], textColor: [0, 0, 0] as [number, number, number], lineColor: [210, 210, 210] as [number, number, number] } },
+        ]]
       : [],
     styles: {
       fontSize: 7.5,
-      cellPadding: 2,
-      textColor: [0, 0, 0],
-      lineColor: [220, 220, 220],
+      cellPadding: { top: 3, bottom: 3, left: 2.5, right: 2.5 },
+      textColor: [40, 40, 40] as [number, number, number],
+      lineColor: [210, 210, 210] as [number, number, number],
+      lineWidth: 0.2,
       overflow: 'linebreak',
+      fillColor: [255, 255, 255] as [number, number, number],
     },
     headStyles: {
-      fillColor: [243, 244, 246],
-      textColor: [30, 30, 30],
+      fillColor: [255, 255, 255] as [number, number, number],
+      textColor: [0, 0, 0] as [number, number, number],
       fontStyle: 'bold',
       fontSize: 7,
+      lineColor: [0, 0, 0] as [number, number, number],
       lineWidth: 0.3,
     },
     footStyles: {
-      fillColor: [249, 250, 251],
-      textColor: [0, 0, 0],
+      fillColor: [255, 255, 255] as [number, number, number],
+      textColor: [0, 0, 0] as [number, number, number],
       fontStyle: 'bold',
       fontSize: 8,
+      lineColor: [180, 180, 180] as [number, number, number],
       lineWidth: 0.3,
     },
-    columnStyles: {
-      0: { cellWidth: 7 },
-      1: { cellWidth: 28, fontStyle: 'bold', fontSize: 6.5 },
-      2: { cellWidth: 40 }, 
-      3: { cellWidth: 30, fontStyle: 'italic', textColor: [80, 80, 80], fontSize: 6.5 },
-      4: { cellWidth: 15 },
-      5: { cellWidth: 10, halign: 'center' },
-      6: { cellWidth: 12, halign: 'right' },
-      7: { cellWidth: 12, halign: 'right' },
-      8: { cellWidth: 12, halign: 'right', fontStyle: 'bold' },
-      9: { cellWidth: 20, halign: 'right', fontStyle: 'bold' },
+    alternateRowStyles: {
+      fillColor: [255, 255, 255] as [number, number, number],
     },
-    alternateRowStyles: { fillColor: [250, 250, 252] },
+    columnStyles: {
+      0: { cellWidth: 35 },
+      1: { cellWidth: 'auto' },
+      2: { cellWidth: 25, halign: 'center' },
+      3: { cellWidth: 30, halign: 'center' },
+      4: { cellWidth: 40, halign: 'right', fontStyle: 'bold' },
+    },
   });
 
-  /* ── Signature Footer ────────────────────────────────────── */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const afterTableY = (doc as Record<string, any>).lastAutoTable?.finalY ?? y + 40;
-  const sigY = afterTableY + 16;
-  const sigLineW = (contentW - 16) / 3;
-  const sigLabels = ['PREPARED BY', 'RECEIVED BY', 'APPROVED BY'];
+  // ── Signature section ─────────────────────────────────────────
+  const afterTableY = (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y + 40;
+  const sigY  = afterTableY + 16;
+  const sigW  = (contentW - 20) / 3;
+  const sigGap = 10;
 
-  sigLabels.forEach((label, i) => {
-    const lineX = margin + i * (sigLineW + 8);
-    doc.setDrawColor(0, 0, 0);
+  ['PREPARED BY', 'RECEIVED BY', 'APPROVED BY'].forEach((label, i) => {
+    const lineX = margin + i * (sigW + sigGap);
+    const midX  = lineX + sigW / 2;
+
+    doc.setDrawColor(100, 100, 100);
     doc.setLineWidth(0.4);
-    doc.line(lineX, sigY, lineX + sigLineW, sigY);
+    doc.line(lineX, sigY, lineX + sigW, sigY);
 
     doc.setFontSize(7);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(80, 80, 80);
+    doc.text(label, midX, sigY + 5, { align: 'center' });
+
+    doc.setFontSize(6.5);
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(120, 120, 120);
-    doc.text(label, lineX + sigLineW / 2, sigY + 4, { align: 'center' });
+    doc.setTextColor(150, 150, 150);
+    doc.text('Date: _______________', midX, sigY + 10, { align: 'center' });
   });
 
-  /* ── Document Footer ─────────────────────────────────────── */
-  const footerY = doc.internal.pageSize.getHeight() - 8;
-  doc.setFontSize(7);
-  doc.setTextColor(180, 180, 180);
+  // ── Footer ────────────────────────────────────────────────────
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.3);
+  doc.line(margin, pageH - 10, pageW - margin, pageH - 10);
+
+  doc.setFontSize(6.5);
   doc.setFont('helvetica', 'normal');
-  const printDate = new Date().toLocaleString('en-PH');
+  doc.setTextColor(160, 160, 160);
   doc.text(
-    `Printed on ${printDate} · VOS Web Supply Chain Management System`,
+    `Printed: ${new Date().toLocaleString('en-PH')}  ·  VOS Web Supply Chain Management System`,
     pageW / 2,
-    footerY,
+    pageH - 6,
     { align: 'center' },
   );
+
+  return doc;
+}
+
+// ── Picklist Types ────────────────────────────────────────────
+
+export interface PicklistPDFData {
+  orderNo: string;
+  pickerName: string;
+  date: string;
+  items: OrderGroupItem[]; 
+  companyData: CompanyData | null;
+}
+
+export interface ReceivingPDFData {
+  orderNo: string;
+  checkedBy: string;
+  date: string;
+  items: OrderGroupItem[];
+  companyData: CompanyData | null;
+  sourceBranch?: string;
+  targetBranch?: string;
+}
+
+/**
+ * Generates a Picklist PDF for warehouse picking.
+ * Grouped by Supplier/Brand and includes checkboxes.
+ */
+export function generateStockTransferPicklistPDF(data: PicklistPDFData): jsPDF {
+  const { orderNo, pickerName, date, items, companyData } = data;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'legal' });
+
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 16;
+  const contentW = pageW - margin * 2;
+
+  let y = drawCorporateHeader(doc, companyData, margin, pageW);
+
+  // ── Title & Picker Info ───────────────────────────────────────
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 0, 0);
+  doc.text(orderNo.toUpperCase(), margin, y);
+  
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.text(date, pageW - margin, y, { align: 'right' });
+  y += 6;
+
+  doc.setFontSize(10);
+  doc.text(`Picker: ${pickerName.toUpperCase()}`, margin, y);
+  y += 10;
+
+  // ── Table Header ──────────────────────────────────────────────
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.3);
+  doc.line(margin, y, pageW - margin, y);
+  y += 5;
+
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text('PRODUCT DESCRIPTION', margin + 12, y);
+  doc.text('UNIT', pageW - margin - 35, y, { align: 'center' });
+  doc.text('QTY', pageW - margin - 10, y, { align: 'center' });
+  y += 3;
+  
+  doc.line(margin, y, pageW - margin, y);
+  y += 8;
+
+  // ── Grouping & Body ───────────────────────────────────────────
+  // Group by Brand/Supplier
+  const groups: Record<string, OrderGroupItem[]> = {};
+  items.forEach(item => {
+    const product = typeof item.product_id === 'object' ? (item.product_id as ProductRow) : null;
+    const brand = typeof product?.product_brand === 'object' ? product.product_brand?.brand_name : 'No Brand';
+    const supplierObj = product?.product_per_supplier?.[0]?.supplier_id;
+    const supplier = typeof supplierObj === 'object' ? supplierObj.supplier_shortcut : (supplierObj || 'N/A');
+    
+    const groupKey = `${supplier} | ${brand}`;
+    if (!groups[groupKey]) groups[groupKey] = [];
+    groups[groupKey].push(item);
+  });
+
+  Object.entries(groups).forEach(([groupTitle, groupItems]) => {
+    // Check for page break
+    if (y > pageH - 40) {
+      doc.addPage();
+      y = 20;
+    }
+
+    // Group Title (Supplier | Brand)
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0, 0, 0);
+    doc.text(groupTitle.toUpperCase(), margin, y);
+    y += 4;
+    
+    doc.setDrawColor(230, 230, 230);
+    doc.setLineWidth(0.1);
+    doc.line(margin, y, pageW - margin, y);
+    y += 6;
+
+    // Items in Group
+    groupItems.forEach(item => {
+      if (y > pageH - 30) {
+        doc.addPage();
+        y = 20;
+      }
+
+      const product = typeof item.product_id === 'object' ? (item.product_id as ProductRow) : null;
+      const productName = product?.product_name || `ID: ${item.product_id}`;
+      const unit = (typeof product?.unit_of_measurement === 'object' ? product.unit_of_measurement?.unit_name : 'PCS') || 'PCS';
+      const qty = item.allocated_quantity ?? item.ordered_quantity ?? 0;
+
+      // Checkbox
+      doc.setDrawColor(100, 100, 100);
+      doc.setLineWidth(0.2);
+      doc.rect(margin, y - 3.5, 4, 4);
+
+      // Product Info
+      doc.setFontSize(8.5);
+      doc.setFont('helvetica', 'normal');
+      doc.text(productName, margin + 12, y);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.text(unit, pageW - margin - 35, y, { align: 'center' });
+      doc.text(String(qty), pageW - margin - 10, y, { align: 'center' });
+      
+      y += 4;
+      doc.setDrawColor(245, 245, 245);
+      doc.line(margin + 12, y, pageW - margin, y);
+      y += 6;
+    });
+    
+    y += 4; // Gap between groups
+  });
+
+  // ── Signature Section ─────────────────────────────────────────
+  const sigY = Math.max(y + 10, pageH - 40);
+  const sigW = (contentW - 40) / 2;
+
+  // Picker Confirmation
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.4);
+  doc.line(margin, sigY, margin + sigW, sigY);
+  
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.text(pickerName.toUpperCase(), margin, sigY - 2);
+  
+  doc.setFontSize(7);
+  doc.text('PICKER CONFIRMATION', margin, sigY + 5);
+
+  // Verification Officer
+  doc.line(pageW - margin - sigW, sigY, pageW - margin, sigY);
+  doc.text('VERIFICATION OFFICER', pageW - margin, sigY + 5, { align: 'right' });
+
+  return doc;
+}
+
+/**
+ * Generates a Receiving Checklist PDF.
+ */
+export function generateStockTransferReceivingPDF(data: ReceivingPDFData): jsPDF {
+  const { orderNo, checkedBy, date, items, companyData, sourceBranch, targetBranch } = data;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'legal' });
+
+  const pageW = doc.internal.pageSize.getWidth();
+  const margin = 16;
+
+  let y = drawCorporateHeader(doc, companyData, margin, pageW);
+
+  // ── Title & Metadata ───────────────────────────────────────
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('CHECKLIST (PER DISPATCH PLAN)', margin, y);
+  
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.text(date, pageW - margin, y, { align: 'right' });
+  y += 6;
+
+  // Secondary Info
+  doc.setFontSize(9);
+  doc.text(`TR#: ${orderNo}`, margin, y);
+  doc.text(`Checked By: ${checkedBy.toUpperCase()}`, pageW - margin, y, { align: 'right' });
+  y += 5;
+
+  if (sourceBranch || targetBranch) {
+    doc.text(`Source: ${sourceBranch || 'N/A'}`, margin, y);
+    doc.text(`Target: ${targetBranch || 'N/A'}`, pageW - margin, y, { align: 'right' });
+    y += 5;
+  }
+  y += 5;
+
+  // ── Table ─────────────────────────────────────────────────────
+  const rows = items.map((item) => {
+    const product = typeof item.product_id === 'object' ? (item.product_id as ProductRow) : null;
+    return [
+      product?.product_name || `ID: ${item.product_id}`,
+      (typeof product?.unit_of_measurement === 'object' ? product.unit_of_measurement?.unit_name : 'PCS') || 'PCS',
+      product?.product_code || '---',
+      String(item.receivedQty || 0),
+      String(item.allocated_quantity || 0),
+    ];
+  });
+
+  autoTable(doc, {
+    startY: y,
+    margin: { left: margin, right: margin },
+    head: [['Product', 'Unit', 'Barcode', 'Received', 'Expected']],
+    body: rows,
+    styles: {
+      fontSize: 8,
+      cellPadding: 3,
+      lineColor: [210, 210, 210],
+      lineWidth: 0.1,
+    },
+    headStyles: {
+      fillColor: [240, 240, 240],
+      textColor: [0, 0, 0],
+      fontStyle: 'bold',
+    },
+  });
 
   return doc;
 }

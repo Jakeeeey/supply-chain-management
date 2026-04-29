@@ -146,25 +146,34 @@ export async function updateTransferStatus(payload: UpdateTransferPayload): Prom
  * Specifically handles manual receiving where received_quantity is auto-filled.
  */
 export async function manualReceiveItems(ids: number[], status: string): Promise<{ success: boolean }> {
-  const transfers = await repo.fetchStockTransfers(); // Ideally we'd filter by IDs here
-  const targetItems = transfers.filter(t => ids.includes(t.id));
+  // Fetch ONLY the rows we need instead of the entire table
+  const targetItems = await repo.fetchStockTransfersByIds(ids);
 
+  if (targetItems.length === 0) return { success: true };
+
+  // Build update payloads
   const updates = targetItems.map(item => ({
     id: item.id,
     status: status,
     received_quantity: item.allocated_quantity ?? item.ordered_quantity ?? 0
   }));
 
-  if (updates.length > 0) {
-    await Promise.all(
-      updates.map(u => 
-        repo.updateTransfer(u.id, {
-          status: u.status,
-          received_quantity: u.received_quantity
-        })
-      )
-    );
-  }
+  // Use bulk update — one request per unique payload shape
+  await repo.updateTransfersStatus(updates.map(u => ({
+    id: u.id,
+    status: u.status,
+    allocated_quantity: u.received_quantity
+  })));
+
+  // Also set received_quantity individually where it varies per row
+  await Promise.all(
+    updates.map(u =>
+      repo.updateTransfer(u.id, {
+        status: u.status,
+        received_quantity: u.received_quantity
+      })
+    )
+  );
 
   return { success: true };
 }
