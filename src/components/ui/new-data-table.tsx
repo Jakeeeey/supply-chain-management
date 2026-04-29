@@ -12,6 +12,12 @@ import {
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
+  HeaderGroup,
+  Header,
+  Row,
+  Cell,
+  PaginationState,
+  Updater,
 } from "@tanstack/react-table";
 
 import {
@@ -45,6 +51,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { EmptyPlaceholder } from "@/components/shared/EmptyPlaceholder";
 
 interface SearchInputProps {
   placeholder: string;
@@ -141,6 +148,7 @@ export function DataTable<TData, TValue>({
   onSelectionChange,
   actionComponent,
 }: DataTableProps<TData, TValue>) {
+  "use no memo"
   const [internalSorting, setInternalSorting] = React.useState<SortingState>(
     [],
   );
@@ -149,7 +157,7 @@ export function DataTable<TData, TValue>({
   );
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({});
-  const [rowSelection, setRowSelection] = React.useState<Record<string, boolean>>({});
+  const [rowSelection, setRowSelection] = React.useState({});
 
   // Trigger onSelectionChange when rowSelection updates
   React.useEffect(() => {
@@ -157,7 +165,7 @@ export function DataTable<TData, TValue>({
       // rowSelection is a map of index/id to boolean
       // We need to map it back to the data
       const selectedIndices = Object.keys(rowSelection).filter(
-        (key) => rowSelection[key],
+        (key) => rowSelection[key as keyof typeof rowSelection],
       );
       const selectedData = selectedIndices
         .map((index) => data[parseInt(index)])
@@ -179,7 +187,7 @@ export function DataTable<TData, TValue>({
     columns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    onSortingChange: (updater) => {
+    onSortingChange: (updater: Updater<SortingState>) => {
       const nextSorting =
         typeof updater === "function" ? updater(actualSorting) : updater;
       if (onExternalSortingChange) {
@@ -205,14 +213,14 @@ export function DataTable<TData, TValue>({
         ? (pagination ?? internalPagination)
         : internalPagination,
     },
-    onPaginationChange: (updater) => {
+    onPaginationChange: (updater: Updater<PaginationState>) => {
       const nextPagination =
         typeof updater === "function"
           ? updater(
-              manualPagination
-                ? (pagination ?? internalPagination)
-                : internalPagination,
-            )
+            manualPagination
+              ? (pagination ?? internalPagination)
+              : internalPagination,
+          )
           : updater;
 
       if (manualPagination && onPaginationChange) {
@@ -284,20 +292,20 @@ export function DataTable<TData, TValue>({
           </DropdownMenu>
         </div>
       </div>
-      <div className="rounded-xl border bg-card shadow-xs overflow-hidden">
+      <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
         <Table>
           <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
+            {table.getHeaderGroups().map((headerGroup: HeaderGroup<TData>) => (
               <TableRow key={headerGroup.id} className="bg-muted/10">
-                {headerGroup.headers.map((header) => {
+                {headerGroup.headers.map((header: Header<TData, unknown>) => {
                   return (
-                    <TableHead key={header.id} className="font-semibold py-2">
+                    <TableHead key={header.id} className="font-bold py-2">
                       {header.isPlaceholder
                         ? null
                         : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext(),
-                          )}
+                          header.column.columnDef.header,
+                          header.getContext(),
+                        )}
                     </TableHead>
                   );
                 })}
@@ -312,13 +320,12 @@ export function DataTable<TData, TValue>({
                     <TableCell key={colIndex} className="py-3 ">
                       <div className="flex items-center gap-2">
                         <div
-                          className={`h-4 bg-muted animate-pulse rounded ${
-                            colIndex === 0
-                              ? "w-48"
-                              : colIndex === columns.length - 1
-                                ? "w-8 ml-auto"
-                                : "w-24"
-                          }`}
+                          className={`h-4 bg-muted animate-pulse rounded ${colIndex === 0
+                            ? "w-48"
+                            : colIndex === columns.length - 1
+                              ? "w-8 ml-auto"
+                              : "w-24"
+                            }`}
                         />
                       </div>
                     </TableCell>
@@ -326,13 +333,13 @@ export function DataTable<TData, TValue>({
                 </TableRow>
               ))
             ) : table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
+              table.getRowModel().rows.map((row: Row<TData>) => (
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
                   className="group hover:bg-muted/10 transition-colors"
                 >
-                  {row.getVisibleCells().map((cell) => (
+                  {row.getVisibleCells().map((cell: Cell<TData, unknown>) => (
                     <TableCell key={cell.id} className="py-3">
                       {flexRender(
                         cell.column.columnDef.cell,
@@ -346,12 +353,12 @@ export function DataTable<TData, TValue>({
               <TableRow>
                 <TableCell
                   colSpan={columns.length}
-                  className="h-24 text-center"
+                  className="h-24 text-center border-none hover:bg-transparent"
                 >
-                  <div className="flex flex-col items-center justify-center gap-1">
-                    <p className="text-sm font-medium text-muted-foreground">{emptyTitle || "No results."}</p>
-                    {emptyDescription && <p className="text-xs text-muted-foreground/60">{emptyDescription}</p>}
-                  </div>
+                  <EmptyPlaceholder
+                    title={emptyTitle}
+                    description={emptyDescription}
+                  />
                 </TableCell>
               </TableRow>
             )}
@@ -367,7 +374,7 @@ export function DataTable<TData, TValue>({
         </div>
         <div className="flex items-center space-x-6 lg:space-x-8">
           <div className="flex items-center space-x-2">
-            <p className="text-sm font-semibold">Rows per page</p>
+            <p className="text-sm font-bold">Rows per page</p>
             <Select
               value={`${table.getState().pagination.pageSize}`}
               onValueChange={(value) => {
@@ -388,7 +395,7 @@ export function DataTable<TData, TValue>({
               </SelectContent>
             </Select>
           </div>
-          <div className="flex w-[100px] items-center justify-center text-sm font-semibold">
+          <div className="flex w-[100px] items-center justify-center text-sm font-bold">
             Page {table.getState().pagination.pageIndex + 1} of{" "}
             {table.getPageCount()}
           </div>

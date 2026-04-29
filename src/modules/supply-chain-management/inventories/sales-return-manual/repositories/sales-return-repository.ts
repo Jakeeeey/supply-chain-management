@@ -1,8 +1,59 @@
-import { getDirectusBase, directusFetch } from "@/lib/directus";
+// =============================================================================
+// INTERNAL HELPERS — Directus Client (Module-Isolated)
+// =============================================================================
 
-// =============================================================================
-// INTERNAL HELPERS
-// =============================================================================
+/** Returns the Directus base URL (no trailing slash). Throws if not set. */
+function getDirectusBase(): string {
+  const raw =
+    process.env.DIRECTUS_URL ||
+    process.env.NEXT_PUBLIC_DIRECTUS_URL ||
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    "";
+  const cleaned = raw.trim().replace(/\/$/, "");
+  if (!cleaned) {
+    throw new Error("DIRECTUS_URL is not set. Add it to .env.local and restart the dev server.");
+  }
+  return /^https?:\/\//i.test(cleaned) ? cleaned : `http://${cleaned}`;
+}
+
+/** Returns the Directus static token. Throws if not set. */
+function getDirectusToken(): string {
+  const token = (process.env.DIRECTUS_STATIC_TOKEN || process.env.DIRECTUS_TOKEN || "").trim();
+  if (!token) {
+    throw new Error("DIRECTUS_STATIC_TOKEN is not set. Add it to .env.local and restart the dev server.");
+  }
+  return token;
+}
+
+/** Returns headers for authenticated Directus requests. */
+function directusHeaders(): Record<string, string> {
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${getDirectusToken()}`,
+  };
+}
+
+/** Fetches a Directus URL with JSON response handling. Throws on non-2xx. */
+async function directusFetch<T = unknown>(url: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(url, {
+    ...init,
+    headers: {
+      ...directusHeaders(),
+      ...(init?.headers as Record<string, string> | undefined),
+    },
+    cache: "no-store",
+  });
+  const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    const errors = json?.errors as Array<{ message: string }> | undefined;
+    const msg =
+      errors?.[0]?.message ||
+      (json?.error as string) ||
+      `Directus responded ${res.status} ${res.statusText}`;
+    throw new Error(msg);
+  }
+  return json as T;
+}
 
 /** Helper for Directus GET requests */
 async function directusGet<T>(path: string): Promise<T> {
@@ -38,7 +89,7 @@ async function directusMutate<T>(
 export async function getRawReturns(
   page: number = 1,
   limit: number = 10,
-  filters: { salesman?: string; customer?: string; status?: string } = {},
+  filters: { salesman?: string; customer?: string; status?: string; invoiceNo?: string } = {},
 ) {
   const allowedFields =
     "return_id,return_number,invoice_no,customer_code,salesman_id,total_amount,status,return_date,remarks,order_id,isThirdParty,created_at,price_type";
@@ -51,6 +102,8 @@ export async function getRawReturns(
     url += `&filter[customer_code][_eq]=${encodeURIComponent(filters.customer)}`;
   if (filters.status && filters.status !== "All")
     url += `&filter[status][_eq]=${filters.status}`;
+  if (filters.invoiceNo)
+    url += `&filter[invoice_no][_eq]=${encodeURIComponent(filters.invoiceNo)}`;
 
   return directusGet<{ data: Record<string, unknown>[]; meta?: { filter_count?: number } }>(url);
 }

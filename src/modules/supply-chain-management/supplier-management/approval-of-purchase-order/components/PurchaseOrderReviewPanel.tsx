@@ -26,6 +26,7 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
+    AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
     Pagination,
@@ -39,6 +40,7 @@ import {
 import { cn } from "@/lib/utils";
 
 import type { PurchaseOrderDetail, PaymentTerm } from "../types";
+import type { CompanyData } from "@/components/pdf-layout-design/types";
 
 import { toast } from "sonner";
 
@@ -183,11 +185,21 @@ export default function PurchaseOrderReviewPanel(props: {
 
     const [currentPage, setCurrentPage] = React.useState(1);
     const [pageSize, setPageSize] = React.useState(10);
+    const [companyData, setCompanyData] = React.useState<CompanyData | null>(null);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const poAny: any = React.useMemo(() => unwrap(props.po), [props.po]);
 
     React.useEffect(() => {
+        // Fetch company data for PDF
+        fetch("/api/pdf/company")
+            .then(res => res.json())
+            .then(data => {
+                const company = data?.data?.[0] || (Array.isArray(data.data) ? null : data.data);
+                setCompanyData(company);
+            })
+            .catch(err => console.error("Failed to fetch company data:", err));
+
         setMarkAsInvoice(!!(poAny?.is_invoice ?? poAny?.isInvoice ?? false));
         setPaymentTerm("cash_on_delivery");
         setTermsDays(30);
@@ -257,10 +269,18 @@ export default function PurchaseOrderReviewPanel(props: {
         return 0;
     }, [grossDirect, netAmount, discountAmount]);
 
+    const vatExclusive = React.useMemo(() => {
+        return netAmount / 1.12;
+    }, [netAmount]);
+
+    const vatAmountComputed = React.useMemo(() => {
+        return Math.max(0, netAmount - vatExclusive);
+    }, [netAmount, vatExclusive]);
+
     const ewtGoods = React.useMemo(() => {
         if (ewtDirect > 0) return ewtDirect;
-        return netAmount > 0 ? netAmount * 0.01 : 0;
-    }, [ewtDirect, netAmount]);
+        return vatExclusive > 0 ? vatExclusive * 0.01 : 0;
+    }, [ewtDirect, vatExclusive]);
 
     const totalAmount = React.useMemo(() => {
         if (totalDirect > 0) return totalDirect;
@@ -563,8 +583,8 @@ export default function PurchaseOrderReviewPanel(props: {
                                 {markAsInvoice ? (
                                     <>
                                         <div className="flex justify-between text-xs">
-                                            <span className="text-muted-foreground font-medium uppercase">VAT</span>
-                                            <span className="font-bold text-foreground">{fmt.format(vatAmount)}</span>
+                                            <span className="text-muted-foreground font-medium uppercase">VAT (12%)</span>
+                                            <span className="font-bold text-foreground">{fmt.format(vatAmount || vatAmountComputed)}</span>
                                         </div>
 
                                         <div className="flex justify-between text-xs">
@@ -573,7 +593,7 @@ export default function PurchaseOrderReviewPanel(props: {
                                         </div>
 
                                         <div className="rounded-md bg-background/60 border border-border/60 px-3 py-2 text-[11px] text-amber-600 dark:text-amber-400 font-bold italic">
-                                            Note: VAT and EWT are shown for receipt/invoice display purposes only. EWT is not yet deducted.
+                                            Note: VAT and EWT are shown for display purposes. EWT (1%) is calculated from the VAT-exclusive amount (Net / 1.12).
                                         </div>
                                     </>
                                 ) : null}
@@ -617,54 +637,77 @@ export default function PurchaseOrderReviewPanel(props: {
                                         Payment Term
                                     </div>
 
-                                    <div className="flex items-center gap-2">
-                                        <Select value={paymentTerm} onValueChange={(v) => setPaymentTerm(v as PaymentTerm)}>
-                                            <SelectTrigger className="h-10 w-[220px] rounded-xl">
-                                                <SelectValue placeholder="Select payment term" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="cash_with_order">Cash With Order</SelectItem>
-                                                <SelectItem value="cash_on_delivery">Cash On Delivery</SelectItem>
-                                                <SelectItem value="terms">Terms</SelectItem>
-                                            </SelectContent>
-                                        </Select>
+                                    <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground">
+                                        <div className="flex flex-wrap items-center gap-1.5 bg-muted/40 p-1 rounded-xl border border-border/40">
+                                            {[
+                                                { id: "cash_with_order", label: "Cash With Order" },
+                                                { id: "cash_on_delivery", label: "Cash On Delivery" },
+                                                { id: "terms", label: "Terms" },
+                                            ].map((term) => {
+                                                const active = paymentTerm === term.id;
+                                                return (
+                                                    <button
+                                                        key={term.id}
+                                                        type="button"
+                                                        onClick={() => setPaymentTerm(term.id as PaymentTerm)}
+                                                        className={cn(
+                                                            "px-3 h-8 text-[10px] font-black uppercase tracking-tight rounded-lg transition-all duration-200",
+                                                            active
+                                                                ? "bg-primary text-primary-foreground shadow-sm scale-[1.02]"
+                                                                : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                                                        )}
+                                                    >
+                                                        {term.label}
+                                                    </button>
+                                                );
+                                            })}
 
-                                        {paymentTerm === "terms" ? (
-                                            <div className="flex items-center gap-2">
-                                                <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                                                    Days
+                                            {paymentTerm === "terms" ? (
+                                                <div className="flex items-center gap-2 ml-2 pl-2 border-l border-border/50">
+                                                    <div className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+                                                        Days
+                                                    </div>
+                                                    <Input
+                                                        type="number"
+                                                        min={1}
+                                                        value={String(termsDays)}
+                                                        onChange={(e) => setTermsDays(Math.max(1, toNum(e.target.value)))}
+                                                        className="h-8 w-[80px] rounded-lg text-xs font-bold"
+                                                    />
                                                 </div>
-                                                <Input
-                                                    type="number"
-                                                    min={1}
-                                                    value={String(termsDays)}
-                                                    onChange={(e) => setTermsDays(Math.max(1, toNum(e.target.value)))}
-                                                    className="h-10 w-[110px] rounded-xl"
-                                                />
-                                            </div>
-                                        ) : null}
+                                            ) : null}
+                                        </div>
 
                                         {/* Added the Print button here */}
                                         <Button
                                             type="button"
                                             variant="outline"
                                             className="h-10 rounded-xl font-black uppercase tracking-wider"
-                                            disabled={!poAny?.purchase_order_id}
-                                            onClick={() => generatePurchaseOrderPdf(poAny, branchLabel, supplierName)}
+                                            disabled={!poAny?.purchase_order_id || !companyData}
+                                            onClick={async () => {
+                                                try {
+                                                    await generatePurchaseOrderPdf(poAny, branchLabel, supplierName, companyData as CompanyData);
+                                                } catch (err) {
+                                                    console.error("PDF Generation failed:", err);
+                                                    toast.error("Failed to generate PDF.");
+                                                }
+                                            }}
                                         >
                                             <Printer className="mr-2 h-4 w-4" />
                                             Print PO
                                         </Button>
 
                                         <AlertDialog open={confirmOpen} onOpenChange={(o) => !submitting && setConfirmOpen(o)}>
-                                            <Button
-                                                type="button"
-                                                className="h-10 rounded-xl font-black uppercase tracking-wider"
-                                                disabled={approveDisabled}
-                                                onClick={() => setConfirmOpen(true)}
-                                            >
-                                                {submitting ? "Approving..." : "Approve PO"}
-                                            </Button>
+                                            <AlertDialogTrigger asChild>
+                                                <Button
+                                                    type="button"
+                                                    className="h-10 rounded-xl font-black uppercase tracking-wider"
+                                                    disabled={approveDisabled}
+                                                    onClick={() => setConfirmOpen(true)}
+                                                >
+                                                    {submitting ? "Approving..." : "Approve PO"}
+                                                </Button>
+                                            </AlertDialogTrigger>
 
                                             <AlertDialogContent>
                                                 <AlertDialogHeader>

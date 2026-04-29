@@ -1,31 +1,45 @@
-/.github/ @Jakeeeey @ECuerdo
+/.github/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
 
-/src/app/(supply-chain-management)/scm/_components/ @Jakeeeey @ECuerdo
+/src/app/(customer-relationship-management)/crm/_components/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
 
-/src/app/(supply-chain-management)/layout.tsx @Jakeeeey @ECuerdo
+/src/app/(customer-relationship-management)/layout.tsx @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
 
-/src/app/api/auth/@Jakeeeey @ECuerdo
+/src/actions/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
 
-/src/app/(public)/ @Jakeeeey @ECuerdo
+/src/app/(customer-relationship-management)/crm/_components/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
 
-/src/app/globals.css @Jakeeeey @ECuerdo
+/src/app/(customer-relationship-management)/crm/[...slug]/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
 
-/src/app/layout.tsx @Jakeeeey @ECuerdo
+/src/app/layout.tsx @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
 
-/src/components/ui/ @Jakeeeey @ECuerdo
+/src/app/(public)/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
 
-/src/hooks/ @Jakeeeey @ECuerdo
+/src/app/api/auth/@Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
 
-/src/lib @Jakeeeey @ECuerdo
+/src/app/main-dashboard/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
 
-/components.json @Jakeeeey @ECuerdo
+/src/app/globals.css @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
 
-/eslint.config.mjs @Jakeeeey @ECuerdo
+/src/components/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
 
-/next.config.ts @Jakeeeey @ECuerdo
+/src/hooks/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
 
-/next-env.d.ts @Jakeeeey @ECuerdo
+/src/lib @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
 
-/postcss.config.mjs @Jakeeeey @ECuerdo
+/src/modules/cms/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
 
-/tsconfig.json @Jakeeeey @ECuerdo
+/src/types/ @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
+
+/components.json @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
+
+/eslint.config.mjs @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
+
+/next.config.ts @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
+
+/next-env.d.ts @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
+
+/package.json @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
+
+/postcss.config.mjs @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830
+
+/tsconfig.json @Jakeeeey @ECuerdo @Xerman09 @Erwinrillorta0830

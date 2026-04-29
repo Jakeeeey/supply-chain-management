@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowRight, Cuboid } from "lucide-react";
+import { ArrowRight, Cuboid, AlertCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { StockConversionProduct } from "../types";
 
@@ -55,23 +55,37 @@ export function StockConversionModal({
   );
 
   let convertedAmount = 0;
+  let wholeUnits = 0;
+  let actualSourceQtyUsed = 0;
+  let remainderSourceUnits = 0;
+
   if (qtyToConvert && targetUnit) {
     const sourceFactor = Number(product.conversionFactor) || 1;
     const targetFactor = Number(targetUnit.conversionFactor) || 1;
 
-    // Conversion formula: (Quantity * Source Factor) / Target Factor
-    // Example: 1 Box (24pcs) to Pack (6pcs) => (1 * 24) / 6 = 4 Packs
+    // 1. Total available base pieces if we converted the entire typed quantity
+    const totalBaseUnits = Number(qtyToConvert) * sourceFactor;
+
+    // 2. Conversion with rounding down
     if (targetFactor > 0) {
-      convertedAmount = (Number(qtyToConvert) * sourceFactor) / targetFactor;
-      if (convertedAmount % 1 !== 0) {
-        convertedAmount = Number(convertedAmount.toFixed(2));
-      }
+      convertedAmount = totalBaseUnits / targetFactor;
+      wholeUnits = Math.floor(convertedAmount);
+
+      // 3. How much of the source quantity is actually used to make those whole units
+      actualSourceQtyUsed = (wholeUnits * targetFactor) / sourceFactor;
+
+      // 4. What is left over in the source unit
+      remainderSourceUnits = Number(qtyToConvert) - actualSourceQtyUsed;
     }
   }
 
+  const totalBaseUnits = qtyToConvert ? Number(qtyToConvert) * (product.conversionFactor || 1) : 0;
+  const targetFactor = targetUnit ? Number(targetUnit.conversionFactor) || 1 : 1;
+  const isUomRequirementNotMet = !!(qtyToConvert && targetUnit && totalBaseUnits < targetFactor);
+
   const handleConfirm = () => {
-    if (qtyToConvert && targetUnit && convertedAmount > 0) {
-      onConfirm(Number(qtyToConvert), targetUnit, convertedAmount);
+    if (qtyToConvert && targetUnit && wholeUnits > 0) {
+      onConfirm(actualSourceQtyUsed, targetUnit, wholeUnits);
     }
   };
 
@@ -160,8 +174,7 @@ export function StockConversionModal({
                     {u.name}
                   </div>
                   <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-tighter">
-                    {/* Display generic info or leave empty if specific packaging info is no longer in schema */}
-                    Conversion Factor: {u.conversionFactor}
+                    UoM Count: {u.conversionFactor}
                   </div>
                 </div>
               ))}
@@ -174,21 +187,47 @@ export function StockConversionModal({
             </div>
           </div>
 
-          {convertedAmount > 0 && (
-            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-md p-3 flex items-center justify-between animate-in fade-in slide-in-from-top-1">
-              <div>
-                <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-tight">
-                  Converted Result
+            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-md p-3 flex flex-col gap-2 animate-in fade-in slide-in-from-top-1">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-tight">
+                    Converted Result
+                  </div>
+                  <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                    {wholeUnits}
+                  </div>
+                  <div className="text-xs font-bold text-emerald-600/80 uppercase tracking-tighter">
+                    {targetUnit?.name}(S)
+                  </div>
                 </div>
-                <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
-                  {convertedAmount}
-                </div>
-                <div className="text-xs font-bold text-emerald-600/80 uppercase tracking-tighter">
-                  {targetUnit?.name}(S)
+                <div className="bg-emerald-500/20 p-2 rounded-full text-emerald-600 dark:text-emerald-400">
+                  <ArrowRight className="w-5 h-5" />
                 </div>
               </div>
-              <div className="bg-emerald-500/20 p-2 rounded-full">
-                <ArrowRight className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+
+              {remainderSourceUnits > 0 && (
+                <div className="mt-1 pt-2 border-t border-emerald-500/10">
+                  <div className="text-[10px] text-amber-600 dark:text-amber-400 font-bold uppercase flex items-center gap-1.5 leading-none">
+                    <AlertCircle className="w-3 h-3" />
+                    Remaining stock: {remainderSourceUnits} {product.currentUnit}(s) will stay in inventory
+                  </div>
+                </div>
+              )}
+            </div>
+
+          {isUomRequirementNotMet && (
+            <div className="bg-destructive/10 border border-destructive/20 rounded-md p-3 flex items-start gap-3 animate-in fade-in slide-in-from-top-1">
+              <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <div className="text-xs font-bold text-destructive uppercase tracking-tight">
+                  Requirement Not Met
+                </div>
+                <div className="text-sm font-medium text-destructive leading-tight">
+                  Sorry you cannot convert this product you must meet the required quantity of it to convert.
+                </div>
+                <div className="text-[10px] text-destructive/70 font-bold uppercase">
+                  Need {targetFactor} base units, but you only have {totalBaseUnits}
+                </div>
               </div>
             </div>
           )}
@@ -205,7 +244,7 @@ export function StockConversionModal({
           <Button
             onClick={handleConfirm}
             disabled={
-              !qtyToConvert || !selectedTargetUnit || convertedAmount <= 0
+              !qtyToConvert || !selectedTargetUnit || wholeUnits <= 0 || isUomRequirementNotMet
             }
             className="bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-600 dark:hover:bg-blue-500 rounded-md font-bold text-xs uppercase tracking-widest transition-all shadow-md shadow-blue-500/20"
           >

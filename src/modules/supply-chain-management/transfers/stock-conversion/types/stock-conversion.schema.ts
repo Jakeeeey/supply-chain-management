@@ -17,6 +17,7 @@ export const stockConversionProductSchema = z.object({
   brand: z.string(),
   category: z.string(),
   productCode: z.string().optional(),
+  productName: z.string().optional(),
   productDescription: z.string(),
   family: z.string().optional(),
   conversionFactor: z.number().optional(), // multiplier vs base unit
@@ -26,6 +27,7 @@ export const stockConversionProductSchema = z.object({
   totalAmount: z.number(), // Qty * price per unit
   pricePerUnit: z.number(),
   inventoryLoaded: z.boolean().optional(),
+  inventoryError: z.boolean().optional(),
   
   // Available conversion targets mapped from units
   availableUnits: z.array(z.object({
@@ -49,6 +51,7 @@ export const stockConversionPayloadSchema = z.object({
   userId: z.number().min(1, "User ID is required"),
   pricePerUnit: z.number(),
   rfidTags: z.array(rfidTagSchema).default([]),
+  sourceRfidTags: z.array(z.string()).optional(),
 });
 
 export type StockConversionPayload = z.infer<typeof stockConversionPayloadSchema>;

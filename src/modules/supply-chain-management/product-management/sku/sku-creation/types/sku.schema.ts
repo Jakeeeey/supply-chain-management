@@ -44,7 +44,7 @@ export const skuSchema = z
 
     // UOM and Conversion
     base_unit: z.number().int().nullable().optional(), // Links to units master list
-    unit_of_measurement: z.number().int().nullable().optional(),
+    unit_of_measurement: z.union([z.number(), z.any()]).nullable().optional(),
     unit_of_measurement_count: z.number().int().nullable().optional(), // Conversion rate
 
     // Attributes for Variants

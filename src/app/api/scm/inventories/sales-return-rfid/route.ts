@@ -19,7 +19,46 @@ import {
   updateReturn,
   updateStatus,
 } from "@/modules/supply-chain-management/inventories/sales-return-rfid/services/sales-return-service";
-import { getUserIdFromToken } from "@/lib/auth-utils";
+/**
+ * Decodes the base64url payload of a JWT without verifying the signature.
+ */
+function decodeJwtPayload(token: string): any {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const base64Url = parts[1];
+    if (!base64Url) return null;
+
+    let base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    while (base64.length % 4) {
+      base64 += "=";
+    }
+
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join(""),
+    );
+    return JSON.parse(jsonPayload);
+  } catch (error) {
+    console.error("Failed to decode JWT payload:", error);
+    return null;
+  }
+}
+
+/**
+ * Helper to extract user ID from a token.
+ */
+function getUserIdFromToken(token: string | undefined): number | null {
+  if (!token) return null;
+  const payload = decodeJwtPayload(token);
+  if (!payload) return null;
+  const idValue = payload.id ?? payload.sub ?? payload.userId ?? payload.user_id;
+  if (idValue === undefined || idValue === null) return null;
+  const num = Number(idValue);
+  return isNaN(num) ? null : num;
+}
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -113,7 +152,10 @@ export async function GET(req: NextRequest) {
           );
         }
 
-        const rfidToken = req.cookies.get("vos_access_token")?.value;
+        let rfidToken = req.cookies.get("vos_access_token")?.value;
+        if (!rfidToken && process.env.NEXT_PUBLIC_AUTH_DISABLED === "true") {
+          rfidToken = "dev-mode-token"; // Placeholder when auth is disabled
+        }
         if (!rfidToken) {
           return json(
             { error: "Unauthorized: Missing access token" },
@@ -140,8 +182,11 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const token = req.cookies.get("vos_access_token")?.value;
-    const userId = getUserIdFromToken(token);
+    let userId = getUserIdFromToken(token);
     
+    if (!userId && process.env.NEXT_PUBLIC_AUTH_DISABLED === "true") {
+      userId = 1; // Default system user when auth is disabled
+    }
     if (!userId) {
       return json({ error: "Unauthorized: Invalid or missing session" }, 401);
     }
@@ -181,8 +226,11 @@ export async function PATCH(req: NextRequest) {
 
     // Default: full update
     const token = req.cookies.get("vos_access_token")?.value;
-    const userId = getUserIdFromToken(token);
+    let userId = getUserIdFromToken(token);
     
+    if (!userId && process.env.NEXT_PUBLIC_AUTH_DISABLED === "true") {
+      userId = 1; // Default system user when auth is disabled
+    }
     if (!userId) {
       return json({ error: "Unauthorized: Invalid or missing session" }, 401);
     }
