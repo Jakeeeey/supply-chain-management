@@ -201,6 +201,7 @@ export interface EnrichedApprovedPlan extends RawDispatchPlan {
   cluster_name: string;
   total_items: number;
   total_weight: number;
+  is_selectable: boolean;
 }
 
 /** Enriched detail row returned by `fetchPlanDetails`. */
@@ -208,6 +209,7 @@ export interface EnrichedPlanDetail {
   detail_id: number | string | undefined;
   sales_order_id?: number;
   invoice_id?: number;
+  invoice_ids?: number[];
   order_no?: string;
   order_status?: string;
   true_order_status?: string;

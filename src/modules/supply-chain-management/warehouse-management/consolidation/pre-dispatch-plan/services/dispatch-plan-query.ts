@@ -461,6 +461,7 @@ export const dispatchPlanQueryService = {
             customer?.customer_name || customer?.store_name || "\u2014",
           city: customer?.city ?? undefined,
           province: customer?.province ?? undefined,
+          brgy: customer?.brgy ?? undefined,
           amount:
             order?.allocated_amount ??
             order?.net_amount ??
@@ -491,13 +492,13 @@ export const dispatchPlanQueryService = {
     branchId?: number,
   ): Promise<SalesOrderOption[]> {
     // Step 1: Get allowed areas for the cluster
-    let allowedAreas: { province: string; city: string }[] = [];
+    let allowedAreas: { province: string; city: string; baranggay: string | null }[] = [];
     if (clusterId) {
-      const areasRes = await fetchItems<{ province: string; city: string }>(
+      const areasRes = await fetchItems<{ province: string; city: string; baranggay: string | null }>(
         "/items/area_per_cluster",
         {
           "filter[cluster_id][_eq]": clusterId,
-          fields: "province,city",
+          fields: "province,city,baranggay",
           limit: -1,
         },
       );
@@ -689,11 +690,28 @@ export const dispatchPlanQueryService = {
         if (!clusterId || !allowedAreas.length) return true;
         const customer = customerMap.get(o.customer_code);
         if (!customer) return false;
-        return allowedAreas.some(
-          (area) =>
-            area.province?.toUpperCase() === customer.province?.toUpperCase() &&
-            area.city?.toUpperCase() === customer.city?.toUpperCase(),
-        );
+
+        return allowedAreas.some((area) => {
+          // Province must match exactly
+          const provMatch =
+            area.province?.toUpperCase() === customer.province?.toUpperCase();
+          if (!provMatch) return false;
+
+          // If customer has a city, it must match area city (if area defines one)
+          if (customer.city && area.city) {
+            if (area.city.toUpperCase() !== customer.city.toUpperCase())
+              return false;
+          }
+
+          // If customer has a barangay, it must match area barangay (if area defines one)
+          if (customer.brgy && area.baranggay) {
+            if (area.baranggay.toUpperCase() !== customer.brgy.toUpperCase())
+              return false;
+          }
+
+          // If city/barangay are missing on customer side, or not defined in area, it's a match on province level
+          return true;
+        });
       })
       .map((o) => {
         const customer = customerMap.get(o.customer_code);
@@ -705,6 +723,7 @@ export const dispatchPlanQueryService = {
           store_name: customer?.store_name || undefined,
           city: customer?.city || undefined,
           province: customer?.province || undefined,
+          brgy: customer?.brgy || undefined,
           total_amount: o.total_amount,
           net_amount: o.net_amount,
           allocated_amount: o.allocated_amount,
