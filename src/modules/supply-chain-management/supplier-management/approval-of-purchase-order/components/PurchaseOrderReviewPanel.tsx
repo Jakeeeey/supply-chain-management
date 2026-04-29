@@ -195,36 +195,6 @@ export default function PurchaseOrderReviewPanel(props: {
 }) {
     const fmt = React.useMemo(() => money(), []);
 
-    const printPO = React.useCallback(async () => {
-        if (!props.po) return;
-        try {
-            // Fetch company data REQUIRED by MEN2 engine
-            let companyData: CompanyData = {} as CompanyData;
-            try {
-                const res = await fetch("/api/pdf/company");
-                if (res.ok) {
-                    const body = await res.json();
-                    companyData = Array.isArray(body?.data) ? body.data[0] : body?.data || {};
-                }
-            } catch (err) {
-                console.warn("Failed to fetch company data for PDF:", err);
-            }
-
-            // Using the new generated PDF engine
-            await generatePurchaseOrderPdf(
-                props.po as unknown as Record<string, unknown>,
-                "Approved Purchase Order",
-                supplierName,
-                companyData,
-                props.approverName || "—"
-            );
-        } catch (e: unknown) {
-            console.error("Print PO Failed", e);
-            toast.error("Failed to generate PDF.", {
-                description: String(e instanceof Error ? e.message : e)
-            });
-        }
-    }, [props.po, props.approverName]);
 
     const [markAsInvoice, setMarkAsInvoice] = React.useState(false);
     const [selectedPaymentTermId, setSelectedPaymentTermId] = React.useState<number | null>(null);
