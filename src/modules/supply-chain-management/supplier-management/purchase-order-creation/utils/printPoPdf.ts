@@ -5,6 +5,7 @@ export interface POCreationPrintData {
     poNumber: string;
     poDate: string;
     supplierName: string;
+    preparerName?: string;
     items: Array<{
         name: string;
         brand: string;
@@ -47,6 +48,7 @@ export async function printPOCreationPdf(data: POCreationPrintData) {
         const mappedPo = {
             poNumber: data.poNumber,
             date: data.poDate,
+            preparerName: data.preparerName,
             items: data.items.map(item => ({
                 name: item.name,
                 brand: item.brand,
