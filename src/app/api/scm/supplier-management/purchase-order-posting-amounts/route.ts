@@ -781,6 +781,13 @@ export async function GET() {
                 if (pid) products.add(pid);
                 if (bid) branches.add(bid);
             }
+            // Include products from POR rows (Extra items)
+            for (const r of porRows) {
+                const pid = toNum(r?.product_id);
+                const bid = toNum(r?.branch_id);
+                if (pid) products.add(pid);
+                if (bid) branches.add(bid);
+            }
 
             const lr = latestReceiptInfo(porRows);
             const rs = buildReceiptSummary(porRows);
@@ -1250,7 +1257,6 @@ export async function POST(req: NextRequest) {
                 }
 
                 await patchPOR(base, row.porId, { 
-                    isPosted: 1,
                     unit_price: unitPrice,
                     total_amount: lineNet,
                     discounted_amount: lineDisc,
@@ -1260,62 +1266,14 @@ export async function POST(req: NextRequest) {
                 });
             }
 
-            // Re-check fully received AFTER posting these rows
-            const updatedPorRows = porRows.map((r) => {
-                const wasPosted = toPost.find((p) => p.porId === toNum(r?.purchase_order_product_id));
-                return wasPosted ? { ...r, isPosted: 1 } : r;
-            });
-            const fully = isFullyReceived(poId, lines, updatedPorRows);
-            
-            try {
-                const poUpdate: Record<string, unknown> = { date_received: nowISO() };
-                if (fully) {
-                    // If fully received and all posted, we keep status 6 (Received)
-                    // The front-end will know it is "Closed" if unpostedReceiptsCount === 0
-                    poUpdate.inventory_status = 6;
-                } else {
-                    // Not fully received — mark as Partially Received
-                    poUpdate.inventory_status = 9;
-                }
-                await patchPO(base, poId, poUpdate);
-            } catch {}
+            // Removed: No longer updating inventory_status or received flags in the Amounts module
 
-            // Sync 'received' flag in POP based on POSTED quantities
-            const updatedPorIdsByKey = buildPorIdsByKey(updatedPorRows);
-            const popSyncPromises = lines.map(async (ln) => {
-                const pid = toNum(ln.product_id);
-                const bid = toNum(ln.branch_id ?? 0);
-                const k = keyLine(poId, pid, bid);
-                const pors = updatedPorIdsByKey.get(k) || [];
-                
-                const totalPosted = pors.reduce((sum, id) => {
-                    const row = updatedPorRows.find(r => toNum(r.purchase_order_product_id) === id && toNum(r.isPosted) === 1);
-                    return sum + (row ? toNum(row.received_quantity) : 0);
-                }, 0);
-                
-                const ordered = toNum(ln.ordered_quantity);
-                const shouldBeReceived = (totalPosted >= ordered && totalPosted > 0) || (ordered === 0 && totalPosted > 0);
-                const currentReceived = toNum(ln.received || 0);
-
-                if (shouldBeReceived && currentReceived !== 1) {
-                    await fetchJson(`${base}/items/${PO_PRODUCTS_COLLECTION}/${ln.purchase_order_product_id}`, {
-                        method: "PATCH", body: JSON.stringify({ received: 1 })
-                    }).catch(() => {});
-                } else if (!shouldBeReceived && currentReceived === 1) {
-                    await fetchJson(`${base}/items/${PO_PRODUCTS_COLLECTION}/${ln.purchase_order_product_id}`, {
-                        method: "PATCH", body: JSON.stringify({ received: 0 })
-                    }).catch(() => {});
-                }
-            });
-            await Promise.all(popSyncPromises);
 
             return ok({
                 ok: true,
                 postedAt: nowISO(),
                 receiptNo,
-                fullyPosted: fully,
-                // Let the UI know this was a partial post so it can show the right message
-                partialPost: !fully,
+                message: "Amounts updated successfully.",
             });
         }
 
@@ -1390,7 +1348,6 @@ export async function POST(req: NextRequest) {
                     const lineNet = Number((lineGross - lineDisc).toFixed(2));
 
                     await patchPOR(base, porId, { 
-                        isPosted: 1,
                         unit_price: uPrice,
                         total_amount: lineNet,
                         discounted_amount: lineDisc,
@@ -1399,56 +1356,14 @@ export async function POST(req: NextRequest) {
                 }
             }
 
-            const fully = isFullyReceived(poId, lines, porRows);
-            try {
-                const poUpdate: Record<string, unknown> = { date_received: nowISO() };
-                if (fully) {
-                    // Keep at status 6 (Received)
-                    poUpdate.inventory_status = 6;
-                } else {
-                    // Partial post: keep at 9 (Partially Received)
-                    poUpdate.inventory_status = 9;
-                }
-                await patchPO(base, poId, poUpdate);
-            } catch {}
+            // Removed: No longer updating inventory_status or received flags in the Amounts module
 
-            // Sync 'received' flag in POP based on POSTED quantities
-            // After post_all, we need to re-fetch porRows to get the updated isPosted status
-            const updatedPorRowsAll = await fetchPORByPOIds(base, [poId]);
-            const updatedPorIdsByKeyAll = buildPorIdsByKey(updatedPorRowsAll);
-            const popSyncPromisesAll = lines.map(async (ln) => {
-                const pid = toNum(ln.product_id);
-                const bid = toNum(ln.branch_id ?? 0);
-                const k = keyLine(poId, pid, bid);
-                const pors = updatedPorIdsByKeyAll.get(k) || [];
-                
-                const totalPosted = pors.reduce((sum, id) => {
-                    const row = updatedPorRowsAll.find(r => toNum(r.purchase_order_product_id) === id && toNum(r.isPosted) === 1);
-                    return sum + (row ? toNum(row.received_quantity) : 0);
-                }, 0);
-                
-                const ordered = toNum(ln.ordered_quantity);
-                const shouldBeReceived = (totalPosted >= ordered && totalPosted > 0) || (ordered === 0 && totalPosted > 0);
-                const currentReceived = toNum(ln.received || 0);
-
-                if (shouldBeReceived && currentReceived !== 1) {
-                    await fetchJson(`${base}/items/${PO_PRODUCTS_COLLECTION}/${ln.purchase_order_product_id}`, {
-                        method: "PATCH", body: JSON.stringify({ received: 1 })
-                    }).catch(() => {});
-                } else if (!shouldBeReceived && currentReceived === 1) {
-                    await fetchJson(`${base}/items/${PO_PRODUCTS_COLLECTION}/${ln.purchase_order_product_id}`, {
-                        method: "PATCH", body: JSON.stringify({ received: 0 })
-                    }).catch(() => {});
-                }
-            });
-            await Promise.all(popSyncPromisesAll);
 
             return ok({
                 ok: true,
                 postedAt: nowISO(),
-                fullyPosted: fully,
-                partialPost: !fully,
                 postedCount: toPost.length,
+                message: "Amounts updated successfully.",
             });
         }
 

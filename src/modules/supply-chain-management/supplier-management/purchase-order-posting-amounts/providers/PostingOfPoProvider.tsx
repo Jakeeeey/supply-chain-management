@@ -7,7 +7,7 @@ import type { POListItem, PurchaseOrder, DiscountType } from "../types";
 // ✅ Use the existing global toaster (Sonner) — do NOT mount another Toaster here
 import { toast } from "sonner";
 
-const API = "/api/scm/supplier-management/purchase-order-posting";
+const API = "/api/scm/supplier-management/purchase-order-posting-amounts";
 
 async function asJson(r: Response) {
     const j = await r.json().catch(() => ({}));
@@ -95,7 +95,7 @@ export function PostingOfPoProvider({ children }: { children: React.ReactNode })
         refreshList();
 
         // also fetch discount types
-        fetch("/api/scm/supplier-management/purchase-order-posting/discount-types")
+        fetch("/api/scm/supplier-management/purchase-order-posting-amounts/discount-types")
             .then(r => r.json())
             .then(j => {
                 if (j?.data && Array.isArray(j.data)) {

@@ -97,12 +97,29 @@ function resolveDiscountPercent(dt: Record<string, unknown> | null | undefined):
     const name = toStr(dt.discount_type || dt.name);
 
     if (lines.length > 0) {
-        return calculateDiscountFromLines(lines);
+        return calculateDiscountFromLines(lines as any[]);
     }
     if (totalPct > 0) {
         return totalPct;
     }
     return deriveDiscountPercentFromCode(name);
+}
+
+async function fetchDiscountTypesMap(base: string) {
+    const map = new Map<number, { name: string; pct: number }>();
+    try {
+        const fields = encodeURIComponent("id,discount_type,total_percent,line_per_discount_type.line_id.*");
+        const url = `${base}/items/discount_type?limit=-1&fields=${fields}`;
+        const j = await fetchJson<{ data: any[] }>(url);
+        for (const dt of (j?.data ?? [])) {
+            const id = toNum(dt.id);
+            if (!id) continue;
+            map.set(id, { name: toStr(dt.discount_type), pct: resolveDiscountPercent(dt) });
+        }
+    } catch (e: unknown) {
+        console.error("[posting-po] Failed to fetch discount types:", e);
+    }
+    return map;
 }
 function chunk<T>(arr: T[], size: number) {
     const out: T[][] = [];
@@ -159,6 +176,7 @@ interface PORRow {
     withholding_amount: number | string;
     unit_price: number | string;
     total_amount: number | string;
+    discount_type?: number | string | null;
 }
 interface ReceivingItem {
     receiving_item_id: number;
@@ -169,7 +187,7 @@ interface ReceivingItem {
 }
 
 const POR_SAFE_FIELDS =
-    "purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted,discounted_amount,vat_amount,withholding_amount,total_amount,unit_price";
+    "purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted,discounted_amount,vat_amount,withholding_amount,total_amount,unit_price,discount_type";
 
 // =====================
 // FETCHERS
@@ -781,6 +799,13 @@ export async function GET() {
                 if (pid) products.add(pid);
                 if (bid) branches.add(bid);
             }
+            // Include products from POR rows (Extra items)
+            for (const r of porRows) {
+                const pid = toNum(r?.product_id);
+                const bid = toNum(r?.branch_id);
+                if (pid) products.add(pid);
+                if (bid) branches.add(bid);
+            }
 
             const lr = latestReceiptInfo(porRows);
             const rs = buildReceiptSummary(porRows);
@@ -792,28 +817,9 @@ export async function GET() {
             const unpostedRows = porRows.filter(r => toNum(r.isPosted) === 0 && (toNum(r.received_quantity) > 0 || toStr(r.receipt_no)));
             let listTotal = 0;
             if (unpostedRows.length > 0) {
-                const sid = toNum(po?.supplier_name);
-                const psl = sid ? await fetchProductSupplierLinks(base, sid) : new Map();
-                const poDType = po?.discount_type as Record<string, unknown> | null | undefined;
-                const poDiscPct = resolveDiscountPercent(poDType);
-
+                // Inventory module trusts stored values in POR for listTotal
                 for (const r of unpostedRows) {
-                    const pid = toNum(r.product_id);
-                    const bid = toNum(r.branch_id);
-                    const qty = effectiveReceivedQty(r);
-                    const matchLine = lines.find(l => toNum(l.product_id) === pid && toNum(l.branch_id) === bid);
-                    const p = productsMap.get(pid);
-
-                    // Live sourcing for unposted rows in the list view
-                    const unitPrice = toNum(p?.cost_per_unit) || toNum(matchLine?.unit_price) || 0;
-                    const link = psl.get(pid);
-                    const discPct = link ? resolveDiscountPercent(link.discount_type) : poDiscPct;
-
-                    const lineGross = unitPrice * qty;
-                    const lineDisc = Number((lineGross * (discPct / 100)).toFixed(2));
-                    const lineNet = Number((lineGross - lineDisc).toFixed(2));
-                    
-                    listTotal += lineNet; // simplified for listing
+                    listTotal += toNum(r.total_amount);
                 }
             } else {
                 listTotal = Number((toNum(po?.total_amount) - toNum(po?.discounted_amount)).toFixed(2));
@@ -902,14 +908,9 @@ export async function POST(req: NextRequest) {
 
             const productsMap = await fetchProductsMap(base, productIds);
             const branchesMap = await fetchBranchesMap(base, branchIds);
-            const productSupplierLinks = sid ? await fetchProductSupplierLinks(base, sid) : new Map();
-
-            // ── DEBUG: Log what productSupplierLinks contains ──
-            console.log("[DEBUG open_po] supplierId (sid):", sid);
-            console.log("[DEBUG open_po] productSupplierLinks size:", productSupplierLinks.size);
-            for (const [k, v] of productSupplierLinks.entries()) {
-                console.log(`[DEBUG open_po] PSL entry: pid=${k}, discount_type=`, JSON.stringify(v?.discount_type));
-            }
+            const discountTypesMap = await fetchDiscountTypesMap(base);
+            // Removed: Live Sourcing of productSupplierLinks is no longer done here.
+            // The Inventory module trusts the financials saved by the Amounts module.
 
             // ── Resolve PO-level discount percent (Total Percent Source of Truth) ──
             const poDType = po?.discount_type as Record<string, unknown> | null;
@@ -968,47 +969,23 @@ export async function POST(req: NextRequest) {
                 let discountTypeId = "";
                 let resolvedLabel = "—";
 
-                let itemDiscPct = 0;
-                const psl = productSupplierLinks.get(pid);
-
-                // Priority 1: Product-Supplier Link
-                if (psl) {
-                    const linkDt = psl.discount_type as Record<string, unknown> | null | undefined;
-                    const linkName = toStr(linkDt?.discount_type || linkDt?.name);
-                    const linkId = toNum(linkDt?.id || linkDt);
-                    itemDiscPct = resolveDiscountPercent(linkDt);
-                    if (itemDiscPct > 0 || linkName) {
-                        discountTypeId = linkId ? String(linkId) : "";
-                        resolvedLabel = linkName || `${Number(itemDiscPct.toFixed(2))}% Disc`;
-                    }
+                const linePorRows = porRows.filter(r => porIdsForLine.includes(toNum(r.purchase_order_product_id)));
+                const srcRow = linePorRows.find(r => toNum(r.unit_price) > 0) || linePorRows.find(r => toNum(r.isPosted) === 1) || linePorRows[0];
+                
+                discountTypeId = toStr(srcRow?.discount_type);
+                if (discountTypeId) {
+                    const dt = discountTypesMap.get(toNum(discountTypeId));
+                    resolvedLabel = toStr(dt?.name, "—");
                 }
+                
+                unitPrice = toNum(srcRow?.unit_price) || toNum(ln?.unit_price) || toNum(p?.cost_per_unit);
+                lineGrossAmt = linePorRows.reduce((sum, r) => sum + (toNum(r.unit_price) * effectiveReceivedQty(r)), 0);
+                lineDiscount = linePorRows.reduce((sum, r) => sum + toNum(r.discounted_amount), 0);
+                lineNet = linePorRows.reduce((sum, r) => sum + toNum(r.total_amount), 0);
 
-                // Priority 2: PO Header (Fallback)
-                if (itemDiscPct === 0 && poDiscountPercent > 0) {
-                    itemDiscPct = poDiscountPercent;
-                    resolvedLabel = poDiscountName ? poDiscountName : `${Number(poDiscountPercent.toFixed(2))}% PO Disc`;
-                    discountTypeId = poDType?.id ? String(poDType.id) : "";
-                }
-
-                if (isPoFrozen) {
-                    const linePorRows = porRows.filter(r => porIdsForLine.includes(toNum(r.purchase_order_product_id)));
-                    const srcRow = linePorRows.find(r => toNum(r.isPosted) === 1) || linePorRows.find(r => toNum(r.isPosted) === 0 && !!toStr(r.receipt_no));
-                    
-                    unitPrice = toNum(srcRow?.unit_price) || toNum(ln?.unit_price) || toNum(p?.cost_per_unit);
-                    lineGrossAmt = linePorRows.reduce((sum, r) => sum + (toNum(r.unit_price) * effectiveReceivedQty(r)), 0);
-                    lineDiscount = Number((lineGrossAmt * (itemDiscPct / 100)).toFixed(2));
-                    lineNet = Number((lineGrossAmt - lineDiscount).toFixed(2));
-
-                    if (receivedQty === 0 && expected > 0) {
-                        lineGrossAmt = unitPrice * expected;
-                        lineDiscount = Number((lineGrossAmt * (itemDiscPct / 100)).toFixed(2));
-                        lineNet = Number((lineGrossAmt - lineDiscount).toFixed(2));
-                    }
-                } else {
-                    unitPrice = toNum(p?.cost_per_unit) || toNum(ln?.unit_price) || 0;
-                    lineGrossAmt = unitPrice * (receivedQty || (expected > 0 ? expected : 0));
-                    lineDiscount = Number((lineGrossAmt * (itemDiscPct / 100)).toFixed(2));
-                    lineNet = Number((lineGrossAmt - lineDiscount).toFixed(2));
+                if (receivedQty === 0 && expected > 0) {
+                    lineGrossAmt = unitPrice * expected;
+                    lineNet = lineGrossAmt;
                 }
 
                 const item: PostingPOItem = {
@@ -1208,55 +1185,9 @@ export async function POST(req: NextRequest) {
             const poDType = po?.discount_type as Record<string, unknown> | null | undefined;
             const poDiscountPercent = resolveDiscountPercent(poDType);
 
-            const psl = sid ? await fetchProductSupplierLinks(base, sid) : new Map();
-            const productIds = Array.from(new Set(toPost.map(x => x.productId)));
-            const productsMap = await fetchProductsMap(base, productIds);
-
             for (const row of toPost) {
-                const ln = lines.find(l => toNum(l.product_id) === row.productId && toNum(l.branch_id) === row.branchId);
-                const p = productsMap.get(row.productId);
-                
-        let itemDiscPct = 0;
-        let discountTypeId = "";
-        const pid = toNum(row.productId);
-        const link = psl.get(pid);
-        if (link) {
-            const linkDt = link.discount_type as Record<string, unknown> | null | undefined;
-            const linkName = toStr(linkDt?.discount_type || linkDt?.name);
-            const linkId = toNum(linkDt?.id || linkDt);
-
-            itemDiscPct = resolveDiscountPercent(linkDt);
-
-            if (itemDiscPct > 0 || linkName) {
-                discountTypeId = linkId ? String(linkId) : "";
-            }
-        }
-                
-                if (itemDiscPct === 0 && poDiscountPercent > 0) {
-                    itemDiscPct = poDiscountPercent;
-                    discountTypeId = poDType?.id ? String(poDType.id) : "";
-                }
-
-                const unitPrice = toNum(p?.cost_per_unit) || toNum(ln?.unit_price);
-                const lineGross = unitPrice * row.qty;
-                const lineDisc = Number((lineGross * (itemDiscPct / 100)).toFixed(2));
-                const lineNet = Number((lineGross - lineDisc).toFixed(2));
-                
-                let rowVat = 0, rowWht = 0;
-                if (poIsInvoice) {
-                    const lineVatExcl = Number((lineNet / 1.12).toFixed(2));
-                    rowVat = Number((lineNet - lineVatExcl).toFixed(2));
-                    rowWht = Number((lineVatExcl * 0.01).toFixed(2));
-                }
-
                 await patchPOR(base, row.porId, { 
                     isPosted: 1,
-                    unit_price: unitPrice,
-                    total_amount: lineNet,
-                    discounted_amount: lineDisc,
-                    discount_type: discountTypeId || null,
-                    vat_amount: rowVat,
-                    withholding_amount: rowWht,
                 });
             }
 
@@ -1356,45 +1287,11 @@ export async function POST(req: NextRequest) {
                 .filter((r) => toNum(r?.isPosted) === 0 && (toNum(r.received_quantity) > 0 || toStr(r.receipt_no)));
 
             if (toPost.length > 0) {
-                const sid = toNum(po?.supplier_name);
-                const psl = sid ? await fetchProductSupplierLinks(base, sid) : new Map();
-                const poDType = po?.discount_type as Record<string, unknown> | null | undefined;
-                const poDiscPct = resolveDiscountPercent(poDType);
-                const productIds = Array.from(new Set(toPost.map(r => toNum(r.product_id)).filter(Boolean)));
-                const productsMap = await fetchProductsMap(base, productIds);
-
                 for (const r of toPost) {
                     const porId = toNum(r.purchase_order_product_id);
                     if (!porId) continue;
-
-                    const pid = toNum(r.product_id);
-                    const p = productsMap.get(pid);
-                    const qty = effectiveReceivedQty(r);
-                    const uPrice = toNum(p?.cost_per_unit) || toNum(r.unit_price);
-                    
-                    const link = psl.get(pid);
-                    let discPct = 0;
-                    let discTypeId = null;
-
-                    if (link) {
-                        const linkDt = link.discount_type as Record<string, unknown> | null | undefined;
-                        discPct = resolveDiscountPercent(linkDt);
-                        discTypeId = linkDt?.id || linkDt;
-                    } else if (poDiscPct > 0) {
-                        discPct = poDiscPct;
-                        discTypeId = poDType?.id || poDType;
-                    }
-
-                    const lineGross = uPrice * qty;
-                    const lineDisc = Number((lineGross * (discPct / 100)).toFixed(2));
-                    const lineNet = Number((lineGross - lineDisc).toFixed(2));
-
                     await patchPOR(base, porId, { 
                         isPosted: 1,
-                        unit_price: uPrice,
-                        total_amount: lineNet,
-                        discounted_amount: lineDisc,
-                        discount_type: discTypeId || null,
                     });
                 }
             }
