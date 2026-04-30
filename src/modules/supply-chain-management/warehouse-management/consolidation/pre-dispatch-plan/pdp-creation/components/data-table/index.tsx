@@ -10,6 +10,7 @@ interface PDPCreationTableProps {
   totalCount: number;
   isLoading: boolean;
   onEdit: (plan: DispatchPlan) => void;
+  onViewRemarks: (remarks: string) => void;
   onSearch: (value: string) => void;
   actionComponent?: React.ReactNode;
 }
@@ -23,12 +24,13 @@ export function PDPCreationTable({
   totalCount,
   isLoading,
   onEdit,
+  onViewRemarks,
   onSearch,
   actionComponent,
 }: PDPCreationTableProps) {
   const columns = React.useMemo(
-    () => getPDPCreationColumns({ onEdit }),
-    [onEdit],
+    () => getPDPCreationColumns({ onEdit, onViewRemarks }),
+    [onEdit, onViewRemarks],
   );
 
   return (

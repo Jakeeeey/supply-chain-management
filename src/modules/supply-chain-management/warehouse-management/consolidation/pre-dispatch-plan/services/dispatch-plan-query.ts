@@ -40,7 +40,8 @@ export const dispatchPlanQueryService = {
     };
 
     if (status) {
-      params["filter[status][_eq]"] = status;
+      const op = status.includes(",") ? "_in" : "_eq";
+      params[`filter[status][${op}]`] = status;
     }
 
     if (search) {
@@ -668,7 +669,7 @@ export const dispatchPlanQueryService = {
       const { data: assignedDetails } = await fetchItemsInChunks<{
         sales_order_id: number;
       }>("/items/dispatch_plan_details", "sales_order_id", allOrderIds, {
-        "filter[dispatch_id][status][_nin]": "Dispatched,Cancelled,Delivered",
+        "filter[dispatch_id][status][_nin]": "Dispatched,Cancelled,Delivered,Rejected",
         "filter[sales_order_id][order_status][_neq]": "Not Fulfilled",
         fields: "sales_order_id",
         limit: -1,
