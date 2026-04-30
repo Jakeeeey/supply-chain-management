@@ -68,6 +68,7 @@ export type ReceivingPODetail = {
     }>;
     createdAt: string;
     priceType?: string;
+    isInvoice?: boolean;
 };
 
 type ScanRFIDResult = {
@@ -116,6 +117,7 @@ export type ReceiptSavedInfo = {
     isFullyReceived: boolean;
     savedAt: number;
     receiverName?: string;
+    isInvoice?: boolean;
 };
 
 // ✅ MERGED: Types for on-the-fly tagging modal
@@ -191,13 +193,19 @@ type Ctx = {
 
     // ✅ EXTRA: Add Product via Barcode
     lookupProduct: (barcode: string) => Promise<{ productId: string; name: string; barcode: string; unitPrice: number } | null>;
-    addExtraProductLocally: (item: { productId: string; name: string; barcode: string; branchId: string; branchName: string; unitPrice?: number }) => void;
+    addExtraProductLocally: (item: { productId: string; name: string; barcode: string; branchId: string; branchName: string; unitPrice?: number; discountType?: string; discountPercent?: number; uom?: string; sku?: string; }) => void;
+    removeExtraProductLocally: (productId: string) => void;
+
+    // ✅ CHECKLIST: Product verification (mirrors manual module)
+    verifiedProductIds: string[];
+    toggleProductVerification: (productId: string) => void;
+    getSupplierProducts: (supplierId: string) => Promise<{ productId: string; name: string; sku: string; barcode: string; unitPrice: number; uom: string; discountType: string; discountPercent: number; }[]>;
 
     // ✅ METADATA (Batch, Lot, Expiry)
     metaDataByPorId: Record<string, { batchNo?: string; lotNo?: string; lotId?: string; expiryDate?: string }>;
     setMetaDataByPorId: React.Dispatch<React.SetStateAction<Record<string, { batchNo?: string; lotNo?: string; lotId?: string; expiryDate?: string }>>>;
 
-    // ✅ NEW FLOW: Product Barcode Verification
+    // ✅ LEGACY COMPAT: kept for TagRFIDStep internal usage
     verifiedBarcodes: string[];
     verifyBarcode: (barcode: string) => Promise<boolean>;
     markProductAsVerified: (productId: string) => void;
@@ -850,7 +858,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
 
 
 
-    const addExtraProductLocally = React.useCallback((item: { productId: string; name: string; barcode: string; branchId: string; branchName: string; unitPrice?: number }) => {
+    const addExtraProductLocally = React.useCallback((item: { productId: string; name: string; barcode: string; branchId: string; branchName: string; unitPrice?: number; discountType?: string; discountPercent?: number; uom?: string; sku?: string; }) => {
         setSelectedPO(prev => {
             if (!prev) return prev;
             const updated = { ...prev };
@@ -864,21 +872,25 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
             
             const existingItem = branchAlloc.items.find(i => i.productId === item.productId);
             if (!existingItem) {
+                const uPrice = item.unitPrice || 0;
+                const dPct = item.discountPercent || 0;
+                const dAmt = Number((uPrice * (dPct / 100)).toFixed(2));
+                
                 branchAlloc.items = [...branchAlloc.items, {
-                    id: String(item.productId),
+                    id: `${item.productId}-${item.branchId}`,
                     productId: String(item.productId),
                     name: item.name,
-                    barcode: item.barcode,
-                    uom: "—",
+                    barcode: item.sku || item.barcode,
+                    uom: item.uom || "BOX",
                     expectedQty: 0,
                     receivedQty: 0,
                     requiresRfid: true,
                     taggedQty: 0,
                     rfids: [],
                     isReceived: false,
-                    unitPrice: item.unitPrice || 0,
-                    discountType: "Standard",
-                    discountAmount: 0,
+                    unitPrice: uPrice,
+                    discountType: item.discountType || "Standard",
+                    discountAmount: dAmt,
                     netAmount: 0,
                     isExtra: true
                 }];
@@ -887,7 +899,53 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
             updated.allocations = allocs;
             return updated;
         });
+        // Auto-verify the extra product
+        setVerifiedBarcodes(prev => [...new Set([...prev, item.productId])]);
     }, []);
+
+    const removeExtraProductLocally = React.useCallback((productId: string) => {
+        setSelectedPO(prev => {
+            if (!prev) return prev;
+            const updated = { ...prev };
+            updated.allocations = updated.allocations.map(a => ({
+                ...a,
+                items: a.items.filter(i => i.productId !== productId || !i.isExtra)
+            }));
+            return updated;
+        });
+        setVerifiedBarcodes(prev => prev.filter(id => id !== productId));
+        setScannedCountByPorId(prev => {
+            const next = { ...prev };
+            Object.keys(next).forEach(k => {
+                if (k.startsWith(`${productId}-`) || k === productId) delete next[k];
+            });
+            return next;
+        });
+        setLocalScannedRfids(prev => prev.filter(r => r.productId !== productId));
+        setActivity(prev => prev.filter(a => a.productId !== productId));
+    }, []);
+
+    const toggleProductVerification = React.useCallback((productId: string) => {
+        setVerifiedBarcodes(prev => {
+            if (prev.includes(productId)) return prev.filter(id => id !== productId);
+            return [...prev, productId];
+        });
+    }, []);
+
+    const getSupplierProducts = React.useCallback(async (supplierId: string) => {
+        try {
+            const r = await fetch(API_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "get_supplier_products", supplierId }),
+            });
+            const j = await asJson(r);
+            return j?.data || [];
+        } catch {
+            return [];
+        }
+    }, []);
+
 
     // ✅ NEW FLOW: Product Barcode Verify Function
     const verifyBarcode = React.useCallback(async (barcode: string) => {
@@ -1062,7 +1120,8 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                 receiptDate: receiptDate.trim(),
                 items: savedItems,
                 isFullyReceived: isFullyReceivedNow,
-                savedAt: Date.now()
+                savedAt: Date.now(),
+                isInvoice: selectedPO?.isInvoice ?? false
             });
 
             refreshList();
@@ -1131,7 +1190,14 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
 
         lookupProduct,
         addExtraProductLocally,
+        removeExtraProductLocally,
 
+        // ✅ CHECKLIST
+        verifiedProductIds: verifiedBarcodes,
+        toggleProductVerification,
+        getSupplierProducts,
+
+        // ✅ LEGACY COMPAT (used by TagRFIDStep)
         verifiedBarcodes,
         verifyBarcode,
         markProductAsVerified,
