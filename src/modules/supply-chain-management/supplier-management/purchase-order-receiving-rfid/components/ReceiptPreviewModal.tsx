@@ -23,6 +23,7 @@ interface ReceiptPreviewModalProps {
     poNumber: string;
     supplierName: string;
     priceType: string;
+    isInvoice?: boolean;
 }
 
 export function ReceiptPreviewModal({
@@ -32,6 +33,7 @@ export function ReceiptPreviewModal({
     poNumber,
     supplierName,
     priceType,
+    isInvoice,
 }: ReceiptPreviewModalProps) {
     const [companyData, setCompanyData] = React.useState<CompanyData | null>(null);
 
@@ -101,7 +103,7 @@ export function ReceiptPreviewModal({
                             <div className="font-black text-sm truncate" title={poNumber}>{poNumber}</div>
                         </div>
                         <div className="space-y-1">
-                            <div className="text-muted-foreground font-bold uppercase tracking-widest text-[9px]">Receipt No.</div>
+                            <div className="text-muted-foreground font-bold uppercase tracking-widest text-[9px]">{isInvoice ? "Invoice No." : "Receipt No."}</div>
                             <div className="font-black text-sm text-blue-600 underline underline-offset-4">{data.receiptNo}</div>
                         </div>
                         <div className="space-y-1">

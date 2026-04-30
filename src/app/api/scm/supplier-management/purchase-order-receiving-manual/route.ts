@@ -667,28 +667,7 @@ export async function POST(req: NextRequest) {
 
             await fetchJson(`${base}/items/${PO_COLLECTION}/${thePoId}`, { method: "PATCH", body: JSON.stringify(patchPO) }).catch(() => {});
 
-            // ✅ Sync the "received" flag in purchase_order_products for each line
-            for (const ln of fLines) {
-                const pid = toNum(ln.product_id);
-                const bid = toNum(ln.branch_id ?? 0);
-                const k = keyLine(thePoId, pid, bid);
-                const pors = updatedPorIdsByKey.get(k) || [];
-                const totalRec = pors.reduce((sum, id) => sum + effectiveReceivedQty(fPors.find(r => toNum(r.purchase_order_product_id) === id)), 0);
-                const ordered = toNum(ln.ordered_quantity);
-                
-                const shouldBeReceived = (totalRec >= ordered && totalRec > 0) || (ordered === 0 && totalRec > 0);
-                const currentReceived = toNum((ln as Record<string, unknown>).received || 0);
 
-                if (shouldBeReceived && currentReceived !== 1) {
-                    await fetchJson(`${base}/items/${PO_PRODUCTS_COLLECTION}/${ln.purchase_order_product_id}`, {
-                        method: "PATCH", body: JSON.stringify({ received: 1 })
-                    }).catch(() => {});
-                } else if (!shouldBeReceived && currentReceived === 1) {
-                    await fetchJson(`${base}/items/${PO_PRODUCTS_COLLECTION}/${ln.purchase_order_product_id}`, {
-                        method: "PATCH", body: JSON.stringify({ received: 0 })
-                    }).catch(() => {});
-                }
-            }
 
             // ✅ Return the full updated PO detail so the frontend can render the Receipt Preview
             // Include ALL product IDs: from PO lines AND from receiving rows (for extra products)

@@ -10,7 +10,7 @@ export default function PostingOfProductsModule() {
         <PostingOfPoProvider>
             <div className="w-full min-w-0 space-y-4">
                 <div className="space-y-1">
-                    <div className="text-2xl font-black">Purchase Order Post Inventory</div>
+                    <div className="text-2xl font-black">Purchase Order Post Amounts</div>
                     <div className="text-sm text-muted-foreground">
                         Post receipts after Receiving. This confirms receiving is finalized.
                     </div>

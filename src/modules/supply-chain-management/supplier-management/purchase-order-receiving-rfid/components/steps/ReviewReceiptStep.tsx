@@ -371,21 +371,27 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                                 <span className="text-[11px] font-bold uppercase tracking-wider">Net Amount:</span>
                                 <span className="font-bold text-slate-700">{formatPHP(financials.net)}</span>
                             </div>
-                            <div className="flex justify-between items-center text-slate-600">
-                                <span className="text-[11px] font-bold uppercase tracking-wider">VAT Details:</span>
-                                <span className="font-bold text-slate-700">{financials.isExclusive ? "+" : ""}{formatPHP(financials.vatAmount)}</span>
-                            </div>
-                            <div className="flex justify-between items-center text-red-600 pb-2 border-b">
-                                <span className="text-[11px] font-bold uppercase tracking-wider">EWT:</span>
-                                <span className="font-bold">{formatPHP(financials.whtAmount)}</span>
-                            </div>
+                            {selectedPO?.isInvoice && (
+                                <>
+                                    <div className="flex justify-between items-center text-slate-600">
+                                        <span className="text-[11px] font-bold uppercase tracking-wider">VAT Details:</span>
+                                        <span className="font-bold text-slate-700">{financials.isExclusive ? "+" : ""}{formatPHP(financials.vatAmount)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-red-600 pb-2 border-b">
+                                        <span className="text-[11px] font-bold uppercase tracking-wider">EWT:</span>
+                                        <span className="font-bold">{formatPHP(financials.whtAmount)}</span>
+                                    </div>
+                                </>
+                            )}
                             <div className="flex justify-between items-center pt-4">
                                 <span className="font-black text-sm uppercase tracking-widest text-slate-900 underline decoration-indigo-500 underline-offset-4">Grand Total:</span>
                                 <span className="font-black text-xl text-indigo-600 drop-shadow-sm">{formatPHP(financials.grandTotal)}</span>
                             </div>
-                            <p className="text-[10px] text-muted-foreground mt-2 italic leading-tight text-right">
-                                Note: VAT and EWT figures are for reference and have not been deducted from the total.
-                            </p>
+                            {selectedPO?.isInvoice && (
+                                <p className="text-[10px] text-muted-foreground mt-2 italic leading-tight text-right">
+                                    Note: VAT and EWT figures are for reference and have not been deducted from the total.
+                                </p>
+                            )}
                         </div>
                     </div>
 
@@ -445,6 +451,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                     poNumber={selectedPO?.poNumber || "N/A"}
                     supplierName={selectedPO?.supplier?.name || "N/A"}
                     priceType={selectedPO?.priceType || "VAT Inclusive"}
+                    isInvoice={receiptSaved?.isInvoice ?? selectedPO?.isInvoice ?? false}
                 />
             )}
  

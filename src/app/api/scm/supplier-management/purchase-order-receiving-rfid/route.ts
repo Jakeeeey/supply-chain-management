@@ -647,6 +647,9 @@ export async function POST(req: NextRequest) {
                 status: receivingStatusFrom(poId, lines, porRows),
                 allocations: Array.from(allocationsMap.entries()).map(([branchId, items]) => ({ branch: { id: String(branchId || "0"), name: branchesMap.get(branchId) || `Branch ${branchId}` }, items })),
                 priceType: toStr(po.price_type, "Cost Per Unit"),
+                isInvoice: (toNum((po as unknown as Record<string, unknown>)?.receiving_type) === 2) ||
+                           (toNum((po as unknown as Record<string, unknown>)?.vat_amount) > 0) ||
+                           (toNum((po as unknown as Record<string, unknown>)?.withholding_tax_amount) > 0),
                 createdAt: po.date_encoded ? new Date(po.date_encoded).toISOString() : new Date().toISOString(),
                 history
             });
