@@ -11,6 +11,7 @@ import type {
     Product,
     Supplier,
     DiscountType,
+    PaymentTerm,
 } from "./types";
 
 import {
@@ -213,7 +214,10 @@ function SupplierSelect(props: {
     return (
         <div className="space-y-1.5 w-full min-w-0">
             <div className="flex items-center justify-between gap-2 text-xs font-bold uppercase text-muted-foreground tracking-tight">
-                <span>Supplier</span>
+                <div className="flex items-center gap-2">
+                    <span>Supplier</span>
+                    <Badge variant="outline" className="text-[9px] font-black uppercase bg-primary/5 text-primary border-primary/20 px-1.5 h-4 flex items-center leading-none">Trade Only</Badge>
+                </div>
                 {props.value ? (
                     <button
                         type="button"
@@ -235,7 +239,7 @@ function SupplierSelect(props: {
                         disabled={props.disabled}
                     >
                         <div className="flex items-center gap-2 min-w-0">
-              <span className="truncate text-xs font-bold">
+              <span className="text-xs font-bold text-wrap">
                 {props.value?.name ?? "Select supplier"}
               </span>
                             {props.value?.id ? (
@@ -287,7 +291,7 @@ function SupplierSelect(props: {
                                                         </div>
 
                                                         <div className="min-w-0 flex-1">
-                                                            <div className="text-xs font-bold truncate">
+                                                            <div className="text-xs font-bold text-wrap">
                                                                 {s.name}
                                                             </div>
                                                         </div>
@@ -369,7 +373,7 @@ function BranchMultiSelect(props: {
                         className="w-full justify-between h-11 rounded-xl min-w-0"
                         disabled={props.disabled}
                     >
-                        <span className="truncate text-xs font-bold">{label}</span>
+                        <span className="text-xs font-bold text-wrap">{label}</span>
                         <ChevronDown className="w-4 h-4 opacity-60 shrink-0" />
                     </Button>
                 </PopoverTrigger>
@@ -447,10 +451,10 @@ function BranchMultiSelect(props: {
                                                         </div>
 
                                                         <div className="min-w-0 flex-1">
-                                                            <div className="text-xs font-black truncate">
+                                                            <div className="text-xs font-black text-wrap">
                                                                 {b.code}
                                                             </div>
-                                                            <div className="text-[10px] text-muted-foreground truncate">
+                                                            <div className="text-[10px] text-muted-foreground text-wrap">
                                                                 {b.name}
                                                             </div>
                                                         </div>
@@ -468,7 +472,7 @@ function BranchMultiSelect(props: {
     );
 }
 
-export default function CreatePurchaseOrderModule() {
+export default function CreatePurchaseOrderModule({ encoderId, preparerName }: { encoderId?: number; preparerName?: string; }) {
     const [isLoading, setIsLoading] = React.useState(true);
     const [isSaving, setIsSaving] = React.useState(false);
     const [error, setError] = React.useState<string>("");
@@ -477,6 +481,8 @@ export default function CreatePurchaseOrderModule() {
     const [branches, setBranches] = React.useState<Array<{ id: string; code: string; name: string }>>([]);
 
     const [discountTypes, setDiscountTypes] = React.useState<DiscountType[]>([]);
+    const [paymentTerms, setPaymentTerms] = React.useState<PaymentTerm[]>([]);
+    const [selectedPaymentTermId, setSelectedPaymentTermId] = React.useState<number | null>(null);
 
     const [selectedSupplier, setSelectedSupplier] = React.useState<Supplier | null>(null);
     const [selectedBranchIds, setSelectedBranchIds] = React.useState<string[]>([]);
@@ -484,7 +490,6 @@ export default function CreatePurchaseOrderModule() {
 
     const [allProducts, setAllProducts] = React.useState<Product[]>([]);
 
-    const [selectedSupplierType, setSelectedSupplierType] = React.useState<"ALL" | "TRADE" | "NON-TRADE">("TRADE");
 
     const [pickerOpen, setPickerOpen] = React.useState(false);
     const [pickerBranchId, setPickerBranchId] = React.useState<string>("");
@@ -527,6 +532,7 @@ export default function CreatePurchaseOrderModule() {
                     provider.fetchSuppliers(),
                     provider.fetchBranches(),
                     provider.fetchDiscountTypes(),
+                    provider.fetchPaymentTerms(),
                 ]);
 
                 if (!alive) return;
@@ -546,6 +552,13 @@ export default function CreatePurchaseOrderModule() {
                     setDiscountTypes([]);
                     console.warn("Discount types failed:", results[2].reason);
                 }
+
+                if (results[3].status === "fulfilled") {
+                    setPaymentTerms(results[3].value ?? []);
+                } else {
+                    setPaymentTerms([]);
+                    console.warn("Payment terms failed:", results[3].reason);
+                }
             } catch (e: unknown) {
                 if (!alive) return;
                 const err = e as Error;
@@ -562,9 +575,8 @@ export default function CreatePurchaseOrderModule() {
     }, []);
 
     const filteredSuppliers = React.useMemo(() => {
-        if (selectedSupplierType === "ALL") return suppliers;
-        return suppliers.filter((s) => s.supplierType === selectedSupplierType.toUpperCase());
-    }, [suppliers, selectedSupplierType]);
+        return suppliers.filter((s) => s.supplierType === "TRADE");
+    }, [suppliers]);
 
     // supplier change: fetch products + product_per_supplier links then merge discountTypeId
     React.useEffect(() => {
@@ -860,6 +872,7 @@ export default function CreatePurchaseOrderModule() {
                 purchase_order_no: poNumber,
                 supplier_name: Number(selectedSupplier.id),
                 is_invoice: isInvoice,
+                payment_type: selectedPaymentTermId,
 
                 date: dateOnly,
                 date_encoded: nowISO,
@@ -872,6 +885,7 @@ export default function CreatePurchaseOrderModule() {
                 total_amount: financials.total,
 
                 inventory_status: 1,
+                encoder_id: encoderId,
 
                 poNumber,
                 poDate,
@@ -919,7 +933,7 @@ export default function CreatePurchaseOrderModule() {
         } finally {
             setIsSaving(false);
         }
-    }, [selectedSupplier, allItemsFlat, poNumber, poDate, poDateISO, allocations, financials, isInvoice]);
+    }, [selectedSupplier, allItemsFlat, poNumber, poDate, poDateISO, allocations, financials, isInvoice, encoderId, selectedPaymentTermId]);
 
     const pickerBranchLabel = React.useMemo(() => {
         const b = allocations.find((x) => x.branchId === pickerBranchId);
@@ -986,50 +1000,30 @@ export default function CreatePurchaseOrderModule() {
 
             <Separator />
 
-            {/* ✅ Optimized 3-Column Layout */}
+            {/* ✅ Optimized 2-Column Layout */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-end w-full min-w-0">
-                {/* 1) SUPPLIER TYPE FILTER (3/12) */}
-                <div className="lg:col-span-3 min-w-0 space-y-1.5 flex flex-col justify-end">
-                    <div className="text-[10px] font-black uppercase text-muted-foreground tracking-widest ml-1">
-                        Supplier Type
-                    </div>
-                    <div className="flex gap-1 bg-muted/40 p-1 rounded-xl border border-border/40 h-11 items-center backdrop-blur-sm">
-                        {["TRADE", "NON-TRADE", "ALL"].map((type) => {
-                            const active = selectedSupplierType === type;
-                            return (
-                                <button
-                                    key={type}
-                                    type="button"
-                                    onClick={() => {
-                                         
-                                        setSelectedSupplierType(type as any);
-                                        if (selectedSupplier && type !== "ALL" && selectedSupplier.supplierType !== type) {
-                                            setSelectedSupplier(null);
-                                            setAllocations([]);
-                                            setSelectedBranchIds([]);
-                                        }
-                                    }}
-                                    className={cn(
-                                        "flex-1 h-full px-2 text-[9px] font-black uppercase tracking-tighter rounded-lg transition-all duration-200",
-                                        active
-                                            ? "bg-primary text-primary-foreground shadow-md scale-[1.02]"
-                                            : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                                    )}
-                                >
-                                    {type.replace("-", " ")}
-                                </button>
-                            );
-                        })}
-                    </div>
-                </div>
-
-                {/* 2) SUPPLIER SELECT (4/12) */}
-                <div className="lg:col-span-4 min-w-0">
+                {/* 1) SUPPLIER SELECT (5/12) */}
+                <div className="lg:col-span-5 min-w-0">
                     <SupplierSelect
                         suppliers={filteredSuppliers}
                         value={selectedSupplier}
                         onChange={(s) => {
                             setSelectedSupplier(s);
+                            
+                            // Auto-resolve payment term from supplier string
+                            if (s?.terms) {
+                                const matched = paymentTerms.find(pt => 
+                                    pt.payment_name.toLowerCase().trim() === s.terms.toLowerCase().trim()
+                                );
+                                if (matched) {
+                                    setSelectedPaymentTermId(matched.id);
+                                } else {
+                                    setSelectedPaymentTermId(null);
+                                }
+                            } else {
+                                setSelectedPaymentTermId(null);
+                            }
+
                             setAllocations([]);
                             setSelectedBranchIds([]);
                             setPickerOpen(false);
@@ -1040,8 +1034,8 @@ export default function CreatePurchaseOrderModule() {
                     />
                 </div>
 
-                {/* 3) DELIVERY BRANCHES (5/12) */}
-                <div className="lg:col-span-5 min-w-0">
+                {/* 2) DELIVERY BRANCHES (7/12) */}
+                <div className="lg:col-span-7 min-w-0">
                     <BranchMultiSelect
                         branches={branches}
                         value={selectedBranchIds}
@@ -1130,8 +1124,12 @@ export default function CreatePurchaseOrderModule() {
                 discountTypes={discountTypes}
                 isInvoice={isInvoice}
                 setIsInvoice={setIsInvoice}
+                paymentTerms={paymentTerms}
+                selectedPaymentTermId={selectedPaymentTermId}
+                setSelectedPaymentTermId={setSelectedPaymentTermId}
                 isLocked={isLocked}
                 onReset={() => window.location.reload()}
+                preparerName={preparerName}
             />
 
             <ProductPickerDialog

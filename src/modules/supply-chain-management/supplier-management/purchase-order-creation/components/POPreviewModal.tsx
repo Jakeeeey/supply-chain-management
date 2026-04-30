@@ -45,6 +45,7 @@ interface POPreviewModalProps {
         vat: number;
         ewt: number;
         total: number;
+        preparerName?: string;
     };
 }
 
@@ -145,7 +146,7 @@ export function POPreviewModal({
                                     <Package className="h-5 w-5 text-primary" />
                                 </div>
                                 <div className="min-w-0">
-                                    <p className="text-xs font-black uppercase tracking-tight truncate text-foreground">
+                                    <p className="text-xs font-black uppercase tracking-tight text-foreground">
                                         {data.supplierName}
                                     </p>
                                     <Badge variant="outline" className="text-[9px] font-bold h-4 px-1.5 mt-1 border-primary/30 text-primary uppercase">
@@ -194,7 +195,7 @@ export function POPreviewModal({
                                                     {item.category || "—"}
                                                 </td>
                                                 <td className="px-4 py-3 text-[9px] font-black text-foreground uppercase tracking-tight max-w-[200px]">
-                                                    <div className="truncate" title={item.name}>{item.name}</div>
+                                                    <div className="" title={item.name}>{item.name}</div>
                                                 </td>
                                                 <td className="px-4 py-3 text-center">
                                                     <span className="inline-flex px-1.5 py-0.5 bg-secondary text-secondary-foreground text-[7px] font-black rounded uppercase">

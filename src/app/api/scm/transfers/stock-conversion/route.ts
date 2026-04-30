@@ -1,65 +1,63 @@
 import { NextRequest, NextResponse } from "next/server";
-import { handleApiError } from "@/modules/supply-chain-management/transfers/stock-conversion/utils/error-handler";
-import { fetchStockList, convertStock, fetchInventoryMap } from "@/modules/supply-chain-management/transfers/stock-conversion/services/stock-conversion";
-import { stockConversionPayloadSchema } from "@/modules/supply-chain-management/transfers/stock-conversion/types/stock-conversion.schema";
+import { stockConversionService, stockConversionRepo } from "@/modules/supply-chain-management/transfers/stock-conversion/services";
 
 export const runtime = "nodejs";
+export const revalidate = 0;
 
 export async function GET(req: NextRequest) {
   try {
-    const allCookiesObj = req.cookies.getAll();
-    const springToken = req.cookies.get('springboot_token')?.value || 
-                       req.cookies.get('vos_access_token')?.value;
-    
-    console.log(`[Stock-Conversion API] All Cookies:`, allCookiesObj.map(c => `${c.name}=${c.value.substring(0, 5)}...`));
-    console.log(`[Stock-Conversion API] GET Request URL: ${req.url}`);
-    
+    const springToken = req.cookies.get('springboot_token')?.value || req.cookies.get('vos_access_token')?.value;
     const { searchParams } = new URL(req.url);
     const type = searchParams.get("type");
     const branchId = searchParams.get("branchId") ? Number(searchParams.get("branchId")) : undefined;
     
-    // Filters for inventory
-    const filters = {
-      supplierShortcut: searchParams.get("supplierShortcut") || undefined,
-      productCategory: searchParams.get("productCategory") || undefined,
-      unitName: searchParams.get("unitName") || undefined,
-      productBrand: searchParams.get("productBrand") || undefined,
-      productIds: searchParams.get("productIds")?.split(",").map(Number).filter(n => !isNaN(n)),
-    };
-
-    // Staged loading support
+    // 1. Inventory Fetch
     if (type === "inventory") {
-        console.log(`[Stock-Conversion API] Background inventory fetch for branch ${branchId || 'ALL'}. Filters: ${JSON.stringify(filters)}. Token present: ${!!springToken}`);
-        try {
-            const data = await fetchInventoryMap(springToken, branchId, filters);
-            console.log("[Stock-Conversion API] Background inventory fetch SUCCESS");
-            return NextResponse.json({ data });
-        } catch (e: unknown) {
-            const err = e as Error;
-            console.error("[Stock-Conversion API] Background inventory fetch FAILED:", err.message);
-            throw err;
-        }
+        const queryParams = searchParams.toString().replace(/type=inventory&?/, "").replace(/branchId=\d+&?/, "");
+        const data = await stockConversionRepo.fetchInventory(springToken, branchId, queryParams || undefined);
+        return NextResponse.json({ data }, {
+          headers: { "Cache-Control": "no-store, max-age=0" }
+        });
     }
 
-    console.log("[Stock-Conversion API] Initial product fetch requested");
-    const page = searchParams.get("page") ? Number(searchParams.get("page")) : 1;
-    const limit = searchParams.get("limit") ? Number(searchParams.get("limit")) : 20;
+    // 2. Product List Fetch
+    const page = Number(searchParams.get("page") || 1);
+    const limit = Number(searchParams.get("limit") || 20);
+    const hasStock = searchParams.get("hasStock") === "true";
     const offset = (page - 1) * limit;
 
-    const data = await fetchStockList(limit, offset, filters);
-    return NextResponse.json(data);
+    // Filter building
+    const filters: Record<string, string> = {};
+    searchParams.forEach((val, key) => {
+      if (!["page", "limit", "branchId", "hasStock", "type"].includes(key)) {
+        filters[key] = val;
+      }
+    });
+
+    const data = await stockConversionService.getStockList(limit, offset, branchId, hasStock, filters, springToken);
+    return NextResponse.json(data, {
+      headers: { "Cache-Control": "no-store, max-age=0" }
+    });
   } catch (error: unknown) {
-    return handleApiError(error);
+    const err = error as { message?: string; status?: number };
+    console.error("[API Error] Stock Conversion Route:", err);
+    return NextResponse.json(
+      { error: err.message || "Internal Server Error" },
+      { status: err.status || 500 }
+    );
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const validated = stockConversionPayloadSchema.parse(body);
-    const result = await convertStock(validated);
-    return NextResponse.json({ data: result });
+    const data = await stockConversionService.executeConversion(body);
+    return NextResponse.json(data);
   } catch (error: unknown) {
-    return handleApiError(error);
+    const err = error as { message?: string; status?: number };
+    return NextResponse.json(
+      { error: err.message || "Conversion failed" },
+      { status: err.status || 500 }
+    );
   }
 }
