@@ -258,6 +258,7 @@ type PoProductRow = {
     unit_price?: number;
     total_amount?: number;
     discount_type?: number | string | null;
+    received?: number | string | null;
 };
 
 async function fetchPOProductsByPOIds(base: string, poIds: number[]) {
@@ -267,7 +268,7 @@ async function fetchPOProductsByPOIds(base: string, poIds: number[]) {
         const url =
             `${base}/items/${PO_PRODUCTS_COLLECTION}?limit=-1` +
             `&filter[purchase_order_id][_in]=${encodeURIComponent(ids.join(","))}` +
-            `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,ordered_quantity,unit_price,total_amount`;
+            `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,ordered_quantity,unit_price,total_amount,received`;
         const j = await fetchJson(url) as { data: PoProductRow[] };
         rows.push(...(Array.isArray(j?.data) ? j.data : []));
     }
@@ -278,7 +279,7 @@ async function fetchPOProductsByPOId(base: string, poId: number) {
     const url =
         `${base}/items/${PO_PRODUCTS_COLLECTION}?limit=-1` +
         `&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}` +
-        `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,ordered_quantity,unit_price,total_amount`;
+        `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,ordered_quantity,unit_price,total_amount,received`;
     const j = await fetchJson(url) as { data: PoProductRow[] };
     return (Array.isArray(j?.data) ? j.data : []) as PoProductRow[];
 }
@@ -934,7 +935,11 @@ export async function POST(req: NextRequest) {
 
             const allKeys = new Set<string>();
             lines.forEach(ln => allKeys.add(`${toNum(ln.product_id)}-${toNum(ln.branch_id)}`));
-            porRows.forEach(r => allKeys.add(`${toNum(r.product_id)}-${toNum(r.branch_id)}`));
+            porRows.forEach(r => {
+                if (toNum(r.received_quantity) > 0 || toStr(r.receipt_no)) {
+                    allKeys.add(`${toNum(r.product_id)}-${toNum(r.branch_id)}`);
+                }
+            });
 
             for (const keyStr of allKeys) {
                 const [pid, bid] = keyStr.split("-").map(Number);
@@ -1275,6 +1280,35 @@ export async function POST(req: NextRequest) {
                 await patchPO(base, poId, poUpdate);
             } catch {}
 
+            // Sync 'received' flag in POP based on POSTED quantities
+            const updatedPorIdsByKey = buildPorIdsByKey(updatedPorRows);
+            const popSyncPromises = lines.map(async (ln) => {
+                const pid = toNum(ln.product_id);
+                const bid = toNum(ln.branch_id ?? 0);
+                const k = keyLine(poId, pid, bid);
+                const pors = updatedPorIdsByKey.get(k) || [];
+                
+                const totalPosted = pors.reduce((sum, id) => {
+                    const row = updatedPorRows.find(r => toNum(r.purchase_order_product_id) === id && toNum(r.isPosted) === 1);
+                    return sum + (row ? toNum(row.received_quantity) : 0);
+                }, 0);
+                
+                const ordered = toNum(ln.ordered_quantity);
+                const shouldBeReceived = (totalPosted >= ordered && totalPosted > 0) || (ordered === 0 && totalPosted > 0);
+                const currentReceived = toNum(ln.received || 0);
+
+                if (shouldBeReceived && currentReceived !== 1) {
+                    await fetchJson(`${base}/items/${PO_PRODUCTS_COLLECTION}/${ln.purchase_order_product_id}`, {
+                        method: "PATCH", body: JSON.stringify({ received: 1 })
+                    }).catch(() => {});
+                } else if (!shouldBeReceived && currentReceived === 1) {
+                    await fetchJson(`${base}/items/${PO_PRODUCTS_COLLECTION}/${ln.purchase_order_product_id}`, {
+                        method: "PATCH", body: JSON.stringify({ received: 0 })
+                    }).catch(() => {});
+                }
+            });
+            await Promise.all(popSyncPromises);
+
             return ok({
                 ok: true,
                 postedAt: nowISO(),
@@ -1378,6 +1412,37 @@ export async function POST(req: NextRequest) {
                 await patchPO(base, poId, poUpdate);
             } catch {}
 
+            // Sync 'received' flag in POP based on POSTED quantities
+            // After post_all, we need to re-fetch porRows to get the updated isPosted status
+            const updatedPorRowsAll = await fetchPORByPOIds(base, [poId]);
+            const updatedPorIdsByKeyAll = buildPorIdsByKey(updatedPorRowsAll);
+            const popSyncPromisesAll = lines.map(async (ln) => {
+                const pid = toNum(ln.product_id);
+                const bid = toNum(ln.branch_id ?? 0);
+                const k = keyLine(poId, pid, bid);
+                const pors = updatedPorIdsByKeyAll.get(k) || [];
+                
+                const totalPosted = pors.reduce((sum, id) => {
+                    const row = updatedPorRowsAll.find(r => toNum(r.purchase_order_product_id) === id && toNum(r.isPosted) === 1);
+                    return sum + (row ? toNum(row.received_quantity) : 0);
+                }, 0);
+                
+                const ordered = toNum(ln.ordered_quantity);
+                const shouldBeReceived = (totalPosted >= ordered && totalPosted > 0) || (ordered === 0 && totalPosted > 0);
+                const currentReceived = toNum(ln.received || 0);
+
+                if (shouldBeReceived && currentReceived !== 1) {
+                    await fetchJson(`${base}/items/${PO_PRODUCTS_COLLECTION}/${ln.purchase_order_product_id}`, {
+                        method: "PATCH", body: JSON.stringify({ received: 1 })
+                    }).catch(() => {});
+                } else if (!shouldBeReceived && currentReceived === 1) {
+                    await fetchJson(`${base}/items/${PO_PRODUCTS_COLLECTION}/${ln.purchase_order_product_id}`, {
+                        method: "PATCH", body: JSON.stringify({ received: 0 })
+                    }).catch(() => {});
+                }
+            });
+            await Promise.all(popSyncPromisesAll);
+
             return ok({
                 ok: true,
                 postedAt: nowISO(),
@@ -1420,33 +1485,45 @@ export async function POST(req: NextRequest) {
             }
 
             // 4. Reset each target POR row: clear quantities, financials, and receipt metadata
+            const lines = await fetchPOProductsByPOId(base, poId);
             const targetPorIds: number[] = [];
+            const targetPopIds: number[] = [];
+
             for (const r of targetRows) {
                 const porId = toNum(r?.purchase_order_product_id);
                 if (!porId) continue;
                 targetPorIds.push(porId);
 
-                await patchPOR(base, porId, {
-                    received_quantity: 0,
-                    receipt_no: null,
-                    receipt_date: null,
-                    received_date: null,
-                    discounted_amount: 0,
-                    vat_amount: 0,
-                    withholding_amount: 0,
-                    total_amount: 0,
-                });
-            }
-
-            // 4.5. Delete associated RFID tags (both new POR and legacy POP linkages)
-            const lines = await fetchPOProductsByPOId(base, poId);
-            
-            const targetPopIds: number[] = [];
-            for (const r of targetRows) {
                 const pop = lines.find(ln => toNum(ln.product_id) === toNum(r.product_id) && toNum(ln.branch_id) === toNum(r.branch_id));
                 const popId = toNum(pop?.purchase_order_product_id);
                 if (popId) targetPopIds.push(popId);
+
+                if (pop) {
+                    await patchPOR(base, porId, {
+                        received_quantity: 0,
+                        receipt_no: null,
+                        receipt_date: null,
+                        received_date: null,
+                        discounted_amount: 0,
+                        vat_amount: 0,
+                        withholding_amount: 0,
+                        total_amount: 0,
+                    });
+                } else {
+                    // Extra product: delete completely to prevent ghost records
+                    try {
+                        await fetch(`${base}/items/${POR_COLLECTION}`, {
+                            method: "DELETE",
+                            headers: directusHeaders(),
+                            body: JSON.stringify([porId]),
+                        });
+                    } catch (err) {
+                        console.error("Failed to delete extra POR item during revert:", err);
+                    }
+                }
             }
+
+            // 4.5. Delete associated RFID tags (legacy POP linkages)
 
             const allLinkIds = [...targetPorIds, ...targetPopIds];
 
@@ -1499,6 +1576,32 @@ export async function POST(req: NextRequest) {
             try {
                 await patchPO(base, poId, poUpdate);
             } catch {}
+
+            // 6. Update 'received' flag in purchase_order_products
+            // Since we reverted, re-evaluate if the PO products are fully posted
+            const updatedPorIdsByKeyRevert = buildPorIdsByKey(updatedPorRows);
+            const popSyncPromisesRevert = lines.map(async (ln) => {
+                const pid = toNum(ln.product_id);
+                const bid = toNum(ln.branch_id ?? 0);
+                const k = keyLine(poId, pid, bid);
+                const pors = updatedPorIdsByKeyRevert.get(k) || [];
+                
+                const totalPosted = pors.reduce((sum, id) => {
+                    const row = updatedPorRows.find(r => toNum(r.purchase_order_product_id) === id && toNum(r.isPosted) === 1);
+                    return sum + (row ? toNum(row.received_quantity) : 0);
+                }, 0);
+                
+                const ordered = toNum(ln.ordered_quantity);
+                const shouldBeReceived = (totalPosted >= ordered && totalPosted > 0) || (ordered === 0 && totalPosted > 0);
+                const currentReceived = toNum(ln.received || 0);
+
+                if (!shouldBeReceived && currentReceived === 1) {
+                    await fetchJson(`${base}/items/${PO_PRODUCTS_COLLECTION}/${ln.purchase_order_product_id}`, {
+                        method: "PATCH", body: JSON.stringify({ received: 0 })
+                    }).catch(() => {});
+                }
+            });
+            await Promise.all(popSyncPromisesRevert);
 
             return ok({
                 ok: true,
