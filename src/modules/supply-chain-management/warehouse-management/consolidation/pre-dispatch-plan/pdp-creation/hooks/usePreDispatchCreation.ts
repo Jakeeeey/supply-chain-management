@@ -62,7 +62,7 @@ export function usePreDispatchCreation() {
     setError(null);
     try {
       const params = new URLSearchParams({
-        status: "Pending",
+        status: "Pending,Rejected",
         limit: "-1",
       });
 
