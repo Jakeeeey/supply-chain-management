@@ -75,9 +75,10 @@ function buildHeaderUserFromToken(token: string | null | undefined) {
 }
 
 export default async function Page() {
-    // ✅ Next.js cookies() is async
     const cookieStore = await cookies();
     const token = cookieStore.get(COOKIE_NAME)?.value ?? null;
+    const payload = token ? decodeJwtPayload(token) : null;
+    const receiverId = Number(payload?.sub) || undefined;
 
     const headerUser = buildHeaderUserFromToken(token);
 
@@ -126,7 +127,7 @@ export default async function Page() {
             <ScrollArea className="min-h-0 flex-1">
                 <div className="p-4">
                     {/* ✅ Purchase Order UI (Create / Approval / Receiving / Posting) */}
-                    <ReceivingProductsModule />
+                    <ReceivingProductsModule receiverId={receiverId} receiverName={headerUser.name} />
                 </div>
             </ScrollArea>
         </div>

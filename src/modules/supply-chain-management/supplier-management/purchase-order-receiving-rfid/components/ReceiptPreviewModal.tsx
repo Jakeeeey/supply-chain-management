@@ -13,7 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Download, FileText, X } from "lucide-react";
 import { ReceiptSavedInfo } from "../providers/ReceivingProductsProvider";
-import { generateOfficialSupplierReceiptV5 } from "../utils/printUtils";
+import { generateReceivingPdf } from "../utils/generateReceivingPdf";
+import { CompanyData } from "@/components/pdf-layout-design/types";
 
 interface ReceiptPreviewModalProps {
     isOpen: boolean;
@@ -21,6 +22,7 @@ interface ReceiptPreviewModalProps {
     data: ReceiptSavedInfo;
     poNumber: string;
     supplierName: string;
+    priceType: string;
 }
 
 export function ReceiptPreviewModal({
@@ -29,29 +31,46 @@ export function ReceiptPreviewModal({
     data,
     poNumber,
     supplierName,
+    priceType,
 }: ReceiptPreviewModalProps) {
+    const [companyData, setCompanyData] = React.useState<CompanyData | null>(null);
+
+    React.useEffect(() => {
+        fetch("/api/pdf/company")
+            .then(res => res.json())
+            .then(d => {
+                const company = d?.data?.[0] || (Array.isArray(d.data) ? null : d.data);
+                setCompanyData(company);
+            })
+            .catch(err => console.error("Failed to fetch company data:", err));
+    }, []);
+
     if (!data) return null;
 
     const handleDownload = async () => {
-        await generateOfficialSupplierReceiptV5({
+        if (!companyData) return;
+        await generateReceivingPdf({
             poNumber,
             supplierName,
             receiptNo: data.receiptNo,
             receiptDate: data.receiptDate,
             receiptType: data.receiptType,
+            branchLabel: "All Branches",
             isFullyReceived: data.isFullyReceived,
+            priceType: priceType,
             items: data.items.map((it) => ({
                 name: it.name,
                 barcode: it.barcode,
                 expectedQty: it.expectedQty,
-                receivedQtyAtStart: it.receivedQtyAtStart,
                 receivedQtyNow: it.receivedQtyNow,
-                rfids: it.rfids,
-                lotId: it.lotId,
+                unitPrice: it.unitPrice || 0,
+                discountAmount: it.discountAmount || 0,
                 batchNo: it.batchNo,
-                expiryDate: it.expiryDate
+                lotId: it.lotId,
+                expiryDate: it.expiryDate,
+                uom: it.uom,
             })),
-        });
+        }, companyData);
     };
 
     return (
@@ -149,12 +168,12 @@ export function ReceiptPreviewModal({
                                                             )}
                                                         </div>
                                                         <div className="flex flex-wrap gap-1 mt-2">
-                                                            {it.rfids.map((code, ri) => (
+                                                            {(it.rfids || []).map((code, ri) => (
                                                                 <span key={ri} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-muted/50 border border-primary/5 text-muted-foreground">
                                                                     {code}
                                                                 </span>
                                                             ))}
-                                                            {it.rfids.length === 0 && (
+                                                            {(it.rfids || []).length === 0 && (
                                                                 <span className="text-[10px] italic text-muted-foreground">Waiting for verification...</span>
                                                             )}
                                                         </div>

@@ -239,6 +239,7 @@ export function DispatchCreationModal({
       ...values,
       invoices: planDetails.map((d, index) => ({
         invoice_id: d.invoice_id,
+        invoice_ids: d.invoice_ids,
         invoice_no: d.order_no,
         sequence: index + 1,
         remarks: d.remarks,

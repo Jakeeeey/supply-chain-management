@@ -149,11 +149,12 @@ function AvailableOrderCard({
         </div>
       </div>
 
-      {/* Row 4: Location */}
       <div className="flex items-center gap-1 mt-1.5 text-[11px] text-muted-foreground">
         <MapPin className="h-3 w-3 shrink-0" />
         <span className="truncate">
-          {[order.city, order.province].filter(Boolean).join(", ") || "—"}
+          {[order.brgy, order.city, order.province]
+            .filter(Boolean)
+            .join(", ") || "—"}
         </span>
       </div>
     </div>
@@ -236,6 +237,7 @@ export function PDPCreateModal({
               customer_name: d.customer_name,
               city: d.city,
               province: d.province,
+              brgy: d.brgy,
               total_amount: d.amount ?? null,
               net_amount: d.amount ?? null,
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -332,6 +334,7 @@ export function PDPCreateModal({
       customer_name: d.customer_name,
       city: d.city,
       province: d.province,
+      brgy: d.brgy,
       total_amount: d.amount ?? null,
       net_amount: d.amount ?? null,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -768,7 +771,7 @@ export function PDPCreateModal({
                           {order.customer_name || order.store_name || "—"}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {[order.city, order.province]
+                          {[order.brgy, order.city, order.province]
                             .filter(Boolean)
                             .join(", ") || "—"}
                         </TableCell>

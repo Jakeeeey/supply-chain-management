@@ -17,7 +17,7 @@ function StepDot({ active }: { active: boolean }) {
     );
 }
 
-export function ReceivingWorkbench() {
+export function ReceivingWorkbench({ receiverName }: { receiverName?: string }) {
     const { selectedPO } = useReceivingProducts();
     const [step, setStep] = React.useState<0 | 1 | 2 | 3 | 4>(0);
 
@@ -68,7 +68,7 @@ export function ReceivingWorkbench() {
                 ) : step === 3 ? (
                     <TagRFIDStep onContinue={() => setStep(4)} />
                 ) : (
-                    <ReviewReceiptStep onBack={() => setStep(3)} />
+                    <ReviewReceiptStep onBack={() => setStep(3)} receiverName={receiverName} />
                 )}
             </div>
         </Card>

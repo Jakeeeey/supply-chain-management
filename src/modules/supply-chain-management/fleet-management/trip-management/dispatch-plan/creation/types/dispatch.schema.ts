@@ -28,6 +28,7 @@ export const CrewHelperSchema = z.object({
 /** A single invoice reference or manual route stop entry. */
 export const InvoiceRefSchema = z.object({
   invoice_id: z.number().optional(),
+  invoice_ids: z.array(z.number()).optional(),
   invoice_no: z.string().optional(),
   sequence: z.number(),
   remarks: z.string().optional(),
