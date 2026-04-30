@@ -97,7 +97,7 @@ function resolveDiscountPercent(dt: Record<string, unknown> | null | undefined):
     const name = toStr(dt.discount_type || dt.name);
 
     if (lines.length > 0) {
-        return calculateDiscountFromLines(lines as any[]);
+        return calculateDiscountFromLines(lines as Record<string, unknown>[]);
     }
     if (totalPct > 0) {
         return totalPct;
@@ -110,7 +110,7 @@ async function fetchDiscountTypesMap(base: string) {
     try {
         const fields = encodeURIComponent("id,discount_type,total_percent,line_per_discount_type.line_id.*");
         const url = `${base}/items/discount_type?limit=-1&fields=${fields}`;
-        const j = await fetchJson<{ data: any[] }>(url);
+        const j = await fetchJson<{ data: Record<string, unknown>[] }>(url);
         for (const dt of (j?.data ?? [])) {
             const id = toNum(dt.id);
             if (!id) continue;
@@ -353,21 +353,7 @@ async function patchPOR(base: string, porId: number, payload: unknown) {
     await fetchJson(url, { method: "PATCH", body: JSON.stringify(payload) });
 }
 
-async function fetchProductSupplierLinks(base: string, supplierId: number) {
-    const fields = encodeURIComponent("id,product_id,supplier_id,discount_type.*,discount_type.line_per_discount_type.line_id.*");
-    const url =
-        `${base}/items/product_per_supplier?limit=-1` +
-        `&filter[supplier_id][_eq]=${encodeURIComponent(String(supplierId))}` +
-        `&fields=${fields}`;
-    const j = await fetchJson(url) as { data: Array<Record<string, unknown>> };
-    const rows = Array.isArray(j?.data) ? j.data : [];
-    const map = new Map<number, Record<string, unknown>>();
-    for (const r of rows) {
-        const pid = toNum(r?.product_id);
-        if (pid) map.set(pid, r);
-    }
-    return map;
-}
+
 
 // =====================
 // BUILDERS / LOGIC
@@ -747,7 +733,7 @@ export async function GET() {
         const supplierNamesMap = await fetchSupplierNames(base, supplierIds);
         
         const allProductIds = Array.from(new Set(Array.from(linesByPo.values()).flatMap(rows => rows.map(r => toNum(r.product_id)).filter(Boolean))));
-        const productsMap = await fetchProductsMap(base, allProductIds as number[]);
+        await fetchProductsMap(base, allProductIds as number[]);
 
         const list: PostingListItem[] = [];
 
@@ -1178,12 +1164,10 @@ export async function POST(req: NextRequest) {
             const poUrl = `${base}/items/${PO_COLLECTION}/${poId}?fields=supplier_name,discount_type.*,discount_type.line_per_discount_type.line_id.*,receiving_type,vat_amount,withholding_tax_amount`;
             const pj = await fetchJson(poUrl) as { data: Record<string, unknown> };
             const po = pj?.data;
-            const sid = toNum(po?.supplier_name);
-            const poIsInvoice = (toNum(po?.receiving_type) === 2) || (toNum(po?.vat_amount) > 0) || (toNum(po?.withholding_tax_amount) > 0);
 
             // PO Global Discount
             const poDType = po?.discount_type as Record<string, unknown> | null | undefined;
-            const poDiscountPercent = resolveDiscountPercent(poDType);
+            resolveDiscountPercent(poDType);
 
             for (const row of toPost) {
                 await patchPOR(base, row.porId, { 
