@@ -4,6 +4,7 @@ import * as React from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Trash2 } from "lucide-react";
 import { useReceivingProducts, ReceivingPOItem, ActivityRow } from "../../providers/ReceivingProductsProvider";
 import { useKeyboardScanner } from "../../hooks/useKeyboardScanner";
 import { toast } from "sonner";
@@ -29,6 +30,7 @@ export function TagRFIDStep({ onContinue, onBack }: { onContinue: () => void; on
         scannedCountByPorId,
         activeProductId,
         setActiveProductId,
+        removeActivity,
     } = useReceivingProducts();
 
     const [activityPage, setActivityPage] = React.useState(1);
@@ -344,9 +346,20 @@ export function TagRFIDStep({ onContinue, onBack }: { onContinue: () => void; on
                                     <span className="truncate font-semibold max-w-[200px]">{a.productName}</span>
                                     <span className="text-[10px] text-muted-foreground font-mono">{a.rfid}</span>
                                 </div>
-                                <Badge variant="outline" className={a.status === "ok" ? "bg-green-50 text-green-700 border-green-200" : "bg-amber-50 text-amber-700 border-amber-200"}>
-                                    {a.status.toUpperCase()}
-                                </Badge>
+                                <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className={a.status === "ok" ? "bg-green-50 text-green-700 border-green-200" : "bg-amber-50 text-amber-700 border-amber-200"}>
+                                        {a.status.toUpperCase()}
+                                    </Badge>
+                                    <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                        onClick={() => removeActivity(a.id)}
+                                        title="Remove scanned tag"
+                                    >
+                                        <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                </div>
                             </div>
                         ))
                     }
