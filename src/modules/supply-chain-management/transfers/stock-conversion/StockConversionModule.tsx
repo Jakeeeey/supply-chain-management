@@ -87,10 +87,9 @@ export default function StockConversionModule({
   } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // ── Logic ─────────────────────────────────────────────────────────────────
 
   const handleOpenConversion = useCallback(async (product: StockConversionProduct, preScannedRfid?: string) => {
-    const isBoxSource = product.currentUnit?.toLowerCase().includes("box") || product.currentUnit?.toLowerCase().includes("pack");
+    const isBoxSource = product.currentUnit?.toLowerCase().includes("box");
 
     if (isBoxSource) {
        setPendingSourceProduct(product);
@@ -100,7 +99,6 @@ export default function StockConversionModule({
        return;
     }
 
-    // For non-RFID sources (Ties, Pieces, etc.)
     if (preScannedRfid) setScannedSourceRfids([preScannedRfid]);
     setSelectedProduct(product);
     setPendingConversion(null);
