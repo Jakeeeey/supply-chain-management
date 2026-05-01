@@ -81,16 +81,6 @@ export function ReceiptCard({ receipt }: { receipt: PostingReceipt }) {
                         </Button>
                     )}
 
-                    <span title={!canPost ? disabledReason : ""}>
-                        <Button
-                            type="button"
-                            size="sm"
-                            disabled={!canPost || posting}
-                            onClick={() => setOpen(true)}
-                        >
-                            Post
-                        </Button>
-                    </span>
                 </div>
             </div>
 

@@ -473,7 +473,7 @@ type PostingReceipt = {
     totalAmount: number;
 };
 
-function buildReceiptSummary(porRows: PORRow[]) {
+function buildReceiptSummary(porRows: PORRow[], priceMap?: Map<number, number>, discMap?: Map<number, number>) {
     const groups = new Map<string, PORRow[]>();
 
     for (const r of porRows ?? []) {
@@ -486,7 +486,7 @@ function buildReceiptSummary(porRows: PORRow[]) {
 
     const receipts: PostingReceipt[] = [];
 
-    for (const [receiptNo, rows] of groups.entries()) {
+    for (const [receiptNo, rows] of Array.from(groups.entries())) {
         const porIds = new Set<number>();
         let bestDate = "";
         let total = 0;
@@ -505,15 +505,22 @@ function buildReceiptSummary(porRows: PORRow[]) {
                 if (!bestDate || new Date(d).getTime() >= new Date(bestDate).getTime()) bestDate = d;
             }
 
-            total += effectiveReceivedQty(r);
+            const qty = effectiveReceivedQty(r);
+            total += qty;
             if (toNum(r?.isPosted) !== 1) allPosted = false;
 
-            const whtTotal = toNum(r?.withholding_amount || 0);
+            const price = (toNum(r?.isPosted) === 1 && toNum(r?.unit_price) > 0) 
+                ? toNum(r?.unit_price) 
+                : (priceMap?.get(porId) || 0);
             
-            gross += toNum(r?.unit_price || 0) * toNum(r?.received_quantity || 0);
-            disc += toNum(r?.discounted_amount || 0);
+            const rowDisc = (toNum(r?.isPosted) === 1)
+                ? toNum(r?.discounted_amount || 0)
+                : ((discMap?.get(porId) || 0) * qty);
+
+            gross += (price * qty);
+            disc += rowDisc;
             vat += toNum(r?.vat_amount || 0);
-            wht += whtTotal;
+            wht += toNum(r?.withholding_amount || 0);
         }
 
         receipts.push({
@@ -770,8 +777,8 @@ export async function GET() {
             const isClosed = fully && allPosted;
             const fullyReceived = fully && !allPosted;
 
-            // Align totalAmount with what's actually being posted (Items already posted to inventory)
-            const unpostedRows = porRows.filter(r => toNum(r.isPosted) === 1 && (toNum(r.received_quantity) > 0 || toStr(r.receipt_no)));
+            // Align totalAmount with what's actually being posted (Items already received but NOT YET posted to inventory)
+            const unpostedRows = porRows.filter(r => toNum(r.isPosted) === 0 && (toNum(r.received_quantity) > 0 || toStr(r.receipt_no)));
             let listTotal = 0;
             if (unpostedRows.length > 0) {
                 const sid = toNum(po?.supplier_name);
@@ -787,7 +794,7 @@ export async function GET() {
                     const p = productsMap.get(pid);
 
                     // Live sourcing for unposted rows in the list view
-                    const unitPrice = toNum(p?.cost_per_unit) || toNum(matchLine?.unit_price) || 0;
+                    const unitPrice = toNum(matchLine?.unit_price) || toNum(p?.cost_per_unit) || 0;
                     const link = psl.get(pid);
                     const discPct = link ? resolveDiscountPercent(link.discount_type) : poDiscPct;
 
@@ -894,9 +901,13 @@ export async function POST(req: NextRequest) {
             // ── DEBUG: Log what productSupplierLinks contains ──
             console.log("[DEBUG open_po] supplierId (sid):", sid);
             console.log("[DEBUG open_po] productSupplierLinks size:", productSupplierLinks.size);
-            for (const [k, v] of productSupplierLinks.entries()) {
+            for (const [k, v] of Array.from(productSupplierLinks.entries())) {
                 console.log(`[DEBUG open_po] PSL entry: pid=${k}, discount_type=`, JSON.stringify(v?.discount_type));
             }
+            // Removed redundant RFID fetching (already handled above)
+            
+            const porPriceMap = new Map<number, number>();
+            const porDiscMap = new Map<number, number>();
 
             // ── Resolve PO-level discount percent (Total Percent Source of Truth) ──
             const poDType = po?.discount_type as Record<string, unknown> | null;
@@ -928,7 +939,7 @@ export async function POST(req: NextRequest) {
                 }
             });
 
-            for (const keyStr of allKeys) {
+            for (const keyStr of Array.from(allKeys)) {
                 const [pid, bid] = keyStr.split("-").map(Number);
                 if (!pid || !bid) continue;
 
@@ -981,8 +992,11 @@ export async function POST(req: NextRequest) {
                     const linePorRows = porRows.filter(r => porIdsForLine.includes(toNum(r.purchase_order_product_id)));
                     const srcRow = linePorRows.find(r => toNum(r.isPosted) === 1) || linePorRows.find(r => toNum(r.isPosted) === 0 && !!toStr(r.receipt_no));
                     
-                    unitPrice = toNum(srcRow?.unit_price) || toNum(ln?.unit_price) || toNum(p?.cost_per_unit);
-                    lineGrossAmt = linePorRows.reduce((sum, r) => sum + (toNum(r.unit_price) * effectiveReceivedQty(r)), 0);
+                    unitPrice = toNum(ln?.unit_price) || toNum(srcRow?.unit_price) || toNum(p?.cost_per_unit) || 0;
+                    lineGrossAmt = linePorRows.reduce((sum, r) => {
+                        const price = (toNum(r.isPosted) === 1 && toNum(r.unit_price) > 0) ? toNum(r.unit_price) : unitPrice;
+                        return sum + (price * effectiveReceivedQty(r));
+                    }, 0);
                     lineDiscount = Number((lineGrossAmt * (itemDiscPct / 100)).toFixed(2));
                     lineNet = Number((lineGrossAmt - lineDiscount).toFixed(2));
 
@@ -992,7 +1006,7 @@ export async function POST(req: NextRequest) {
                         lineNet = Number((lineGrossAmt - lineDiscount).toFixed(2));
                     }
                 } else {
-                    unitPrice = toNum(p?.cost_per_unit) || toNum(ln?.unit_price) || 0;
+                    unitPrice = toNum(ln?.unit_price) || toNum(p?.cost_per_unit) || 0;
                     lineGrossAmt = unitPrice * (receivedQty || (expected > 0 ? expected : 0));
                     lineDiscount = Number((lineGrossAmt * (itemDiscPct / 100)).toFixed(2));
                     lineNet = Number((lineGrossAmt - lineDiscount).toFixed(2));
@@ -1018,6 +1032,11 @@ export async function POST(req: NextRequest) {
                     discountLabel: resolvedLabel !== "—" ? resolvedLabel : undefined,
                 };
 
+                porIdsForLine.forEach(id => {
+                    porPriceMap.set(id, unitPrice);
+                    porDiscMap.set(id, itemDiscPct > 0 ? (unitPrice * (itemDiscPct / 100)) : 0);
+                });
+
                 const arr = itemsByBranch.get(bid) ?? [];
                 arr.push(item);
                 itemsByBranch.set(bid, arr);
@@ -1032,7 +1051,7 @@ export async function POST(req: NextRequest) {
             }));
 
             const lr = latestReceiptInfo(porRows);
-            const rs = buildReceiptSummary(porRows);
+            const rs = buildReceiptSummary(porRows, porPriceMap, porDiscMap);
             const allPosted = rs.receiptsCount > 0 && rs.unpostedReceiptsCount === 0;
             const isClosed = fully && allPosted;
             const fullyReceived = fully && !allPosted;
@@ -1048,25 +1067,17 @@ export async function POST(req: NextRequest) {
             let detailTotal = 0;
 
             if (isPoFrozen && !hasUnposted) {
-                // Completely posted or closed
-                detailGross = toNum(po?.gross_amount);
-                detailDisc = toNum(po?.discounted_amount);
-                detailVat = toNum(po?.vat_amount);
-                detailWht = toNum(po?.withholding_tax_amount);
-                detailTotal = toNum(po?.total_amount); 
-            } else if (isPoFrozen && hasUnposted) {
-                // Partially posted, mix of unposted/posted: we still sum what's in DB for unposted if no changes happen, 
-                // but if we are frozen, we should just read from the PO header, unless it's out of sync
+                // Completely posted or closed: use PO header as finalized snapshot
                 detailGross = toNum(po?.gross_amount);
                 detailDisc = toNum(po?.discounted_amount);
                 detailVat = toNum(po?.vat_amount);
                 detailWht = toNum(po?.withholding_tax_amount);
                 detailTotal = toNum(po?.total_amount); 
             } else {
-                // Live unposted PO: build footer from exact items
+                // Live PO (unposted or partial): ALWAYS build footer from exact items to reflect price changes
                 const poIsInvoice = (toNum(po?.vat_amount) > 0) || (toNum(po?.withholding_tax_amount) > 0);
                 
-                for (const arr of itemsByBranch.values()) {
+                for (const arr of Array.from(itemsByBranch.values())) {
                     for (const item of arr) {
                         if (item.receivedQty > 0) {
                             // The properties on `item` were calculated using receivedQty exactly when receivedQty > 0
@@ -1241,7 +1252,7 @@ export async function POST(req: NextRequest) {
                     discountTypeId = poDType?.id ? String(poDType.id) : "";
                 }
 
-                const unitPrice = toNum(p?.cost_per_unit) || toNum(ln?.unit_price);
+                const unitPrice = toNum(ln?.unit_price) || toNum(p?.cost_per_unit) || 0;
                 const lineGross = unitPrice * row.qty;
                 const lineDisc = Number((lineGross * (itemDiscPct / 100)).toFixed(2));
                 const lineNet = Number((lineGross - lineDisc).toFixed(2));
@@ -1345,9 +1356,11 @@ export async function POST(req: NextRequest) {
                     if (!porId) continue;
 
                     const pid = toNum(r.product_id);
+                    const bid = toNum(r.branch_id);
+                    const ln = lines.find(l => toNum(l.product_id) === pid && toNum(l.branch_id) === bid);
                     const p = productsMap.get(pid);
                     const qty = effectiveReceivedQty(r);
-                    const uPrice = toNum(p?.cost_per_unit) || toNum(r.unit_price);
+                    const uPrice = toNum(ln?.unit_price) || toNum(p?.cost_per_unit) || toNum(r.unit_price) || 0;
                     
                     const link = psl.get(pid);
                     let discPct = 0;
