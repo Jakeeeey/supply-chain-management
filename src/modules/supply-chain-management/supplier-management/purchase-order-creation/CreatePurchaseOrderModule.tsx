@@ -1149,6 +1149,7 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
                 onRemoveFromTemp={removeFromTemp}
                 onUpdateTempQty={updateTempQty}
                 onConfirm={confirmPicker}
+                discountTypes={discountTypes}
             />
         </div>
     );

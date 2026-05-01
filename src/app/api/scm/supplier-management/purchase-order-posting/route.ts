@@ -1180,20 +1180,6 @@ export async function POST(req: NextRequest) {
                 const wasPosted = toPost.find((p) => p.porId === toNum(r?.purchase_order_product_id));
                 return wasPosted ? { ...r, isPosted: 1 } : r;
             });
-            const fully = isFullyReceived(poId, lines, updatedPorRows);
-            
-            try {
-                const poUpdate: Record<string, unknown> = { date_received: nowISO() };
-                if (fully) {
-                    // If fully received and all posted, we keep status 6 (Received)
-                    // The front-end will know it is "Closed" if unpostedReceiptsCount === 0
-                    poUpdate.inventory_status = 6;
-                } else {
-                    // Not fully received — mark as Partially Received
-                    poUpdate.inventory_status = 9;
-                }
-                await patchPO(base, poId, poUpdate);
-            } catch {}
 
             // Sync 'received' flag in POP based on POSTED quantities
             const updatedPorIdsByKey = buildPorIdsByKey(updatedPorRows);
@@ -1223,6 +1209,17 @@ export async function POST(req: NextRequest) {
                 }
             });
             await Promise.all(popSyncPromises);
+
+            const fully = isFullyReceived(poId, lines, updatedPorRows);
+            try {
+                const poUpdate: Record<string, unknown> = { date_received: nowISO() };
+                if (fully) {
+                    poUpdate.inventory_status = 14; // ✅ Fully Received & Posted = CLOSED
+                } else {
+                    poUpdate.inventory_status = 9;  // Partially Received
+                }
+                await patchPO(base, poId, poUpdate);
+            } catch {}
 
             return ok({
                 ok: true,
@@ -1280,22 +1277,20 @@ export async function POST(req: NextRequest) {
                 }
             }
 
-            const fully = isFullyReceived(poId, lines, porRows);
+            // After post_all, we need to re-fetch porRows to get the updated isPosted status
+            const updatedPorRowsAll = await fetchPORByPOIds(base, [poId]);
+
+            const fully = isFullyReceived(poId, lines, updatedPorRowsAll);
             try {
                 const poUpdate: Record<string, unknown> = { date_received: nowISO() };
                 if (fully) {
-                    // Keep at status 6 (Received)
-                    poUpdate.inventory_status = 6;
+                    poUpdate.inventory_status = 14; // ✅ Fully Received & Posted = CLOSED
                 } else {
-                    // Partial post: keep at 9 (Partially Received)
-                    poUpdate.inventory_status = 9;
+                    poUpdate.inventory_status = 9;  // Partially Received
                 }
                 await patchPO(base, poId, poUpdate);
             } catch {}
 
-            // Sync 'received' flag in POP based on POSTED quantities
-            // After post_all, we need to re-fetch porRows to get the updated isPosted status
-            const updatedPorRowsAll = await fetchPORByPOIds(base, [poId]);
             const updatedPorIdsByKeyAll = buildPorIdsByKey(updatedPorRowsAll);
             const popSyncPromisesAll = lines.map(async (ln) => {
                 const pid = toNum(ln.product_id);
