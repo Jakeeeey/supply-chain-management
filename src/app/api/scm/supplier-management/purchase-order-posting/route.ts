@@ -160,6 +160,7 @@ interface POHeader {
     vat_amount: number | string;
     withholding_tax_amount?: number | string;
     discount_type?: string | number | Record<string, unknown> | null;
+    is_posted?: boolean | number | string | null;
 }
 interface PORRow {
     purchase_order_product_id: number;
@@ -309,7 +310,7 @@ async function fetchPOHeadersByIds(base: string, poIds: number[]) {
         const url =
             `${base}/items/${PO_COLLECTION}?limit=-1` +
             `&filter[purchase_order_id][_in]=${encodeURIComponent(ids.join(","))}` +
-            `&fields=purchase_order_id,purchase_order_no,date,date_encoded,supplier_name,total_amount,date_received,inventory_status,gross_amount,discounted_amount,vat_amount,withholding_tax_amount,discount_type.*,discount_type.line_per_discount_type.line_id.*`;
+            `&fields=purchase_order_id,purchase_order_no,date,date_encoded,supplier_name,total_amount,date_received,inventory_status,gross_amount,discounted_amount,vat_amount,withholding_tax_amount,discount_type.*,discount_type.line_per_discount_type.line_id.*,is_posted`;
         const j = await fetchJson(url) as { data: POHeader[] };
         rows.push(...(Array.isArray(j?.data) ? j.data : []));
     }
@@ -741,9 +742,10 @@ export async function GET() {
             const poId = toNum(po?.purchase_order_id);
             if (!poId) continue;
 
-            // Skip fully-closed POs (inventory_status=14)
+            // Skip fully-closed POs (inventory_status=14) or already financially posted POs
             const invStatus = toNum(po?.inventory_status);
             if (invStatus === 14) continue;
+            if (toNum(po?.is_posted) === 1 || po?.is_posted === true) continue;
 
             const porRows = porByPo.get(poId) ?? [];
             const lines = linesByPo.get(poId) ?? [];
@@ -868,6 +870,11 @@ export async function POST(req: NextRequest) {
             const porIds = porRows.map((r: PORRow) => toNum(r?.purchase_order_product_id)).filter(Boolean);
             const receivingItems = porIds.length ? await fetchReceivingItems(base, porIds) : [];
             const rfidsByPorId = groupRfidsByPorId(receivingItems);
+
+            // ✅ Block if PO is already financially posted (locked by Post Amounts)
+            if (toNum(po?.is_posted) === 1 || (po as Record<string, unknown>)?.is_posted === true) {
+                return bad("This PO has been fully posted and is now locked. No further changes allowed.", 409);
+            }
 
             const receivingOk = isPartiallyReceivedOrTagged(poId, lines, porRows, rfidsByPorId);
             // Also allow opening POs that already had a partial post (inventory_status=13)
@@ -1131,6 +1138,13 @@ export async function POST(req: NextRequest) {
             if (!poId) return bad("Missing poId.", 400);
             if (!receiptNo) return bad("Missing receiptNo.", 400);
 
+            // ✅ Check is_posted lock
+            const poCheckUrl = `${base}/items/${PO_COLLECTION}/${poId}?fields=is_posted`;
+            const poCheckJ = await fetchJson(poCheckUrl) as { data: Record<string, unknown> };
+            if (toNum(poCheckJ?.data?.is_posted) === 1 || poCheckJ?.data?.is_posted === true) {
+                return bad("This PO has been fully posted and is now locked. No further changes allowed.", 409);
+            }
+
             const lines = await fetchPOProductsByPOId(base, poId);
             const porRows = await fetchPORByPOIds(base, [poId]);
 
@@ -1240,10 +1254,15 @@ export async function POST(req: NextRequest) {
             const poId = toNum(body?.poId);
             if (!poId) return bad("Missing poId.", 400);
 
-            const poUrl = `${base}/items/${PO_COLLECTION}/${encodeURIComponent(String(poId))}?fields=purchase_order_id,purchase_order_no,supplier_name,inventory_status,discount_type.*,discount_type.line_per_discount_type.line_id.*`;
+            const poUrl = `${base}/items/${PO_COLLECTION}/${encodeURIComponent(String(poId))}?fields=purchase_order_id,purchase_order_no,supplier_name,inventory_status,discount_type.*,discount_type.line_per_discount_type.line_id.*,is_posted`;
             const pj_po = await fetchJson(poUrl) as { data: Record<string, unknown> };
             const po = pj_po?.data ?? null;
             if (!po) return bad("PO not found for bulk posting.", 404);
+
+            // ✅ Check is_posted lock
+            if (toNum(po?.is_posted) === 1 || po?.is_posted === true) {
+                return bad("This PO has been fully posted and is now locked. No further changes allowed.", 409);
+            }
 
             const lines = await fetchPOProductsByPOId(base, poId);
             const porRows = await fetchPORByPOIds(base, [poId]);

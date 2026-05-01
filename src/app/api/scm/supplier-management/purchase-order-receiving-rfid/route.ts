@@ -987,36 +987,13 @@ export async function POST(req: NextRequest) {
                      const supplierMap = await fetchSupplierNames(base, [toNum(po.supplier_name)]);
                      const porIdsByKey = buildPorIdsByKey(porRows);
 
-                     // ✅ Synchronize PO Header Status
-                     const fully = isFullyReceived(poId, lines, porRows);
-                     const hasReceipts = porRows.some((r) => toStr(r.receipt_no) || toStr(r.receipt_date) || toStr(r.received_date) || toNum(r.received_quantity) > 0);
-                     const nextStatus = fully ? 6 : (hasReceipts ? 9 : po.inventory_status);
-                     
-                     // Only patch if we are truly upgrading the status
-                     if (nextStatus === 6 || nextStatus === 9) {
-                         const patch: Record<string, unknown> = (() => {
-                             const headerDiscTotal = porRows.reduce((s, r) => s + toNum((r as unknown as Record<string, unknown>).discounted_amount), 0);
-                             const headerVatTotal = porRows.reduce((s, r) => s + toNum((r as unknown as Record<string, unknown>).vat_amount), 0);
-                             const headerWhtTotal = porRows.reduce((s, r) => s + toNum((r as unknown as Record<string, unknown>).withholding_amount), 0);
-                             const headerTotalAmt = porRows.reduce((s, r) => s + toNum((r as unknown as Record<string, unknown>).total_amount), 0);
-                             const p: Record<string, unknown> = {
-                                 inventory_status: nextStatus,
-                                 discounted_amount: Number(headerDiscTotal.toFixed(2)),
-                                 vat_amount: Number(headerVatTotal.toFixed(2)),
-                                 withholding_tax_amount: Number(headerWhtTotal.toFixed(2)),
-                                 total_amount: Number(headerTotalAmt.toFixed(2)),
-                             };
-                             if (receiverId) p.receiver_id = receiverId;
-                             // ✅ Only set completion date if fully received
-                             if (nextStatus === 6) {
-                                 p.date_received = nowISO();
-                             }
-                             return p;
-                         })();
-
+                     // ✅ Receiving no longer updates PO header status or financials.
+                     // Post Inventory is the sole authority for status transitions (6/9).
+                     // Only track the receiver_id if provided.
+                     if (receiverId) {
                          await fetchJson(`${base}/items/${PO_COLLECTION}/${poId}`, {
                              method: "PATCH",
-                             body: JSON.stringify(patch)
+                             body: JSON.stringify({ receiver_id: receiverId })
                          }).catch(() => {});
                      }
 

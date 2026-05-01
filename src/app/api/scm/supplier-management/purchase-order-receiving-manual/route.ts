@@ -654,47 +654,15 @@ export async function POST(req: NextRequest) {
             const fLines = await fetchPOProductsByPOId(base, thePoId), fPors = await fetchPORByPOIds(base, [thePoId]);
             const updatedPorIdsByKey = buildPorIdsByKey(fPors);
 
-            const fully = isFullyReceived(thePoId, fLines, fPors);
-            const hasRec = fPors.some(r => toStr(r.receipt_no) || toNum(r.received_quantity) > 0);
-            const nextStatus = fully ? 6 : (hasRec ? 9 : po.inventory_status);
+            // ✅ Receiving no longer updates PO header status or financials.
+            // Post Inventory is the sole authority for status transitions (6/9).
+            // Only track the receiver_id if provided.
+            if (receiverId) {
+                await fetchJson(`${base}/items/${PO_COLLECTION}/${thePoId}`, { method: "PATCH", body: JSON.stringify({ receiver_id: receiverId }) }).catch(() => {});
+            }
 
-            // ✅ Determine isInvoice status
+            // ✅ Determine isInvoice status (still needed for detail response)
             const poIsInvoice = (toNum(getVal(po, "vat_amount", "vatAmount")) > 0) || (toNum(getVal(po, "withholding_tax_amount", "withholdingTaxAmount")) > 0);
-
-            // ✅ Recalculate PO header totals from all receiving rows
-            let poGross = 0, poDiscount = 0;
-            for (const r of fPors) {
-                const rQty = toNum(r.received_quantity);
-                const rPrice = toNum(r.unit_price);
-                poGross += rQty * rPrice;
-                // Use the POR's own discount data if available
-                const rPid = toNum(r.product_id);
-                const rDtId = ensureId(r.discount_type);
-                let rPct = poDiscountPercent;
-                if (rDtId) { const dt = discountMap.get(String(rDtId)); if (dt) rPct = dt.pct; }
-                else { const linkId = ensureId(linksMap.get(rPid)?.discount_type); if (linkId) { const dt = discountMap.get(String(linkId)); if (dt) rPct = dt.pct; } }
-                poDiscount += rQty * Number((rPrice * (rPct / 100)).toFixed(2));
-            }
-            const poNet = Math.max(0, poGross - poDiscount);
-            const priceType = toStr(getVal(po, "price_type", "priceType"), "Cost Per Unit");
-            const isExclusive = priceType.toUpperCase() === "VAT EXCLUSIVE";
-
-            const patchPO: Record<string, unknown> = { inventory_status: nextStatus };
-            if (receiverId) patchPO.receiver_id = receiverId;
-            if (fully) patchPO.date_received = nowISO();
-
-            // ✅ Only apply VAT/EWT totals if the PO is an Invoice
-            if (poIsInvoice) {
-                let vatTotal = 0, ewtTotal = 0;
-                if (isExclusive) { vatTotal = poNet * 0.12; ewtTotal = poNet * 0.01; }
-                else { const vatableAmt = poNet / 1.12; vatTotal = poNet - vatableAmt; ewtTotal = vatableAmt * 0.01; }
-                patchPO.vat_amount = Number(vatTotal.toFixed(2));
-                patchPO.withholding_tax_amount = Number(ewtTotal.toFixed(2));
-            }
-            patchPO.total_amount = Number(poNet.toFixed(2));
-
-            await fetchJson(`${base}/items/${PO_COLLECTION}/${thePoId}`, { method: "PATCH", body: JSON.stringify(patchPO) }).catch(() => {});
-
 
 
             // ✅ Return the full updated PO detail so the frontend can render the Receipt Preview
