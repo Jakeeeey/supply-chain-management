@@ -509,13 +509,8 @@ function buildReceiptSummary(porRows: PORRow[], priceMap?: Map<number, number>, 
             total += qty;
             if (toNum(r?.isPosted) !== 1) allPosted = false;
 
-            const price = (toNum(r?.isPosted) === 1 && toNum(r?.unit_price) > 0) 
-                ? toNum(r?.unit_price) 
-                : (priceMap?.get(porId) || 0);
-            
-            const rowDisc = (toNum(r?.isPosted) === 1)
-                ? toNum(r?.discounted_amount || 0)
-                : ((discMap?.get(porId) || 0) * qty);
+            const price = priceMap?.get(porId) || 0;
+            const rowDisc = (discMap?.get(porId) || 0) * qty;
 
             gross += (price * qty);
             disc += rowDisc;
@@ -793,8 +788,8 @@ export async function GET() {
                     const matchLine = lines.find(l => toNum(l.product_id) === pid && toNum(l.branch_id) === bid);
                     const p = productsMap.get(pid);
 
-                    // Live sourcing for unposted rows in the list view
-                    const unitPrice = toNum(matchLine?.unit_price) || toNum(p?.cost_per_unit) || 0;
+                    // Prioritize live Product Master cost for unposted rows in the list view
+                    const unitPrice = toNum(p?.cost_per_unit) || toNum(matchLine?.unit_price) || 0;
                     const link = psl.get(pid);
                     const discPct = link ? resolveDiscountPercent(link.discount_type) : poDiscPct;
 
@@ -988,29 +983,13 @@ export async function POST(req: NextRequest) {
                     discountTypeId = poDType?.id ? String(poDType.id) : "";
                 }
 
-                if (isPoFrozen) {
-                    const linePorRows = porRows.filter(r => porIdsForLine.includes(toNum(r.purchase_order_product_id)));
-                    const srcRow = linePorRows.find(r => toNum(r.isPosted) === 1) || linePorRows.find(r => toNum(r.isPosted) === 0 && !!toStr(r.receipt_no));
-                    
-                    unitPrice = toNum(ln?.unit_price) || toNum(srcRow?.unit_price) || toNum(p?.cost_per_unit) || 0;
-                    lineGrossAmt = linePorRows.reduce((sum, r) => {
-                        const price = (toNum(r.isPosted) === 1 && toNum(r.unit_price) > 0) ? toNum(r.unit_price) : unitPrice;
-                        return sum + (price * effectiveReceivedQty(r));
-                    }, 0);
-                    lineDiscount = Number((lineGrossAmt * (itemDiscPct / 100)).toFixed(2));
-                    lineNet = Number((lineGrossAmt - lineDiscount).toFixed(2));
-
-                    if (receivedQty === 0 && expected > 0) {
-                        lineGrossAmt = unitPrice * expected;
-                        lineDiscount = Number((lineGrossAmt * (itemDiscPct / 100)).toFixed(2));
-                        lineNet = Number((lineGrossAmt - lineDiscount).toFixed(2));
-                    }
-                } else {
-                    unitPrice = toNum(ln?.unit_price) || toNum(p?.cost_per_unit) || 0;
-                    lineGrossAmt = unitPrice * (receivedQty || (expected > 0 ? expected : 0));
-                    lineDiscount = Number((lineGrossAmt * (itemDiscPct / 100)).toFixed(2));
-                    lineNet = Number((lineGrossAmt - lineDiscount).toFixed(2));
-                }
+                // Prioritize live Product Master cost over stale PO line price to reflect recent updates
+                unitPrice = toNum(p?.cost_per_unit) || toNum(ln?.unit_price) || 0;
+                
+                // Recalculate everything from scratch using the resolved live unitPrice
+                lineGrossAmt = unitPrice * (receivedQty || (expected > 0 ? expected : 0));
+                lineDiscount = Number((lineGrossAmt * (itemDiscPct / 100)).toFixed(2));
+                lineNet = Number((lineGrossAmt - lineDiscount).toFixed(2));
 
                 const item: PostingPOItem = {
                     id: String(primaryPorId),
@@ -1038,6 +1017,7 @@ export async function POST(req: NextRequest) {
                 });
 
                 const arr = itemsByBranch.get(bid) ?? [];
+                console.log(`[DEBUG open_po] pid=${pid} bid=${bid} unitPrice=${unitPrice} receivedQty=${receivedQty} expected=${expected} itemDiscPct=${itemDiscPct} lineGrossAmt=${lineGrossAmt} lineDiscount=${lineDiscount} lineNet=${lineNet}`);
                 arr.push(item);
                 itemsByBranch.set(bid, arr);
             }
@@ -1066,41 +1046,41 @@ export async function POST(req: NextRequest) {
             let detailWht = 0;
             let detailTotal = 0;
 
-            if (isPoFrozen && !hasUnposted) {
-                // Completely posted or closed: use PO header as finalized snapshot
-                detailGross = toNum(po?.gross_amount);
-                detailDisc = toNum(po?.discounted_amount);
-                detailVat = toNum(po?.vat_amount);
-                detailWht = toNum(po?.withholding_tax_amount);
-                detailTotal = toNum(po?.total_amount); 
-            } else {
-                // Live PO (unposted or partial): ALWAYS build footer from exact items to reflect price changes
-                const poIsInvoice = (toNum(po?.vat_amount) > 0) || (toNum(po?.withholding_tax_amount) > 0);
-                
-                for (const arr of Array.from(itemsByBranch.values())) {
-                    for (const item of arr) {
-                        if (item.receivedQty > 0) {
-                            // The properties on `item` were calculated using receivedQty exactly when receivedQty > 0
-                            detailGross += item.grossAmount;
-                            detailDisc += item.discountAmount;
-                            
-                            if (poIsInvoice) {
-                                const rowVatExcl = Number((item.netAmount / 1.12).toFixed(2));
-                                const rowVat = Number((item.netAmount - rowVatExcl).toFixed(2));
-                                const rowWht = Number((rowVatExcl * 0.01).toFixed(2));
+            // ALWAYS calculate footer dynamically from exact items to reflect price changes and correct formulas
+            const poIsInvoice = (toNum(po?.vat_amount) > 0) || (toNum(po?.withholding_tax_amount) > 0);
+            
+            for (const arr of Array.from(itemsByBranch.values())) {
+                for (const item of arr) {
+                    if (item.receivedQty > 0) {
+                        detailGross += item.grossAmount;
+                        detailDisc += item.discountAmount;
+                        
+                        if (poIsInvoice) {
+                            // Standardize VAT-Inclusive Financial Formulas
+                            // 1. VAT Exclusive = net_amount / 1.12
+                            // 2. VAT Amount = net_amount - vat_exclusive
+                            // 3. EWT Amount = vat_exclusive * 0.01
+                            const rowVatExcl = Number((item.netAmount / 1.12).toFixed(2));
+                            const rowVat = Number((item.netAmount - rowVatExcl).toFixed(2));
+                            const rowWht = Number((rowVatExcl * 0.01).toFixed(2));
 
-                                detailVat += rowVat;
-                                detailWht += rowWht;
-                            }
+                            detailVat += rowVat;
+                            detailWht += rowWht;
                         }
                     }
                 }
-                
-                detailGross = Number(detailGross.toFixed(2));
-                detailDisc = Number(detailDisc.toFixed(2));
-                detailVat = Number(detailVat.toFixed(2));
-                detailWht = Number(detailWht.toFixed(2));
-                detailTotal = Number((detailGross - detailDisc).toFixed(2));
+            }
+
+            detailGross = Number(detailGross.toFixed(2));
+            detailDisc = Number(detailDisc.toFixed(2));
+            detailVat = Number(detailVat.toFixed(2));
+            detailWht = Number(detailWht.toFixed(2));
+            detailTotal = Number((detailGross - detailDisc).toFixed(2));
+
+            // Ensure VAT/EWT are zeroed if not an invoice as requested
+            if (!poIsInvoice) {
+                detailVat = 0;
+                detailWht = 0;
             }
 
 
@@ -1252,7 +1232,8 @@ export async function POST(req: NextRequest) {
                     discountTypeId = poDType?.id ? String(poDType.id) : "";
                 }
 
-                const unitPrice = toNum(ln?.unit_price) || toNum(p?.cost_per_unit) || 0;
+                // Prioritize live Product Master cost for saved records
+                const unitPrice = toNum(p?.cost_per_unit) || toNum(ln?.unit_price) || 0;
                 const lineGross = unitPrice * row.qty;
                 const lineDisc = Number((lineGross * (itemDiscPct / 100)).toFixed(2));
                 const lineNet = Number((lineGross - lineDisc).toFixed(2));
@@ -1360,7 +1341,8 @@ export async function POST(req: NextRequest) {
                     const ln = lines.find(l => toNum(l.product_id) === pid && toNum(l.branch_id) === bid);
                     const p = productsMap.get(pid);
                     const qty = effectiveReceivedQty(r);
-                    const uPrice = toNum(ln?.unit_price) || toNum(p?.cost_per_unit) || toNum(r.unit_price) || 0;
+                    // Prioritize live Product Master cost for saved records in bulk posting
+                    const uPrice = toNum(p?.cost_per_unit) || toNum(ln?.unit_price) || toNum(r.unit_price) || 0;
                     
                     const link = psl.get(pid);
                     let discPct = 0;
