@@ -5,9 +5,9 @@ import { ReceivingProductsManualProvider } from "./providers/ReceivingProductsMa
 import { AvailableForReceivingManual } from "./components/AvailableForReceivingManual";
 import { ReceivingWorkbenchManual } from "./components/ReceivingWorkbenchManual";
 
-export function ReceivingProductsManualModule() {
+export function ReceivingProductsManualModule({ receiverId, receiverName }: { receiverId?: number; receiverName?: string }) {
     return (
-        <ReceivingProductsManualProvider>
+        <ReceivingProductsManualProvider receiverId={receiverId}>
             <div className="w-full px-6 py-8">
                 <div className="mb-6">
                     <h1 className="text-2xl font-semibold tracking-tight">
@@ -18,9 +18,9 @@ export function ReceivingProductsManualModule() {
                     </p>
                 </div>
 
-                <div className="grid grid-cols-1 gap-6 lg:grid-cols-[380px_1fr]">
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-[380px_1fr] items-start">
                     <AvailableForReceivingManual />
-                    <ReceivingWorkbenchManual />
+                    <ReceivingWorkbenchManual receiverName={receiverName} />
                 </div>
             </div>
         </ReceivingProductsManualProvider>

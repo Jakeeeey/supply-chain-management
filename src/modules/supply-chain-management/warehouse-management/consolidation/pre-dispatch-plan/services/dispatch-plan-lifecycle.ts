@@ -162,4 +162,18 @@ export const dispatchPlanLifecycleService = {
       body: JSON.stringify({ status: "Approved" }),
     });
   },
+
+  /**
+   * Rejects a dispatch plan by updating its status to 'Rejected' and adding remarks.
+   */
+  async rejectPlan(id: number | string, remarks: string): Promise<void> {
+    const baseUrl = API_BASE_URL?.replace(/\/$/, "");
+    await request(`${baseUrl}/items/dispatch_plan/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        status: "Rejected",
+        reject_remarks: remarks || "",
+      }),
+    });
+  },
 };

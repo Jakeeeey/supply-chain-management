@@ -51,16 +51,75 @@ function bad(error: string, status = 400) {
     return NextResponse.json({ error }, { status });
 }
 function toStr(v: unknown, fb = "") {
+    if (v && typeof v === "object") {
+        const obj = v as Record<string, unknown>;
+        return toStr(obj.name ?? obj.discount_type ?? obj.discount_code ?? obj.value ?? fb);
+    }
     const s = String(v ?? "").trim();
     return s ? s : fb;
 }
-function toNum(v: unknown) {
-    const s = String(v ?? "").replace(/,/g, "");
+function toNum(v: unknown): number {
+    if (v && typeof v === "object") {
+        const obj = v as Record<string, unknown>;
+        return toNum(obj.id ?? obj.value ?? obj.product_id ?? obj.supplier_id ?? obj.branch_id ?? 0);
+    }
+    const s = String(v ?? "").replace(/,/g, "").trim();
     const n = Number(s);
     return Number.isFinite(n) ? n : 0;
 }
 function nowISO() {
     return new Date().toISOString();
+}
+
+function deriveDiscountPercentFromCode(codeRaw: string): number {
+    const code = String(codeRaw ?? "").trim().toUpperCase();
+    if (!code || code === "NO DISCOUNT" || code === "D0") return 0;
+    const nums = (code.match(/\d+(?:\.\d+)?/g) ?? []).map(Number).filter(n => n > 0 && n <= 100);
+    if (!nums.length) return 0;
+    const f = nums.reduce((acc, p) => acc * (1 - p / 100), 1);
+    return Number(((1 - f) * 100).toFixed(4));
+}
+
+function calculateDiscountFromLines(lines: Array<Record<string, unknown>>): number {
+    if (!lines || !lines.length) return 0;
+    const factor = lines.reduce((acc: number, l: Record<string, unknown>) => {
+        const pidObj = l?.line_id as Record<string, unknown> | undefined;
+        const p = toNum(pidObj?.percentage ?? l?.percentage ?? 0);
+        return acc * (1 - p / 100);
+    }, 1);
+    return Number(((1 - factor) * 100).toFixed(4));
+}
+
+function resolveDiscountPercent(dt: Record<string, unknown> | null | undefined): number {
+    if (!dt) return 0;
+    const lines = (dt.line_per_discount_type as Array<Record<string, unknown>>) ?? [];
+    const totalPct = toNum(dt.total_percent);
+    const name = toStr(dt.discount_type || dt.name);
+
+    if (lines.length > 0) {
+        return calculateDiscountFromLines(lines as Record<string, unknown>[]);
+    }
+    if (totalPct > 0) {
+        return totalPct;
+    }
+    return deriveDiscountPercentFromCode(name);
+}
+
+async function fetchDiscountTypesMap(base: string) {
+    const map = new Map<number, { name: string; pct: number }>();
+    try {
+        const fields = encodeURIComponent("id,discount_type,total_percent,line_per_discount_type.line_id.*");
+        const url = `${base}/items/discount_type?limit=-1&fields=${fields}`;
+        const j = await fetchJson<{ data: Record<string, unknown>[] }>(url);
+        for (const dt of (j?.data ?? [])) {
+            const id = toNum(dt.id);
+            if (!id) continue;
+            map.set(id, { name: toStr(dt.discount_type), pct: resolveDiscountPercent(dt) });
+        }
+    } catch (e: unknown) {
+        console.error("[posting-po] Failed to fetch discount types:", e);
+    }
+    return map;
 }
 function chunk<T>(arr: T[], size: number) {
     const out: T[][] = [];
@@ -86,7 +145,7 @@ const POR_ITEMS_COLLECTION = "purchase_order_receiving_items";
 type POStatus = "OPEN" | "PARTIAL" | "RECEIVED" | "CLOSED";
 interface Supplier { id: number; supplier_name: string; }
 interface Branch { id: number; branch_name: string; branch_description: string; }
-interface Product { product_id: number; product_name: string; barcode: string; product_code: string; }
+interface Product { product_id: number; product_name: string; barcode: string; product_code: string; cost_per_unit?: number; }
 interface POHeader {
     purchase_order_id: number;
     purchase_order_no: string;
@@ -100,6 +159,7 @@ interface POHeader {
     discounted_amount: number | string;
     vat_amount: number | string;
     withholding_tax_amount?: number | string;
+    discount_type?: string | number | Record<string, unknown> | null;
 }
 interface PORRow {
     purchase_order_product_id: number;
@@ -114,7 +174,9 @@ interface PORRow {
     discounted_amount: number | string;
     vat_amount: number | string;
     withholding_amount: number | string;
+    unit_price: number | string;
     total_amount: number | string;
+    discount_type?: number | string | null;
 }
 interface ReceivingItem {
     receiving_item_id: number;
@@ -125,7 +187,7 @@ interface ReceivingItem {
 }
 
 const POR_SAFE_FIELDS =
-    "purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted,discounted_amount,vat_amount,withholding_amount,total_amount";
+    "purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted,discounted_amount,vat_amount,withholding_amount,total_amount,unit_price,discount_type";
 
 // =====================
 // FETCHERS
@@ -186,7 +248,7 @@ async function fetchProductsMap(base: string, productIds: number[]) {
         const url =
             `${base}/items/${PRODUCTS_COLLECTION}?limit=-1` +
             `&filter[product_id][_in]=${encodeURIComponent(ids.join(","))}` +
-            `&fields=product_id,product_name,barcode,product_code`;
+            `&fields=product_id,product_name,barcode,product_code,cost_per_unit`;
         const j = await fetchJson(url) as { data: (Product & { id?: number })[] };
         rows.push(...(Array.isArray(j?.data) ? j.data : []));
     }
@@ -199,6 +261,7 @@ async function fetchProductsMap(base: string, productIds: number[]) {
             product_name: toStr(p?.product_name, `Product #${id}`),
             barcode: toStr(p?.barcode),
             product_code: toStr(p?.product_code),
+            cost_per_unit: toNum(p?.cost_per_unit),
         });
     }
     return map;
@@ -213,6 +276,7 @@ type PoProductRow = {
     unit_price?: number;
     total_amount?: number;
     discount_type?: number | string | null;
+    received?: number | string | null;
 };
 
 async function fetchPOProductsByPOIds(base: string, poIds: number[]) {
@@ -222,7 +286,7 @@ async function fetchPOProductsByPOIds(base: string, poIds: number[]) {
         const url =
             `${base}/items/${PO_PRODUCTS_COLLECTION}?limit=-1` +
             `&filter[purchase_order_id][_in]=${encodeURIComponent(ids.join(","))}` +
-            `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,ordered_quantity,unit_price,total_amount`;
+            `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,ordered_quantity,unit_price,total_amount,received`;
         const j = await fetchJson(url) as { data: PoProductRow[] };
         rows.push(...(Array.isArray(j?.data) ? j.data : []));
     }
@@ -233,7 +297,7 @@ async function fetchPOProductsByPOId(base: string, poId: number) {
     const url =
         `${base}/items/${PO_PRODUCTS_COLLECTION}?limit=-1` +
         `&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}` +
-        `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,ordered_quantity,unit_price,total_amount`;
+        `&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,ordered_quantity,unit_price,total_amount,received`;
     const j = await fetchJson(url) as { data: PoProductRow[] };
     return (Array.isArray(j?.data) ? j.data : []) as PoProductRow[];
 }
@@ -245,7 +309,7 @@ async function fetchPOHeadersByIds(base: string, poIds: number[]) {
         const url =
             `${base}/items/${PO_COLLECTION}?limit=-1` +
             `&filter[purchase_order_id][_in]=${encodeURIComponent(ids.join(","))}` +
-            `&fields=purchase_order_id,purchase_order_no,date,date_encoded,supplier_name,total_amount,date_received,inventory_status,gross_amount,discounted_amount,vat_amount,withholding_tax_amount`;
+            `&fields=purchase_order_id,purchase_order_no,date,date_encoded,supplier_name,total_amount,date_received,inventory_status,gross_amount,discounted_amount,vat_amount,withholding_tax_amount,discount_type.*,discount_type.line_per_discount_type.line_id.*`;
         const j = await fetchJson(url) as { data: POHeader[] };
         rows.push(...(Array.isArray(j?.data) ? j.data : []));
     }
@@ -289,20 +353,7 @@ async function patchPOR(base: string, porId: number, payload: unknown) {
     await fetchJson(url, { method: "PATCH", body: JSON.stringify(payload) });
 }
 
-async function fetchProductSupplierLinks(base: string, supplierId: number) {
-    const url =
-        `${base}/items/product_per_supplier?limit=-1` +
-        `&filter[supplier_id][_eq]=${encodeURIComponent(String(supplierId))}` +
-        `&fields=id,product_id,supplier_id,discount_type`;
-    const j = await fetchJson(url) as { data: { product_id: number; discount_type: number | string }[] };
-    const rows = Array.isArray(j?.data) ? j.data : [];
-    const map = new Map<number, { product_id: number; discount_type: number | string }>();
-    for (const r of rows) {
-        const pid = toNum(r?.product_id);
-        if (pid) map.set(pid, r);
-    }
-    return map;
-}
+
 
 // =====================
 // BUILDERS / LOGIC
@@ -458,7 +509,6 @@ function buildReceiptSummary(porRows: PORRow[]) {
         let disc = 0;
         let vat = 0;
         let wht = 0;
-        let net = 0;
 
         for (const r of rows) {
             const porId = toNum(r?.purchase_order_product_id);
@@ -472,13 +522,12 @@ function buildReceiptSummary(porRows: PORRow[]) {
             total += effectiveReceivedQty(r);
             if (toNum(r?.isPosted) !== 1) allPosted = false;
 
-            gross += toNum(r?.total_amount || 0); // Note: total_amount in POR is Gross + VAT
+            const whtTotal = toNum(r?.withholding_amount || 0);
+            
+            gross += toNum(r?.unit_price || 0) * toNum(r?.received_quantity || 0);
             disc += toNum(r?.discounted_amount || 0);
             vat += toNum(r?.vat_amount || 0);
-            wht += toNum(r?.withholding_amount || 0);
-            
-            // Reconstruct net based on formula: Total - Disc - WHT
-            net += toNum(r?.total_amount || 0) - toNum(r?.discounted_amount || 0) - toNum(r?.withholding_amount || 0);
+            wht += whtTotal;
         }
 
         receipts.push({
@@ -491,7 +540,7 @@ function buildReceiptSummary(porRows: PORRow[]) {
             discountAmount: disc,
             vatAmount: vat,
             withholdingTaxAmount: wht,
-            totalAmount: net,
+            totalAmount: gross - disc, // Grand Total is Net (Gross - Discount)
         });
     }
 
@@ -591,7 +640,10 @@ type PostingPOItem = {
     isReceived: boolean;
     unitPrice: number;
     grossAmount: number;
+    discountAmount: number;
+    netAmount: number;
     discountTypeId?: string;
+    discountLabel?: string;
 };
 
 type PostingPODetail = {
@@ -679,6 +731,9 @@ export async function GET() {
         // Supplier names
         const supplierIds = poHeaders.map((p) => toNum(p?.supplier_name)).filter(Boolean);
         const supplierNamesMap = await fetchSupplierNames(base, supplierIds);
+        
+        const allProductIds = Array.from(new Set(Array.from(linesByPo.values()).flatMap(rows => rows.map(r => toNum(r.product_id)).filter(Boolean))));
+        await fetchProductsMap(base, allProductIds as number[]);
 
         const list: PostingListItem[] = [];
 
@@ -730,6 +785,13 @@ export async function GET() {
                 if (pid) products.add(pid);
                 if (bid) branches.add(bid);
             }
+            // Include products from POR rows (Extra items)
+            for (const r of porRows) {
+                const pid = toNum(r?.product_id);
+                const bid = toNum(r?.branch_id);
+                if (pid) products.add(pid);
+                if (bid) branches.add(bid);
+            }
 
             const lr = latestReceiptInfo(porRows);
             const rs = buildReceiptSummary(porRows);
@@ -741,22 +803,12 @@ export async function GET() {
             const unpostedRows = porRows.filter(r => toNum(r.isPosted) === 0 && (toNum(r.received_quantity) > 0 || toStr(r.receipt_no)));
             let listTotal = 0;
             if (unpostedRows.length > 0) {
-                const porSum = unpostedRows.reduce((sum, r) => sum + (toNum(r.total_amount) - toNum(r.discounted_amount) - toNum(r.withholding_amount)), 0);
-                if (porSum === 0) {
-                    // Fallback for old records: recalculate from line items
-                    for (const r of unpostedRows) {
-                        const pid = toNum(r.product_id);
-                        const bid = toNum(r.branch_id);
-                        const qty = effectiveReceivedQty(r);
-                        const matchLine = lines.find(l => toNum(l.product_id) === pid && toNum(l.branch_id) === bid);
-                        const uPrice = matchLine ? toNum(matchLine.unit_price) : 0;
-                        listTotal += uPrice * qty;
-                    }
-                } else {
-                    listTotal = porSum;
+                // Inventory module trusts stored values in POR for listTotal
+                for (const r of unpostedRows) {
+                    listTotal += toNum(r.total_amount);
                 }
             } else {
-                listTotal = toNum(po?.total_amount ?? 0);
+                listTotal = Number((toNum(po?.total_amount) - toNum(po?.discounted_amount)).toFixed(2));
             }
 
             list.push({
@@ -829,33 +881,29 @@ export async function POST(req: NextRequest) {
 
             const sid = toNum(po?.supplier_name);
             const supplierMap = await fetchSupplierNames(base, sid ? [sid] : []);
-            const supplierName = sid ? toStr(supplierMap.get(sid), "—") : "—";
+            const supplierName = sid ? toStr(supplierMap.get(sid)) : toStr(po?.supplier_name);
 
-            const productIds = Array.from(new Set(lines.map((x) => toNum(x.product_id)).filter(Boolean)));
-            const branchIds = Array.from(new Set(lines.map((x) => toNum(x.branch_id)).filter(Boolean)));
+            const productIds = Array.from(new Set([
+                ...lines.map((x) => toNum(x.product_id)),
+                ...porRows.map((x) => toNum(x.product_id))
+            ].filter(Boolean)));
+            const branchIds = Array.from(new Set([
+                ...lines.map((x) => toNum(x.branch_id)),
+                ...porRows.map((x) => toNum(x.branch_id))
+            ].filter(Boolean)));
 
             const productsMap = await fetchProductsMap(base, productIds);
             const branchesMap = await fetchBranchesMap(base, branchIds);
-            const productSupplierLinks = sid ? await fetchProductSupplierLinks(base, sid) : new Map();
+            const discountTypesMap = await fetchDiscountTypesMap(base);
+            // Removed: Live Sourcing of productSupplierLinks is no longer done here.
+            // The Inventory module trusts the financials saved by the Amounts module.
 
-            // ── Resolve PO-level discount name & percent ──
+            // ── Resolve PO-level discount percent (Total Percent Source of Truth) ──
             const poDType = po?.discount_type as Record<string, unknown> | null;
-            const poDiscountName = toStr(poDType?.discount_type || poDType?.discount_code || poDType?.name, "");
-            const poDLines = (poDType?.line_per_discount_type ?? []) as { line_id?: { percentage?: number }; percentage?: number }[];
-            let poDiscountPercent = 0;
-            if (Array.isArray(poDLines) && poDLines.length > 0) {
-                poDiscountPercent = poDLines.reduce((acc, l) => {
-                    const p = toNum(l?.line_id?.percentage ?? l?.percentage ?? 0);
-                    return acc * (1 - p / 100);
-                }, 1);
-                poDiscountPercent = Number(((1 - poDiscountPercent) * 100).toFixed(4));
-            } else if (poDiscountName) {
-                // Derive from code like "L5/L8/L25"
-                const nums = (poDiscountName.match(/\d+(?:\.\d+)?/g) ?? []).map(Number).filter(n => Number.isFinite(n) && n > 0 && n <= 100);
-                if (nums.length) {
-                    poDiscountPercent = Number(((1 - nums.reduce((a, p) => a * (1 - p / 100), 1)) * 100).toFixed(4));
-                }
-            }
+            const poDiscountName = toStr(poDType?.discount_type || poDType?.name, "");
+            const poDiscountPercent = resolveDiscountPercent(poDType);
+
+            console.log("[DEBUG open_po] PO-level discount:", { poDType: JSON.stringify(poDType), poDiscountName, poDiscountPercent });
 
             const porIdsByKey = buildPorIdsByKey(porRows);
 
@@ -866,13 +914,26 @@ export async function POST(req: NextRequest) {
                 recByPor.set(porId, effectiveReceivedQty(r));
             }
 
+            const unpostedRows = porRows.filter(r => toNum(r.isPosted) === 0 && (toStr(r.receipt_no).trim() !== "" || toNum(r.received_quantity) > 0));
             const itemsByBranch = new Map<number, PostingPOItem[]>();
 
-            for (const ln of lines) {
-                const pid = toNum(ln.product_id);
-                const bid = toNum(ln.branch_id);
-                const expected = Math.max(0, toNum(ln.ordered_quantity));
-                if (!pid || !bid || expected <= 0) continue;
+            // --- Live Sourcing vs Frozen ---
+            const isPoFrozen = hasAnyPosted || invStatus === 14;
+
+            const allKeys = new Set<string>();
+            lines.forEach(ln => allKeys.add(`${toNum(ln.product_id)}-${toNum(ln.branch_id)}`));
+            porRows.forEach(r => {
+                if (toNum(r.received_quantity) > 0 || toStr(r.receipt_no)) {
+                    allKeys.add(`${toNum(r.product_id)}-${toNum(r.branch_id)}`);
+                }
+            });
+
+            for (const keyStr of allKeys) {
+                const [pid, bid] = keyStr.split("-").map(Number);
+                if (!pid || !bid) continue;
+
+                const ln = lines.find(l => toNum(l.product_id) === pid && toNum(l.branch_id) === bid);
+                const expected = Math.max(0, toNum(ln?.ordered_quantity || 0));
 
                 const k = keyLine(poId, pid, bid);
                 const porIdsForLine = porIdsByKey.get(k) ?? [];
@@ -880,16 +941,38 @@ export async function POST(req: NextRequest) {
                 const rfids = porIdsForLine.flatMap((id) => rfidsByPorId.get(id) ?? []);
                 const taggedQty = rfids.length;
                 const receivedQty = porIdsForLine.reduce((sum, id) => sum + (recByPor.get(id) ?? 0), 0);
-                const isReceived = receivedQty >= expected;
+                
+                // For extra items, we consider them received if a record exists with qty > 0
+                const isReceived = expected > 0 ? (receivedQty >= expected) : (receivedQty > 0);
 
                 const p = productsMap.get(pid) ?? null;
-                const primaryPorId = porIdsForLine[0] || ln.purchase_order_product_id;
+                const primaryPorId = porIdsForLine[0] || (ln ? ln.purchase_order_product_id : `extra-${pid}-${bid}`);
 
-                // Resolve discount: prefer product-supplier link, else PO header
-                const psl = productSupplierLinks.get(pid);
-                const itemDiscountId = psl?.discount_type
-                    ? String(psl.discount_type)
-                    : (poDiscountName || undefined);
+                let unitPrice = 0;
+                let lineGrossAmt = 0;
+                let lineDiscount = 0;
+                let lineNet = 0;
+                let discountTypeId = "";
+                let resolvedLabel = "—";
+
+                const linePorRows = porRows.filter(r => porIdsForLine.includes(toNum(r.purchase_order_product_id)));
+                const srcRow = linePorRows.find(r => toNum(r.unit_price) > 0) || linePorRows.find(r => toNum(r.isPosted) === 1) || linePorRows[0];
+                
+                discountTypeId = toStr(srcRow?.discount_type);
+                if (discountTypeId) {
+                    const dt = discountTypesMap.get(toNum(discountTypeId));
+                    resolvedLabel = toStr(dt?.name, "—");
+                }
+                
+                unitPrice = toNum(srcRow?.unit_price) || toNum(ln?.unit_price) || toNum(p?.cost_per_unit);
+                lineGrossAmt = linePorRows.reduce((sum, r) => sum + (toNum(r.unit_price) * effectiveReceivedQty(r)), 0);
+                lineDiscount = linePorRows.reduce((sum, r) => sum + toNum(r.discounted_amount), 0);
+                lineNet = linePorRows.reduce((sum, r) => sum + toNum(r.total_amount), 0);
+
+                if (receivedQty === 0 && expected > 0) {
+                    lineGrossAmt = unitPrice * expected;
+                    lineNet = lineGrossAmt;
+                }
 
                 const item: PostingPOItem = {
                     id: String(primaryPorId),
@@ -903,9 +986,12 @@ export async function POST(req: NextRequest) {
                     receivedQty,
                     rfids,
                     isReceived,
-                    unitPrice: toNum(ln.unit_price),
-                    grossAmount: toNum(ln.total_amount),
-                    discountTypeId: itemDiscountId,
+                    unitPrice,
+                    grossAmount: lineGrossAmt,
+                    discountAmount: lineDiscount,
+                    netAmount: lineNet,
+                    discountTypeId: discountTypeId || undefined,
+                    discountLabel: resolvedLabel !== "—" ? resolvedLabel : undefined,
                 };
 
                 const arr = itemsByBranch.get(bid) ?? [];
@@ -929,8 +1015,6 @@ export async function POST(req: NextRequest) {
 
             const branchName = branchesLabelFromLines(lines, branchesMap);
 
-            // If there are unposted receipts, the summary should focus on what's about to be posted
-            const unpostedRows = porRows.filter(r => toNum(r.isPosted) === 0 && hasReceiptEvidence(r));
             const hasUnposted = unpostedRows.length > 0;
 
             let detailGross = 0;
@@ -939,53 +1023,51 @@ export async function POST(req: NextRequest) {
             let detailWht = 0;
             let detailTotal = 0;
 
-            if (hasUnposted) {
-                const porGross = unpostedRows.reduce((sum, r) => sum + toNum(r.total_amount), 0);
-                const porDisc = unpostedRows.reduce((sum, r) => sum + toNum(r.discounted_amount), 0);
-                const porVat = unpostedRows.reduce((sum, r) => sum + toNum(r.vat_amount), 0);
-                const porWht = unpostedRows.reduce((sum, r) => sum + toNum(r.withholding_amount), 0);
-
-                // ✅ Fallback: if POR rows have zero financial data (old records),
-                // recalculate from line items × received qty × discount
-                if (porGross === 0 && unpostedRows.length > 0) {
-                    for (const r of unpostedRows) {
-                        const pid = toNum(r.product_id);
-                        const bid = toNum(r.branch_id);
-                        const qty = effectiveReceivedQty(r);
-                        // Find matching PO line for unit price
-                        const matchLine = lines.find(l => toNum(l.product_id) === pid && toNum(l.branch_id) === bid);
-                        const uPrice = matchLine ? toNum(matchLine.unit_price) : 0;
-                        const lineGross = uPrice * qty;
-                        const lineDisc = lineGross * (poDiscountPercent / 100);
-                        const lineNet = lineGross - lineDisc;
-                        const lineVat = Number((lineNet * 0.12).toFixed(2));
-                        const lineWht = Number((lineNet * 0.01).toFixed(2));
-
-                        detailGross += Number(lineGross.toFixed(2));
-                        detailDisc += Number(lineDisc.toFixed(2));
-                        detailVat += lineVat;
-                        detailWht += lineWht;
-                    }
-                    detailTotal = Number(((detailGross - detailDisc) + detailVat - detailWht).toFixed(2));
-                } else {
-                    detailGross = porGross;
-                    detailDisc = porDisc;
-                    detailVat = porVat;
-                    detailWht = porWht;
-                    detailTotal = porGross - porDisc - porWht;
-                }
-            } else {
+            if (isPoFrozen && !hasUnposted) {
+                // Completely posted or closed
                 detailGross = toNum(po?.gross_amount);
                 detailDisc = toNum(po?.discounted_amount);
                 detailVat = toNum(po?.vat_amount);
                 detailWht = toNum(po?.withholding_tax_amount);
-                detailTotal = toNum(po?.total_amount);
+                detailTotal = toNum(po?.total_amount); 
+            } else if (isPoFrozen && hasUnposted) {
+                // Partially posted, mix of unposted/posted: we still sum what's in DB for unposted if no changes happen, 
+                // but if we are frozen, we should just read from the PO header, unless it's out of sync
+                detailGross = toNum(po?.gross_amount);
+                detailDisc = toNum(po?.discounted_amount);
+                detailVat = toNum(po?.vat_amount);
+                detailWht = toNum(po?.withholding_tax_amount);
+                detailTotal = toNum(po?.total_amount); 
+            } else {
+                // Live unposted PO: build footer from exact items
+                const poIsInvoice = (toNum(po?.receiving_type) === 2) || (toNum(po?.vat_amount) > 0) || (toNum(po?.withholding_tax_amount) > 0);
+                
+                for (const arr of itemsByBranch.values()) {
+                    for (const item of arr) {
+                        if (item.receivedQty > 0) {
+                            // The properties on `item` were calculated using receivedQty exactly when receivedQty > 0
+                            detailGross += item.grossAmount;
+                            detailDisc += item.discountAmount;
+                            
+                            if (poIsInvoice) {
+                                const rowVatExcl = Number((item.netAmount / 1.12).toFixed(2));
+                                const rowVat = Number((item.netAmount - rowVatExcl).toFixed(2));
+                                const rowWht = Number((rowVatExcl * 0.01).toFixed(2));
 
-                // ✅ Ensure total matches components if it was stored incorrectly
-                if (detailTotal === detailGross - detailWht && detailDisc > 0) {
-                    detailTotal = detailGross - detailDisc - detailWht;
+                                detailVat += rowVat;
+                                detailWht += rowWht;
+                            }
+                        }
+                    }
                 }
+                
+                detailGross = Number(detailGross.toFixed(2));
+                detailDisc = Number(detailDisc.toFixed(2));
+                detailVat = Number(detailVat.toFixed(2));
+                detailWht = Number(detailWht.toFixed(2));
+                detailTotal = Number((detailGross - detailDisc).toFixed(2));
             }
+
 
             const detail: PostingPODetail = {
                 id: String(poId),
@@ -1065,8 +1147,12 @@ export async function POST(req: NextRequest) {
             const toPost = target
                 .map((r: PORRow) => ({
                     porId: toNum(r?.purchase_order_product_id),
+                    productId: toNum(r?.product_id),
+                    branchId: toNum(r?.branch_id),
                     posted: toNum(r?.isPosted) === 1,
                     canPost: hasReceiptEvidence(r) || effectiveReceivedQty(r) > 0,
+                    qty: effectiveReceivedQty(r),
+                    rowObj: r,
                 }))
                 .filter((x) => x.porId && !x.posted && x.canPost);
 
@@ -1074,8 +1160,19 @@ export async function POST(req: NextRequest) {
                 return ok({ ok: true, postedAt: nowISO(), receiptNo, message: "Nothing to post." });
             }
 
+            // --- Persist Live Exact Values for Post ---
+            const poUrl = `${base}/items/${PO_COLLECTION}/${poId}?fields=supplier_name,discount_type.*,discount_type.line_per_discount_type.line_id.*,receiving_type,vat_amount,withholding_tax_amount`;
+            const pj = await fetchJson(poUrl) as { data: Record<string, unknown> };
+            const po = pj?.data;
+
+            // PO Global Discount
+            const poDType = po?.discount_type as Record<string, unknown> | null | undefined;
+            resolveDiscountPercent(poDType);
+
             for (const row of toPost) {
-                await patchPOR(base, row.porId, { isPosted: 1 });
+                await patchPOR(base, row.porId, { 
+                    isPosted: 1,
+                });
             }
 
             // Re-check fully received AFTER posting these rows
@@ -1098,6 +1195,35 @@ export async function POST(req: NextRequest) {
                 await patchPO(base, poId, poUpdate);
             } catch {}
 
+            // Sync 'received' flag in POP based on POSTED quantities
+            const updatedPorIdsByKey = buildPorIdsByKey(updatedPorRows);
+            const popSyncPromises = lines.map(async (ln) => {
+                const pid = toNum(ln.product_id);
+                const bid = toNum(ln.branch_id ?? 0);
+                const k = keyLine(poId, pid, bid);
+                const pors = updatedPorIdsByKey.get(k) || [];
+                
+                const totalPosted = pors.reduce((sum, id) => {
+                    const row = updatedPorRows.find(r => toNum(r.purchase_order_product_id) === id && toNum(r.isPosted) === 1);
+                    return sum + (row ? toNum(row.received_quantity) : 0);
+                }, 0);
+                
+                const ordered = toNum(ln.ordered_quantity);
+                const shouldBeReceived = (totalPosted >= ordered && totalPosted > 0) || (ordered === 0 && totalPosted > 0);
+                const currentReceived = toNum(ln.received || 0);
+
+                if (shouldBeReceived && currentReceived !== 1) {
+                    await fetchJson(`${base}/items/${PO_PRODUCTS_COLLECTION}/${ln.purchase_order_product_id}`, {
+                        method: "PATCH", body: JSON.stringify({ received: 1 })
+                    }).catch(() => {});
+                } else if (!shouldBeReceived && currentReceived === 1) {
+                    await fetchJson(`${base}/items/${PO_PRODUCTS_COLLECTION}/${ln.purchase_order_product_id}`, {
+                        method: "PATCH", body: JSON.stringify({ received: 0 })
+                    }).catch(() => {});
+                }
+            });
+            await Promise.all(popSyncPromises);
+
             return ok({
                 ok: true,
                 postedAt: nowISO(),
@@ -1116,6 +1242,11 @@ export async function POST(req: NextRequest) {
         if (action === "post_all" || action === "post_po") {
             const poId = toNum(body?.poId);
             if (!poId) return bad("Missing poId.", 400);
+
+            const poUrl = `${base}/items/${PO_COLLECTION}/${encodeURIComponent(String(poId))}?fields=purchase_order_id,purchase_order_no,supplier_name,inventory_status,discount_type.*,discount_type.line_per_discount_type.line_id.*`;
+            const pj_po = await fetchJson(poUrl) as { data: Record<string, unknown> };
+            const po = pj_po?.data ?? null;
+            if (!po) return bad("PO not found for bulk posting.", 404);
 
             const lines = await fetchPOProductsByPOId(base, poId);
             const porRows = await fetchPORByPOIds(base, [poId]);
@@ -1137,14 +1268,16 @@ export async function POST(req: NextRequest) {
 
             // Post ALL currently unposted POR rows
             const toPost = porRows
-                .map((r: PORRow) => ({
-                    porId: toNum(r?.purchase_order_product_id),
-                    posted: toNum(r?.isPosted) === 1,
-                }))
-                .filter((x) => x.porId && !x.posted);
+                .filter((r) => toNum(r?.isPosted) === 0 && (toNum(r.received_quantity) > 0 || toStr(r.receipt_no)));
 
-            for (const row of toPost) {
-                await patchPOR(base, row.porId, { isPosted: 1 });
+            if (toPost.length > 0) {
+                for (const r of toPost) {
+                    const porId = toNum(r.purchase_order_product_id);
+                    if (!porId) continue;
+                    await patchPOR(base, porId, { 
+                        isPosted: 1,
+                    });
+                }
             }
 
             const fully = isFullyReceived(poId, lines, porRows);
@@ -1160,6 +1293,37 @@ export async function POST(req: NextRequest) {
                 await patchPO(base, poId, poUpdate);
             } catch {}
 
+            // Sync 'received' flag in POP based on POSTED quantities
+            // After post_all, we need to re-fetch porRows to get the updated isPosted status
+            const updatedPorRowsAll = await fetchPORByPOIds(base, [poId]);
+            const updatedPorIdsByKeyAll = buildPorIdsByKey(updatedPorRowsAll);
+            const popSyncPromisesAll = lines.map(async (ln) => {
+                const pid = toNum(ln.product_id);
+                const bid = toNum(ln.branch_id ?? 0);
+                const k = keyLine(poId, pid, bid);
+                const pors = updatedPorIdsByKeyAll.get(k) || [];
+                
+                const totalPosted = pors.reduce((sum, id) => {
+                    const row = updatedPorRowsAll.find(r => toNum(r.purchase_order_product_id) === id && toNum(r.isPosted) === 1);
+                    return sum + (row ? toNum(row.received_quantity) : 0);
+                }, 0);
+                
+                const ordered = toNum(ln.ordered_quantity);
+                const shouldBeReceived = (totalPosted >= ordered && totalPosted > 0) || (ordered === 0 && totalPosted > 0);
+                const currentReceived = toNum(ln.received || 0);
+
+                if (shouldBeReceived && currentReceived !== 1) {
+                    await fetchJson(`${base}/items/${PO_PRODUCTS_COLLECTION}/${ln.purchase_order_product_id}`, {
+                        method: "PATCH", body: JSON.stringify({ received: 1 })
+                    }).catch(() => {});
+                } else if (!shouldBeReceived && currentReceived === 1) {
+                    await fetchJson(`${base}/items/${PO_PRODUCTS_COLLECTION}/${ln.purchase_order_product_id}`, {
+                        method: "PATCH", body: JSON.stringify({ received: 0 })
+                    }).catch(() => {});
+                }
+            });
+            await Promise.all(popSyncPromisesAll);
+
             return ok({
                 ok: true,
                 postedAt: nowISO(),
@@ -1168,6 +1332,7 @@ export async function POST(req: NextRequest) {
                 postedCount: toPost.length,
             });
         }
+
 
         // -------------------------
         // revert_receipt — revert a single unposted receipt back to receiving.
@@ -1201,33 +1366,45 @@ export async function POST(req: NextRequest) {
             }
 
             // 4. Reset each target POR row: clear quantities, financials, and receipt metadata
+            const lines = await fetchPOProductsByPOId(base, poId);
             const targetPorIds: number[] = [];
+            const targetPopIds: number[] = [];
+
             for (const r of targetRows) {
                 const porId = toNum(r?.purchase_order_product_id);
                 if (!porId) continue;
                 targetPorIds.push(porId);
 
-                await patchPOR(base, porId, {
-                    received_quantity: 0,
-                    receipt_no: null,
-                    receipt_date: null,
-                    received_date: null,
-                    discounted_amount: 0,
-                    vat_amount: 0,
-                    withholding_amount: 0,
-                    total_amount: 0,
-                });
-            }
-
-            // 4.5. Delete associated RFID tags (both new POR and legacy POP linkages)
-            const lines = await fetchPOProductsByPOId(base, poId);
-            
-            const targetPopIds: number[] = [];
-            for (const r of targetRows) {
                 const pop = lines.find(ln => toNum(ln.product_id) === toNum(r.product_id) && toNum(ln.branch_id) === toNum(r.branch_id));
                 const popId = toNum(pop?.purchase_order_product_id);
                 if (popId) targetPopIds.push(popId);
+
+                if (pop) {
+                    await patchPOR(base, porId, {
+                        received_quantity: 0,
+                        receipt_no: null,
+                        receipt_date: null,
+                        received_date: null,
+                        discounted_amount: 0,
+                        vat_amount: 0,
+                        withholding_amount: 0,
+                        total_amount: 0,
+                    });
+                } else {
+                    // Extra product: delete completely to prevent ghost records
+                    try {
+                        await fetch(`${base}/items/${POR_COLLECTION}`, {
+                            method: "DELETE",
+                            headers: directusHeaders(),
+                            body: JSON.stringify([porId]),
+                        });
+                    } catch (err) {
+                        console.error("Failed to delete extra POR item during revert:", err);
+                    }
+                }
             }
+
+            // 4.5. Delete associated RFID tags (legacy POP linkages)
 
             const allLinkIds = [...targetPorIds, ...targetPopIds];
 
@@ -1281,12 +1458,39 @@ export async function POST(req: NextRequest) {
                 await patchPO(base, poId, poUpdate);
             } catch {}
 
+            // 6. Update 'received' flag in purchase_order_products
+            // Since we reverted, re-evaluate if the PO products are fully posted
+            const updatedPorIdsByKeyRevert = buildPorIdsByKey(updatedPorRows);
+            const popSyncPromisesRevert = lines.map(async (ln) => {
+                const pid = toNum(ln.product_id);
+                const bid = toNum(ln.branch_id ?? 0);
+                const k = keyLine(poId, pid, bid);
+                const pors = updatedPorIdsByKeyRevert.get(k) || [];
+                
+                const totalPosted = pors.reduce((sum, id) => {
+                    const row = updatedPorRows.find(r => toNum(r.purchase_order_product_id) === id && toNum(r.isPosted) === 1);
+                    return sum + (row ? toNum(row.received_quantity) : 0);
+                }, 0);
+                
+                const ordered = toNum(ln.ordered_quantity);
+                const shouldBeReceived = (totalPosted >= ordered && totalPosted > 0) || (ordered === 0 && totalPosted > 0);
+                const currentReceived = toNum(ln.received || 0);
+
+                if (!shouldBeReceived && currentReceived === 1) {
+                    await fetchJson(`${base}/items/${PO_PRODUCTS_COLLECTION}/${ln.purchase_order_product_id}`, {
+                        method: "PATCH", body: JSON.stringify({ received: 0 })
+                    }).catch(() => {});
+                }
+            });
+            await Promise.all(popSyncPromisesRevert);
+
             return ok({
                 ok: true,
                 revertedAt: nowISO(),
                 receiptNo,
                 revertedCount: targetRows.length,
                 newStatus: nextStatus,
+                noRemainingReceipts: !hasAnyRemainingReceipts && !hasAnyPosted,
             });
         }
 

@@ -130,3 +130,22 @@ export async function updateItem<T>(
     body: JSON.stringify(payload),
   });
 }
+
+/**
+ * Bulk-update multiple items in a Directus collection using the
+ * PATCH /items/{collection} endpoint with { keys, data } payload.
+ * This replaces the N+1 pattern of individual PATCH calls.
+ */
+export async function bulkUpdateItems<T>(
+  endpoint: string,
+  ids: (number | string)[],
+  data: Record<string, unknown>,
+): Promise<{ data: T }> {
+  const baseUrl = API_BASE_URL?.replace(/\/$/, "");
+  const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+
+  return request<{ data: T }>(`${baseUrl}${cleanEndpoint}`, {
+    method: "PATCH",
+    body: JSON.stringify({ keys: ids, data }),
+  });
+}
