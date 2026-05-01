@@ -6,7 +6,7 @@ import type { BranchAllocation, CartItem, Supplier, DiscountType, PaymentTerm } 
 import { buildMoneyFormatter, cn, deriveDiscountPercentFromCode } from "../utils/calculations";
 import { toast } from "sonner";
 import { ColumnDef } from "@tanstack/react-table";
-import { DataTable } from "@/components/ui/new-data-table";
+import { POCreationDataTable } from "./POCreationDataTable";
 
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -263,17 +263,6 @@ export function PurchaseOrderSummary(props: {
                     : "Your purchase order has been saved successfully.",
             });
 
-            // ✅ Global toast
-            if (alreadyExists) {
-                toast.info("Purchase order already exists", {
-                    description: "This PO number is already in the database. No duplicate was created.",
-                });
-            } else {
-                toast.success("Purchase order created!", {
-                    description: "Your purchase order has been saved successfully.",
-                });
-            }
-
             // ✅ lock to prevent double submit
             setLocked(true);
         } catch (e: unknown) {
@@ -284,9 +273,6 @@ export function PurchaseOrderSummary(props: {
                 title: "Failed to create purchase order",
                 description: errMsg,
             });
-
-            // ✅ Global toast error
-            toast.error("Failed to create purchase order", { description: errMsg });
 
             setLocked(false);
         } finally {
@@ -507,11 +493,12 @@ export function PurchaseOrderSummary(props: {
                         </div>
 
                         <div className="flex-1 overflow-auto custom-scrollbar bg-background p-4 [&_button:has(svg.lucide-settings-2)]:hidden">
-                            <DataTable
+                            <POCreationDataTable
                                 columns={consolidatedColumns}
                                 data={consolidatedRows}
                                 emptyTitle="No items"
                                 emptyDescription="Add products to your purchase order."
+                                showSelectionCount={true}
                             />
                         </div>
                     </div>

@@ -341,6 +341,7 @@ function BranchTable({
                                     );
                                 })}
                                 autoResetPageIndex={false}
+                                showSelectionCount={true}
                                 emptyTitle="No matches"
                                 emptyDescription="Try a different search term."
                             />
