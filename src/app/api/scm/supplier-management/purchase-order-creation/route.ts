@@ -454,11 +454,9 @@ export async function POST(req: NextRequest) {
             String(input?.is_invoice || "").toLowerCase() === "true" ||
             String(input?.isInvoice || "").toLowerCase() === "true" ||
             input?.is_invoice === true ||
-            input?.isInvoice === true ||
-            input?.receiving_type === 2 ||
-            input?.receivingType === 2;
+            input?.isInvoice === true;
 
-        const receiving_type = isInvoiceFlag ? 2 : 3;
+        const receiving_type = 1; // Always 1 for "RECEIVE FROM PO"
         const receipt_required = intOrDefault(input?.receipt_required ?? input?.receiptRequired, 1);
         const price_type = strOrDefault(input?.price_type ?? input?.priceType, "Cost Per Unit");
         const inventory_status = intOrDefault(input?.inventory_status ?? input?.inventoryStatus, 1);
@@ -474,9 +472,9 @@ export async function POST(req: NextRequest) {
 
             gross_amount,
             discounted_amount,
-            vat_amount,
+            vat_amount: isInvoiceFlag ? vat_amount : 0,
             total_amount,
-            withholding_tax_amount,
+            withholding_tax_amount: isInvoiceFlag ? withholding_tax_amount : 0,
 
             payment_type,
             payment_status,

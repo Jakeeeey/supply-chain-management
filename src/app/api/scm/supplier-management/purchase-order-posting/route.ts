@@ -1040,7 +1040,7 @@ export async function POST(req: NextRequest) {
                 detailTotal = toNum(po?.total_amount); 
             } else {
                 // Live unposted PO: build footer from exact items
-                const poIsInvoice = (toNum(po?.receiving_type) === 2) || (toNum(po?.vat_amount) > 0) || (toNum(po?.withholding_tax_amount) > 0);
+                const poIsInvoice = (toNum(po?.vat_amount) > 0) || (toNum(po?.withholding_tax_amount) > 0);
                 
                 for (const arr of itemsByBranch.values()) {
                     for (const item of arr) {
@@ -1161,7 +1161,7 @@ export async function POST(req: NextRequest) {
             }
 
             // --- Persist Live Exact Values for Post ---
-            const poUrl = `${base}/items/${PO_COLLECTION}/${poId}?fields=supplier_name,discount_type.*,discount_type.line_per_discount_type.line_id.*,receiving_type,vat_amount,withholding_tax_amount`;
+            const poUrl = `${base}/items/${PO_COLLECTION}/${poId}?fields=supplier_name,discount_type.*,discount_type.line_per_discount_type.line_id.*,vat_amount,withholding_tax_amount`;
             const pj = await fetchJson(poUrl) as { data: Record<string, unknown> };
             const po = pj?.data;
 
@@ -1214,7 +1214,7 @@ export async function POST(req: NextRequest) {
             try {
                 const poUpdate: Record<string, unknown> = { date_received: nowISO() };
                 if (fully) {
-                    poUpdate.inventory_status = 14; // ✅ Fully Received & Posted = CLOSED
+                    poUpdate.inventory_status = 6; // ✅ Fully Received & Posted = CLOSED
                 } else {
                     poUpdate.inventory_status = 9;  // Partially Received
                 }
@@ -1284,7 +1284,7 @@ export async function POST(req: NextRequest) {
             try {
                 const poUpdate: Record<string, unknown> = { date_received: nowISO() };
                 if (fully) {
-                    poUpdate.inventory_status = 14; // ✅ Fully Received & Posted = CLOSED
+                    poUpdate.inventory_status = 6; // ✅ Fully Received & Posted = CLOSED
                 } else {
                     poUpdate.inventory_status = 9;  // Partially Received
                 }

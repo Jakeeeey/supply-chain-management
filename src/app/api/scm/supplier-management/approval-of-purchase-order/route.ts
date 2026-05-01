@@ -867,8 +867,7 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
 
         payment_type: header?.payment_type ?? null,
         
-        // derives is_invoice from receiving_type (2=Invoice, 3=PO) (robust check)
-        is_invoice: (Number(header?.receiving_type) === 2) || (String(header?.is_invoice ?? header?.isInvoice).toLowerCase() === "true") || !!(header?.is_invoice ?? header?.isInvoice),
+        is_invoice: (String(header?.is_invoice ?? header?.isInvoice).toLowerCase() === "true") || !!(header?.is_invoice ?? header?.isInvoice),
 
         vat_amount: vat,
         vatAmount: vat,
@@ -1067,7 +1066,7 @@ export async function GET(req: NextRequest) {
 
                 totalAmount: totalByPo.get(poId) ?? 0,
                 currency: "PHP",
-                is_invoice: (Number(h.receiving_type) === 2) || (String(h.is_invoice ?? h.isInvoice).toLowerCase() === "true") || !!(h.is_invoice ?? h.isInvoice),
+                is_invoice: (String(h.is_invoice ?? h.isInvoice).toLowerCase() === "true") || !!(h.is_invoice ?? h.isInvoice),
 
                 preparer_name: getPreparer(),
             };
@@ -1093,16 +1092,16 @@ export async function POST(req: NextRequest) {
 
         const patch: Record<string, unknown> = { 
             date_approved: new Date().toISOString(),
-            receiving_type: Boolean(body?.markAsInvoice) ? 2 : 3, // Persistent flag for "Mark as Invoice"
+            receiving_type: 1, // ✅ Always 1 for PO
             inventory_status: 3, // ✅ For Receiving
             approver_id: body?.approver_id ?? body?.approverId ?? null, // ✅ Track who approved
             payment_type: body?.payment_type ?? body?.paymentType ?? null, // ✅ Update payment terms
 
-            // ✅ Expanded financial tracking
+            // ✅ Expanded financial tracking (forced to 0 if not invoice)
             gross_amount: body?.gross_amount !== undefined ? toNum(body.gross_amount) : undefined,
             discounted_amount: body?.discounted_amount !== undefined ? toNum(body.discounted_amount) : undefined,
-            vat_amount: body?.vat_amount !== undefined ? toNum(body.vat_amount) : undefined,
-            withholding_tax_amount: (body?.withholding_tax_amount ?? body?.withholdingTaxAmount ?? body?.ewtGoods) !== undefined ? toNum(body.withholding_tax_amount ?? body.withholdingTaxAmount ?? body.ewtGoods) : undefined,
+            vat_amount: Boolean(body?.markAsInvoice) ? (body?.vat_amount !== undefined ? toNum(body.vat_amount) : undefined) : 0,
+            withholding_tax_amount: Boolean(body?.markAsInvoice) ? ((body?.withholding_tax_amount ?? body?.withholdingTaxAmount ?? body?.ewtGoods) !== undefined ? toNum(body.withholding_tax_amount ?? body.withholdingTaxAmount ?? body.ewtGoods) : undefined) : 0,
             total_amount: body?.total_amount !== undefined ? toNum(body.total_amount) : undefined,
 
             // ✅ Expanded relationship mapping

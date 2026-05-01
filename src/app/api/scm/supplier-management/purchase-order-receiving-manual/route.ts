@@ -354,28 +354,34 @@ function receivingStatusFrom(poId: number, lines: POProductRow[], porRows: PORow
 }
 
 async function ensureOpenReceivingRow(args: {
-    base: string; poId: number; productId: number; branchId: number;
-    unitPrice: number; discountTypeId: number | null; discountPercent: number;
+    base: string;
+    poId: number;
+    productId: number;
+    branchId: number;
+    unitPrice: number;
+    discountTypeId: number | null;
+    discountPercent: number;
+    isInvoice?: boolean;
 }) {
-    const { base, poId, productId, branchId, unitPrice, discountTypeId, discountPercent } = args;
+    const { base, poId, productId, branchId, unitPrice, discountTypeId, discountPercent, isInvoice } = args;
 
     const findUrl = `${base}/items/${POR_COLLECTION}?limit=1&sort=-purchase_order_product_id&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&filter[product_id][_eq]=${encodeURIComponent(String(productId))}&filter[branch_id][_eq]=${encodeURIComponent(String(branchId))}&filter[isPosted][_eq]=0&fields=purchase_order_product_id,received_quantity,receipt_no`;
     const found = await fetchJson<{ data: Record<string, unknown>[] }>(findUrl);
     const row = Array.isArray(found?.data) ? found.data[0] : null;
     if (row?.purchase_order_product_id) return { porId: toNum(row.purchase_order_product_id), receivedQty: toNum(row.received_quantity), created: false };
 
-    const lineGross = unitPrice; // qty=0 at creation, so gross = unitPrice × 1 for per-unit seed
-    const discountedSum = Number((lineGross * (discountPercent / 100)).toFixed(2));
-    const net = lineGross - discountedSum;
-    const vatExcl = Number((net / 1.12).toFixed(2));
-    const vatAmt = Number((net - vatExcl).toFixed(2));
-    const ewtAmt = Number((vatExcl * 0.01).toFixed(2));
+    const lineGross = unitPrice;
+    const discountedAmount = Number((lineGross * (discountPercent / 100)).toFixed(2));
+    const netPrice = lineGross - discountedAmount;
+    const vatExcl = isInvoice ? Number((netPrice / 1.12).toFixed(2)) : netPrice;
+    const vatAmount = isInvoice ? Number((netPrice - vatExcl).toFixed(2)) : 0;
+    const withholdingAmount = isInvoice ? Number((vatExcl * 0.01).toFixed(2)) : 0;
 
     const insertPayload: Record<string, unknown> = {
         purchase_order_id: poId, product_id: productId, branch_id: branchId,
-        received_quantity: 0, unit_price: unitPrice, discounted_amount: discountedSum,
-        discount_type: discountTypeId, vat_amount: vatAmt,
-        withholding_amount: ewtAmt, total_amount: Number(net.toFixed(2)),
+        received_quantity: 0, unit_price: unitPrice, discounted_amount: discountedAmount,
+        discount_type: discountTypeId, vat_amount: vatAmount,
+        withholding_amount: withholdingAmount, total_amount: Number(netPrice.toFixed(2)),
         isPosted: 0, receipt_no: null, receipt_date: null, received_date: null
     };
 
@@ -504,9 +510,7 @@ export async function POST(req: NextRequest) {
                 status: receivingStatusFrom(toNum(po.purchase_order_id), lines, porRows),
                 allocations: Array.from(allocationsMap.entries()).map(([bid, items]) => ({ branch: { id: String(bid), name: branchesMap.get(bid) || `Branch ${bid}` }, items })),
                 priceType: toStr(getVal(po, "price_type", "priceType"), "Cost Per Unit"),
-                isInvoice: (Number(getVal(po, "receiving_type", "receivingType")) === 2) || 
-                          (toNum(getVal(po, "vat_amount", "vatAmount", "val_amount", "valAmount")) > 0) || 
-                          (toNum(getVal(po, "withholding_tax_amount", "withholdingTaxAmount")) > 0),
+                isInvoice: (toNum(getVal(po, "vat_amount", "vatAmount")) > 0) || (toNum(getVal(po, "withholding_tax_amount", "withholdingTaxAmount")) > 0),
                 createdAt: po.date_encoded ? new Date(po.date_encoded).toISOString() : new Date().toISOString(),
                 history
             });
@@ -555,7 +559,7 @@ export async function POST(req: NextRequest) {
             const thePoId = toNum(poId);
             if (!thePoId) return bad("Missing PO ID");
 
-            const poUrl = `${base}/items/${PO_COLLECTION}/${thePoId}?fields=purchase_order_id,purchase_order_no,supplier_name,discount_type.*,discount_type.line_per_discount_type.line_id.*,inventory_status,price_type,date_encoded,receiving_type,vat_amount,withholding_tax_amount`;
+            const poUrl = `${base}/items/${PO_COLLECTION}/${thePoId}?fields=purchase_order_id,purchase_order_no,supplier_name,discount_type.*,discount_type.line_per_discount_type.line_id.*,inventory_status,price_type,date_encoded,vat_amount,withholding_tax_amount`;
             const pj = await fetchJson<{ data: POHeaderRow }>(poUrl);
             const po = pj?.data;
             let poDiscountPercent = 0;
@@ -600,7 +604,8 @@ export async function POST(req: NextRequest) {
 
                     // ✅ Removed unused isExclLine
 
-                    const ensured = await ensureOpenReceivingRow({ base, poId: thePoId, productId: pid, branchId: bid, unitPrice: uPrice, discountTypeId: resolvedId, discountPercent: linePct });
+                    const poIsInvoice = (toNum(po?.vat_amount) > 0) || (toNum(po?.withholding_tax_amount) > 0);
+                    const ensured = await ensureOpenReceivingRow({ base, poId: thePoId, productId: pid, branchId: bid, unitPrice: uPrice, discountTypeId: resolvedId, discountPercent: linePct, isInvoice: poIsInvoice });
                     porCounts[String(ensured.porId)] = qty;
                     delete porCounts[key];
                     if (porMetaData?.[key]) { porMetaData[String(ensured.porId)] = porMetaData[key]; delete porMetaData[key]; }
@@ -628,9 +633,10 @@ export async function POST(req: NextRequest) {
                 const lineGross = uPrice * newQty;
                 const lineDisc = Number((lineGross * (linePct / 100)).toFixed(2));
                 const lineNet = lineGross - lineDisc;
-                const vatExclTotal = Number((lineNet / 1.12).toFixed(2));
-                const vatAmtTotal = Number((lineNet - vatExclTotal).toFixed(2));
-                const ewtAmtTotal = Number((vatExclTotal * 0.01).toFixed(2));
+                const poIsInvoice = (toNum(po?.vat_amount) > 0) || (toNum(po?.withholding_tax_amount) > 0);
+                const vatExclTotal = poIsInvoice ? Number((lineNet / 1.12).toFixed(2)) : lineNet;
+                const vatAmtTotal = poIsInvoice ? Number((lineNet - vatExclTotal).toFixed(2)) : 0;
+                const ewtAmtTotal = poIsInvoice ? Number((vatExclTotal * 0.01).toFixed(2)) : 0;
 
                 const patch: Record<string, unknown> = {
                     receipt_no: receiptNo, receipt_date: receiptDate, received_quantity: newQty, received_date: nowISO(), isPosted: 0,
@@ -650,12 +656,10 @@ export async function POST(req: NextRequest) {
 
             const fully = isFullyReceived(thePoId, fLines, fPors);
             const hasRec = fPors.some(r => toStr(r.receipt_no) || toNum(r.received_quantity) > 0);
-            const nextStatus = fully ? 13 : (hasRec ? 9 : po.inventory_status);
+            const nextStatus = fully ? 6 : (hasRec ? 9 : po.inventory_status);
 
             // ✅ Determine isInvoice status
-            const poIsInvoice = (Number(getVal(po, "receiving_type", "receivingType")) === 2) || 
-                          (toNum(getVal(po, "vat_amount", "vatAmount")) > 0) || 
-                          (toNum(getVal(po, "withholding_tax_amount", "withholdingTaxAmount")) > 0);
+            const poIsInvoice = (toNum(getVal(po, "vat_amount", "vatAmount")) > 0) || (toNum(getVal(po, "withholding_tax_amount", "withholdingTaxAmount")) > 0);
 
             // ✅ Recalculate PO header totals from all receiving rows
             let poGross = 0, poDiscount = 0;
