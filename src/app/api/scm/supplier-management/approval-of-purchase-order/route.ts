@@ -438,9 +438,6 @@ type PoHeaderRow = {
     receiving_type?: number | null;
     vat_amount?: number | string | null;
     withholding_tax_amount?: number | string | null;
-    vatAmount?: number | string | null;
-    withholdingTaxAmount?: number | string | null;
-    ewtGoods?: number | string | null;
     user_created?: string | number | { first_name?: string; last_name?: string } | null;
     encoder_id?: string | number | { first_name?: string; last_name?: string } | null;
 };
@@ -459,9 +456,6 @@ async function fetchPendingPOs(base: string): Promise<PoHeaderRow[]> {
         "receiving_type",
         "vat_amount",
         "withholding_tax_amount",
-        "vatAmount",
-        "withholdingTaxAmount",
-        "ewtGoods",
         "user_created.first_name",
         "user_created.last_name",
         "encoder_id.user_id",
@@ -716,7 +710,7 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
         const linkDisc = getDiscInfo(linkData?.discount_type);
         const headerDiscPct = pickNum(header, ["discount_percent", "discountPercent", "discount_rate", "discountRate", "discount_percentage", "discountPercentage"]);
 
-        const resolvedDiscountType = formatDiscLabel(itemDisc, formatDiscLabel(linkDisc, headerDiscTypeName)) || "—";
+        const resolvedDiscountType = formatDiscLabel(itemDisc, formatDiscLabel(linkDisc, headerDiscTypeName)) || "No Discount";
         const discountPct = itemDisc?.pct || linkDisc?.pct || headerDiscPct || 0;
 
         const grossVal = toNum((l as Record<string, unknown>).gross) || lineTotal;
@@ -877,7 +871,7 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
 
         payment_type: header?.payment_type ?? null,
         
-        is_invoice: (toNum(header?.vat_amount ?? header?.vatAmount) > 0) || (toNum(header?.withholding_tax_amount ?? header?.withholdingTaxAmount ?? header?.ewtGoods) > 0),
+        is_invoice: (toNum(header?.vat_amount) > 0) || (toNum(header?.withholding_tax_amount) > 0),
 
         vat_amount: vat,
         vatAmount: vat,
@@ -1076,7 +1070,7 @@ export async function GET(req: NextRequest) {
 
                 totalAmount: totalByPo.get(poId) ?? 0,
                 currency: "PHP",
-                is_invoice: (toNum(h.vat_amount ?? h.vatAmount) > 0) || (toNum(h.withholding_tax_amount ?? h.withholdingTaxAmount ?? h.ewtGoods) > 0),
+                is_invoice: (toNum(h.vat_amount) > 0) || (toNum(h.withholding_tax_amount) > 0),
                 preparer_name: getPreparer(),
             };
         });
