@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
         const url = new URL(req.url);
         const limit = url.searchParams.get("limit") ?? "-1";
 
-        const upstream = `${base}/items/branches?limit=${encodeURIComponent(limit)}`;
+        const upstream = `${base}/items/branches?limit=${encodeURIComponent(limit)}&filter[isActive][_eq]=1`;
 
         const res = await fetch(upstream, {
             headers: buildUpstreamHeaders(),

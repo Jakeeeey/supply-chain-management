@@ -600,7 +600,6 @@ export default function PurchaseOrderSummaryModule({
         columns={columns}
         data={filteredData}
         isLoading={isLoading}
-        searchKey="purchase_order_no"
         emptyTitle="No purchase orders found matching your filters."
       />
 
@@ -672,31 +671,31 @@ export default function PurchaseOrderSummaryModule({
                   </div>
 
                   {/* Financial Summary Cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="p-6 rounded-2xl border border-border bg-muted/30 space-y-2 shadow-inner transition-all hover:border-border/80">
-                      <div className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Gross Amount</div>
-                      <div className="text-2xl font-black font-mono text-foreground flex items-baseline gap-1">
-                        <span className="text-sm font-bold opacity-50">₱</span>
-                        {gross.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
+                    <div className="p-4 lg:p-6 rounded-2xl border border-border bg-muted/30 space-y-2 shadow-inner transition-all hover:border-border/80 min-w-0 overflow-hidden">
+                      <div className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] truncate">Gross Amount</div>
+                      <div className="text-xl lg:text-2xl font-black font-mono text-foreground flex items-baseline gap-1 flex-wrap">
+                        <span className="text-sm font-bold opacity-50 shrink-0">₱</span>
+                        <span className="break-all">{gross.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                       </div>
                     </div>
 
-                    <div className="p-6 rounded-2xl border border-border bg-muted/30 space-y-2 shadow-inner transition-all hover:border-border/80">
-                      <div className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Discount</div>
-                      <div className="text-2xl font-black font-mono text-destructive flex items-baseline gap-1 text-red-500">
-                        <span className="text-sm font-bold opacity-50">- ₱</span>
-                        {disc.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    <div className="p-4 lg:p-6 rounded-2xl border border-border bg-muted/30 space-y-2 shadow-inner transition-all hover:border-border/80 min-w-0 overflow-hidden">
+                      <div className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] truncate">Discount</div>
+                      <div className="text-xl lg:text-2xl font-black font-mono text-destructive flex items-baseline gap-1 text-red-500 flex-wrap">
+                        <span className="text-sm font-bold opacity-50 shrink-0">- ₱</span>
+                        <span className="break-all">{disc.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                       </div>
                     </div>
 
-                    <div className="p-6 rounded-2xl border-2 border-primary/30 bg-primary/5 space-y-2 shadow-[0_0_20px_rgba(var(--primary),0.1)] transition-all hover:border-primary/50 relative overflow-hidden group">
+                    <div className="p-4 lg:p-6 rounded-2xl border-2 border-primary/30 bg-primary/5 space-y-2 shadow-[0_0_20px_rgba(var(--primary),0.1)] transition-all hover:border-primary/50 relative overflow-hidden group min-w-0 md:col-span-2 lg:col-span-1">
                       <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                         <div className="w-16 h-16 rounded-full bg-primary" />
                       </div>
-                      <div className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">Total Net Amount</div>
-                      <div className="text-4xl font-black font-mono text-primary flex items-baseline gap-2">
-                        <span className="text-lg font-bold opacity-40">₱</span>
-                        {net.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      <div className="text-[10px] font-black text-primary uppercase tracking-[0.2em] truncate relative z-10">Total Net Amount</div>
+                      <div className="text-3xl lg:text-4xl font-black font-mono text-primary flex items-baseline gap-2 flex-wrap relative z-10">
+                        <span className="text-lg font-bold opacity-40 shrink-0">₱</span>
+                        <span className="break-all">{net.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                       </div>
                     </div>
                   </div>
