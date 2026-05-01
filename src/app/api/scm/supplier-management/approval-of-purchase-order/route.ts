@@ -867,7 +867,7 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
 
         payment_type: header?.payment_type ?? null,
         
-        is_invoice: (String(header?.is_invoice ?? header?.isInvoice).toLowerCase() === "true") || !!(header?.is_invoice ?? header?.isInvoice),
+        is_invoice: (toNum(header?.vat_amount ?? header?.vatAmount) > 0) || (toNum(header?.withholding_tax_amount ?? header?.withholdingTaxAmount ?? header?.ewtGoods) > 0),
 
         vat_amount: vat,
         vatAmount: vat,
@@ -882,7 +882,7 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
     };
 }
 
-async function syncPoProductFinancialsOnApproval(base: string, poId: number) {
+async function syncPoProductFinancialsOnApproval(base: string, poId: number, isInvoice: boolean) {
     try {
         // Fetch header to get fallback discount_type
         const headerUrl = `${base}/items/${PO_COLLECTION}/${poId}?fields=discount_type`;
@@ -908,9 +908,9 @@ async function syncPoProductFinancialsOnApproval(base: string, poId: number) {
             const discAmtTotal = Number((lineGross * (discPercent / 100)).toFixed(2));
             const lineNet = lineGross - discAmtTotal;
             
-            const vatExcl = Number((lineNet / 1.12).toFixed(2));
-            const vatAmt = Number((lineNet - vatExcl).toFixed(2));
-            const ewtAmt = Number((vatExcl * 0.01).toFixed(2));
+            const vatExcl = isInvoice ? Number((lineNet / 1.12).toFixed(2)) : lineNet;
+            const vatAmt = isInvoice ? Number((lineNet - vatExcl).toFixed(2)) : 0;
+            const ewtAmt = isInvoice ? Number((vatExcl * 0.01).toFixed(2)) : 0;
             
             const discountedPricePerUnit = qty > 0 ? Number((lineNet / qty).toFixed(2)) : 0;
 
@@ -1066,7 +1066,7 @@ export async function GET(req: NextRequest) {
 
                 totalAmount: totalByPo.get(poId) ?? 0,
                 currency: "PHP",
-                is_invoice: (String(h.is_invoice ?? h.isInvoice).toLowerCase() === "true") || !!(h.is_invoice ?? h.isInvoice),
+                is_invoice: (toNum((h as any).vat_amount ?? (h as any).vatAmount) > 0) || (toNum((h as any).withholding_tax_amount ?? (h as any).withholdingTaxAmount ?? (h as any).ewtGoods) > 0),
 
                 preparer_name: getPreparer(),
             };
@@ -1114,7 +1114,7 @@ export async function POST(req: NextRequest) {
         await fetchJson(url, { method: "PATCH", body: JSON.stringify(patch) });
 
         // ✅ Sync line items financials
-        await syncPoProductFinancialsOnApproval(base, poId);
+        await syncPoProductFinancialsOnApproval(base, poId, Boolean(body?.markAsInvoice));
 
         return ok({ ok: true });
     } catch (e: unknown) {

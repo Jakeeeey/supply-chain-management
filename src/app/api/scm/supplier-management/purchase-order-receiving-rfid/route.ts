@@ -847,9 +847,10 @@ export async function POST(req: NextRequest) {
              if (!receiptNo) return bad("Missing receipt number.");
 
              // ✅ Shared: Fetch PO header discount context for both branches
-             const poUrl = `${base}/items/${PO_COLLECTION}/${poId}?fields=supplier_name,discount_type.*,discount_type.line_per_discount_type.line_id.*`;
+             const poUrl = `${base}/items/${PO_COLLECTION}/${poId}?fields=supplier_name,vat_amount,withholding_tax_amount,discount_type.*,discount_type.line_per_discount_type.line_id.*`;
              const pj = await fetchJson<{ data: POHeaderRow }>(poUrl);
              const po = pj?.data;
+             const poIsInvoice = (toNum(po?.vat_amount) > 0) || (toNum(po?.withholding_tax_amount) > 0);
              let poDiscountPercent = 0;
              const dType = po?.discount_type;
              const dLines = dType?.line_per_discount_type || [];
@@ -891,9 +892,9 @@ export async function POST(req: NextRequest) {
 
                      const dAmount = Number((uPrice * (discountPercent / 100)).toFixed(2));
                      const nPrice = uPrice - dAmount;
-                     const vatExcl = Number((nPrice / 1.12).toFixed(2));
-                     const vAmount = Number((nPrice - vatExcl).toFixed(2));
-                     const wAmount = Number((vatExcl * 0.01).toFixed(2));
+                     const vatExcl = poIsInvoice ? Number((nPrice / 1.12).toFixed(2)) : nPrice;
+                     const vAmount = poIsInvoice ? Number((nPrice - vatExcl).toFixed(2)) : 0;
+                     const wAmount = poIsInvoice ? Number((vatExcl * 0.01).toFixed(2)) : 0;
                      const tAmount = Number(nPrice.toFixed(2));
 
                      const patch: Record<string, unknown> = {
@@ -940,9 +941,9 @@ export async function POST(req: NextRequest) {
 
                      const dAmount = Number((uPrice * (discountPercent / 100)).toFixed(2));
                      const nPrice = uPrice - dAmount;
-                     const vatExcl = Number((nPrice / 1.12).toFixed(2));
-                     const vAmount = Number((nPrice - vatExcl).toFixed(2));
-                     const wAmount = Number((vatExcl * 0.01).toFixed(2));
+                     const vatExcl = poIsInvoice ? Number((nPrice / 1.12).toFixed(2)) : nPrice;
+                     const vAmount = poIsInvoice ? Number((nPrice - vatExcl).toFixed(2)) : 0;
+                     const wAmount = poIsInvoice ? Number((vatExcl * 0.01).toFixed(2)) : 0;
                      const tAmount = Number(nPrice.toFixed(2));
 
                      const patch: Record<string, unknown> = { 
