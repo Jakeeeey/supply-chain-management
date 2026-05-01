@@ -177,6 +177,8 @@ interface POHeaderRow {
         name?: string;
         line_per_discount_type?: DiscountLine[];
     } | null;
+    vat_amount?: string | number;
+    withholding_tax_amount?: string | number;
 }
 
 interface ProductRow {
@@ -262,6 +264,22 @@ async function fetchPORByPOIds(base: string, poIds: number[]) {
         rows.push(...(j?.data ?? []));
     }
     return rows;
+}
+
+async function cleanupAbandonedRows(base: string) {
+    try {
+        const oneHourAgo = new Date(Date.now() - 3600000).toISOString();
+        const url = `${base}/items/${POR_COLLECTION}?limit=-1&fields=purchase_order_product_id&filter[received_quantity][_eq]=0&filter[receipt_no][_null]=true&filter[isPosted][_eq]=0&filter[date_created][_lt]=${oneHourAgo}`;
+        const j = await fetchJson<{ data: { purchase_order_product_id: number }[] }>(url).catch(() => ({ data: [] }));
+        const ids = (j?.data ?? []).map(r => toNum(r.purchase_order_product_id)).filter(id => id > 0);
+        if (ids.length > 0) {
+            await fetch(`${base}/items/${POR_COLLECTION}`, {
+                method: "DELETE",
+                headers: directusHeaders(),
+                body: JSON.stringify(ids)
+            }).catch(() => {});
+        }
+    } catch {}
 }
 
 async function fetchPOProductsByPOId(base: string, poId: number) {
@@ -446,8 +464,9 @@ async function ensureOpenReceivingRow(args: {
     unitPrice: number;
     discountTypeId: number | null;
     discountPercent: number;
+    isInvoice?: boolean;
 }) {
-    const { base, poId, productId, branchId, unitPrice, discountTypeId, discountPercent } = args;
+    const { base, poId, productId, branchId, unitPrice, discountTypeId, discountPercent, isInvoice } = args;
     const findUrl = `${base}/items/${POR_COLLECTION}?limit=1&sort=-purchase_order_product_id&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&filter[product_id][_eq]=${encodeURIComponent(String(productId))}&filter[branch_id][_eq]=${encodeURIComponent(String(branchId))}&filter[isPosted][_eq]=0&fields=purchase_order_product_id,received_quantity,receipt_no`;
     const found = await fetchJson<{ data: Record<string, unknown>[] }>(findUrl);
     const row = Array.isArray(found?.data) ? found.data[0] : null;
@@ -456,9 +475,9 @@ async function ensureOpenReceivingRow(args: {
     }
     const discountedAmount = Number((unitPrice * (discountPercent / 100)).toFixed(2));
     const netPrice = unitPrice - discountedAmount;
-    const vatExcl = Number((netPrice / 1.12).toFixed(2));
-    const vatAmount = Number((netPrice - vatExcl).toFixed(2));
-    const withholdingAmount = Number((vatExcl * 0.01).toFixed(2));
+    const vatExcl = isInvoice ? Number((netPrice / 1.12).toFixed(2)) : netPrice;
+    const vatAmount = isInvoice ? Number((netPrice - vatExcl).toFixed(2)) : 0;
+    const withholdingAmount = isInvoice ? Number((vatExcl * 0.01).toFixed(2)) : 0;
     const totalAmount = Number(netPrice.toFixed(2));
     const insertUrl = `${base}/items/${POR_COLLECTION}`;
     const payload: Record<string, unknown> = {
@@ -486,6 +505,7 @@ async function ensureOpenReceivingRow(args: {
 export async function GET() {
     try {
         const base = getDirectusBase();
+        await cleanupAbandonedRows(base);
         const poHeaders = await fetchApprovedNotReceivedPOs(base);
         const poIds = poHeaders.map((p) => toNum(p.purchase_order_id)).filter(Boolean);
         if (!poIds.length) return ok([]);
@@ -498,7 +518,15 @@ export async function GET() {
             const poId = toNum(po.purchase_order_id);
             const lines = poLinesAll.filter((l) => toNum(l.purchase_order_id) === poId);
             const porRows = porRowsAll.filter((r) => toNum(r.purchase_order_id) === poId);
-            if (isFullyReceived(poId, lines, porRows)) return null;
+            
+            // ✅ Smarter check: If all items are received (or exceed) expected, it's done.
+            const hasPending = lines.some(ln => {
+                const received = porRows.filter(r => toNum(r.product_id) === toNum(ln.product_id) && toNum(r.branch_id) === toNum(ln.branch_id));
+                const totalReceived = received.reduce((sum, r) => sum + effectiveReceivedQty(r), 0);
+                return totalReceived < toNum(ln.ordered_quantity);
+            });
+            if (!hasPending && lines.length > 0) return null;
+
             return {
                 id: String(poId),
                 poNumber: toStr(po.purchase_order_no),
@@ -647,9 +675,7 @@ export async function POST(req: NextRequest) {
                 status: receivingStatusFrom(poId, lines, porRows),
                 allocations: Array.from(allocationsMap.entries()).map(([branchId, items]) => ({ branch: { id: String(branchId || "0"), name: branchesMap.get(branchId) || `Branch ${branchId}` }, items })),
                 priceType: toStr(po.price_type, "Cost Per Unit"),
-                isInvoice: (toNum((po as unknown as Record<string, unknown>)?.receiving_type) === 2) ||
-                           (toNum((po as unknown as Record<string, unknown>)?.vat_amount) > 0) ||
-                           (toNum((po as unknown as Record<string, unknown>)?.withholding_tax_amount) > 0),
+                isInvoice: (toNum((po as unknown as Record<string, unknown>)?.vat_amount) > 0) || (toNum((po as unknown as Record<string, unknown>)?.withholding_tax_amount) > 0),
                 createdAt: po.date_encoded ? new Date(po.date_encoded).toISOString() : new Date().toISOString(),
                 history
             });
@@ -734,7 +760,7 @@ export async function POST(req: NextRequest) {
              }
 
              // Resolve discount from PO header
-             const poUrl = `${base}/items/${PO_COLLECTION}/${poId}?fields=discount_type.*,discount_type.line_per_discount_type.line_id.*,discount_percentage`;
+             const poUrl = `${base}/items/${PO_COLLECTION}/${poId}?fields=discount_type.*,discount_type.line_per_discount_type.line_id.*,discount_percentage,vat_amount,withholding_tax_amount`;
              const pj = await fetchJson<{ data: POHeaderRow }>(poUrl);
              const po = pj?.data;
 
@@ -775,6 +801,8 @@ export async function POST(req: NextRequest) {
                  unitPrice = toNum(productJ?.data?.cost_per_unit || 0);
              }
 
+             const isInvoice = (toNum(po?.vat_amount) > 0) || (toNum(po?.withholding_tax_amount) > 0);
+
              const ensured = await ensureOpenReceivingRow({
                  base,
                  poId,
@@ -782,7 +810,8 @@ export async function POST(req: NextRequest) {
                  branchId,
                  unitPrice,
                  discountTypeId,
-                 discountPercent
+                 discountPercent,
+                 isInvoice
              });
 
              await fetchJson(`${base}/items/${POR_ITEMS_COLLECTION}`, {
@@ -818,9 +847,10 @@ export async function POST(req: NextRequest) {
              if (!receiptNo) return bad("Missing receipt number.");
 
              // ✅ Shared: Fetch PO header discount context for both branches
-             const poUrl = `${base}/items/${PO_COLLECTION}/${poId}?fields=supplier_name,discount_type.*,discount_type.line_per_discount_type.line_id.*`;
+             const poUrl = `${base}/items/${PO_COLLECTION}/${poId}?fields=supplier_name,vat_amount,withholding_tax_amount,discount_type.*,discount_type.line_per_discount_type.line_id.*`;
              const pj = await fetchJson<{ data: POHeaderRow }>(poUrl);
              const po = pj?.data;
+             const poIsInvoice = (toNum(po?.vat_amount) > 0) || (toNum(po?.withholding_tax_amount) > 0);
              let poDiscountPercent = 0;
              const dType = po?.discount_type;
              const dLines = dType?.line_per_discount_type || [];
@@ -862,9 +892,9 @@ export async function POST(req: NextRequest) {
 
                      const dAmount = Number((uPrice * (discountPercent / 100)).toFixed(2));
                      const nPrice = uPrice - dAmount;
-                     const vatExcl = Number((nPrice / 1.12).toFixed(2));
-                     const vAmount = Number((nPrice - vatExcl).toFixed(2));
-                     const wAmount = Number((vatExcl * 0.01).toFixed(2));
+                     const vatExcl = poIsInvoice ? Number((nPrice / 1.12).toFixed(2)) : nPrice;
+                     const vAmount = poIsInvoice ? Number((nPrice - vatExcl).toFixed(2)) : 0;
+                     const wAmount = poIsInvoice ? Number((vatExcl * 0.01).toFixed(2)) : 0;
                      const tAmount = Number(nPrice.toFixed(2));
 
                      const patch: Record<string, unknown> = {
@@ -911,9 +941,9 @@ export async function POST(req: NextRequest) {
 
                      const dAmount = Number((uPrice * (discountPercent / 100)).toFixed(2));
                      const nPrice = uPrice - dAmount;
-                     const vatExcl = Number((nPrice / 1.12).toFixed(2));
-                     const vAmount = Number((nPrice - vatExcl).toFixed(2));
-                     const wAmount = Number((vatExcl * 0.01).toFixed(2));
+                     const vatExcl = poIsInvoice ? Number((nPrice / 1.12).toFixed(2)) : nPrice;
+                     const vAmount = poIsInvoice ? Number((nPrice - vatExcl).toFixed(2)) : 0;
+                     const wAmount = poIsInvoice ? Number((vatExcl * 0.01).toFixed(2)) : 0;
                      const tAmount = Number(nPrice.toFixed(2));
 
                      const patch: Record<string, unknown> = { 
@@ -957,36 +987,13 @@ export async function POST(req: NextRequest) {
                      const supplierMap = await fetchSupplierNames(base, [toNum(po.supplier_name)]);
                      const porIdsByKey = buildPorIdsByKey(porRows);
 
-                     // ✅ Synchronize PO Header Status
-                     const fully = isFullyReceived(poId, lines, porRows);
-                     const hasReceipts = porRows.some((r) => toStr(r.receipt_no) || toStr(r.receipt_date) || toStr(r.received_date) || toNum(r.received_quantity) > 0);
-                     const nextStatus = fully ? 13 : (hasReceipts ? 9 : po.inventory_status);
-                     
-                     // Only patch if we are truly upgrading the status
-                     if (nextStatus === 13 || nextStatus === 9) {
-                         const patch: Record<string, unknown> = (() => {
-                             const headerDiscTotal = porRows.reduce((s, r) => s + toNum((r as unknown as Record<string, unknown>).discounted_amount), 0);
-                             const headerVatTotal = porRows.reduce((s, r) => s + toNum((r as unknown as Record<string, unknown>).vat_amount), 0);
-                             const headerWhtTotal = porRows.reduce((s, r) => s + toNum((r as unknown as Record<string, unknown>).withholding_amount), 0);
-                             const headerTotalAmt = porRows.reduce((s, r) => s + toNum((r as unknown as Record<string, unknown>).total_amount), 0);
-                             const p: Record<string, unknown> = {
-                                 inventory_status: nextStatus,
-                                 discounted_amount: Number(headerDiscTotal.toFixed(2)),
-                                 vat_amount: Number(headerVatTotal.toFixed(2)),
-                                 withholding_tax_amount: Number(headerWhtTotal.toFixed(2)),
-                                 total_amount: Number(headerTotalAmt.toFixed(2)),
-                             };
-                             if (receiverId) p.receiver_id = receiverId;
-                             // ✅ Only set completion date if fully received
-                             if (nextStatus === 13) {
-                                 p.date_received = nowISO();
-                             }
-                             return p;
-                         })();
-
+                     // ✅ Receiving no longer updates PO header status or financials.
+                     // Post Inventory is the sole authority for status transitions (6/9).
+                     // Only track the receiver_id if provided.
+                     if (receiverId) {
                          await fetchJson(`${base}/items/${PO_COLLECTION}/${poId}`, {
                              method: "PATCH",
-                             body: JSON.stringify(patch)
+                             body: JSON.stringify({ receiver_id: receiverId })
                          }).catch(() => {});
                      }
 

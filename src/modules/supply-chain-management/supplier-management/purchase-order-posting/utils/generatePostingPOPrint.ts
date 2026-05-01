@@ -203,34 +203,50 @@ export async function generatePostingPOPrint(data: PrintData): Promise<jsPDF> {
         doc.setFont('helvetica', 'normal');
       };
 
-      const computedTotalDiscount = (po.allocations || []).reduce((sum, alloc) => {
-          return sum + alloc.items.reduce((itemSum, it) => {
+      // --- DYNAMIC FINANCIAL CALCULATION ---
+      let sumGross = 0;
+      let sumDiscount = 0;
+      let sumNet = 0;
+
+      (po.allocations || []).forEach(alloc => {
+          alloc.items.forEach(it => {
               const uprice = it.unitPrice || 0;
               const qty = it.receivedQty || it.expectedQty || 0;
               const gross = it.grossAmount || (uprice * qty);
               
-              if (!it.discountTypeId || it.discountTypeId === "null") return itemSum;
-              const dt = discountTypes.find(d => String(d.id) === String(it.discountTypeId) || String(d.name) === String(it.discountTypeId));
-              if (dt) return itemSum + ((dt.percent / 100) * gross);
-              const nums = (it.discountTypeId.match(/\d+(?:\.\d+)?/g) ?? []).map(Number).filter(n => Number.isFinite(n) && n > 0 && n <= 100);
-              if (nums.length) {
-                  const factor = nums.reduce((a, p) => a * (1 - p / 100), 1);
-                  return itemSum + (gross * (1 - factor));
+              let discAmtVal = 0;
+              if (it.discountTypeId && it.discountTypeId !== "null") {
+                  const dt = discountTypes.find(d => String(d.id) === String(it.discountTypeId) || String(d.name) === String(it.discountTypeId));
+                  if (dt) {
+                      discAmtVal = (dt.percent / 100) * gross;
+                  } else {
+                      const nums = (it.discountTypeId.match(/\d+(?:\.\d+)?/g) ?? []).map(Number).filter(n => Number.isFinite(n) && n > 0 && n <= 100);
+                      if (nums.length) {
+                          const factor = nums.reduce((a, p) => a * (1 - p / 100), 1);
+                          discAmtVal = gross * (1 - factor);
+                      }
+                  }
               }
-              return itemSum;
-          }, 0);
-      }, 0);
 
-      const finalDiscountAmt = Number(po.discountAmount) > 0 ? Number(po.discountAmount) : computedTotalDiscount;
+              sumGross += gross;
+              sumDiscount += discAmtVal;
+              sumNet += (gross - discAmtVal);
+          });
+      });
 
-      addLine('Gross Amount:', po.grossAmount || 0);
-      if (finalDiscountAmt > 0) addLine('Total Discount:', finalDiscountAmt, false, true);
-      if (Number(po.vatAmount) > 0) addLine('VAT amount:', po.vatAmount || 0);
-      if (Number(po.withholdingTaxAmount) > 0) addLine('EWT amount:', po.withholdingTaxAmount || 0, false, true);
+      // VAT and EWT (Assuming VAT Inclusive as per project standard)
+      const vatable = sumNet / 1.12;
+      const vatAmount = sumNet - vatable;
+      const ewtAmount = vatable * 0.01;
+
+      addLine('Gross Amount:', sumGross);
+      if (sumDiscount > 0) addLine('Total Discount:', sumDiscount, false, true);
+      addLine('VAT amount:', vatAmount);
+      addLine('EWT amount:', ewtAmount, false, true);
       
       y += 2;
       doc.setFontSize(10);
-      addLine('GRAND TOTAL:', po.totalAmount || 0, true);
+      addLine('GRAND TOTAL:', sumNet, true);
 
       // Standardized Footnote
       y += 2;
