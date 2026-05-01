@@ -285,19 +285,7 @@ async function fetchPOProductsByPOId(base: string, poId: number) {
     return (Array.isArray(j?.data) ? j.data : []) as PoProductRow[];
 }
 
-async function fetchPOHeadersByIds(base: string, poIds: number[]) {
-    if (!poIds.length) return [];
-    const rows: POHeader[] = [];
-    for (const ids of chunk(Array.from(new Set(poIds)), 250)) {
-        const url =
-            `${base}/items/${PO_COLLECTION}?limit=-1` +
-            `&filter[purchase_order_id][_in]=${encodeURIComponent(ids.join(","))}` +
-            `&fields=purchase_order_id,purchase_order_no,date,date_encoded,supplier_name,total_amount,date_received,inventory_status,gross_amount,discounted_amount,vat_amount,withholding_tax_amount,discount_type.*,discount_type.line_per_discount_type.line_id.*,is_posted`;
-        const j = await fetchJson(url) as { data: POHeader[] };
-        rows.push(...(Array.isArray(j?.data) ? j.data : []));
-    }
-    return rows;
-}
+
 
 async function fetchPORByPOIds(base: string, poIds: number[]) {
     if (!poIds.length) return [];
@@ -728,7 +716,7 @@ export async function GET() {
 
         // RFID tags
         const receivingItems = (porIdsAll.length ? await fetchReceivingItems(base, porIdsAll) : []) as ReceivingItem[];
-        const rfidsByPorId = groupRfidsByPorId(receivingItems);
+        groupRfidsByPorId(receivingItems);
 
         // Supplier names
         const supplierIds = poHeaders.map((p) => toNum(p?.supplier_name)).filter(Boolean);
