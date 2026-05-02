@@ -100,7 +100,7 @@ export async function GET(req: NextRequest) {
                 product_id: string | number;
                 parent_id?: string | number | null;
             }
-
+            const initialUrl = `${base}/items/products?limit=-1&fields=product_id,parent_id&filter[product_id][_in]=${encodeURIComponent(linkedProductIds.join(","))}`;
             const initialRes = await fetch(initialUrl, { headers, cache: "no-store" });
             const initialJson = await initialRes.json().catch(() => ({}));
             const initialProducts = (initialJson.data ?? []) as ProductMeta[];
