@@ -158,7 +158,7 @@ export function ManualProductsStep({ onContinue, onBack }: { onContinue: () => v
                                                                 type="number"
                                                                 min="0"
                                                                 placeholder="0"
-                                                                value={currentEntry}
+                                                                value={currentEntryNum === 0 ? "" : currentEntryNum}
                                                                 onChange={(e) => handleCountChange(id, e.target.value)}
                                                                 className={`h-9 w-full text-center font-black text-sm border-2 focus-visible:ring-0 shadow-none transition-colors ${
                                                                     isOver 

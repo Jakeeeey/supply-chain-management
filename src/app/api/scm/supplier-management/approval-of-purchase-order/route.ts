@@ -100,6 +100,18 @@ const DIRECTUS_RELATIONS_COLLECTION = "directus_relations";
 function ok(data: unknown, status = 200) {
     return NextResponse.json({ data }, { status });
 }
+
+/**
+ * Returns current PH Manila Time (UTC+8) as an ISO-like string
+ * but without the 'Z' suffix to ensure correct local interpretation.
+ */
+function nowPH() {
+    const date = new Date();
+    const phOffset = 8 * 60; // 8 hours in minutes
+    const localOffset = date.getTimezoneOffset(); // in minutes
+    const phTime = new Date(date.getTime() + (phOffset + localOffset) * 60000);
+    return phTime.toISOString().replace("Z", "");
+}
 function bad(error: string, status = 400) {
     return NextResponse.json({ error }, { status });
 }
@@ -1094,7 +1106,7 @@ export async function POST(req: NextRequest) {
         if (!poId) return bad("Invalid id.", 400);
 
         const patch: Record<string, unknown> = { 
-            date_approved: new Date().toISOString(),
+            date_approved: nowPH(),
             receiving_type: 1, // ✅ Always 1 for PO
             inventory_status: 3, // ✅ For Receiving
             approver_id: body?.approver_id ?? body?.approverId ?? null, // ✅ Track who approved

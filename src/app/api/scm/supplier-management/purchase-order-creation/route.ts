@@ -49,21 +49,24 @@ interface DirectusResponse {
 
 
 function now() {
-    return new Date();
+    const date = new Date();
+    const phOffset = 8 * 60; // 8 hours in minutes
+    const localOffset = date.getTimezoneOffset(); // in minutes
+    return new Date(date.getTime() + (phOffset + localOffset) * 60000);
 }
 
 function isoDateOnlyFrom(value?: string | Date | number | null) {
-    if (!value) return now().toISOString().slice(0, 10);
+    if (!value) return now().toISOString().replace("Z", "").slice(0, 10);
     const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return now().toISOString().slice(0, 10);
+    if (Number.isNaN(d.getTime())) return now().toISOString().replace("Z", "").slice(0, 10);
     return d.toISOString().slice(0, 10);
 }
 
 function isoDateTimeFrom(value?: string | Date | number | null) {
-    if (!value) return now().toISOString();
+    if (!value) return now().toISOString().replace("Z", "");
     const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return now().toISOString();
-    return d.toISOString();
+    if (Number.isNaN(d.getTime())) return now().toISOString().replace("Z", "");
+    return d.toISOString().replace("Z", "");
 }
 
 function timeHHMMSSFrom(value?: string | Date | number | null) {
