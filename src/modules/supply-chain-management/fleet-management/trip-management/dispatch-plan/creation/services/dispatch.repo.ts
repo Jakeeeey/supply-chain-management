@@ -30,7 +30,7 @@ import type {
   PostDispatchPurchaseRow,
   PurchaseOrderRow,
 } from "../types/dispatch.types";
-import { fetchItems } from "./api";
+import { fetchItems, fetchItemsInChunks } from "./api";
 import { directusHeaders, getDirectusBaseUrl } from "./dispatch.helpers";
 
 const READY_STATUSES = ["For Loading", "On Hold"];
@@ -149,6 +149,27 @@ export async function updateDispatchPlanStatus(
   }
 }
 
+/**
+ * Updates the `inventory_status` field on a `purchase_order` row.
+ * Status 11 = "Picked" (available), Status 12 = "En Route" (dispatched).
+ */
+export async function updatePurchaseOrderStatus(
+  poId: number,
+  inventoryStatus: number,
+): Promise<void> {
+  const res = await fetch(
+    `${getDirectusBaseUrl()}/items/purchase_order/${poId}`,
+    {
+      method: "PATCH",
+      headers: directusHeaders(),
+      body: JSON.stringify({ inventory_status: inventoryStatus }),
+    },
+  );
+  if (!res.ok) {
+    throw new Error(`Failed to update PO status for id=${poId}`);
+  }
+}
+
 // ─── Junction Table ─────────────────────────────────────────
 
 export async function fetchJunctionsByPlanId(
@@ -207,7 +228,7 @@ export async function fetchMasterData(): Promise<DispatchCreationMasterData> {
     }),
     // Fetch Helpers
     fetchItems<HelperOption>("/items/user", {
-      "filter[user_department][_eq]": 9, // Helper department
+      "filter[user_department][_eq]": 8, // Helper department
       fields: "user_id,user_fname,user_lname",
       limit: -1,
     }),
@@ -215,10 +236,11 @@ export async function fetchMasterData(): Promise<DispatchCreationMasterData> {
     fetchItems<{
       vehicle_id: number;
       vehicle_plate: string;
+      maximum_weight?: number | string;
       vehicle_type?: { type_name?: string };
     }>("/items/vehicles", {
       "filter[status][_eq]": "Active",
-      fields: "vehicle_id,vehicle_plate,vehicle_type.type_name",
+      fields: "vehicle_id,vehicle_plate,maximum_weight,vehicle_type.type_name",
       limit: -1,
     }),
     // Fetch Branches (Starting Points)
@@ -241,6 +263,7 @@ export async function fetchMasterData(): Promise<DispatchCreationMasterData> {
     vehicles: (vehicles.data || []).map((v) => ({
       vehicle_id: v.vehicle_id,
       vehicle_plate: v.vehicle_plate,
+      maximum_weight: v.maximum_weight,
       vehicle_type_name: v.vehicle_type?.type_name,
     })),
     branches: branches.data || [],
@@ -311,32 +334,52 @@ export async function fetchPostDispatchPlanDetails(
 export async function fetchApprovedPreDispatchPlans(
   branchId?: number,
   currentPlanId?: number | number[],
+  limit: number = 25,
+  offset: number = 0,
+  search?: string
 ): Promise<DirectusResponse<EnrichedApprovedPlan>> {
   const params: Record<string, string | number> = {
     fields:
       "dispatch_id,dispatch_no,driver_id,vehicle_id,cluster_id,branch_id,total_amount,status",
-    limit: -1,
+    limit,
+    offset,
+    sort: "-dispatch_id"
   };
 
   // Build a permissive filter:
   // ( (status = 'Picked' AND branch_id = branchId) OR (dispatch_id IN currentPlanId) )
+  const baseFilter: Record<string, unknown>[] = [];
+
+  if (search) {
+     baseFilter.push({ dispatch_no: { _icontains: search } });
+  }
   if (currentPlanId && branchId) {
     const ids = Array.isArray(currentPlanId)
       ? currentPlanId.join(",")
       : currentPlanId;
-    params["filter[_or][0][_and][0][status][_eq]"] = "Picked";
-    params["filter[_or][0][_and][1][branch_id][_eq]"] = branchId;
-    params["filter[_or][1][dispatch_id][_in]"] = ids;
+    if (search) {
+        params["filter[_and][0][_or][0][_and][0][status][_eq]"] = "Picked";
+        params["filter[_and][0][_or][0][_and][1][branch_id][_eq]"] = branchId;
+        params["filter[_and][0][_or][1][dispatch_id][_in]"] = ids;
+        params["filter[_and][1][dispatch_no][_icontains]"] = search;
+    } else {
+        params["filter[_or][0][_and][0][status][_eq]"] = "Picked";
+        params["filter[_or][0][_and][1][branch_id][_eq]"] = branchId;
+        params["filter[_or][1][dispatch_id][_in]"] = ids;
+    }
   } else if (branchId) {
-    params["filter[status][_eq]"] = "Picked";
-    params["filter[branch_id][_eq]"] = branchId;
+    if (search) params["filter[_and][0][dispatch_no][_icontains]"] = search;
+    params[search ? "filter[_and][1][status][_eq]" : "filter[status][_eq]"] = "Picked";
+    params[search ? "filter[_and][2][branch_id][_eq]" : "filter[branch_id][_eq]"] = branchId;
   } else if (currentPlanId) {
     const ids = Array.isArray(currentPlanId)
       ? currentPlanId.join(",")
       : currentPlanId;
-    params["filter[dispatch_id][_in]"] = ids;
+    if (search) params["filter[_and][0][dispatch_no][_icontains]"] = search;
+    params[search ? "filter[_and][1][dispatch_id][_in]" : "filter[dispatch_id][_in]"] = ids;
   } else {
-    params["filter[status][_eq]"] = "Picked";
+    if (search) params["filter[_and][0][dispatch_no][_icontains]"] = search;
+    params[search ? "filter[_and][1][status][_eq]" : "filter[status][_eq]"] = "Picked";
   }
 
   const plansRes = await fetchItems<RawDispatchPlan>(
@@ -367,6 +410,75 @@ export async function fetchApprovedPreDispatchPlans(
   const details = detailsRes.data || [];
   const soIds = [...new Set(details.map((d) => d.sales_order_id))];
 
+  // 1. Fetch Sales Orders first to check status
+  let orders: RawSalesOrder[] = [];
+  const orderStatusMap = new Map<number, string>();
+  
+  if (soIds.length > 0) {
+    const ordersRes = await fetchItems<RawSalesOrder>("/items/sales_order", {
+      "filter[order_id][_in]": soIds.join(","),
+      fields: "order_id,order_no,order_status",
+      limit: -1,
+    });
+    orders = ordersRes.data || [];
+    orders.forEach(o => {
+      if (o.order_id) orderStatusMap.set(Number(o.order_id), o.order_status || "");
+    });
+  }
+
+  // 2. --- WEIGHT CALCULATION START ---
+  const planWeightMap = new Map<number, number>();
+  if (soIds.length > 0) {
+    const { data: soDetails } = await fetchItemsInChunks<{
+      order_id: number;
+      product_id: number;
+      ordered_quantity: number | string;
+      allocated_quantity: number | string;
+    }>("/items/sales_order_details", "order_id", soIds, {
+      fields: "order_id,product_id,ordered_quantity,allocated_quantity",
+    });
+
+    const productIds = [...new Set(soDetails.map((d) => Number(d.product_id)).filter(Boolean))];
+    const prodWeightMap = new Map<number, number>();
+
+    if (productIds.length > 0) {
+      const { data: products } = await fetchItemsInChunks<{
+        product_id: number;
+        weight: string | number;
+      }>("/items/products", "product_id", productIds, {
+        fields: "product_id,weight",
+      });
+      products.forEach((p) =>
+        prodWeightMap.set(Number(p.product_id), Number(p.weight || 0)),
+      );
+    }
+
+    const soWeightMap = new Map<number, number>();
+    const soReadyMap = new Map<number, boolean>(); // Track if each SO is ready
+
+    soDetails.forEach((sd) => {
+      const soId = Number(sd.order_id);
+      const status = orderStatusMap.get(soId) || "";
+      const isReady = READY_STATUSES.includes(status);
+      
+      // Store readiness for later is_selectable check
+      if (!soReadyMap.has(soId) || !isReady) {
+        soReadyMap.set(soId, isReady);
+      }
+
+      const weight = prodWeightMap.get(Number(sd.product_id)) || 0;
+      const qty = Number(sd.allocated_quantity || sd.ordered_quantity || 0);
+      soWeightMap.set(soId, (soWeightMap.get(soId) || 0) + weight * qty);
+    });
+
+    details.forEach((d) => {
+      const pId = Number(d.dispatch_id);
+      const soWeight = soWeightMap.get(Number(d.sales_order_id)) || 0;
+      planWeightMap.set(pId, (planWeightMap.get(pId) || 0) + soWeight);
+    });
+  }
+  // --- WEIGHT CALCULATION END ---
+
   // Build a set of currently linked PDP IDs for edit mode
   const currentPlanIdSet = new Set<number>(
     currentPlanId
@@ -378,68 +490,44 @@ export async function fetchApprovedPreDispatchPlans(
 
   if (!soIds.length && currentPlanIdSet.size === 0) return { data: [] };
 
-  let orders: RawSalesOrder[] = [];
-  let invoicesRes: { data: RawSalesInvoice[] } | undefined;
-
-  if (soIds.length) {
-    const ordersRes = await fetchItems<RawSalesOrder>("/items/sales_order", {
-      "filter[order_id][_in]": soIds.join(","),
-      fields: "order_id,order_no,order_status",
-      limit: -1,
-    });
-
-    orders = ordersRes.data || [];
-    const orderNos = orders.map((o) => o.order_no).filter(Boolean);
-
-    if (orderNos.length) {
-      invoicesRes = await fetchItems<RawSalesInvoice>("/items/sales_invoice", {
-        "filter[order_id][_in]": orderNos.join(","),
-        fields: "invoice_id,order_id,transaction_status",
-        limit: -1,
-      });
-    }
-  }
-
-  const orderIdToMapData = new Map(
-    orders.map((o) => [o.order_id, { no: o.order_no, status: o.order_status }]),
-  );
-  const invoiceMap = new Map(
-    (invoicesRes?.data || []).map((i) => [i.order_id, i.transaction_status]),
-  );
+  // 3. (No longer fetching invoices as we only use Sales Order status for Sidebar filtering)
   const clusterMap = new Map(
     (clustersRes.data || []).map((c) => [c.id, c.cluster_name]),
   );
 
   const detailCountMap = new Map<number, number>();
+  const planReadyMap = new Map<number, boolean>(); // Track if entire plan is selectable
+
   details.forEach((d) => {
     const dPlanId = d.dispatch_id;
-    const orderData = orderIdToMapData.get(d.sales_order_id);
-    if (!dPlanId || !orderData) return;
+    if (!dPlanId) return;
 
-    // For currently linked PDPs (edit mode), count ALL items regardless of status
-    if (currentPlanIdSet.has(dPlanId)) {
-      detailCountMap.set(dPlanId, (detailCountMap.get(dPlanId) || 0) + 1);
-      return;
+    // Count ALL items
+    detailCountMap.set(dPlanId, (detailCountMap.get(dPlanId) || 0) + 1);
+
+    // Check readiness of the plan
+    const soId = Number(d.sales_order_id);
+    const isSoReady = orderStatusMap.has(soId) ? READY_STATUSES.includes(orderStatusMap.get(soId)!) : false;
+    
+    if (!planReadyMap.has(dPlanId)) {
+        planReadyMap.set(dPlanId, true);
     }
-
-    const invoiceStatus = invoiceMap.get(orderData.no);
-    const isReady =
-      READY_STATUSES.includes(orderData.status) ||
-      (invoiceStatus != null && READY_STATUSES.includes(invoiceStatus));
-
-    if (isReady) {
-      detailCountMap.set(dPlanId, (detailCountMap.get(dPlanId) || 0) + 1);
+    if (!isSoReady) {
+        planReadyMap.set(dPlanId, false);
     }
   });
 
   const enrichedData = plans
-    .map((p) => ({
-      ...p,
-      cluster_name: clusterMap.get(p.cluster_id || -1) || "Unassigned",
-      total_items: detailCountMap.get(p.dispatch_id) || 0,
-    }))
-    // Keep linked PDPs even if they have 0 ready items
-    .filter((p) => p.total_items > 0 || currentPlanIdSet.has(p.dispatch_id));
+    .map((p) => {
+        const total_items = detailCountMap.get(p.dispatch_id) || 0;
+        return {
+          ...p,
+          cluster_name: clusterMap.get(p.cluster_id || -1) || "Unassigned",
+          total_items,
+          total_weight: planWeightMap.get(p.dispatch_id) || 0,
+          is_selectable: total_items > 0 && (planReadyMap.get(p.dispatch_id) ?? false),
+        };
+    });
 
   return { data: enrichedData };
 }
@@ -518,11 +606,6 @@ export async function fetchPlanDetails(
       }
     });
 
-    // Extract manual stops (those that don't correspond to the currently fetched PDP invoices)
-    // We'll identify them by matching remarks against order Nos later,
-    // but initially we just take them all if they aren't linked to an invoice_id?
-    // Wait, 'others' doesn't have invoice_id.
-    // Let's just collect all others, and we'll filter them against the 'seen' invoices later.
     manualStops = (tripOthersRes.data || []).map((other) => ({
       detail_id: `other-${other.id}`,
       amount: 0,
@@ -533,7 +616,6 @@ export async function fetchPlanDetails(
       status: other.status,
     }));
 
-    // Combine manual and PO stops
     manualStops = [...manualStops, ...poStops];
   }
 
@@ -549,9 +631,10 @@ export async function fetchPlanDetails(
     orders.map((o) => [Number(o.order_id), o]),
   );
 
-  // 4. Fetch invoices
+  // 4. Fetch invoices (store ALL non-void invoices per order)
+  const VOID_STATUSES = ["Void", "void"];
   const orderNos = orders.map((o) => o.order_no).filter(Boolean);
-  const invoiceMap = new Map<string, RawSalesInvoice>();
+  const invoiceMap = new Map<string, RawSalesInvoice[]>();
   if (orderNos.length) {
     const invoicesRes = await fetchItems<RawSalesInvoice>(
       "/items/sales_invoice",
@@ -562,7 +645,14 @@ export async function fetchPlanDetails(
       },
     );
     (invoicesRes.data || []).forEach((i) => {
-      if (i.order_id) invoiceMap.set(String(i.order_id), i);
+      if (!i.order_id) return;
+      // Skip voided invoices
+      if (VOID_STATUSES.includes(i.transaction_status)) return;
+
+      const key = String(i.order_id);
+      const existing = invoiceMap.get(key) || [];
+      existing.push(i);
+      invoiceMap.set(key, existing);
     });
   }
 
@@ -582,8 +672,48 @@ export async function fetchPlanDetails(
     });
   }
 
-  // 6. Enrichment loop for invoices
-  const seenInvoices = new Set<number>();
+  // 6. Fetch weights for these orders
+  const orderWeightMap = new Map<number, number>();
+  if (requestedSoIds.length) {
+    try {
+      const { data: soDetails } = await fetchItemsInChunks<{
+        order_id: number;
+        product_id: number;
+        ordered_quantity: number | string;
+        allocated_quantity: number | string;
+      }>("/items/sales_order_details", "order_id", requestedSoIds, {
+        fields: "order_id,product_id,ordered_quantity,allocated_quantity",
+      });
+
+      const productIds = [...new Set(soDetails.map((d) => Number(d.product_id)).filter(Boolean))];
+
+      if (productIds.length) {
+        const { data: products } = await fetchItemsInChunks<{
+          product_id: number;
+          weight: number | string | null;
+        }>("/items/products", "product_id", productIds, {
+          fields: "product_id,weight",
+        });
+
+        const prodWeightMap = new Map<number, number>(
+          products.map((p) => [Number(p.product_id), Number(p.weight || 0)])
+        );
+
+        soDetails.forEach((detail) => {
+          const oid = Number(detail.order_id);
+          const weight = prodWeightMap.get(Number(detail.product_id)) || 0;
+          const qty = Number(detail.allocated_quantity || detail.ordered_quantity || 0);
+          const currentTotal = orderWeightMap.get(oid) || 0;
+          orderWeightMap.set(oid, currentTotal + weight * qty);
+        });
+      }
+    } catch (err) {
+      console.error("[fetchPlanDetails Weight Error]:", err);
+    }
+  }
+
+  // 7. Enrichment loop for invoices
+  const seenOrderNos = new Set<string>();
   const invoiceOrderNos = new Set<string>();
 
   const enrichedInvoices = pdpDetails
@@ -592,57 +722,55 @@ export async function fetchPlanDetails(
       if (!order) return null;
 
       const orderNo = order.order_no ? String(order.order_no) : "";
-      const invoice = orderNo ? invoiceMap.get(orderNo) : undefined;
-      const invId = invoice ? Number(invoice.invoice_id) : 0;
 
-      if (invId > 0) {
-        if (seenInvoices.has(invId)) return null;
-        seenInvoices.add(invId);
+      // Deduplicate by order_no (one row per SO in the route)
+      if (orderNo && seenOrderNos.has(orderNo)) return null;
+      if (orderNo) seenOrderNos.add(orderNo);
+
+      const invoices = orderNo ? (invoiceMap.get(orderNo) || []) : [];
+      const primaryInvoice = invoices[0];
+      const primaryInvId = primaryInvoice ? Number(primaryInvoice.invoice_id) : 0;
+      const allInvIds = invoices.map((inv) => Number(inv.invoice_id)).filter(Boolean);
+
+      if (allInvIds.length > 0) {
         invoiceOrderNos.add(orderNo);
       }
 
       const orderStatus = order.order_status || "—";
-      const isReady = READY_STATUSES.includes(orderStatus);
-      const isAlreadyLinked = invId > 0 && currentlyLinkedInvIds.has(invId);
-
-      if (!isReady && !isAlreadyLinked) return null;
-
       const customer = order.customer_code
         ? customerMap.get(String(order.customer_code))
         : undefined;
 
-      const tripData = invoiceSequenceMap.get(invId);
+      const tripData = primaryInvId > 0 ? invoiceSequenceMap.get(primaryInvId) : undefined;
 
       return {
         detail_id: d.detail_id,
         sales_order_id: Number(d.sales_order_id),
-        invoice_id: invId || undefined,
+        invoice_id: primaryInvId || undefined,
+        invoice_ids: allInvIds.length > 0 ? allInvIds : undefined,
         order_no: orderNo || "—",
-        order_status: tripData?.status || invoice?.transaction_status || orderStatus,
+        // Status MUST reflect the Sales Order status directly
+        order_status: tripData?.status || orderStatus,
         true_order_status: orderStatus,
+        invoice_status: primaryInvoice?.transaction_status || undefined,
         customer_name: customer?.customer_name || customer?.store_name || "—",
         city: customer?.city || "—",
         amount: order.net_amount ?? order.total_amount ?? 0,
+        weight: orderWeightMap.get(Number(d.sales_order_id)) || 0,
         sequence: tripData?.sequence,
       };
     })
     .filter((d): d is EnrichedPlanDetail => d !== null);
 
-  // 7. Filter manual stops to exclude those that are actually invoices
-  // (In our system, if an 'other' row's remarks matches an invoice's order_no, it's an invoice stop)
+  // 8. Filter manual stops to exclude those that are actually invoices
   const actualManualStops = manualStops.filter(
     (ms) => !invoiceOrderNos.has(ms.remarks || ""),
   );
 
-  // 8. Combine and sort by sequence if available
+  // 9. Combine and sort
   const result = [...enrichedInvoices, ...actualManualStops];
 
   if (tripId) {
-    // If we have trip sequence data, ensure we sort by it.
-    // Note: enrichedInvoices doesn't have sequence from the DB yet in this fetchPlanDetails,
-    // so we need to fetch sequences for them too if we want a perfect restore.
-    // However, the current UI often re-sequences on load or keeps sequence in the form.
-    // Let's try to find the sequence from the manual matching.
     const tripOthersRes = await fetchItems<{
       remarks: string;
       sequence: number;
@@ -659,7 +787,6 @@ export async function fetchPlanDetails(
       ]),
     );
 
-    // Also fetch PO sequence data for re-sequencing during updates
     const tripPOSequencesRes = await fetchItems<PostDispatchPurchaseRow>(
       "/items/post_dispatch_purchases",
       {
@@ -689,9 +816,7 @@ export async function fetchPlanDetails(
         mapToUse = poDataMap;
       } else {
         key = item.order_no;
-        mapToUse = stopDataMap; // Invoices are also matched by order_no in post_dispatch_plan_others sometimes, but typically they handle sequence differently.
-        // Wait, for invoices, we might need a separate map for post_dispatch_invoices if we want to restore their sequence too.
-        // But for now, let's stick to the user's manual/PO stop logic.
+        mapToUse = stopDataMap;
       }
 
       const data = key && mapToUse ? mapToUse.get(key) : undefined;
@@ -701,7 +826,7 @@ export async function fetchPlanDetails(
       }
     });
 
-    result.sort((a: { sequence?: number }, b: { sequence?: number }) => (a.sequence || 0) - (b.sequence || 0));
+    result.sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
   }
 
   return { data: result };
@@ -712,21 +837,40 @@ export async function fetchPlanDetails(
  */
 export async function fetchPurchaseOrders(
   query?: string,
+  branchId?: number
 ): Promise<PurchaseOrderRow[]> {
   const params: Record<string, string | number> = {
     fields:
       "purchase_order_id,purchase_order_no,date,supplier_name,total_amount,inventory_status",
     limit: -1,
     sort: "-date",
+    "filter[inventory_status][_eq]": 11,
   };
   if (query) {
-    params["filter[purchase_order_no][_contains]"] = query;
+    params["filter[_and][2][purchase_order_no][_contains]"] = query;
   }
-  const res = await fetchItems<PurchaseOrderRow>(
+  if (branchId) {
+    params["filter[_and][3][branch_id][_eq]"] = branchId;
+  }
+  const res = await fetchItems<PurchaseOrderRow & { inventory_status: number }>(
     "/items/purchase_order",
     params,
   );
-  return res.data || [];
+
+  const poData = res.data || [];
+  if (poData.length === 0) return [];
+
+  // Fetch transaction status map to resolve numeric statuses
+  const transRes = await fetchItems<{ id: number; status: string }>(
+    "/items/transaction_status",
+    { limit: -1, fields: "id,status" }
+  );
+  const statusMap = new Map((transRes.data || []).map((s) => [Number(s.id), s.status]));
+
+  return poData.map((po) => ({
+    ...po,
+    inventory_status: statusMap.get(Number(po.inventory_status)) || `Status ${po.inventory_status}`,
+  })) as unknown as PurchaseOrderRow[];
 }
 
 // ─── Budget Queries ─────────────────────────────────────────
@@ -794,14 +938,17 @@ export async function fetchPdpInvoiceIds(pdpIds: number[]): Promise<number[]> {
     .filter(Boolean);
   if (!orderNos.length) return [];
 
-  const invoicesRes = await fetchItems<{ invoice_id: number }>(
+  const invoicesRes = await fetchItems<{ invoice_id: number; transaction_status: string }>(
     "/items/sales_invoice",
     {
       "filter[order_id][_in]": orderNos.join(","),
-      fields: "invoice_id",
+      fields: "invoice_id,transaction_status",
       limit: -1,
     },
   );
-  const invoiceIds = (invoicesRes.data || []).map((i) => i.invoice_id);
+  const VOID_STATUSES = ["Void", "void"];
+  const invoiceIds = (invoicesRes.data || [])
+    .filter((i) => !VOID_STATUSES.includes(i.transaction_status))
+    .map((i) => i.invoice_id);
   return [...new Set(invoiceIds)];
 }

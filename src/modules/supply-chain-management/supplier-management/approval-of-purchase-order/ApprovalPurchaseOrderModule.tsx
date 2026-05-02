@@ -1,14 +1,15 @@
 "use client";
 
 import * as React from "react";
+import { toast } from "sonner";
 
 import type { PendingApprovalPO, PurchaseOrderDetail, PaymentTerm } from "./types";
-import * as provider from "./providers/approvalPurchaseOrderProvider";
+import * as provider from "./providers/fetchProviders";
 
 import PendingApprovalList from "./components/PendingApprovalList";
 import PurchaseOrderReviewPanel from "./components/PurchaseOrderReviewPanel";
 
-export default function ApprovalPurchaseOrderModule() {
+export default function ApprovalPurchaseOrderModule({ approverId, approverName }: { approverId?: number; approverName?: string; }) {
     const [loadingList, setLoadingList] = React.useState(true);
     const [loadingDetail, setLoadingDetail] = React.useState(false);
     const [error, setError] = React.useState("");
@@ -16,15 +17,24 @@ export default function ApprovalPurchaseOrderModule() {
     const [pending, setPending] = React.useState<PendingApprovalPO[]>([]);
     const [selectedId, setSelectedId] = React.useState<string | null>(null);
     const [detail, setDetail] = React.useState<PurchaseOrderDetail | null>(null);
+    const [paymentTerms, setPaymentTerms] = React.useState<PaymentTerm[]>([]);
 
     const refreshList = React.useCallback(async () => {
         try {
             setLoadingList(true);
             setError("");
-            const data = await provider.fetchPendingApprovalPOs();
+            const [data, terms] = await Promise.all([
+                provider.fetchPendingApprovalPOs(),
+                provider.fetchPaymentTerms(),
+            ]);
             setPending(data);
+            setPaymentTerms(terms);
         } catch (e: unknown) {
-            setError(String(e instanceof Error ? e.message : e));
+            const msg = String(e instanceof Error ? e.message : e);
+            if (msg.trim().toLowerCase() !== "fetch failed") {
+                setError(msg);
+                toast.error(`Load failed: ${msg}`);
+            }
         } finally {
             setLoadingList(false);
         }
@@ -42,7 +52,11 @@ export default function ApprovalPurchaseOrderModule() {
             const d = await provider.fetchPurchaseOrderDetail(id);
             setDetail(d);
         } catch (e: unknown) {
-            setError(String(e instanceof Error ? e.message : e));
+            const msg = e instanceof Error ? e.message : String(e);
+            if (msg.trim().toLowerCase() !== "fetch failed") {
+                setError(msg);
+                toast.error(`Failed to load PO detail: ${msg}`);
+            }
         } finally {
             setLoadingDetail(false);
         }
@@ -59,8 +73,15 @@ export default function ApprovalPurchaseOrderModule() {
     const onApprove = React.useCallback(
         async (opts: {
             markAsInvoice: boolean;
-            paymentTerm: PaymentTerm;
+            payment_type: number | null;
             termsDays?: number;
+            gross_amount?: number;
+            discounted_amount?: number;
+            vat_amount?: number;
+            withholding_tax_amount?: number;
+            total_amount?: number;
+            branch_id?: number | null;
+            receiver_id?: number | null;
         }) => {
             if (!selectedId) return;
 
@@ -68,20 +89,21 @@ export default function ApprovalPurchaseOrderModule() {
                 setError("");
                 await provider.approvePurchaseOrder({
                     id: selectedId,
-                    markAsInvoice: opts.markAsInvoice,
-                    paymentTerm: opts.paymentTerm,
-                    termsDays: opts.termsDays,
+                    ...opts,
+                    approverId: approverId,
                 });
 
-                // remove from list + clear selection
-                setPending((prev) => prev.filter((x) => x.id !== selectedId));
+                // Refresh list and clear selection
+                await refreshList();
                 setSelectedId(null);
                 setDetail(null);
             } catch (e: unknown) {
-                setError(String(e instanceof Error ? e.message : e));
+                const msg = String(e instanceof Error ? e.message : e);
+                setError(msg);
+                toast.error(`Approval failed: ${msg}`);
             }
         },
-        [selectedId]
+        [selectedId, refreshList, approverId]
     );
 
     return (
@@ -99,7 +121,7 @@ export default function ApprovalPurchaseOrderModule() {
                 </div>
             ) : null}
 
-            <div className="grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-4 min-w-0">
+            <div className="grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-4 min-w-0 items-start">
                 <PendingApprovalList
                     items={pending}
                     selectedId={selectedId}
@@ -111,7 +133,9 @@ export default function ApprovalPurchaseOrderModule() {
                     po={detail}
                     loading={loadingDetail}
                     disabled={loadingList}
+                    paymentTerms={paymentTerms}
                     onApprove={onApprove}
+                    approverName={approverName}
                 />
             </div>
         </div>

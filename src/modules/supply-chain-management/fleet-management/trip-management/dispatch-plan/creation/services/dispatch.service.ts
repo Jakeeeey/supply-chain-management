@@ -3,6 +3,7 @@ import {
   prepareStaffPayload,
 } from "./dispatch.helpers";
 import * as repo from "./dispatch.repo";
+import { fetchItems } from "./api";
 import type {
   DispatchCreationMasterData,
   DirectusResponse,
@@ -35,8 +36,11 @@ export async function getMasterData(): Promise<DispatchCreationMasterData> {
 export async function getApprovedPlans(
   branchId?: number,
   currentPlanId?: number | number[],
+  limit: number = 25,
+  offset: number = 0,
+  search?: string
 ): Promise<DirectusResponse<EnrichedApprovedPlan>> {
-  return repo.fetchApprovedPreDispatchPlans(branchId, currentPlanId);
+  return repo.fetchApprovedPreDispatchPlans(branchId, currentPlanId, limit, offset, search);
 }
 
 /**
@@ -78,8 +82,8 @@ export async function getPostPlanDetails(
 /**
  * Fetches available purchase orders for route stop selection.
  */
-export async function getPurchaseOrders(query?: string) {
-  return repo.fetchPurchaseOrders(query);
+export async function getPurchaseOrders(query?: string, branchId?: number) {
+  return repo.fetchPurchaseOrders(query, branchId);
 }
 /**
  * Creates a complete dispatch plan: header + staff + junction + budgets + invoices.
@@ -147,13 +151,16 @@ export async function createDispatchPlan(
       }
 
       // 2. Only real invoices go into 'post_dispatch_invoices'
-      if (!item.isManualStop && !item.isPoStop && item.invoice_id) { // Modified
-        invoicePayloads.push({
-          post_dispatch_plan_id: newPlanId,
-          invoice_id: item.invoice_id,
-          invoiceNo: item.invoice_no,
-          sequence: item.sequence,
-          status: item.status || "Not Fulfilled",
+      // Expand invoice_ids (all non-void invoices for this SO) into individual rows
+      if (!item.isManualStop && !item.isPoStop) {
+        const ids = item.invoice_ids || (item.invoice_id ? [item.invoice_id] : []);
+        ids.forEach((invId) => {
+          invoicePayloads.push({
+            post_dispatch_plan_id: newPlanId,
+            invoice_id: invId,
+            sequence: item.sequence,
+            status: item.status || "Not Fulfilled",
+          });
         });
       }
 
@@ -183,13 +190,17 @@ export async function createDispatchPlan(
   }
 
   // 3. Batch inserts + status update
+  // Collect unique PO IDs for status update
+  const poIdsToDispatch = [...new Set(purchasePayloads.map((p) => Number(p.po_id)).filter(Boolean))];
+
   await Promise.all([
     repo.batchCreate("post_dispatch_plan_staff", staffPayloads),
     repo.batchCreate("post_dispatch_dispatch_plans", junctionPayloads),
     repo.batchCreate("post_dispatch_invoices", invoicePayloads),
     repo.batchCreate("post_dispatch_plan_others", othersPayloads),
-    repo.batchCreate("post_dispatch_purchases", purchasePayloads), // Added this line
+    repo.batchCreate("post_dispatch_purchases", purchasePayloads),
     ...data.pre_dispatch_plan_ids.map(pdpId => repo.updateDispatchPlanStatus(pdpId, "Dispatched")),
+    ...poIdsToDispatch.map(poId => repo.updatePurchaseOrderStatus(poId, 12)),
   ]);
 
   return { success: true, id: newPlanId };
@@ -256,13 +267,16 @@ export async function updateTrip(
       }
 
       // Only real invoices go to 'post_dispatch_invoices'
-      if (!item.isManualStop && !item.isPoStop && item.invoice_id) { // Modified
-        newInvoicePayloads.push({
-          post_dispatch_plan_id: planId,
-          invoice_id: item.invoice_id,
-          invoiceNo: item.invoice_no,
-          sequence: seq,
-          status: item.status || "Not Fulfilled",
+      // Expand invoice_ids (all non-void invoices for this SO) into individual rows
+      if (!item.isManualStop && !item.isPoStop) {
+        const ids = item.invoice_ids || (item.invoice_id ? [item.invoice_id] : []);
+        ids.forEach((invId) => {
+          newInvoicePayloads.push({
+            post_dispatch_plan_id: planId,
+            invoice_id: invId,
+            sequence: seq,
+            status: item.status || "Not Fulfilled",
+          });
         });
       }
 
@@ -305,11 +319,20 @@ export async function updateTrip(
       "post_dispatch_plan_id",
       planId,
     );
-    const oldPurchaseIds = await repo.fetchIdsByFilter(
-      "post_dispatch_purchases",
-      "post_dispatch_plan_id",
-      planId,
+
+    // Fetch old PO records before deleting (need po_id for status revert)
+    const oldPurchaseRecords = await fetchItems<PostDispatchPurchaseRow>(
+      "/items/post_dispatch_purchases",
+      {
+        "filter[post_dispatch_plan_id][_eq]": planId,
+        fields: "id,po_id",
+        limit: -1,
+      },
     );
+    const oldPoIds = (oldPurchaseRecords.data || [])
+      .map((r) => typeof r.po_id === "object" ? r.po_id.purchase_order_id : Number(r.po_id))
+      .filter(Boolean);
+    const oldPurchaseIds = (oldPurchaseRecords.data || []).map((r) => r.id!).filter(Boolean);
 
     await repo.deleteByIds("post_dispatch_invoices", oldIds);
     await repo.deleteByIds("post_dispatch_plan_others", oldOtherIds);
@@ -324,6 +347,16 @@ export async function updateTrip(
     if (newPurchasePayloads.length > 0) {
       await repo.batchCreate("post_dispatch_purchases", newPurchasePayloads);
     }
+
+    // PO status transitions: revert removed → 11 (Picked), set added → 12 (En Route)
+    const newPoIds = [...new Set(newPurchasePayloads.map((p) => Number(p.po_id)).filter(Boolean))];
+    const removedPoIds = oldPoIds.filter((id) => !newPoIds.includes(id));
+    const addedPoIds = newPoIds.filter((id) => !oldPoIds.includes(id));
+
+    await Promise.all([
+      ...removedPoIds.map((poId) => repo.updatePurchaseOrderStatus(poId, 11)),
+      ...addedPoIds.map((poId) => repo.updatePurchaseOrderStatus(poId, 12)),
+    ]);
   }
 
   // 3. Update Header & Staff

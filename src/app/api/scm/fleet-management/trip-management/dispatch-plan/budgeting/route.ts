@@ -1,4 +1,4 @@
-import { handleApiError } from "@/lib/error-handler";
+import { handleApiError } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/utils/error-handler";
 import * as budgetingService from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/budgeting/services/budgeting.service";
 import { UpdateBudgetSchema } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/budgeting/types/budgeting.schema";
 import { NextRequest, NextResponse } from "next/server";

@@ -1,6 +1,6 @@
-import { directusFetch, getDirectusBase } from "@/lib/directus";
-import { 
-  StockAdjustmentHeader, 
+import { directusFetch, getDirectusBase } from "@/modules/supply-chain-management/inventory-management/stock-adjustment/utils/directus";
+import {
+  StockAdjustmentHeader,
   StockAdjustmentDetail,
   StockAdjustmentItem,
   StockAdjustmentProduct,
@@ -67,60 +67,60 @@ export const stockAdjustmentService = {
    */
   async fetchAllHeaders(params?: { search?: string; branchId?: number; type?: string; status?: string }) {
     let query = `fields=*,branch_id.branch_name,branch_id.id,supplier_id.id,supplier_id.supplier_name,created_by.user_fname,created_by.user_lname,created_by.user_id,posted_by.user_fname,posted_by.user_lname,items.id,stock_adjustment.id&sort=-created_at`;
-    
+
     const filters: Record<string, unknown> = {};
-    
+
     if (params?.branchId) filters.branch_id = { _eq: params.branchId };
     if (params?.type) filters.type = { _eq: params.type };
-    
+
     if (params?.status) {
-        if (params.status === "Posted") {
-            filters.isPosted = { _eq: true };
-        } else if (params.status === "Unposted") {
-            filters.isPosted = { _neq: true };
-        }
+      if (params.status === "Posted") {
+        filters.isPosted = { _eq: true };
+      } else if (params.status === "Unposted") {
+        filters.isPosted = { _neq: true };
+      }
     }
-    
+
     if (params?.search) {
-        filters._or = [
-            { doc_no: { _icontains: params.search } },
-            { remarks: { _icontains: params.search } }
-        ];
+      filters._or = [
+        { doc_no: { _icontains: params.search } },
+        { remarks: { _icontains: params.search } }
+      ];
     }
 
     if (Object.keys(filters).length > 0) {
-        query += `&filter=${encodeURIComponent(JSON.stringify(filters))}`;
+      query += `&filter=${encodeURIComponent(JSON.stringify(filters))}`;
     }
 
     const res = await directusFetch<{ data: StockAdjustmentHeader[] }>(`${DIRECTUS_URL}/items/stock_adjustment_header?${query}`);
     const headers = res.data;
-    
+
     if (headers.length === 0) return [];
 
     const docNos = headers.map(h => h.doc_no);
     const itemsRes = await directusFetch<{ data: RawItem[] }>(
-        `${DIRECTUS_URL}/items/stock_adjustment?filter={"doc_no":{"_in":${JSON.stringify(docNos)}}}&fields=doc_no,quantity,product_id.price_per_unit,product_id.cost_per_unit,unit_id.unit_name&limit=-1`
+      `${DIRECTUS_URL}/items/stock_adjustment?filter={"doc_no":{"_in":${JSON.stringify(docNos)}}}&fields=doc_no,quantity,product_id.price_per_unit,product_id.cost_per_unit,unit_id.unit_name&limit=-1`
     );
     const allItems = itemsRes.data || [];
 
     const itemsMap = new Map<string, RawItem[]>();
     allItems.forEach((item: RawItem) => {
-        if (!itemsMap.has(item.doc_no)) itemsMap.set(item.doc_no, []);
-        itemsMap.get(item.doc_no)!.push(item);
+      if (!itemsMap.has(item.doc_no)) itemsMap.set(item.doc_no, []);
+      itemsMap.get(item.doc_no)!.push(item);
     });
 
     return headers.map(header => {
-        const headerItems = itemsMap.get(header.doc_no) || [];
-        const totalAmount = headerItems.reduce((sum: number, item: RawItem) => {
-            const cost = item.product_id?.cost_per_unit || item.product_id?.price_per_unit || 0;
-            return sum + ((item.quantity || 0) * cost);
-        }, 0);
+      const headerItems = itemsMap.get(header.doc_no) || [];
+      const totalAmount = headerItems.reduce((sum: number, item: RawItem) => {
+        const cost = item.product_id?.cost_per_unit || item.product_id?.price_per_unit || 0;
+        return sum + ((item.quantity || 0) * cost);
+      }, 0);
 
-        return {
-            ...header,
-            items: headerItems,
-            amount: totalAmount > 0 ? totalAmount : (Number(header.amount) || 0)
-        };
+      return {
+        ...header,
+        items: headerItems,
+        amount: totalAmount > 0 ? totalAmount : (Number(header.amount) || 0)
+      };
     });
   },
 
@@ -134,7 +134,7 @@ export const stockAdjustmentService = {
     const header = headerRes.data;
 
     const itemsRes = await directusFetch<{ data: RawItem[] }>(
-        `${DIRECTUS_URL}/items/stock_adjustment?filter={"doc_no":{"_eq":"${header.doc_no}"}}&fields=*,product_id.product_id,product_id.product_name,product_id.product_code,product_id.cost_per_unit,product_id.price_per_unit,product_id.unit_of_measurement.unit_name,product_id.unit_of_measurement.order,product_id.product_brand.brand_name,product_id.product_category.category_name,product_id.barcode,product_id.description,unit_id.unit_name&limit=-1`
+      `${DIRECTUS_URL}/items/stock_adjustment?filter={"doc_no":{"_eq":"${header.doc_no}"}}&fields=*,product_id.product_id,product_id.product_name,product_id.product_code,product_id.cost_per_unit,product_id.price_per_unit,product_id.unit_of_measurement.unit_name,product_id.unit_of_measurement.order,product_id.product_brand.brand_name,product_id.product_category.category_name,product_id.barcode,product_id.description,unit_id.unit_name&limit=-1`
     );
     const items = (itemsRes.data || []).map((item: RawItem) => {
       const cost = item.cost_per_unit || item.product_id?.cost_per_unit || item.product_id?.price_per_unit || 0;
@@ -184,7 +184,7 @@ export const stockAdjustmentService = {
     }
 
     const totalAmount = items.reduce((sum: number, item: RawItem) => {
-        return sum + ((item.quantity || 0) * (item.cost_per_unit || 0));
+      return sum + ((item.quantity || 0) * (item.cost_per_unit || 0));
     }, 0);
 
     const itemIds = items.map((i: RawItem) => i.id).filter(Boolean) as number[];
@@ -228,7 +228,7 @@ export const stockAdjustmentService = {
         }
       });
       if (!res.ok) return 0;
-      
+
       const data = await res.json();
       if (Array.isArray(data)) {
         const item = data.find((item: InventoryItem) => item.product_id === productId);
@@ -287,7 +287,7 @@ export const stockAdjustmentService = {
         }
       });
       if (!res.ok) return null;
-      
+
       const data = await res.json();
       if (Array.isArray(data)) {
         return data.find((item: RfidStatusItem) => item.productId === productId) || null;
@@ -309,7 +309,7 @@ export const stockAdjustmentService = {
       const springRes = await fetch(springUrl.toString(), {
         headers: { "Authorization": `Bearer ${token}` }
       });
-      
+
       if (springRes.ok) {
         const data = await springRes.json();
         const hasInventory = Array.isArray(data) ? data.length > 0 : (data && typeof data === 'object' && ('productId' in data || 'id' in data));
@@ -357,7 +357,7 @@ export const stockAdjustmentService = {
    */
   async create(payload: { header: Record<string, unknown>; items: StockAdjustmentItem[]; userId?: number }) {
     const { header, items } = payload;
-    
+
     const headerRes = await directusFetch<{ data: { id: number } }>(`${DIRECTUS_URL}/items/stock_adjustment_header`, {
       method: "POST",
       body: JSON.stringify({
@@ -434,15 +434,15 @@ export const stockAdjustmentService = {
     });
 
     const existingItemsRes = await directusFetch<{ data: { id: number }[] }>(
-        `${DIRECTUS_URL}/items/stock_adjustment?filter={"doc_no":{"_eq":"${payload.header.doc_no}"}}&fields=id`
+      `${DIRECTUS_URL}/items/stock_adjustment?filter={"doc_no":{"_eq":"${payload.header.doc_no}"}}&fields=id`
     );
     const itemIds = existingItemsRes.data.map((i: { id: number }) => i.id);
-    
+
     if (itemIds.length > 0) {
-        await directusFetch(`${DIRECTUS_URL}/items/stock_adjustment`, {
-          method: "DELETE",
-          body: JSON.stringify(itemIds),
-        });
+      await directusFetch(`${DIRECTUS_URL}/items/stock_adjustment`, {
+        method: "DELETE",
+        body: JSON.stringify(itemIds),
+      });
     }
 
     const itemsPayload = payload.items.map((item: StockAdjustmentItem) => ({
@@ -510,25 +510,25 @@ export const stockAdjustmentService = {
     const docNo = headerRes.data.doc_no;
 
     const itemsRes = await directusFetch<{ data: { id: number }[] }>(
-        `${DIRECTUS_URL}/items/stock_adjustment?filter={"doc_no":{"_eq":"${docNo}"}}&fields=id`
+      `${DIRECTUS_URL}/items/stock_adjustment?filter={"doc_no":{"_eq":"${docNo}"}}&fields=id`
     );
     const itemIds = itemsRes.data.map((i: { id: number }) => i.id);
     if (itemIds.length > 0) {
-        await directusFetch(`${DIRECTUS_URL}/items/stock_adjustment`, {
-          method: "DELETE",
-          body: JSON.stringify(itemIds),
-        });
+      await directusFetch(`${DIRECTUS_URL}/items/stock_adjustment`, {
+        method: "DELETE",
+        body: JSON.stringify(itemIds),
+      });
     }
 
     const rfidRes = await directusFetch<{ data: { id: number }[] }>(
-        `${DIRECTUS_URL}/items/stock_adjustment_rfid?filter={"stock_adjustment_id":{"_eq":${id}}}&fields=id`
+      `${DIRECTUS_URL}/items/stock_adjustment_rfid?filter={"stock_adjustment_id":{"_eq":${id}}}&fields=id`
     );
     const rfidIds = rfidRes.data.map((i: { id: number }) => i.id);
     if (rfidIds.length > 0) {
-        await directusFetch(`${DIRECTUS_URL}/items/stock_adjustment_rfid`, {
-          method: "DELETE",
-          body: JSON.stringify(rfidIds),
-        });
+      await directusFetch(`${DIRECTUS_URL}/items/stock_adjustment_rfid`, {
+        method: "DELETE",
+        body: JSON.stringify(rfidIds),
+      });
     }
 
     await directusFetch(`${DIRECTUS_URL}/items/stock_adjustment_header/${id}`, {
@@ -549,11 +549,11 @@ export const stockAdjustmentService = {
    */
   async fetchProducts(params?: { search?: string }) {
     let query = `fields=product_id,product_name,product_code,price_per_unit,cost_per_unit,barcode,description,unit_of_measurement.unit_name,unit_of_measurement.order,product_brand.brand_name&limit=100&sort=product_name`;
-    
+
     const filters: Record<string, unknown> = {
       isActive: { _eq: 1 }
     };
-    
+
     if (params?.search) {
       filters._or = [
         { product_name: { _icontains: params.search } },
@@ -561,12 +561,12 @@ export const stockAdjustmentService = {
         { barcode: { _icontains: params.search } }
       ];
     }
-    
+
     query += `&filter=${JSON.stringify(filters)}`;
-    
+
     const res = await directusFetch<{ data: unknown[] }>(`${DIRECTUS_URL}/items/products?${query}`);
     const products = res.data || [];
-    
+
     return products.map((item: unknown) => {
       const p = item as Record<string, unknown>;
       const uom = p['unit_of_measurement'] as Record<string, unknown> | undefined;
@@ -613,8 +613,8 @@ export const stockAdjustmentService = {
       `${DIRECTUS_URL}/items/product_per_supplier?filter[supplier_id][_eq]=${supplierId}&fields=product_id&limit=-1`
     );
     const supplierProductIds: number[] = (ppsRes.data || []).map((r) => {
-        const pid = typeof r.product_id === 'object' ? (r.product_id as Record<string, unknown>)['id'] : r.product_id;
-        return Number(pid);
+      const pid = typeof r.product_id === 'object' ? (r.product_id as Record<string, unknown>)['id'] : r.product_id;
+      return Number(pid);
     });
 
     if (supplierProductIds.length === 0) return [];

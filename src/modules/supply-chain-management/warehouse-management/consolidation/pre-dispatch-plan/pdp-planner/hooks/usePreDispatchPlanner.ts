@@ -21,6 +21,12 @@ export function usePreDispatchPlanner() {
   const [plansData, setPlansData] = useState<DispatchPlan[]>([]);
   const [plansTotal, setPlansTotal] = useState(0);
 
+  // ─── Pagination State ─────────────────────────────
+  const [pagination, setPagination] = useState({
+    pageIndex: 0,
+    pageSize: 25,
+  });
+
   // ─── Master Data (for filters) ───────────────────
   const [masterData, setMasterData] = useState<DispatchPlanMasterData | null>(
     null,
@@ -34,13 +40,27 @@ export function usePreDispatchPlanner() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * Fetch master data only if not already loaded.
+   */
+  const loadMasterData = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_PATH}?type=master`);
+      const result = await res.json();
+      if (result.data) setMasterData(result.data);
+    } catch (e) {
+      console.error("Failed to load master data", e);
+    }
+  }, []);
+
   // ─── Fetch All Data ──────────────────────────────
   const refresh = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams({
-        limit: "-1",
+        limit: String(pagination.pageSize),
+        offset: String(pagination.pageIndex * pagination.pageSize),
         search: search,
       });
 
@@ -55,23 +75,20 @@ export function usePreDispatchPlanner() {
         params.append("end_date", format(dateRange.to, "yyyy-MM-dd"));
       }
 
-      const [plansRes, masterRes, metricsRes] = await Promise.all([
+      const [plansRes, metricsRes] = await Promise.all([
         fetch(`${API_PATH}?${params.toString()}`).then((r) => r.json()),
-        fetch(`${API_PATH}?type=master`).then((r) => r.json()),
         fetch(`${API_PATH}?type=metrics&${params.toString()}`).then((r) =>
           r.json(),
         ),
       ]);
 
       if (plansRes.error) throw new Error(plansRes.error);
-      if (masterRes.error) throw new Error(masterRes.error);
       if (metricsRes.error) throw new Error(metricsRes.error);
 
       setPlansData(plansRes.data || []);
       setPlansTotal(
         plansRes.meta?.filter_count || plansRes.meta?.total_count || 0,
       );
-      setMasterData(masterRes.data || null);
       setMetrics(metricsRes.data || null);
     } catch (e: unknown) {
       const err = e as Error;
@@ -79,7 +96,7 @@ export function usePreDispatchPlanner() {
     } finally {
       setIsLoading(false);
     }
-  }, [search, clusterId, status, branchId, dateRange]);
+  }, [search, clusterId, status, branchId, dateRange, pagination]);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -87,6 +104,11 @@ export function usePreDispatchPlanner() {
     }, 300);
     return () => clearTimeout(handler);
   }, [refresh]);
+
+  // Initial load of master data
+  useEffect(() => {
+    loadMasterData();
+  }, [loadMasterData]);
 
   // ─── Fetch Plan Details ───────────────────────────
   const fetchPlanDetails = useCallback(
@@ -115,9 +137,25 @@ export function usePreDispatchPlanner() {
     await refresh();
   };
 
+  /**
+   * Rejects a single dispatch plan with remarks.
+   */
+  const rejectPlan = async (id: number | string, remarks: string) => {
+    const response = await fetch(`${API_PATH}/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "reject", reject_remarks: remarks }),
+    });
+    const result = await response.json();
+    if (result.error) throw new Error(result.error);
+    await refresh();
+  };
+
   return {
     plansData,
     plansTotal,
+    pagination,
+    setPagination,
 
     masterData,
     metrics,
@@ -130,5 +168,6 @@ export function usePreDispatchPlanner() {
 
     fetchPlanDetails,
     approvePlan,
+    rejectPlan,
   };
 }

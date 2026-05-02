@@ -22,6 +22,8 @@ function getStatusVariant(
     case "Picking":
     case "Picked":
       return "secondary";
+    case "Rejected":
+      return "destructive";
     default:
       return "outline";
   }
@@ -34,9 +36,11 @@ function getStatusVariant(
 export function getPDPPlannerColumns({
   onView,
   onApprove,
+  onReject,
 }: {
   onView: (plan: DispatchPlan) => void;
   onApprove: (plan: DispatchPlan) => void;
+  onReject: (plan: DispatchPlan) => void;
 }): ColumnDef<DispatchPlan>[] {
   return [
     {
@@ -65,21 +69,27 @@ export function getPDPPlannerColumns({
       id: "cluster",
       header: "Cluster",
       cell: ({ row }) => (
-        <span className="font-medium">{row.original.cluster_name || "—"}</span>
+        <span className="font-medium line-clamp-1 max-w-[120px]">
+          {row.original.cluster_name || "—"}
+        </span>
       ),
     },
     {
       id: "branch",
       header: "Branch",
       cell: ({ row }) => (
-        <span className="font-medium text-xs text-muted-foreground">{row.original.branch_name || "—"}</span>
+        <span className="font-medium text-xs text-muted-foreground line-clamp-1 max-w-[120px]">
+          {row.original.branch_name || "—"}
+        </span>
       ),
     },
     {
       id: "driver",
       header: "Driver",
       cell: ({ row }) => (
-        <span className="font-medium">{row.original.driver_name || "—"}</span>
+        <span className="font-medium line-clamp-1 max-w-[150px]">
+          {row.original.driver_name || "—"}
+        </span>
       ),
     },
     {
@@ -146,6 +156,15 @@ export function getPDPPlannerColumns({
                 onClick={() => onApprove(row.original)}
               >
                 Approve
+              </Button>
+            )}
+            {isPending && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => onReject(row.original)}
+              >
+                Reject
               </Button>
             )}
             <Button

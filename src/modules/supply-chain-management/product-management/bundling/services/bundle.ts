@@ -30,10 +30,10 @@ export const bundleService = {
     const typesRes = await fetchItems<any>("/items/product_bundle_types", {
       limit: -1,
     });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const productsRes = await fetchItems<any>("/items/products", {
-      limit: -1,
+    const productsRes = await fetchItems<Record<string, unknown>>("/items/products", {
+      limit: 1000,
       "filter[isActive][_eq]": 1,
+      "filter[item_type][_neq]": "bundle",
       fields:
         "product_id,product_name,product_code,isActive,unit_of_measurement.*,product_brand.brand_name,product_category.category_name",
       sort: "product_name",
@@ -239,105 +239,52 @@ export const bundleService = {
     typeId?: number,
   ): Promise<PaginatedBundles> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const masterFilter: any = { _and: [] };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const draftFilter: any = { _and: [{ draft_status: { _eq: "REJECTED" } }] };
+    const filter: Record<string, any> = { _and: [{ item_type: { _eq: "bundle" } }] };
 
     if (search) {
-      // Master (products table) uses product_name / product_code
-      masterFilter._and.push({
+      filter._and.push({
         _or: [
           { product_name: { _icontains: search } },
           { product_code: { _icontains: search } },
         ],
       });
-      // Drafts still use bundle_name / bundle_sku
-      draftFilter._and.push({
-        _or: [
-          { bundle_name: { _icontains: search } },
-          { bundle_sku: { _icontains: search } },
-        ],
-      });
     }
 
     if (typeId) {
-      masterFilter._and.push({ bundle_type_id: { _eq: typeId } });
-      draftFilter._and.push({ bundle_type_id: { _eq: typeId } });
+      filter._and.push({ bundle_type_id: { _eq: typeId } });
     }
 
-    // Logic:
-    // If status is 'REJECTED' or empty/undefined (all), we fetch from drafts collection.
-    // If status is 'APPROVED' or empty/undefined (all), we fetch from master collection.
+    // Always fetch APPROVED bundles directly from the master products table
+    const ObjectStrFilter = filter._and.length > 0 ? JSON.stringify(filter) : undefined;
+    
+    const params: Record<string, string | number> = {
+      limit,
+      offset,
+      fields: "*.*",
+      meta: "filter_count",
+      sort: "-product_id",
+    };
+    
+    if (ObjectStrFilter) params.filter = ObjectStrFilter;
 
-    const fetchMaster = !status || status === "APPROVED" || status === "ALL";
-    const fetchRejected = !status || status === "REJECTED" || status === "ALL";
+    const { data: masterData, meta } = await fetchItems<Record<string, unknown>>(
+      "/items/products",
+      params
+    );
 
-    let results: (Bundle | BundleDraft)[] = [];
-    let totalCount = 0;
+    const mappedData = (masterData || []).map((p: Record<string, unknown>) => ({
+      ...p,
+      id: Number(p.product_id) || 0,
+      bundle_sku: String(p.product_code || ""),
+      bundle_name: String(p.product_name || ""),
+      status: "APPROVED" as const,
+      bundle_type_id: p.bundle_type_id || null,
+    } as unknown as Bundle));
 
-    const masterRes = fetchMaster
-      ? await fetchItems<Bundle>("/items/products", {
-          limit: 200, // Fetch a larger pool from both tables
-          offset: 0, // Always fetch from the beginning to ensure correct merging
-          fields: "*.*",
-          meta: "filter_count",
-          sort: "-product_id",
-          filter: JSON.stringify({
-            _and: [
-              ...(masterFilter._and.length > 0 ? masterFilter._and : []),
-              { item_type: { _eq: "bundle" } },
-            ],
-          }),
-        })
-      : { data: [], meta: { filter_count: 0 } };
-
-    const draftRes = fetchRejected
-      ? await fetchItems<BundleDraft>("/items/product_bundles_draft", {
-          limit: 200, // Fetch a larger pool from both tables
-          offset: 0, // Always fetch from the beginning to ensure correct merging
-          fields: "*.*",
-          meta: "filter_count",
-          sort: "-id",
-          filter: JSON.stringify(draftFilter),
-        })
-      : { data: [], meta: { filter_count: 0 } };
-
-    // Merge results and normalize field names for the UI
-    results = [
-      ...(draftRes.data || []),
-      ...(masterRes.data || []).map((p: Record<string, unknown>) => ({
-        ...p,
-        id: (p.product_id as number) || 0,
-        bundle_sku: (p.product_code as string) || "",
-        bundle_name: (p.product_name as string) || "",
-        status: "APPROVED" as const,
-      } as unknown as Bundle)),
-    ];
-    totalCount =
-      (masterRes.meta?.filter_count || 0) + (draftRes.meta?.filter_count || 0);
-
-    // Sort: most recently updated/created first (strictly chronological)
-    results.sort((a, b) => {
-      const getSortTime = (item: Bundle | BundleDraft) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const i = item as any; // Cast for dynamic property access
-        const dateStr =
-          i.updated_at ||
-          i.last_updated ||
-          i.date_updated ||
-          i.created_at ||
-          i.date_created ||
-          0;
-        return new Date(dateStr).getTime();
-      };
-      return getSortTime(b) - getSortTime(a);
-    });
-
-    // Unified pagination: slice the merged and sorted results
-    const paginatedResults = results.slice(offset, offset + limit);
+    const totalCount = meta?.filter_count || 0;
 
     return {
-      data: paginatedResults,
+      data: mappedData,
       meta: {
         total_count: totalCount,
         filter_count: totalCount,

@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { AppError } from "@/lib/error-handler";
-import { StockConversionPayload, StockConversionProduct } from "../types/stock-conversion.schema";
+import { AppError } from "@/modules/supply-chain-management/transfers/stock-conversion/utils/error-handler";
+import { StockConversionPayload, StockConversionProduct } from "../types/stock-conversion.types";
+
 
 const DIRECTUS_API = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "");
 const DIRECTUS_TOKEN = process.env.DIRECTUS_STATIC_TOKEN;
@@ -17,6 +18,7 @@ function springHeaders(token?: string) {
   return {
     "Content-Type": "application/json",
     "Accept": "application/json",
+    "Accept-Encoding": "gzip, deflate, br", // Emphasize compression
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 }
@@ -85,8 +87,8 @@ export async function fetchStockList(
     const startTime = Date.now();
     const headers = getHeaders();
 
-    // 1. Fetch products with limit and offset (Cached for 60 seconds because inventory is handled entirely dynamically elsewhere)
-    const prodRes = await fetchWithTimeout(`${DIRECTUS_API}/items/products?limit=${limit}&offset=${offset}&meta=filter_count&fields=product_id,product_name,description,product_code,parent_id,unit_of_measurement,product_brand,product_category,cost_per_unit,price_per_unit`, { headers, next: { revalidate: 120 } });
+    // 1. Fetch products with limit and offset (Force fresh data to ensure UOM counts are accurate)
+    const prodRes = await fetchWithTimeout(`${DIRECTUS_API}/items/products?limit=${limit}&offset=${offset}&meta=filter_count&fields=product_id,product_name,description,product_code,parent_id,unit_of_measurement,unit_of_measurement_count,product_brand,product_category,cost_per_unit,price_per_unit`, { headers, cache: "no-store" });
 
     // 2. Fetch or retrieve cached master dictionaries
     const cache = await getMasterData(headers);
@@ -130,20 +132,53 @@ export async function fetchStockList(
 
     // 2. Strict Grouping logic to prevent JSON explosion (No more name-based fuzzy grouping)
     // We only group products that are explicitly parts of a parent-child relationship.
-    const productGroups = new Map<number, any[]>();
+    const normalizeName = (name: string) => {
+        return name
+            .replace(/x\s*\d+\s*(box|pack|tie|pcs|pieces)?/gi, '')
+            .replace(/\s+\d+\s*(box|pack|tie|pcs|pieces)\b/gi, '')
+            .replace(/\s+(box|pack|tie|pcs|pieces)\b/gi, '')
+            .trim();
+    };
+
+    const parentIds = new Set<number>();
+    products.forEach((p: any) => {
+        if (p.parent_id) parentIds.add(Number(p.parent_id));
+    });
+
+    const productGroups = new Map<string, any[]>();
     products.forEach((p: any) => {
         const pId = Number(p.product_id);
-        const parentId = p.parent_id ? Number(p.parent_id) : pId;
-        if (!productGroups.has(parentId)) productGroups.set(parentId, []);
-        productGroups.get(parentId)!.push(p);
+        const parentId = p.parent_id ? Number(p.parent_id) : undefined;
+        const nameKey = (p.product_name || "").trim().toLowerCase();
+        
+        let groupKey: string;
+        if (parentId) {
+            groupKey = `ID-${parentId}`;
+        } else if (parentIds.has(pId)) {
+            groupKey = `ID-${pId}`;
+        } else {
+            groupKey = `NAME-${normalizeName(nameKey)}`;
+        }
+        
+        if (!productGroups.has(groupKey)) productGroups.set(groupKey, []);
+        productGroups.get(groupKey)!.push(p);
     });
 
     const result: StockConversionProduct[] = [];
 
     products.forEach((p: any) => {
       const pId = Number(p.product_id);
-      const parentId = p.parent_id ? Number(p.parent_id) : pId;
-      const group = productGroups.get(parentId) || [p];
+      const parentId = p.parent_id ? Number(p.parent_id) : undefined;
+      const nameKey = (p.product_name || "").trim().toLowerCase();
+      let groupKey: string;
+      if (parentId) {
+          groupKey = `ID-${parentId}`;
+      } else if (parentIds.has(pId)) {
+          groupKey = `ID-${pId}`;
+      } else {
+          groupKey = `NAME-${normalizeName(nameKey)}`;
+      }
+      const group = productGroups.get(groupKey) || [p];
 
       // Safe extraction of IDs handling both number and object (Directus behavior)
       const brandId = Number(typeof p.product_brand === 'object' ? p.product_brand?.brand_id : p.product_brand);
@@ -157,16 +192,27 @@ export async function fetchStockList(
         })
         .map((v: any) => {
             const vUnitId = Number(typeof v.unit_of_measurement === 'object' ? v.unit_of_measurement?.unit_id : v.unit_of_measurement);
+            const dbFactor = Number(v.unit_of_measurement_count) || 1;
+            const targetUnitName = unitMap.get(vUnitId) || "Unknown";
+            let parsedFactor = dbFactor;
+            
+            if (targetUnitName.toLowerCase().includes("piece") || targetUnitName.toLowerCase() === "pcs") {
+                parsedFactor = 1;
+            }
+            
             return {
                 unitId: vUnitId,
-                name: unitMap.get(vUnitId) || "Unknown",
-                conversionFactor: Number(v.unit_of_measurement_count) || 1,
+                name: targetUnitName,
+                conversionFactor: parsedFactor,
                 targetProductId: Number(v.product_id)
             };
         });
 
       // Robust supplier lookup: check product then parent, try to find a named one
-      const sIds = [...(supplierMap.get(pId) || []), ...(supplierMap.get(parentId) || [])];
+      const sIds = [
+          ...(supplierMap.get(pId) || []),
+          ...(parentId !== undefined ? (supplierMap.get(parentId) || []) : [])
+      ];
       let finalSupplierId = sIds[0];
       let finalSupplierName = "No Supplier";
       let finalSupplierShortcut = "";
@@ -181,6 +227,13 @@ export async function fetchStockList(
           }
       }
 
+      const currentUnitName = unitMap.get(unitId) || "Unknown";
+      let sourceFactor = Number(p.unit_of_measurement_count) || 1;
+      
+      if (currentUnitName.toLowerCase().includes("piece") || currentUnitName.toLowerCase() === "pcs") {
+          sourceFactor = 1;
+      }
+
       result.push({
         productId: pId,
         supplierId: finalSupplierId ? Number(finalSupplierId) : undefined,
@@ -189,13 +242,15 @@ export async function fetchStockList(
         brand: brandMap.get(brandId) || "Unknown",
         category: catMap.get(categoryId) || "Unknown",
         productCode: p.product_code || "",
+        productName: p.product_name || "",
         productDescription: p.description || p.product_name || "",
         family: `FAM-${parentId}`,
-        currentUnit: unitMap.get(unitId) || "Unknown",
+        currentUnit: currentUnitName,
         currentUnitId: unitId,
         quantity: 0,
         pricePerUnit: Number(p.cost_per_unit || p.price_per_unit || 0),
         totalAmount: 0,
+        conversionFactor: sourceFactor,
         inventoryLoaded: false,
         availableUnits,
       });
@@ -218,6 +273,12 @@ export interface InventoryFilters {
   productBrand?: string;
   productIds?: number[];
 }
+
+const localInventoryCache: { data: Record<number, number> | null; timestamp: number } = {
+  data: null,
+  timestamp: 0,
+};
+const INVENTORY_CACHE_TTL = 1000 * 60 * 2; // 2 minutes TTL for this massive payload
 
 export async function fetchInventoryMap(token?: string, branchId?: number, filters?: InventoryFilters): Promise<Record<number, number>> {
   if (!SPRING_API) return {};
@@ -243,14 +304,22 @@ export async function fetchInventoryMap(token?: string, branchId?: number, filte
       
       url = `${SPRING_API}/api/view-running-inventory/filter?${sp.toString()}`;
     } else {
-      url = `${SPRING_API}/api/view-running-inventory/all${branchId !== undefined ? `?branch_id=${branchId}` : ""}`;
+      url = `${SPRING_API}/api/view-running-inventory-balance/all${branchId !== undefined ? `?branch_id=${branchId}` : ""}`;
     }
+    if (url.includes("/all")) {
+      const now = Date.now();
+      if (localInventoryCache.data && now - localInventoryCache.timestamp < INVENTORY_CACHE_TTL) {
+        console.log(`[Stock-Conversion] Serving /all inventory from custom Node memory cache! (Bypassed NextJS 2MB limit in ${Date.now() - start}ms)`);
+        return localInventoryCache.data;
+      }
+    }
+
     console.log(`[Stock-Conversion] Fetching inventory from: ${url}`);
     
     const res = await fetchWithTimeout(url, { 
       headers: springHeaders(token), 
-      cache: "no-store" 
-    }, 90000);
+      cache: "no-store" // Force dynamic fetch to evade NextJS 2MB error. We use custom cache above.
+    }, 300000); // Expanded timeout to 5 mins for massive payload
     
     if (!res.ok) {
         const status = res.status;
@@ -265,11 +334,11 @@ export async function fetchInventoryMap(token?: string, branchId?: number, filte
         // If /filter failed (e.g. 404 or 400), try falling back to /all as a last resort
         if (url.includes("/filter")) {
           console.warn(`[Stock-Conversion] /filter failed (${status}). Falling back to /all...`);
-          const fallbackUrl = `${SPRING_API}/api/view-running-inventory/all${branchId !== undefined ? `?branch_id=${branchId}` : ""}`;
+          const fallbackUrl = `${SPRING_API}/api/view-running-inventory-balance/all${branchId !== undefined ? `?branch_id=${branchId}` : ""}`;
           const fallbackRes = await fetchWithTimeout(fallbackUrl, { 
             headers: springHeaders(token), 
-            cache: "no-store" 
-          }, 90000);
+            next: { revalidate: 60 } // NextJS ISR cache for 60s
+          }, 120000);
           
           if (fallbackRes.ok) {
             const json = await fallbackRes.json();
@@ -280,6 +349,11 @@ export async function fetchInventoryMap(token?: string, branchId?: number, filte
               const qty = Number(i.runningInventory ?? i.running_inventory ?? 0);
               if (!isNaN(pId)) invMap[pId] = (invMap[pId] || 0) + qty;
             });
+            
+            // Save to memory cache to defeat the 110MB proxy lag
+            localInventoryCache.data = invMap;
+            localInventoryCache.timestamp = Date.now();
+            
             return invMap;
           }
         }
@@ -298,6 +372,13 @@ export async function fetchInventoryMap(token?: string, branchId?: number, filte
     });
     
     console.log(`[Stock-Conversion] Inventory Map built in ${Date.now() - start}ms`);
+
+    // Save to memory cache to defeat the 110MB proxy lag for next 2 minutes
+    if (url.includes("/all")) {
+      localInventoryCache.data = invMap;
+      localInventoryCache.timestamp = Date.now();
+    }
+
     return invMap;
   } catch (err: any) {
     console.error("[Stock-Conversion] fetchInventoryMap error:", err.message);
@@ -335,16 +416,28 @@ export async function convertStock(payload: StockConversionPayload) {
          return iRes.json();
      };
 
-     await createAdj("OUT", payload.productId, payload.quantityToConvert);
+     const outData = await createAdj("OUT", payload.productId, payload.quantityToConvert);
      const inData = await createAdj("IN", targetProductId, payload.convertedQuantity);
      
+     const outStockAdjId = outData.data?.id || (Array.isArray(outData.data) ? outData.data[0]?.id : outData.data?.id);
+     
+     if (outStockAdjId && payload.sourceRfidTags?.length) {
+         for (const tag of payload.sourceRfidTags) {
+             await fetch(`${DIRECTUS_API}/items/stock_adjustment_rfid`, {
+                 method: "POST", headers, body: JSON.stringify({
+                     stock_adjustment_id: Number(outStockAdjId), rfid_tag: tag, created_by: payload.userId, scan_type: 'CONVERT_OUT'
+                 })
+             }).catch(e => console.error("Source RFID tag storage failed:", e.message));
+         }
+     }
+
      const newStockAdjId = inData.data?.id || (Array.isArray(inData.data) ? inData.data[0]?.id : inData.data?.id);
 
      if (newStockAdjId && payload.rfidTags?.length) {
          for (const tag of payload.rfidTags) {
              await fetch(`${DIRECTUS_API}/items/stock_adjustment_rfid`, {
                  method: "POST", headers, body: JSON.stringify({
-                     stock_adjustment_id: Number(newStockAdjId), rfid_tag: tag.rfid_tag, created_by: payload.userId
+                     stock_adjustment_id: Number(newStockAdjId), rfid_tag: tag.rfid_tag, created_by: payload.userId, scan_type: 'CONVERT_IN'
                  })
              }).catch(e => console.error("RFID tag storage failed:", e.message));
          }

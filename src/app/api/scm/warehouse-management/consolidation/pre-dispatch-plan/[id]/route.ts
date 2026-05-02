@@ -67,6 +67,11 @@ export async function PATCH(
       return NextResponse.json({ data: { success: true } });
     }
 
+    if (action === "reject") {
+      await dispatchPlanService.rejectPlan(id, body.reject_remarks || "");
+      return NextResponse.json({ data: { success: true } });
+    }
+
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   } catch (error: unknown) {
     const errorMsg = error instanceof Error ? error.message : "Failed to update dispatch plan";

@@ -1,29 +1,14 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import {
-  useReactTable,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  flexRender,
-} from "@tanstack/react-table";
-import { StockConversionProduct } from "../types/stock-conversion.schema";
+import { RefreshCw } from "lucide-react";
+import { StockConversionProduct } from "../types/stock-conversion.types";
 import { getColumns } from "./columns";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataTable } from "@/components/ui/new-data-table";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Filter, Cuboid, Layers, Users, RefreshCw } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { SearchableCombobox } from "@/modules/supply-chain-management/warehouse-management/stock-transfer/shared/components/searchable-combobox";
 
 interface StockConversionTableProps {
   data: StockConversionProduct[];
@@ -33,320 +18,316 @@ interface StockConversionTableProps {
   setPage: (p: number) => void;
   setPageSize: (s: number) => void;
   onConvertClick: (product: StockConversionProduct) => void;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onRefresh: (filters?: any) => void;
+  onRefresh: () => void;
+  onFilterChange: (filters: Record<string, string>) => void;
   loadProductsInventory: (productIds: number[]) => void;
   isLoading?: boolean;
+  branches?: Array<{ id: number; branch_name?: string; name?: string }>;
+  selectedBranchId?: number;
+  onBranchChange?: (branchId: number | undefined) => void;
+  options?: {
+    brands: { id: number; name: string }[];
+    categories: { id: number; name: string }[];
+    units: { id: number; name: string }[];
+    suppliers: { id: number; name: string; shortcut: string }[];
+  };
+  convertingId?: number | null;
 }
 
-export function StockConversionTable({ 
-  data, page, pageSize, setPage, setPageSize,
-  onConvertClick, onRefresh, loadProductsInventory, isLoading 
+export function StockConversionTable({
+  data,
+  totalCount,
+  page,
+  pageSize,
+  setPage,
+  setPageSize,
+  onConvertClick,
+  onRefresh,
+  onFilterChange,
+  loadProductsInventory,
+  isLoading,
+  branches,
+  selectedBranchId,
+  onBranchChange,
+  options,
+  convertingId,
 }: StockConversionTableProps) {
-  const [brandFilter, setBrandFilter] = useState("all");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [unitFilter, setUnitFilter] = useState("all");
-  const [supplierFilter, setSupplierFilter] = useState("all");
-  const [isGrouped, setIsGrouped] = useState(false);
+  const [brandFilter, setBrandFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [unitFilter, setUnitFilter] = useState("");
+  const [supplierFilter, setSupplierFilter] = useState("");
+  const [hasStockFilter, setHasStockFilter] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [localBranchId, setLocalBranchId] = useState<number | undefined>(selectedBranchId);
 
-  const uniqueBrands = useMemo(() => Array.from(new Set(data.map(d => d.brand))), [data]);
-  const uniqueCategories = useMemo(() => Array.from(new Set(data.map(d => d.category))), [data]);
-  const uniqueUnits = useMemo(() => Array.from(new Set(data.map(d => d.currentUnit))), [data]);
-  const uniqueSuppliers = useMemo(() => Array.from(new Set(data.map(d => d.supplierName || "No Supplier"))), [data]);
-
-  const filteredData = useMemo(() => {
-    let result = data.filter(item => {
-      const matchBrand = brandFilter === "all" || item.brand === brandFilter;
-      const matchCat = categoryFilter === "all" || item.category === categoryFilter;
-      const matchUnit = unitFilter === "all" || item.currentUnit === unitFilter;
-      const matchSupplier = supplierFilter === "all" || (item.supplierName || "No Supplier") === supplierFilter;
-      return matchBrand && matchCat && matchUnit && matchSupplier;
-    });
-
-    if (isGrouped) {
-      // Sort by family so they appear together
-      result = [...result].sort((a, b) => (a.family || "").localeCompare(b.family || ""));
-    }
-
-    return result;
-  }, [data, brandFilter, categoryFilter, unitFilter, supplierFilter, isGrouped]);
-
-  const columns = useMemo(() => getColumns(onConvertClick), [onConvertClick]);
-
-  const table = useReactTable({
-    data: filteredData,
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    state: {
-      pagination: {
-        pageIndex: page - 1,
-        pageSize,
-      },
-    },
-  });
-
-  // Effect to trigger filtered inventory fetch when filters change
+  // Sync local branch when prop changes externally
   useEffect(() => {
-    // Only fetch if we actually have products loaded
-    if (!data.length) return;
+    setLocalBranchId(selectedBranchId);
+  }, [selectedBranchId]);
 
-    // Skip initial bulk fetch if no specific filter is active. 
-    // The table relies on lazy-loading visible rows efficiently instead.
-    if (supplierFilter === "all" && categoryFilter === "all" && unitFilter === "all" && brandFilter === "all") {
-        return;
-    }
+  const uniqueBrands = useMemo(() => {
+    if (options?.brands?.length) return options.brands;
+    const set = new Set<string>();
+    return data.map(d => d.brand).filter(b => {
+      if (!b || b === "Unknown" || set.has(b)) return false;
+      set.add(b);
+      return true;
+    }).map(b => ({ id: 0, name: b }));
+  }, [options, data]);
 
-    const selectedShortcut = data.find(d => d.supplierName === supplierFilter)?.supplierShortcut || 
-                            (supplierFilter === "all" ? "all" : undefined);
+  const uniqueCategories = useMemo(() => {
+    if (options?.categories?.length) return options.categories;
+    const set = new Set<string>();
+    return data.map(d => d.category).filter(c => {
+      if (!c || c === "Unknown" || set.has(c)) return false;
+      set.add(c);
+      return true;
+    }).map(c => ({ id: 0, name: c }));
+  }, [options, data]);
 
-    // If everything is "all", the backend /all endpoint is slow. 
-    // We only trigger if at least one meaningful filter is set, OR on the very first load.
-    // However, the user wants /filter to be used.
+  const uniqueUnits = useMemo(() => {
+    if (options?.units?.length) return options.units;
+    const set = new Set<string>();
+    return data.map(d => d.currentUnit).filter(u => {
+      if (!u || u === "Unknown" || set.has(u)) return false;
+      set.add(u);
+      return true;
+    }).map(u => ({ id: 0, name: u }));
+  }, [options, data]);
+
+  const uniqueSuppliers = useMemo(() => {
+    const suppliers = options?.suppliers?.length ? options.suppliers : [];
+    const map = new Map<string, string>();
     
-    onRefresh({
-      supplierShortcut: selectedShortcut,
-      productCategory: categoryFilter,
-      unitName: unitFilter,
-      productBrand: brandFilter
+    // Add from props
+    suppliers.forEach(s => {
+      if (s.name?.trim() && s.shortcut?.trim()) map.set(s.name.trim(), s.shortcut.trim());
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [brandFilter, categoryFilter, unitFilter, supplierFilter, onRefresh, data.length]);
-
-  // Lazy Loading Effect: Watch the current page and fetch inventory for visible products
-  const pageItems = table.getRowModel().rows;
-  const visibleProductIds = JSON.stringify(pageItems.map(row => row.original.productId));
-
-  useEffect(() => {
-    if (!pageItems.length) return;
-
-    // Grab products from current page that need loading
-    const productsToLoad = pageItems
-      .map(row => row.original)
-      .filter(p => p.inventoryLoaded === false)
-      .map(p => p.productId);
-
-    if (productsToLoad.length > 0) {
-      // Debounce the call so rapid pagination doesn't overwhelm the backend
-      const timer = setTimeout(() => {
-        console.log("[StockConversionTable] Lazy loading inventory for current page products:", productsToLoad);
-        loadProductsInventory(productsToLoad);
-      }, 350);
-      
-      return () => clearTimeout(timer);
+    
+    // Add from data (fallbacks)
+    if (!suppliers.length) {
+      data.forEach((d) => {
+        if (d.supplierName?.trim() && d.supplierShortcut?.trim()) {
+          map.set(d.supplierName.trim(), d.supplierShortcut.trim());
+        }
+      });
     }
+
+    return Array.from(map.entries()).map(([name, shortcut]) => {
+      const found = suppliers.find(s => s.name === name);
+      return { id: found?.id || 0, name, shortcut };
+    });
+  }, [options, data]);
+
+  const handleApplyFilters = (searchOverride?: string) => {
+    const filterPayload: Record<string, string> = {};
+    
+    // Safety check: ensure activeSearch is a string. 
+    // onClick={handleApplyFilters} passes the event object, which we must ignore.
+    const activeSearch = (typeof searchOverride === 'string') ? searchOverride : searchQuery;
+
+    if (supplierFilter) {
+      // Find by name OR shortcut to be safe
+      const found = uniqueSuppliers.find(s => s.name === supplierFilter || s.shortcut === supplierFilter);
+      filterPayload.supplierShortcut = found?.shortcut || supplierFilter;
+    }
+    if (brandFilter) filterPayload.productBrand = brandFilter;
+    if (categoryFilter) filterPayload.productCategory = categoryFilter;
+    if (unitFilter) filterPayload.unitName = unitFilter;
+    if (activeSearch && typeof activeSearch === 'string' && activeSearch.trim()) {
+      filterPayload.search = activeSearch.trim();
+    }
+    if (hasStockFilter) filterPayload.hasStock = "true";
+
+    setPage(1);
+    const finalPayload = { 
+      ...filterPayload, 
+      branchId: localBranchId ? String(localBranchId) : "" 
+    };
+    onBranchChange?.(localBranchId);
+    onFilterChange(finalPayload);
+  };
+
+  // Filters now only apply when the "Apply" button is clicked, per user preference.
+  // Search query remains reactive but debounced for a better user experience.
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      // Apply filters if there is a search query OR if the search query was just cleared
+      // This ensures that deleting the search string actually resets the list.
+      handleApplyFilters();
+    }, 400);
+
+    return () => clearTimeout(handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleProductIds, loadProductsInventory, pageItems.length]); // Use stringified IDs
+  }, [searchQuery]);
+
+  const handleClearFilters = () => {
+    setBrandFilter("");
+    setCategoryFilter("");
+    setUnitFilter("");
+    setSupplierFilter("");
+    setHasStockFilter(false);
+    setSearchQuery("");
+    setLocalBranchId(selectedBranchId);
+    setPage(1);
+    onFilterChange({});
+  };
+
+  const canConvert = selectedBranchId !== undefined && selectedBranchId > 0;
+  const columns = useMemo(
+    () => getColumns(onConvertClick, (id: number) => loadProductsInventory([id]), canConvert, convertingId),
+    [onConvertClick, loadProductsInventory, canConvert, convertingId]
+  );
+
+  const filterActions = (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+      {/* Primary Controls: Branch & Convertible Toggle */}
+      <div className="flex items-center gap-2">
+        <div className="w-[170px]">
+        <SearchableCombobox
+          options={branches?.map((b) => ({
+            value: String(b.id),
+            label: String(b.branch_name || b.name || b.id),
+          })) || []}
+          value={localBranchId ? String(localBranchId) : ""}
+          onValueChange={(val: string | null) => setLocalBranchId(val ? Number(val) : undefined)}
+          placeholder="Select Branch"
+          className="h-9"
+        />
+      </div>
+
+      <div className="flex items-center space-x-2 bg-blue-500/5 px-3 py-1.5 rounded-md border border-blue-500/10 h-9">
+        <Checkbox 
+          id="convertible-only" 
+          checked={hasStockFilter} 
+          onCheckedChange={(checked) => setHasStockFilter(!!checked)} 
+          disabled={!localBranchId}
+        />
+          <Label 
+            htmlFor="convertible-only" 
+            className={`text-[10px] font-bold cursor-pointer uppercase tracking-tight ${!localBranchId ? "text-muted-foreground opacity-50" : "text-blue-600 dark:text-blue-400"}`}
+          >
+            Convertible Only
+          </Label>
+        </div>
+      </div>
+
+      {/* Divider */}
+      <div className="hidden xl:block w-px h-6 bg-slate-200 dark:bg-slate-800" />
+
+      {/* Secondary Filters Group */}
+      <div className="flex flex-wrap items-center gap-2">
+
+        <div className="w-[145px]">
+        <SearchableCombobox
+          options={uniqueSuppliers.map(s => ({
+            value: s.name || "Unknown",
+            label: s.name || "Unknown",
+          }))}
+          value={supplierFilter}
+          onValueChange={setSupplierFilter}
+          placeholder="All Suppliers"
+          className="h-9"
+        />
+      </div>
+
+        <div className="w-[120px]">
+        <SearchableCombobox
+          options={uniqueBrands.map(b => ({
+            value: b.name || "Unknown",
+            label: b.name || "Unknown",
+          }))}
+          value={brandFilter}
+          onValueChange={setBrandFilter}
+          placeholder="All Brands"
+          className="h-9"
+        />
+      </div>
+
+        <div className="w-[130px]">
+        <SearchableCombobox
+          options={uniqueCategories.map(c => ({
+            value: c.name || "Unknown",
+            label: c.name || "Unknown",
+          }))}
+          value={categoryFilter}
+          onValueChange={setCategoryFilter}
+          placeholder="All Categories"
+          className="h-9"
+        />
+      </div>
+
+        <div className="w-[105px]">
+        <SearchableCombobox
+          options={uniqueUnits.map(u => ({
+            value: u.name || "Unknown",
+            label: u.name || "Unknown",
+          }))}
+          value={unitFilter}
+          onValueChange={setUnitFilter}
+          placeholder="All Units"
+          className="h-9"
+        />
+      </div>
+
+      <div className="flex items-center gap-1 ml-1">
+        <Button 
+          variant="default" 
+          size="sm" 
+          onClick={() => handleApplyFilters()} 
+          disabled={isLoading || !localBranchId}
+          className="h-9 px-3 text-xs font-bold uppercase bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all active:scale-95"
+        >
+          Apply
+        </Button>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={handleClearFilters} 
+          disabled={isLoading || !localBranchId}
+          className="h-9 px-3 text-xs font-bold uppercase border-slate-200 hover:bg-slate-50 transition-all active:scale-95"
+        >
+          Clear
+        </Button>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          onClick={onRefresh} 
+          disabled={isLoading || !localBranchId} 
+          className="h-9 w-9 rounded-lg hover:bg-blue-50 text-blue-600"
+        >
+          <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+        </Button>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
-    <Card className="border-none shadow-sm h-full flex flex-col pt-3 bg-background">
-      <CardHeader className="flex flex-row items-center justify-between py-4 pb-2">
-         <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-               <Cuboid className="w-5 h-5 text-blue-600" />
-               <CardTitle className="text-xl font-semibold tracking-tight">Stock Conversion</CardTitle>
-            </div>
-            <Button 
-               variant="ghost" 
-               size="sm" 
-               onClick={onRefresh} 
-               disabled={isLoading}
-               className="h-8 w-8 p-0 hover:bg-muted rounded-full"
-            >
-               <RefreshCw className={`w-4 h-4 text-muted-foreground ${isLoading ? 'animate-spin' : ''}`} />
-            </Button>
-         </div>
-      </CardHeader>
-      <CardContent className="flex-1 flex flex-col gap-4 overflow-hidden pt-4">
-        {/* Filters */}
-        <div className="flex items-center gap-4 bg-background p-3 rounded-lg border shadow-sm relative z-20">
-           <div className="flex items-center gap-2 text-muted-foreground font-medium text-sm">
-             <Filter className="w-4 h-4" />
-             Filters:
-           </div>
-           
-           <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-foreground flex items-center gap-1">
-                <Users className="w-3.5 h-3.5 text-muted-foreground" />
-                Supplier:
-              </span>
-              <Select value={supplierFilter} onValueChange={setSupplierFilter}>
-                <SelectTrigger className="w-[180px] bg-background">
-                  <SelectValue placeholder="All Suppliers" />
-                </SelectTrigger>
-                <SelectContent position="popper" className="z-50 bg-background">
-                  <SelectItem value="all">All Suppliers</SelectItem>
-                  {uniqueSuppliers.map(s => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-           </div>
-
-           <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-foreground">Brand:</span>
-              <Select value={brandFilter} onValueChange={setBrandFilter}>
-                <SelectTrigger className="w-[180px] bg-background">
-                  <SelectValue placeholder="All Brands" />
-                </SelectTrigger>
-                <SelectContent position="popper" className="z-50 bg-background">
-                  <SelectItem value="all">All Brands</SelectItem>
-                  {uniqueBrands.map(b => (
-                    <SelectItem key={b} value={b}>{b}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-           </div>
-           
-           <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-foreground">Category:</span>
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-[180px] bg-background">
-                  <SelectValue placeholder="All Categories" />
-                </SelectTrigger>
-                <SelectContent position="popper" className="z-50 bg-background">
-                  <SelectItem value="all">All Categories</SelectItem>
-                  {uniqueCategories.map(c => (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-           </div>
-           
-           <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-foreground">Unit:</span>
-              <Select value={unitFilter} onValueChange={setUnitFilter}>
-                <SelectTrigger className="w-[150px] bg-background">
-                  <SelectValue placeholder="All Units" />
-                </SelectTrigger>
-                <SelectContent position="popper" className="z-50 bg-background">
-                  <SelectItem value="all">All Units</SelectItem>
-                  {uniqueUnits.map(u => (
-                    <SelectItem key={u} value={u}>{u}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-           </div>
-
-           <div className="h-4 w-px bg-border mx-2" />
-
-           <div className="flex items-center space-x-2">
-              <Checkbox 
-                id="group-family" 
-                checked={isGrouped} 
-                onCheckedChange={(checked) => setIsGrouped(!!checked)}
-              />
-              <Label htmlFor="group-family" className="text-sm font-medium flex items-center gap-1 cursor-pointer">
-                <Layers className="w-4 h-4 text-blue-500" />
-                Group by Family
-              </Label>
-           </div>
-        </div>
-
-        {/* Table */}
-        <div className="rounded-md border bg-background flex-1 overflow-auto">
-          <Table>
-            <TableHeader className="bg-muted/30 sticky top-0 z-10 shadow-sm border-b">
-              {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => (
-                    <TableHead key={header.id} className="text-xs font-semibold text-muted-foreground uppercase py-3 whitespace-nowrap">
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              ))}
-            </TableHeader>
-            <TableBody>
-              {table.getRowModel().rows?.length ? (
-                table.getRowModel().rows.map((row) => (
-                  <TableRow
-                    key={row.id}
-                    data-state={row.getIsSelected() && "selected"}
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id} className="py-3 text-sm font-medium text-foreground whitespace-nowrap">
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext()
-                        )}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={columns.length}
-                    className="h-24 text-center text-muted-foreground"
-                  >
-                    No products found.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-        
-        {/* Pagination Controls */}
-        <div className="flex items-center justify-between py-2 border-t mt-auto">
-          <div className="flex items-center gap-2">
-            <p className="text-sm font-medium text-muted-foreground">Rows per page</p>
-            <Select
-              value={`${pageSize}`}
-              onValueChange={(value) => {
-                setPageSize(Number(value));
-                setPage(1);
-              }}
-            >
-              <SelectTrigger className="h-8 w-[70px]">
-                <SelectValue placeholder={pageSize} />
-              </SelectTrigger>
-              <SelectContent side="top">
-                {[10, 20, 30, 50].map((size) => (
-                  <SelectItem key={size} value={`${size}`}>
-                    {size}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <div className="flex w-[100px] items-center justify-center text-sm font-medium text-muted-foreground">
-              Page {page} of{" "}
-              {table.getPageCount() || 1}
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage(page - 1)}
-              disabled={!table.getCanPreviousPage()}
-              className="h-8 w-8 p-0"
-            >
-              <span className="sr-only">Go to previous page</span>
-              {"<"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage(page + 1)}
-              disabled={!table.getCanNextPage()}
-              className="h-8 w-8 p-0"
-            >
-              <span className="sr-only">Go to next page</span>
-              {">"}
-            </Button>
-          </div>
-        </div>
-        
-      </CardContent>
-    </Card>
+    <div className="flex-1 flex flex-col min-h-0 bg-background rounded-xl p-4">
+      <DataTable
+        columns={columns}
+        data={data}
+        pageCount={Math.ceil(totalCount / pageSize)}
+        pagination={{
+          pageIndex: page - 1,
+          pageSize: pageSize,
+        }}
+        onPaginationChange={(p) => {
+          setPage(p.pageIndex + 1);
+          setPageSize(p.pageSize);
+        }}
+        manualPagination={true}
+        onSearch={(val) => {
+          setSearchQuery(val);
+          // useEffect handles the filter trigger
+        }}
+        searchKey="productName"
+        isLoading={isLoading}
+        actionComponent={filterActions}
+        emptyTitle={!selectedBranchId ? "Select a Branch to start" : "No products found"}
+        emptyDescription={!selectedBranchId ? "Please choose a branch from the dropdown above to view stock levels." : "Try adjusting your filters."}
+      />
+    </div>
   );
 }

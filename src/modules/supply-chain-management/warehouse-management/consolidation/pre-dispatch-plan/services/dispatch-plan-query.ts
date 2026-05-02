@@ -22,7 +22,7 @@ export const dispatchPlanQueryService = {
    * Fetches dispatch plans with server-side pagination and optional filtering.
    */
   async fetchPlans(
-    limit: number = 10,
+    limit: number = 25,
     offset: number = 0,
     status?: string,
     search?: string,
@@ -40,7 +40,8 @@ export const dispatchPlanQueryService = {
     };
 
     if (status) {
-      params["filter[status][_eq]"] = status;
+      const op = status.includes(",") ? "_in" : "_eq";
+      params[`filter[status][${op}]`] = status;
     }
 
     if (search) {
@@ -88,26 +89,42 @@ export const dispatchPlanQueryService = {
   async enrichPlans(plans: DispatchPlan[]): Promise<DispatchPlan[]> {
     if (!plans.length) return [];
 
-    // Fetch master data once for resolution
+    const driverIds = [...new Set(plans.map((p) => p.driver_id).filter(Boolean))];
+    const clusterIds = [...new Set(plans.map((p) => p.cluster_id).filter(Boolean))];
+    const branchIds = [...new Set(plans.map((p) => p.branch_id).filter(Boolean))];
+    const vehicleIds = [...new Set(plans.map((p) => p.vehicle_id).filter(Boolean))];
+
+    // Fetch master data only for the entities referenced in the current plans
     const [driversRes, clustersRes, branchesRes, vehiclesRes, vehicleTypesRes] =
       await Promise.all([
-        fetchItems<DriverOption>("/items/user", {
-          "filter[user_department][_eq]": 8,
-          fields: "user_id,user_fname,user_mname,user_lname",
-          limit: -1,
-        }),
-        fetchItems<ClusterOption>("/items/cluster", {
-          fields: "id,cluster_name",
-          limit: -1,
-        }),
-        fetchItems<BranchOption>("/items/branches", {
-          fields: "id,branch_name",
-          limit: -1,
-        }),
-        fetchItems<VehicleOption>("/items/vehicles", {
-          fields: "vehicle_id,maximum_weight,vehicle_plate,vehicle_type",
-          limit: -1,
-        }),
+        driverIds.length
+          ? fetchItems<DriverOption>("/items/user", {
+              "filter[user_id][_in]": driverIds.join(","),
+              fields: "user_id,user_fname,user_mname,user_lname",
+              limit: -1,
+            })
+          : Promise.resolve({ data: [] }),
+        clusterIds.length
+          ? fetchItems<ClusterOption>("/items/cluster", {
+              "filter[id][_in]": clusterIds.join(","),
+              fields: "id,cluster_name",
+              limit: -1,
+            })
+          : Promise.resolve({ data: [] }),
+        branchIds.length
+          ? fetchItems<BranchOption>("/items/branches", {
+              "filter[id][_in]": branchIds.join(","),
+              fields: "id,branch_name",
+              limit: -1,
+            })
+          : Promise.resolve({ data: [] }),
+        vehicleIds.length
+          ? fetchItems<VehicleOption>("/items/vehicles", {
+              "filter[vehicle_id][_in]": vehicleIds.join(","),
+              fields: "vehicle_id,maximum_weight,vehicle_plate,vehicle_type",
+              limit: -1,
+            })
+          : Promise.resolve({ data: [] }),
         fetchItems<{ id: number; type_name: string }>("/items/vehicle_type", {
           fields: "id,type_name",
           limit: -1,
@@ -445,6 +462,7 @@ export const dispatchPlanQueryService = {
             customer?.customer_name || customer?.store_name || "\u2014",
           city: customer?.city ?? undefined,
           province: customer?.province ?? undefined,
+          brgy: customer?.brgy ?? undefined,
           amount:
             order?.allocated_amount ??
             order?.net_amount ??
@@ -475,13 +493,13 @@ export const dispatchPlanQueryService = {
     branchId?: number,
   ): Promise<SalesOrderOption[]> {
     // Step 1: Get allowed areas for the cluster
-    let allowedAreas: { province: string; city: string }[] = [];
+    let allowedAreas: { province: string; city: string; baranggay: string | null }[] = [];
     if (clusterId) {
-      const areasRes = await fetchItems<{ province: string; city: string }>(
+      const areasRes = await fetchItems<{ province: string; city: string; baranggay: string | null }>(
         "/items/area_per_cluster",
         {
           "filter[cluster_id][_eq]": clusterId,
-          fields: "province,city",
+          fields: "province,city,baranggay",
           limit: -1,
         },
       );
@@ -651,7 +669,7 @@ export const dispatchPlanQueryService = {
       const { data: assignedDetails } = await fetchItemsInChunks<{
         sales_order_id: number;
       }>("/items/dispatch_plan_details", "sales_order_id", allOrderIds, {
-        "filter[dispatch_id][status][_nin]": "Dispatched,Cancelled,Delivered",
+        "filter[dispatch_id][status][_nin]": "Dispatched,Cancelled,Delivered,Rejected",
         "filter[sales_order_id][order_status][_neq]": "Not Fulfilled",
         fields: "sales_order_id",
         limit: -1,
@@ -673,11 +691,28 @@ export const dispatchPlanQueryService = {
         if (!clusterId || !allowedAreas.length) return true;
         const customer = customerMap.get(o.customer_code);
         if (!customer) return false;
-        return allowedAreas.some(
-          (area) =>
-            area.province?.toUpperCase() === customer.province?.toUpperCase() &&
-            area.city?.toUpperCase() === customer.city?.toUpperCase(),
-        );
+
+        return allowedAreas.some((area) => {
+          // Province must match exactly
+          const provMatch =
+            area.province?.toUpperCase() === customer.province?.toUpperCase();
+          if (!provMatch) return false;
+
+          // If customer has a city, it must match area city (if area defines one)
+          if (customer.city && area.city) {
+            if (area.city.toUpperCase() !== customer.city.toUpperCase())
+              return false;
+          }
+
+          // If customer has a barangay, it must match area barangay (if area defines one)
+          if (customer.brgy && area.baranggay) {
+            if (area.baranggay.toUpperCase() !== customer.brgy.toUpperCase())
+              return false;
+          }
+
+          // If city/barangay are missing on customer side, or not defined in area, it's a match on province level
+          return true;
+        });
       })
       .map((o) => {
         const customer = customerMap.get(o.customer_code);
@@ -689,6 +724,7 @@ export const dispatchPlanQueryService = {
           store_name: customer?.store_name || undefined,
           city: customer?.city || undefined,
           province: customer?.province || undefined,
+          brgy: customer?.brgy || undefined,
           total_amount: o.total_amount,
           net_amount: o.net_amount,
           allocated_amount: o.allocated_amount,

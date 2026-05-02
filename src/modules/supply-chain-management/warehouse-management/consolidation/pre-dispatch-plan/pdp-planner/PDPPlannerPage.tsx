@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { PDPPlannerTable } from "./components/data-table";
 import { PDPApproveModal } from "./components/modals/pdp-approve-modal";
+import { PDPRejectModal } from "./components/modals/pdp-reject-modal";
 import { PDPViewModal } from "./components/modals/pdp-view-modal";
 import { PDPGlobalFilter } from "./components/PDPGlobalFilter";
 import { PDPMetrics } from "./components/PDPMetrics";
@@ -21,6 +22,8 @@ export default function PDPPlannerPage() {
   const {
     plansData,
     plansTotal,
+    pagination,
+    setPagination,
     masterData,
     metrics,
     isLoading,
@@ -29,11 +32,14 @@ export default function PDPPlannerPage() {
     refresh,
     fetchPlanDetails,
     approvePlan,
+    rejectPlan,
   } = usePreDispatchPlanner();
 
   const [selectedPlan, setSelectedPlan] = useState<DispatchPlan | null>(null);
   const [approvingPlan, setApprovingPlan] = useState<DispatchPlan | null>(null);
+  const [rejectingPlan, setRejectingPlan] = useState<DispatchPlan | null>(null);
   const [isApproving, setIsApproving] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
 
   const handleView = useCallback((plan: DispatchPlan) => {
     setSelectedPlan(plan);
@@ -58,6 +64,25 @@ export default function PDPPlannerPage() {
     }
   };
 
+  const handleRejectClick = useCallback((plan: DispatchPlan) => {
+    setRejectingPlan(plan);
+  }, []);
+
+  const handleRejectConfirm = async (remarks: string) => {
+    if (!rejectingPlan) return;
+    setIsRejecting(true);
+    try {
+      await rejectPlan(rejectingPlan.dispatch_id, remarks);
+      toast.success(`${rejectingPlan.dispatch_no} rejected.`);
+      setRejectingPlan(null);
+    } catch (e: unknown) {
+      const err = e as Error;
+      toast.error(err.message || "Failed to reject plan.");
+    } finally {
+      setIsRejecting(false);
+    }
+  };
+
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -79,9 +104,12 @@ export default function PDPPlannerPage() {
       <PDPPlannerTable
         data={plansData}
         totalCount={plansTotal}
+        pagination={pagination}
+        onPaginationChange={setPagination}
         isLoading={isLoading}
         onView={handleView}
         onApprove={handleApproveClick}
+        onReject={handleRejectClick}
         onSearch={(v: string) => setSearch(v)}
         actionComponent={
           <Button
@@ -114,6 +142,15 @@ export default function PDPPlannerPage() {
         onConfirm={handleApproveConfirm}
         isLoading={isApproving}
         fetchDetails={fetchPlanDetails}
+      />
+
+      {/* Reject Modal */}
+      <PDPRejectModal
+        open={rejectingPlan !== null}
+        onClose={() => setRejectingPlan(null)}
+        plan={rejectingPlan}
+        onConfirm={handleRejectConfirm}
+        isLoading={isRejecting}
       />
     </div>
   );

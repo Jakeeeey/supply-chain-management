@@ -23,6 +23,7 @@ export interface VehicleOption {
   vehicle_id: number;
   vehicle_plate: string;
   vehicle_type_name?: string;
+  maximum_weight?: number | string;
 }
 
 /** Branch (starting-point / warehouse). */
@@ -199,6 +200,8 @@ export interface PostDispatchOtherRowDetail {
 export interface EnrichedApprovedPlan extends RawDispatchPlan {
   cluster_name: string;
   total_items: number;
+  total_weight: number;
+  is_selectable: boolean;
 }
 
 /** Enriched detail row returned by `fetchPlanDetails`. */
@@ -206,16 +209,19 @@ export interface EnrichedPlanDetail {
   detail_id: number | string | undefined;
   sales_order_id?: number;
   invoice_id?: number;
+  invoice_ids?: number[];
   order_no?: string;
   order_status?: string;
   true_order_status?: string;
   customer_name?: string;
   city?: string;
   amount: number;
+  weight?: number;
+  sequence?: number;
+  invoice_status?: string;
   isManualStop?: boolean;
   remarks?: string;
   distance?: number;
-  sequence?: number;
   status?: string;
   isPoStop?: boolean;
   po_id?: number;

@@ -114,8 +114,34 @@ export function UpdateSalesReturnModal({
   onClose,
   onSuccess,
 }: Props) {
+  const searchParams = useSearchParams();
+  const prefillRemarks = searchParams.get("prefillRemarks");
+  const prefillInvoiceNo = searchParams.get("prefillInvoiceNo");
+  const prefillOrderNo = searchParams.get("prefillOrderNo");
+
   // --- STATE ---
   const [headerData, setHeaderData] = useState<SalesReturn>(initialData);
+
+  // 🟢 Effect to pre-fill remarks from Clearance if redirected
+  useEffect(() => {
+    if (prefillRemarks) {
+      setHeaderData((prev) => {
+        const currentRemarks = prev?.remarks || "";
+        if (currentRemarks.includes(prefillRemarks)) return prev;
+        return {
+          ...prev,
+          remarks: currentRemarks
+            ? `${currentRemarks}\n\n[From Clearance]: ${prefillRemarks}`
+            : prefillRemarks,
+        };
+      });
+      
+      // Clean up URL to prevent re-applying on refresh
+      const url = new URL(window.location.href);
+      url.searchParams.delete('prefillRemarks');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [prefillRemarks]);
   const [details, setDetails] = useState<SalesReturnItem[]>([]);
   const [statusCardData, setStatusCardData] =
     useState<SalesReturnStatusCard | null>(null);
@@ -161,9 +187,7 @@ export function UpdateSalesReturnModal({
   const [lastScannedRfid, setLastScannedRfid] = useState("");
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
-  const searchParams = useSearchParams();
-  const prefillInvoiceNo = searchParams.get("prefillInvoiceNo");
-  const prefillOrderNo = searchParams.get("prefillOrderNo");
+
 
   // 🟢 REVISED: Edit Permissions Logic
   const isPending = headerData.status === "Pending";
