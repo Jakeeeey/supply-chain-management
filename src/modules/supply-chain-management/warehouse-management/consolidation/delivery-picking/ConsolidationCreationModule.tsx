@@ -5,9 +5,10 @@ import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, Loader2, Package, ClipboardList, ChevronRight, Tags, Building2 } from "lucide-react";
+import { AlertTriangle, Loader2, Package, ClipboardList, ChevronRight, Tags, Building2, Search } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Input } from "@/components/ui/input";
 
 // 🚀 Modularized Success Component
 import ConsolidationCreationSuccess from "./components/ConsolidationCreationSuccess";
@@ -36,6 +37,7 @@ export default function ConsolidationCreationModule({
     const [availablePdps, setAvailablePdps] = useState<unknown[]>([]);
     const [isLoadingPdps, setIsLoadingPdps] = useState(false);
     const [isBranchesLoading, setIsBranchesLoading] = useState(true);
+    const [searchQuery, setSearchQuery] = useState("");
 
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
     const [previewData, setPreviewData] = useState<ConsolidationPreviewItem[]>([]);
@@ -98,6 +100,24 @@ export default function ConsolidationCreationModule({
         };
         loadPreview();
     }, [selectedIds]);
+
+    const filteredPdps = useMemo(() => {
+        if (!searchQuery) return availablePdps;
+        
+        const query = searchQuery.toLowerCase();
+        return availablePdps.filter((item) => {
+            const pdp = item as Record<string, unknown>;
+            const dispatchNo = String(pdp['dispatchNo'] || '').toLowerCase();
+            const clusterName = (pdp['cluster'] as Record<string, unknown>)?.['clusterName'] as string || '';
+            const driverName = (pdp['driver'] as Record<string, unknown>)?.['firstName'] as string || '';
+            const totalAmount = String(pdp['totalAmount'] || '');
+            
+            return dispatchNo.includes(query) || 
+                   clusterName.toLowerCase().includes(query) || 
+                   driverName.toLowerCase().includes(query) ||
+                   totalAmount.includes(query);
+        });
+    }, [availablePdps, searchQuery]);
 
     const groupedData = useMemo(() => {
         const groups: Record<string, Record<string, Record<string, ConsolidationPreviewItem[]>>> = {};
@@ -186,8 +206,21 @@ export default function ConsolidationCreationModule({
                     <div className="flex flex-col w-full lg:w-[35%] xl:w-[30%] shrink-0 bg-card border border-border rounded-xl shadow-sm overflow-hidden min-h-[400px] lg:min-h-0">
                         <div className="flex-none p-4 border-b bg-muted/20 flex items-center justify-between">
                             <h2 className="font-bold text-xs uppercase tracking-wider italic">Pending Plans</h2>
-                            <Badge variant="outline" className="font-bold text-primary border-primary/20">{availablePdps.length}</Badge>
+                            <Badge variant="outline" className="font-bold text-primary border-primary/20">{filteredPdps.length}</Badge>
                         </div>
+                        {selectedBranchId && availablePdps.length > 0 && (
+                            <div className="flex-none p-3 border-b bg-muted/10">
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                    <Input
+                                        placeholder="Search by dispatch #, cluster, driver, or amount..."
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className="pl-9 h-8 text-xs"
+                                    />
+                                </div>
+                            </div>
+                        )}
 
                         {/* Bulletproof ScrollArea container */}
                         <div className="flex-1 relative min-h-0">
@@ -208,10 +241,15 @@ export default function ConsolidationCreationModule({
                                             <ClipboardList className="h-10 w-10 mb-2" />
                                             <p className="text-[10px] font-bold uppercase tracking-widest text-center">No pending plans<br/>for this branch</p>
                                         </div>
+                                    ) : filteredPdps.length === 0 ? (
+                                        <div className="py-20 flex flex-col items-center justify-center text-muted-foreground opacity-30">
+                                            <Search className="h-10 w-10 mb-2" />
+                                            <p className="text-[10px] font-bold uppercase tracking-widest text-center">No results found<br/>for "{searchQuery}"</p>
+                                        </div>
                                     ) : (
                                         <Table>
                                             <TableBody>
-                                                {availablePdps.map((item) => {
+                                                {filteredPdps.map((item) => {
                                                     const pdp = item as Record<string, unknown>;
                                                     return (
                                                         <TableRow
