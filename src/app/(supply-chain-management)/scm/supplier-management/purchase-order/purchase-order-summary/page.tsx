@@ -74,7 +74,7 @@ async function getData() {
             fetch(`${base}/items/payment_status?limit=-1`, { cache: "no-store", headers }),
             fetch(`${base}/items/transaction_status?limit=-1`, { cache: "no-store", headers }),
             fetch(`${base}/items/purchase_order_receiving?limit=-1&fields=purchase_order_product_id,purchase_order_id,received_quantity,isPosted,receipt_no`, { cache: "no-store", headers }),
-            fetch(`${base}/items/purchase_order_product?limit=-1&fields=purchase_order_product_id,purchase_order_id,quantity`, { cache: "no-store", headers }),
+            fetch(`${base}/items/purchase_order_products?limit=-1&fields=purchase_order_product_id,purchase_order_id,ordered_quantity`, { cache: "no-store", headers }),
         ]);
 
         const pos = await poRes.json();
@@ -92,7 +92,7 @@ async function getData() {
         const orderedByPo = new Map<number, number>();
         for (const p of popRows) {
             const poId = Number(p.purchase_order_id);
-            orderedByPo.set(poId, (orderedByPo.get(poId) || 0) + Number(p.quantity || 0));
+            orderedByPo.set(poId, (orderedByPo.get(poId) || 0) + Number(p.ordered_quantity || 0));
         }
 
         const receivedByPo = new Map<number, number>();

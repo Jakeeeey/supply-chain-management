@@ -688,16 +688,17 @@ export async function GET() {
 
         const rawPoIds = poHeaders.map(p => toNum(p?.purchase_order_id)).filter(Boolean) as number[];
         const poLinesAll = await fetchPOProductsByPOIds(base, rawPoIds);
+        const porRowsAllPre = await fetchPORByPOIds(base, rawPoIds);
 
         const candidatePoIds = poHeaders.filter(po => {
             const poId = toNum(po?.purchase_order_id);
-            const lines = poLinesAll.filter(l => toNum(l.purchase_order_id) === poId);
-            // Check: all ordered items must be marked as received: 1
-            const unreceived = lines.filter(ln => toNum(ln.ordered_quantity) > 0 && toNum(ln.received) !== 1);
-            return unreceived.length === 0;
+            const pors = porRowsAllPre.filter(r => toNum(r.purchase_order_id) === poId);
+            // ✅ Gate: ALL existing receipts must be already posted to inventory
+            const allInvPosted = pors.length > 0 && pors.every((r) => toNum(r?.isPosted) === 1);
+            return allInvPosted;
         }).map(p => toNum(p?.purchase_order_id)).filter(Boolean) as number[];
 
-        const porRowsAll = await fetchPORByPOIds(base, candidatePoIds);
+        const porRowsAll = porRowsAllPre.filter(r => candidatePoIds.includes(toNum(r.purchase_order_id)));
 
         const porByPo = new Map<number, PORRow[]>();
         const porIdsAll: number[] = [];
@@ -1182,13 +1183,7 @@ export async function POST(req: NextRequest) {
             const pj = await fetchJson(poUrl) as { data: Record<string, unknown> };
             const po = pj?.data;
 
-            // ✅ Verify all products are marked as received: 1
-            const unreceivedProducts = lines.filter(ln => toNum(ln.ordered_quantity) > 0 && toNum(ln.received) !== 1);
-            if (unreceivedProducts.length > 0) {
-                return bad(`Cannot post. ${unreceivedProducts.length} items are not yet fully received in inventory.`, 409);
-            }
-
-            // ✅ Check is_posted lock
+            // Check is_posted lock
             if (toNum(po?.is_posted) === 1 || po?.is_posted === true) {
                 return bad("This PO has been fully posted and is now locked. No further changes allowed.", 409);
             }
@@ -1257,17 +1252,13 @@ export async function POST(req: NextRequest) {
                 });
             }
 
-            // Removed: No longer updating inventory_status or received flags in the Amounts module
-
-
-            // ✅ Set is_posted = 1 on the PO header to lock the PO
+            // ✅ Terminal Status Update:
+            // If ALL receipts are now posted to inventory AND we just finished posting the amounts,
+            // the PO is officially terminal (Status 6 - Received).
             const poUpdate: Record<string, unknown> = { is_posted: 1 };
-            
-            // Re-check if everything is fully received and inventory-posted
-            const fully = isFullyReceived(poId, lines, porRows);
             const allInvPosted = porRows.every(r => toNum(r.isPosted) === 1);
-            if (fully && allInvPosted) {
-                poUpdate.inventory_status = 6; // ✅ Received
+            if (allInvPosted) {
+                poUpdate.inventory_status = 6;
             }
 
             await patchPO(base, poId, poUpdate);
@@ -1406,10 +1397,9 @@ export async function POST(req: NextRequest) {
                 total_amount: Number(sumNet.toFixed(2)),
             });
 
-            // ✅ Update inventory_status to 6 if everything is fully received and inventory-posted
-            const fullyAll = isFullyReceived(poId, lines, porRows);
+            // ✅ Terminal Status: If ALL receipts are now posted to inventory AND we just posted the amounts, set to 6 (Received)
             const allInvPostedAll = porRows.every(r => toNum(r.isPosted) === 1);
-            if (fullyAll && allInvPostedAll) {
+            if (allInvPostedAll) {
                 await patchPO(base, poId, { inventory_status: 6 });
             }
 
