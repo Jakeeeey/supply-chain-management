@@ -10,6 +10,7 @@ import type {
   CreateTransferPayload, 
   UpdateTransferPayload 
 } from "@/modules/supply-chain-management/warehouse-management/stock-transfer/types/stock-transfer.types";
+import { decodeJwtPayload } from "@/lib/auth-utils";
 
 export const dynamic = "force-dynamic";
 
@@ -130,7 +131,13 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const body = (await request.json()) as UpdateTransferPayload;
-    const result = await updateTransferStatus(body);
+    
+    // Extract userId from token
+    const token = request.cookies.get("vos_access_token")?.value;
+    const decoded = token ? decodeJwtPayload(token) : null;
+    const userId = decoded?.sub ? Number(decoded.sub) : undefined;
+    
+    const result = await updateTransferStatus({ ...body, userId });
     return NextResponse.json(result, { status: 200 });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
