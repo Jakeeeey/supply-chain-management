@@ -32,7 +32,6 @@ export function ReceiptCard({ receipt }: { receipt: PostingReceipt }) {
         poStatus === "PARTIAL" ||
         poStatus === "PARTIAL_POSTED";
 
-    const canPost = !!selectedPO.id && !isPosted && poReady;
     const canRevert = !!selectedPO.id && !isPosted;
 
     const disabledReason = !poReady

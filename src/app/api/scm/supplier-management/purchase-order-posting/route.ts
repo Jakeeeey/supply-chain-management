@@ -1134,7 +1134,8 @@ export async function POST(req: NextRequest) {
         // -------------------------
         // post_receipt — post a single receipt by receiptNo
         // Allows partial posting: PO does NOT need to be fully received.
-        // inventory_status → 13 (PARTIAL_POSTED) if not fully received after this post.
+        // inventory_status → 13 (For Posting) if fully received but not all posted yet.
+        // inventory_status → 6 (Received) if fully received and everything (including amounts) is posted.
         // -------------------------
         if (action === "post_receipt") {
             const poId = toNum(body?.poId);
@@ -1231,8 +1232,17 @@ export async function POST(req: NextRequest) {
             const fully = isFullyReceived(poId, lines, updatedPorRows);
             try {
                 const poUpdate: Record<string, unknown> = { date_received: nowISO() };
+                const amountsPosted = toNum(poCheckJ?.data?.is_posted) === 1 || poCheckJ?.data?.is_posted === true;
+                
                 if (fully) {
-                    poUpdate.inventory_status = 6; // ✅ Fully Received & Posted = CLOSED
+                    // Check if ALL inventory receipts are now posted
+                    const allInvPosted = updatedPorRows.every(r => toNum(r.isPosted) === 1);
+                    
+                    if (allInvPosted && amountsPosted) {
+                        poUpdate.inventory_status = 6; // ✅ Fully Received & Fully Posted = Received
+                    } else {
+                        poUpdate.inventory_status = 13; // ✅ Fully Received but pending some posting = For Posting
+                    }
                 } else {
                     poUpdate.inventory_status = 9;  // Partially Received
                 }
@@ -1306,8 +1316,17 @@ export async function POST(req: NextRequest) {
             const fully = isFullyReceived(poId, lines, updatedPorRowsAll);
             try {
                 const poUpdate: Record<string, unknown> = { date_received: nowISO() };
+                const amountsPosted = toNum(po?.is_posted) === 1 || po?.is_posted === true;
+
                 if (fully) {
-                    poUpdate.inventory_status = 6; // ✅ Fully Received & Posted = CLOSED
+                    // Check if ALL inventory receipts are now posted
+                    const allInvPosted = updatedPorRowsAll.every(r => toNum(r.isPosted) === 1);
+
+                    if (allInvPosted && amountsPosted) {
+                        poUpdate.inventory_status = 6; // ✅ Fully Received & Fully Posted = Received
+                    } else {
+                        poUpdate.inventory_status = 13; // ✅ Fully Received but pending some posting = For Posting
+                    }
                 } else {
                     poUpdate.inventory_status = 9;  // Partially Received
                 }

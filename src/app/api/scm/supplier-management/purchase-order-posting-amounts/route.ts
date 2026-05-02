@@ -924,11 +924,9 @@ export async function POST(req: NextRequest) {
                 recByPor.set(porId, effectiveReceivedQty(r));
             }
 
-            const unpostedRows = porRows.filter(r => toNum(r.isPosted) === 0 && (toStr(r.receipt_no).trim() !== "" || toNum(r.received_quantity) > 0));
             const itemsByBranch = new Map<number, PostingPOItem[]>();
 
             // --- Live Sourcing vs Frozen ---
-            const isPoFrozen = hasAnyPosted || invStatus === 14;
 
             const allKeys = new Set<string>();
             lines.forEach(ln => allKeys.add(`${toNum(ln.product_id)}-${toNum(ln.branch_id)}`));
@@ -1042,8 +1040,6 @@ export async function POST(req: NextRequest) {
 
             const branchName = branchesLabelFromLines(lines, branchesMap);
 
-            const hasUnposted = unpostedRows.length > 0;
-
             let detailGross = 0;
             let detailDisc = 0;
             let detailVat = 0;
@@ -1142,7 +1138,8 @@ export async function POST(req: NextRequest) {
         // -------------------------
         // post_receipt — post a single receipt by receiptNo
         // Allows partial posting: PO does NOT need to be fully received.
-        // inventory_status → 13 (PARTIAL_POSTED) if not fully received after this post.
+        // inventory_status → 13 (For Posting) if fully received but not all posted yet.
+        // inventory_status → 6 (Received) if fully received and everything (including amounts) is posted.
         // -------------------------
         if (action === "post_receipt") {
             const poId = toNum(body?.poId);
@@ -1196,8 +1193,8 @@ export async function POST(req: NextRequest) {
             }
 
             // ✅ Verify PO is fully received (status 6) before allowing amount posting
-            if (toNum(po?.inventory_status) !== 6) {
-                return bad("This PO is not fully received yet. Only fully received POs (status 6) can be posted in Amounts.", 409);
+            if (toNum(po?.inventory_status) !== 13 && toNum(po?.inventory_status) !== 6) {
+                return bad("This PO is not fully received yet. Only fully received POs (status 13 or 6) can be posted in Amounts.", 409);
             }
 
             const sid = toNum(po?.supplier_name);
@@ -1263,7 +1260,16 @@ export async function POST(req: NextRequest) {
 
 
             // ✅ Set is_posted = 1 on the PO header to lock the PO
-            await patchPO(base, poId, { is_posted: 1 });
+            const poUpdate: Record<string, unknown> = { is_posted: 1 };
+            
+            // Re-check if everything is fully received and inventory-posted
+            const fully = isFullyReceived(poId, lines, porRows);
+            const allInvPosted = porRows.every(r => toNum(r.isPosted) === 1);
+            if (fully && allInvPosted) {
+                poUpdate.inventory_status = 6; // ✅ Received
+            }
+
+            await patchPO(base, poId, poUpdate);
 
             return ok({
                 ok: true,
@@ -1293,8 +1299,8 @@ export async function POST(req: NextRequest) {
             }
 
             // ✅ Verify PO is fully received (status 6) before allowing amount posting
-            if (toNum(po?.inventory_status) !== 6) {
-                return bad("This PO is not fully received yet. Only fully received POs (status 6) can be posted in Amounts.", 409);
+            if (toNum(po?.inventory_status) !== 13 && toNum(po?.inventory_status) !== 6) {
+                return bad("This PO is not fully received yet. Only fully received POs (status 13 or 6) can be posted in Amounts.", 409);
             }
 
             const lines = await fetchPOProductsByPOId(base, poId);
@@ -1398,6 +1404,13 @@ export async function POST(req: NextRequest) {
                 withholding_tax_amount: Number(sumWht.toFixed(2)),
                 total_amount: Number(sumNet.toFixed(2)),
             });
+
+            // ✅ Update inventory_status to 6 if everything is fully received and inventory-posted
+            const fullyAll = isFullyReceived(poId, lines, porRows);
+            const allInvPostedAll = porRows.every(r => toNum(r.isPosted) === 1);
+            if (fullyAll && allInvPostedAll) {
+                await patchPO(base, poId, { inventory_status: 6 });
+            }
 
             return ok({
                 ok: true,
