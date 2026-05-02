@@ -68,7 +68,11 @@ function toNum(v: unknown): number {
     return Number.isFinite(n) ? n : 0;
 }
 function nowISO() {
-    return new Date().toISOString();
+    const date = new Date();
+    const phOffset = 8 * 60; // 8 hours in minutes
+    const localOffset = date.getTimezoneOffset(); // in minutes
+    const phTime = new Date(date.getTime() + (phOffset + localOffset) * 60000);
+    return phTime.toISOString().replace("Z", "");
 }
 
 function deriveDiscountPercentFromCode(codeRaw: string): number {
@@ -473,7 +477,7 @@ type PostingReceipt = {
     totalAmount: number;
 };
 
-function buildReceiptSummary(porRows: PORRow[]) {
+function buildReceiptSummary(porRows: PORRow[], priceMap?: Map<number, number>, discMap?: Map<number, number>) {
     const groups = new Map<string, PORRow[]>();
 
     for (const r of porRows ?? []) {
@@ -486,7 +490,7 @@ function buildReceiptSummary(porRows: PORRow[]) {
 
     const receipts: PostingReceipt[] = [];
 
-    for (const [receiptNo, rows] of groups.entries()) {
+    for (const [receiptNo, rows] of Array.from(groups.entries())) {
         const porIds = new Set<number>();
         let bestDate = "";
         let total = 0;
@@ -505,15 +509,17 @@ function buildReceiptSummary(porRows: PORRow[]) {
                 if (!bestDate || new Date(d).getTime() >= new Date(bestDate).getTime()) bestDate = d;
             }
 
-            total += effectiveReceivedQty(r);
+            const qty = effectiveReceivedQty(r);
+            total += qty;
             if (toNum(r?.isPosted) !== 1) allPosted = false;
 
-            const whtTotal = toNum(r?.withholding_amount || 0);
-            
-            gross += toNum(r?.unit_price || 0) * toNum(r?.received_quantity || 0);
-            disc += toNum(r?.discounted_amount || 0);
+            const price = priceMap?.get(porId) || 0;
+            const rowDisc = (discMap?.get(porId) || 0) * qty;
+
+            gross += (price * qty);
+            disc += rowDisc;
             vat += toNum(r?.vat_amount || 0);
-            wht += whtTotal;
+            wht += toNum(r?.withholding_amount || 0);
         }
 
         receipts.push({
@@ -770,8 +776,8 @@ export async function GET() {
             const isClosed = fully && allPosted;
             const fullyReceived = fully && !allPosted;
 
-            // Align totalAmount with what's actually being posted (Items already posted to inventory)
-            const unpostedRows = porRows.filter(r => toNum(r.isPosted) === 1 && (toNum(r.received_quantity) > 0 || toStr(r.receipt_no)));
+            // Align totalAmount with what's actually being posted (Items already received but NOT YET posted to inventory)
+            const unpostedRows = porRows.filter(r => toNum(r.isPosted) === 0 && (toNum(r.received_quantity) > 0 || toStr(r.receipt_no)));
             let listTotal = 0;
             if (unpostedRows.length > 0) {
                 const sid = toNum(po?.supplier_name);
@@ -786,7 +792,7 @@ export async function GET() {
                     const matchLine = lines.find(l => toNum(l.product_id) === pid && toNum(l.branch_id) === bid);
                     const p = productsMap.get(pid);
 
-                    // Live sourcing for unposted rows in the list view
+                    // Prioritize live Product Master cost for unposted rows in the list view
                     const unitPrice = toNum(p?.cost_per_unit) || toNum(matchLine?.unit_price) || 0;
                     const link = psl.get(pid);
                     const discPct = link ? resolveDiscountPercent(link.discount_type) : poDiscPct;
@@ -894,9 +900,13 @@ export async function POST(req: NextRequest) {
             // ── DEBUG: Log what productSupplierLinks contains ──
             console.log("[DEBUG open_po] supplierId (sid):", sid);
             console.log("[DEBUG open_po] productSupplierLinks size:", productSupplierLinks.size);
-            for (const [k, v] of productSupplierLinks.entries()) {
+            for (const [k, v] of Array.from(productSupplierLinks.entries())) {
                 console.log(`[DEBUG open_po] PSL entry: pid=${k}, discount_type=`, JSON.stringify(v?.discount_type));
             }
+            // Removed redundant RFID fetching (already handled above)
+            
+            const porPriceMap = new Map<number, number>();
+            const porDiscMap = new Map<number, number>();
 
             // ── Resolve PO-level discount percent (Total Percent Source of Truth) ──
             const poDType = po?.discount_type as Record<string, unknown> | null;
@@ -914,11 +924,9 @@ export async function POST(req: NextRequest) {
                 recByPor.set(porId, effectiveReceivedQty(r));
             }
 
-            const unpostedRows = porRows.filter(r => toNum(r.isPosted) === 0 && (toStr(r.receipt_no).trim() !== "" || toNum(r.received_quantity) > 0));
             const itemsByBranch = new Map<number, PostingPOItem[]>();
 
             // --- Live Sourcing vs Frozen ---
-            const isPoFrozen = hasAnyPosted || invStatus === 14;
 
             const allKeys = new Set<string>();
             lines.forEach(ln => allKeys.add(`${toNum(ln.product_id)}-${toNum(ln.branch_id)}`));
@@ -928,7 +936,7 @@ export async function POST(req: NextRequest) {
                 }
             });
 
-            for (const keyStr of allKeys) {
+            for (const keyStr of Array.from(allKeys)) {
                 const [pid, bid] = keyStr.split("-").map(Number);
                 if (!pid || !bid) continue;
 
@@ -977,26 +985,13 @@ export async function POST(req: NextRequest) {
                     discountTypeId = poDType?.id ? String(poDType.id) : "";
                 }
 
-                if (isPoFrozen) {
-                    const linePorRows = porRows.filter(r => porIdsForLine.includes(toNum(r.purchase_order_product_id)));
-                    const srcRow = linePorRows.find(r => toNum(r.isPosted) === 1) || linePorRows.find(r => toNum(r.isPosted) === 0 && !!toStr(r.receipt_no));
-                    
-                    unitPrice = toNum(srcRow?.unit_price) || toNum(ln?.unit_price) || toNum(p?.cost_per_unit);
-                    lineGrossAmt = linePorRows.reduce((sum, r) => sum + (toNum(r.unit_price) * effectiveReceivedQty(r)), 0);
-                    lineDiscount = Number((lineGrossAmt * (itemDiscPct / 100)).toFixed(2));
-                    lineNet = Number((lineGrossAmt - lineDiscount).toFixed(2));
-
-                    if (receivedQty === 0 && expected > 0) {
-                        lineGrossAmt = unitPrice * expected;
-                        lineDiscount = Number((lineGrossAmt * (itemDiscPct / 100)).toFixed(2));
-                        lineNet = Number((lineGrossAmt - lineDiscount).toFixed(2));
-                    }
-                } else {
-                    unitPrice = toNum(p?.cost_per_unit) || toNum(ln?.unit_price) || 0;
-                    lineGrossAmt = unitPrice * (receivedQty || (expected > 0 ? expected : 0));
-                    lineDiscount = Number((lineGrossAmt * (itemDiscPct / 100)).toFixed(2));
-                    lineNet = Number((lineGrossAmt - lineDiscount).toFixed(2));
-                }
+                // Prioritize live Product Master cost over stale PO line price to reflect recent updates
+                unitPrice = toNum(p?.cost_per_unit) || toNum(ln?.unit_price) || 0;
+                
+                // Recalculate everything from scratch using the resolved live unitPrice
+                lineGrossAmt = unitPrice * (receivedQty || (expected > 0 ? expected : 0));
+                lineDiscount = Number((lineGrossAmt * (itemDiscPct / 100)).toFixed(2));
+                lineNet = Number((lineGrossAmt - lineDiscount).toFixed(2));
 
                 const item: PostingPOItem = {
                     id: String(primaryPorId),
@@ -1018,7 +1013,13 @@ export async function POST(req: NextRequest) {
                     discountLabel: resolvedLabel !== "—" ? resolvedLabel : undefined,
                 };
 
+                porIdsForLine.forEach(id => {
+                    porPriceMap.set(id, unitPrice);
+                    porDiscMap.set(id, itemDiscPct > 0 ? (unitPrice * (itemDiscPct / 100)) : 0);
+                });
+
                 const arr = itemsByBranch.get(bid) ?? [];
+                console.log(`[DEBUG open_po] pid=${pid} bid=${bid} unitPrice=${unitPrice} receivedQty=${receivedQty} expected=${expected} itemDiscPct=${itemDiscPct} lineGrossAmt=${lineGrossAmt} lineDiscount=${lineDiscount} lineNet=${lineNet}`);
                 arr.push(item);
                 itemsByBranch.set(bid, arr);
             }
@@ -1032,14 +1033,12 @@ export async function POST(req: NextRequest) {
             }));
 
             const lr = latestReceiptInfo(porRows);
-            const rs = buildReceiptSummary(porRows);
+            const rs = buildReceiptSummary(porRows, porPriceMap, porDiscMap);
             const allPosted = rs.receiptsCount > 0 && rs.unpostedReceiptsCount === 0;
             const isClosed = fully && allPosted;
             const fullyReceived = fully && !allPosted;
 
             const branchName = branchesLabelFromLines(lines, branchesMap);
-
-            const hasUnposted = unpostedRows.length > 0;
 
             let detailGross = 0;
             let detailDisc = 0;
@@ -1047,49 +1046,41 @@ export async function POST(req: NextRequest) {
             let detailWht = 0;
             let detailTotal = 0;
 
-            if (isPoFrozen && !hasUnposted) {
-                // Completely posted or closed
-                detailGross = toNum(po?.gross_amount);
-                detailDisc = toNum(po?.discounted_amount);
-                detailVat = toNum(po?.vat_amount);
-                detailWht = toNum(po?.withholding_tax_amount);
-                detailTotal = toNum(po?.total_amount); 
-            } else if (isPoFrozen && hasUnposted) {
-                // Partially posted, mix of unposted/posted: we still sum what's in DB for unposted if no changes happen, 
-                // but if we are frozen, we should just read from the PO header, unless it's out of sync
-                detailGross = toNum(po?.gross_amount);
-                detailDisc = toNum(po?.discounted_amount);
-                detailVat = toNum(po?.vat_amount);
-                detailWht = toNum(po?.withholding_tax_amount);
-                detailTotal = toNum(po?.total_amount); 
-            } else {
-                // Live unposted PO: build footer from exact items
-                const poIsInvoice = (toNum(po?.vat_amount) > 0) || (toNum(po?.withholding_tax_amount) > 0);
-                
-                for (const arr of itemsByBranch.values()) {
-                    for (const item of arr) {
-                        if (item.receivedQty > 0) {
-                            // The properties on `item` were calculated using receivedQty exactly when receivedQty > 0
-                            detailGross += item.grossAmount;
-                            detailDisc += item.discountAmount;
-                            
-                            if (poIsInvoice) {
-                                const rowVatExcl = Number((item.netAmount / 1.12).toFixed(2));
-                                const rowVat = Number((item.netAmount - rowVatExcl).toFixed(2));
-                                const rowWht = Number((rowVatExcl * 0.01).toFixed(2));
+            // ALWAYS calculate footer dynamically from exact items to reflect price changes and correct formulas
+            const poIsInvoice = (toNum(po?.vat_amount) > 0) || (toNum(po?.withholding_tax_amount) > 0);
+            
+            for (const arr of Array.from(itemsByBranch.values())) {
+                for (const item of arr) {
+                    if (item.receivedQty > 0) {
+                        detailGross += item.grossAmount;
+                        detailDisc += item.discountAmount;
+                        
+                        if (poIsInvoice) {
+                            // Standardize VAT-Inclusive Financial Formulas
+                            // 1. VAT Exclusive = net_amount / 1.12
+                            // 2. VAT Amount = net_amount - vat_exclusive
+                            // 3. EWT Amount = vat_exclusive * 0.01
+                            const rowVatExcl = Number((item.netAmount / 1.12).toFixed(2));
+                            const rowVat = Number((item.netAmount - rowVatExcl).toFixed(2));
+                            const rowWht = Number((rowVatExcl * 0.01).toFixed(2));
 
-                                detailVat += rowVat;
-                                detailWht += rowWht;
-                            }
+                            detailVat += rowVat;
+                            detailWht += rowWht;
                         }
                     }
                 }
-                
-                detailGross = Number(detailGross.toFixed(2));
-                detailDisc = Number(detailDisc.toFixed(2));
-                detailVat = Number(detailVat.toFixed(2));
-                detailWht = Number(detailWht.toFixed(2));
-                detailTotal = Number((detailGross - detailDisc).toFixed(2));
+            }
+
+            detailGross = Number(detailGross.toFixed(2));
+            detailDisc = Number(detailDisc.toFixed(2));
+            detailVat = Number(detailVat.toFixed(2));
+            detailWht = Number(detailWht.toFixed(2));
+            detailTotal = Number((detailGross - detailDisc).toFixed(2));
+
+            // Ensure VAT/EWT are zeroed if not an invoice as requested
+            if (!poIsInvoice) {
+                detailVat = 0;
+                detailWht = 0;
             }
 
 
@@ -1147,7 +1138,8 @@ export async function POST(req: NextRequest) {
         // -------------------------
         // post_receipt — post a single receipt by receiptNo
         // Allows partial posting: PO does NOT need to be fully received.
-        // inventory_status → 13 (PARTIAL_POSTED) if not fully received after this post.
+        // inventory_status → 13 (For Posting) if fully received but not all posted yet.
+        // inventory_status → 6 (Received) if fully received and everything (including amounts) is posted.
         // -------------------------
         if (action === "post_receipt") {
             const poId = toNum(body?.poId);
@@ -1201,8 +1193,8 @@ export async function POST(req: NextRequest) {
             }
 
             // ✅ Verify PO is fully received (status 6) before allowing amount posting
-            if (toNum(po?.inventory_status) !== 6) {
-                return bad("This PO is not fully received yet. Only fully received POs (status 6) can be posted in Amounts.", 409);
+            if (toNum(po?.inventory_status) !== 13 && toNum(po?.inventory_status) !== 6) {
+                return bad("This PO is not fully received yet. Only fully received POs (status 13 or 6) can be posted in Amounts.", 409);
             }
 
             const sid = toNum(po?.supplier_name);
@@ -1241,7 +1233,8 @@ export async function POST(req: NextRequest) {
                     discountTypeId = poDType?.id ? String(poDType.id) : "";
                 }
 
-                const unitPrice = toNum(p?.cost_per_unit) || toNum(ln?.unit_price);
+                // Prioritize live Product Master cost for saved records
+                const unitPrice = toNum(p?.cost_per_unit) || toNum(ln?.unit_price) || 0;
                 const lineGross = unitPrice * row.qty;
                 const lineDisc = Number((lineGross * (itemDiscPct / 100)).toFixed(2));
                 const lineNet = Number((lineGross - lineDisc).toFixed(2));
@@ -1267,7 +1260,16 @@ export async function POST(req: NextRequest) {
 
 
             // ✅ Set is_posted = 1 on the PO header to lock the PO
-            await patchPO(base, poId, { is_posted: 1 });
+            const poUpdate: Record<string, unknown> = { is_posted: 1 };
+            
+            // Re-check if everything is fully received and inventory-posted
+            const fully = isFullyReceived(poId, lines, porRows);
+            const allInvPosted = porRows.every(r => toNum(r.isPosted) === 1);
+            if (fully && allInvPosted) {
+                poUpdate.inventory_status = 6; // ✅ Received
+            }
+
+            await patchPO(base, poId, poUpdate);
 
             return ok({
                 ok: true,
@@ -1297,8 +1299,8 @@ export async function POST(req: NextRequest) {
             }
 
             // ✅ Verify PO is fully received (status 6) before allowing amount posting
-            if (toNum(po?.inventory_status) !== 6) {
-                return bad("This PO is not fully received yet. Only fully received POs (status 6) can be posted in Amounts.", 409);
+            if (toNum(po?.inventory_status) !== 13 && toNum(po?.inventory_status) !== 6) {
+                return bad("This PO is not fully received yet. Only fully received POs (status 13 or 6) can be posted in Amounts.", 409);
             }
 
             const lines = await fetchPOProductsByPOId(base, poId);
@@ -1345,9 +1347,12 @@ export async function POST(req: NextRequest) {
                     if (!porId) continue;
 
                     const pid = toNum(r.product_id);
+                    const bid = toNum(r.branch_id);
+                    const ln = lines.find(l => toNum(l.product_id) === pid && toNum(l.branch_id) === bid);
                     const p = productsMap.get(pid);
                     const qty = effectiveReceivedQty(r);
-                    const uPrice = toNum(p?.cost_per_unit) || toNum(r.unit_price);
+                    // Prioritize live Product Master cost for saved records in bulk posting
+                    const uPrice = toNum(p?.cost_per_unit) || toNum(ln?.unit_price) || toNum(r.unit_price) || 0;
                     
                     const link = psl.get(pid);
                     let discPct = 0;
@@ -1399,6 +1404,13 @@ export async function POST(req: NextRequest) {
                 withholding_tax_amount: Number(sumWht.toFixed(2)),
                 total_amount: Number(sumNet.toFixed(2)),
             });
+
+            // ✅ Update inventory_status to 6 if everything is fully received and inventory-posted
+            const fullyAll = isFullyReceived(poId, lines, porRows);
+            const allInvPostedAll = porRows.every(r => toNum(r.isPosted) === 1);
+            if (fullyAll && allInvPostedAll) {
+                await patchPO(base, poId, { inventory_status: 6 });
+            }
 
             return ok({
                 ok: true,

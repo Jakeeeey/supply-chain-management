@@ -32,7 +32,6 @@ export function ReceiptCard({ receipt }: { receipt: PostingReceipt }) {
         poStatus === "PARTIAL" ||
         poStatus === "PARTIAL_POSTED";
 
-    const canPost = !!selectedPO.id && !isPosted && poReady;
     const canRevert = !!selectedPO.id && !isPosted;
 
     const disabledReason = !poReady
@@ -81,16 +80,6 @@ export function ReceiptCard({ receipt }: { receipt: PostingReceipt }) {
                         </Button>
                     )}
 
-                    <span title={!canPost ? disabledReason : ""}>
-                        <Button
-                            type="button"
-                            size="sm"
-                            disabled={!canPost || posting}
-                            onClick={() => setOpen(true)}
-                        >
-                            Post
-                        </Button>
-                    </span>
                 </div>
             </div>
 

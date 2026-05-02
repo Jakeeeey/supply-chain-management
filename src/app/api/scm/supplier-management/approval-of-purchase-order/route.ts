@@ -100,6 +100,18 @@ const DIRECTUS_RELATIONS_COLLECTION = "directus_relations";
 function ok(data: unknown, status = 200) {
     return NextResponse.json({ data }, { status });
 }
+
+/**
+ * Returns current PH Manila Time (UTC+8) as an ISO-like string
+ * but without the 'Z' suffix to ensure correct local interpretation.
+ */
+function nowPH() {
+    const date = new Date();
+    const phOffset = 8 * 60; // 8 hours in minutes
+    const localOffset = date.getTimezoneOffset(); // in minutes
+    const phTime = new Date(date.getTime() + (phOffset + localOffset) * 60000);
+    return phTime.toISOString().replace("Z", "");
+}
 function bad(error: string, status = 400) {
     return NextResponse.json({ error }, { status });
 }
@@ -438,9 +450,6 @@ type PoHeaderRow = {
     receiving_type?: number | null;
     vat_amount?: number | string | null;
     withholding_tax_amount?: number | string | null;
-    vatAmount?: number | string | null;
-    withholdingTaxAmount?: number | string | null;
-    ewtGoods?: number | string | null;
     user_created?: string | number | { first_name?: string; last_name?: string } | null;
     encoder_id?: string | number | { first_name?: string; last_name?: string } | null;
 };
@@ -459,9 +468,6 @@ async function fetchPendingPOs(base: string): Promise<PoHeaderRow[]> {
         "receiving_type",
         "vat_amount",
         "withholding_tax_amount",
-        "vatAmount",
-        "withholdingTaxAmount",
-        "ewtGoods",
         "user_created.first_name",
         "user_created.last_name",
         "encoder_id.user_id",
@@ -716,7 +722,7 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
         const linkDisc = getDiscInfo(linkData?.discount_type);
         const headerDiscPct = pickNum(header, ["discount_percent", "discountPercent", "discount_rate", "discountRate", "discount_percentage", "discountPercentage"]);
 
-        const resolvedDiscountType = formatDiscLabel(itemDisc, formatDiscLabel(linkDisc, headerDiscTypeName)) || "—";
+        const resolvedDiscountType = formatDiscLabel(itemDisc, formatDiscLabel(linkDisc, headerDiscTypeName)) || "No Discount";
         const discountPct = itemDisc?.pct || linkDisc?.pct || headerDiscPct || 0;
 
         const grossVal = toNum((l as Record<string, unknown>).gross) || lineTotal;
@@ -877,7 +883,7 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
 
         payment_type: header?.payment_type ?? null,
         
-        is_invoice: (toNum(header?.vat_amount ?? header?.vatAmount) > 0) || (toNum(header?.withholding_tax_amount ?? header?.withholdingTaxAmount ?? header?.ewtGoods) > 0),
+        is_invoice: (toNum(header?.vat_amount) > 0) || (toNum(header?.withholding_tax_amount) > 0),
 
         vat_amount: vat,
         vatAmount: vat,
@@ -1076,7 +1082,7 @@ export async function GET(req: NextRequest) {
 
                 totalAmount: totalByPo.get(poId) ?? 0,
                 currency: "PHP",
-                is_invoice: (toNum(h.vat_amount ?? h.vatAmount) > 0) || (toNum(h.withholding_tax_amount ?? h.withholdingTaxAmount ?? h.ewtGoods) > 0),
+                is_invoice: (toNum(h.vat_amount) > 0) || (toNum(h.withholding_tax_amount) > 0),
                 preparer_name: getPreparer(),
             };
         });
@@ -1100,7 +1106,7 @@ export async function POST(req: NextRequest) {
         if (!poId) return bad("Invalid id.", 400);
 
         const patch: Record<string, unknown> = { 
-            date_approved: new Date().toISOString(),
+            date_approved: nowPH(),
             receiving_type: 1, // ✅ Always 1 for PO
             inventory_status: 3, // ✅ For Receiving
             approver_id: body?.approver_id ?? body?.approverId ?? null, // ✅ Track who approved

@@ -402,13 +402,6 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                     )}
 
                     <div className="mt-4 flex justify-end gap-3">
-                        <Button
-                            variant="outline"
-                            className="h-10 px-6 text-xs font-black uppercase tracking-widest border-indigo-200 text-indigo-700 hover:bg-indigo-50"
-                            onClick={() => setPreviewOpen(true)}
-                        >
-                            Print Preview / Export PDF
-                        </Button>
                         <Button 
                             className="bg-indigo-600 hover:bg-indigo-700 h-10 px-8 text-xs font-black uppercase tracking-widest"
                             onClick={handleSaveReceipt}

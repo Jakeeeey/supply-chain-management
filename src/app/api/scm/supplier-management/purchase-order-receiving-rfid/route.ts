@@ -90,7 +90,13 @@ function deriveDiscountPercentFromCode(codeRaw: string): number {
     const combined = (1 - factor) * 100;
     return Number(combined.toFixed(4));
 }
-function nowISO() { return new Date().toISOString(); }
+function nowISO() {
+    const date = new Date();
+    const phOffset = 8 * 60; // 8 hours in minutes
+    const localOffset = date.getTimezoneOffset(); // in minutes
+    const phTime = new Date(date.getTime() + (phOffset + localOffset) * 60000);
+    return phTime.toISOString().replace("Z", "");
+}
 function keyLine(poId: number, productId: number, branchId: number) {
     return `${poId}::${productId}::${branchId}`;
 }

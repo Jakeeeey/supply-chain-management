@@ -92,7 +92,7 @@ export function PostingPODetail() {
                             onClick={() => postAllReceipts(String(selectedPO.id))}
                             className="bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase text-[10px] h-8 rounded-lg shadow-sm"
                         >
-                            {posting ? "Posting..." : "Post All"}
+                            {posting ? "Posting..." : "Post Amount"}
                         </Button>
                     )}
                     <PostingPOPrintAction />
