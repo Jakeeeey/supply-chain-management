@@ -745,9 +745,9 @@ export async function GET() {
 
             const fully = isFullyReceived(poId, lines, porRows);
 
-            // hasAnyPosted: true when at least one POR row is already posted
-            // This is the key signal for PARTIAL_POSTED status
-            const hasAnyPosted = porRows.some((r) => toNum(r?.isPosted) === 1);
+            // Only show POs where ALL receipts are already inventory-posted.
+            const allInvPosted = porRows.length > 0 && porRows.every((r) => toNum(r?.isPosted) === 1);
+            if (!allInvPosted) continue;
 
             const sid = toNum(po?.supplier_name);
             const supplierName = sid ? toStr(supplierNamesMap.get(sid), "—") : "—";
@@ -777,15 +777,16 @@ export async function GET() {
             const fullyReceived = fully && !allPosted;
 
             // Align totalAmount with what's actually being posted (Items already received but NOT YET posted to inventory)
-            const unpostedRows = porRows.filter(r => toNum(r.isPosted) === 0 && (toNum(r.received_quantity) > 0 || toStr(r.receipt_no)));
+            // readyRows: all receipts that are already posted to inventory
+            const readyRows = porRows.filter(r => toNum(r.isPosted) === 1 && (toNum(r.received_quantity) > 0 || toStr(r.receipt_no)));
             let listTotal = 0;
-            if (unpostedRows.length > 0) {
+            if (readyRows.length > 0) {
                 const sid = toNum(po?.supplier_name);
                 const psl = sid ? await fetchProductSupplierLinks(base, sid) : new Map();
                 const poDType = po?.discount_type as Record<string, unknown> | null | undefined;
                 const poDiscPct = resolveDiscountPercent(poDType);
 
-                for (const r of unpostedRows) {
+                for (const r of readyRows) {
                     const pid = toNum(r.product_id);
                     const bid = toNum(r.branch_id);
                     const qty = effectiveReceivedQty(r);
@@ -815,7 +816,7 @@ export async function GET() {
                     isClosed,
                     fullyReceived,
                     // Only flag PARTIAL_POSTED when not fully received
-                    hasAnyPosted: !fully && hasAnyPosted,
+                    hasAnyPosted: !fully && allInvPosted,
                 }),
                 totalAmount: listTotal,
                 currency: "PHP",
