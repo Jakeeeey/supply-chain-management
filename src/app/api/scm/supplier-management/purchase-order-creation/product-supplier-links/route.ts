@@ -63,7 +63,63 @@ export async function GET(req: NextRequest) {
         }
 
         const json = await res.json();
-        return NextResponse.json({ data: json?.data ?? [] });
+        const links = json?.data ?? [];
+        if (links.length === 0) return NextResponse.json({ data: [] });
+
+        // ✅ Family Logic: Ensure siblings get the same discount link
+        const linkedProductIds = Array.from(new Set(links.map((l: any) => String(l.product_id)).filter(Boolean)));
+
+        // 1) Find Roots
+        const initialUrl = `${base}/items/products?limit=-1&fields=product_id,parent_id&filter[product_id][_in]=${encodeURIComponent(linkedProductIds.join(","))}`;
+        const initialRes = await fetch(initialUrl, { headers: { "Content-Type": "application/json", Authorization: `Bearer ${TOKEN}` }, cache: "no-store" });
+        const initialJson = await initialRes.json().catch(() => ({}));
+        const initialProducts = initialJson.data ?? [];
+        const rootIds = Array.from(new Set(initialProducts.map((p: any) => String(p.parent_id || p.product_id)).filter(Boolean)));
+
+        if (rootIds.length === 0) return NextResponse.json({ data: [] });
+
+        // 2) Find All Family Members that are Box (UOM 11)
+        const familyFilter = {
+            _and: [
+                {
+                    _or: [
+                        { product_id: { _in: rootIds } },
+                        { parent_id: { _in: rootIds } }
+                    ]
+                },
+                { unit_of_measurement: { _eq: 11 } }
+            ]
+        };
+        const familyUrl = `${base}/items/products?limit=-1&fields=product_id,parent_id&filter=${encodeURIComponent(JSON.stringify(familyFilter))}`;
+        const familyRes = await fetch(familyUrl, { headers: { "Content-Type": "application/json", Authorization: `Bearer ${TOKEN}` }, cache: "no-store" });
+        const familyJson = await familyRes.json().catch(() => ({}));
+        const familyProducts = familyJson.data ?? [];
+
+        // 3) Build Synthetic Links
+        const discountByRootId = new Map<string, any>();
+        for (const l of links) {
+            const pid = String(l.product_id);
+            const pInfo = initialProducts.find((p: any) => String(p.product_id) === pid);
+            if (pInfo) {
+                const rid = String(pInfo.parent_id || pInfo.product_id);
+                if (!discountByRootId.has(rid)) discountByRootId.set(rid, l.discount_type);
+            }
+        }
+
+        const syntheticLinks = familyProducts.map((p: any) => {
+            const pid = Number(p.product_id);
+            const rid = String(p.parent_id || p.product_id);
+            const exact = links.find((l: any) => Number(l.product_id) === pid);
+            
+            return {
+                id: exact?.id || `synth-${pid}`,
+                product_id: pid,
+                supplier_id: Number(supplierId),
+                discount_type: exact?.discount_type ?? discountByRootId.get(rid) ?? null
+            };
+        });
+
+        return NextResponse.json({ data: syntheticLinks });
     } catch (e: unknown) {
         const error = e as Error;
         return NextResponse.json(
