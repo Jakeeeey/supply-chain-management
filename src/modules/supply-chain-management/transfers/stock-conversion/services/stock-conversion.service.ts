@@ -356,7 +356,31 @@ export const stockConversionService = {
   async executeConversion(payload: StockConversionPayload) {
     const docNo = generateConversionDocNo();
     const targetProductId = payload.targetProductId || payload.productId;
-    const remarkStr = `Conversion from ${payload.sourceUnitId} to ${payload.targetUnitId}`;
+    const sourceFactor = Number(payload.sourceFactor || 1);
+    const targetFactor = Number(payload.targetFactor || 1);
+    
+    // 1. Validate the conversion math on the backend for integrity
+    const totalBaseUnits = Number(payload.quantityToConvert) * sourceFactor;
+    const expectedConvertedQty = Math.floor(totalBaseUnits / targetFactor);
+    
+    if (payload.convertedQuantity > expectedConvertedQty) {
+      throw new Error(`Invalid conversion: ${payload.quantityToConvert} units of source cannot produce ${payload.convertedQuantity} units of target (Expected max: ${expectedConvertedQty}).`);
+    }
+    
+    if (expectedConvertedQty <= 0) {
+      throw new Error(`Insufficient quantity: The source amount is not enough to create at least one unit of the target.`);
+    }
+
+    // 2. FETCH LATEST INVENTORY - Final server-side check to prevent over-drawing
+    const inventory = await stockConversionRepo.fetchInventory(undefined, payload.branchId, `product_id=${payload.productId}`);
+    const rawStock = inventory[payload.productId] || 0;
+    const availableSourceUnits = Math.floor(rawStock / sourceFactor);
+
+    if (payload.quantityToConvert > availableSourceUnits) {
+      throw new Error(`Insufficient stock: You requested to convert ${payload.quantityToConvert} units, but only ${availableSourceUnits} are available in branch ${payload.branchId}.`);
+    }
+
+    const remarkStr = `Conversion: ${payload.quantityToConvert} source units to ${payload.convertedQuantity} target units`;
     const totalAmount = Number((payload.quantityToConvert * payload.pricePerUnit).toFixed(2));
 
     try {
