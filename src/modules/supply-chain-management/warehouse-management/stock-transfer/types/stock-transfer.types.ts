@@ -223,6 +223,7 @@ export interface UpdateTransferItem {
   status: string;
   allocated_quantity?: number;
   scanned_quantity?: number;
+  date_received?: string | null;
 }
 
 /** RFID tracking entry in the PATCH request body. */
@@ -243,6 +244,8 @@ export interface UpdateTransferPayload {
   rfids?: RfidTrackingEntry[];
   /** Scan type for RFID tracking ('DISPATCH' or 'RECEIVE'). */
   scanType?: "DISPATCH" | "RECEIVE";
+  /** ID of the user performing the update. */
+  userId?: number;
 }
 
 /** Directus payload for batch-inserting a stock_transfer row. */

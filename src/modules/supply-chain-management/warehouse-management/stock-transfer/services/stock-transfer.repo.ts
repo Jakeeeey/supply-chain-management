@@ -195,7 +195,7 @@ export async function createStockTransfers(payloads: StockTransferInsertPayload[
 /**
  * Updates status and allocated quantity for a batch of items.
  */
-export async function updateTransfersStatus(items: { id: number; status: string; allocated_quantity?: number }[]): Promise<void> {
+export async function updateTransfersStatus(items: { id: number; status: string; allocated_quantity?: number; date_received?: string | null; receiver_id?: number | null }[]): Promise<void> {
   if (items.length === 0) return;
 
   // Group items by their update payload shape so we can batch them
@@ -204,6 +204,8 @@ export async function updateTransfersStatus(items: { id: number; status: string;
     const key = JSON.stringify({
       status: item.status,
       ...(item.allocated_quantity !== undefined ? { allocated_quantity: item.allocated_quantity } : {}),
+      ...(item.date_received !== undefined ? { date_received: item.date_received } : {}),
+      ...(item.receiver_id !== undefined ? { receiver_id: item.receiver_id } : {}),
     });
     if (!grouped[key]) grouped[key] = [];
     grouped[key].push(item.id);

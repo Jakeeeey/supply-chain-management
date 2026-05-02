@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { manualReceiveItems } from "@/modules/supply-chain-management/warehouse-management/stock-transfer/services/stock-transfer.service";
+import { decodeJwtPayload } from "@/lib/auth-utils";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,12 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Missing required field: ids array" }, { status: 400 });
     }
 
-    const { success } = await manualReceiveItems(ids, status);
+    // Extract userId from token
+    const token = request.cookies.get("vos_access_token")?.value;
+    const decoded = token ? decodeJwtPayload(token) : null;
+    const userId = decoded?.sub ? Number(decoded.sub) : undefined;
+
+    const { success } = await manualReceiveItems(ids, status, userId);
 
     return NextResponse.json({ 
       success, 
