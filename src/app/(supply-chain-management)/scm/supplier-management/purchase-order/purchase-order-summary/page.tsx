@@ -98,7 +98,7 @@ async function getData() {
         const receivedByPo = new Map<number, number>();
         const hasReceiptByPo = new Map<number, boolean>();
         const allInvPostedByPo = new Map<number, boolean>();
-        const poReceipts = new Map<number, Record<string, any>[]>();
+        const poReceipts = new Map<number, Record<string, unknown>[]>();
 
         for (const r of porRows) {
             const poId = Number(r.purchase_order_id);
