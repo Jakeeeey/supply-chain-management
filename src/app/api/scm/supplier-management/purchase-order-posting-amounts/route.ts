@@ -677,7 +677,7 @@ export async function GET() {
         // Fetch PO headers directly by inventory_status=6 and is_posted is not true.
         const poHeaderUrl =
             `${base}/items/${PO_COLLECTION}?limit=-1` +
-            `&filter[inventory_status][_in]=6,13` +
+            `&filter[inventory_status][_eq]=6` +
             `&filter[_or][0][is_posted][_eq]=0` +
             `&filter[_or][1][is_posted][_null]=true` +
             `&fields=purchase_order_id,purchase_order_no,date,date_encoded,supplier_name,total_amount,date_received,inventory_status,gross_amount,discounted_amount,vat_amount,withholding_tax_amount,discount_type.*,discount_type.line_per_discount_type.line_id.*,is_posted`;

@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
             return rawUom; // Fallback to raw if not in map
         };
 
-        // 1) If supplierId provided: fetch product_per_supplier then fetch products (including family: parent + children)
+        // 1) If supplierId provided: fetch product_per_supplier then fetch products
         if (supplierId) {
             const linksUrl =
                 `${base}/items/product_per_supplier` +
@@ -86,40 +86,28 @@ export async function GET(req: NextRequest) {
             }
 
             const links = linksJson.data ?? [];
-            const linkedProductIds = unique(
+
+            const productIds = unique(
                 links
                     .map((x: Record<string, unknown>) => x?.product_id)
                     .filter((v: unknown) => v !== null && v !== undefined)
                     .map((v: unknown) => String(v))
             );
 
-            if (linkedProductIds.length === 0) return NextResponse.json({ data: [] });
+            if (productIds.length === 0) return NextResponse.json({ data: [] });
 
-            // 1.1) Fetch initial products to identify the "Roots" (parents) for the linked products
-            const initialUrl = `${base}/items/products?limit=-1&fields=product_id,parent_id&filter[product_id][_in]=${encodeURIComponent(linkedProductIds.join(","))}`;
-            const initialRes = await fetch(initialUrl, { headers, cache: "no-store" });
-            const initialJson = await initialRes.json().catch(() => ({}));
-            const initialProducts = initialJson.data ?? [];
+            // Map product_id -> discount_type (FIXED)
+            const discountByProductId = new Map<string, unknown>();
+            for (const l of links) {
+                const pid = String(l?.product_id ?? "");
+                if (!pid) continue;
+                discountByProductId.set(pid, l?.discount_type ?? null);
+            }
 
-            // Root ID is parent_id if it exists, otherwise it's the product_id itself
-            const rootIds = unique(initialProducts.map((p: any) => String(p.parent_id || p.product_id)).filter(Boolean));
-            if (rootIds.length === 0) return NextResponse.json({ data: [] });
-
-            // 1.2) Fetch the full family (parent + all children)
-            // Filter: (product_id is a root OR parent_id is a root) AND UOM is 11 (Box)
-            const familyFilter = {
-                _and: [
-                    {
-                        _or: [
-                            { product_id: { _in: rootIds } },
-                            { parent_id: { _in: rootIds } }
-                        ]
-                    },
-                    { unit_of_measurement: { _eq: 11 } } // ✅ Only BOX products
-                ]
-            };
             const productsUrl =
-                `${base}/items/products?limit=-1&fields=*,product_category.*,product_brand.*&filter=${encodeURIComponent(JSON.stringify(familyFilter))}`;
+                `${base}/items/products?limit=-1&fields=*,product_category.*,product_brand.*&filter[product_id][_in]=${encodeURIComponent(
+                    productIds.join(",")
+                )}`;
 
             const prodRes = await fetch(productsUrl, { headers, cache: "no-store" });
             const prodJson = await prodRes.json().catch(() => ({}));
@@ -131,34 +119,14 @@ export async function GET(req: NextRequest) {
                 );
             }
 
-            // Map product_id -> discount_type AND rootId -> discount_type for inheritance
-            const discountByProductId = new Map<string, unknown>();
-            const discountByRootId = new Map<string, unknown>();
-            
-            for (const l of links) {
-                const pid = String(l?.product_id ?? "");
-                if (!pid) continue;
-                discountByProductId.set(pid, l?.discount_type ?? null);
-                
-                // Track discount for the family
-                const pInfo = initialProducts.find((p: any) => String(p.product_id) === pid);
-                if (pInfo) {
-                    const rid = String(pInfo.parent_id || pInfo.product_id);
-                    if (!discountByRootId.has(rid)) discountByRootId.set(rid, l?.discount_type ?? null);
-                }
-            }
-
             const rows = (prodJson.data ?? []).map((p: Record<string, unknown>) => {
                 const pid = String(p?.product_id ?? p?.id ?? "");
-                const rid = String(p?.parent_id || p?.product_id || "");
-                
-                // Inherit discount: direct match > family match
-                const dt = discountByProductId.get(pid) ?? discountByRootId.get(rid) ?? null;
-
                 return {
                     ...p,
+                    // ✅ Map UOM robustly
                     unit_of_measurement: resolveUom(p),
-                    discount_type: dt,
+                    // ✅ Attach discount_type from product_per_supplier
+                    discount_type: discountByProductId.get(pid) ?? null,
                 };
             });
 
