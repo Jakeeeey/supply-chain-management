@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { Check, Plus, ShoppingCart, X, Minus } from "lucide-react";
-import type { CartItem, Product } from "../types";
+import type { CartItem, Product, DiscountType } from "../types";
 import { cn, buildMoneyFormatter } from "../utils/calculations";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -28,6 +28,7 @@ export function ProductPickerDialog(props: {
     onRemoveFromTemp: (item: CartItem) => void;
     onUpdateTempQty: (productId: string, qty: number) => void;
     onConfirm: () => void;
+    discountTypes: DiscountType[];
 }) {
     const money = React.useMemo(() => buildMoneyFormatter(), []);
     const selectedCount = props.tempCart.length;
@@ -143,7 +144,7 @@ export function ProductPickerDialog(props: {
                                             <div className="p-4 flex-1 flex flex-col">
                                                 <div className="flex justify-between items-start gap-2 mb-2">
                                                     <div className="min-w-0">
-                                                        <h3 className="text-xs font-bold text-foreground line-clamp-2 leading-snug h-8">
+                                                        <h3 className="text-xs font-bold text-foreground leading-snug">
                                                             {product.name}
                                                         </h3>
                                                         <p className="text-[10px] font-mono text-muted-foreground mt-1 uppercase tracking-tighter">
@@ -156,6 +157,22 @@ export function ProductPickerDialog(props: {
                                                         </div>
                                                     )}
                                                 </div>
+
+                                                {/* Discount Badge */}
+                                                {product.discountTypeId && (
+                                                    <div className="mb-2">
+                                                        {(() => {
+                                                            const dt = props.discountTypes.find(d => String(d.id) === String(product.discountTypeId));
+                                                            if (!dt || dt.name === "No Discount") return null;
+                                                            return (
+                                                                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-green-50 border border-green-200 rounded text-[9px] font-black text-green-700 uppercase tracking-tight">
+                                                                    <div className="w-1 h-1 rounded-full bg-green-500 animate-pulse" />
+                                                                    {dt.name}
+                                                                </div>
+                                                            );
+                                                        })()}
+                                                    </div>
+                                                )}
 
                                                 <div className="mt-2 py-2 border-t border-border/50 space-y-0.5">
                                                     <div className="flex flex-col">
@@ -240,7 +257,7 @@ export function ProductPickerDialog(props: {
 
                                         <div className="p-3 pt-4">
                                             <div className="pr-6">
-                                                <p className="text-[11px] font-black text-foreground leading-tight line-clamp-1 uppercase tracking-tight">
+                                                <p className="text-[11px] font-black text-foreground leading-tight uppercase tracking-tight">
                                                     {item.name}
                                                 </p>
                                                 <div className="flex flex-col gap-0.5 mt-1.5">
@@ -250,6 +267,15 @@ export function ProductPickerDialog(props: {
                                                     <span className="w-fit text-[8px] px-1.5 py-0.5 bg-muted text-muted-foreground rounded font-mono font-bold uppercase tracking-wider">
                                                         / {item.uom}
                                                     </span>
+                                                    {item.discountTypeId && (() => {
+                                                        const dt = props.discountTypes.find(d => String(d.id) === String(item.discountTypeId));
+                                                        if (!dt || dt.name === "No Discount") return null;
+                                                        return (
+                                                            <div className="mt-1 inline-flex items-center gap-1 text-[8px] font-bold text-green-600 uppercase tracking-tight">
+                                                                {dt.name}
+                                                            </div>
+                                                        );
+                                                    })()}
                                                 </div>
                                             </div>
 

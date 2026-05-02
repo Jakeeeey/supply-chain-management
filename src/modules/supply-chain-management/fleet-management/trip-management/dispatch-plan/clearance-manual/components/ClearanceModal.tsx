@@ -75,14 +75,7 @@ const ClearanceModal: React.FC<ClearanceModalProps> = ({ isOpen, onClose, onSucc
         if (isOpen && dispatch.invoices) {
             setInvoices(dispatch.invoices);
             
-            // Auto-select rows that were previously cleared/pre-saved
-            const initialSelected = new Set<number>();
-            dispatch.invoices.forEach(inv => {
-                if (inv.isCleared && isRowCheckable(inv)) {
-                    initialSelected.add(inv.id);
-                }
-            });
-            setSelectedIds(initialSelected);
+            setSelectedIds(new Set());
         }
     }, [isOpen, dispatch.invoices]);
 

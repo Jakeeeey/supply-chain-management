@@ -49,21 +49,24 @@ interface DirectusResponse {
 
 
 function now() {
-    return new Date();
+    const date = new Date();
+    const phOffset = 8 * 60; // 8 hours in minutes
+    const localOffset = date.getTimezoneOffset(); // in minutes
+    return new Date(date.getTime() + (phOffset + localOffset) * 60000);
 }
 
 function isoDateOnlyFrom(value?: string | Date | number | null) {
-    if (!value) return now().toISOString().slice(0, 10);
+    if (!value) return now().toISOString().replace("Z", "").slice(0, 10);
     const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return now().toISOString().slice(0, 10);
+    if (Number.isNaN(d.getTime())) return now().toISOString().replace("Z", "").slice(0, 10);
     return d.toISOString().slice(0, 10);
 }
 
 function isoDateTimeFrom(value?: string | Date | number | null) {
-    if (!value) return now().toISOString();
+    if (!value) return now().toISOString().replace("Z", "");
     const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return now().toISOString();
-    return d.toISOString();
+    if (Number.isNaN(d.getTime())) return now().toISOString().replace("Z", "");
+    return d.toISOString().replace("Z", "");
 }
 
 function timeHHMMSSFrom(value?: string | Date | number | null) {
@@ -182,6 +185,69 @@ interface AllocationItem {
     discountTypeId?: string | number;
 }
 
+interface DiscountLine {
+    id?: string | number;
+    description?: string;
+    percentage?: string | number;
+    line_id?: {
+        id?: string | number;
+        description?: string;
+        percentage?: string | number;
+    };
+}
+
+function deriveDiscountPercentFromCode(codeRaw: string): number {
+    const code = String(codeRaw ?? "").trim().toUpperCase();
+    if (!code || code === "NO DISCOUNT" || code === "D0") return 0;
+    const nums = (code.match(/\d+(?:\.\d+)?/g) ?? [])
+        .map((s) => Number(s))
+        .filter((n) => Number.isFinite(n) && n > 0 && n <= 100);
+    if (!nums.length) return 0;
+    const factor = nums.reduce((acc, p) => acc * (1 - p / 100), 1);
+    return Number(((1 - factor) * 100).toFixed(4));
+}
+
+function calculateDiscountFromLines(lines: DiscountLine[]): number {
+    if (!lines.length) return 0;
+    const factor = lines.reduce(
+        (acc: number, l: DiscountLine) => acc * (1 - Number(l.line_id?.percentage ?? l?.percentage ?? 0) / 100),
+        1
+    );
+    return Number(((1 - factor) * 100).toFixed(4));
+}
+
+async function fetchDiscountTypesMap(base: string) {
+    const map = new Map<string, { name: string; pct: number }>();
+    try {
+        const fields = encodeURIComponent("id,discount_type,total_percent,line_per_discount_type.line_id.*");
+        const url = `${base}/items/discount_type?limit=-1&fields=${fields}`;
+        const j = await directusFetch(url, { method: "GET" });
+        const json = await safeJson(j);
+        const data = (json.json?.data as Array<{
+            id: string | number;
+            discount_type: string;
+            total_percent?: number | string;
+            line_per_discount_type?: DiscountLine[];
+        }>) || [];
+        
+        for (const dt of data) {
+            const id = String(dt.id);
+            const rawPct = Number(dt.total_percent || 0);
+            const lines = dt.line_per_discount_type ?? [];
+            
+            let computed = 0;
+            if (lines.length > 0) computed = calculateDiscountFromLines(lines);
+            else if (rawPct > 0) computed = rawPct;
+            else computed = deriveDiscountPercentFromCode(String(dt.discount_type));
+
+            map.set(id, { name: String(dt.discount_type), pct: computed });
+        }
+    } catch (e: unknown) {
+        console.error("[creation-po] Failed to fetch discount types:", (e as Error).message);
+    }
+    return map;
+}
+
 interface Allocation {
     branchId?: string | number;
     branch_id?: string | number;
@@ -189,7 +255,7 @@ interface Allocation {
     items?: AllocationItem[];
 }
 
-function buildPoProductLines(input: { allocations?: Allocation[] }, poId: number) {
+function buildPoProductLines(input: { allocations?: Allocation[] }, poId: number, discountMap: Map<string, { pct: number }>, isInvoice: boolean) {
     const allocations = Array.isArray(input?.allocations) ? input.allocations : [];
     const lines: Record<string, unknown>[] = [];
 
@@ -209,7 +275,20 @@ function buildPoProductLines(input: { allocations?: Allocation[] }, poId: number
             const ordered_quantity = Number.isFinite(qtyNum) && qtyNum > 0 ? qtyNum : 1;
 
             const unitPrice = Number(it?.price ?? it?.pricePerBox ?? it?.unit_price ?? 0) || 0;
-            const lineTotal = ordered_quantity * unitPrice;
+            
+            // Financial Calculations (VAT-Inclusive Logic)
+            const dtId = it.discountTypeId ? String(it.discountTypeId) : null;
+            const discPercent = dtId ? (discountMap.get(dtId)?.pct ?? 0) : 0;
+            
+            const lineGross = ordered_quantity * unitPrice;
+            const discAmtTotal = Number((lineGross * (discPercent / 100)).toFixed(2));
+            const lineNet = lineGross - discAmtTotal;
+            
+            const vatExcl = isInvoice ? Number((lineNet / 1.12).toFixed(2)) : lineNet;
+            const vatAmt = isInvoice ? Number((lineNet - vatExcl).toFixed(2)) : 0;
+            const ewtAmt = isInvoice ? Number((vatExcl * 0.01).toFixed(2)) : 0;
+            
+            const discountedPricePerUnit = Number((lineNet / ordered_quantity).toFixed(2));
 
             if (!branch_id) {
                 throw new Error(
@@ -223,13 +302,13 @@ function buildPoProductLines(input: { allocations?: Allocation[] }, poId: number
                 product_id: productIdNum,
                 ordered_quantity,
                 unit_price: toFixedMoney(unitPrice),
-                total_amount: toFixedMoney(lineTotal),
-                vat_amount: null,
-                withholding_amount: null,
-                discount_type: it.discountTypeId || null,
-                discounted_price: null,
-                approved_price: null,
-                received: null,
+                approved_price: toFixedMoney(unitPrice),
+                discounted_price: toFixedMoney(discountedPricePerUnit),
+                vat_amount: toFixedMoney(vatAmt),
+                withholding_amount: toFixedMoney(ewtAmt),
+                total_amount: toFixedMoney(lineNet), // Total is Net (VAT-inclusive)
+                discount_type: dtId,
+                received: 0,
             });
         }
     }
@@ -270,8 +349,9 @@ async function createManyPurchaseOrderProducts(base: string, lines: Record<strin
     return { ok: false, json: parsed.json, message: msg, status: r.status };
 }
 
-async function ensurePoProducts(base: string, poId: number, input: Record<string, unknown>) {
-    const lines = buildPoProductLines(input, poId);
+async function ensurePoProducts(base: string, poId: number, input: { allocations?: Allocation[] }, isInvoice: boolean) {
+    const discountMap = await fetchDiscountTypesMap(base);
+    const lines = buildPoProductLines(input, poId, discountMap, isInvoice);
 
     if (!lines.length) {
         return { created: 0, skipped: true, reason: "No allocation lines" };
@@ -332,7 +412,12 @@ export async function POST(req: NextRequest) {
 
             if (existingPoId) {
                 try {
-                    const linesMeta = await ensurePoProducts(base, existingPoId, input);
+                    const isInvoiceFlag = 
+                        String(input?.is_invoice || "").toLowerCase() === "true" ||
+                        String(input?.isInvoice || "").toLowerCase() === "true" ||
+                        input?.is_invoice === true ||
+                        input?.isInvoice === true;
+                    const linesMeta = await ensurePoProducts(base, existingPoId, input, isInvoiceFlag);
                     return NextResponse.json({
                         data: existing,
                         meta: { alreadyExists: true, purchase_order_no: poNumber, po_products: linesMeta },
@@ -377,13 +462,11 @@ export async function POST(req: NextRequest) {
             String(input?.is_invoice || "").toLowerCase() === "true" ||
             String(input?.isInvoice || "").toLowerCase() === "true" ||
             input?.is_invoice === true ||
-            input?.isInvoice === true ||
-            input?.receiving_type === 2 ||
-            input?.receivingType === 2;
+            input?.isInvoice === true;
 
-        const receiving_type = isInvoiceFlag ? 2 : 3;
+        const receiving_type = 1; // Always 1 for "RECEIVE FROM PO"
         const receipt_required = intOrDefault(input?.receipt_required ?? input?.receiptRequired, 1);
-        const price_type = strOrDefault(input?.price_type ?? input?.priceType, "General Receive Price");
+        const price_type = strOrDefault(input?.price_type ?? input?.priceType, "Cost Per Unit");
         const inventory_status = intOrDefault(input?.inventory_status ?? input?.inventoryStatus, 1);
 
         const payload: Record<string, unknown> = {
@@ -397,9 +480,9 @@ export async function POST(req: NextRequest) {
 
             gross_amount,
             discounted_amount,
-            vat_amount,
+            vat_amount: isInvoiceFlag ? vat_amount : 0,
             total_amount,
-            withholding_tax_amount,
+            withholding_tax_amount: isInvoiceFlag ? withholding_tax_amount : 0,
 
             payment_type,
             payment_status,
@@ -412,8 +495,16 @@ export async function POST(req: NextRequest) {
             reference: input?.reference ?? null,
             remark: input?.remark ?? null,
 
-            branch_id: input?.branch_id ?? input?.branchId ?? null,
+            branch_id: input?.branch_id ?? input?.branchId ?? 
+                       (Array.isArray(input?.allocations) ? (input.allocations[0]?.branchId ?? input.allocations[0]?.branch_id ?? input.allocations[0]?.id) : null) ?? 
+                       null,
             price_type_id: input?.price_type_id ?? null,
+
+            // ✅ User relationship & discount fields
+            encoder_id: input?.encoder_id ?? input?.encoderId ?? null,
+            approver_id: input?.approver_id ?? input?.approverId ?? null,
+            receiver_id: input?.receiver_id ?? input?.receiverId ?? null,
+            discount_type: input?.discount_type ?? input?.discountType ?? input?.discountTypeId ?? null,
         };
 
         for (const k of Object.keys(payload)) {
@@ -451,7 +542,7 @@ export async function POST(req: NextRequest) {
 
         if (createdPoId) {
             try {
-                const linesMeta = await ensurePoProducts(base, createdPoId, input);
+                const linesMeta = await ensurePoProducts(base, createdPoId, input, isInvoiceFlag);
 
                 return NextResponse.json({
                     data: created,

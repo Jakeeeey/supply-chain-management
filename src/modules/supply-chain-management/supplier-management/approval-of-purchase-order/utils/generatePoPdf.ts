@@ -35,7 +35,7 @@ function safeStr(v: unknown, fallback = "—") {
 /**
  * Compact Signature Renderer - minimal space usage
  */
-function renderSignatures(doc: jsPDF, startY: number, preparerName: string) {
+function renderSignatures(doc: jsPDF, startY: number, preparerName: string, approverName: string) {
     const pageWidth = doc.internal.pageSize.getWidth();
     const signatureWidth = 50;
     const spacing = 20;
@@ -64,6 +64,8 @@ function renderSignatures(doc: jsPDF, startY: number, preparerName: string) {
     doc.setFontSize(7);
     doc.setTextColor(15, 23, 42);
     doc.text("Approved:", approvedByX, startY);
+    doc.setFont("helvetica", "bold underline");
+    doc.text(approverName || "—", approvedByX, startY + 4);
     doc.line(approvedByX, startY + 8, approvedByX + signatureWidth, startY + 8);
     doc.setFontSize(6);
     doc.setTextColor(150, 150, 150);
@@ -78,13 +80,21 @@ export async function generatePurchaseOrderPdf(
     po: Record<string, unknown> | null, 
     branchLabel: string, 
     supplierName: string,
-    companyData: CompanyData
+    companyData: CompanyData,
+    approverName: string = "—"
 ) {
     if (!po) return;
 
     const poNumber = safeStr(po.purchase_order_no ?? po.poNumber, "N/A");
-    const date = safeStr(po.date ?? po.date_encoded, "N/A");
-    const preparerName = safeStr(po.preparer_name ?? "—");
+    const rawDate = safeStr(po.date ?? po.date_encoded, "N/A");
+    // Format date to M/D/YYYY for consistency
+    const date = (() => {
+        if (rawDate === "N/A") return rawDate;
+        const d = new Date(rawDate);
+        if (isNaN(d.getTime())) return rawDate;
+        return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
+    })();
+    const preparerName = safeStr(po.preparer_name ?? po.preparerName ?? "—");
 
     // --- FIND BEST MATCH TEMPLATE (Robust fallback to match pdf-test) ---
     const templates = await pdfTemplateService.fetchTemplates();
@@ -226,13 +236,46 @@ export async function generatePurchaseOrderPdf(
         doc.line(labelX, finalY + lineHeight + 3, rightColX, finalY + lineHeight + 3);
 
         doc.setTextColor(50, 50, 50);
+        let currentY = finalY + lineHeight + 3;
+
+        const isInvoice = Boolean(po.isInvoice || po.is_invoice || Number(po.vat_amount) > 0);
+
+        if (isInvoice) {
+            const vatAmount = totalAmount - (totalAmount / 1.12);
+            const ewtAmount = (totalAmount / 1.12) * 0.01;
+
+            doc.setFontSize(8);
+            doc.setFont("helvetica", "normal");
+            doc.text("VAT Details (12%):", labelX, currentY + lineHeight);
+            doc.text(formatMoney(vatAmount), rightColX, currentY + lineHeight, { align: "right" });
+
+            doc.text("EWT (1%):", labelX, currentY + lineHeight * 2);
+            doc.setTextColor(150, 50, 50);
+            doc.text(`-${formatMoney(ewtAmount)}`, rightColX, currentY + lineHeight * 2, { align: "right" });
+
+            doc.setDrawColor(180, 180, 180);
+            doc.setLineWidth(0.5);
+            doc.line(labelX, currentY + lineHeight * 2 + 2, rightColX, currentY + lineHeight * 2 + 2);
+            
+            currentY += lineHeight * 2 + 2;
+        }
+
+        doc.setTextColor(50, 50, 50);
         doc.setFontSize(9);
         doc.setFont("helvetica", "bold");
-        doc.text("Total:", labelX, finalY + lineHeight * 2 + 3);
-        doc.text(`PHP ${formatMoney(totalAmount)}`, rightColX, finalY + lineHeight * 2 + 3, { align: "right" });
+        doc.text("Grand Total:", labelX, currentY + lineHeight + 1);
+        doc.text(`PHP ${formatMoney(totalAmount)}`, rightColX, currentY + lineHeight + 1, { align: "right" });
 
-        // 4. Compact Signatures
-        renderSignatures(doc, finalY + 40, preparerName);
+        if (isInvoice) {
+            // Standardized Footnote
+            doc.setFont("helvetica", "italic");
+            doc.setFontSize(7);
+            doc.setTextColor(100, 100, 100);
+            doc.text("Note: VAT and EWT figures are for reference and have not been deducted from the total.", labelX - 25, currentY + lineHeight + 6);
+        }
+
+        // 4. Compact Signatures with increased vertical spacing
+        renderSignatures(doc, finalY + 60, preparerName, approverName);
     });
 
     const poNumberStr = String(poNumber);

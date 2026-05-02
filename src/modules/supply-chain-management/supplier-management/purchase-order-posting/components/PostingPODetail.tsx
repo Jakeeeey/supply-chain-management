@@ -69,42 +69,28 @@ export function PostingPODetail() {
     const isPartialPosted = status === "PARTIAL_POSTED";
 
     return (
-        <Card className="p-4 min-w-0">
-            <div className="flex items-start justify-between gap-3">
+        <div className={cn(
+            "min-w-0 border border-border rounded-xl bg-background shadow-sm overflow-hidden flex flex-col",
+            posting ? "opacity-70 pointer-events-none" : ""
+        )}>
+            <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center justify-between gap-3 shrink-0">
                 <div className="min-w-0">
-                    <div className="text-base font-semibold truncate">{selectedPO.poNumber}</div>
-                    <div className="text-xs text-muted-foreground truncate">
-                        {selectedPO.supplier?.name ?? "—"}
+                    <div className="text-sm font-black text-foreground uppercase tracking-tight truncate">
+                        Purchase Order Posting
                     </div>
-
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                        <Badge
-                            variant="secondary"
-                            className={cn("text-[10px] font-bold", statusBadge(selectedPO.status))}
-                        >
-                            {statusLabel(selectedPO.status)}
-                        </Badge>
-                        <span>
-                            Total:{" "}
-                            <span className="font-semibold text-foreground">
-                                {money(selectedPO.totalAmount ?? 0, selectedPO.currency ?? "PHP")}
-                            </span>
-                        </span>
-                        <span>
-                            Unposted Receipts:{" "}
-                            <span className="font-semibold text-foreground">{unposted.length}</span>
-                        </span>
+                    <div className="text-[11px] text-muted-foreground truncate font-mono">
+                        {selectedPO.poNumber}
                     </div>
                 </div>
 
-                <div className="shrink-0 pt-1 flex items-center gap-2">
+                <div className="shrink-0 flex items-center gap-2">
                     {showPostAll && (
                         <Button
                             type="button"
                             size="sm"
                             disabled={posting}
                             onClick={() => postAllReceipts(String(selectedPO.id))}
-                            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold"
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase text-[10px] h-8 rounded-lg shadow-sm"
                         >
                             {posting ? "Posting..." : "Post All"}
                         </Button>
@@ -113,47 +99,71 @@ export function PostingPODetail() {
                 </div>
             </div>
 
-            {/* Partial-posted info banner */}
-            {isPartialPosted && (
-                <div className="mt-3 rounded-lg border border-blue-500/20 bg-blue-500/10 p-3 text-xs text-blue-700 dark:text-blue-300">
-                    <span className="font-semibold">Partially posted.</span> This PO has been
-                    partially received and posted. It will remain here so you can post additional
-                    receipts as more items are received. Once fully received and all receipts are
-                    posted, it will be marked as <span className="font-semibold">CLOSED</span>.
-                </div>
-            )}
+            <div className="p-4 space-y-4 bg-background">
+                <div className="rounded-lg border border-border bg-muted/20 p-4">
+                    <div className="flex flex-wrap items-center gap-3">
+                        <div className="min-w-0 flex-1">
+                            <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Supplier</div>
+                            <div className="text-sm font-black text-foreground truncate uppercase">{selectedPO.supplier?.name ?? "—"}</div>
+                        </div>
 
-            {successMsg ? (
-                <div className="mt-3 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs text-emerald-700 dark:text-emerald-300">
-                    <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0 truncate">{successMsg}</div>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-7"
-                            onClick={clearSuccess}
-                        >
-                            OK
-                        </Button>
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground font-bold">
+                            <Badge
+                                variant="secondary"
+                                className={cn("text-[9px] font-black uppercase tracking-tight", statusBadge(selectedPO.status))}
+                            >
+                                {statusLabel(selectedPO.status)}
+                            </Badge>
+                            <span className="bg-background px-2 py-0.5 rounded border border-border/50">
+                                {money(selectedPO.totalAmount ?? 0, selectedPO.currency ?? "PHP")}
+                            </span>
+                            <span className="bg-background px-2 py-0.5 rounded border border-border/50 text-primary">
+                                {unposted.length} UNPOSTED RECEIPTS
+                            </span>
+                        </div>
                     </div>
                 </div>
-            ) : null}
 
-            {postError ? (
-                <div className="mt-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
-                    {postError}
+                {/* Partial-posted info banner */}
+                {isPartialPosted && (
+                    <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-3 text-[11px] text-blue-700 dark:text-blue-300 font-medium">
+                        <span className="font-black uppercase mr-1">Partially posted.</span>
+                        This PO has been partially received and posted. It will remain here so you can post additional receipts as more items are received.
+                    </div>
+                )}
+
+                {successMsg ? (
+                    <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-[11px] text-emerald-700 dark:text-emerald-300 font-medium">
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0 truncate font-black uppercase italic">{successMsg}</div>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-[10px] font-black uppercase rounded-md shadow-sm"
+                                onClick={clearSuccess}
+                            >
+                                OK
+                            </Button>
+                        </div>
+                    </div>
+                ) : null}
+
+                {postError ? (
+                    <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-[11px] text-destructive font-bold uppercase tracking-tight">
+                        {postError}
+                    </div>
+                ) : null}
+
+                <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                    <ProductsReceivingStatusCard />
+                    <ReceiptsCard />
                 </div>
-            ) : null}
 
-            <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
-                <ProductsReceivingStatusCard />
-                <ReceiptsCard />
+                <div className="">
+                    <PODetailsBreakdownCard />
+                </div>
             </div>
-
-            <div className="mt-4">
-                <PODetailsBreakdownCard />
-            </div>
-        </Card>
+        </div>
     );
 }

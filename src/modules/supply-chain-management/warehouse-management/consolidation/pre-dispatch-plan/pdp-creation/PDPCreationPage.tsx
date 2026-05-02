@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { PDPGlobalFilter } from "../pdp-planner/components/PDPGlobalFilter";
 import { PDPCreationTable } from "./components/data-table";
 import { PDPCreateModal } from "./components/modals/pdp-create-modal";
+import { PDPRemarksModal } from "./components/modals/pdp-remarks-modal";
 import { usePreDispatchCreation } from "./hooks/usePreDispatchCreation";
 
 /**
@@ -44,6 +45,9 @@ export default function PDPCreationPage() {
   const [editPlan, setEditPlan] = useState<DispatchPlan | null>(null);
   const [editDetails, setEditDetails] = useState<DispatchPlanDetail[]>([]);
   const [isEditLoading, setIsEditLoading] = useState(false);
+
+  // ─── Remarks View State ───────────────────────────
+  const [viewRemarks, setViewRemarks] = useState<string | null>(null);
 
   const handleEdit = useCallback(
     async (plan: DispatchPlan) => {
@@ -107,6 +111,7 @@ export default function PDPCreationPage() {
         totalCount={pendingTotal}
         isLoading={isLoading || isEditLoading}
         onEdit={handleEdit}
+        onViewRemarks={(remarks: string) => setViewRemarks(remarks)}
         onSearch={(v: string) => setSearch(v)}
         actionComponent={
           <Button onClick={() => setIsCreateOpen(true)}>
@@ -129,6 +134,13 @@ export default function PDPCreationPage() {
         initialBranchId={branchId}
         editPlan={editPlan}
         editDetails={editDetails}
+      />
+
+      {/* Remarks Modal */}
+      <PDPRemarksModal
+        open={viewRemarks !== null}
+        onClose={() => setViewRemarks(null)}
+        remarks={viewRemarks || ""}
       />
     </div>
   );

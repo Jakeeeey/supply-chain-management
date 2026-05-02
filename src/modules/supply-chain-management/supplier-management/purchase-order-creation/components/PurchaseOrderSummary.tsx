@@ -2,9 +2,11 @@
 "use client";
 
 import * as React from "react";
-import type { BranchAllocation, CartItem, Supplier, DiscountType } from "../types";
+import type { BranchAllocation, CartItem, Supplier, DiscountType, PaymentTerm } from "../types";
 import { buildMoneyFormatter, cn, deriveDiscountPercentFromCode } from "../utils/calculations";
 import { toast } from "sonner";
+import { ColumnDef } from "@tanstack/react-table";
+import { POCreationDataTable } from "./POCreationDataTable";
 
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -22,8 +24,10 @@ import {
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-import { Info, CheckCircle2, AlertTriangle, Package, Building2, TrendingUp, Tags } from "lucide-react";
+import { Info, CheckCircle2, AlertTriangle, Package, Building2, TrendingUp, Tags, CreditCard } from "lucide-react";
 import { POPreviewModal } from "./POPreviewModal";
+
+import { SearchableSelect } from "@/components/ui/searchable-select";
 
 type Notice = {
     variant: "success" | "error" | "info";
@@ -50,8 +54,12 @@ export function PurchaseOrderSummary(props: {
     discountTypes: DiscountType[];
     isInvoice: boolean;
     setIsInvoice: (v: boolean) => void;
+    paymentTerms: PaymentTerm[];
+    selectedPaymentTermId: number | null;
+    setSelectedPaymentTermId: (id: number | null) => void;
     isLocked?: boolean;
     onReset?: () => void;
+    preparerName?: string;
 }) {
     // ✅ ALL HOOKS MUST BE ABOVE ANY CONDITIONAL RETURN
     const money = React.useMemo(() => buildMoneyFormatter(), []);
@@ -65,24 +73,122 @@ export function PurchaseOrderSummary(props: {
     }, [props.discountTypes]);
 
     // =========================
-    // PRODUCTS PAGINATION (existing)
+    // PRODUCTS TABLE DATA (flat items with computed fields)
     // =========================
-    const [page, setPage] = React.useState(1);
-    const itemsPerPage = 6;
+    type ConsolidatedRow = {
+        key: string;
+        branchName: string;
+        item: CartItem;
+        gross: number;
+        net: number;
+        discountLabel: string;
+    };
 
-    const totalPages = React.useMemo(
-        () => Math.max(1, Math.ceil(props.allItemsFlat.length / itemsPerPage)),
-        [props.allItemsFlat.length]
-    );
+    const consolidatedRows: ConsolidatedRow[] = React.useMemo(() => {
+        return props.allItemsFlat.map((x, idx) => {
+            const dtId = String(x.item?.discountTypeId ?? "");
+            const dt = dtId ? discountTypeById.get(dtId) : undefined;
+            const code = dt?.name ?? "";
+            const pct = Number(dt?.percent ?? 0) > 0 ? Number(dt?.percent) : deriveDiscountPercentFromCode(code);
+            const discountLabel = code || "—";
+            const gross = x.item.price * x.item.orderQty;
+            const net = gross * (1 - pct / 100);
+            return {
+                key: `${x.branchName}-${x.item.id}-${idx}`,
+                branchName: x.branchName,
+                item: x.item,
+                gross,
+                net,
+                discountLabel,
+            };
+        });
+    }, [props.allItemsFlat, discountTypeById]);
 
-    React.useEffect(() => {
-        setPage((p) => Math.min(Math.max(1, p), totalPages));
-    }, [totalPages, props.allItemsFlat.length]);
-
-    const paginatedItems = React.useMemo(() => {
-        const start = (page - 1) * itemsPerPage;
-        return props.allItemsFlat.slice(start, start + itemsPerPage);
-    }, [props.allItemsFlat, page]);
+    const consolidatedColumns: ColumnDef<ConsolidatedRow>[] = React.useMemo(() => [
+        {
+            id: "index",
+            header: "#",
+            cell: ({ row }) => (
+                <span className="text-muted-foreground font-mono text-[10px]">
+                    {row.index + 1}
+                </span>
+            ),
+            size: 40,
+            enableHiding: false,
+        },
+        {
+            id: "details",
+            header: "Details",
+            cell: ({ row }) => (
+                <div className="flex flex-col gap-1 max-w-[280px]">
+                    <span className="font-black text-foreground text-[11px] leading-tight group-hover:text-primary transition-colors uppercase tracking-tight">
+                        {row.original.item.name}
+                    </span>
+                    <div className="flex flex-wrap gap-1.5 items-center">
+                        <span className="text-[9px] font-bold text-muted-foreground uppercase bg-muted px-1.5 py-0.5 rounded border border-border/50">
+                            {row.original.item.brand || "NO BRAND"}
+                        </span>
+                        <span className="text-[9px] font-bold text-muted-foreground uppercase bg-muted px-1.5 py-0.5 rounded border border-border/50">
+                            {row.original.item.category || "UNCATEGORIZED"}
+                        </span>
+                        <span className="text-[9px] font-black text-primary uppercase bg-primary/5 px-2 py-0.5 rounded-full border border-primary/10">
+                            @{row.original.branchName}
+                        </span>
+                    </div>
+                </div>
+            ),
+        },
+        {
+            id: "unitPrice",
+            header: () => <div className="text-right">Unit Price</div>,
+            cell: ({ row }) => (
+                <div className="text-right font-bold text-foreground whitespace-nowrap">
+                    {money.format(row.original.item.price)}
+                </div>
+            ),
+        },
+        {
+            id: "qty",
+            header: () => <div className="text-center">Qty</div>,
+            cell: ({ row }) => (
+                <div className="flex flex-col items-center">
+                    <span className="text-foreground font-black text-sm tracking-tighter">{row.original.item.orderQty}</span>
+                    <span className="text-[8px] bg-secondary text-secondary-foreground px-1.5 rounded font-black uppercase tracking-widest mt-0.5">
+                        {row.original.item.uom}
+                    </span>
+                </div>
+            ),
+        },
+        {
+            id: "gross",
+            header: () => <div className="text-right">Gross</div>,
+            cell: ({ row }) => (
+                <div className="text-right font-medium text-muted-foreground whitespace-nowrap">
+                    {money.format(row.original.gross)}
+                </div>
+            ),
+        },
+        {
+            id: "discount",
+            header: () => <div className="text-center">Discount</div>,
+            cell: ({ row }) => (
+                <div className="text-center">
+                    <span className="inline-flex px-1.5 py-1 rounded text-[9px] font-bold border border-emerald-500/20 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400">
+                        {row.original.discountLabel}
+                    </span>
+                </div>
+            ),
+        },
+        {
+            id: "netAmount",
+            header: () => <div className="text-right">Net Amount</div>,
+            cell: ({ row }) => (
+                <div className="text-right font-black text-primary text-sm tracking-tighter whitespace-nowrap">
+                    {money.format(row.original.net)}
+                </div>
+            ),
+        },
+    ], [money]);
 
     // =========================
     // ✅ ALLOCATED BRANCHES PAGINATION (NEW)
@@ -130,6 +236,13 @@ export function PurchaseOrderSummary(props: {
     const { onSave } = props;
 
     const runSave = React.useCallback(async () => {
+        if (!props.selectedPaymentTermId) {
+            toast.error("Required Field Missing", {
+                description: "Please select a payment term before saving.",
+            });
+            return;
+        }
+
         if (disabled) return;
 
         setNotice(null);
@@ -150,17 +263,6 @@ export function PurchaseOrderSummary(props: {
                     : "Your purchase order has been saved successfully.",
             });
 
-            // ✅ Global toast
-            if (alreadyExists) {
-                toast.info("Purchase order already exists", {
-                    description: "This PO number is already in the database. No duplicate was created.",
-                });
-            } else {
-                toast.success("Purchase order created!", {
-                    description: "Your purchase order has been saved successfully.",
-                });
-            }
-
             // ✅ lock to prevent double submit
             setLocked(true);
         } catch (e: unknown) {
@@ -172,15 +274,12 @@ export function PurchaseOrderSummary(props: {
                 description: errMsg,
             });
 
-            // ✅ Global toast error
-            toast.error("Failed to create purchase order", { description: errMsg });
-
             setLocked(false);
         } finally {
             setIsSubmitting(false);
             setConfirmOpen(false);
         }
-    }, [disabled, onSave]);
+    }, [disabled, onSave, props.selectedPaymentTermId]);
 
     const NoticeIcon = React.useMemo(() => {
         if (!notice) return null;
@@ -195,12 +294,12 @@ export function PurchaseOrderSummary(props: {
     const grossTotal = Number(props.subtotal || 0);
     const discountTotal = Number(props.discount || 0);
     const netTotal = Math.max(0, grossTotal - discountTotal);
-    
+
     // Recalculate based on user's manual edit in calculations.ts
     const vatExclusive = netTotal / 1.12;
     const vatTotal = Math.max(0, netTotal - vatExclusive);
     const ewtGoods = Math.max(0, vatExclusive * 0.01);
-    
+
     // ✅ Updated: Total Payable is always netTotal. VAT/EWT are hidden and don't subtract anymore.
     const totalPayable = netTotal;
 
@@ -213,8 +312,8 @@ export function PurchaseOrderSummary(props: {
                         Purchase Order Summary
                     </h3>
                     <p className="text-[10px] sm:text-xs text-muted-foreground font-medium">
-                        {locked 
-                            ? "This purchase order has been successfully saved and locked in the system." 
+                        {locked
+                            ? "This purchase order has been successfully saved and locked in the system."
                             : "Finalize and review your order details before saving to the system."}
                     </p>
                 </div>
@@ -264,7 +363,7 @@ export function PurchaseOrderSummary(props: {
                                 <div className="absolute top-0 right-0 w-16 h-16 bg-primary/5 -mr-8 -mt-8 rounded-full transition-transform group-hover:scale-110" />
                                 <div className="flex justify-between items-center gap-4 relative">
                                     <span className="text-muted-foreground font-medium text-[10px] uppercase tracking-wider shrink-0">PO Number:</span>
-                                    <span className="font-mono font-black text-primary text-sm sm:text-base underline decoration-dotted underline-offset-4 truncate">{props.poNumber}</span>
+                                    <span className="font-mono font-black text-primary text-sm sm:text-base underline decoration-dotted underline-offset-4">{props.poNumber}</span>
                                 </div>
                                 <div className="flex justify-between items-center gap-4 relative">
                                     <span className="text-muted-foreground font-medium text-[10px] uppercase tracking-wider shrink-0">Transaction Date:</span>
@@ -282,6 +381,32 @@ export function PurchaseOrderSummary(props: {
                                 <div className="flex flex-col">
                                     <span className="text-[10px] font-medium text-muted-foreground mb-1 uppercase tracking-wider">Entity Name</span>
                                     <p className="text-sm font-black text-foreground tracking-tight">{props.supplier?.name || "—"}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+                                <CreditCard className="w-3 h-3" />
+                                Payment Terms
+                            </p>
+                            <div className="rounded-lg border border-border bg-card text-card-foreground p-5 shadow-sm space-y-3">
+                                <div className="flex flex-col space-y-2">
+                                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Select Term</span>
+                                    <SearchableSelect
+                                        options={props.paymentTerms.map((t) => ({
+                                            value: String(t.id),
+                                            label: `${t.payment_name}${t.payment_days > 0 ? ` (${t.payment_days} Days)` : ""}`,
+                                        }))}
+                                        value={props.selectedPaymentTermId ? String(props.selectedPaymentTermId) : ""}
+                                        onValueChange={(v) => props.setSelectedPaymentTermId(Number(v))}
+                                        placeholder="No term selected"
+                                        disabled={props.isLocked}
+                                        className={cn(
+                                            "h-10 rounded-xl border-border bg-muted/20 font-bold text-xs uppercase",
+                                            !props.selectedPaymentTermId && "border-red-500 ring-1 ring-red-500"
+                                        )}
+                                    />
                                 </div>
                             </div>
                         </div>
@@ -365,128 +490,16 @@ export function PurchaseOrderSummary(props: {
                                     Consolidated Items ({props.allItemsFlat.length})
                                 </p>
                             </div>
-                            <span className="text-[10px] font-black text-muted-foreground bg-background px-2.5 py-1 rounded-full border shadow-sm uppercase tracking-widest w-fit">
-                                Page {page} of {totalPages}
-                            </span>
                         </div>
 
-                        <div className="flex-1 overflow-auto custom-scrollbar bg-background">
-                            <table className="w-full text-xs border-separate border-spacing-0 min-w-[800px]">
-                                <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur-md">
-                                <tr>
-                                    <th className="px-4 py-3 text-left text-[9px] font-black text-muted-foreground uppercase border-b border-border w-12">#</th>
-                                    <th className="px-4 py-3 text-left text-[9px] font-black text-muted-foreground uppercase border-b border-border">Details</th>
-                                    <th className="px-4 py-3 text-right text-[9px] font-black text-muted-foreground uppercase border-b border-border">Unit Price</th>
-                                    <th className="px-4 py-3 text-center text-[9px] font-black text-muted-foreground uppercase border-b border-border">Qty</th>
-                                    <th className="px-4 py-3 text-right text-[9px] font-black text-muted-foreground uppercase border-b border-border">Gross</th>
-                                    <th className="px-4 py-3 text-center text-[9px] font-black text-muted-foreground uppercase border-b border-border">Discount</th>
-                                    <th className="px-4 py-3 text-right text-[9px] font-black text-muted-foreground uppercase border-b border-border">Net Amount</th>
-                                </tr>
-                                </thead>
-                                <tbody className="divide-y divide-border">
-                                {paginatedItems.map(({ branchName, item }, idx) => {
-                                    const dtId = String(item?.discountTypeId ?? "");
-                                    const dt = dtId ? discountTypeById.get(dtId) : undefined;
-                                    const code = dt?.name ?? "";
-                                    const pct = Number(dt?.percent ?? 0) > 0 ? Number(dt?.percent) : deriveDiscountPercentFromCode(code);
-                                    const discountLabel = code && pct > 0 ? `${code} (${pct.toFixed(2)}%)` : code || "—";
-                                    const gross = item.price * item.orderQty;
-                                    const net = gross * (1 - pct / 100);
-
-                                    return (
-                                        <tr
-                                            key={`${branchName}-${item.id}-${idx}`}
-                                            className="hover:bg-muted/30 transition-colors group"
-                                        >
-                                            <td className="px-4 py-4 text-muted-foreground font-mono text-[10px]">
-                                                {(page - 1) * itemsPerPage + idx + 1}
-                                            </td>
-                                            <td className="px-4 py-4">
-                                                <div className="flex flex-col gap-1 max-w-[280px]">
-                                                    <span className="font-black text-foreground text-[11px] leading-tight group-hover:text-primary transition-colors uppercase tracking-tight">
-                                                        {item.name}
-                                                    </span>
-                                                    <div className="flex flex-wrap gap-1.5 items-center">
-                                                        <span className="text-[9px] font-bold text-muted-foreground uppercase bg-muted px-1.5 py-0.5 rounded border border-border/50">
-                                                            {item.brand || "NO BRAND"}
-                                                        </span>
-                                                        <span className="text-[9px] font-bold text-muted-foreground uppercase bg-muted px-1.5 py-0.5 rounded border border-border/50">
-                                                            {item.category || "UNCATEGORIZED"}
-                                                        </span>
-                                                        <span className="text-[9px] font-black text-primary uppercase bg-primary/5 px-2 py-0.5 rounded-full border border-primary/10">
-                                                            @{branchName}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-4 text-right font-bold text-foreground whitespace-nowrap">
-                                                {money.format(item.price)}
-                                            </td>
-                                            <td className="px-4 py-4 text-center">
-                                                <div className="flex flex-col items-center">
-                                                    <span className="text-foreground font-black text-sm tracking-tighter">{item.orderQty}</span>
-                                                    <span className="text-[8px] bg-secondary text-secondary-foreground px-1.5 rounded font-black uppercase tracking-widest mt-0.5">
-                                                        {item.uom}
-                                                    </span>
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-4 text-right font-medium text-muted-foreground whitespace-nowrap">
-                                                {money.format(gross)}
-                                            </td>
-                                            <td className="px-4 py-4 text-center">
-                                                <span className="inline-flex px-1.5 py-1 rounded text-[9px] font-bold border border-emerald-500/20 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400">
-                                                    {discountLabel}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-4 text-right font-black text-primary text-sm tracking-tighter whitespace-nowrap">
-                                                {money.format(net)}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        {/* Pagination with Improved Controls */}
-                        <div className="px-5 py-4 border-t border-border bg-muted/30 flex items-center justify-between shrink-0">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={page <= 1}
-                                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                                className="h-9 px-4 text-[10px] font-black uppercase tracking-widest bg-background border-border shadow-sm hover:bg-muted hover:shadow-md hover:translate-x-[-2px] active:scale-95 transition-all text-foreground"
-                            >
-                                Previous
-                            </Button>
-
-                            <div className="hidden sm:flex items-center gap-2">
-                                {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => (
-                                    <button
-                                        key={i}
-                                        onClick={() => setPage(i + 1)}
-                                        className={cn(
-                                            "w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-black transition-all border shadow-sm hover:scale-110 active:scale-95",
-                                            page === i + 1 
-                                                ? "bg-primary text-primary-foreground border-primary shadow-primary/20 scale-110" 
-                                                : "bg-background text-foreground border-border hover:bg-muted hover:border-primary/30"
-                                        )}
-                                    >
-                                        {i + 1}
-                                    </button>
-                                ))}
-                                {totalPages > 5 && <span className="text-muted-foreground px-1 font-black">...</span>}
-                            </div>
-
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={page >= totalPages}
-                                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                                className="h-9 px-4 text-[10px] font-black uppercase tracking-widest bg-background border-border shadow-sm hover:bg-muted hover:shadow-md hover:translate-x-[2px] active:scale-95 transition-all text-foreground"
-                            >
-                                Next
-                            </Button>
+                        <div className="flex-1 overflow-auto custom-scrollbar bg-background p-4 [&_button:has(svg.lucide-settings-2)]:hidden">
+                            <POCreationDataTable
+                                columns={consolidatedColumns}
+                                data={consolidatedRows}
+                                emptyTitle="No items"
+                                emptyDescription="Add products to your purchase order."
+                                showSelectionCount={true}
+                            />
                         </div>
                     </div>
 
@@ -500,15 +513,15 @@ export function PurchaseOrderSummary(props: {
                                     <span className="text-sm font-black uppercase tracking-tight text-foreground">Financial Summary</span>
                                 </div>
                                 <div className="flex items-center gap-2 px-2 py-1 bg-muted/50 rounded-lg border border-border/50 hover:bg-muted transition-colors group">
-                                    <Checkbox 
-                                        id="is-invoice" 
-                                        checked={props.isInvoice} 
+                                    <Checkbox
+                                        id="is-invoice"
+                                        checked={props.isInvoice}
                                         onCheckedChange={(checked) => props.setIsInvoice(!!checked)}
                                         disabled={locked}
                                         className="transition-transform group-active:scale-90"
                                     />
-                                    <Label 
-                                        htmlFor="is-invoice" 
+                                    <Label
+                                        htmlFor="is-invoice"
                                         className="text-[10px] font-black uppercase tracking-widest cursor-pointer select-none text-muted-foreground group-hover:text-foreground transition-colors"
                                     >
                                         Invoice
@@ -544,7 +557,7 @@ export function PurchaseOrderSummary(props: {
                                             <span className="font-black text-foreground text-sm">{money.format(ewtGoods)}</span>
                                         </div>
                                         <p className="text-[9px] text-amber-600 dark:text-amber-400 font-bold italic text-right mt-0.5">
-                                            Note: EWT is not yet deducted
+                                            Note: VAT and EWT figures are for reference and have not been deducted from the total.
                                         </p>
                                     </>
                                 )}
@@ -590,15 +603,15 @@ export function PurchaseOrderSummary(props: {
                                             disabled={disabled}
                                             className={cn(
                                                 "w-full h-10 sm:h-12 rounded-xl font-black uppercase tracking-widest transition-all text-[10px] sm:text-xs shadow-lg relative overflow-hidden group/save",
-                                                locked 
-                                                    ? "bg-emerald-600 text-emerald-50 cursor-default opacity-100 border-none shadow-emerald-500/20" 
+                                                locked
+                                                    ? "bg-emerald-600 text-emerald-50 cursor-default opacity-100 border-none shadow-emerald-500/20"
                                                     : !disabled && "bg-primary text-primary-foreground hover:bg-primary/90 border-b-4 border-primary/20 hover:-translate-y-1 hover:shadow-primary/30 active:translate-y-0 active:border-b-0",
                                                 disabled && "bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 opacity-100 cursor-not-allowed shadow-none border-2 border-slate-300 dark:border-slate-700",
                                                 isSubmitting && "opacity-70 animate-pulse"
                                             )}
                                         >
                                             <span className="relative z-10 flex items-center justify-center gap-2">
-                                                {isSubmitting ? "Processing Transaction..." : locked ? "Transaction Posted" : "Save Purchase Order"}
+                                                {isSubmitting ? "Processing..." : locked ? "Purchase Order Submitted" : "Save Purchase Order"}
                                             </span>
                                             {!disabled && !locked && (
                                                 <div className="absolute inset-0 bg-white/10 opacity-0 group-hover/save:opacity-100 transition-opacity" />
@@ -622,13 +635,13 @@ export function PurchaseOrderSummary(props: {
                                             </AlertDialogCancel>
 
                                             <AlertDialogAction asChild>
-                                                <Button 
-                                                    type="button" 
-                                                    onClick={runSave} 
-                                                    disabled={disabled} 
+                                                <Button
+                                                    type="button"
+                                                    onClick={runSave}
+                                                    disabled={disabled}
                                                     className="bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase tracking-widest shadow-lg shadow-primary/20 border-b-4 border-primary/20 hover:-translate-y-1 hover:shadow-xl active:translate-y-0 active:border-b-0 transition-all w-full sm:w-auto"
                                                 >
-                                                    Yes, Post Record
+                                                    Yes, Submit
                                                 </Button>
                                             </AlertDialogAction>
                                         </AlertDialogFooter>
@@ -662,6 +675,7 @@ export function PurchaseOrderSummary(props: {
                     poNumber: props.poNumber,
                     poDate: props.poDate,
                     supplierName: props.supplier?.name || "N/A",
+                    preparerName: props.preparerName || "—",
                     items: props.allItemsFlat.map(x => {
                         const dt = discountTypeById.get(x.item.discountTypeId || "");
                         const gross = x.item.price * x.item.orderQty;

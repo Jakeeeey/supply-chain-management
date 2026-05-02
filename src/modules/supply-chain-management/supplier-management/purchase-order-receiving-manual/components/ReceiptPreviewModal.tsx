@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Download, FileText, X } from "lucide-react";
 import { ReceiptSavedInfo } from "../providers/ReceivingProductsManualProvider";
 import { generateOfficialSupplierReceiptV5 } from "../utils/printUtils";
@@ -21,6 +20,8 @@ interface ReceiptPreviewModalProps {
     data: ReceiptSavedInfo;
     poNumber: string;
     supplierName: string;
+    priceType: string;
+    isInvoice?: boolean;
 }
 
 export function ReceiptPreviewModal({
@@ -29,6 +30,8 @@ export function ReceiptPreviewModal({
     data,
     poNumber,
     supplierName,
+    priceType,
+    isInvoice,
 }: ReceiptPreviewModalProps) {
     if (!data) return null;
 
@@ -40,12 +43,21 @@ export function ReceiptPreviewModal({
             receiptDate: data.receiptDate,
             receiptType: data.receiptType,
             isFullyReceived: data.isFullyReceived,
+            priceType: priceType,
+            isInvoice: isInvoice ?? false,
+            receiverName: data.receiverName,
             items: data.items.map((it) => ({
                 name: it.name,
                 barcode: it.barcode,
                 expectedQty: it.expectedQty,
                 receivedQtyAtStart: it.receivedQtyAtStart,
                 receivedQtyNow: it.receivedQtyNow,
+                unitPrice: it.unitPrice || 0,
+                discountAmount: it.discountAmount || 0,
+                batchNo: it.batchNo,
+                lotId: it.lotId,
+                expiryDate: it.expiryDate,
+                uom: it.uom,
                 rfids: (it.rfids || []) as string[],
             })),
         });
@@ -53,7 +65,7 @@ export function ReceiptPreviewModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="w-[95vw] max-w-6xl max-h-[90vh] flex flex-col p-0 overflow-hidden shadow-2xl border-primary/20 scale-[0.98] sm:scale-100">
+            <DialogContent showCloseButton={false} className="w-[98vw] max-w-none sm:!max-w-[95vw] lg:!max-w-[1200px] h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden shadow-2xl border-primary/20">
                 <DialogHeader className="p-6 border-b bg-muted/30">
                     <div className="flex items-center justify-between">
                         <DialogTitle className="flex items-center gap-3 text-2xl font-black tracking-tight">
@@ -62,7 +74,7 @@ export function ReceiptPreviewModal({
                             </div>
                             Receipt Overview
                         </DialogTitle>
-                        <Badge 
+                        <Badge
                             variant={data.isFullyReceived ? "default" : "secondary"}
                             className={data.isFullyReceived ? "bg-green-600 px-4 py-1.5 text-xs font-bold" : "bg-orange-500 text-white px-4 py-1.5 text-xs font-bold"}
                         >
@@ -100,7 +112,7 @@ export function ReceiptPreviewModal({
                     </div>
                 </div>
 
-                <ScrollArea className="flex-1 px-8 py-6">
+                <div className="flex-1 px-8 py-6 overflow-y-auto min-h-0 scrollbar-thin">
                     <div className="space-y-6 max-w-6xl mx-auto">
 
                         {/* Items List - Ultra Compact 1-Row Style */}
@@ -111,7 +123,7 @@ export function ReceiptPreviewModal({
                                     <span className="text-muted-foreground text-sm font-medium">({data.items.length} items)</span>
                                 </div>
                             </div>
-                            
+
                             <div className="overflow-x-auto pb-4 scrollbar-thin">
                                 <div className="space-y-2 min-w-[800px]">
                                     {data.items.map((it, idx) => {
@@ -125,7 +137,7 @@ export function ReceiptPreviewModal({
                                                             {it.barcode}
                                                         </code>
                                                     </div>
-                                                        <span className="text-[10px] italic text-muted-foreground">{isPending ? "Pending Manual Entry" : "Manual Entry Recorded"}</span>
+                                                    <span className="text-[10px] italic text-muted-foreground">{isPending ? "Pending Manual Entry" : "Manual Entry Recorded"}</span>
                                                 </div>
 
                                                 <div className="shrink-0 flex items-center gap-6 pl-4 border-l">
@@ -149,15 +161,15 @@ export function ReceiptPreviewModal({
                             </div>
                         </div>
                     </div>
-                </ScrollArea>
+                </div>
 
                 <DialogFooter className="p-8 border-t bg-muted/20 flex flex-row items-center justify-center sm:justify-center gap-4">
                     <Button variant="outline" onClick={onClose} className="px-8 h-11 font-black uppercase tracking-widest text-[10px] shadow-sm border-muted-foreground/20 hover:bg-muted transition-colors">
                         <X className="h-4 w-4 mr-2" />
                         Cancel & Close
                     </Button>
-                    <Button 
-                        onClick={handleDownload} 
+                    <Button
+                        onClick={handleDownload}
                         className="px-8 h-11 font-black !bg-[#2563eb] hover:!bg-[#1d4ed8] !text-white shadow-lg shadow-blue-200 uppercase tracking-widest text-[10px] border-none"
                     >
                         <Download className="h-4 w-4 mr-2 !text-white" />

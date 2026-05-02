@@ -93,7 +93,11 @@ function toNum(v: unknown) {
     return Number.isFinite(n) ? n : 0;
 }
 function nowISO() {
-    return new Date().toISOString();
+    const date = new Date();
+    const phOffset = 8 * 60; // 8 hours in minutes
+    const localOffset = date.getTimezoneOffset(); // in minutes
+    const phTime = new Date(date.getTime() + (phOffset + localOffset) * 60000);
+    return phTime.toISOString().replace("Z", "");
 }
 function timeDisplay(iso: string) {
     if (!iso) return "—";

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { DispatchPlan } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/types/dispatch-plan.schema";
 import { formatPeso } from "@/modules/supply-chain-management/warehouse-management/consolidation/pre-dispatch-plan/utils/format";
 import { ColumnDef } from "@tanstack/react-table";
-import { Pencil } from "lucide-react";
+import { Pencil, Eye } from "lucide-react";
 
 /**
  * Column definitions for the PDP Creation (Pending) table.
@@ -13,8 +13,10 @@ import { Pencil } from "lucide-react";
  */
 export function getPDPCreationColumns({
   onEdit,
+  onViewRemarks,
 }: {
   onEdit: (plan: DispatchPlan) => void;
+  onViewRemarks: (remarks: string) => void;
 }): ColumnDef<DispatchPlan>[] {
   return [
     {
@@ -43,7 +45,9 @@ export function getPDPCreationColumns({
       id: "cluster",
       header: "Cluster",
       cell: ({ row }) => (
-        <span className="font-medium">{row.original.cluster_name || "—"}</span>
+        <span className="font-medium line-clamp-1 max-w-[120px]">
+          {row.original.cluster_name || "—"}
+        </span>
       ),
     },
     {
@@ -59,7 +63,9 @@ export function getPDPCreationColumns({
       id: "driver",
       header: "Driver",
       cell: ({ row }) => (
-        <span className="font-medium">{row.original.driver_name || "—"}</span>
+        <span className="font-medium line-clamp-1 max-w-[150px]">
+          {row.original.driver_name || "—"}
+        </span>
       ),
     },
     {
@@ -110,11 +116,38 @@ export function getPDPCreationColumns({
             ? "outline"
             : status === "Approved"
               ? "default"
-              : "secondary";
+              : status === "Rejected"
+                ? "destructive"
+                : "secondary";
         return (
           <Badge variant={variant} className="capitalize">
             {status}
           </Badge>
+        );
+      },
+    },
+    {
+      accessorKey: "reject_remarks",
+      header: "Rejected Remarks",
+      cell: ({ row }) => {
+        const remarks = row.original.reject_remarks;
+        if (!remarks) return <span className="text-muted-foreground">—</span>;
+        
+        return (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground italic line-clamp-1 max-w-[150px]">
+              {remarks}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => onViewRemarks(remarks)}
+              title="View Remarks"
+            >
+              <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+            </Button>
+          </div>
         );
       },
     },

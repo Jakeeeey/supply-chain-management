@@ -100,6 +100,18 @@ const DIRECTUS_RELATIONS_COLLECTION = "directus_relations";
 function ok(data: unknown, status = 200) {
     return NextResponse.json({ data }, { status });
 }
+
+/**
+ * Returns current PH Manila Time (UTC+8) as an ISO-like string
+ * but without the 'Z' suffix to ensure correct local interpretation.
+ */
+function nowPH() {
+    const date = new Date();
+    const phOffset = 8 * 60; // 8 hours in minutes
+    const localOffset = date.getTimezoneOffset(); // in minutes
+    const phTime = new Date(date.getTime() + (phOffset + localOffset) * 60000);
+    return phTime.toISOString().replace("Z", "");
+}
 function bad(error: string, status = 400) {
     return NextResponse.json({ error }, { status });
 }
@@ -110,6 +122,10 @@ function toStr(v: unknown, fb = "") {
 function toNum(v: unknown) {
     const n = Number(String(v ?? "").replace(/,/g, ""));
     return Number.isFinite(n) ? n : 0;
+}
+function toFixedMoney(v: unknown) {
+    const n = toNum(v);
+    return n.toFixed(2);
 }
 function uniqNums(arr: (number | string | null | undefined)[]) {
     return Array.from(new Set(arr.map((x) => toNum(x)).filter((n) => Number.isFinite(n) && n > 0)));
@@ -432,7 +448,10 @@ type PoHeaderRow = {
     is_invoice?: boolean | number | null;
     isInvoice?: boolean | number | null;
     receiving_type?: number | null;
+    vat_amount?: number | string | null;
+    withholding_tax_amount?: number | string | null;
     user_created?: string | number | { first_name?: string; last_name?: string } | null;
+    encoder_id?: string | number | { first_name?: string; last_name?: string } | null;
 };
 
 async function fetchPendingPOs(base: string): Promise<PoHeaderRow[]> {
@@ -447,8 +466,15 @@ async function fetchPendingPOs(base: string): Promise<PoHeaderRow[]> {
         "approver_id",
         "date_approved",
         "receiving_type",
+        "vat_amount",
+        "withholding_tax_amount",
         "user_created.first_name",
         "user_created.last_name",
+        "encoder_id.user_id",
+        "encoder_id.user_fname",
+        "encoder_id.user_lname",
+        "encoder_id.first_name",
+        "encoder_id.last_name",
     ].join(",");
 
     const url = `${base}/items/${PO_COLLECTION}?limit=-1&sort=-date_encoded&fields=${fields}&filter[date_approved][_null]=true&filter[approver_id][_null]=true`;
@@ -466,7 +492,17 @@ type PoProductRow = {
     total_amount?: string | number | null;
     discounted_price?: string | number | null;
     approved_price?: string | number | null;
+    discount_type?: string | number | null;
 };
+
+interface UserRef {
+    id?: string | number;
+    user_id?: string | number;
+    first_name?: string;
+    last_name?: string;
+    user_fname?: string;
+    user_lname?: string;
+}
 
 interface PoLineRow {
     purchase_order_id: string | number;
@@ -557,7 +593,7 @@ async function fetchProductSupplierLinks(base: string, productIds: number[]) {
 // DETAIL BUILDER
 // =====================
 async function buildPurchaseOrderDetail(base: string, poId: number) {
-    const fields = encodeURIComponent("*,discount_type.*,discount_type.line_per_discount_type.line_id.*,user_created.first_name,user_created.last_name");
+    const fields = encodeURIComponent("*,discount_type.*,discount_type.line_per_discount_type.line_id.*,user_created.first_name,user_created.last_name,encoder_id.user_id,encoder_id.user_fname,encoder_id.user_lname,encoder_id.first_name,encoder_id.last_name");
     const headerUrl = `${base}/items/${PO_COLLECTION}/${encodeURIComponent(String(poId))}?fields=${fields}`;
     const headerJ = await fetchJson(headerUrl) as { data: Record<string, unknown> };
     const header = (headerJ?.data as Record<string, unknown>) ?? null;
@@ -686,7 +722,7 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
         const linkDisc = getDiscInfo(linkData?.discount_type);
         const headerDiscPct = pickNum(header, ["discount_percent", "discountPercent", "discount_rate", "discountRate", "discount_percentage", "discountPercentage"]);
 
-        const resolvedDiscountType = formatDiscLabel(itemDisc, formatDiscLabel(linkDisc, headerDiscTypeName)) || "—";
+        const resolvedDiscountType = formatDiscLabel(itemDisc, formatDiscLabel(linkDisc, headerDiscTypeName)) || "No Discount";
         const discountPct = itemDisc?.pct || linkDisc?.pct || headerDiscPct || 0;
 
         const grossVal = toNum((l as Record<string, unknown>).gross) || lineTotal;
@@ -765,6 +801,55 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
     const ewt = ewtHeader || 0;
     const total = totalHeader || headerGross - headerDiscAmount + vat - ewt;
 
+    // Preparer info - resolve from encoder_id (best) or user_created (fallback)
+    let preparerName = "—";
+    
+    // 1) Try encoder_id (Object or expanded)
+    const encoder = header?.encoder_id as UserRef | undefined;
+    if (typeof encoder === "object" && encoder) {
+        preparerName = [
+            encoder.user_fname ?? encoder.first_name, 
+            encoder.user_lname ?? encoder.last_name
+        ].filter(Boolean).join(" ");
+    }
+    
+    // 2) Try user_created (Object or expanded)
+    if (!preparerName || preparerName === "—") {
+        const creator = header?.user_created as UserRef | undefined;
+        if (typeof creator === "object" && creator) {
+            preparerName = [
+                creator.user_fname ?? creator.first_name, 
+                creator.user_lname ?? creator.last_name
+            ].filter(Boolean).join(" ");
+        }
+    }
+
+    // 3) Fallback: Fetch by ID string from custom 'user' collection OR 'directus_users'
+    if (!preparerName || preparerName === "—") {
+        const userId = String(header?.encoder_id || header?.user_created || "");
+        if (userId && userId !== "—" && userId !== "[object Object]") {
+            try {
+                // Try custom 'user' collection first (numeric IDs usually stay here)
+                const isNumeric = /^\d+$/.test(userId);
+                const userUrl = isNumeric
+                    ? `${base}/items/user?filter[user_id][_eq]=${userId}&fields=user_fname,user_lname`
+                    : `${base}/users/${encodeURIComponent(userId)}?fields=first_name,last_name`;
+                
+                const userJ = await fetchJson(userUrl) as { data: UserRef | UserRef[] };
+                const u = Array.isArray(userJ?.data) ? userJ.data[0] : userJ?.data;
+                
+                if (u) {
+                    preparerName = [
+                        u.user_fname || u.first_name,
+                        u.user_lname || u.last_name
+                    ].filter(Boolean).join(" ");
+                }
+            } catch { /* skip */ }
+        }
+    }
+    
+    if (!preparerName) preparerName = "—";
+
     return {
         id: String(poId),
         purchase_order_id: poId,
@@ -795,9 +880,10 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
 
         discount_type: headerDiscTypeName,
         discountType: headerDiscTypeName,
+
+        payment_type: header?.payment_type ?? null,
         
-        // derives is_invoice from receiving_type (2=Invoice, 3=PO) (robust check)
-        is_invoice: (Number(header?.receiving_type) === 2) || (String(header?.is_invoice ?? header?.isInvoice).toLowerCase() === "true") || !!(header?.is_invoice ?? header?.isInvoice),
+        is_invoice: (toNum(header?.vat_amount) > 0) || (toNum(header?.withholding_tax_amount) > 0),
 
         vat_amount: vat,
         vatAmount: vat,
@@ -808,11 +894,58 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
         total_amount: total,
         total: total,
 
-        // Preparer info
-        preparer_name: (typeof header?.user_created === "object" && header.user_created)
-            ? [(header.user_created as { first_name?: string }).first_name, (header.user_created as { last_name?: string }).last_name].filter(Boolean).join(" ")
-            : "—",
+        preparer_name: preparerName,
     };
+}
+
+async function syncPoProductFinancialsOnApproval(base: string, poId: number, isInvoice: boolean) {
+    try {
+        // Fetch header to get fallback discount_type
+        const headerUrl = `${base}/items/${PO_COLLECTION}/${poId}?fields=discount_type`;
+        const headerJson = await fetchJson<{ data: { discount_type: string | number | null } }>(headerUrl);
+        const headerDtId = headerJson?.data?.discount_type ? String(headerJson.data.discount_type) : null;
+
+        const lines = await fetchPOProductsByPOId(base, poId);
+        const discountMap = await fetchDiscountTypesMap(base);
+        
+        for (const l of lines) {
+            const lid = toNum(l.purchase_order_product_id);
+            if (!lid) continue;
+
+            const qty = toNum(l.ordered_quantity);
+            const unitPrice = toNum(l.unit_price);
+            
+            // Financial Calculations (VAT-Inclusive Logic)
+            // Fallback to header discount if line item discount is missing
+            const dtId = (l.discount_type ? String(l.discount_type) : null) || headerDtId;
+            const discPercent = dtId ? (discountMap.get(dtId)?.pct ?? 0) : 0;
+            
+            const lineGross = qty * unitPrice;
+            const discAmtTotal = Number((lineGross * (discPercent / 100)).toFixed(2));
+            const lineNet = lineGross - discAmtTotal;
+            
+            const vatExcl = isInvoice ? Number((lineNet / 1.12).toFixed(2)) : lineNet;
+            const vatAmt = isInvoice ? Number((lineNet - vatExcl).toFixed(2)) : 0;
+            const ewtAmt = isInvoice ? Number((vatExcl * 0.01).toFixed(2)) : 0;
+            
+            const discountedPricePerUnit = qty > 0 ? Number((lineNet / qty).toFixed(2)) : 0;
+
+            const patch = {
+                approved_price: toStr(toFixedMoney(unitPrice)),
+                discounted_price: toStr(toFixedMoney(discountedPricePerUnit)),
+                vat_amount: toStr(toFixedMoney(vatAmt)),
+                withholding_amount: toStr(toFixedMoney(ewtAmt)),
+                total_amount: toStr(toFixedMoney(lineNet)), // Total is Net (VAT-inclusive)
+                discount_type: dtId, // Sync/Lock the discount type
+                received: 0, // Reset/Init to 0 on approval
+            };
+
+            const url = `${base}/items/${PO_PRODUCTS_COLLECTION}/${lid}`;
+            await fetchJson(url, { method: "PATCH", body: JSON.stringify(patch) });
+        }
+    } catch (e: unknown) {
+        console.error("[approval-po] Failed to sync product financials:", (e as Error).message);
+    }
 }
 
 // =====================
@@ -860,6 +993,44 @@ export async function GET(req: NextRequest) {
         const supplierIds = uniqNums(headers.map((h) => h.supplier_name as string | number | null | undefined));
         const suppliersMap = await fetchSuppliersMapByIds(base, supplierIds);
 
+        // 1) Batch resolve all possible preparers (encoder_id or user_created)
+        const allUserIds = new Set<string>();
+        for (const h of headers) {
+            const eidObj = h.encoder_id as UserRef | undefined;
+            const ucidObj = h.user_created as UserRef | undefined;
+            const eid = typeof h.encoder_id === "object" && h.encoder_id ? String(eidObj?.user_id || eidObj?.id || "") : String(h.encoder_id || "");
+            const ucid = typeof h.user_created === "object" && h.user_created ? String(ucidObj?.id || "") : String(h.user_created || "");
+            if (eid && eid !== "undefined" && eid !== "null" && eid !== "[object Object]") allUserIds.add(eid);
+            if (ucid && ucid !== "undefined" && ucid !== "null" && ucid !== "[object Object]") allUserIds.add(ucid);
+        }
+
+        const userNamesMap = new Map<string, string>();
+        if (allUserIds.size > 0) {
+            try {
+                const IDs = Array.from(allUserIds);
+                const numericIds = IDs.filter(id => /^\d+$/.test(id));
+                const uuidIds = IDs.filter(id => !/^\d+$/.test(id));
+
+                // A) Fetch from custom 'user' collection
+                if (numericIds.length > 0) {
+                    const uUrl = `${base}/items/user?fields=user_id,user_fname,user_lname&filter[user_id][_in]=${encodeURIComponent(numericIds.join(","))}`;
+                    const uJ = await fetchJson(uUrl) as { data: UserRef[] };
+                    for (const u of uJ?.data ?? []) {
+                        userNamesMap.set(String(u.user_id), [u.user_fname, u.user_lname].filter(Boolean).join(" ") || "—");
+                    }
+                }
+
+                // B) Fetch from standard 'directus_users'
+                if (uuidIds.length > 0) {
+                    const uUrl = `${base}/users?fields=id,first_name,last_name&filter[id][_in]=${encodeURIComponent(uuidIds.join(","))}`;
+                    const uJ = await fetchJson(uUrl) as { data: UserRef[] };
+                    for (const u of uJ?.data ?? []) {
+                        userNamesMap.set(String(u.id), [u.first_name, u.last_name].filter(Boolean).join(" ") || "—");
+                    }
+                }
+            } catch { /* skip batch fetch fail */ }
+        }
+
         const list = headers.map((h) => {
             const poId = toNum(h.purchase_order_id);
             const sid = toNum(h.supplier_name);
@@ -867,6 +1038,30 @@ export async function GET(req: NextRequest) {
             const bset = branchesByPo.get(poId);
             const branchIds = bset ? Array.from(bset.values()) : [];
             const bs = branchSummary(branchIds, branchesMap);
+
+            const getPreparer = () => {
+                const enc = h.encoder_id as UserRef | undefined;
+                const uc = h.user_created as UserRef | undefined;
+                // a) Try expanded objects
+                if (typeof enc === "object" && enc) {
+                    return [
+                        enc.user_fname ?? enc.first_name, 
+                        enc.user_lname ?? enc.last_name
+                    ].filter(Boolean).join(" ") || "—";
+                }
+                if (typeof uc === "object" && uc) {
+                    return [
+                        uc.user_fname ?? uc.first_name, 
+                        uc.user_lname ?? uc.last_name
+                    ].filter(Boolean).join(" ") || "—";
+                }
+                // b) Try mapped names from IDs
+                const eid = typeof enc === "string" ? enc : "";
+                const ucid = typeof uc === "string" ? uc : "";
+                if (userNamesMap.has(eid)) return userNamesMap.get(eid);
+                if (userNamesMap.has(ucid)) return userNamesMap.get(ucid);
+                return "—";
+            };
 
             return {
                 id: String(poId),
@@ -887,15 +1082,8 @@ export async function GET(req: NextRequest) {
 
                 totalAmount: totalByPo.get(poId) ?? 0,
                 currency: "PHP",
-                // derives is_invoice from receiving_type (2=Invoice, 3=PO) (robust check)
-                is_invoice: (Number(h.receiving_type) === 2) || (String(h.is_invoice ?? h.isInvoice).toLowerCase() === "true") || !!(h.is_invoice ?? h.isInvoice),
-
-                preparer_name: (typeof h.user_created === "object" && h.user_created)
-                    ? [
-                        (h.user_created as { first_name?: string }).first_name, 
-                        (h.user_created as { last_name?: string }).last_name
-                    ].filter(Boolean).join(" ")
-                    : "—",
+                is_invoice: (toNum(h.vat_amount) > 0) || (toNum(h.withholding_tax_amount) > 0),
+                preparer_name: getPreparer(),
             };
         });
 
@@ -918,14 +1106,30 @@ export async function POST(req: NextRequest) {
         if (!poId) return bad("Invalid id.", 400);
 
         const patch: Record<string, unknown> = { 
-            date_approved: new Date().toISOString(),
-            receiving_type: Boolean(body?.markAsInvoice) ? 2 : 3, // Persistent flag for "Mark as Invoice"
-            inventory_status: 3 // ✅ For Receiving
+            date_approved: nowPH(),
+            receiving_type: 1, // ✅ Always 1 for PO
+            inventory_status: 3, // ✅ For Receiving
+            approver_id: body?.approver_id ?? body?.approverId ?? null, // ✅ Track who approved
+            payment_type: body?.payment_type ?? body?.paymentType ?? null, // ✅ Update payment terms
+
+            // ✅ Expanded financial tracking (forced to 0 if not invoice)
+            gross_amount: body?.gross_amount !== undefined ? toNum(body.gross_amount) : undefined,
+            discounted_amount: body?.discounted_amount !== undefined ? toNum(body.discounted_amount) : undefined,
+            vat_amount: Boolean(body?.markAsInvoice) ? (body?.vat_amount !== undefined ? toNum(body.vat_amount) : undefined) : 0,
+            withholding_tax_amount: Boolean(body?.markAsInvoice) ? ((body?.withholding_tax_amount ?? body?.withholdingTaxAmount ?? body?.ewtGoods) !== undefined ? toNum(body.withholding_tax_amount ?? body.withholdingTaxAmount ?? body.ewtGoods) : undefined) : 0,
+            total_amount: body?.total_amount !== undefined ? toNum(body.total_amount) : undefined,
+
+            // ✅ Expanded relationship mapping
+            receiver_id: (body?.receiver_id ?? body?.receiverId) !== undefined ? (toNum(body.receiver_id ?? body.receiverId) || null) : undefined,
+            branch_id: (body?.branch_id ?? body?.branchId) !== undefined ? (toNum(body.branch_id ?? body.branchId) || undefined) : undefined,
         };
         if (Boolean(body?.markAsInvoice)) patch.payment_status = 2;
 
         const url = `${base}/items/${PO_COLLECTION}/${encodeURIComponent(String(poId))}`;
         await fetchJson(url, { method: "PATCH", body: JSON.stringify(patch) });
+
+        // ✅ Sync line items financials
+        await syncPoProductFinancialsOnApproval(base, poId, Boolean(body?.markAsInvoice));
 
         return ok({ ok: true });
     } catch (e: unknown) {

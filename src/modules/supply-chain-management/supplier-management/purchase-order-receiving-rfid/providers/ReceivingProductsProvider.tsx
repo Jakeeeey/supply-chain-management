@@ -68,6 +68,7 @@ export type ReceivingPODetail = {
     }>;
     createdAt: string;
     priceType?: string;
+    isInvoice?: boolean;
 };
 
 type ScanRFIDResult = {
@@ -98,10 +99,13 @@ export type SavedItem = {
     expectedQty: number;
     receivedQtyAtStart: number;
     receivedQtyNow: number;
-    rfids: string[];
-    lotId?: string;
+    unitPrice?: number;
+    discountAmount?: number;
     batchNo?: string;
+    lotId?: string;
     expiryDate?: string;
+    uom?: string;
+    rfids?: string[];
 };
 
 export type ReceiptSavedInfo = {
@@ -112,6 +116,8 @@ export type ReceiptSavedInfo = {
     items: SavedItem[];
     isFullyReceived: boolean;
     savedAt: number;
+    receiverName?: string;
+    isInvoice?: boolean;
 };
 
 // ✅ MERGED: Types for on-the-fly tagging modal
@@ -187,9 +193,19 @@ type Ctx = {
 
     // ✅ EXTRA: Add Product via Barcode
     lookupProduct: (barcode: string) => Promise<{ productId: string; name: string; barcode: string; unitPrice: number } | null>;
-    addExtraProductLocally: (item: { productId: string; name: string; barcode: string; branchId: string; branchName: string; unitPrice?: number }) => void;
+    addExtraProductLocally: (item: { productId: string; name: string; barcode: string; branchId: string; branchName: string; unitPrice?: number; discountType?: string; discountPercent?: number; uom?: string; sku?: string; }) => void;
+    removeExtraProductLocally: (productId: string) => void;
 
-    // ✅ NEW FLOW: Product Barcode Verification
+    // ✅ CHECKLIST: Product verification (mirrors manual module)
+    verifiedProductIds: string[];
+    toggleProductVerification: (productId: string) => void;
+    getSupplierProducts: (supplierId: string) => Promise<{ productId: string; name: string; sku: string; barcode: string; unitPrice: number; uom: string; discountType: string; discountPercent: number; }[]>;
+
+    // ✅ METADATA (Batch, Lot, Expiry)
+    metaDataByPorId: Record<string, { batchNo?: string; lotNo?: string; lotId?: string; expiryDate?: string }>;
+    setMetaDataByPorId: React.Dispatch<React.SetStateAction<Record<string, { batchNo?: string; lotNo?: string; lotId?: string; expiryDate?: string }>>>;
+
+    // ✅ LEGACY COMPAT: kept for TagRFIDStep internal usage
     verifiedBarcodes: string[];
     verifyBarcode: (barcode: string) => Promise<boolean>;
     markProductAsVerified: (productId: string) => void;
@@ -229,6 +245,36 @@ function genReceiptNo() {
 
 const API_URL = "/api/scm/supplier-management/purchase-order-receiving-rfid";
 
+// ✅ PERSISTENCE: localStorage helpers
+const DRAFT_KEY_PREFIX = "scm_rfid_draft_";
+function getDraftKey(poId: string) { return `${DRAFT_KEY_PREFIX}${poId}`; }
+
+type DraftState = {
+    localScannedRfids: Ctx["localScannedRfids"];
+    activity: ActivityRow[];
+    scannedCountByPorId: Record<string, number>;
+    verifiedBarcodes: string[];
+    receiptNo: string;
+    receiptType: string;
+    receiptDate: string;
+    metaDataByPorId?: Record<string, { batchNo?: string; lotNo?: string; lotId?: string; expiryDate?: string }>;
+    savedAt: number;
+};
+
+function saveDraft(poId: string, state: DraftState) {
+    try { localStorage.setItem(getDraftKey(poId), JSON.stringify(state)); } catch { /* quota exceeded, ignore */ }
+}
+function loadDraft(poId: string): DraftState | null {
+    try {
+        const raw = localStorage.getItem(getDraftKey(poId));
+        if (!raw) return null;
+        return JSON.parse(raw) as DraftState;
+    } catch { return null; }
+}
+function clearDraft(poId: string) {
+    try { localStorage.removeItem(getDraftKey(poId)); } catch { /* ignore */ }
+}
+
 const playBeep = (type: "success" | "error" = "success") => {
     try {
         const AudioCtor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -259,7 +305,7 @@ const playBeep = (type: "success" | "error" = "success") => {
     }
 };
 
-export function ReceivingProductsProvider({ children }: { children: React.ReactNode }) {
+export function ReceivingProductsProvider({ children, receiverId }: { children: React.ReactNode, receiverId?: number }) {
     const [list, setList] = React.useState<ReceivingListItem[]>([]);
     const [listLoading, setListLoading] = React.useState(false);
     const [listError, setListError] = React.useState("");
@@ -306,6 +352,9 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
     // ✅ NEW FLOW: Product Barcode Verification State
     const [verifiedBarcodes, setVerifiedBarcodes] = React.useState<string[]>([]);
     const [activeProductId, setActiveProductId] = React.useState<string | null>(null);
+
+    // ✅ METADATA
+    const [metaDataByPorId, setMetaDataByPorId] = React.useState<Record<string, { batchNo?: string; lotNo?: string; lotId?: string; expiryDate?: string }>>({});
 
     const refreshList = React.useCallback(async () => {
         setListLoading(true);
@@ -370,7 +419,7 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
         })();
     }, []);
 
-    const resetSession = React.useCallback(() => {
+    const resetSession = React.useCallback((opts?: { clearStorage?: boolean; poId?: string }) => {
         setScanError("");
         setSaveError("");
         setLastMatched(null);
@@ -380,7 +429,29 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
         setLocalScannedRfids([]);
         setVerifiedBarcodes([]);
         setActiveProductId(null);
+        if (opts?.clearStorage && opts?.poId) {
+            clearDraft(opts.poId);
+        }
     }, []);
+
+    // ✅ PERSISTENCE: Auto-save draft to localStorage whenever tagging state changes
+    React.useEffect(() => {
+        const poId = selectedPO?.id;
+        if (!poId) return;
+        // Only save if there's meaningful data
+        if (localScannedRfids.length === 0 && activity.length === 0 && verifiedBarcodes.length === 0) return;
+        saveDraft(poId, {
+            localScannedRfids,
+            activity,
+            scannedCountByPorId,
+            verifiedBarcodes,
+            receiptNo,
+            receiptType,
+            receiptDate,
+            metaDataByPorId,
+            savedAt: Date.now(),
+        });
+    }, [selectedPO?.id, localScannedRfids, activity, scannedCountByPorId, verifiedBarcodes, receiptNo, receiptType, receiptDate, metaDataByPorId]);
 
     const openPOById = React.useCallback(
         async (poId: string, options?: { silent?: boolean }) => {
@@ -410,10 +481,31 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
                 setSelectedPO(detail);
 
                 if (!silent) {
-                    setReceiptDate(todayYMD());
-                    setReceiptNo("");
-                    setReceiptType("");
                     setPoBarcode(detail?.poNumber ?? "");
+                    // ✅ PERSISTENCE: Restore draft if available
+                    const draft = detail?.id ? loadDraft(detail.id) : null;
+                    const hasDraftData = draft ? (
+                        draft.localScannedRfids.length > 0 ||
+                        Object.keys(draft.scannedCountByPorId || {}).length > 0 ||
+                        (draft.verifiedBarcodes && draft.verifiedBarcodes.length > 0) ||
+                        Object.keys(draft.metaDataByPorId || {}).length > 0
+                    ) : false;
+
+                    if (hasDraftData && draft) {
+                        setLocalScannedRfids(draft.localScannedRfids);
+                        setActivity(draft.activity);
+                        setScannedCountByPorId(draft.scannedCountByPorId);
+                        setVerifiedBarcodes(draft.verifiedBarcodes);
+                        setMetaDataByPorId(draft.metaDataByPorId || {});
+                        setReceiptNo(draft.receiptNo || "");
+                        setReceiptType(draft.receiptType || "");
+                        setReceiptDate(draft.receiptDate || todayYMD());
+                        toast.info("Draft restored from previous session.");
+                    } else {
+                        setReceiptDate(todayYMD());
+                        setReceiptNo("");
+                        setReceiptType("");
+                    }
                 }
             } catch (e: unknown) {
                 const msg = e instanceof Error ? e.message : String(e);
@@ -457,10 +549,29 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
                 setSelectedPO(detail);
 
                 if (!silent) {
-                    setReceiptDate(todayYMD());
-                    setReceiptNo("");
-                    setReceiptType("");
                     setPoBarcode(code);
+                    // ✅ PERSISTENCE: Restore draft if available
+                    const draft = detail?.id ? loadDraft(detail.id) : null;
+                    const hasDraftData = draft ? (
+                        draft.localScannedRfids.length > 0 ||
+                        Object.keys(draft.scannedCountByPorId || {}).length > 0 ||
+                        (draft.verifiedBarcodes && draft.verifiedBarcodes.length > 0)
+                    ) : false;
+
+                    if (hasDraftData && draft) {
+                        setLocalScannedRfids(draft.localScannedRfids);
+                        setActivity(draft.activity);
+                        setScannedCountByPorId(draft.scannedCountByPorId);
+                        setVerifiedBarcodes(draft.verifiedBarcodes);
+                        setReceiptNo(draft.receiptNo || "");
+                        setReceiptType(draft.receiptType || "");
+                        setReceiptDate(draft.receiptDate || todayYMD());
+                        toast.info("Draft restored from previous session.");
+                    } else {
+                        setReceiptDate(todayYMD());
+                        setReceiptNo("");
+                        setReceiptType("");
+                    }
                 }
             } catch (e: unknown) {
                 const msg = e instanceof Error ? e.message : String(e);
@@ -747,7 +858,7 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
 
 
 
-    const addExtraProductLocally = React.useCallback((item: { productId: string; name: string; barcode: string; branchId: string; branchName: string; unitPrice?: number }) => {
+    const addExtraProductLocally = React.useCallback((item: { productId: string; name: string; barcode: string; branchId: string; branchName: string; unitPrice?: number; discountType?: string; discountPercent?: number; uom?: string; sku?: string; }) => {
         setSelectedPO(prev => {
             if (!prev) return prev;
             const updated = { ...prev };
@@ -761,21 +872,25 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
             
             const existingItem = branchAlloc.items.find(i => i.productId === item.productId);
             if (!existingItem) {
+                const uPrice = item.unitPrice || 0;
+                const dPct = item.discountPercent || 0;
+                const dAmt = Number((uPrice * (dPct / 100)).toFixed(2));
+                
                 branchAlloc.items = [...branchAlloc.items, {
-                    id: String(item.productId),
+                    id: `${item.productId}-${item.branchId}`,
                     productId: String(item.productId),
                     name: item.name,
-                    barcode: item.barcode,
-                    uom: "—",
+                    barcode: item.sku || item.barcode,
+                    uom: item.uom || "BOX",
                     expectedQty: 0,
                     receivedQty: 0,
                     requiresRfid: true,
                     taggedQty: 0,
                     rfids: [],
                     isReceived: false,
-                    unitPrice: item.unitPrice || 0,
-                    discountType: "Standard",
-                    discountAmount: 0,
+                    unitPrice: uPrice,
+                    discountType: item.discountType || "Standard",
+                    discountAmount: dAmt,
                     netAmount: 0,
                     isExtra: true
                 }];
@@ -784,7 +899,53 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
             updated.allocations = allocs;
             return updated;
         });
+        // Auto-verify the extra product
+        setVerifiedBarcodes(prev => [...new Set([...prev, item.productId])]);
     }, []);
+
+    const removeExtraProductLocally = React.useCallback((productId: string) => {
+        setSelectedPO(prev => {
+            if (!prev) return prev;
+            const updated = { ...prev };
+            updated.allocations = updated.allocations.map(a => ({
+                ...a,
+                items: a.items.filter(i => i.productId !== productId || !i.isExtra)
+            }));
+            return updated;
+        });
+        setVerifiedBarcodes(prev => prev.filter(id => id !== productId));
+        setScannedCountByPorId(prev => {
+            const next = { ...prev };
+            Object.keys(next).forEach(k => {
+                if (k.startsWith(`${productId}-`) || k === productId) delete next[k];
+            });
+            return next;
+        });
+        setLocalScannedRfids(prev => prev.filter(r => r.productId !== productId));
+        setActivity(prev => prev.filter(a => a.productId !== productId));
+    }, []);
+
+    const toggleProductVerification = React.useCallback((productId: string) => {
+        setVerifiedBarcodes(prev => {
+            if (prev.includes(productId)) return prev.filter(id => id !== productId);
+            return [...prev, productId];
+        });
+    }, []);
+
+    const getSupplierProducts = React.useCallback(async (supplierId: string) => {
+        try {
+            const r = await fetch(API_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "get_supplier_products", supplierId }),
+            });
+            const j = await asJson(r);
+            return j?.data || [];
+        } catch {
+            return [];
+        }
+    }, []);
+
 
     // ✅ NEW FLOW: Product Barcode Verify Function
     const verifyBarcode = React.useCallback(async (barcode: string) => {
@@ -854,9 +1015,6 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
         // Add to verified list
         setVerifiedBarcodes(prev => [...prev, matchingItem!.productId]);
         
-        // Automatically make it the active product for the next screen
-        setActiveProductId(matchingItem.productId);
-        
         playBeep("success");
         setScanError("");
         return true;
@@ -900,6 +1058,7 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     action: "save_receipt",
+                    receiverId,
                     poId,
                     receiptNo: oldReceiptNo,
                     receiptType: receiptType.trim(),
@@ -961,10 +1120,13 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
                 receiptDate: receiptDate.trim(),
                 items: savedItems,
                 isFullyReceived: isFullyReceivedNow,
-                savedAt: Date.now()
+                savedAt: Date.now(),
+                isInvoice: selectedPO?.isInvoice ?? false
             });
 
             refreshList();
+            // ✅ PERSISTENCE: Clear draft on successful save
+            clearDraft(String(poId));
             resetSession();
 
             // ✅ IMPORTANT: prepare a new receipt immediately (supports multiple receipts)
@@ -978,7 +1140,7 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
         } finally {
             setSavingReceipt(false);
         }
-    }, [selectedPO, receiptNo, receiptType, receiptDate, scannedCountByPorId, refreshList, resetSession, localScannedRfids, activity]);
+    }, [selectedPO, receiptNo, receiptType, receiptDate, scannedCountByPorId, refreshList, resetSession, localScannedRfids, activity, receiverId]);
 
     const value: Ctx = {
         list,
@@ -1023,11 +1185,19 @@ export function ReceivingProductsProvider({ children }: { children: React.ReactN
         savingReceipt,
         saveError,
 
-
+        metaDataByPorId,
+        setMetaDataByPorId,
 
         lookupProduct,
         addExtraProductLocally,
+        removeExtraProductLocally,
 
+        // ✅ CHECKLIST
+        verifiedProductIds: verifiedBarcodes,
+        toggleProductVerification,
+        getSupplierProducts,
+
+        // ✅ LEGACY COMPAT (used by TagRFIDStep)
         verifiedBarcodes,
         verifyBarcode,
         markProductAsVerified,
