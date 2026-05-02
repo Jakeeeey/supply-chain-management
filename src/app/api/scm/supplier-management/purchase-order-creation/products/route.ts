@@ -96,13 +96,17 @@ export async function GET(req: NextRequest) {
             if (linkedProductIds.length === 0) return NextResponse.json({ data: [] });
 
             // 1.1) Fetch initial products to identify the "Roots" (parents) for the linked products
-            const initialUrl = `${base}/items/products?limit=-1&fields=product_id,parent_id&filter[product_id][_in]=${encodeURIComponent(linkedProductIds.join(","))}`;
+            interface ProductMeta {
+                product_id: string | number;
+                parent_id?: string | number | null;
+            }
+
             const initialRes = await fetch(initialUrl, { headers, cache: "no-store" });
             const initialJson = await initialRes.json().catch(() => ({}));
-            const initialProducts = initialJson.data ?? [];
+            const initialProducts = (initialJson.data ?? []) as ProductMeta[];
 
             // Root ID is parent_id if it exists, otherwise it's the product_id itself
-            const rootIds = unique(initialProducts.map((p: any) => String(p.parent_id || p.product_id)).filter(Boolean));
+            const rootIds = unique(initialProducts.map((p) => String(p.parent_id || p.product_id)).filter(Boolean));
             if (rootIds.length === 0) return NextResponse.json({ data: [] });
 
             // 1.2) Fetch the full family (parent + all children)
@@ -141,7 +145,7 @@ export async function GET(req: NextRequest) {
                 discountByProductId.set(pid, l?.discount_type ?? null);
                 
                 // Track discount for the family
-                const pInfo = initialProducts.find((p: any) => String(p.product_id) === pid);
+                const pInfo = initialProducts.find((p) => String(p.product_id) === pid);
                 if (pInfo) {
                     const rid = String(pInfo.parent_id || pInfo.product_id);
                     if (!discountByRootId.has(rid)) discountByRootId.set(rid, l?.discount_type ?? null);
