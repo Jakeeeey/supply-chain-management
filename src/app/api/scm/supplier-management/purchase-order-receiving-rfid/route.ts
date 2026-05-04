@@ -81,11 +81,22 @@ function pickNum(obj: Record<string, unknown> | null | undefined, keys: string[]
 
 function deriveDiscountPercentFromCode(codeRaw: string): number {
     const code = String(codeRaw ?? "").trim().toUpperCase();
-    if (!code || code === "NO DISCOUNT" || code === "D0") return 0;
-    const nums = (code.match(/\d+(?:\.\d+)?/g) ?? [])
-        .map((s) => Number(s))
+    if (!code || code === "NO DISCOUNT" || code === "D0" || code === "STANDARD") return 0;
+
+    // Improved regex to avoid extracting digits from random codes like "L3" if it's not clearly a %
+    // We only extract if it's like "3%", "10 percent", etc.
+    const nums = (code.match(/(\d+(?:\.\d+)?)\s*%/g) ?? [])
+        .map((s) => Number(s.replace(/%/g, "")))
         .filter((n) => Number.isFinite(n) && n > 0 && n <= 100);
-    if (!nums.length) return 0;
+
+    if (!nums.length) {
+        // Fallback: only extract if the code is ONLY digits or like "D5" or "L6"
+        if (/^[DL]\d+$/.test(code)) {
+            const n = Number(code.replace(/[DL]/, ""));
+            if (n > 0 && n <= 100) return n;
+        }
+        return 0;
+    }
     const factor = nums.reduce((acc, p) => acc * (1 - p / 100), 1);
     const combined = (1 - factor) * 100;
     return Number(combined.toFixed(4));
@@ -181,6 +192,7 @@ interface POHeaderRow {
         discount_type?: string;
         discount_code?: string;
         name?: string;
+        total_percent?: string | number;
         line_per_discount_type?: DiscountLine[];
     } | null;
     vat_amount?: string | number;
@@ -312,10 +324,11 @@ async function fetchDiscountTypesMap(base: string) {
             const lines = dt.line_per_discount_type ?? [];
 
             let computed = 0;
-            if (lines.length > 0) {
-                computed = calculateDiscountFromLines(lines);
-            } else if (rawPct > 0) {
+
+            if (rawPct > 0) {
                 computed = rawPct;
+            } else if (lines.length > 0) {
+                computed = calculateDiscountFromLines(lines);
             } else {
                 computed = deriveDiscountPercentFromCode(toStr(dt.discount_type));
             }
@@ -333,16 +346,58 @@ async function fetchProductSupplierLinks(base: string, productIds: number[], sup
     const ids = Array.from(new Set(productIds));
     if (!ids.length) return map;
 
-    for (const chunkIds of chunk(ids, 250)) {
-        const url = supplierId
-            ? `${base}/items/${PRODUCT_SUPPLIER_COLLECTION}?limit=-1&filter[product_id][_in]=${encodeURIComponent(chunkIds.join(","))}&filter[supplier_id][_eq]=${supplierId}&fields=*`
-            : `${base}/items/${PRODUCT_SUPPLIER_COLLECTION}?limit=-1&filter[product_id][_in]=${encodeURIComponent(chunkIds.join(","))}&fields=*`;
+    try {
+        // 1. Fetch direct links
+        for (const chunkIds of chunk(ids, 250)) {
+            const url = supplierId
+                ? `${base}/items/${PRODUCT_SUPPLIER_COLLECTION}?limit=-1&filter[product_id][_in]=${encodeURIComponent(chunkIds.join(","))}&filter[supplier_id][_eq]=${supplierId}&fields=*`
+                : `${base}/items/${PRODUCT_SUPPLIER_COLLECTION}?limit=-1&filter[product_id][_in]=${encodeURIComponent(chunkIds.join(","))}&fields=*`;
 
-        const j = await fetchJson<{ data: Record<string, unknown>[] }>(url);
-        for (const link of (j?.data ?? [])) {
-            const pid = toNum(link?.product_id);
-            if (pid) map.set(pid, { supplier_id: toNum(link?.supplier_id), discount_type: link?.discount_type });
+            const j = await fetchJson<{ data: Record<string, unknown>[] }>(url);
+            for (const link of (j?.data ?? [])) {
+                const pid = toNum(link?.product_id);
+                if (pid) map.set(pid, { supplier_id: toNum(link?.supplier_id), discount_type: link?.discount_type });
+            }
         }
+
+        // 2. Family Logic: If some products have no direct link, check their parents/siblings
+        const missingIds = ids.filter(id => !map.has(id));
+        if (missingIds.length > 0 && supplierId) {
+            // Find parents/roots for missing products
+            const initialUrl = `${base}/items/products?limit=-1&fields=product_id,parent_id&filter[product_id][_in]=${encodeURIComponent(missingIds.join(","))}`;
+            const initialRes = await fetchJson<{ data: Array<{ product_id: number; parent_id?: number }> }>(initialUrl);
+            const productMetas = initialRes.data ?? [];
+            const rootIds = Array.from(new Set(productMetas.map(p => p.parent_id || p.product_id).filter(Boolean))) as number[];
+
+            if (rootIds.length > 0) {
+                // Fetch links for any family member (roots or siblings)
+                const familyLinkUrl = `${base}/items/${PRODUCT_SUPPLIER_COLLECTION}?limit=-1&filter[supplier_id][_eq]=${supplierId}&filter[product_id][_in]=${encodeURIComponent(rootIds.join(","))}&fields=product_id,discount_type`;
+                const familyLinkRes = await fetchJson<{ data: Array<Record<string, unknown>> }>(familyLinkUrl);
+                const familyLinks = familyLinkRes.data ?? [];
+
+                // Map root_id -> discount_type
+                const rootDiscountMap = new Map<number, unknown>();
+                for (const fl of familyLinks) {
+                    const flPid = toNum(fl.product_id);
+                    if (rootIds.includes(flPid)) {
+                        rootDiscountMap.set(flPid, fl.discount_type);
+                    }
+                }
+
+                // Apply to missing products
+                for (const mid of missingIds) {
+                    const meta = productMetas.find(p => p.product_id === mid);
+                    if (meta) {
+                        const rid = meta.parent_id || meta.product_id;
+                        if (rid && rootDiscountMap.has(rid)) {
+                            map.set(mid, { supplier_id: supplierId, discount_type: rootDiscountMap.get(rid) });
+                        }
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.error("Failed to fetch product supplier links with family logic:", e);
     }
     return map;
 }
@@ -446,6 +501,35 @@ function receivingStatusFrom(poId: number, lines: POProductRow[], porRows: PORow
     const hasAnyReceipt = porRows.some(r => effectiveReceivedQty(r) > 0 || toStr(r.receipt_no));
     if (hasAnyPosted || hasAnyReceipt) return "PARTIAL";
     return "OPEN";
+}
+
+function resolveLineDiscount(args: {
+    pid: number;
+    unitPrice: number;
+    productLinksMap: Map<number, any>;
+    discountMap: Map<string, any>;
+    headerDiscountPercent: number;
+    headerDiscountType: any;
+}) {
+    const { pid, unitPrice, productLinksMap, discountMap, headerDiscountPercent, headerDiscountType } = args;
+    const lineDiscountTypeId = productLinksMap.get(pid)?.discount_type;
+    let lineDiscountPercent = 0;
+    let lineDiscountTypeStr = "No Discount";
+
+    const resolvedLineId = ensureId(lineDiscountTypeId);
+    if (resolvedLineId) {
+        const dt = discountMap.get(String(resolvedLineId));
+        if (dt) {
+            lineDiscountPercent = dt.pct;
+            lineDiscountTypeStr = dt.name;
+        }
+    } else if (headerDiscountPercent > 0) {
+        lineDiscountPercent = headerDiscountPercent;
+        lineDiscountTypeStr = headerDiscountType ? toStr(headerDiscountType.discount_type || headerDiscountType.discount_code || headerDiscountType.name, "No Discount") : "No Discount";
+    }
+
+    const dAmount = unitPrice * (lineDiscountPercent / 100);
+    return { lineDiscountPercent, lineDiscountTypeStr, dAmount };
 }
 
 function chunk<T>(arr: T[], size: number) {
@@ -575,8 +659,14 @@ export async function POST(req: NextRequest) {
             let headerDiscountPercent = 0;
             const dType = po.discount_type;
             const dLines = dType?.line_per_discount_type || [];
-            if (dLines.length > 0) headerDiscountPercent = calculateDiscountFromLines(dLines);
-            else headerDiscountPercent = deriveDiscountPercentFromCode(toStr(dType?.discount_type || dType?.discount_code || dType?.name));
+            if (dLines.length > 0) {
+                headerDiscountPercent = calculateDiscountFromLines(dLines);
+            } else if (toNum(dType?.total_percent) > 0) {
+                headerDiscountPercent = toNum(dType?.total_percent);
+            } else {
+                headerDiscountPercent = deriveDiscountPercentFromCode(toStr(dType?.discount_type || dType?.discount_code || dType?.name));
+            }
+
             if (!headerDiscountPercent) headerDiscountPercent = toNum(po.discount_percentage);
 
             const allocationsMap = new Map<number, POItem[]>();
@@ -588,24 +678,14 @@ export async function POST(req: NextRequest) {
                 const pors = porIdsByKey.get(k) || [];
                 const receivedQty = pors.reduce((sum, id) => sum + effectiveReceivedQty(porRows.find(r => toNum(r.purchase_order_product_id) === id)!), 0);
 
-                // Determine line-level discount
-                const lineDiscountTypeId = productLinksMap.get(pid)?.discount_type;
-                let lineDiscountPercent = 0;
-                let lineDiscountTypeStr = "Standard";
-
-                const resolvedLineId = ensureId(lineDiscountTypeId);
-                if (resolvedLineId) {
-                    const dt = discountMap.get(String(resolvedLineId));
-                    if (dt) {
-                        lineDiscountPercent = dt.pct;
-                        lineDiscountTypeStr = dt.name;
-                    }
-                } else {
-                    lineDiscountPercent = headerDiscountPercent;
-                    lineDiscountTypeStr = dType ? toStr(dType.discount_type || dType.discount_code || dType.name, "Standard") : "Standard";
-                }
-
-                const dAmount = toNum(ln.unit_price) * (lineDiscountPercent / 100);
+                const { lineDiscountTypeStr, dAmount } = resolveLineDiscount({
+                    pid,
+                    unitPrice: toNum(ln.unit_price),
+                    productLinksMap,
+                    discountMap,
+                    headerDiscountPercent,
+                    headerDiscountType: dType
+                });
 
                 const openRow = pors.map(id => porRows.find(r => toNum(r.purchase_order_product_id) === id)).find(r => r && !toStr(r.receipt_no));
                 const porIdStr = openRow ? String(openRow.purchase_order_product_id) : `${pid}-${bid}`;
@@ -654,25 +734,16 @@ export async function POST(req: NextRequest) {
                 const openRow = pors.map(id => porRows.find(r => toNum(r.purchase_order_product_id) === id)).find(r => r && !toStr(r.receipt_no));
                 const porIdStr = openRow ? String(openRow.purchase_order_product_id) : `${pid}-${bid}`;
 
-                // Determine line-level discount for extra items
-                const lineDiscountTypeId = productLinksMap.get(pid)?.discount_type;
-                let lineDiscountPercent = 0;
-                let lineDiscountTypeStr = "No Discount";
-
-                const resolvedLineId = ensureId(lineDiscountTypeId);
-                if (resolvedLineId) {
-                    const dt = discountMap.get(String(resolvedLineId));
-                    if (dt) {
-                        lineDiscountPercent = dt.pct;
-                        lineDiscountTypeStr = dt.name;
-                    }
-                } else {
-                    lineDiscountPercent = headerDiscountPercent;
-                    lineDiscountTypeStr = dType ? toStr(dType.discount_type || dType.discount_code || dType.name, "Standard") : "Standard";
-                }
+                const { lineDiscountTypeStr, dAmount } = resolveLineDiscount({
+                    pid,
+                    unitPrice: toNum(p?.cost_per_unit || 0),
+                    productLinksMap,
+                    discountMap,
+                    headerDiscountPercent,
+                    headerDiscountType: dType
+                });
 
                 const uPrice = toNum(p?.cost_per_unit || 0);
-                const dAmount = uPrice * (lineDiscountPercent / 100);
 
                 const item: POItem = {
                     id: porIdStr,
@@ -913,6 +984,7 @@ export async function POST(req: NextRequest) {
             const dType = po?.discount_type;
             const dLines = dType?.line_per_discount_type || [];
             if (dLines.length > 0) poDiscountPercent = calculateDiscountFromLines(dLines);
+            else if (toNum(dType?.total_percent) > 0) poDiscountPercent = toNum(dType?.total_percent);
             else poDiscountPercent = deriveDiscountPercentFromCode(toStr(dType?.discount_type));
 
             const discountMap = await fetchDiscountTypesMap(base);
@@ -1121,13 +1193,14 @@ export async function POST(req: NextRequest) {
 
                 if (currRecQty <= 0 && startingBalance <= 0) continue;
 
-                const lineTypeId = linksMap.get(pid)?.discount_type;
-                let linePct = poDiscountPercent;
-                const resId = ensureId(lineTypeId);
-                if (resId) {
-                    const dt = discountMap.get(String(resId));
-                    if (dt) linePct = dt.pct;
-                }
+                const { lineDiscountTypeStr, dAmount } = resolveLineDiscount({
+                    pid,
+                    unitPrice: toNum(ln.unit_price),
+                    productLinksMap: linksMap,
+                    discountMap,
+                    headerDiscountPercent: poDiscountPercent,
+                    headerDiscountType: dType
+                });
 
                 allocationsMap.set(bid, [...(allocationsMap.get(bid) ?? []), {
                     id: String(pors[0] || pid),
@@ -1144,9 +1217,9 @@ export async function POST(req: NextRequest) {
                     rfids: rfidsByKey.get(k) || [],
                     isReceived: currRecQty >= startingBalance && startingBalance > 0,
                     unitPrice: toNum(ln.unit_price),
-                    discountType: dType ? toStr(dType.discount_type || dType.discount_code || dType.name, "Standard") : "Standard",
-                    discountAmount: toNum(ln.unit_price) * (linePct / 100),
-                    netAmount: currRecQty * (toNum(ln.unit_price) * (1 - linePct / 100)),
+                    discountType: lineDiscountTypeStr,
+                    discountAmount: dAmount,
+                    netAmount: currRecQty * (toNum(ln.unit_price) - dAmount),
                 }]);
             }
 
@@ -1160,6 +1233,15 @@ export async function POST(req: NextRequest) {
                 const p = updatedProductsMap.get(pid);
                 const currRecQty = effectiveReceivedQty(r);
                 const uPrice = toNum(r.unit_price);
+                const { lineDiscountTypeStr, dAmount } = resolveLineDiscount({
+                    pid,
+                    unitPrice: uPrice,
+                    productLinksMap: linksMap,
+                    discountMap,
+                    headerDiscountPercent: poDiscountPercent,
+                    headerDiscountType: dType
+                });
+
                 allocationsMap.set(bid, [...(allocationsMap.get(bid) ?? []), {
                     id: String(r.purchase_order_product_id),
                     porId: String(r.purchase_order_product_id),
@@ -1175,9 +1257,9 @@ export async function POST(req: NextRequest) {
                     rfids: rfidsByKey.get(k) || [],
                     isReceived: true,
                     unitPrice: uPrice,
-                    discountType: "Standard",
-                    discountAmount: 0,
-                    netAmount: currRecQty * uPrice,
+                    discountType: lineDiscountTypeStr,
+                    discountAmount: dAmount,
+                    netAmount: currRecQty * (uPrice - dAmount),
                     isExtra: true
                 }]);
             }
@@ -1223,13 +1305,13 @@ export async function POST(req: NextRequest) {
                 if (Number(p.unit_of_measurement?.unit_id ?? p.unit_of_measurement) !== 11) return null;
 
                 const dt = link.discount_type as Record<string, unknown> | null | undefined;
-                let discTypeStr = "Standard";
+                let discTypeStr = "No Discount";
                 let discPct = 0;
                 if (dt) {
-                    discTypeStr = toStr(dt.discount_type || dt.name, "Standard");
+                    discTypeStr = toStr(dt.discount_type || dt.name, "No Discount");
                     const lines = (dt.line_per_discount_type as DiscountLine[]) || [];
                     if (lines.length > 0) discPct = calculateDiscountFromLines(lines);
-                    else if (toNum(dt.total_percent) > 0) discPct = toNum(dt.total_percent);
+                    else if (toNum(dt?.total_percent) > 0) discPct = toNum(dt?.total_percent);
                     else discPct = deriveDiscountPercentFromCode(discTypeStr);
                 }
 

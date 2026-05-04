@@ -102,6 +102,7 @@ export type SavedItem = {
     receivedQtyAtStart: number;
     receivedQtyNow: number;
     unitPrice?: number;
+    discountType?: string;
     discountAmount?: number;
     batchNo?: string;
     lotId?: string;
@@ -461,7 +462,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                             branchId: alloc.branch.id,
                             branchName: alloc.branch.name,
                             unitPrice: item.unitPrice ?? 0,
-                            discountType: item.discountType ?? "Standard",
+                            discountType: item.discountType ?? "No Discount",
                             discountPercent: item.discountAmount && item.unitPrice ? Number(((item.discountAmount / item.unitPrice) * 100).toFixed(2)) : 0,
                             uom: item.uom ?? "BOX",
                             sku: item.barcode,
@@ -554,7 +555,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                                         rfids: [],
                                         isReceived: false,
                                         unitPrice: uPrice,
-                                        discountType: extra.discountType || "Standard",
+                                        discountType: extra.discountType || "No Discount",
                                         discountAmount: dAmt,
                                         netAmount: 0,
                                         isExtra: true
@@ -661,7 +662,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                                         rfids: [],
                                         isReceived: false,
                                         unitPrice: uPrice,
-                                        discountType: extra.discountType || "Standard",
+                                        discountType: extra.discountType || "No Discount",
                                         discountAmount: dAmt,
                                         netAmount: 0,
                                         isExtra: true
@@ -745,29 +746,27 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
     }, [openPOByBarcode, poBarcode]);
 
     const removeActivity = React.useCallback((id: string) => {
-        setActivity((prev) => {
-            const row = prev.find((a) => a.id === id);
-            if (!row) return prev;
+        const row = activity.find((a) => a.id === id);
+        if (!row) return;
 
-            // If removing an "ok" scan, also decrement the scannedCountByPorId
-            if (row.status === "ok" && row.porId) {
-                setScannedCountByPorId((counts) => {
-                    const current = counts[row.porId] ?? 0;
-                    if (current <= 1) {
-                        const next = { ...counts };
-                        delete next[row.porId];
-                        return next;
-                    }
-                    return { ...counts, [row.porId]: current - 1 };
-                });
-            }
+        // If removing an "ok" scan, also decrement the scannedCountByPorId
+        if (row.status === "ok" && row.porId) {
+            setScannedCountByPorId((counts) => {
+                const current = counts[row.porId] ?? 0;
+                if (current <= 1) {
+                    const next = { ...counts };
+                    delete next[row.porId];
+                    return next;
+                }
+                return { ...counts, [row.porId]: current - 1 };
+            });
+        }
 
-            // Also remove from local buffer if it exists
-            setLocalScannedRfids((buffer) => buffer.filter(b => b.rfid !== row.rfid));
+        // Also remove from local buffer if it exists
+        setLocalScannedRfids((buffer) => buffer.filter(b => b.rfid !== row.rfid));
 
-            return prev.filter((a) => a.id !== id);
-        });
-    }, []);
+        setActivity((prev) => prev.filter((a) => a.id !== id));
+    }, [activity]);
 
     const scanRFID = React.useCallback(async (rfidOverride?: string) => {
         setScanError("");
@@ -984,7 +983,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                     rfids: [],
                     isReceived: false,
                     unitPrice: uPrice,
-                    discountType: item.discountType || "Standard",
+                    discountType: item.discountType || "No Discount",
                     discountAmount: dAmt,
                     netAmount: 0,
                     isExtra: true
@@ -1134,7 +1133,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                     expiryDate: meta?.expiryDate,
                     unitPrice: Number(it.unitPrice) || 0,
                     discountAmount: Number(it.discountAmount) || 0,
-                    discountType: it.discountType || "Standard",
+                    discountType: it.discountType || "No Discount",
                     uom: it.uom || "BOX"
                 };
             });

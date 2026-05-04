@@ -149,22 +149,7 @@ export function TagRFIDStep({ onContinue, onBack }: { onContinue: () => void; on
     if (!activeProductId) {
         return (
             <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
-                {/* Over-Receiving Banner */}
-                {hasOverReceiving && (
-                    <Card className="p-3 border-2 border-amber-500 bg-amber-50 dark:bg-amber-950/20">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
-                                <span className="text-amber-600 font-black text-lg">!</span>
-                            </div>
-                            <div>
-                                <div className="text-sm font-black uppercase text-amber-700">Over-Receiving Mode Active</div>
-                                <div className="text-xs text-amber-600">
-                                    {overReceivedProducts.map(p => p.name).join(", ")} — scanned more than ordered quantity.
-                                </div>
-                            </div>
-                        </div>
-                    </Card>
-                )}
+
 
                 <Card className="p-4 border-primary shadow-sm bg-primary/5">
                     <div className="flex flex-col items-center justify-center py-4 gap-2">
@@ -290,22 +275,7 @@ export function TagRFIDStep({ onContinue, onBack }: { onContinue: () => void; on
                 </Button>
             </div>
 
-            {/* Over-Receiving Banner for Active Item */}
-            {activeIsOver && (
-                <Card className="p-3 border-2 border-amber-500 bg-amber-50 dark:bg-amber-950/20">
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
-                            <span className="text-amber-600 font-black text-sm">!</span>
-                        </div>
-                        <div>
-                            <div className="text-xs font-black uppercase text-amber-700">Over-Receiving Mode</div>
-                            <div className="text-xs text-amber-600">
-                                Scanned {activeScanned} tags for {activeExpected} ordered. Extra tags will be recorded.
-                            </div>
-                        </div>
-                    </div>
-                </Card>
-            )}
+
 
             <Card className="p-4 border-2 border-green-500/30 bg-green-50/30 dark:bg-green-950/10 mb-4">
                 <div className="flex flex-col items-center justify-center py-6 gap-4">

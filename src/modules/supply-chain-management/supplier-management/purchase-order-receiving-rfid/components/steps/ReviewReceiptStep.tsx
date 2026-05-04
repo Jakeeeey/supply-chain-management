@@ -275,7 +275,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                                         return (
                                             <TableRow key={porId}>
                                                 <TableCell>
-                                                    <div className="font-bold text-xs truncate max-w-[200px]">{it.name}</div>
+                                                    <div className="font-bold text-xs">{it.name}</div>
                                                     <div className="text-[9px] text-muted-foreground font-mono">SKU: {it.barcode} | UOM: {it.uom}</div>
                                                 </TableCell>
                                                 <TableCell className="min-w-[100px]">
