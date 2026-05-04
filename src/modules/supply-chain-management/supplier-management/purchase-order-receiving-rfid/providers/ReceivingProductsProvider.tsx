@@ -1249,7 +1249,3 @@ export function useReceivingProducts() {
     if (!ctx) throw new Error("useReceivingProducts must be used within ReceivingProductsProvider");
     return ctx;
 }
-
-function genReceiptNo() {
-    return `REC-${String(Math.floor(Math.random() * 9000) + 1000)}`;
-}

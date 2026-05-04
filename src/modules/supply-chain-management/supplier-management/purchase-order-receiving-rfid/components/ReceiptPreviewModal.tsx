@@ -225,7 +225,7 @@ export function ReceiptPreviewModal({
                                     <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Notes & Information</h4>
                                     <div className="bg-background/50 p-4 rounded-xl border border-dashed text-xs text-muted-foreground leading-relaxed">
                                         This summary reflects the products received and verified in this specific session.
-                                        Financial values are calculated based on the purchase order's pricing terms and applicable
+                                        Financial values are calculated based on the purchase order&apos;s pricing terms and applicable
                                         supplier discounts.
                                     </div>
                                 </div>

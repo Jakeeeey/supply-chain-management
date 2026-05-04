@@ -69,15 +69,6 @@ function ensureId(v: unknown): number | null {
     const n = toNum(v);
     return n > 0 ? n : null;
 }
-function pickNum(obj: Record<string, unknown> | null | undefined, keys: string[]) {
-    for (const k of keys) {
-        if (obj && obj[k] !== undefined && obj[k] !== null) {
-            const n = toNum(obj[k]);
-            if (n !== 0) return n;
-        }
-    }
-    return 0;
-}
 
 function deriveDiscountPercentFromCode(codeRaw: string): number {
     const code = String(codeRaw ?? "").trim().toUpperCase();
@@ -506,10 +497,10 @@ function receivingStatusFrom(poId: number, lines: POProductRow[], porRows: PORow
 function resolveLineDiscount(args: {
     pid: number;
     unitPrice: number;
-    productLinksMap: Map<number, any>;
-    discountMap: Map<string, any>;
+    productLinksMap: Map<number, { supplier_id: number; discount_type: unknown }>;
+    discountMap: Map<string, { name: string; pct: number }>;
     headerDiscountPercent: number;
-    headerDiscountType: any;
+    headerDiscountType: POHeaderRow["discount_type"];
 }) {
     const { pid, unitPrice, productLinksMap, discountMap, headerDiscountPercent, headerDiscountType } = args;
     const lineDiscountTypeId = productLinksMap.get(pid)?.discount_type;
@@ -813,7 +804,7 @@ export async function POST(req: NextRequest) {
             try {
                 const porProdId = toNum(row.purchase_order_product_id);
                 const prodUrl = `${base}/items/${PO_PRODUCTS_COLLECTION}/${porProdId}?fields=product_id.product_name,purchase_order_id.purchase_order_no`;
-                const pdj = await fetchJson<{ data: any }>(prodUrl);
+                const pdj = await fetchJson<{ data: { product_id?: { product_name?: string }; purchase_order_id?: { purchase_order_no?: string } } }>(prodUrl);
                 const pd = pdj?.data;
                 if (pd) {
                     productName = pd.product_id?.product_name || productName;

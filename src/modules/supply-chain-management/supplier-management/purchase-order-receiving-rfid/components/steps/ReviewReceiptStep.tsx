@@ -38,7 +38,6 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
         receiptSaved,
         lots,
         verifiedPorIds,
-        activity,
         setMetaDataByPorId,
     } = useReceivingProducts();
 
