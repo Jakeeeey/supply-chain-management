@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 export function ProductChecklistStep({ onContinue }: { onContinue: () => void }) {
     const {
         selectedPO,
-        verifiedProductIds,
+        verifiedPorIds,
         toggleProductVerification,
         removeExtraProductLocally
     } = useReceivingProducts();
@@ -26,13 +26,13 @@ export function ProductChecklistStep({ onContinue }: { onContinue: () => void })
             const items = Array.isArray(a?.items) ? a.items : [];
             return items.map((it) => ({
                 ...it,
-                id: String(it.id),
+                porId: String(it.porId || it.id),
                 branchName: a?.branch?.name ?? "Unassigned",
             }));
         });
     }, [selectedPO]);
 
-    const canContinue = verifiedProductIds.length > 0;
+    const canContinue = verifiedPorIds.length > 0;
 
     return (
         <div className="space-y-4">
@@ -64,7 +64,7 @@ export function ProductChecklistStep({ onContinue }: { onContinue: () => void })
                             <Plus className="h-3 w-3" /> Add Extra Product
                         </Button>
                         <Badge variant="secondary" className="font-bold">
-                            Selected: {verifiedProductIds.length} / {allItems.length}
+                            Selected: {verifiedPorIds.length} / {allItems.length}
                         </Badge>
                     </div>
                 </div>
@@ -74,7 +74,7 @@ export function ProductChecklistStep({ onContinue }: { onContinue: () => void })
                         <TableHeader className="bg-muted/50">
                             <TableRow>
                                 <TableHead className="text-[10px] h-9 font-black uppercase tracking-wider">Product / SKU</TableHead>
-                                <TableHead className="text-[10px] h-9 font-black uppercase tracking-wider text-center w-32">Ordered Qty</TableHead>
+                                <TableHead className="text-[10px] h-9 font-black uppercase tracking-wider text-center w-32">Remaining Qty</TableHead>
                                 <TableHead className="text-[10px] h-9 font-black uppercase tracking-wider text-center w-40">Status</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -87,9 +87,9 @@ export function ProductChecklistStep({ onContinue }: { onContinue: () => void })
                                 </TableRow>
                             ) : (
                                 allItems.map((item) => {
-                                    const isVerified = verifiedProductIds.includes(item.productId);
+                                    const isVerified = verifiedPorIds.includes(item.porId);
                                     return (
-                                        <TableRow key={item.id} className={cn(isVerified && "bg-green-50/30")}>
+                                        <TableRow key={item.porId} className={cn(isVerified && "bg-green-50/30")}>
                                             <TableCell className="align-middle py-3">
                                                 <div className="flex flex-col">
                                                     <div className="font-bold text-sm leading-none flex items-center gap-2">
@@ -111,7 +111,7 @@ export function ProductChecklistStep({ onContinue }: { onContinue: () => void })
                                                             "h-8 text-[10px] font-black uppercase tracking-widest px-4 transition-all",
                                                             isVerified ? "bg-green-600 hover:bg-green-700 border-green-600" : "hover:border-primary hover:bg-primary/5"
                                                         )}
-                                                        onClick={() => toggleProductVerification(item.productId)}
+                                                        onClick={() => toggleProductVerification(item.porId)}
                                                     >
                                                         {isVerified ? (
                                                             <>
@@ -127,7 +127,7 @@ export function ProductChecklistStep({ onContinue }: { onContinue: () => void })
                                                             size="icon"
                                                             variant="ghost"
                                                             className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                                            onClick={() => removeExtraProductLocally(item.productId)}
+                                                            onClick={() => removeExtraProductLocally(item.porId)}
                                                             title="Delete extra product"
                                                         >
                                                             <Trash2 className="h-4 w-4" />

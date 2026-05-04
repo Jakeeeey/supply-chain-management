@@ -399,7 +399,7 @@ function buildPorIdsByKey(porRows: PORRow[]) {
         const pid = toNum(r?.product_id);
         const bid = toNum(r?.branch_id);
         const porId = toNum(r?.purchase_order_product_id);
-        if (!poId || !pid || !bid || !porId) continue;
+        if (!poId || !pid || !porId) continue;
         const k = keyLine(poId, pid, bid);
         const arr = map.get(k) ?? [];
         arr.push(porId);
@@ -428,7 +428,7 @@ function isPartiallyReceivedOrTagged(
         const pid = toNum(ln.product_id);
         const bid = toNum(ln.branch_id);
         const expected = Math.max(0, toNum(ln.ordered_quantity));
-        if (!pid || !bid || expected <= 0) continue;
+        if (!pid || expected <= 0) continue;
 
         const porIds = porIdsByKey.get(keyLine(poId, pid, bid)) ?? [];
         if (!porIds.length) continue;
@@ -461,7 +461,7 @@ function isFullyReceived(
         const pid = toNum(ln.product_id);
         const bid = toNum(ln.branch_id);
         const expected = Math.max(0, toNum(ln.ordered_quantity));
-        if (!pid || !bid || expected <= 0) continue;
+        if (!pid || expected <= 0) continue;
 
         const porIds = porIdsByKey.get(keyLine(poId, pid, bid)) ?? [];
         if (!porIds.length) return false;
@@ -884,7 +884,13 @@ export async function POST(req: NextRequest) {
             // Also allow opening POs that already had a partial post (inventory_status=13)
             const invStatus = toNum(po?.inventory_status);
             const hasAnyPosted = porRows.some((r) => toNum(r?.isPosted) === 1);
-            if (!receivingOk && !hasAnyPosted && invStatus !== 13) {
+            // ✅ Fallback: check for unposted POR rows with receipt activity (same logic as GET list)
+            const hasUnpostedReceipts = porRows.some((r) =>
+                toNum(r?.isPosted) === 0 && (
+                    toStr(r?.receipt_no) || toStr(r?.receipt_date) || toStr(r?.received_date) || toNum(r?.received_quantity) > 0
+                )
+            );
+            if (!receivingOk && !hasAnyPosted && !hasUnpostedReceipts && invStatus !== 13) {
                 return bad("PO is not ready for posting. Please receive at least one item first.", 409);
             }
 
