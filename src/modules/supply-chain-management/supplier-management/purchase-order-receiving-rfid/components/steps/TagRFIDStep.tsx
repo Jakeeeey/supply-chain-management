@@ -8,6 +8,7 @@ import { Trash2 } from "lucide-react";
 import { useReceivingProducts, ReceivingPOItem, ActivityRow } from "../../providers/ReceivingProductsProvider";
 import { useKeyboardScanner } from "../../hooks/useKeyboardScanner";
 import { toast } from "sonner";
+import { AlertTriangle } from "lucide-react";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -26,10 +27,12 @@ export function TagRFIDStep({ onContinue, onBack }: { onContinue: () => void; on
         scanRFID,
         scanError,
         activity,
-        verifiedBarcodes,
+        verifiedPorIds,
         scannedCountByPorId,
         activeProductId,
         setActiveProductId,
+        activePorId,
+        setActivePorId,
         removeActivity,
     } = useReceivingProducts();
 
@@ -69,9 +72,9 @@ export function TagRFIDStep({ onContinue, onBack }: { onContinue: () => void; on
                     ...it,
                     porId: String(it.porId || it.id),
                 }))
-                .filter((it) => verifiedBarcodes.includes(it.productId)) as Array<ReceivingPOItem & { porId: string }>;
+                .filter((it) => verifiedPorIds.includes(it.porId)) as Array<ReceivingPOItem & { porId: string }>;
         });
-    }, [selectedPO, verifiedBarcodes]);
+    }, [selectedPO, verifiedPorIds]);
 
     const safeCounts: Record<string, number> = React.useMemo(() =>
         scannedCountByPorId && typeof scannedCountByPorId === "object" ? scannedCountByPorId : {}, [scannedCountByPorId]);
@@ -124,39 +127,29 @@ export function TagRFIDStep({ onContinue, onBack }: { onContinue: () => void; on
         onContinue();
     };
 
-    // Pagination
+    // Pagination — filtered to current product
+    const filteredActivity = React.useMemo(() => {
+        if (!activePorId) return activity || [];
+        return (activity || []).filter((a: ActivityRow) => a.porId === activePorId);
+    }, [activity, activePorId]);
+
     const activityPaginated = React.useMemo(() => {
         const start = (activityPage - 1) * ITEMS_PER_PAGE;
-        return (activity || []).slice(start, start + ITEMS_PER_PAGE);
-    }, [activity, activityPage]);
+        return filteredActivity.slice(start, start + ITEMS_PER_PAGE);
+    }, [filteredActivity, activityPage]);
 
-    const totalActivityPages = Math.ceil((activity?.length || 0) / ITEMS_PER_PAGE);
+    const totalActivityPages = Math.ceil(filteredActivity.length / ITEMS_PER_PAGE);
 
     const activeItem = React.useMemo(() => {
-        if (!activeProductId) return null;
-        return activeProducts.find((p) => p.productId === activeProductId);
-    }, [activeProductId, activeProducts]);
+        if (!activePorId) return null;
+        return activeProducts.find((p) => p.porId === activePorId);
+    }, [activePorId, activeProducts]);
 
     // ========== NO PRODUCT SELECTED: Product List View ==========
     if (!activeProductId) {
         return (
             <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
-                {/* Over-Receiving Banner */}
-                {hasOverReceiving && (
-                    <Card className="p-3 border-2 border-amber-500 bg-amber-50 dark:bg-amber-950/20">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
-                                <span className="text-amber-600 font-black text-lg">!</span>
-                            </div>
-                            <div>
-                                <div className="text-sm font-black uppercase text-amber-700">Over-Receiving Mode Active</div>
-                                <div className="text-xs text-amber-600">
-                                    {overReceivedProducts.map(p => p.name).join(", ")} — scanned more than ordered quantity.
-                                </div>
-                            </div>
-                        </div>
-                    </Card>
-                )}
+
 
                 <Card className="p-4 border-primary shadow-sm bg-primary/5">
                     <div className="flex flex-col items-center justify-center py-4 gap-2">
@@ -212,7 +205,10 @@ export function TagRFIDStep({ onContinue, onBack }: { onContinue: () => void; on
                                                     size="sm" 
                                                     variant={isDone ? "secondary" : "default"}
                                                     className={!isDone ? "bg-indigo-600 hover:bg-indigo-700" : ""}
-                                                    onClick={() => setActiveProductId(p.productId)}
+                                                    onClick={() => {
+                                                        setActiveProductId(p.productId);
+                                                        setActivePorId(p.porId);
+                                                    }}
                                                 >
                                                     {isDone ? "Review Tags" : "Tag Item"}
                                                 </Button>
@@ -238,27 +234,24 @@ export function TagRFIDStep({ onContinue, onBack }: { onContinue: () => void; on
                     </Button>
                 </div>
 
-                {/* Over-Receive Confirmation Modal */}
+                {/* ✅ Over-Receiving Verification Modal (matches Manual Receiving) */}
                 <AlertDialog open={isOverReceiveModalOpen} onOpenChange={setIsOverReceiveModalOpen}>
                     <AlertDialogContent>
                         <AlertDialogHeader>
-                            <AlertDialogTitle>Over-Receiving Detected</AlertDialogTitle>
+                            <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+                                <AlertTriangle className="h-5 w-5" />
+                                Over-Receiving Detected
+                            </AlertDialogTitle>
                             <AlertDialogDescription>
-                                The following products have been scanned beyond their ordered quantity:
-                                <ul className="mt-2 list-disc pl-5 space-y-1">
-                                    {overReceivedProducts.map(p => (
-                                        <li key={p.porId} className="font-semibold">
-                                            {p.name}: {safeCounts[p.porId]} scanned / {p.expectedQty} ordered
-                                        </li>
-                                    ))}
-                                </ul>
-                                <span className="block mt-3">Are you sure you want to proceed with over-receiving?</span>
+                                One or more items exceed the expected ordered quantity.
+                                <br /><br />
+                                Are you sure you want to continue to the review step? The system will still allow you to save this, but it will be recorded as over-receiving.
                             </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={confirmOverReceive} className="bg-amber-600 hover:bg-amber-700">
-                                Yes, Proceed with Over-Receiving
+                            <AlertDialogCancel>Review Quantities</AlertDialogCancel>
+                            <AlertDialogAction onClick={confirmOverReceive} className="bg-red-600 hover:bg-red-700 focus:ring-red-600">
+                                Yes, Continue
                             </AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>
@@ -277,27 +270,12 @@ export function TagRFIDStep({ onContinue, onBack }: { onContinue: () => void; on
     return (
         <div className="space-y-4 animate-in slide-in-from-right-4 duration-300">
             <div className="flex items-center gap-2 mb-2">
-                <Button variant="ghost" size="sm" onClick={() => setActiveProductId(null)} className="text-muted-foreground hover:text-foreground">
+                <Button variant="ghost" size="sm" onClick={() => { setActiveProductId(null); setActivePorId(null); }} className="text-muted-foreground hover:text-foreground">
                     ← Back to Product List
                 </Button>
             </div>
 
-            {/* Over-Receiving Banner for Active Item */}
-            {activeIsOver && (
-                <Card className="p-3 border-2 border-amber-500 bg-amber-50 dark:bg-amber-950/20">
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
-                            <span className="text-amber-600 font-black text-sm">!</span>
-                        </div>
-                        <div>
-                            <div className="text-xs font-black uppercase text-amber-700">Over-Receiving Mode</div>
-                            <div className="text-xs text-amber-600">
-                                Scanned {activeScanned} tags for {activeExpected} ordered. Extra tags will be recorded.
-                            </div>
-                        </div>
-                    </div>
-                </Card>
-            )}
+
 
             <Card className="p-4 border-2 border-green-500/30 bg-green-50/30 dark:bg-green-950/10 mb-4">
                 <div className="flex flex-col items-center justify-center py-6 gap-4">
@@ -369,7 +347,7 @@ export function TagRFIDStep({ onContinue, onBack }: { onContinue: () => void; on
             <div className="flex justify-end pt-4">
                 <Button 
                     className="h-12 w-full md:w-auto px-8 bg-indigo-600 hover:bg-indigo-700 font-bold" 
-                    onClick={() => setActiveProductId(null)}
+                    onClick={() => { setActiveProductId(null); setActivePorId(null); }}
                 >
                     Done Tagging This Product
                 </Button>
