@@ -278,7 +278,7 @@ async function fetchPORByPOIds(base: string, poIds: number[]) {
 async function cleanupAbandonedRows(base: string) {
     try {
         const oneHourAgo = new Date(Date.now() - 3600000).toISOString();
-        const url = `${base}/items/${POR_COLLECTION}?limit=-1&fields=purchase_order_product_id&filter[received_quantity][_eq]=0&filter[receipt_no][_null]=true&filter[isPosted][_eq]=0&filter[date_created][_lt]=${oneHourAgo}`;
+        const url = `${base}/items/${POR_COLLECTION}?limit=-1&fields=purchase_order_product_id&filter[received_quantity][_eq]=0&filter[receipt_no][_null]=true&filter[isPosted][_eq]=0`;
         const j = await fetchJson<{ data: { purchase_order_product_id: number }[] }>(url).catch(() => ({ data: [] }));
         const ids = (j?.data ?? []).map(r => toNum(r.purchase_order_product_id)).filter(id => id > 0);
         if (ids.length > 0) {
@@ -586,7 +586,7 @@ async function ensureOpenReceivingRow(args: {
 export async function GET() {
     try {
         const base = getDirectusBase();
-        await cleanupAbandonedRows(base);
+        // await cleanupAbandonedRows(base); // Disabled: POR table lacks date_created field to safely filter by age
         const poHeaders = await fetchApprovedNotReceivedPOs(base);
         const poIds = poHeaders.map((p) => toNum(p.purchase_order_id)).filter(Boolean);
         if (!poIds.length) return ok([]);
@@ -941,6 +941,7 @@ export async function POST(req: NextRequest) {
                     purchase_order_product_id: ensured.porId,
                     product_id: productId,
                     rfid_code: rfid,
+                    created_at: nowISO()
                 }),
             });
 
@@ -1049,6 +1050,7 @@ export async function POST(req: NextRequest) {
                             purchase_order_product_id: realPorId,
                             product_id: toNum(t.productId),
                             rfid_code: t.rfid,
+                            created_at: nowISO()
                         })
                     }).catch(() => { });
                 }

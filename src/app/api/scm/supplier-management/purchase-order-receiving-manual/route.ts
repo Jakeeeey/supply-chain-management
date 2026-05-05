@@ -403,7 +403,7 @@ async function ensureOpenReceivingRow(args: {
 export async function GET() {
     try {
         const base = getDirectusBase();
-        await cleanupAbandonedRows(base);
+        // await cleanupAbandonedRows(base); // Disabled: POR table lacks date_created field
         const poHeaders = await fetchApprovedNotReceivedPOs(base);
         const poIds = poHeaders.map((p) => toNum(p.purchase_order_id)).filter(Boolean);
         if (!poIds.length) return ok([]);
