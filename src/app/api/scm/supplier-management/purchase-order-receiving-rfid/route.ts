@@ -275,21 +275,6 @@ async function fetchPORByPOIds(base: string, poIds: number[]) {
     return rows;
 }
 
-async function cleanupAbandonedRows(base: string) {
-    try {
-        const oneHourAgo = new Date(Date.now() - 3600000).toISOString();
-        const url = `${base}/items/${POR_COLLECTION}?limit=-1&fields=purchase_order_product_id&filter[received_quantity][_eq]=0&filter[receipt_no][_null]=true&filter[isPosted][_eq]=0`;
-        const j = await fetchJson<{ data: { purchase_order_product_id: number }[] }>(url).catch(() => ({ data: [] }));
-        const ids = (j?.data ?? []).map(r => toNum(r.purchase_order_product_id)).filter(id => id > 0);
-        if (ids.length > 0) {
-            await fetch(`${base}/items/${POR_COLLECTION}`, {
-                method: "DELETE",
-                headers: directusHeaders(),
-                body: JSON.stringify(ids)
-            }).catch(() => { });
-        }
-    } catch { }
-}
 
 async function fetchPOProductsByPOId(base: string, poId: number) {
     const url = `${base}/items/${PO_PRODUCTS_COLLECTION}?limit=-1&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,ordered_quantity,unit_price,total_amount`;
@@ -586,7 +571,6 @@ async function ensureOpenReceivingRow(args: {
 export async function GET() {
     try {
         const base = getDirectusBase();
-        // await cleanupAbandonedRows(base); // Disabled: POR table lacks date_created field to safely filter by age
         const poHeaders = await fetchApprovedNotReceivedPOs(base);
         const poIds = poHeaders.map((p) => toNum(p.purchase_order_id)).filter(Boolean);
         if (!poIds.length) return ok([]);

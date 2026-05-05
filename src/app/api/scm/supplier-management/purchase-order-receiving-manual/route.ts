@@ -257,21 +257,6 @@ async function fetchPOProductsByPOId(base: string, poId: number): Promise<POProd
     return (j?.data ?? []);
 }
 
-async function cleanupAbandonedRows(base: string) {
-    try {
-        const oneHourAgo = new Date(Date.now() - 3600000).toISOString();
-        const url = `${base}/items/${POR_COLLECTION}?limit=-1&fields=purchase_order_product_id&filter[received_quantity][_eq]=0&filter[receipt_no][_null]=true&filter[isPosted][_eq]=0&filter[date_created][_lt]=${oneHourAgo}`;
-        const j = await fetchJson<{ data: { purchase_order_product_id: number }[] }>(url).catch(() => ({ data: [] }));
-        const ids = (j?.data ?? []).map(r => toNum(r.purchase_order_product_id)).filter(id => id > 0);
-        if (ids.length > 0) {
-            await fetch(`${base}/items/${POR_COLLECTION}`, {
-                method: "DELETE",
-                headers: directusHeaders(),
-                body: JSON.stringify(ids)
-            }).catch(() => {});
-        }
-    } catch {}
-}
 
 async function fetchDiscountTypesMap(base: string) {
     const map = new Map<string, { name: string; pct: number }>();
@@ -403,7 +388,6 @@ async function ensureOpenReceivingRow(args: {
 export async function GET() {
     try {
         const base = getDirectusBase();
-        // await cleanupAbandonedRows(base); // Disabled: POR table lacks date_created field
         const poHeaders = await fetchApprovedNotReceivedPOs(base);
         const poIds = poHeaders.map((p) => toNum(p.purchase_order_id)).filter(Boolean);
         if (!poIds.length) return ok([]);
