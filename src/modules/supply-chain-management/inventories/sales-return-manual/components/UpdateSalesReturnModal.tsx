@@ -1501,6 +1501,24 @@ export function UpdateSalesReturnModal({
               />
             </div>
             <div className="max-h-[300px] overflow-y-auto border rounded-md divide-y">
+              {/* 🟢 NEW: Clear Selection Option */}
+              <div
+                className="p-3 hover:bg-destructive/10 cursor-pointer flex items-center gap-3 transition-colors text-destructive font-medium border-b"
+                onClick={() => {
+                  setStatusCardData((prev) => ({
+                    ...prev!,
+                    appliedTo: "",
+                  }));
+                  setAppliedInvoiceId(null);
+                  setIsInvoiceLookupOpen(false);
+                }}
+              >
+                <div className="h-8 w-8 rounded-full bg-destructive/10 flex items-center justify-center">
+                  <X className="h-4 w-4" />
+                </div>
+                <div className="text-sm">Clear Selection (Unlink)</div>
+              </div>
+
               {filteredInvoices.length === 0 ? (
                 <div className="p-4 text-center text-sm text-muted-foreground">
                   No invoices found.
