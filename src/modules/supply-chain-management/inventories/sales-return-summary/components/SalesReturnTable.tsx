@@ -23,6 +23,12 @@ import {
   ChevronsRight,
 } from "lucide-react";
 import { SalesReturnExportDialog } from "./SalesReturnExportDialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const getStatusBadge = (status: string) => {
   const s = (status || "").toLowerCase();
@@ -45,6 +51,55 @@ const DataCell = ({ children, className = "", ...props }: any) => (
     {children}
   </TableCell>
 );
+
+const TruncatedCell = ({ children, maxWidth = "150px", className = "" }: any) => {
+  const [isTruncated, setIsTruncated] = React.useState(false);
+  const textRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const checkTruncation = () => {
+      if (textRef.current) {
+        setIsTruncated(textRef.current.scrollWidth > textRef.current.offsetWidth);
+      }
+    };
+
+    checkTruncation();
+    // Re-check on window resize
+    window.addEventListener("resize", checkTruncation);
+    return () => window.removeEventListener("resize", checkTruncation);
+  }, [children]);
+
+  if (!children || children === "-") return <DataCell className={className}>-</DataCell>;
+
+  const content = (
+    <div
+      ref={textRef}
+      className="truncate"
+      style={{ maxWidth }}
+    >
+      {children}
+    </div>
+  );
+
+  if (!isTruncated) {
+    return <DataCell className={className}>{content}</DataCell>;
+  }
+
+  return (
+    <DataCell className={className}>
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            {content}
+          </TooltipTrigger>
+          <TooltipContent>
+            {children}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </DataCell>
+  );
+};
 
 // 🟢 HELPER: Format Date to MM-DD-YYYY
 const formatDate = (dateStr: string | null) => {
@@ -146,6 +201,7 @@ export const SalesReturnTable = ({
               <HeaderCell className="text-right">Discount Amt</HeaderCell>
               <HeaderCell className="text-right">Net Amount</HeaderCell>
               <HeaderCell>Applied To</HeaderCell>
+              <HeaderCell>Remarks</HeaderCell>
               <HeaderCell className="text-center">Status</HeaderCell>
             </TableRow>
           </TableHeader>
@@ -153,7 +209,7 @@ export const SalesReturnTable = ({
             {loading ? (
               <TableRow>
                 <TableCell
-                  colSpan={19}
+                  colSpan={20}
                   className="py-12 text-center text-slate-500 animate-pulse"
                 >
                   Loading data...
@@ -162,7 +218,7 @@ export const SalesReturnTable = ({
             ) : report.rows.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={19}
+                  colSpan={20}
                   className="py-12 text-center text-slate-500"
                 >
                   No results found.
@@ -184,15 +240,12 @@ export const SalesReturnTable = ({
                     <DataCell className="text-slate-600 dark:text-slate-400">
                       {r.salesmanName}
                     </DataCell>
-                    <DataCell
-                      className="text-slate-600 dark:text-slate-400 max-w-[150px] truncate"
-                      title={r.customerName}
-                    >
+                    <TruncatedCell className="text-slate-600 dark:text-slate-400" maxWidth="150px">
                       {r.customerName}
-                    </DataCell>
-                    <DataCell className="text-slate-600 dark:text-slate-400 max-w-[120px] truncate">
-                      {item.supplierName || "-"}
-                    </DataCell>
+                    </TruncatedCell>
+                    <TruncatedCell className="text-slate-600 dark:text-slate-400" maxWidth="120px">
+                      {item.supplierName}
+                    </TruncatedCell>
                     <DataCell className="text-slate-600 dark:text-slate-400">
                       {item.brandName || "-"}
                     </DataCell>
@@ -205,9 +258,9 @@ export const SalesReturnTable = ({
                     <DataCell className="text-slate-600 dark:text-slate-400">
                       {item.returnCategory || "-"}
                     </DataCell>
-                    <DataCell className="text-slate-500 italic max-w-[150px] truncate">
-                      {item.specificReason || "-"}
-                    </DataCell>
+                    <TruncatedCell className="text-slate-500 italic" maxWidth="150px">
+                      {item.specificReason}
+                    </TruncatedCell>
                     <DataCell className="text-slate-600 dark:text-slate-400 text-center">
                       {item.unit || "-"}
                     </DataCell>
@@ -232,6 +285,9 @@ export const SalesReturnTable = ({
                     <DataCell className="text-slate-600 dark:text-slate-400">
                       {item.invoiceNo || r.invoiceNo || "-"}
                     </DataCell>
+                    <TruncatedCell className="text-slate-500" maxWidth="200px">
+                      {r.remarks}
+                    </TruncatedCell>
                     <DataCell className="text-center">
                       <Badge
                         variant="outline"

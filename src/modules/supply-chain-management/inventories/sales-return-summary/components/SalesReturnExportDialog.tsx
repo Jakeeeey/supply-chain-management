@@ -203,6 +203,8 @@ export function SalesReturnExportDialog({
               <td class="text-right">${Number(item.grossAmount).toFixed(2)}</td>
               <td class="text-right text-red-600">(${Number(item.discountAmount).toFixed(2)})</td>
               <td class="text-right font-bold">${Number(item.netAmount).toFixed(2)}</td>
+              <td class="truncate-text">${item.invoiceNo || header.invoiceNo || "-"}</td>
+              <td class="truncate-text">${header.remarks || "-"}</td>
               <td class="text-center text-xs uppercase">${header.returnStatus}</td>
             </tr>`;
           });
@@ -221,7 +223,7 @@ export function SalesReturnExportDialog({
         <strong>Generated:</strong> ${new Date().toLocaleString()} <br/>
         <strong>Period:</strong> ${formatDateForHeader(dateFrom)} to ${formatDateForHeader(dateTo)}
       </div>
-      <table><thead><tr><th width="8%">Return No</th><th width="6%">Date</th><th width="8%">Salesman</th><th width="10%">Customer</th><th width="8%">Supplier</th><th width="8%">Category</th><th width="12%">Product</th><th width="6%">Type</th><th width="6%">Reason</th><th width="3%" class="text-center">Unit</th><th width="4%" class="text-right">Qty</th><th width="5%" class="text-right">Price</th><th width="5%" class="text-right">Gross</th><th width="5%" class="text-right">Disc</th><th width="6%" class="text-right">Net</th><th width="5%" class="text-center">Status</th></tr></thead><tbody>${tableRows}</tbody><tfoot><tr><td colspan="10" class="text-right">GRAND TOTALS:</td><td class="text-right">${totalQty.toLocaleString()}</td><td></td><td class="text-right">${totalGross.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td><td class="text-right text-red-600">(${totalDisc.toLocaleString(undefined, { minimumFractionDigits: 2 })})</td><td class="text-right">${totalNet.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td><td></td></tr></tfoot></table></body></html>`;
+      <table><thead><tr><th width="6%">Return No</th><th width="5%">Date</th><th width="7%">Salesman</th><th width="8%">Customer</th><th width="7%">Supplier</th><th width="7%">Category</th><th width="10%">Product</th><th width="5%">Type</th><th width="5%">Reason</th><th width="3%" class="text-center">Unit</th><th width="4%" class="text-right">Qty</th><th width="5%" class="text-right">Price</th><th width="5%" class="text-right">Gross</th><th width="5%" class="text-right">Disc</th><th width="6%" class="text-right">Net</th><th width="8%">Applied To</th><th width="10%">Remarks</th><th width="4%" class="text-center">Status</th></tr></thead><tbody>${tableRows}</tbody><tfoot><tr><td colspan="10" class="text-right">GRAND TOTALS:</td><td class="text-right">${totalQty.toLocaleString()}</td><td></td><td class="text-right">${totalGross.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td><td class="text-right text-red-600">(${totalDisc.toLocaleString(undefined, { minimumFractionDigits: 2 })})</td><td class="text-right">${totalNet.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td><td colspan="3"></td></tr></tfoot></table></body></html>`;
 
       newWindow.document.write(fullHtml);
       newWindow.document.close();

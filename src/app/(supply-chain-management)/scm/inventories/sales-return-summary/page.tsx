@@ -12,7 +12,10 @@ import { NavUser } from "@/components/shared/app-sidebar/nav-user";
 
 import { cookies } from "next/headers";
 
-import SalesReturnModule from "@/modules/supply-chain-management/inventories/sales-return-summary/SalesReturnModule";
+// ✅ Wire the module you asked for
+// import ComingSoon from "../../_components/ComingSoon";
+import SalesReturn from "@/modules/supply-chain-management/inventories/sales-return-rfid/SalesReturnModule";
+import { SalesReturnSummary } from "@/modules/supply-chain-management/inventories/sales-return-summary/SalesReturnModule";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -115,7 +118,7 @@ export default async function Page() {
 
             {/* ✅ Only content scrolls inside RIGHT column */}
             <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-2 sm:p-4">
-                <SalesReturnModule />
+                <SalesReturnSummary />
             </main>
         </div>
     );

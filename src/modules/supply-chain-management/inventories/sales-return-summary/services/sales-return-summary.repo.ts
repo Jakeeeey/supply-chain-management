@@ -94,7 +94,7 @@ export async function fetchBrands() {
 
 export async function fetchSuppliers() {
   return directusGet<{ data: Record<string, any>[] }>(
-    `/items/suppliers?limit=-1&fields=id,supplier_name,nonBuy`,
+    `/items/suppliers?limit=-1&fields=id,supplier_shortcut,nonBuy`,
   );
 }
 

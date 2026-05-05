@@ -104,7 +104,7 @@ export async function fetchLookups(): Promise<LookupData> {
     const sup = supplierMap.get(supId);
     if (sup) {
       if (!suppliersByProduct.has(prodId)) suppliersByProduct.set(prodId, new Set());
-      suppliersByProduct.get(prodId)!.add(String(sup.supplier_name));
+      suppliersByProduct.get(prodId)!.add(String(sup.supplier_shortcut));
     }
   }
 
@@ -154,7 +154,7 @@ export async function getSuppliersList() {
   const lookups = await fetchLookups();
   return lookups.rawSuppliers.map((s: any) => ({
     id: s.id,
-    name: s.supplier_name,
+    name: s.supplier_shortcut,
   }));
 }
 
