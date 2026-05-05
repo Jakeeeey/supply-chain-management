@@ -1396,6 +1396,7 @@ export function UpdateSalesReturnModal({
                                   });
                                   setOrderSearch(inv.order_id);
                                   setInvoiceDropdownSearch(inv.invoice_no);
+                                  setAppliedInvoiceId(Number(inv.id));
                                   setIsOrderDropdownOpen(false);
                                 }}
                               >
@@ -1458,6 +1459,7 @@ export function UpdateSalesReturnModal({
                                   });
                                   setInvoiceDropdownSearch(inv.invoice_no);
                                   setOrderSearch(inv.order_id);
+                                  setAppliedInvoiceId(Number(inv.id));
                                   setIsInvoiceDropdownOpen(false);
                                 }}
                               >

@@ -103,6 +103,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
   // INVOICE STATE
   const [invoiceNo, setInvoiceNo] = useState("");
+  const [appliedInvoiceId, setAppliedInvoiceId] = useState<number | null>(null);
   const [remarks, setRemarks] = useState("");
 
   // --- 2. DATA LISTS ---
@@ -551,6 +552,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     setOrderSearch("");
     setInvoiceNo("");
     setInvoiceSearch("");
+    setAppliedInvoiceId(null);
     setIsThirdParty(false);
     setLastScannedRfid("");
     setRfidScanning(false);
@@ -661,6 +663,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         priceType,
         remarks,
         items: items,
+        appliedInvoiceId: appliedInvoiceId ?? undefined,
       };
 
       await SalesReturnProvider.submitReturn(payload);
@@ -1497,6 +1500,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                                 // Auto-fill invoice
                                 setInvoiceNo(inv.invoice_no);
                                 setInvoiceSearch(inv.invoice_no);
+                                setAppliedInvoiceId(Number(inv.id));
                               }}
                             >
                               <div className="flex flex-col">
@@ -1533,6 +1537,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                         setInvoiceSearch(e.target.value);
                         setInvoiceNo(e.target.value);
                         setIsInvoiceOpen(true);
+                        setAppliedInvoiceId(null);
                       }}
                       onFocus={() => setIsInvoiceOpen(true)}
                     />
@@ -1547,6 +1552,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                               onClick={() => {
                                 setInvoiceNo(inv.invoice_no);
                                 setInvoiceSearch(inv.invoice_no);
+                                setAppliedInvoiceId(Number(inv.id));
                                 setIsInvoiceOpen(false);
                                 // Auto-fill order
                                 setOrderNo(inv.order_id);
