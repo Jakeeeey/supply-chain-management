@@ -103,6 +103,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
   // INVOICE STATE
   const [invoiceNo, setInvoiceNo] = useState("");
+  const [appliedInvoiceId, setAppliedInvoiceId] = useState<number | null>(null);
   const [remarks, setRemarks] = useState("");
 
   // --- 2. DATA LISTS ---
@@ -551,6 +552,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     setOrderSearch("");
     setInvoiceNo("");
     setInvoiceSearch("");
+    setAppliedInvoiceId(null);
     setIsThirdParty(false);
     setLastScannedRfid("");
     setRfidScanning(false);
@@ -661,6 +663,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         priceType,
         remarks,
         items: items,
+        appliedInvoiceId: appliedInvoiceId ?? undefined,
       };
 
       await SalesReturnProvider.submitReturn(payload);
@@ -1484,7 +1487,19 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                     />
                     <ChevronDown className="h-3 w-3 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     {isOrderOpen && (
-                      <div className="absolute bottom-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto">
+                      <div className="absolute bottom-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto divide-y">
+                        {/* 🟢 Clear Option */}
+                        <div
+                          className="px-3 py-2 text-xs font-medium cursor-pointer hover:bg-destructive/10 text-destructive flex items-center gap-2"
+                          onClick={() => {
+                            setOrderNo("");
+                            setOrderSearch("");
+                            setAppliedInvoiceId(null);
+                            setIsOrderOpen(false);
+                          }}
+                        >
+                          <X className="h-3 w-3" /> Clear Selection
+                        </div>
                         {filteredOrders.length > 0 ? (
                           filteredOrders.map((inv) => (
                             <div
@@ -1497,6 +1512,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                                 // Auto-fill invoice
                                 setInvoiceNo(inv.invoice_no);
                                 setInvoiceSearch(inv.invoice_no);
+                                setAppliedInvoiceId(Number(inv.id));
                               }}
                             >
                               <div className="flex flex-col">
@@ -1533,12 +1549,25 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                         setInvoiceSearch(e.target.value);
                         setInvoiceNo(e.target.value);
                         setIsInvoiceOpen(true);
+                        setAppliedInvoiceId(null);
                       }}
                       onFocus={() => setIsInvoiceOpen(true)}
                     />
                     <ChevronDown className="h-3 w-3 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     {isInvoiceOpen && (
-                      <div className="absolute bottom-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto">
+                      <div className="absolute bottom-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto divide-y">
+                        {/* 🟢 Clear Option */}
+                        <div
+                          className="px-3 py-2 text-xs font-medium cursor-pointer hover:bg-destructive/10 text-destructive flex items-center gap-2"
+                          onClick={() => {
+                            setInvoiceNo("");
+                            setInvoiceSearch("");
+                            setAppliedInvoiceId(null);
+                            setIsInvoiceOpen(false);
+                          }}
+                        >
+                          <X className="h-3 w-3" /> Clear Selection
+                        </div>
                         {filteredInvoices.length > 0 ? (
                           filteredInvoices.map((inv) => (
                             <div
@@ -1547,6 +1576,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                               onClick={() => {
                                 setInvoiceNo(inv.invoice_no);
                                 setInvoiceSearch(inv.invoice_no);
+                                setAppliedInvoiceId(Number(inv.id));
                                 setIsInvoiceOpen(false);
                                 // Auto-fill order
                                 setOrderNo(inv.order_id);

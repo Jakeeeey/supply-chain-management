@@ -443,8 +443,22 @@ export async function submitReturn(payload: any, userId: number): Promise<any> {
   };
 
   const headerResult = await repo.createReturnHeader(headerPayload);
-  const finalReturnNo =
-    (headerResult.data as any)?.return_number || generatedReturnNo;
+  const headerData = headerResult.data as any;
+  const finalReturnNo = headerData?.return_number || generatedReturnNo;
+  const returnId = headerData?.id;
+
+  // 🟢 Handle Optional Junction Link to Invoice
+  if (payload.appliedInvoiceId && returnId) {
+    try {
+      await repo.createJunctionLink({
+        return_no: returnId,
+        invoice_no: payload.appliedInvoiceId,
+        linked_by: userId,
+      });
+    } catch (e) {
+      console.error("Failed to create junction link during submission", e);
+    }
+  }
 
   const detailPromises = payload.items.map(async (item: any) => {
     const matchedType = returnTypes.find(
