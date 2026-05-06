@@ -164,6 +164,6 @@ export async function fetchSalesReturnDetails(returnNos: string[]) {
     .map((v) => encodeURIComponent(String(v)))
     .join(",");
 
-  const detailsUrl = `/items/sales_return_details?limit=-1&filter[return_no][_in]=${inFilterParam}&fields=detail_id,return_no,reason,quantity,unit_price,gross_amount,discount_type,total_amount,sales_return_type_id,product_id.product_id,product_id.product_code,product_id.product_name,product_id.product_brand,product_id.parent_id,product_id.unit_of_measurement,product_id.product_category`;
+  const detailsUrl = `/items/sales_return_details?limit=-1&filter[return_no][_in]=${inFilterParam}&fields=detail_id,return_no,reason,quantity,unit_price,gross_amount,discount_amount,discount_type,total_amount,sales_return_type_id,product_id.product_id,product_id.product_code,product_id.product_name,product_id.product_brand,product_id.parent_id,product_id.unit_of_measurement,product_id.product_category`;
   return directusGet<{ data: Record<string, any>[] }>(detailsUrl);
 }

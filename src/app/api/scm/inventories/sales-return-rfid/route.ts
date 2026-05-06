@@ -184,9 +184,7 @@ export async function POST(req: NextRequest) {
     const token = req.cookies.get("vos_access_token")?.value;
     let userId = getUserIdFromToken(token);
     
-    if (!userId && process.env.NEXT_PUBLIC_AUTH_DISABLED === "true") {
-      userId = 1; // Default system user when auth is disabled
-    }
+    // 🟢 Session token is now mandatory.
     if (!userId) {
       return json({ error: "Unauthorized: Invalid or missing session" }, 401);
     }
@@ -228,9 +226,7 @@ export async function PATCH(req: NextRequest) {
     const token = req.cookies.get("vos_access_token")?.value;
     let userId = getUserIdFromToken(token);
     
-    if (!userId && process.env.NEXT_PUBLIC_AUTH_DISABLED === "true") {
-      userId = 1; // Default system user when auth is disabled
-    }
+    // 🟢 Session token is now mandatory.
     if (!userId) {
       return json({ error: "Unauthorized: Invalid or missing session" }, 401);
     }
