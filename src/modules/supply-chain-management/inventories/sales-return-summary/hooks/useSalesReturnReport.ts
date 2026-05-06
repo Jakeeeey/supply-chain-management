@@ -136,95 +136,56 @@ export const useSalesReturnReport = () => {
       returnCategory: filters.returnCategory,
     };
 
-    const isComplexFilter =
-      (filters.supplierName && filters.supplierName !== "All") ||
-      (filters.returnCategory && filters.returnCategory !== "All");
-
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
-        let tableData: SummaryReturnHeader[] = [];
-        let totalCount = 0;
-        let chartData: SummaryReturnHeader[] = [];
+        const params = new URLSearchParams({
+          action: "report",
+          page: "1",
+          limit: "-1",
+          search: filters.search,
+          dateFrom: dateRange.from,
+          dateTo: dateRange.to,
+          status: filters.status,
+          customerCode: filters.customerCode,
+          salesmanId: filters.salesmanId,
+          supplierName: filters.supplierName,
+          returnCategory: filters.returnCategory,
+        } as any);
 
-        const buildQuery = (page: number, limit: number) => {
-          const params = new URLSearchParams({
-            action: "report",
-            page: String(page),
-            limit: String(limit),
-            search: filters.search,
-            ...apiFilters as any
-          });
-          return `/api/scm/inventories/sales-return-summary?${params.toString()}`;
-        };
+        const res = await fetch(`/api/scm/inventories/sales-return-summary?${params.toString()}`).then((r) => r.json());
+        const allRows: SummaryReturnHeader[] = res.data || [];
+        
+        // Accurate totals and charts from full set
+        let gross = 0, discount = 0, net = 0, pending = 0, received = 0;
+        const statusMap = new Map<string, number>();
+        const supplierMap = new Map<string, number>();
+        const categoryMap = new Map<string, number>();
 
-        if (isComplexFilter) {
-          // STRATEGY A: Fetch ALL, then Paginate Locally
-          const res = await fetch(buildQuery(1, -1)).then((r) => r.json());
-          const allRows = res.data || [];
-          totalCount = res.data.length; // Accurate filtered count
-
-          // Manual Pagination
-          const start = (pagination.page - 1) * pagination.limit;
-          tableData = allRows.slice(start, start + pagination.limit);
-          chartData = allRows;
-        } else {
-          // STRATEGY B: Fetch Page for Table, Fetch All for Charts (Parallel)
-          const [tableReq, chartReq] = await Promise.all([
-            fetch(buildQuery(pagination.page, pagination.limit)).then((r) => r.json()),
-            fetch(buildQuery(1, -1)).then((r) => r.json()),
-          ]);
-          tableData = tableReq.data || [];
-          totalCount = tableReq.total || 0;
-          chartData = chartReq.data || [];
-        }
-
-        // Metrics & Charts Aggregation (using chartData - full set)
-        let gross = 0,
-          discount = 0,
-          net = 0,
-          pending = 0,
-          received = 0;
-        const statusCount = new Map<string, number>();
-        const supplierCount = new Map<string, number>();
-        const categoryCount = new Map<string, number>();
-
-        for (const r of chartData) {
+        allRows.forEach((r) => {
           const st = (r.returnStatus || "").toLowerCase();
           if (st === "pending") pending++;
           if (st === "received") received++;
-          // Sum Net from ITEMS for accuracy in filtered views
-          let rowNet = 0;
+          
           const stKey = r.returnStatus || "Unknown";
-          statusCount.set(stKey, (statusCount.get(stKey) || 0) + 1);
+          statusMap.set(stKey, (statusMap.get(stKey) || 0) + 1);
 
-          if (r.items) {
-            for (const item of r.items) {
-              gross += Number(item.grossAmount || 0);
-              discount += Number(item.discountAmount || 0);
-              rowNet += Number(item.netAmount || 0);
+          (r.items || []).forEach((it) => {
+            gross += Number(it.grossAmount || 0);
+            discount += Number(it.discountAmount || 0);
+            net += Number(it.netAmount || 0);
 
-              const supStr = (item.supplierName || "").trim();
-              const sups = supStr
-                ? supStr
-                    .split(",")
-                    .map((x) => x.trim())
-                    .filter(Boolean)
-                : ["No Supplier"];
-              sups.forEach((s) =>
-                supplierCount.set(s, (supplierCount.get(s) || 0) + 1),
-              );
+            const sup = (it.supplierName || "Unknown").split(",")[0].trim();
+            supplierMap.set(sup, (supplierMap.get(sup) || 0) + 1);
 
-              const cat = item.returnCategory || "Uncategorized";
-              categoryCount.set(
-                cat,
-                (categoryCount.get(cat) || 0) + Number(item.netAmount || 0),
-              );
-            }
-          }
-          // Use Summed item net if filtered, else use header net
-          net += isComplexFilter ? rowNet : Number(r.netTotal || 0);
-        }
+            const cat = it.returnCategory || "Uncategorized";
+            categoryMap.set(cat, (categoryMap.get(cat) || 0) + Number(it.netAmount || 0));
+          });
+        });
+
+        // Paginate locally
+        const start = (pagination.page - 1) * pagination.limit;
+        const pageData = allRows.slice(start, start + pagination.limit);
 
         const toChart = (m: Map<string, number>) =>
           Array.from(m.entries())
@@ -232,10 +193,10 @@ export const useSalesReturnReport = () => {
             .sort((a, b) => b.value - a.value);
 
         setReport({
-          rows: tableData,
-          total: totalCount,
+          rows: pageData,
+          total: allRows.length,
           summary: {
-            totalReturns: chartData.length,
+            totalReturns: allRows.length,
             grossAmount: gross,
             totalDiscount: discount,
             netAmount: net,
@@ -243,17 +204,19 @@ export const useSalesReturnReport = () => {
             receivedInventory: received,
           },
           charts: {
-            status: toChart(statusCount),
-            supplier: toChart(supplierCount).slice(0, 12),
-            category: toChart(categoryCount),
+            status: toChart(statusMap),
+            supplier: toChart(supplierMap).slice(0, 10),
+            category: toChart(categoryMap),
           },
         });
+      } catch (err) {
+        console.error("Fetch error:", err);
       } finally {
         setLoading(false);
       }
-    }, 300);
+    }, 400);
     return () => clearTimeout(timer);
-  }, [pagination, filters.search, filters, dateRange]);
+  }, [pagination.page, pagination.limit, filters, dateRange]);
 
   return {
     mounted,

@@ -225,9 +225,12 @@ export async function getSummaryReturnsWithItems(
 
   const detailsByReturnNo = new Map<string, SummaryReturnItem[]>();
   for (const d of allDetails) {
-    const returnNo = String(d.return_no);
-    const product = d.product_id || {};
-    const baseProdId = String(product.parent_id || product.product_id || "");
+    const returnNo = String(d.return_no || "").trim();
+    const rawProduct = d.product_id;
+    const product = typeof rawProduct === "object" && rawProduct !== null ? rawProduct : {};
+    const productIdFromRaw = (typeof rawProduct === "number" || typeof rawProduct === "string") ? String(rawProduct) : "";
+
+    const baseProdId = String(product.parent_id || product.product_id || productIdFromRaw || "");
 
     const brandId =
       product.product_brand && typeof product.product_brand === "object"
@@ -291,7 +294,7 @@ export async function getSummaryReturnsWithItems(
 
     return {
       returnId: r.return_id,
-      returnNumber: r.return_number,
+      returnNumber: String(r.return_number || "").trim(),
       returnDate: r.return_date,
       returnStatus: r.status,
       customerName: cust?.customer_name || "",
@@ -302,7 +305,7 @@ export async function getSummaryReturnsWithItems(
       remarks: r.remarks || "",
       items,
     };
-  });
+  }).filter(row => row.items.length > 0);
 
   if (f.supplierName && f.supplierName !== "All") {
     const needle = String(f.supplierName).toLowerCase();
