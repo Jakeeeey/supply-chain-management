@@ -86,6 +86,18 @@ export async function fetchLineDiscounts() {
   );
 }
 
+export async function fetchDiscountTypes() {
+  return directusGet<{ data: Record<string, any>[] }>(
+    `/items/discount_type?limit=-1&fields=id,discount_type`,
+  );
+}
+
+export async function fetchLinePerDiscountType() {
+  return directusGet<{ data: Record<string, any>[] }>(
+    `/items/line_per_discount_type?limit=-1&fields=id,type_id,line_id`,
+  );
+}
+
 export async function fetchBrands() {
   return directusGet<{ data: Record<string, any>[] }>(
     `/items/brand?limit=-1&fields=brand_id,brand_name`,
@@ -94,13 +106,13 @@ export async function fetchBrands() {
 
 export async function fetchSuppliers() {
   return directusGet<{ data: Record<string, any>[] }>(
-    `/items/suppliers?limit=-1&fields=id,supplier_shortcut,nonBuy`,
+    `/items/suppliers?limit=-1&fields=id,supplier_name,supplier_shortcut,nonBuy`,
   );
 }
 
 export async function fetchUnits() {
   return directusGet<{ data: Record<string, any>[] }>(
-    `/items/units?limit=-1&fields=unit_id,unit_name`,
+    `/items/units?limit=-1&fields=unit_id,unit_name,unit_shortcut`,
   );
 }
 

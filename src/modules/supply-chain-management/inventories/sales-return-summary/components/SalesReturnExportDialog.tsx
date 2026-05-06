@@ -149,6 +149,19 @@ export function SalesReturnExportDialog({
         search: "",
         ...filters as any
       });
+      const companyResp = await fetch("/api/pdf/company").catch(() => null);
+      let companyData: any = null;
+      if (companyResp?.ok) {
+        const body = await companyResp.json();
+        companyData = body?.data?.[0] || body?.data;
+      }
+
+      const companyName = companyData?.company_name || "Men2 Marketing & Distribution Enterprise Corporation";
+      const companyAddress = companyData?.company_address || "Gonzales Street, Bonuan Boquig, Dagupan, Pangasinan - 2400";
+      const companyContact = companyData?.company_contact || "09125846321";
+      const companyEmail = companyData?.company_email || "men2corp@men2corp.com";
+      const companyLogo = companyData?.company_logo || "/logo.png";
+
       const res = await fetch(`/api/scm/inventories/sales-return-summary?${params.toString()}`).then((r) => r.json());
 
       const data = res.data || [];
@@ -173,12 +186,11 @@ export function SalesReturnExportDialog({
 
       const tableRows = data
         .flatMap((header: any) => {
-          // 🟢 FIX: Format date to MM-DD-YYYY
           let dateStr = "-";
           if (header.returnDate) {
-            const isoDate = String(header.returnDate).split("T")[0]; // YYYY-MM-DD
+            const isoDate = String(header.returnDate).split("T")[0];
             const [year, month, day] = isoDate.split("-");
-            dateStr = `${month}-${day}-${year}`; // MM-DD-YYYY
+            dateStr = `${month}-${day}-${year}`;
           }
 
           return (header.items || []).map((item: any) => {
@@ -194,36 +206,58 @@ export function SalesReturnExportDialog({
               <td class="truncate-text" title="${header.customerName}">${header.customerName}</td>
               <td class="truncate-text">${item.supplierName || "-"}</td>
               <td>${item.productCategory || "-"}</td>
-              <td class="truncate-text" title="${item.productName}">${item.productName}</td>
+              <td class="wrap-text">${item.productName}</td>
               <td>${item.returnCategory || "-"}</td>
-              <td class="italic text-gray-500">${item.specificReason || "-"}</td>
+              <td class="italic text-gray-500 wrap-text">${item.specificReason || "-"}</td>
               <td class="text-center">${item.unit || "Pcs"}</td>
               <td class="text-right">${Number(item.quantity).toLocaleString()}</td>
-              <td class="text-right">${Number(item.unitPrice).toFixed(2)}</td>
-              <td class="text-right">${Number(item.grossAmount).toFixed(2)}</td>
-              <td class="text-right text-red-600">(${Number(item.discountAmount).toFixed(2)})</td>
-              <td class="text-right font-bold">${Number(item.netAmount).toFixed(2)}</td>
-              <td class="truncate-text">${item.invoiceNo || header.invoiceNo || "-"}</td>
-              <td class="truncate-text">${header.remarks || "-"}</td>
-              <td class="text-center text-xs uppercase">${header.returnStatus}</td>
+              <td class="text-right no-truncate amount-cell">${Number(item.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              <td class="text-right no-truncate amount-cell">${Number(item.grossAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              <td class="text-right text-red-600 no-truncate amount-cell">(${Number(item.discountAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</td>
+              <td class="text-right font-bold no-truncate amount-cell">${Number(item.netAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              <td class="wrap-text text-gray-600">${header.remarks || "-"}</td>
             </tr>`;
           });
         })
         .join("");
 
-      // Helper to format the printed range in header
       const formatDateForHeader = (isoDate: string) => {
         const [y, m, d] = isoDate.split("-");
         return `${m}-${d}-${y}`;
       };
 
-      const fullHtml = `<!DOCTYPE html><html><head><title>Sales Return Summary</title><style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono&display=swap');@page { size: A4 landscape; margin: 10mm; }body { font-family: 'Inter', sans-serif; font-size: 10px; margin: 0; padding: 20px; color: #111; }table { width: 100%; border-collapse: collapse; font-size: 9px; }th { background: #f3f4f6; border: 1px solid #d1d5db; padding: 6px 4px; text-align: left; font-weight: 700; text-transform: uppercase; }td { border: 1px solid #e5e7eb; padding: 4px; vertical-align: top; }tr:nth-child(even) { background-color: #f9fafb; }.text-right { text-align: right; }.text-center { text-align: center; }.font-mono { font-family: 'JetBrains Mono', monospace; }.font-bold { font-weight: 700; }.text-red-600 { color: #dc2626; }.uppercase { text-transform: uppercase; }.truncate-text { max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }tfoot tr td { background-color: #e5e7eb; font-weight: bold; border-top: 2px solid #000; font-size: 10px; }@media print { .truncate-text { white-space: normal; overflow: visible; } th { background-color: #e5e7eb !important; -webkit-print-color-adjust: exact; } }</style></head><body>
-      <h1>Sales Return Summary Report</h1>
-      <div class="meta">
-        <strong>Generated:</strong> ${new Date().toLocaleString()} <br/>
-        <strong>Period:</strong> ${formatDateForHeader(dateFrom)} to ${formatDateForHeader(dateTo)}
+      const fullHtml = `<!DOCTYPE html><html><head><title>Sales Return Summary</title><style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono&display=swap');@page { size: A4 landscape; margin: 8mm; }body { font-family: 'Inter', sans-serif; font-size: 8px; margin: 0; padding: 10px; color: #111; }.official-header { display: flex; align-items: center; border-bottom: 1px solid #999; padding-bottom: 12px; margin-bottom: 15px; }.logo-container { width: 140px; margin-right: 20px; }.logo-container img { width: 100%; height: auto; display: block; }.company-info { flex: 1; }.company-name { font-size: 20px; font-weight: 800; color: #000; line-height: 1; margin-bottom: 4px; letter-spacing: -0.5px; }.company-details { font-size: 11px; color: #000; margin-bottom: 2px; }.contact-email { font-size: 11px; color: #000; }.report-info { text-align: right; margin-bottom: 10px; }.report-title { font-size: 14px; font-weight: 700; text-transform: uppercase; }.report-period { font-size: 10px; color: #444; }table { width: 100%; border-collapse: collapse; font-size: 6.5px; table-layout: fixed; }th { background: #f3f4f6; border: 1px solid #999; padding: 3px 1px; text-align: left; font-weight: 700; text-transform: uppercase; }td { border: 1px solid #ccc; padding: 2px 1px; vertical-align: top; }.text-right { text-align: right; }.text-center { text-align: center; }.font-mono { font-family: 'JetBrains Mono', monospace; }.font-bold { font-weight: 700; }.text-red-600 { color: #dc2626; }.uppercase { text-transform: uppercase; }.truncate-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.wrap-text { white-space: normal; word-break: break-word; }.no-truncate { white-space: nowrap; }.amount-cell { min-width: 45px; }tfoot tr td { background-color: #f3f4f6; font-weight: bold; border-top: 1px solid #000; font-size: 7.5px; }@media print { th { background-color: #f3f4f6 !important; -webkit-print-color-adjust: exact; } }</style></head><body>
+      <div class="official-header">
+        <div class="logo-container"><img src="${companyLogo}" alt="Logo" onerror="this.style.display='none'"/></div>
+        <div class="company-info">
+          <div class="company-name">${companyName}</div>
+          <div class="company-details">${companyAddress}</div>
+          <div class="contact-email">Contact: ${companyContact} | Email: ${companyEmail}</div>
+        </div>
       </div>
-      <table><thead><tr><th width="6%">Return No</th><th width="5%">Date</th><th width="7%">Salesman</th><th width="8%">Customer</th><th width="7%">Supplier</th><th width="7%">Category</th><th width="10%">Product</th><th width="5%">Type</th><th width="5%">Reason</th><th width="3%" class="text-center">Unit</th><th width="4%" class="text-right">Qty</th><th width="5%" class="text-right">Price</th><th width="5%" class="text-right">Gross</th><th width="5%" class="text-right">Disc</th><th width="6%" class="text-right">Net</th><th width="8%">Applied To</th><th width="10%">Remarks</th><th width="4%" class="text-center">Status</th></tr></thead><tbody>${tableRows}</tbody><tfoot><tr><td colspan="10" class="text-right">GRAND TOTALS:</td><td class="text-right">${totalQty.toLocaleString()}</td><td></td><td class="text-right">${totalGross.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td><td class="text-right text-red-600">(${totalDisc.toLocaleString(undefined, { minimumFractionDigits: 2 })})</td><td class="text-right">${totalNet.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td><td colspan="3"></td></tr></tfoot></table></body></html>`;
+      <div class="report-info">
+        <div class="report-title">Sales Return Summary</div>
+        <div class="report-period">Period: ${formatDateForHeader(dateFrom)} to ${formatDateForHeader(dateTo)}</div>
+        <div style="font-size: 8px; color: #666; margin-top: 2px;">Generated on ${new Date().toLocaleString()}</div>
+      </div>
+      <table><thead><tr>
+        <th width="6.5%">Return No</th>
+        <th width="4.5%">Date</th>
+        <th width="5%">Salesman</th>
+        <th width="7.5%">Customer</th>
+        <th width="5.5%">Supplier</th>
+        <th width="5.5%">Category</th>
+        <th width="10%">Product</th>
+        <th width="4.5%">Type</th>
+        <th width="4.5%">Reason</th>
+        <th width="2.5%">Unit</th>
+        <th width="3%">Qty</th>
+        <th width="7.5%">Price</th>
+        <th width="7.5%">Gross</th>
+        <th width="7.5%">Disc</th>
+        <th width="8.5%">Net</th>
+        <th width="8%">Remarks</th>
+      </tr></thead><tbody>${tableRows}</tbody><tfoot><tr><td colspan="10" class="text-right">GRAND TOTALS:</td><td class="text-right">${totalQty.toLocaleString()}</td><td></td><td class="text-right">${totalGross.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td><td class="text-right text-red-600">(${totalDisc.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</td><td class="text-right">${totalNet.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td><td></td></tr></tfoot></table></body></html>`;
 
       newWindow.document.write(fullHtml);
       newWindow.document.close();

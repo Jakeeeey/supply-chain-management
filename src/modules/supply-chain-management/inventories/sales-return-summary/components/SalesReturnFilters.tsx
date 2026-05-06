@@ -158,7 +158,7 @@ export const SalesReturnFilters = ({ logic }: { logic: any }) => {
           </label>
           <SearchableSelect
             options={options.suppliers.map((s: any) => ({
-              value: s.name,
+              value: s.shortcut,
               label: s.name,
             }))}
             value={filters.supplierName}
@@ -192,22 +192,15 @@ export const SalesReturnFilters = ({ logic }: { logic: any }) => {
           <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
             Return Type
           </label>
-          <Select
+          <SearchableSelect
+            options={options.returnTypes.map((t: any) => ({
+              value: t.type_name,
+              label: t.type_name,
+            }))}
             value={filters.returnCategory}
-            onValueChange={(v) => handleFilterChange("returnCategory", v)}
-          >
-            <SelectTrigger className="h-10 bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 dark:text-slate-200">
-              <SelectValue placeholder="All Types" />
-            </SelectTrigger>
-            <SelectContent className="dark:bg-slate-900 dark:border-slate-700">
-              <SelectItem value="All">All Types</SelectItem>
-              {options.returnTypes.map((t: any) => (
-                <SelectItem key={t.type_name} value={t.type_name}>
-                  {t.type_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            onChange={(v) => handleFilterChange("returnCategory", v)}
+            placeholder="All Types"
+          />
         </div>
       </div>
     </div>

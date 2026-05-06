@@ -6,7 +6,7 @@ interface LookupData {
   customerMap: Map<string, any>;
   salesmanMap: Map<string, any>;
   returnTypeMap: Map<string, any>;
-  lineDiscountMap: Map<string, { name: string; percentage: number }>;
+  discountTypeMap: Map<string, { name: string; percentage: number }>;
   brandMap: Map<string, any>;
   supplierMap: Map<string, any>;
   unitMap: Map<string, string>;
@@ -40,6 +40,8 @@ export async function fetchLookups(): Promise<LookupData> {
     unitsReq,
     categoriesReq,
     ppsAllReq,
+    discountTypesReq,
+    junctionReq,
   ] = await Promise.allSettled([
     Repo.fetchCustomers(),
     Repo.fetchSalesmen(),
@@ -51,6 +53,8 @@ export async function fetchLookups(): Promise<LookupData> {
     Repo.fetchUnits(),
     Repo.fetchCategories(),
     Repo.fetchProductPerSupplier(),
+    Repo.fetchDiscountTypes(),
+    Repo.fetchLinePerDiscountType(),
   ]);
 
   const extractData = (req: PromiseSettledResult<{ data: any[] }>) => 
@@ -76,12 +80,35 @@ export async function fetchLookups(): Promise<LookupData> {
   const returnTypeMap = new Map<string, any>();
   for (const t of returnTypes) returnTypeMap.set(String(t.type_id), t);
 
-  const lineDiscountMap = new Map<string, { name: string; percentage: number }>();
+  const discountTypes = extractData(discountTypesReq);
+  const junctions = extractData(junctionReq);
+
+  // 1. Build line_discount percentage map
+  const linePercentMap = new Map<string, number>();
   for (const d of lineDiscounts) {
-    lineDiscountMap.set(String(d.id), {
-      name: d.line_discount,
-      percentage: parseFloat(d.percentage) || 0,
+    linePercentMap.set(String(d.id), parseFloat(d.percentage) || 0);
+  }
+
+  // 2. Build aggregate discountTypeMap using junction
+  const discountTypeMap = new Map<string, { name: string; percentage: number }>();
+  
+  // First, initialize with names from discount_type collection
+  for (const dt of discountTypes) {
+    discountTypeMap.set(String(dt.id), {
+      name: dt.discount_type,
+      percentage: 0,
     });
+  }
+
+  // Then, sum percentages through junction line_per_discount_type
+  for (const j of junctions) {
+    const typeId = String(j.type_id);
+    const lineId = String(j.line_id);
+    const existing = discountTypeMap.get(typeId);
+    if (existing) {
+      const linePct = linePercentMap.get(lineId) || 0;
+      existing.percentage += linePct;
+    }
   }
 
   const brandMap = new Map<string, any>();
@@ -92,7 +119,7 @@ export async function fetchLookups(): Promise<LookupData> {
   for (const s of activeSuppliers) supplierMap.set(String(s.id), s);
 
   const unitMap = new Map<string, string>();
-  for (const u of units) unitMap.set(String(u.unit_id), u.unit_name);
+  for (const u of units) unitMap.set(String(u.unit_id), u.unit_shortcut || u.unit_name);
 
   const categoryMap = new Map<string, string>();
   for (const c of categories) categoryMap.set(String(c.category_id), c.category_name);
@@ -112,7 +139,7 @@ export async function fetchLookups(): Promise<LookupData> {
     customerMap,
     salesmanMap,
     returnTypeMap,
-    lineDiscountMap,
+    discountTypeMap,
     brandMap,
     supplierMap,
     unitMap,
@@ -154,7 +181,8 @@ export async function getSuppliersList() {
   const lookups = await fetchLookups();
   return lookups.rawSuppliers.map((s: any) => ({
     id: s.id,
-    name: s.supplier_shortcut,
+    name: s.supplier_name,
+    shortcut: s.supplier_shortcut,
   }));
 }
 
@@ -218,15 +246,16 @@ export async function getSummaryReturnsWithItems(
         ? String(product.product_category.category_id)
         : String(product.product_category || "");
 
-    const discountData = lookups.lineDiscountMap.get(String(d.discount_type));
+    const discountData = lookups.discountTypeMap.get(String(d.discount_type));
     const discountApplied = discountData ? discountData.name : "No Discount";
 
     const qty = Helpers.toNum(d.quantity);
     const price = Helpers.toNum(d.unit_price);
-    const calculatedGross = Helpers.roundToTwo(qty * price);
-    const discountPercentage = discountData ? discountData.percentage : 0;
-    const discountAmt = Helpers.calculateDiscount(calculatedGross, discountPercentage);
-    const calculatedNet = Helpers.roundToTwo(calculatedGross - discountAmt);
+    
+    // 🟢 Trust the amounts saved by the Sales Return module
+    const grossAmount = Helpers.toNum(d.gross_amount) || Helpers.roundToTwo(qty * price);
+    const discountAmount = Helpers.toNum(d.discount_amount) || 0;
+    const netAmount = Helpers.toNum(d.total_amount) || Helpers.roundToTwo(grossAmount - discountAmount);
 
     const item: SummaryReturnItem = {
       detailId: d.detail_id,
@@ -241,10 +270,10 @@ export async function getSummaryReturnsWithItems(
       specificReason: d.reason || "",
       quantity: qty,
       unitPrice: price,
-      grossAmount: calculatedGross,
-      discountAmount: discountAmt,
+      grossAmount,
+      discountAmount,
       discountApplied,
-      netAmount: calculatedNet,
+      netAmount,
     };
 
     if (!detailsByReturnNo.has(returnNo)) detailsByReturnNo.set(returnNo, []);
