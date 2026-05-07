@@ -1,14 +1,14 @@
-export const parseBoolean = (val: any): boolean => {
+export const parseBoolean = (val: unknown): boolean => {
   if (typeof val === "boolean") return val;
   if (typeof val === "number") return val === 1;
-  if (val && val.type === "Buffer" && Array.isArray(val.data))
+  if (val && typeof val === "object" && "type" in val && val.type === "Buffer" && "data" in val && Array.isArray(val.data))
     return val.data[0] === 1;
   if (typeof val === "string")
     return val === "1" || val.toLowerCase() === "true";
   return false;
 };
 
-export const toNum = (v: any): number => {
+export const toNum = (v: unknown): number => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 };
@@ -19,14 +19,16 @@ export const chunkArray = <T>(arr: T[], size: number): T[][] => {
   return out;
 };
 
-export const normalizeFilters = (raw: any) => {
+import { SummaryFilters } from "../type";
+
+export const normalizeFilters = (raw: Partial<SummaryFilters>): Required<SummaryFilters> => {
   const f = raw || {};
   return {
-    dateFrom: f.dateFrom,
-    dateTo: f.dateTo,
+    dateFrom: f.dateFrom || "",
+    dateTo: f.dateTo || "",
     status: f.status ?? "All",
     customerCode: f.customerCode ?? "All",
-    salesmanId: f.salesmanId ?? "All",
+    salesmanId: String(f.salesmanId ?? "All"),
     supplierName: f.supplierName ?? "All",
     returnCategory: f.returnCategory ?? "All",
   };

@@ -5,7 +5,7 @@ export interface SummaryFilters {
   dateTo?: string; // YYYY-MM-DD
   status?: string; // Pending/Received/All
   customerCode?: string;
-  salesmanId?: string | number;
+  salesmanId?: string;
 
   // optional item-based filters
   supplierName?: string;

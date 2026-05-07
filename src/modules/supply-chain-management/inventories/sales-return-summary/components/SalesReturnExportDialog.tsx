@@ -29,6 +29,8 @@ import type {
   SummarySalesmanOption,
   SummarySupplierOption,
   API_SalesReturnType,
+  SummaryReturnHeader,
+  SummaryReturnItem,
   SummaryFilters,
 } from "../type";
 
@@ -147,10 +149,10 @@ export function SalesReturnExportDialog({
         page: "1",
         limit: "-1",
         search: "",
-        ...filters as any
+        ...filters as Record<string, string>
       });
       const companyResp = await fetch("/api/pdf/company").catch(() => null);
-      let companyData: any = null;
+      let companyData: Record<string, string | number | null> | null = null;
       if (companyResp?.ok) {
         const body = await companyResp.json();
         companyData = body?.data?.[0] || body?.data;
@@ -184,8 +186,8 @@ export function SalesReturnExportDialog({
       let totalDisc = 0;
       let totalNet = 0;
 
-      const tableRows = data
-        .flatMap((header: any) => {
+      const tableRows = (data as SummaryReturnHeader[])
+        .flatMap((header: SummaryReturnHeader) => {
           let dateStr = "-";
           if (header.returnDate) {
             const isoDate = String(header.returnDate).split("T")[0];
@@ -193,7 +195,7 @@ export function SalesReturnExportDialog({
             dateStr = `${month}-${day}-${year}`;
           }
 
-          return (header.items || []).map((item: any) => {
+          return (header.items || []).map((item: SummaryReturnItem) => {
             totalQty += Number(item.quantity) || 0;
             totalGross += Number(item.grossAmount) || 0;
             totalDisc += Number(item.discountAmount) || 0;

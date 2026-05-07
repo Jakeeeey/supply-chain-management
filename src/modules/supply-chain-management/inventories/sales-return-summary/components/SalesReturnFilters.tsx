@@ -11,7 +11,33 @@ import {
 import { RefreshCw } from "lucide-react";
 import { SearchableSelect } from "./SearchableSelect";
 
-export const SalesReturnFilters = ({ logic }: { logic: any }) => {
+import { SummaryCustomerOption, SummarySalesmanOption, SummarySupplierOption, API_SalesReturnType } from "../type";
+
+interface SalesReturnReportHook {
+  options: {
+    customers: SummaryCustomerOption[];
+    salesmen: SummarySalesmanOption[];
+    suppliers: SummarySupplierOption[];
+    returnTypes: API_SalesReturnType[];
+  };
+  filters: {
+    search: string;
+    customerCode: string;
+    salesmanId: string;
+    status: string;
+    supplierName: string;
+    returnCategory: string;
+  };
+  setFilters: React.Dispatch<React.SetStateAction<SalesReturnReportHook["filters"]>>;
+  quickRange: string;
+  setQuickRange: React.Dispatch<React.SetStateAction<string>>;
+  dateRange: { from: string; to: string };
+  setDateRange: React.Dispatch<React.SetStateAction<{ from: string; to: string }>>;
+  loading: boolean;
+  setPagination: React.Dispatch<React.SetStateAction<{ page: number; limit: number }>>;
+}
+
+export const SalesReturnFilters = ({ logic }: { logic: SalesReturnReportHook }) => {
   const {
     options,
     filters,
@@ -26,15 +52,15 @@ export const SalesReturnFilters = ({ logic }: { logic: any }) => {
 
   // Helper to reset pagination when filter changes
   const handleFilterChange = (key: string, val: string) => {
-    setFilters((prev: any) => ({ ...prev, [key]: val }));
-    setPagination((prev: any) => ({ ...prev, page: 1 }));
+    setFilters((prev: SalesReturnReportHook["filters"]) => ({ ...prev, [key]: val }));
+    setPagination((prev: { page: number; limit: number }) => ({ ...prev, page: 1 }));
   };
 
   // Helper for date inputs to switch to 'custom' mode automatically
   const handleDateChange = (key: "from" | "to", val: string) => {
     setQuickRange("custom");
-    setDateRange((prev: any) => ({ ...prev, [key]: val }));
-    setPagination((prev: any) => ({ ...prev, page: 1 }));
+    setDateRange((prev: { from: string; to: string }) => ({ ...prev, [key]: val }));
+    setPagination((prev: { page: number; limit: number }) => ({ ...prev, page: 1 }));
   };
 
   const resetFilters = () => {
@@ -73,7 +99,7 @@ export const SalesReturnFilters = ({ logic }: { logic: any }) => {
             value={quickRange}
             onValueChange={(v) => {
               setQuickRange(v);
-              setPagination((p: any) => ({ ...p, page: 1 }));
+              setPagination((p: { page: number; limit: number }) => ({ ...p, page: 1 }));
             }}
           >
             <SelectTrigger className="h-10 bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 dark:text-slate-200">
@@ -132,7 +158,7 @@ export const SalesReturnFilters = ({ logic }: { logic: any }) => {
           </label>
           <SearchableSelect
             options={options.customers}
-            value={filters.customerCode}
+            value={filters.customerCode || ""}
             onChange={(v) => handleFilterChange("customerCode", v)}
             placeholder="All Customers"
           />
@@ -145,7 +171,7 @@ export const SalesReturnFilters = ({ logic }: { logic: any }) => {
           </label>
           <SearchableSelect
             options={options.salesmen}
-            value={filters.salesmanId}
+            value={filters.salesmanId || ""}
             onChange={(v) => handleFilterChange("salesmanId", v)}
             placeholder="All Salesmen"
           />
@@ -157,11 +183,11 @@ export const SalesReturnFilters = ({ logic }: { logic: any }) => {
             Supplier
           </label>
           <SearchableSelect
-            options={options.suppliers.map((s: any) => ({
-              value: s.shortcut,
+            options={options.suppliers.map((s: SummarySupplierOption) => ({
+              value: String(s.id),
               label: s.name,
             }))}
-            value={filters.supplierName}
+            value={filters.supplierName || ""}
             onChange={(v) => handleFilterChange("supplierName", v)}
             placeholder="All Suppliers"
           />
@@ -173,7 +199,7 @@ export const SalesReturnFilters = ({ logic }: { logic: any }) => {
             Status
           </label>
           <Select
-            value={filters.status}
+            value={filters.status || "All"}
             onValueChange={(v) => handleFilterChange("status", v)}
           >
             <SelectTrigger className="h-10 bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 dark:text-slate-200">
@@ -193,11 +219,11 @@ export const SalesReturnFilters = ({ logic }: { logic: any }) => {
             Return Type
           </label>
           <SearchableSelect
-            options={options.returnTypes.map((t: any) => ({
+            options={options.returnTypes.map((t: API_SalesReturnType) => ({
               value: t.type_name,
               label: t.type_name,
             }))}
-            value={filters.returnCategory}
+            value={filters.returnCategory || ""}
             onChange={(v) => handleFilterChange("returnCategory", v)}
             placeholder="All Types"
           />

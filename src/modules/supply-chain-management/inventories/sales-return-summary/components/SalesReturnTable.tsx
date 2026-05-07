@@ -39,20 +39,37 @@ const getStatusBadge = (status: string) => {
   return "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700";
 };
 
-const HeaderCell = ({ children, className = "" }: any) => (
+interface HeaderCellProps {
+  children: React.ReactNode;
+  className?: string;
+}
+
+const HeaderCell = ({ children, className = "" }: HeaderCellProps) => (
   <TableHead
     className={`h-9 px-3 text-xs font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap ${className}`}
   >
     {children}
   </TableHead>
 );
-const DataCell = ({ children, className = "", ...props }: any) => (
+
+interface DataCellProps extends React.TdHTMLAttributes<HTMLTableCellElement> {
+  children: React.ReactNode;
+  className?: string;
+}
+
+const DataCell = ({ children, className = "", ...props }: DataCellProps) => (
   <TableCell className={`text-xs px-3 py-2 align-top ${className}`} {...props}>
     {children}
   </TableCell>
 );
 
-const TruncatedCell = ({ children, maxWidth = "150px", className = "" }: any) => {
+interface TruncatedCellProps {
+  children: React.ReactNode;
+  maxWidth?: string;
+  className?: string;
+}
+
+const TruncatedCell = ({ children, maxWidth = "150px", className = "" }: TruncatedCellProps) => {
   const [isTruncated, setIsTruncated] = React.useState(false);
   const textRef = React.useRef<HTMLDivElement>(null);
 
@@ -110,13 +127,28 @@ const formatDate = (dateStr: string | null) => {
   const year = d.getFullYear();
   return `${month}-${day}-${year}`;
 };
+import { SummaryReturnHeader, SummaryReturnItem } from "../type";
+
+import { SummaryCustomerOption, SummarySalesmanOption, SummarySupplierOption, API_SalesReturnType } from "../type";
+
 export const SalesReturnTable = ({
   report,
   loading,
   pagination,
   setPagination,
   options,
-}: any) => {
+}: {
+  report: { rows: SummaryReturnHeader[]; total: number };
+  loading: boolean;
+  pagination: { page: number; limit: number };
+  setPagination: React.Dispatch<React.SetStateAction<{ page: number; limit: number }>>;
+  options: {
+    customers: SummaryCustomerOption[];
+    salesmen: SummarySalesmanOption[];
+    suppliers: SummarySupplierOption[];
+    returnTypes: API_SalesReturnType[];
+  };
+}) => {
   const totalPages = Math.max(1, Math.ceil(report.total / pagination.limit));
   const { page, limit } = pagination;
   const getPageNumbers = () => {
@@ -150,7 +182,7 @@ export const SalesReturnTable = ({
           <SalesReturnExportDialog
             customers={options.customers}
             salesmen={options.salesmen}
-            suppliers={options.suppliers.map((s: any) => ({
+            suppliers={options.suppliers.map((s: SummarySupplierOption) => ({
               ...s,
               value: s.name,
               label: s.name,
@@ -225,8 +257,8 @@ export const SalesReturnTable = ({
                 </TableCell>
               </TableRow>
             ) : (
-              report.rows.flatMap((r: any) =>
-                (r.items || []).map((item: any) => (
+              report.rows.flatMap((r: SummaryReturnHeader) =>
+                (r.items || []).map((item: SummaryReturnItem) => (
                   <TableRow
                     key={String(item.detailId)}
                     className="hover:bg-blue-50/30 dark:hover:bg-slate-800/50 transition-colors border-slate-200 dark:border-slate-800"
@@ -314,7 +346,7 @@ export const SalesReturnTable = ({
             variant="outline"
             size="icon"
             className="h-8 w-8 hidden sm:flex dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 dark:text-slate-300"
-            onClick={() => setPagination((p: any) => ({ ...p, page: 1 }))}
+            onClick={() => setPagination((p: { page: number; limit: number }) => ({ ...p, page: 1 }))}
             disabled={page === 1 || loading}
           >
             <ChevronsLeft className="h-4 w-4" />
@@ -324,7 +356,7 @@ export const SalesReturnTable = ({
             size="icon"
             className="h-8 w-8 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 dark:text-slate-300"
             onClick={() =>
-              setPagination((p: any) => ({ ...p, page: Math.max(1, page - 1) }))
+              setPagination((p: { page: number; limit: number }) => ({ ...p, page: Math.max(1, page - 1) }))
             }
             disabled={page === 1 || loading}
           >
@@ -339,7 +371,7 @@ export const SalesReturnTable = ({
                 className={`h-8 w-8 p-0 ${p === "..." ? "cursor-default border-none hover:bg-transparent dark:hover:bg-transparent dark:text-slate-400" : ""} ${p === page ? "bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:text-white" : "dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 dark:text-slate-300"}`}
                 onClick={() =>
                   typeof p === "number" &&
-                  setPagination((prev: any) => ({ ...prev, page: p }))
+                  setPagination((prev: { page: number; limit: number }) => ({ ...prev, page: p }))
                 }
                 disabled={p === "..." || loading}
               >
@@ -352,7 +384,7 @@ export const SalesReturnTable = ({
             size="icon"
             className="h-8 w-8 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 dark:text-slate-300"
             onClick={() =>
-              setPagination((p: any) => ({
+              setPagination((p: { page: number; limit: number }) => ({
                 ...p,
                 page: Math.min(totalPages, page + 1),
               }))
@@ -366,7 +398,7 @@ export const SalesReturnTable = ({
             size="icon"
             className="h-8 w-8 hidden sm:flex dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700 dark:text-slate-300"
             onClick={() =>
-              setPagination((p: any) => ({ ...p, page: totalPages }))
+              setPagination((p: { page: number; limit: number }) => ({ ...p, page: totalPages }))
             }
             disabled={page === totalPages || loading}
           >

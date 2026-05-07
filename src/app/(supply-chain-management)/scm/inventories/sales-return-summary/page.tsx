@@ -14,7 +14,6 @@ import { cookies } from "next/headers";
 
 // ✅ Wire the module you asked for
 // import ComingSoon from "../../_components/ComingSoon";
-import SalesReturn from "@/modules/supply-chain-management/inventories/sales-return-rfid/SalesReturnModule";
 import { SalesReturnSummary } from "@/modules/supply-chain-management/inventories/sales-return-summary/SalesReturnModule";
 
 export const runtime = "nodejs";

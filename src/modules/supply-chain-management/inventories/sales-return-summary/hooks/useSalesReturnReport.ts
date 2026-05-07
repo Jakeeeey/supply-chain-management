@@ -7,7 +7,6 @@ import {
   SummarySupplierOption,
   API_SalesReturnType,
   SummaryReturnHeader,
-  SummaryFilters,
   SummaryMetricsData,
 } from "../type";
 
@@ -82,7 +81,7 @@ export const useSalesReturnReport = () => {
   }, []);
   useEffect(() => {
     if (printData) handlePrint();
-  }, [printData]);
+  }, [printData, handlePrint]);
 
   useEffect(() => {
     (async () => {
@@ -126,16 +125,6 @@ export const useSalesReturnReport = () => {
 
   // --- 🟢 HYBRID FETCHING LOGIC ---
   useEffect(() => {
-    const apiFilters: SummaryFilters = {
-      dateFrom: dateRange.from,
-      dateTo: dateRange.to,
-      status: filters.status,
-      customerCode: filters.customerCode,
-      salesmanId: filters.salesmanId,
-      supplierName: filters.supplierName,
-      returnCategory: filters.returnCategory,
-    };
-
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
@@ -148,10 +137,10 @@ export const useSalesReturnReport = () => {
           dateTo: dateRange.to,
           status: filters.status,
           customerCode: filters.customerCode,
-          salesmanId: filters.salesmanId,
+          salesmanId: String(filters.salesmanId),
           supplierName: filters.supplierName,
           returnCategory: filters.returnCategory,
-        } as any);
+        });
 
         const res = await fetch(`/api/scm/inventories/sales-return-summary?${params.toString()}`).then((r) => r.json());
         const allRows: SummaryReturnHeader[] = res.data || [];

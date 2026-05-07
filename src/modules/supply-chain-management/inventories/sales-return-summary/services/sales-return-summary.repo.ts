@@ -57,73 +57,73 @@ export async function directusGet<T>(path: string): Promise<T> {
 }
 
 export async function fetchCustomers() {
-  return directusGet<{ data: Record<string, any>[] }>(
+  return directusGet<{ data: Record<string, unknown>[] }>(
     `/items/customer?limit=-1&fields=customer_code,customer_name,store_name`,
   );
 }
 
 export async function fetchSalesmen() {
-  return directusGet<{ data: Record<string, any>[] }>(
+  return directusGet<{ data: Record<string, unknown>[] }>(
     `/items/salesman?limit=-1&fields=id,salesman_name,salesman_code,branch_code`,
   );
 }
 
 export async function fetchBranches() {
-  return directusGet<{ data: Record<string, any>[] }>(
+  return directusGet<{ data: Record<string, unknown>[] }>(
     `/items/branches?limit=-1&fields=id,branch_name`,
   );
 }
 
 export async function fetchReturnTypes() {
-  return directusGet<{ data: Record<string, any>[] }>(
+  return directusGet<{ data: Record<string, unknown>[] }>(
     `/items/sales_return_type?limit=-1&fields=type_id,type_name`,
   );
 }
 
 export async function fetchLineDiscounts() {
-  return directusGet<{ data: Record<string, any>[] }>(
+  return directusGet<{ data: Record<string, unknown>[] }>(
     `/items/line_discount?limit=-1&fields=id,line_discount,percentage`,
   );
 }
 
 export async function fetchDiscountTypes() {
-  return directusGet<{ data: Record<string, any>[] }>(
+  return directusGet<{ data: Record<string, unknown>[] }>(
     `/items/discount_type?limit=-1&fields=id,discount_type`,
   );
 }
 
 export async function fetchLinePerDiscountType() {
-  return directusGet<{ data: Record<string, any>[] }>(
+  return directusGet<{ data: Record<string, unknown>[] }>(
     `/items/line_per_discount_type?limit=-1&fields=id,type_id,line_id`,
   );
 }
 
 export async function fetchBrands() {
-  return directusGet<{ data: Record<string, any>[] }>(
+  return directusGet<{ data: Record<string, unknown>[] }>(
     `/items/brand?limit=-1&fields=brand_id,brand_name`,
   );
 }
 
 export async function fetchSuppliers() {
-  return directusGet<{ data: Record<string, any>[] }>(
+  return directusGet<{ data: Record<string, unknown>[] }>(
     `/items/suppliers?limit=-1&fields=id,supplier_name,supplier_shortcut,nonBuy`,
   );
 }
 
 export async function fetchUnits() {
-  return directusGet<{ data: Record<string, any>[] }>(
+  return directusGet<{ data: Record<string, unknown>[] }>(
     `/items/units?limit=-1&fields=unit_id,unit_name,unit_shortcut`,
   );
 }
 
 export async function fetchCategories() {
-  return directusGet<{ data: Record<string, any>[] }>(
+  return directusGet<{ data: Record<string, unknown>[] }>(
     `/items/categories?limit=-1&fields=category_id,category_name`,
   );
 }
 
 export async function fetchProductPerSupplier() {
-  return directusGet<{ data: Record<string, any>[] }>(
+  return directusGet<{ data: Record<string, unknown>[] }>(
     `/items/product_per_supplier?limit=-1&fields=product_id,supplier_id`,
   );
 }
@@ -154,7 +154,7 @@ export async function fetchSalesReturnHeaders(
   if (filters.dateTo)
     url += `&filter[return_date][_lte]=${encodeURIComponent(filters.dateTo)}`;
 
-  return directusGet<{ data: Record<string, any>[]; meta?: { filter_count?: number } }>(url);
+  return directusGet<{ data: Record<string, unknown>[]; meta?: { filter_count?: number } }>(url);
 }
 
 export async function fetchSalesReturnDetails(returnNos: string[]) {
@@ -165,5 +165,5 @@ export async function fetchSalesReturnDetails(returnNos: string[]) {
     .join(",");
 
   const detailsUrl = `/items/sales_return_details?limit=-1&filter[return_no][_in]=${inFilterParam}&fields=detail_id,return_no,reason,quantity,unit_price,gross_amount,discount_amount,discount_type,total_amount,sales_return_type_id,product_id.product_id,product_id.product_code,product_id.product_name,product_id.product_brand,product_id.parent_id,product_id.unit_of_measurement,product_id.product_category`;
-  return directusGet<{ data: Record<string, any>[] }>(detailsUrl);
+  return directusGet<{ data: Record<string, unknown>[] }>(detailsUrl);
 }

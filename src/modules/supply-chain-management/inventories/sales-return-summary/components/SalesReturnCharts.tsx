@@ -15,7 +15,19 @@ import { useTheme } from "next-themes";
 
 const COLORS = ["#2563EB", "#6B7280", "#14B8A6", "#475569"];
 
-const CustomTooltip = ({ active, payload, label, prefix = "" }: any) => {
+interface ChartDatum {
+  name: string;
+  value: number;
+}
+
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: Array<{ name: string; value: number }>;
+  label?: string;
+  prefix?: string;
+}
+
+const CustomTooltip = ({ active, payload, label, prefix = "" }: CustomTooltipProps) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2 rounded shadow-lg z-50">
@@ -32,12 +44,20 @@ const CustomTooltip = ({ active, payload, label, prefix = "" }: any) => {
   return null;
 };
 
-export const SalesReturnCharts = ({ charts }: { charts: any }) => {
+export const SalesReturnCharts = ({
+  charts,
+}: {
+  charts: {
+    status: ChartDatum[];
+    supplier: ChartDatum[];
+    category: ChartDatum[];
+  };
+}) => {
   const { theme } = useTheme();
   const maxCategoryVal = useMemo(() => {
     if (!charts.category.length) return 0;
     return Math.ceil(
-      Math.max(...charts.category.map((d: any) => d.value)) * 1.1,
+      Math.max(...charts.category.map((d: ChartDatum) => d.value)) * 1.1,
     );
   }, [charts.category]);
   const axisStyle = {
@@ -63,7 +83,7 @@ export const SalesReturnCharts = ({ charts }: { charts: any }) => {
                 outerRadius={80}
                 stroke="none"
               >
-                {charts.status.map((_: any, i: number) => (
+                {charts.status.map((_: ChartDatum, i: number) => (
                   <Cell key={i} fill={COLORS[i % COLORS.length]} />
                 ))}
               </Pie>
@@ -108,7 +128,7 @@ export const SalesReturnCharts = ({ charts }: { charts: any }) => {
                 cursor={{ fill: "transparent" }}
               />
               <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20}>
-                {charts.supplier.map((_: any, i: number) => (
+                {charts.supplier.map((_: ChartDatum, i: number) => (
                   <Cell key={i} fill={COLORS[i % COLORS.length]} />
                 ))}
               </Bar>
@@ -143,7 +163,7 @@ export const SalesReturnCharts = ({ charts }: { charts: any }) => {
               />
               <Tooltip content={<CustomTooltip prefix="₱" />} />
               <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                {charts.category.map((_: any, i: number) => (
+                {charts.category.map((_: ChartDatum, i: number) => (
                   <Cell key={i} fill={COLORS[i % COLORS.length]} />
                 ))}
               </Bar>

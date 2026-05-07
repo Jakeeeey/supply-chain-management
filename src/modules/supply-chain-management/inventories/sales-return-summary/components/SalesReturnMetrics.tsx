@@ -1,6 +1,13 @@
 import React from "react";
 
-const MetricCard = ({ title, value, titleColor, bgColor }: any) => (
+interface MetricCardProps {
+  title: string;
+  value: string | number;
+  titleColor: string;
+  bgColor: string;
+}
+
+const MetricCard = ({ title, value, titleColor, bgColor }: MetricCardProps) => (
   <div
     className={`${bgColor} border rounded-xl p-3 sm:p-4 flex flex-col justify-center border-opacity-50`}
   >
@@ -15,11 +22,13 @@ const MetricCard = ({ title, value, titleColor, bgColor }: any) => (
   </div>
 );
 
+import { SummaryMetricsData } from "../type";
+
 export const SalesReturnMetrics = ({
   summary,
   loading,
 }: {
-  summary: any;
+  summary: SummaryMetricsData;
   loading: boolean;
 }) => {
   const fmt = (n: number) =>

@@ -9,35 +9,56 @@ import { SalesReturnTable } from "./SalesReturnTable";
 import { SalesReturnPrintSlip } from "./SalesReturnPrintSlip";
 
 export function SalesReturnSummary() {
-  const logic = useSalesReturnReport();
+  const {
+    mounted,
+    report,
+    loading,
+    pagination,
+    setPagination,
+    options,
+    printData,
+    printComponentRef,
+    filters,
+    setFilters,
+    quickRange,
+    setQuickRange,
+    dateRange,
+    setDateRange,
+  } = useSalesReturnReport();
 
-  if (!logic.mounted) return null;
+  if (!mounted) return null;
+
+  const logicProps = {
+    options,
+    filters,
+    setFilters,
+    quickRange,
+    setQuickRange,
+    dateRange,
+    setDateRange,
+    loading,
+    setPagination,
+  };
 
   return (
     <div className="space-y-4 p-2 sm:p-0">
-      <SalesReturnFilters logic={logic} />
+      <SalesReturnFilters logic={logicProps} />
 
-      <SalesReturnMetrics
-        summary={logic.report.summary}
-        loading={logic.loading}
-      />
+      <SalesReturnMetrics summary={report.summary} loading={loading} />
 
-      <SalesReturnCharts charts={logic.report.charts} />
+      <SalesReturnCharts charts={report.charts} />
 
       <SalesReturnTable
-        report={logic.report}
-        loading={logic.loading}
-        pagination={logic.pagination}
-        setPagination={logic.setPagination}
-        options={logic.options}
+        report={report}
+        loading={loading}
+        pagination={pagination}
+        setPagination={setPagination}
+        options={options}
       />
 
       <div style={{ display: "none" }}>
-        {logic.printData && (
-          <SalesReturnPrintSlip
-            ref={logic.printComponentRef}
-            data={logic.printData}
-          />
+        {printData && (
+          <SalesReturnPrintSlip ref={printComponentRef} data={printData} />
         )}
       </div>
     </div>

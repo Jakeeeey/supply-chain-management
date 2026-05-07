@@ -4,7 +4,7 @@ import { SalesReturnSummaryService } from "@/modules/supply-chain-management/inv
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function json(res: any, status = 200) {
+function json(res: unknown, status = 200) {
   return NextResponse.json(res, { status });
 }
 
@@ -53,8 +53,9 @@ export async function GET(req: NextRequest) {
     }
 
     return json({ error: "Invalid action" }, 400);
-  } catch (error: any) {
-    console.error("Sales Return Summary API GET Error:", error);
-    return json({ error: error.message || "Internal server error" }, 500);
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("Sales Return Summary API GET Error:", err);
+    return json({ error: err.message || "Internal server error" }, 500);
   }
 }
