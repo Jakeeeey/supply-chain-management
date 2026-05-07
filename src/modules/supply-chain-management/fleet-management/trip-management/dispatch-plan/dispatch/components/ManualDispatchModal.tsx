@@ -336,7 +336,7 @@ export function ManualDispatchModal({ plan, users, open, onOpenChange, onSuccess
                     <Button 
                         className="h-11 px-8 rounded-xl font-black text-[11px] uppercase tracking-[0.15em] bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/20 border-none transition-all hover:scale-105 active:scale-95"
                         onClick={() => step === 1 ? setStep(2) : handleConfirm()}
-                        disabled={isSubmitting || (step === 1 && !driverId)}
+                        disabled={isSubmitting || (step === 1 && (!driverId || !driverPresent || !helperConfig.some(h => h.id > 0 && h.present)))}
                     >
                         {isSubmitting ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
