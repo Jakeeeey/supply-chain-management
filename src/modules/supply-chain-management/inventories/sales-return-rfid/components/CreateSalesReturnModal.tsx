@@ -27,6 +27,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { cn } from "@/lib/utils";
 
 import {
   SalesReturnItem,
@@ -1217,33 +1219,22 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                               />
                             </td>
                             <td className="px-3 py-2">
-                              <Select
+                              <SearchableSelect
                                 value={item.returnType || ""}
                                 onValueChange={(val) => { handleItemChange(idx, "returnType", val); setReturnTypeError(false); }}
-                              >
-                                <SelectTrigger
-                                  className={`w-full h-8 px-2 text-sm transition-colors [&>span]:truncate ${returnTypeError && (!item.returnType || item.returnType === "")
-                                      ? "border-destructive ring-1 ring-destructive/30 bg-destructive/5 text-destructive"
-                                      : "border-border bg-background focus:ring-1 focus:ring-primary"
-                                    }`}
-                                >
-                                  <SelectValue placeholder="Select type" />
-                                </SelectTrigger>
-                                <SelectContent className="z-[200]">
-                                  {returnTypeOptions.length > 0 ? (
-                                    returnTypeOptions.map((type) => (
-                                      <SelectItem key={type.type_id} value={type.type_name}>
-                                        {type.type_name}
-                                      </SelectItem>
-                                    ))
-                                  ) : (
-                                    <>
-                                      <SelectItem value="Good Order">Good Order</SelectItem>
-                                      <SelectItem value="Bad Order">Bad Order</SelectItem>
-                                    </>
-                                  )}
-                                </SelectContent>
-                              </Select>
+                                options={returnTypeOptions.length > 0 
+                                  ? returnTypeOptions.map((type) => ({ value: type.type_name, label: type.type_name }))
+                                  : [
+                                      { value: "Good Order", label: "Good Order" },
+                                      { value: "Bad Order", label: "Bad Order" }
+                                    ]
+                                }
+                                placeholder="Select type"
+                                className={cn(
+                                  "h-8 text-sm px-2",
+                                  returnTypeError && (!item.returnType || item.returnType === "") && "border-destructive ring-1 ring-destructive/30 bg-destructive/5 text-destructive"
+                                )}
+                              />
                             </td>
                             <td className="sticky right-0 z-10 px-2 py-2 text-center bg-background border-l border-transparent group-hover:border-primary/20">
                               <button
@@ -1410,33 +1401,22 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                                 />
                               </td>
                               <td className="px-4 py-2">
-                                <Select
+                                <SearchableSelect
                                   value={item.returnType || ""}
                                   onValueChange={(val) => { handleItemChange(idx, "returnType", val); setReturnTypeError(false); }}
-                                >
-                                  <SelectTrigger
-                                    className={`w-full h-8 px-2 text-sm transition-colors [&>span]:truncate ${returnTypeError && (!item.returnType || item.returnType === "")
-                                        ? "border-destructive ring-1 ring-destructive/30 bg-destructive/5 text-destructive"
-                                        : "border-border bg-background focus:ring-1 focus:ring-primary"
-                                      }`}
-                                  >
-                                    <SelectValue placeholder="Select type" />
-                                  </SelectTrigger>
-                                  <SelectContent className="z-[200]">
-                                    {returnTypeOptions.length > 0 ? (
-                                      returnTypeOptions.map((type) => (
-                                        <SelectItem key={type.type_id} value={type.type_name}>
-                                          {type.type_name}
-                                        </SelectItem>
-                                      ))
-                                    ) : (
-                                      <>
-                                        <SelectItem value="Good Order">Good Order</SelectItem>
-                                        <SelectItem value="Bad Order">Bad Order</SelectItem>
-                                      </>
-                                    )}
-                                  </SelectContent>
-                                </Select>
+                                  options={returnTypeOptions.length > 0 
+                                    ? returnTypeOptions.map((type) => ({ value: type.type_name, label: type.type_name }))
+                                    : [
+                                        { value: "Good Order", label: "Good Order" },
+                                        { value: "Bad Order", label: "Bad Order" }
+                                      ]
+                                  }
+                                  placeholder="Select type"
+                                  className={cn(
+                                    "h-8 text-sm px-2",
+                                    returnTypeError && (!item.returnType || item.returnType === "") && "border-destructive ring-1 ring-destructive/30 bg-destructive/5 text-destructive"
+                                  )}
+                                />
                               </td>
                               <td className="sticky right-0 z-10 px-2 py-2 text-center bg-background border-l border-transparent group-hover:border-primary/20">
                                 <button
