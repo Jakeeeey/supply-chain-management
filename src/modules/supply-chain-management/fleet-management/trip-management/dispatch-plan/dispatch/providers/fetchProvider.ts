@@ -1,4 +1,4 @@
-import { KioskDispatchPlan, UserOption } from "../types";
+import { KioskDispatchPlan, UserOption, CustomerDispatchInfo } from "../types";
 
 const API_BASE = "/api/scm/fleet-management/trip-management/dispatch-plan/dispatch";
 
@@ -15,7 +15,7 @@ export const fetchProvider = {
         return data.data || [];
     },
 
-    async getCustomers(planId: number, docNo?: string): Promise<any[]> {
+    async getCustomers(planId: number, docNo?: string): Promise<CustomerDispatchInfo[]> {
         const res = await fetch(`${API_BASE}?type=customers&plan_id=${planId}${docNo ? `&doc_no=${docNo}` : ""}`);
         const data = await res.json();
         return data.data || [];

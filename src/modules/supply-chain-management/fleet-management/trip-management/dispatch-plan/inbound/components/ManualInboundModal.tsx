@@ -36,7 +36,7 @@ export function ManualInboundModal({ plan, open, onOpenChange, onSuccess }: Manu
         try {
             const data = await fetchProvider.getCustomers(plan.id);
             setCustomers(data);
-        } catch (err) {
+        } catch {
             setError("Failed to load customer details");
             toast.error("Error loading arrival details");
         } finally {
@@ -95,7 +95,7 @@ export function ManualInboundModal({ plan, open, onOpenChange, onSuccess }: Manu
             } else {
                 toast.error("Failed to confirm arrival");
             }
-        } catch (error) {
+        } catch {
             toast.error("An error occurred during confirmation");
         } finally {
             setIsSubmitting(false);

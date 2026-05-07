@@ -20,7 +20,7 @@ export function useDispatch() {
             setPlans(plansData);
             setUsers(usersData);
             setError(null);
-        } catch (err) {
+        } catch {
             setError("Failed to fetch data");
             toast.error("Error loading dispatch plans");
         } finally {

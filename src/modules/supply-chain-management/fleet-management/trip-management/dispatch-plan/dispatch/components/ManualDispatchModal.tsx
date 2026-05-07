@@ -6,7 +6,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { KioskDispatchPlan, UserOption, CustomerDispatchInfo } from "../types";
 import { Truck, User, ArrowRight, Loader2, Plus, X, Calendar, MapPin, FileText, Users } from "lucide-react";
@@ -40,7 +39,7 @@ export function ManualDispatchModal({ plan, users, open, onOpenChange, onSuccess
         try {
             const data = await fetchProvider.getCustomers(plan.id, plan.doc_no);
             setCustomers(data);
-        } catch (error) {
+        } catch {
             toast.error("Failed to load delivery details");
         } finally {
             setIsLoadingCustomers(false);
@@ -107,7 +106,7 @@ export function ManualDispatchModal({ plan, users, open, onOpenChange, onSuccess
             } else {
                 toast.error("Failed to confirm dispatch");
             }
-        } catch (error) {
+        } catch {
             toast.error("An error occurred during confirmation");
         } finally {
             setIsSubmitting(false);

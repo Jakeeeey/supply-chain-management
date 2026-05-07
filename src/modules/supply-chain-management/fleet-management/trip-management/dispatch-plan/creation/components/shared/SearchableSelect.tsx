@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Check, ChevronsUpDown, Search } from "lucide-react";
+import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,7 +24,6 @@ export interface SearchableSelectProps {
     onValueChange: (value: string) => void;
     placeholder?: string;
     disabled?: boolean;
-    className?: string;
     triggerClassName?: string;
 }
 
@@ -34,7 +33,6 @@ export function SearchableSelect({
     onValueChange,
     placeholder = "Select option...",
     disabled = false,
-    className,
     triggerClassName,
 }: SearchableSelectProps) {
     const [open, setOpen] = React.useState(false);

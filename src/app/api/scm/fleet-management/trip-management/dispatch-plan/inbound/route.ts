@@ -23,6 +23,26 @@ interface DirectusVehicle {
     vehicle_plate: string;
 }
 
+interface DirectusInvoice {
+    invoice_id: number;
+    post_dispatch_plan_id: number;
+}
+
+interface SalesInvoice {
+    invoice_id: number;
+    invoice_no: string;
+    customer_code: string | number;
+    total_amount: number;
+    net_amount: number;
+    shipping_address?: string;
+    order_id?: string;
+}
+
+interface DirectusCustomer {
+    customer_code: string | number;
+    customer_name: string;
+}
+
 export async function GET(req: NextRequest) {
     try {
         const { searchParams } = new URL(req.url);
@@ -35,7 +55,7 @@ export async function GET(req: NextRequest) {
                 headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
             });
             const invoices = (await invRes.json()).data || [];
-            const invoiceIds = invoices.map((i: any) => i.invoice_id);
+            const invoiceIds = invoices.map((i: DirectusInvoice) => i.invoice_id);
 
             if (invoiceIds.length === 0) return NextResponse.json({ data: [] });
 
@@ -46,18 +66,18 @@ export async function GET(req: NextRequest) {
             const siData = await siRes.json();
             const sis = siData.data || [];
 
-            const customerCodes = Array.from(new Set(sis.map((si: any) => si.customer_code).filter(Boolean)));
+            const customerCodes = Array.from(new Set(sis.map((si: SalesInvoice) => si.customer_code).filter(Boolean)));
             
             // Fetch Customer Names
             const custRes = await fetch(`${DIRECTUS_URL}/items/customer?filter[customer_code][_in]=${customerCodes.join(",")}&fields=customer_code,customer_name`, {
                 headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
             });
             const customers = (await custRes.json()).data || [];
-            const custMap = new Map(customers.map((c: any) => [c.customer_code, c.customer_name]));
+            const custMap = new Map(customers.map((c: DirectusCustomer) => [c.customer_code, c.customer_name]));
 
             // Group invoices by customer
-            const customerGroup = new Map<string, any>();
-            sis.forEach((si: any) => {
+            const customerGroup = new Map<string | number, { customer_code: string | number; customer_name: string; address: string; invoices: { no: string; amount: number }[] }>();
+            sis.forEach((si: SalesInvoice) => {
                 const code = si.customer_code;
                 if (!customerGroup.has(code)) {
                     customerGroup.set(code, {
@@ -82,7 +102,7 @@ export async function GET(req: NextRequest) {
         });
         const plans = await planRes.json();
 
-        const planIds = (plans.data || []).map((p: any) => p.id);
+        const planIds = (plans.data || []).map((p: { id: number }) => p.id);
         if (planIds.length === 0) return NextResponse.json({ data: [] });
 
         // Fetch staff
@@ -105,7 +125,7 @@ export async function GET(req: NextRequest) {
         const vehicles = (await vehicleRes.json()).data || [];
         const vehicleMap = new Map<number, DirectusVehicle>(vehicles.map((v: DirectusVehicle) => [v.vehicle_id, v]));
 
-        const enrichedPlans = plans.data.map((p: any) => {
+        const enrichedPlans = plans.data.map((p: { id: number; doc_no: string; date_encoded: string; estimated_time_of_dispatch?: string; estimated_time_of_arrival?: string; vehicle_id: number; driver_id: number; status: string }) => {
             // Filter staff for this plan and ensure they are present for Inbound
             const planStaff = staff.filter((s: DirectusStaff) => 
                 s.post_dispatch_plan_id === p.id && 
@@ -115,7 +135,7 @@ export async function GET(req: NextRequest) {
             const helperRecords = planStaff.filter((s: DirectusStaff) => s.role.toLowerCase() === "helper");
 
             const driverUser = driverRecord ? userMap.get(driverRecord.user_id) : userMap.get(p.driver_id);
-            const helpers = helperRecords.map((h: any) => {
+            const helpers = helperRecords.map((h: DirectusStaff) => {
                 const u = userMap.get(h.user_id);
                 return u ? { 
                     user_id: u.user_id, 
@@ -198,13 +218,13 @@ export async function PATCH(req: NextRequest) {
         const invoices = (await invoicesRes.json()).data || [];
 
         if (invoices.length > 0) {
-            const invoiceIds = invoices.map((inv: any) => inv.invoice_id);
+            const invoiceIds = invoices.map((inv: DirectusInvoice) => inv.invoice_id);
             const siRes = await fetch(`${DIRECTUS_URL}/items/sales_invoice?filter[invoice_id][_in]=${invoiceIds.join(",")}`, {
                 headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
             });
             const sis = (await siRes.json()).data || [];
 
-            const updates: any[] = [];
+            const updates: { id: number; status: string }[] = [];
             const soStatusGroups: Record<string, string[]> = { "Delivered": [], "Not Fulfilled": [] };
 
             for (const si of sis) {
@@ -223,7 +243,7 @@ export async function PATCH(req: NextRequest) {
                     pdInvStatus = "Fulfilled With Returns";
                 }
 
-                const pdi = invoices.find((i: any) => i.invoice_id === si.invoice_id);
+                const pdi = invoices.find((i: DirectusInvoice) => i.invoice_id === si.invoice_id);
                 if (pdi) updates.push({ id: pdi.id, status: pdInvStatus });
                 
                 if (si.order_id) {

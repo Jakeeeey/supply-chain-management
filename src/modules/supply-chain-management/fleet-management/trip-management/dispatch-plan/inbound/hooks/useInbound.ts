@@ -15,7 +15,7 @@ export function useInbound() {
             const data = await fetchProvider.getPlans();
             setPlans(data);
             setError(null);
-        } catch (err) {
+        } catch {
             setError("Failed to fetch data");
             toast.error("Error loading inbound plans");
         } finally {

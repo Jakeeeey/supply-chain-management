@@ -29,6 +29,29 @@ interface DirectusStaff {
     is_present?: number | boolean;
 }
 
+interface DirectusInvoice {
+    invoice_id: number;
+    post_dispatch_plan_id: number;
+}
+
+interface SalesInvoice {
+    invoice_id: number;
+    invoice_no: string;
+    customer_code: string | number;
+    total_amount: number;
+    net_amount: number;
+    shipping_address?: string;
+    order_id?: string;
+}
+
+interface DirectusCustomer {
+    customer_code: string | number;
+    customer_name: string;
+    brgy?: string;
+    city?: string;
+    province?: string;
+}
+
 async function fetcher(endpoint: string) {
     const res = await fetch(`${DIRECTUS_URL}/items${endpoint}`, {
         headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
@@ -61,28 +84,28 @@ export async function GET(req: NextRequest) {
             
             if (invoices.length === 0) return NextResponse.json({ data: [] });
 
-            const invoiceIds = invoices.map((i: any) => i.invoice_id).filter(Boolean);
+            const invoiceIds = invoices.map((i: DirectusInvoice) => i.invoice_id).filter(Boolean);
             if (invoiceIds.length === 0) return NextResponse.json({ data: [] });
 
             // Fetch Sales Invoices to get customer, address, and amount
             const siData = await fetcher(`/sales_invoice?limit=-1&filter[invoice_id][_in]=${invoiceIds.join(",")}&fields=invoice_id,invoice_no,customer_code,total_amount,net_amount`);
             const sis = siData.data || [];
 
-            const customerCodes = Array.from(new Set(sis.map((si: any) => si.customer_code?.toString()).filter(Boolean)));
+            const customerCodes = Array.from(new Set(sis.map((si: SalesInvoice) => si.customer_code?.toString()).filter(Boolean)));
             if (customerCodes.length === 0) return NextResponse.json({ data: [] });
             
             // Fetch Customer Names and Addresses
             const custData = await fetcher(`/customer?limit=-1&filter[customer_code][_in]=${customerCodes.join(",")}&fields=customer_code,customer_name,brgy,city,province`);
             const customers = custData.data || [];
-            const custMap = new Map<string, { name: string; address: string }>(customers.map((c: any) => {
+            const custMap = new Map<string, { name: string; address: string }>(customers.map((c: DirectusCustomer) => {
                 const addressParts = [c.brgy, c.city, c.province].filter(Boolean);
                 const address = addressParts.join(", ") || "No Address Provided";
                 return [c.customer_code?.toString(), { name: c.customer_name, address }];
             }));
 
             // Group invoices by customer
-            const customerGroup = new Map<string, any>();
-            sis.forEach((si: any) => {
+            const customerGroup = new Map<string, { customer_code: string; customer_name: string; address: string; invoices: { no: string; amount: number }[] }>();
+            sis.forEach((si: SalesInvoice) => {
                 const code = si.customer_code?.toString();
                 if (!code) return;
                 
@@ -123,7 +146,7 @@ export async function GET(req: NextRequest) {
         // Fetch vehicles
         const vehiclesData = await fetcher(`/vehicles?limit=-1&fields=vehicle_id,vehicle_plate`);
         const vehicles = vehiclesData.data || [];
-        const vehicleMap = new Map<number, { vehicle_id: number; vehicle_plate: string }>(vehicles.map((v: any) => [v.vehicle_id, v]));
+        const vehicleMap = new Map<number, { vehicle_id: number; vehicle_plate: string }>(vehicles.map((v: { vehicle_id: number; vehicle_plate: string }) => [v.vehicle_id, v]));
 
         const planStaffMap = new Map<number, DirectusStaff[]>();
         staff.forEach((s: DirectusStaff) => {
@@ -203,7 +226,7 @@ export async function PATCH(req: NextRequest) {
             await fetch(`${DIRECTUS_URL}/items/post_dispatch_plan_staff`, {
                 method: "DELETE",
                 headers: { Authorization: `Bearer ${AUTH_TOKEN}`, "Content-Type": "application/json" },
-                body: JSON.stringify(existingStaff.map((s: any) => s.id))
+                body: JSON.stringify(existingStaff.map((s: { id: number }) => s.id))
             });
         }
 
@@ -228,14 +251,14 @@ export async function PATCH(req: NextRequest) {
             headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
         });
         const invoices = (await invoicesRes.json()).data || [];
-        const invoiceIds = invoices.map((inv: any) => inv.invoice_id);
+        const invoiceIds = invoices.map((inv: DirectusInvoice) => inv.invoice_id);
 
         if (invoiceIds.length > 0) {
             const siRes = await fetch(`${DIRECTUS_URL}/items/sales_invoice?filter[invoice_id][_in]=${invoiceIds.join(",")}`, {
                 headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
             });
             const siData = await siRes.json();
-            const orderNos = Array.from(new Set(siData.data.map((si: any) => si.order_id).filter(Boolean)));
+            const orderNos = Array.from(new Set(siData.data.map((si: SalesInvoice) => si.order_id).filter(Boolean)));
 
             if (orderNos.length > 0) {
                 // Update SO
