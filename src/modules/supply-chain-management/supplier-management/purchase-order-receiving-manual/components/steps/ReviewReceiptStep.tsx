@@ -127,6 +127,10 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
         });
     }, [selectedPO]);
 
+    const receivedItems = React.useMemo(() => {
+        return allItems.filter(it => (safeCounts[String(it.id)] ?? 0) > 0);
+    }, [allItems, safeCounts]);
+
     const executeSave = async () => {
         const metaData: Record<string, { lotNo: string; batchNo?: string; expiryDate: string }> = {};
         Object.keys(lotNumbers).forEach(id => {
@@ -281,7 +285,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                             <TableBody>
                                 {(() => {
                                     const PAGE_SIZE = 10;
-                                    const paginatedItems = allItems.slice((reviewPage - 1) * PAGE_SIZE, reviewPage * PAGE_SIZE);
+                                    const paginatedItems = receivedItems.slice((reviewPage - 1) * PAGE_SIZE, reviewPage * PAGE_SIZE);
                                     return paginatedItems.map((it: ReceivingPOItem) => {
                                         const porId = String(it.id);
                                         const count = safeCounts[porId] ?? 0;
@@ -372,19 +376,19 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                     </div>
 
                     {/* Pagination Controls */}
-                    {allItems.length > 10 && (
+                    {receivedItems.length > 10 && (
                         <div className="flex items-center justify-between px-4 py-3 border rounded-md bg-muted/10 mt-2">
                             <span className="text-xs text-muted-foreground font-medium">
-                                Showing {(reviewPage - 1) * 10 + 1}–{Math.min(reviewPage * 10, allItems.length)} of {allItems.length} items
+                                Showing {(reviewPage - 1) * 10 + 1}–{Math.min(reviewPage * 10, receivedItems.length)} of {receivedItems.length} items
                             </span>
                             <div className="flex items-center gap-2">
                                 <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => setReviewPage(p => Math.max(1, p - 1))} disabled={reviewPage === 1}>
                                     <ChevronLeft className="h-4 w-4" />
                                 </Button>
                                 <span className="text-xs font-bold px-2">
-                                    Page {reviewPage} of {Math.ceil(allItems.length / 10)}
+                                    Page {reviewPage} of {Math.ceil(receivedItems.length / 10)}
                                 </span>
-                                <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => setReviewPage(p => Math.min(Math.ceil(allItems.length / 10), p + 1))} disabled={reviewPage === Math.ceil(allItems.length / 10)}>
+                                <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => setReviewPage(p => Math.min(Math.ceil(receivedItems.length / 10), p + 1))} disabled={reviewPage === Math.ceil(receivedItems.length / 10)}>
                                     <ChevronRight className="h-4 w-4" />
                                 </Button>
                             </div>
@@ -436,13 +440,6 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                     )}
 
                     <div className="mt-4 flex justify-end gap-3">
-                        <Button
-                            variant="outline"
-                            className="h-10 px-6 text-xs font-black uppercase tracking-widest border-indigo-200 text-indigo-700 hover:bg-indigo-50"
-                            onClick={() => setPreviewOpen(true)}
-                        >
-                            Print Preview / Export PDF
-                        </Button>
                         <Button
                             className="bg-indigo-600 hover:bg-indigo-700 h-10 px-8 text-xs font-black uppercase tracking-widest"
                             onClick={handleSaveReceipt}

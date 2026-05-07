@@ -69,12 +69,12 @@ async function getData() {
         const headers = directusHeaders();
 
         const [poRes, supRes, payRes, transRes, porRes, popRes] = await Promise.all([
-            fetch(`${base}/items/purchase_order?limit=-1`, { cache: "no-store", headers }),
+            fetch(`${base}/items/purchase_order?limit=-1&fields=*`, { cache: "no-store", headers }),
             fetch(`${base}/items/suppliers?limit=-1`, { cache: "no-store", headers }),
             fetch(`${base}/items/payment_status?limit=-1`, { cache: "no-store", headers }),
             fetch(`${base}/items/transaction_status?limit=-1`, { cache: "no-store", headers }),
             fetch(`${base}/items/purchase_order_receiving?limit=-1&fields=purchase_order_product_id,purchase_order_id,received_quantity,isPosted,receipt_no`, { cache: "no-store", headers }),
-            fetch(`${base}/items/purchase_order_product?limit=-1&fields=purchase_order_product_id,purchase_order_id,quantity`, { cache: "no-store", headers }),
+            fetch(`${base}/items/purchase_order_products?limit=-1&fields=purchase_order_product_id,purchase_order_id,ordered_quantity`, { cache: "no-store", headers }),
         ]);
 
         const pos = await poRes.json();
@@ -92,17 +92,31 @@ async function getData() {
         const orderedByPo = new Map<number, number>();
         for (const p of popRows) {
             const poId = Number(p.purchase_order_id);
-            orderedByPo.set(poId, (orderedByPo.get(poId) || 0) + Number(p.quantity || 0));
+            orderedByPo.set(poId, (orderedByPo.get(poId) || 0) + Number(p.ordered_quantity || 0));
         }
 
         const receivedByPo = new Map<number, number>();
         const hasReceiptByPo = new Map<number, boolean>();
+        const allInvPostedByPo = new Map<number, boolean>();
+        const poReceipts = new Map<number, Record<string, unknown>[]>();
+
         for (const r of porRows) {
             const poId = Number(r.purchase_order_id);
             receivedByPo.set(poId, (receivedByPo.get(poId) || 0) + Number(r.received_quantity || 0));
             if (r.receipt_no || Number(r.received_quantity) > 0) {
                 hasReceiptByPo.set(poId, true);
+                const list = poReceipts.get(poId) || [];
+                list.push(r);
+                poReceipts.set(poId, list);
             }
+        }
+
+        // Pre-calculate if all inventory receipts are posted for each PO
+        for (const poId of Array.from(orderedByPo.keys())) {
+            const receipts = poReceipts.get(poId) || [];
+            const hasAny = receipts.length > 0;
+            const allPosted = hasAny && receipts.every(r => Number(r.isPosted) === 1);
+            allInvPostedByPo.set(poId, allPosted);
         }
 
         // Derive accurate inventory_status for each PO
@@ -122,8 +136,14 @@ async function getData() {
                 if (hasReceipt) {
                     const fullyReceived = totalOrdered > 0 && totalReceived >= totalOrdered;
                     if (fullyReceived) {
-                        // Keep as Received (6) or Closed (14) if it was already closed
-                        effectiveStatus = 6;
+                        const invPosted = allInvPostedByPo.get(poId) || false;
+                        const amtPosted = Number(po.is_posted) === 1 || po.is_posted === true;
+
+                        if (invPosted && amtPosted) {
+                            effectiveStatus = 6; // ✅ Received
+                        } else {
+                            effectiveStatus = 13; // ✅ For Posting
+                        }
                     } else {
                         // It has some receiving activity but not fully received
                         effectiveStatus = 9; // Partially Received

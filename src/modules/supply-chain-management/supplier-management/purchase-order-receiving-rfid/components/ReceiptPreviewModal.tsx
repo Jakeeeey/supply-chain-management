@@ -66,6 +66,7 @@ export function ReceiptPreviewModal({
                 expectedQty: it.expectedQty,
                 receivedQtyNow: it.receivedQtyNow,
                 unitPrice: it.unitPrice || 0,
+                discountType: it.discountType || "No Discount",
                 discountAmount: it.discountAmount || 0,
                 batchNo: it.batchNo,
                 lotId: it.lotId,
@@ -77,7 +78,7 @@ export function ReceiptPreviewModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="w-[95vw] max-w-6xl max-h-[90vh] flex flex-col p-0 overflow-hidden shadow-2xl border-primary/20 scale-[0.98] sm:scale-100">
+            <DialogContent showCloseButton={false} className="w-[98vw] max-w-none sm:!max-w-[95vw] lg:!max-w-[1200px] h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden shadow-2xl border-primary/20">
                 <DialogHeader className="p-6 border-b bg-muted/30">
                     <div className="flex items-center justify-between">
                         <DialogTitle className="flex items-center gap-3 text-2xl font-black tracking-tight">
@@ -86,7 +87,7 @@ export function ReceiptPreviewModal({
                             </div>
                             Receipt Overview
                         </DialogTitle>
-                        <Badge 
+                        <Badge
                             variant={data.isFullyReceived ? "default" : "secondary"}
                             className={data.isFullyReceived ? "bg-green-600 px-4 py-1.5 text-xs font-bold" : "bg-orange-500 text-white px-4 py-1.5 text-xs font-bold"}
                         >
@@ -135,11 +136,16 @@ export function ReceiptPreviewModal({
                                     <span className="text-muted-foreground text-sm font-medium">({data.items.length} items)</span>
                                 </div>
                             </div>
-                            
+
                             <div className="overflow-x-auto pb-4 scrollbar-thin">
                                 <div className="space-y-2 min-w-[800px]">
                                     {data.items.map((it, idx) => {
                                         const isPending = it.receivedQtyNow === 0;
+                                        const discA = Number(it.discountAmount || 0);
+                                        const uPrice = Number(it.unitPrice || 0);
+                                        const qty = Number(it.receivedQtyNow || 0);
+                                        const netA = (uPrice - discA) * qty;
+
                                         return (
                                             <div key={idx} className={`flex items-center gap-4 p-4 rounded-xl border border-primary/10 bg-background shadow-sm transition-all ${isPending ? "opacity-50 grayscale" : "hover:border-primary/30 hover:shadow-md"}`}>
                                                 <div className="flex-1 min-w-0">
@@ -149,55 +155,130 @@ export function ReceiptPreviewModal({
                                                             {it.barcode}
                                                         </code>
                                                     </div>
-                                                        <div className="flex items-center gap-4 mt-2">
-                                                            {it.lotId && (
-                                                                <div className="flex flex-col">
-                                                                    <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-tighter">Lot</span>
-                                                                    <span className="text-[10px] font-black">{it.lotId}</span>
-                                                                </div>
-                                                            )}
-                                                            {it.batchNo && (
-                                                                <div className="flex flex-col">
-                                                                    <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-tighter">Batch</span>
-                                                                    <span className="text-[10px] font-black">{it.batchNo}</span>
-                                                                </div>
-                                                            )}
-                                                            {it.expiryDate && (
-                                                                <div className="flex flex-col">
-                                                                    <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-tighter">Expiry</span>
-                                                                    <span className="text-[10px] font-black">{it.expiryDate}</span>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                        <div className="flex flex-wrap gap-1 mt-2">
-                                                            {(it.rfids || []).map((code, ri) => (
-                                                                <span key={ri} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-muted/50 border border-primary/5 text-muted-foreground">
-                                                                    {code}
-                                                                </span>
-                                                            ))}
-                                                            {(it.rfids || []).length === 0 && (
-                                                                <span className="text-[10px] italic text-muted-foreground">Waiting for verification...</span>
-                                                            )}
-                                                        </div>
+                                                    <div className="flex items-center gap-4 mt-2">
+                                                        {it.lotId && (
+                                                            <div className="flex flex-col">
+                                                                <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-tighter">Lot</span>
+                                                                <span className="text-[10px] font-black">{it.lotId}</span>
+                                                            </div>
+                                                        )}
+                                                        {it.batchNo && (
+                                                            <div className="flex flex-col">
+                                                                <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-tighter">Batch</span>
+                                                                <span className="text-[10px] font-black">{it.batchNo}</span>
+                                                            </div>
+                                                        )}
+                                                        {it.expiryDate && (
+                                                            <div className="flex flex-col">
+                                                                <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-tighter">Expiry</span>
+                                                                <span className="text-[10px] font-black">{it.expiryDate}</span>
+                                                            </div>
+                                                        )}
                                                     </div>
+                                                    <div className="flex flex-wrap gap-1 mt-2">
+                                                        {(it.rfids || []).map((code, ri) => (
+                                                            <span key={ri} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-muted/50 border border-primary/5 text-muted-foreground">
+                                                                {code}
+                                                            </span>
+                                                        ))}
+                                                        {(it.rfids || []).length === 0 && (
+                                                            <span className="text-[10px] italic text-muted-foreground">Waiting for verification...</span>
+                                                        )}
+                                                    </div>
+                                                </div>
 
                                                 <div className="shrink-0 flex items-center gap-6 pl-4 border-l">
                                                     <div className="text-center min-w-[60px]">
-                                                        <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-tighter">Total</div>
-                                                        <div className="text-lg font-black text-primary tabular-nums">
-                                                            {it.receivedQtyNow}
+                                                        <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-tighter">Price</div>
+                                                        <div className="text-sm font-black tabular-nums">
+                                                            {new Intl.NumberFormat("en-PH").format(uPrice)}
                                                         </div>
                                                     </div>
-                                                    <div className="text-center border-l pl-6 min-w-[60px]">
-                                                        <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-tighter">Expected</div>
-                                                        <div className="text-lg font-black text-muted-foreground/60 tabular-nums">
-                                                            {it.expectedQty}
+                                                    <div className="text-center min-w-[60px]">
+                                                        <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-tighter">Disc ({it.discountType})</div>
+                                                        <div className="text-sm font-black text-red-600 tabular-nums">
+                                                            -{new Intl.NumberFormat("en-PH").format(discA * qty)}
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-center min-w-[60px]">
+                                                        <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-tighter">Net Total</div>
+                                                        <div className="text-sm font-black text-indigo-600 tabular-nums">
+                                                            {new Intl.NumberFormat("en-PH").format(netA)}
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-center border-l pl-6 min-w-[40px]">
+                                                        <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-tighter">Qty</div>
+                                                        <div className="text-lg font-black text-primary tabular-nums">
+                                                            {it.receivedQtyNow}
                                                         </div>
                                                     </div>
                                                 </div>
                                             </div>
                                         );
                                     })}
+                                </div>
+                            </div>
+
+                            {/* Financial Summary Overlay */}
+                            <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-8 bg-muted/5 p-6 rounded-2xl border border-primary/5">
+                                <div className="space-y-4">
+                                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Notes & Information</h4>
+                                    <div className="bg-background/50 p-4 rounded-xl border border-dashed text-xs text-muted-foreground leading-relaxed">
+                                        This summary reflects the products received and verified in this specific session.
+                                        Financial values are calculated based on the purchase order&apos;s pricing terms and applicable
+                                        supplier discounts.
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3">
+                                    {(() => {
+                                        let sumGross = 0;
+                                        let sumDisc = 0;
+                                        data.items.forEach(it => {
+                                            const up = Number(it.unitPrice || 0);
+                                            const da = Number(it.discountAmount || 0);
+                                            const q = Number(it.receivedQtyNow || 0);
+                                            sumGross += (up * q);
+                                            sumDisc += (da * q);
+                                        });
+                                        const net = sumGross - sumDisc;
+                                        const vat = isInvoice ? (priceType?.toUpperCase() === "VAT EXCLUSIVE" ? net * 0.12 : net - (net / 1.12)) : 0;
+                                        const ewt = isInvoice ? (priceType?.toUpperCase() === "VAT EXCLUSIVE" ? net * 0.01 : (net / 1.12) * 0.01) : 0;
+                                        const format = (v: number) => new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(v);
+
+                                        return (
+                                            <div className="bg-background p-6 rounded-2xl border shadow-sm space-y-3">
+                                                <div className="flex justify-between text-xs text-slate-500 font-bold uppercase tracking-wider">
+                                                    <span>Gross Amount</span>
+                                                    <span>{format(sumGross)}</span>
+                                                </div>
+                                                <div className="flex justify-between text-xs text-red-600 font-bold uppercase tracking-wider">
+                                                    <span>Total Discount</span>
+                                                    <span>-{format(sumDisc)}</span>
+                                                </div>
+                                                <div className="pt-2 border-t flex justify-between text-xs text-slate-900 font-black uppercase tracking-widest">
+                                                    <span>Net Total</span>
+                                                    <span>{format(net)}</span>
+                                                </div>
+                                                {isInvoice && (
+                                                    <div className="space-y-2 pt-2 border-t mt-2">
+                                                        <div className="flex justify-between text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                                                            <span>VAT Details</span>
+                                                            <span>{format(vat)}</span>
+                                                        </div>
+                                                        <div className="flex justify-between text-[10px] text-red-400 font-bold uppercase tracking-wider">
+                                                            <span>EWT (1%)</span>
+                                                            <span>-{format(ewt)}</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                <div className="pt-4 mt-2 border-t flex justify-between items-end">
+                                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500 underline underline-offset-8">Grand Total</span>
+                                                    <span className="text-2xl font-black text-indigo-600 tracking-tight">{format(net)}</span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             </div>
                         </div>
@@ -209,8 +290,8 @@ export function ReceiptPreviewModal({
                         <X className="h-4 w-4 mr-2" />
                         Cancel & Close
                     </Button>
-                    <Button 
-                        onClick={handleDownload} 
+                    <Button
+                        onClick={handleDownload}
                         className="px-8 h-11 font-black !bg-[#2563eb] hover:!bg-[#1d4ed8] !text-white shadow-lg shadow-blue-200 uppercase tracking-widest text-[10px] border-none"
                     >
                         <Download className="h-4 w-4 mr-2 !text-white" />

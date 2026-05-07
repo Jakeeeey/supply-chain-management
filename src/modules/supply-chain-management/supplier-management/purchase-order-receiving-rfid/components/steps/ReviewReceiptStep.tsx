@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useReceivingProducts, ReceivingPOItem, ActivityRow } from "../../providers/ReceivingProductsProvider";
+import { useReceivingProducts, ReceivingPOItem } from "../../providers/ReceivingProductsProvider";
 import { toast } from "sonner";
 import { ReceiptPreviewModal } from "../ReceiptPreviewModal";
 import {
@@ -37,8 +37,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
         saveError,
         receiptSaved,
         lots,
-        verifiedBarcodes,
-        activity,
+        verifiedPorIds,
         setMetaDataByPorId,
     } = useReceivingProducts();
 
@@ -122,9 +121,9 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                     porId: String(it.porId || it.id),
                     branchName: a?.branch?.name ?? "Unassigned",
                 }))
-                .filter((it: ReceivingPOItem & { branchName: string }) => verifiedBarcodes.includes(it.productId)) as Array<ReceivingPOItem & { branchName: string }>;
+                .filter((it) => verifiedPorIds.includes(it.porId)) as Array<ReceivingPOItem & { branchName: string }>;
         });
-    }, [selectedPO, verifiedBarcodes]);
+    }, [selectedPO, verifiedPorIds]);
 
     const executeSave = async () => {
         const metaData: Record<string, { lotId: string; batchNo: string; expiryDate: string }> = {};
@@ -275,7 +274,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                                         return (
                                             <TableRow key={porId}>
                                                 <TableCell>
-                                                    <div className="font-bold text-xs truncate max-w-[200px]">{it.name}</div>
+                                                    <div className="font-bold text-xs">{it.name}</div>
                                                     <div className="text-[9px] text-muted-foreground font-mono">SKU: {it.barcode} | UOM: {it.uom}</div>
                                                 </TableCell>
                                                 <TableCell className="min-w-[100px]">
@@ -315,7 +314,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                                                 </TableCell>
                                                 <TableCell className="text-right text-xs">{formatPHP(unitP)}</TableCell>
                                                 <TableCell className="text-center text-[10px] text-muted-foreground">{it.discountType}</TableCell>
-                                                <TableCell className="text-right text-xs text-red-600 font-medium">{(discA || 0) > 0 ? `${formatPHP(discA)}` : "—"}</TableCell>
+                                                <TableCell className="text-right text-xs text-red-600 font-medium">{(discA || 0) > 0 ? `${formatPHP(discA * scanned)}` : "—"}</TableCell>
                                                 <TableCell className="text-right font-bold text-xs">{formatPHP(lineTotal)}</TableCell>
                                                 <TableCell className="text-center font-bold text-xs">{expected}</TableCell>
                                                 <TableCell className="text-center">
@@ -402,13 +401,6 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                     )}
 
                     <div className="mt-4 flex justify-end gap-3">
-                        <Button
-                            variant="outline"
-                            className="h-10 px-6 text-xs font-black uppercase tracking-widest border-indigo-200 text-indigo-700 hover:bg-indigo-50"
-                            onClick={() => setPreviewOpen(true)}
-                        >
-                            Print Preview / Export PDF
-                        </Button>
                         <Button 
                             className="bg-indigo-600 hover:bg-indigo-700 h-10 px-8 text-xs font-black uppercase tracking-widest"
                             onClick={handleSaveReceipt}
@@ -420,34 +412,11 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
                 </Card>
             )}
 
-            {(receiptSaved || selectedPO) && (
+            {receiptSaved && (
                 <ReceiptPreviewModal
                     isOpen={previewOpen}
                     onClose={() => setPreviewOpen(false)}
-                    data={receiptSaved ? { ...receiptSaved, receiverName }  : {
-                        poId: selectedPO?.id || "",
-                        receiptNo: "PREVIEW",
-                        receiptDate: "PREVIEW",
-                        receiptType: "PREVIEW",
-                        isFullyReceived: totalScanned >= totalExpected,
-                        savedAt: 0,
-                        receiverName,
-                        items: allItems.map(it => ({
-                            name: it.name,
-                            barcode: it.barcode,
-                            productId: it.productId || "",
-                            uom: it.uom || "",
-                            unitPrice: Number(it.unitPrice) || 0,
-                            discountAmount: Number(it.discountAmount) || 0,
-                            batchNo: batchNos[String(it.porId || it.id)] || "",
-                            lotId: lotIds[String(it.porId || it.id)] || "",
-                            expiryDate: expiryDates[String(it.porId || it.id)] || "",
-                            expectedQty: Number(it.expectedQty) || 0,
-                            receivedQtyAtStart: 0,
-                            receivedQtyNow: safeCounts[String(it.porId || it.id)] ?? 0,
-                            rfids: (activity || []).filter((a: ActivityRow) => a.productId === it.productId && a.status === "ok").map((a: ActivityRow) => a.rfid)
-                        }))
-                    }}
+                    data={{ ...receiptSaved, receiverName }}
                     poNumber={selectedPO?.poNumber || "N/A"}
                     supplierName={selectedPO?.supplier?.name || "N/A"}
                     priceType={selectedPO?.priceType || "VAT Inclusive"}

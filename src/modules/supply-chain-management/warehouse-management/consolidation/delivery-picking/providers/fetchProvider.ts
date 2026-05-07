@@ -1,3 +1,5 @@
+"use client";
+
 import { ConsolidatorDto, BranchDto, ConsolidationPreviewItem } from "../types";
 
 // Interface for the Paginated Response
@@ -28,6 +30,7 @@ export const fetchActiveBranches = async (): Promise<BranchDto[] | null> => {
         });
         if (response.status === 401) return null;
         if (!response.ok) return [];
+
         const data = await response.json();
         return Array.isArray(data) ? data : [];
     } catch (error) {
@@ -103,6 +106,8 @@ export const fetchConsolidatorSummary = async (): Promise<Record<string, number>
             cache: "no-store"
         });
         if (response.status === 401) return null;
+        if (!response.ok) return {};
+
         return await response.json();
     } catch {
         console.error("Summary Fetch Error");

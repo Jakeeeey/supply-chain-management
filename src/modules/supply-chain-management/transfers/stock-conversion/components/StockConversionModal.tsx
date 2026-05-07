@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ArrowRight, Cuboid, AlertCircle } from "lucide-react";
 import { useEffect, useState } from "react";
-import { StockConversionProduct } from "../types";
+import { StockConversionProduct, UnitTarget } from "../types/stock-conversion.types";
 
 interface StockConversionModalProps {
   product: StockConversionProduct | null;
@@ -21,7 +21,7 @@ interface StockConversionModalProps {
   onClose: () => void;
   onConfirm: (
     qtyToConvert: number,
-    targetUnit: { unitId: number; targetProductId?: number },
+    targetUnit: UnitTarget,
     convertedQuantity: number,
   ) => void;
   sourceQuantity?: number;
@@ -194,8 +194,13 @@ export function StockConversionModal({
                        <Cuboid className="w-3.5 h-3.5 opacity-50" />
                     )}
                   </div>
-                  <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-tighter">
-                    UoM Count: {u.conversionFactor}
+                  <div className="flex items-center justify-between mt-1">
+                    <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-tighter">
+                      UoM Count: {u.conversionFactor}
+                    </div>
+                    <div className="text-[10px] bg-blue-500/10 text-blue-600 px-1 rounded font-bold uppercase">
+                      Required: {u.conversionFactor}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -252,6 +257,20 @@ export function StockConversionModal({
               </div>
             </div>
           )}
+
+          {qtyToConvert && Number(qtyToConvert) > product.quantity && (
+            <div className="bg-destructive/10 border border-destructive/20 rounded-md p-3 flex items-start gap-3 animate-in fade-in slide-in-from-top-1">
+              <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <div className="text-xs font-bold text-destructive uppercase tracking-tight">
+                  Insufficient Stock
+                </div>
+                <div className="text-sm font-medium text-destructive leading-tight">
+                  You cannot convert more than your current stock of {product.quantity} {product.currentUnit}(s).
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         <DialogFooter className="mt-4 gap-2 sm:gap-0">
@@ -265,7 +284,11 @@ export function StockConversionModal({
           <Button
             onClick={handleConfirm}
             disabled={
-              !qtyToConvert || !selectedTargetUnit || wholeUnits <= 0 || isUomRequirementNotMet
+              !qtyToConvert || 
+              !selectedTargetUnit || 
+              wholeUnits <= 0 || 
+              isUomRequirementNotMet || 
+              Number(qtyToConvert) > product.quantity
             }
             className="bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-600 dark:hover:bg-blue-500 rounded-md font-bold text-xs uppercase tracking-widest transition-all shadow-md shadow-blue-500/20"
           >

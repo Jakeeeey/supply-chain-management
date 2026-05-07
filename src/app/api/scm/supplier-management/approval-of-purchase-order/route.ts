@@ -100,6 +100,18 @@ const DIRECTUS_RELATIONS_COLLECTION = "directus_relations";
 function ok(data: unknown, status = 200) {
     return NextResponse.json({ data }, { status });
 }
+
+/**
+ * Returns current PH Manila Time (UTC+8) as an ISO-like string
+ * but without the 'Z' suffix to ensure correct local interpretation.
+ */
+function nowPH() {
+    const date = new Date();
+    const phOffset = 8 * 60; // 8 hours in minutes
+    const localOffset = date.getTimezoneOffset(); // in minutes
+    const phTime = new Date(date.getTime() + (phOffset + localOffset) * 60000);
+    return phTime.toISOString().replace("Z", "");
+}
 function bad(error: string, status = 400) {
     return NextResponse.json({ error }, { status });
 }
@@ -436,6 +448,8 @@ type PoHeaderRow = {
     is_invoice?: boolean | number | null;
     isInvoice?: boolean | number | null;
     receiving_type?: number | null;
+    vat_amount?: number | string | null;
+    withholding_tax_amount?: number | string | null;
     user_created?: string | number | { first_name?: string; last_name?: string } | null;
     encoder_id?: string | number | { first_name?: string; last_name?: string } | null;
 };
@@ -452,6 +466,8 @@ async function fetchPendingPOs(base: string): Promise<PoHeaderRow[]> {
         "approver_id",
         "date_approved",
         "receiving_type",
+        "vat_amount",
+        "withholding_tax_amount",
         "user_created.first_name",
         "user_created.last_name",
         "encoder_id.user_id",
@@ -706,7 +722,7 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
         const linkDisc = getDiscInfo(linkData?.discount_type);
         const headerDiscPct = pickNum(header, ["discount_percent", "discountPercent", "discount_rate", "discountRate", "discount_percentage", "discountPercentage"]);
 
-        const resolvedDiscountType = formatDiscLabel(itemDisc, formatDiscLabel(linkDisc, headerDiscTypeName)) || "—";
+        const resolvedDiscountType = formatDiscLabel(itemDisc, formatDiscLabel(linkDisc, headerDiscTypeName)) || "No Discount";
         const discountPct = itemDisc?.pct || linkDisc?.pct || headerDiscPct || 0;
 
         const grossVal = toNum((l as Record<string, unknown>).gross) || lineTotal;
@@ -867,8 +883,7 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
 
         payment_type: header?.payment_type ?? null,
         
-        // derives is_invoice from receiving_type (2=Invoice, 3=PO) (robust check)
-        is_invoice: (Number(header?.receiving_type) === 2) || (String(header?.is_invoice ?? header?.isInvoice).toLowerCase() === "true") || !!(header?.is_invoice ?? header?.isInvoice),
+        is_invoice: (toNum(header?.vat_amount) > 0) || (toNum(header?.withholding_tax_amount) > 0),
 
         vat_amount: vat,
         vatAmount: vat,
@@ -883,7 +898,7 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
     };
 }
 
-async function syncPoProductFinancialsOnApproval(base: string, poId: number) {
+async function syncPoProductFinancialsOnApproval(base: string, poId: number, isInvoice: boolean) {
     try {
         // Fetch header to get fallback discount_type
         const headerUrl = `${base}/items/${PO_COLLECTION}/${poId}?fields=discount_type`;
@@ -909,9 +924,9 @@ async function syncPoProductFinancialsOnApproval(base: string, poId: number) {
             const discAmtTotal = Number((lineGross * (discPercent / 100)).toFixed(2));
             const lineNet = lineGross - discAmtTotal;
             
-            const vatExcl = Number((lineNet / 1.12).toFixed(2));
-            const vatAmt = Number((lineNet - vatExcl).toFixed(2));
-            const ewtAmt = Number((vatExcl * 0.01).toFixed(2));
+            const vatExcl = isInvoice ? Number((lineNet / 1.12).toFixed(2)) : lineNet;
+            const vatAmt = isInvoice ? Number((lineNet - vatExcl).toFixed(2)) : 0;
+            const ewtAmt = isInvoice ? Number((vatExcl * 0.01).toFixed(2)) : 0;
             
             const discountedPricePerUnit = qty > 0 ? Number((lineNet / qty).toFixed(2)) : 0;
 
@@ -1067,8 +1082,7 @@ export async function GET(req: NextRequest) {
 
                 totalAmount: totalByPo.get(poId) ?? 0,
                 currency: "PHP",
-                is_invoice: (Number(h.receiving_type) === 2) || (String(h.is_invoice ?? h.isInvoice).toLowerCase() === "true") || !!(h.is_invoice ?? h.isInvoice),
-
+                is_invoice: (toNum(h.vat_amount) > 0) || (toNum(h.withholding_tax_amount) > 0),
                 preparer_name: getPreparer(),
             };
         });
@@ -1092,17 +1106,17 @@ export async function POST(req: NextRequest) {
         if (!poId) return bad("Invalid id.", 400);
 
         const patch: Record<string, unknown> = { 
-            date_approved: new Date().toISOString(),
-            receiving_type: Boolean(body?.markAsInvoice) ? 2 : 3, // Persistent flag for "Mark as Invoice"
+            date_approved: nowPH(),
+            receiving_type: 1, // ✅ Always 1 for PO
             inventory_status: 3, // ✅ For Receiving
             approver_id: body?.approver_id ?? body?.approverId ?? null, // ✅ Track who approved
             payment_type: body?.payment_type ?? body?.paymentType ?? null, // ✅ Update payment terms
 
-            // ✅ Expanded financial tracking
+            // ✅ Expanded financial tracking (forced to 0 if not invoice)
             gross_amount: body?.gross_amount !== undefined ? toNum(body.gross_amount) : undefined,
             discounted_amount: body?.discounted_amount !== undefined ? toNum(body.discounted_amount) : undefined,
-            vat_amount: body?.vat_amount !== undefined ? toNum(body.vat_amount) : undefined,
-            withholding_tax_amount: (body?.withholding_tax_amount ?? body?.withholdingTaxAmount ?? body?.ewtGoods) !== undefined ? toNum(body.withholding_tax_amount ?? body.withholdingTaxAmount ?? body.ewtGoods) : undefined,
+            vat_amount: Boolean(body?.markAsInvoice) ? (body?.vat_amount !== undefined ? toNum(body.vat_amount) : undefined) : 0,
+            withholding_tax_amount: Boolean(body?.markAsInvoice) ? ((body?.withholding_tax_amount ?? body?.withholdingTaxAmount ?? body?.ewtGoods) !== undefined ? toNum(body.withholding_tax_amount ?? body.withholdingTaxAmount ?? body.ewtGoods) : undefined) : 0,
             total_amount: body?.total_amount !== undefined ? toNum(body.total_amount) : undefined,
 
             // ✅ Expanded relationship mapping
@@ -1115,7 +1129,7 @@ export async function POST(req: NextRequest) {
         await fetchJson(url, { method: "PATCH", body: JSON.stringify(patch) });
 
         // ✅ Sync line items financials
-        await syncPoProductFinancialsOnApproval(base, poId);
+        await syncPoProductFinancialsOnApproval(base, poId, Boolean(body?.markAsInvoice));
 
         return ok({ ok: true });
     } catch (e: unknown) {
