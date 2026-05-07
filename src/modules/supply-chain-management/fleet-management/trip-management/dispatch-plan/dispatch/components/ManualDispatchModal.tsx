@@ -11,7 +11,6 @@ import { KioskDispatchPlan, UserOption, CustomerDispatchInfo } from "../types";
 import { Truck, User, ArrowRight, Loader2, Plus, X, Calendar, MapPin, FileText, Users } from "lucide-react";
 import { fetchProvider } from "../providers/fetchProvider";
 import { toast } from "sonner";
-import { format } from "date-fns";
 import { SearchableSelect } from "./SearchableSelect";
 
 interface ManualDispatchModalProps {
