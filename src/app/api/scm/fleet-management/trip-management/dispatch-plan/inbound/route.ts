@@ -73,24 +73,35 @@ export async function GET(req: NextRequest) {
                 headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
             });
             const customers = (await custRes.json()).data || [];
-            const custMap = new Map(customers.map((c: DirectusCustomer) => [c.customer_code, c.customer_name]));
+            const custMap = new Map<string | number, string>();
+            customers.forEach((c: DirectusCustomer) => {
+                if (c.customer_code) {
+                    custMap.set(c.customer_code, c.customer_name);
+                }
+            });
 
             // Group invoices by customer
             const customerGroup = new Map<string | number, { customer_code: string | number; customer_name: string; address: string; invoices: { no: string; amount: number }[] }>();
             sis.forEach((si: SalesInvoice) => {
                 const code = si.customer_code;
+                if (!code) return;
+
                 if (!customerGroup.has(code)) {
+                    const custName = custMap.get(code) || "Unknown";
                     customerGroup.set(code, {
                         customer_code: code,
-                        customer_name: custMap.get(code) || "Unknown",
+                        customer_name: custName,
                         address: si.shipping_address || "No Address Provided",
                         invoices: []
                     });
                 }
-                customerGroup.get(code).invoices.push({
-                    no: si.invoice_no,
-                    amount: si.net_amount ?? si.total_amount ?? 0
-                });
+                const existing = customerGroup.get(code);
+                if (existing) {
+                    existing.invoices.push({
+                        no: si.invoice_no,
+                        amount: si.net_amount ?? si.total_amount ?? 0
+                    });
+                }
             });
 
             return NextResponse.json({ data: Array.from(customerGroup.values()) });

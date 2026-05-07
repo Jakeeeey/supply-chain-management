@@ -118,10 +118,13 @@ export async function GET(req: NextRequest) {
                         invoices: []
                     });
                 }
-                customerGroup.get(code).invoices.push({
-                    no: si.invoice_no,
-                    amount: si.net_amount ?? si.total_amount ?? 0
-                });
+                const existing = customerGroup.get(code);
+                if (existing) {
+                    existing.invoices.push({
+                        no: si.invoice_no,
+                        amount: si.net_amount ?? si.total_amount ?? 0
+                    });
+                }
             });
 
             return NextResponse.json({ data: Array.from(customerGroup.values()) });
