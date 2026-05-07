@@ -312,7 +312,7 @@ export function ManualInboundModal({ plan, open, onOpenChange, onSuccess }: Manu
                     <Button 
                         className="h-14 px-10 rounded-2xl font-black text-sm uppercase tracking-[0.15em] !text-white !bg-rose-600 hover:!bg-rose-700 shadow-xl shadow-rose-500/20 border-none transition-all hover:scale-105 active:scale-95"
                         onClick={handleConfirm}
-                        disabled={loading || isSubmitting}
+                        disabled={loading || isSubmitting || !driverPresent}
                     >
                         {isSubmitting ? (
                             <Loader2 className="h-5 w-5 animate-spin" />
