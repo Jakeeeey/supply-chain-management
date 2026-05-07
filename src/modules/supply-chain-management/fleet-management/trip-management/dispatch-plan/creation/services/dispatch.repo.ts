@@ -222,13 +222,11 @@ export async function fetchMasterData(): Promise<DispatchCreationMasterData> {
   const [drivers, helpers, vehicles, branches, coas] = await Promise.all([
     // Fetch Drivers
     fetchItems<DriverOption>("/items/user", {
-      "filter[user_department][_eq]": 8, // Driver department
       fields: "user_id,user_fname,user_lname",
       limit: -1,
     }),
     // Fetch Helpers
     fetchItems<HelperOption>("/items/user", {
-      "filter[user_department][_eq]": 8, // Helper department
       fields: "user_id,user_fname,user_lname",
       limit: -1,
     }),
