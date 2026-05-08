@@ -190,7 +190,7 @@ export const SalesReturnTable = ({
             returnTypes={options.returnTypes}
           />
           <span className="text-sm text-slate-500 dark:text-slate-400">
-            PR Rows:
+            SR Rows:
           </span>
           <Select
             value={String(limit)}
