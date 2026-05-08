@@ -190,7 +190,7 @@ export const SalesReturnTable = ({
             returnTypes={options.returnTypes}
           />
           <span className="text-sm text-slate-500 dark:text-slate-400">
-            Rows:
+            PR Rows:
           </span>
           <Select
             value={String(limit)}
@@ -270,7 +270,12 @@ export const SalesReturnTable = ({
                       {formatDate(r.returnDate)}
                     </DataCell>
                     <DataCell className="text-slate-600 dark:text-slate-400">
-                      {r.salesmanName}
+                      <div>{r.salesmanName}</div>
+                      {r.salesmanCode && (
+                        <div className="text-[10px] text-slate-400 dark:text-slate-500 font-mono mt-0.5">
+                          {r.salesmanCode}
+                        </div>
+                      )}
                     </DataCell>
                     <TruncatedCell className="text-slate-600 dark:text-slate-400" maxWidth="150px">
                       {r.customerName}

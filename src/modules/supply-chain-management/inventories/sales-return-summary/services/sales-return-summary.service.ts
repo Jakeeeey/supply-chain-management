@@ -309,6 +309,7 @@ export async function getSummaryReturnsWithItems(
       customerName: String(cust?.["customer_name"] || ""),
       storeName: String(cust?.["store_name"] || ""),
       salesmanName: String(sm?.["salesman_name"] || ""),
+      salesmanCode: String(sm?.["salesman_code"] || ""),
       invoiceNo: String(r["invoice_no"] || ""),
       netTotal: Helpers.toNum(r["total_amount"]),
       remarks: String(r["remarks"] || ""),
