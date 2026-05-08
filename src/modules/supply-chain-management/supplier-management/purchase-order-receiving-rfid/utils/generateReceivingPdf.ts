@@ -86,6 +86,7 @@ export type ReceivingPdfData = {
         expectedQty: number;
         receivedQtyNow: number;
         unitPrice?: number;
+        discountType?: string;
         discountAmount?: number;
         batchNo?: string;
         lotId?: string;
@@ -144,7 +145,15 @@ export async function generateReceivingPdf(
             sumDiscount += (received * discountAmount);
             sumNet += net;
 
-            return [name, barcode, uom, String(expected), String(received), formatMoney(price), formatMoney(received * discountAmount), formatMoney(net)];
+            const batchExpLines = [
+                item.batchNo ? `Batch: ${item.batchNo}` : "",
+                item.lotId ? `Lot: ${item.lotId}` : "",
+                item.expiryDate ? `Exp: ${item.expiryDate}` : ""
+            ].filter(Boolean).join("\n");
+
+            const discType = safeStr(item.discountType);
+
+            return [barcode, name, batchExpLines || "—", uom, String(expected), String(received), formatMoney(price), discType, formatMoney(received * discountAmount), formatMoney(net)];
         });
 
         // 2. Render Receipt Details (PO Number, Receipt No, Date, Supplier, Branch)
@@ -154,10 +163,10 @@ export async function generateReceivingPdf(
         doc.setTextColor(50, 50, 50);
 
         // Title
-        const statusText = data.isFullyReceived ? "FULLY RECEIVED" : "PARTIAL RECEIVING";
+        const statusText = data.isFullyReceived ? "FULLY RECEIVED" : "PARTIALLY RECEIVED";
         doc.setFontSize(10);
         doc.setFont("helvetica", "bold");
-        doc.setTextColor(data.isFullyReceived ? 22 : 194, data.isFullyReceived ? 163 : 120, data.isFullyReceived ? 74 : 10);
+        doc.setTextColor(data.isFullyReceived ? 46 : 230, data.isFullyReceived ? 125 : 126, data.isFullyReceived ? 50 : 34);
         doc.text(`RECEIVING RECEIPT — ${statusText}`, pageWidth / 2, detailsY, { align: "center" });
 
         doc.setFontSize(8);
@@ -168,12 +177,12 @@ export async function generateReceivingPdf(
         doc.setFont("helvetica", "bold");
         doc.text("Supplier:", 10, infoY);
         doc.setFont("helvetica", "normal");
-        doc.text(supplierName, 28, infoY);
+        doc.text(supplierName, 30, infoY);
 
         doc.setFont("helvetica", "bold");
         doc.text("Branch:", 10, infoY + 5);
         doc.setFont("helvetica", "normal");
-        doc.text(branchLabel, 28, infoY + 5);
+        doc.text(branchLabel, 30, infoY + 5);
 
         // Right Column: PO#, Receipt#, Date, Type
         const rightMarginX = pageWidth - 10;
@@ -201,12 +210,13 @@ export async function generateReceivingPdf(
         autoTable(doc, {
             startY: infoY + 22,
             margin: { left: 10, right: 10 },
-            head: [["Product", "Barcode", "UOM", "Expected", "Received", "Price", "Disc", "Net"]],
+            head: [["Barcode", "Product", "Batch/Exp", "UOM", "Order Qty", "Received", "Unit Price", "Disc Type", "Disc Amt", "Net Amt"]],
             body: tableBody,
             foot: [[
-                { content: "TOTALS", colSpan: 3, styles: { halign: "right", fillColor: [245, 245, 245], fontSize: 7, textColor: [50, 50, 50], fontStyle: "bold" } },
+                { content: "TOTALS", colSpan: 4, styles: { halign: "right", fillColor: [245, 245, 245], fontSize: 7, textColor: [50, 50, 50], fontStyle: "bold" } },
                 { content: String(sumExpected), styles: { halign: "right", fillColor: [245, 245, 245], fontSize: 7, textColor: [50, 50, 50], fontStyle: "bold" } },
                 { content: String(sumReceived), styles: { halign: "right", fillColor: [245, 245, 245], fontSize: 7, textColor: [50, 50, 50], fontStyle: "bold" } },
+                { content: "—", styles: { halign: "right", fillColor: [245, 245, 245], fontSize: 7, textColor: [50, 50, 50], fontStyle: "bold" } },
                 { content: "—", styles: { halign: "right", fillColor: [245, 245, 245], fontSize: 7, textColor: [50, 50, 50], fontStyle: "bold" } },
                 { content: formatMoney(sumDiscount), styles: { halign: "right", fillColor: [245, 245, 245], fontSize: 7, textColor: [50, 50, 50], fontStyle: "bold" } },
                 { content: formatMoney(sumNet), styles: { halign: "right", fillColor: [245, 245, 245], fontSize: 7, textColor: [50, 50, 50], fontStyle: "bold" } },
@@ -216,14 +226,16 @@ export async function generateReceivingPdf(
             headStyles: { fillColor: [100, 100, 100], textColor: [255, 255, 255], fontSize: 7, fontStyle: "bold", halign: "center" },
             bodyStyles: { fontSize: 7, textColor: [50, 50, 50] },
             columnStyles: {
-                0: { cellWidth: "auto" },
-                1: { cellWidth: 22 },
-                2: { cellWidth: 12 },
-                3: { halign: "right", cellWidth: 16 },
-                4: { halign: "right", cellWidth: 16 },
-                5: { halign: "right", cellWidth: 18 },
+                0: { cellWidth: 20 },
+                1: { cellWidth: "auto" },
+                2: { cellWidth: 28, fontSize: 6 },
+                3: { cellWidth: 12 },
+                4: { halign: "right", cellWidth: 14 },
+                5: { halign: "right", cellWidth: 14 },
                 6: { halign: "right", cellWidth: 18 },
-                7: { halign: "right", cellWidth: 20, fontStyle: "bold" },
+                7: { halign: "center", cellWidth: 15 },
+                8: { halign: "right", cellWidth: 18 },
+                9: { halign: "right", cellWidth: 20, fontStyle: "bold" },
             },
             didDrawPage: (pageData) => {
                 // Repeat header on subsequent pages

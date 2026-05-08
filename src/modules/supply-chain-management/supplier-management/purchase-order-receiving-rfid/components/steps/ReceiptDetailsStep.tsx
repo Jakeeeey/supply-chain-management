@@ -206,7 +206,7 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
 
 
                     <Button type="button" className="w-full" onClick={handleContinue}>
-                        Continue Product Scanning
+                        Continue to Product Checklist
                     </Button>
                 </div>
             </Card>

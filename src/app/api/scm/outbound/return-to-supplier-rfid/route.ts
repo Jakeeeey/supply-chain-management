@@ -157,14 +157,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Extract user ID from JWT cookie for audit trail
     const token = req.cookies.get("vos_access_token")?.value;
     const jwtPayload = token ? decodeJwtPayload(token) : null;
     const userId = jwtPayload?.user_id ?? jwtPayload?.userId ?? jwtPayload?.sub ?? null;
 
+    if (!userId) {
+      return json({ error: "Unauthorized: Invalid or missing session" }, 401);
+    }
+
     const payloadWithAudit = {
       ...parsed.data,
-      encoder_id: userId ? Number(userId) : undefined,
+      encoder_id: Number(userId),
     };
 
     const data = await createTransaction(payloadWithAudit as Parameters<typeof createTransaction>[0]);

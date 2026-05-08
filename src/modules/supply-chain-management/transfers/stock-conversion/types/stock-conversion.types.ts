@@ -46,4 +46,6 @@ export interface StockConversionPayload {
   pricePerUnit: number;
   rfidTags: RFIDTag[];
   sourceRfidTags?: string[];
+  sourceFactor?: number;
+  targetFactor?: number;
 }

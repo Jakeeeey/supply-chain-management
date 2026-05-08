@@ -9,7 +9,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Combobox } from "../../shared/Combobox";
+import { SearchableSelect } from "../../shared/SearchableSelect";
 import { Truck, X } from "lucide-react";
 import { useFieldArray, useFormContext } from "react-hook-form";
 import { DateTimePicker } from "../../shared/date-time-picker";
@@ -78,7 +78,7 @@ export function TripConfigurationForm({
                       Source Branch
                     </FormLabel>
                     <FormControl>
-                      <Combobox
+                      <SearchableSelect
                         options={masterData?.branches.map(b => ({
                           value: String(b.id),
                           label: b.branch_name
@@ -103,7 +103,7 @@ export function TripConfigurationForm({
                       Vehicle
                     </FormLabel>
                     <FormControl>
-                      <Combobox
+                      <SearchableSelect
                         options={masterData?.vehicles.map(v => ({
                           value: String(v.vehicle_id),
                           label: `${v.vehicle_plate}${v.vehicle_type_name ? ` (${v.vehicle_type_name})` : ""}`
@@ -173,7 +173,7 @@ export function TripConfigurationForm({
                       Driver
                     </FormLabel>
                     <FormControl>
-                      <Combobox
+                      <SearchableSelect
                         options={masterData?.drivers.map(d => ({
                           value: String(d.user_id),
                           label: `${d.user_fname} ${d.user_lname}`,
@@ -199,7 +199,7 @@ export function TripConfigurationForm({
                       Helper
                     </FormLabel>
                     <FormControl>
-                      <Combobox
+                      <SearchableSelect
                         options={getHelperOptions(0)}
                         value={field.value ? String(field.value) : ""}
                         onValueChange={(val) => field.onChange(Number(val))}
@@ -261,7 +261,7 @@ export function TripConfigurationForm({
                             </button>
                           </FormLabel>
                           <FormControl>
-                            <Combobox
+                            <SearchableSelect
                               options={getHelperOptions(index)}
                               value={field.value ? String(field.value) : ""}
                               onValueChange={(val: string) => field.onChange(Number(val))}
