@@ -1544,16 +1544,6 @@ export function UpdateSalesReturnModal({
         </div>
       </DialogContent>
 
-      {/* --- NESTED MODALS --- */}
-      {isProductLookupOpen && (
-        <ProductLookupModal
-          isOpen={isProductLookupOpen}
-          onClose={() => setIsProductLookupOpen(false)}
-          onConfirm={handleAddProductsToEdit}
-          priceType={headerData.priceType || "A"} // 🟢 Pass prop
-        />
-      )}
-
       {/* 2. INVOICE LOOKUP - 🟢 REVISED: Shows Amount */}
       <Dialog open={isInvoiceLookupOpen} onOpenChange={setIsInvoiceLookupOpen}>
         <DialogContent className="max-w-md">

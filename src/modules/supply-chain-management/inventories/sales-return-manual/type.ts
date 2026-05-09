@@ -118,6 +118,16 @@ export interface SupplierCategoryDiscount {
   discount_type: number | string | null;
 }
 
+export interface ProductCatalog {
+  brands: Brand[];
+  categories: Category[];
+  suppliers: Supplier[];
+  units: Unit[];
+  connections: ProductSupplierConnection[];
+  products: Product[];
+  supplierCategoryDiscount?: SupplierCategoryDiscount[];
+}
+
 // --- API LOOKUPS ---
 export interface API_LineDiscount {
   id: number;

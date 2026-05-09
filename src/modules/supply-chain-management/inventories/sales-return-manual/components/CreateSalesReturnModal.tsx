@@ -39,6 +39,7 @@ import {
   SalesmanOption,
   CustomerOption,
   BranchOption,
+  Product,
 } from "../providers/fetchProviders";
 import { resolveFinalDiscount } from "../utils/discount-resolver";
 
@@ -222,19 +223,16 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       const updateDiscounts = async () => {
         try {
           const catalog = await SalesReturnProvider.getFullCatalog(customerCode);
-          const customer = customers.find((c) => c.code === customerCode);
-          const customerDiscountType = customer?.discountType || null;
 
           setItems((prevItems) =>
             prevItems.map((item) => {
-              const productInfo = catalog.products?.find((p: any) => p.product_id === Number(item.productId));
+              const productInfo = catalog.products?.find((p: Product) => p.product_id === Number(item.productId));
               if (!productInfo) return item;
 
               const newDiscountType = resolveFinalDiscount(
                 productInfo,
                 customerCode,
-                catalog,
-                customerDiscountType
+                catalog
               );
 
               let newDiscountAmt = 0;
@@ -1522,9 +1520,8 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         isOpen={isProductLookupOpen}
         onClose={() => setIsProductLookupOpen(false)}
         onConfirm={handleAddProducts}
-        priceType={priceType} // 🟢 Pass prop
-        customerCode={customerCode} // 🟢 Pass prop
-        customerDiscountType={customers.find(c => c.code === customerCode)?.discountType} // 🟢 Pass prop
+        priceType={priceType}
+        customerCode={customerCode}
       />
 
       {/* SUCCESS MODAL */}
