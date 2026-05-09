@@ -9,6 +9,7 @@ import {
   UpdateTripSchema,
 } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/creation/types/dispatch.schema";
 import { NextRequest, NextResponse } from "next/server";
+import { decodeJwtPayload, COOKIE_NAME } from "@/lib/auth-utils";
 
 // ─── GET ────────────────────────────────────────────────────
 
@@ -131,7 +132,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const result = await dispatchService.createDispatchPlan(parsed.data);
+    const token = req.cookies.get(COOKIE_NAME)?.value;
+    const payload = decodeJwtPayload(token || "");
+    const userId = Number(payload?.user_id || payload?.id || payload?.sub || 0);
+
+    const result = await dispatchService.createDispatchPlan(parsed.data, userId);
     return NextResponse.json(result);
   } catch (error) {
     console.error("[Dispatch POST Error]:", error);
@@ -172,9 +177,14 @@ export async function PATCH(req: NextRequest) {
         );
       }
 
+      const token = req.cookies.get(COOKIE_NAME)?.value;
+      const payload = decodeJwtPayload(token || "");
+      const userId = Number(payload?.user_id || payload?.id || payload?.sub || 0);
+
       const result = await dispatchService.updateTrip(
         Number(planId),
         parsed.data,
+        userId,
       );
       return NextResponse.json(result);
     }

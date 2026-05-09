@@ -11,7 +11,7 @@
    - Blue primary (enterprise)
    - Semantic status tokens (success/warn/info)
    - Sidebar separated but still clean
-============================================================ */
+ ============================================================ */
 :root {
   /* Core */
   --background: 240 6% 98.5%;
@@ -90,7 +90,7 @@
    - Less “boxy” borders
    - Blue primary (slightly brighter for visibility)
    - Semantic tokens tuned for dark
-============================================================ */
+ ============================================================ */
 .dark {
   /* Core */
   --background: 240 10% 3.2%;
@@ -158,7 +158,7 @@
 /* ============================================================
    TAILWIND V4 TOKEN MAPPING
    Enables: bg-background, text-foreground, border-border, etc.
-============================================================ */
+ ============================================================ */
 @theme inline {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -203,8 +203,8 @@
 
   --radius: var(--radius);
 
-  /* Fonts from layout.tsx */
-  --font-sans: var(--font-inter);
+  /* Fonts from layout.tsx (Geist vars) */
+  --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
   /* Sidebar */
@@ -222,10 +222,10 @@
    BASE STYLES
    - Use Geist by default (do not force Arial)
    - Consistent focus outlines + borders
-============================================================ */
+ ============================================================ */
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-ring/50 text-wrap;
   }
 
   body {
@@ -241,9 +241,8 @@
    - Data-grid/table helpers
    - Badge variants for status
    - Density helpers (comfortable/compact)
-============================================================ */
+ ============================================================ */
 @layer components {
-
   /* ----- Data table / grid styling helpers ----- */
   .data-grid {
     @apply w-full overflow-hidden rounded-lg border bg-card text-card-foreground;
@@ -311,7 +310,7 @@
    SMOOTH THEME TRANSITION (only when toggling)
    - Fixes your old "5000s" bug
    - Premium but fast
-============================================================ */
+ ============================================================ */
 html.theme-switching,
 html.theme-switching * {
   transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow;
@@ -321,7 +320,6 @@ html.theme-switching * {
 
 /* Respect reduced motion */
 @media (prefers-reduced-motion: reduce) {
-
   html.theme-switching,
   html.theme-switching * {
     transition: none !important;
@@ -330,10 +328,134 @@ html.theme-switching * {
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-ring/50 text-wrap;
   }
-
   body {
     @apply bg-background text-foreground;
   }
+
+  /* Custom Scrollbar HUD Implementation */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-400/20 rounded-full transition-colors border-2 border-transparent bg-clip-content;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-400/50;
+  }
+
+  /* Dark Mode HUD Specialized Scrollbar */
+  .dark ::-webkit-scrollbar-thumb {
+    @apply bg-white/10;
+  }
+
+  .dark ::-webkit-scrollbar-thumb:hover {
+    @apply bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.5)];
+  }
+
+  /* Hide spinners for all number inputs */
+  input::-webkit-outer-spin-button,
+  input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type=number] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+}
+
+/* ============================================================
+   PERFORMANCE-OPTIMIZED KEYFRAMES
+   ============================================================ */
+@keyframes scan {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(100vh); }
+}
+
+@keyframes orb-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.15; }
+  50% { transform: scale(1.08); opacity: 0.25; }
+}
+
+@layer utilities {
+  .animate-scan {
+    animation: scan 10s linear infinite;
+  }
+  .animate-orb-pulse {
+    animation: orb-pulse 12s ease-in-out infinite;
+  }
+  .will-change-transform {
+    will-change: transform;
+  }
+}
+
+/* ============================================================
+   LEAFLET THEME OVERRIDES (Consolidated)
+   - Uses CSS variables to automatically adapt to light/dark modes
+   ============================================================ */
+.leaflet-container {
+  background: hsl(var(--background)) !important;
+  font-family: inherit !important;
+}
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background-color: hsl(var(--popover)) !important;
+  color: hsl(var(--popover-foreground)) !important;
+  box-shadow: 0 3px 14px rgba(0,0,0,0.4) !important;
+}
+
+:is(.dark) .leaflet-popup-content-wrapper,
+:is(.dark) .leaflet-popup-tip,
+html.dark .leaflet-popup-content-wrapper,
+html.dark .leaflet-popup-tip {
+  background-color: hsl(var(--popover)) !important;
+  color: hsl(var(--popover-foreground)) !important;
+}
+
+.leaflet-popup-content {
+  color: hsl(var(--popover-foreground)) !important;
+  margin: 13px 19px !important;
+  line-height: 1.4 !important;
+}
+
+.leaflet-bar,
+.leaflet-bar a {
+  background-color: hsl(var(--popover)) !important;
+  color: hsl(var(--popover-foreground)) !important;
+  border-color: hsl(var(--border)) !important;
+}
+
+.leaflet-bar a:hover {
+  background-color: hsl(var(--accent)) !important;
+  color: hsl(var(--accent-foreground)) !important;
+}
+
+.leaflet-control-attribution {
+  background: hsl(var(--background) / 0.7) !important;
+  color: hsl(var(--muted-foreground)) !important;
+  font-size: 10px !important;
+}
+
+.leaflet-control-attribution a {
+  color: hsl(var(--primary)) !important;
+}
+
+:is(.dark) .leaflet-tile,
+html.dark .leaflet-tile {
+  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%) !important;
+}
+
+:is(.dark) .leaflet-tile-pane,
+html.dark .leaflet-tile-pane {
+  background-color: #222 !important;
 }

@@ -33,7 +33,7 @@ export function decodeJwtPayload(token: string): JwtPayload | null {
 
         const base64Url = parts[1];
         let base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-
+        
         // Pad for base64
         while (base64.length % 4) {
             base64 += "=";
@@ -53,7 +53,7 @@ export function decodeJwtPayload(token: string): JwtPayload | null {
 export function pickTokenFromPayload(payload: Record<string, unknown> | string | null): string | null {
     if (!payload) return null;
     if (typeof payload === "string") return payload.trim() || null;
-
+    
     const t = payload.token ?? payload.accessToken ?? payload.access_token ?? payload.jwt;
     return typeof t === "string" && t.trim() ? t.trim() : null;
 }

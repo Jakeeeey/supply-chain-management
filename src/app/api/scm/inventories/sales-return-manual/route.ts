@@ -50,8 +50,11 @@ function decodeJwtPayload(token: string): any {
 function getUserIdFromToken(token: string | undefined): number | null {
   if (!token) return null;
   const payload = decodeJwtPayload(token);
-  if (!payload || !payload.id) return null;
-  return Number(payload.id);
+  if (!payload) return null;
+  const idValue = payload.id ?? payload.sub ?? payload.userId ?? payload.user_id;
+  if (idValue === undefined || idValue === null) return null;
+  const num = Number(idValue);
+  return isNaN(num) ? null : num;
 }
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -77,6 +80,7 @@ export async function GET(req: NextRequest) {
           salesman: url.searchParams.get("salesman") || undefined,
           customer: url.searchParams.get("customer") || undefined,
           status: url.searchParams.get("status") || undefined,
+          invoiceNo: url.searchParams.get("invoiceNo") || undefined,
         };
         const data = await fetchReturns(page, limit, filters);
         return json({ data: data.data, total: data.total });
@@ -98,7 +102,8 @@ export async function GET(req: NextRequest) {
       }
 
       case "products": {
-        const data = await fetchProductCatalog();
+        const customerCode = url.searchParams.get("customerCode") || undefined;
+        const data = await fetchProductCatalog(customerCode);
         return json({ data });
       }
 
@@ -135,6 +140,7 @@ export async function POST(req: NextRequest) {
     const token = req.cookies.get("vos_access_token")?.value;
     const userId = getUserIdFromToken(token);
     
+    // 🟢 Session token is now mandatory.
     if (!userId) {
       return json({ error: "Unauthorized: Invalid or missing session" }, 401);
     }
@@ -176,6 +182,7 @@ export async function PATCH(req: NextRequest) {
     const token = req.cookies.get("vos_access_token")?.value;
     const userId = getUserIdFromToken(token);
     
+    // 🟢 Session token is now mandatory.
     if (!userId) {
       return json({ error: "Unauthorized: Invalid or missing session" }, 401);
     }

@@ -8,6 +8,7 @@ export const DispatchPlanStatusSchema = z.enum([
   "Picking",
   "Picked",
   "Dispatched",
+  "Rejected",
 ]);
 export type DispatchPlanStatus = z.infer<typeof DispatchPlanStatusSchema>;
 
@@ -74,6 +75,7 @@ export const salesOrderOptionSchema = z.object({
   store_name: z.string().optional(),
   city: z.string().optional(),
   province: z.string().optional(),
+  brgy: z.string().optional(),
   total_amount: z.number().nullable(),
   net_amount: z.number().nullable(),
   allocated_amount: z.number().nullable().optional(),
@@ -98,6 +100,7 @@ export const dispatchPlanSchema = z.object({
   cluster_id: z.number().nullable(),
   vehicle_id: z.number().nullable(),
   remarks: z.string().nullable().optional(),
+  reject_remarks: z.string().nullable().optional(),
   // Enriched fields (populated on fetch)
   driver_name: z.string().optional(),
   cluster_name: z.string().optional(),
@@ -122,6 +125,7 @@ export const dispatchPlanDetailSchema = z.object({
   customer_name: z.string().optional(),
   city: z.string().optional(),
   province: z.string().optional(),
+  brgy: z.string().optional(),
   weight: z.number().optional(),
   ordered_quantity: z.number().optional(),
   amount: z.number().optional(),

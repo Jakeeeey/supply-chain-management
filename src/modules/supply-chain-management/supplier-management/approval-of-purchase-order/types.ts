@@ -1,4 +1,9 @@
-export type PaymentTerm = "cash_with_order" | "cash_on_delivery" | "terms";
+export type PaymentTerm = {
+    id: number;
+    payment_name: string;
+    payment_days: number;
+    payment_description?: string;
+};
 
 export type PendingApprovalPO = {
     id: string;
@@ -108,6 +113,8 @@ export type PurchaseOrderDetail = {
 
     is_invoice?: boolean | number;
     isInvoice?: boolean | number;
+    preparer_name?: string;
+    encoder_id?: unknown;
 };
 export type Supplier = {
     id: string;

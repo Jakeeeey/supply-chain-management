@@ -3,17 +3,20 @@
 import * as React from "react";
 import Link from "next/link";
 import * as Icons from "lucide-react";
+import Image from "next/image";
 import {
     ArrowUpRight,
     Timer,
 } from "lucide-react";
 import { motion } from "framer-motion";
 
-import { CommandPalette } from "@/components/dashboard/command-palette";
-import { UserMenu } from "@/components/dashboard/user-menu";
+import { CommandPalette } from "@/components/main-dashboard/command-palette";
+import { UserMenu } from "@/components/main-dashboard/user-menu";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { GlassCard } from "@/components/command-center/GlassCard";
+import { AnimatedBackground } from "@/components/command-center/AnimatedBackground";
 
 export type Status = "active" | "comingSoon";
 
@@ -53,31 +56,31 @@ const CATEGORY_ORDER: SubsystemCategory[] = [
 ];
 
 const CATEGORY_META: Record<SubsystemCategory, { title: string; description: string }> =
-    {
-        Operations: {
-            title: "Operations",
-            description: "Core execution systems (supply, production, delivery, projects).",
-        },
-        "Customer & Engagement": {
-            title: "Customer & Engagement",
-            description: "Customer lifecycle, communications, and engagement touchpoints.",
-        },
-        "Corporate Services": {
-            title: "Corporate Services",
-            description: "Back-office functions supporting the organization (Finance, HR).",
-        },
-        "Governance & Assurance": {
-            title: "Governance & Assurance",
-            description: "Risk, audit, and compliance governance workflows.",
-        },
-        "Monitoring & Oversight": {
-            title: "Monitoring & Oversight",
-            description: "Cross-cutting monitoring, KPIs, and program oversight.",
-        },
-    };
+{
+    Operations: {
+        title: "Operations",
+        description: "Core execution systems (supply, production, delivery, projects).",
+    },
+    "Customer & Engagement": {
+        title: "Customer & Engagement",
+        description: "Customer lifecycle, communications, and engagement touchpoints.",
+    },
+    "Corporate Services": {
+        title: "Corporate Services",
+        description: "Back-office functions supporting the organization (Finance, HR).",
+    },
+    "Governance & Assurance": {
+        title: "Governance & Assurance",
+        description: "Risk, audit, and compliance governance workflows.",
+    },
+    "Monitoring & Oversight": {
+        title: "Monitoring & Oversight",
+        description: "Cross-cutting monitoring, KPIs, and program oversight.",
+    },
+};
 
-const HEADER_OFFSET_EXPANDED = 188; // px
-const HEADER_OFFSET_COMPACT = 120; // px
+const HEADER_OFFSET_EXPANDED = 140; // px
+const HEADER_OFFSET_COMPACT = 100; // px
 
 
 function normalize(s: string) {
@@ -113,24 +116,24 @@ function StatusBadge({ status }: { status: Status }) {
     if (status === "active") {
         return (
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-500/20 dark:text-emerald-300">
-        <Icons.CheckCircle2 className="h-3.5 w-3.5" />
-        Active
-      </span>
+                <Icons.CheckCircle2 className="h-3.5 w-3.5" />
+                Active
+            </span>
         );
     }
     return (
         <span className="inline-flex items-center gap-1 rounded-full bg-zinc-500/10 px-2 py-0.5 text-[11px] font-medium text-zinc-700 ring-1 ring-zinc-500/15 dark:text-zinc-200">
-      <Timer className="h-3.5 w-3.5" />
-      Coming Soon
-    </span>
+            <Timer className="h-3.5 w-3.5" />
+            Coming Soon
+        </span>
     );
 }
 
 function HoverLift({
-                       children,
-                       disabled,
-                       className,
-                   }: {
+    children,
+    disabled,
+    className,
+}: {
     children: React.ReactNode;
     disabled?: boolean;
     className?: string;
@@ -151,12 +154,7 @@ function HoverLift({
 }
 
 
-function getGreeting() {
-    const hour = new Date().getHours();
-    if (hour < 12) return "Good morning";
-    if (hour < 17) return "Good afternoon";
-    return "Good evening";
-}
+
 
 const containerVars = {
     hidden: { opacity: 0 },
@@ -175,14 +173,12 @@ const itemVars = {
 
 export type DashboardRegistryItem = Omit<SubsystemItem, "icon">;
 
-export default function MainDashboardClient({ 
-    initialSubsystems, 
-    userFirstName, 
-    userFullName, 
-    userEmail 
-}: { 
-    initialSubsystems: DashboardRegistryItem[]; 
-    userFirstName: string;
+export default function MainDashboardClient({
+    initialSubsystems,
+    userFullName,
+    userEmail
+}: {
+    initialSubsystems: DashboardRegistryItem[];
     userFullName: string;
     userEmail: string;
 }) {
@@ -224,57 +220,77 @@ export default function MainDashboardClient({
 
     return (
         <div className="relative min-h-screen flex flex-col overflow-x-hidden">
-            {/* Background */}
-            <div className="absolute inset-0 -z-10 bg-gradient-to-b from-zinc-50 via-white to-zinc-50 dark:from-zinc-950 dark:via-zinc-950 dark:to-black" />
-            <div className="absolute inset-0 -z-10 opacity-[0.70] dark:opacity-[0.55] bg-[radial-gradient(circle_at_15%_10%,rgba(99,102,241,0.18),transparent_45%),radial-gradient(circle_at_85%_15%,rgba(16,185,129,0.14),transparent_45%),radial-gradient(circle_at_30%_90%,rgba(244,63,94,0.10),transparent_50%),radial-gradient(circle_at_80%_85%,rgba(168,85,247,0.14),transparent_50%)]" />
-            <div className="absolute inset-0 -z-10 opacity-[0.07] dark:opacity-[0.10] [background-image:radial-gradient(#000_1px,transparent_1px)] [background-size:18px_18px]" />
+            <AnimatedBackground />
 
-            {/* FIXED HEADER */}
-            <header className="fixed inset-x-0 top-0 z-50 border-b bg-background/70 backdrop-blur supports-[backdrop-filter]:bg-background/50">
-                <div className="mx-auto w-full max-w-[1400px] px-4 sm:px-8">
-                    <div className={cn("transition-all duration-200", isCompactHeader ? "py-3" : "py-5")}>
-                         <div className="flex items-center justify-between gap-4">
-                            <div className="min-w-0">
-                                <div className="flex items-center gap-3">
-                                     <div className={cn("inline-flex items-center justify-center rounded-2xl border bg-background shadow-xs", isCompactHeader ? "h-9 w-9" : "h-10 w-10")}>
-                                         <Icons.Sparkles className="h-5 w-5 text-muted-foreground" />
-                                     </div>
 
-                                    <div className="min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <span className={cn("font-black tracking-tighter uppercase", isCompactHeader ? "text-base" : "text-lg sm:text-2xl")}>
-                                                VOS ERP
-                                            </span>
-                                            <Badge variant="secondary" className="h-6 px-2 text-[10px] font-black tracking-widest uppercase opacity-70">
-                                                Internal
-                                            </Badge>
-                                        </div>
+            {/* MODERN FLOATING HEADER */}
+            <header className={cn(
+                "fixed inset-x-0 top-0 z-50 transition-all duration-300 px-4 sm:px-8",
+                isCompactHeader ? "pt-4" : "pt-6"
+            )}>
+                <div className={cn(
+                    "mx-auto w-full max-w-[1400px] rounded-2xl border transition-all duration-300",
+                    "bg-white/60 dark:bg-slate-950/60 backdrop-blur-2xl",
+                    "border-slate-900/10 dark:border-white/10",
+                    "shadow-[0_8px_32px_0_rgba(0,0,0,0.05)] dark:shadow-[0_16px_48px_0_rgba(0,0,0,0.4)]",
+                    isCompactHeader ? "py-2.5 px-4" : "py-4 px-6"
+                )}>
+                    <div className="flex items-center justify-between gap-4">
+                        {/* Logo & System HUD */}
+                        <div className="flex items-center gap-6 min-w-0">
+                            <div className="flex items-center gap-3 shrink-0">
+                                <div className={cn(
+                                    "flex items-center justify-center rounded-xl bg-slate-900/5 dark:bg-white/5 border border-slate-900/10 dark:border-white/10 shadow-xs transition-all overflow-hidden p-1.5",
+                                    isCompactHeader ? "h-8 w-8" : "h-10 w-10"
+                                )}>
+                                    <Image 
+                                        src="/vos.png" 
+                                        alt="VOS Logo" 
+                                        width={isCompactHeader ? 20 : 24} 
+                                        height={isCompactHeader ? 20 : 24}
+                                        className="object-contain"
+                                    />
+                                </div>
+                                <div className="flex flex-col leading-none">
+                                    <span className={cn(
+                                        "font-black tracking-tighter uppercase italic leading-none",
+                                        isCompactHeader ? "text-base" : "text-xl sm:text-2xl"
+                                    )}>
+                                        VOS ERP
+                                    </span>
+                                    {!isCompactHeader && (
+                                        <span className="mt-1 text-[8px] font-black tracking-[0.2em] uppercase text-slate-500 opacity-60">Command Center</span>
+                                    )}
+                                </div>
+                            </div>
 
-                                        {!isCompactHeader ? (
-                                            <p className="mt-1 text-xs font-bold tracking-tight text-muted-foreground">
-                                                {getGreeting()}, <span className="text-foreground">{userFirstName}</span>. Welcome to your command center.
-                                            </p>
-                                        ) : null}
+                            {/* System HUD Status (Integrated Stats) */}
+                            <div className={cn(
+                                "hidden md:flex items-center gap-2 border-l border-slate-900/10 dark:border-white/10 pl-6 h-8 transition-opacity duration-300",
+                                isCompactHeader ? "opacity-0 scale-95 pointer-events-none" : "opacity-100"
+                            )}>
+                                <div className="flex flex-col gap-0.5">
+                                    <div className="flex items-center gap-1.5">
+                                        <div className="h-1 w-1 rounded-full bg-emerald-500 animate-pulse" />
+                                        <span className="text-[10px] font-black tracking-widest uppercase text-slate-400">{resolvedSubsystems.length} SYSTEMS SYNCED</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        <div className="h-1 w-1 rounded-full bg-cyan-500" />
+                                        <span className="text-[10px] font-black tracking-widest uppercase text-slate-400">{totalActiveVisible} CORES ONLINE</span>
                                     </div>
                                 </div>
                             </div>
-
-                            <div className="flex items-center gap-3">
-                                <CommandPalette subsystems={resolvedSubsystems} />
-                                <UserMenu fullName={userFullName} email={userEmail} />
-                            </div>
                         </div>
 
-                        <div className={cn("mt-4 flex flex-wrap items-center gap-2", isCompactHeader && "hidden")}>
-                                     <Badge variant="outline" className="h-6 px-2 text-[10px] font-bold tracking-tight bg-background border-border shadow-xs">
-                                        Visible Subsystems: <span className="ml-1 text-foreground font-black">{resolvedSubsystems.length}</span>
-                                    </Badge>
-                                    <Badge variant="outline" className="h-6 px-2 text-[10px] font-bold tracking-tight bg-background border-border shadow-xs">
-                                        Active (Visible): <span className="ml-1 text-foreground font-black">{totalActiveVisible}</span>
-                                    </Badge>
-                                </div>
+                        {/* Interactive Controls */}
+                        <div className="flex items-center gap-3">
+                            <div className="flex items-center pr-3 border-r border-slate-900/10 dark:border-white/10 mr-1">
+                                <CommandPalette subsystems={resolvedSubsystems} />
+                            </div>
+                            <UserMenu fullName={userFullName} email={userEmail} />
                         </div>
                     </div>
+                </div>
             </header>
 
             {/* CONTENT (push down for fixed header) */}
@@ -282,46 +298,48 @@ export default function MainDashboardClient({
                 className="mx-auto w-full max-w-[1400px] px-4 pb-12 sm:px-8 sm:pb-16 flex-1"
                 style={{ paddingTop: headerOffset }}
             >
-                <motion.div 
+                <motion.div
                     variants={containerVars}
                     initial="hidden"
                     animate="show"
                     className="space-y-10"
                 >
-                    <div className="space-y-10">
                     {filtered.length === 0 ? (
-                        <Card className="border bg-background/50 p-8 backdrop-blur">
-                            <div className="text-sm text-muted-foreground">
-                                {q.trim() 
-                                    ? `No visible subsystems match "${q.trim()}" for your account.` 
-                                    : "You do not have access to any subsystems. Please contact your Administrator."}
-                            </div>
-                        </Card>
-                    ) : (
-                        grouped.map((group) => {
-                            const meta = CATEGORY_META[group.category];
-                            return (
-                                <motion.div key={group.category} variants={itemVars}>
-                                    <div className="mb-4 px-1">
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <div className="text-sm font-black tracking-tight uppercase">{meta.title}</div>
-                                            <span className="inline-flex items-center rounded-full bg-primary/5 px-2.5 py-0.5 text-[10px] font-black text-primary ring-1 ring-primary/10 tracking-widest uppercase">
-                                                {group.items.length} Subsystem/s
-                                            </span>
+                            <Card className="border bg-background/50 p-8 backdrop-blur">
+                                <div className="text-sm text-muted-foreground">
+                                    {q.trim()
+                                        ? `No visible subsystems match "${q.trim()}" for your account.`
+                                        : "You do not have access to any subsystems. Please contact your Administrator."}
+                                </div>
+                            </Card>
+                        ) : (
+                            grouped.map((group) => {
+                                const meta = CATEGORY_META[group.category];
+                                return (
+                                    <motion.div key={group.category} variants={itemVars}>
+                                        <div className="mb-4 px-1">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <div className="text-xl md:text-2xl font-black tracking-tighter uppercase italic text-slate-800 dark:text-slate-200">{meta.title}</div>
+                                                <span className="inline-flex items-center rounded-full bg-slate-900/5 px-2.5 py-0.5 text-[10px] font-black text-slate-700 dark:text-slate-300 ring-1 ring-slate-900/10 tracking-widest uppercase">
+                                                    {group.items.length} Subsystem/s
+                                                </span>
+                                            </div>
+                                            <div className="mt-1 text-xs font-bold tracking-widest text-slate-500 opacity-70 uppercase leading-none">{meta.description}</div>
                                         </div>
-                                        <div className="mt-1 text-[11px] font-bold tracking-tight text-muted-foreground opacity-70 uppercase leading-none">{meta.description}</div>
-                                    </div>
 
-                                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                                        {group.items.map((s) => (
-                                            <SubsystemTile key={s.id} subsystem={s} onAccess={() => trackAccess(s.id)} />
-                                        ))}
-                                    </div>
-                                </motion.div>
-                            );
-                        })
-                    )}
-                </div>
+                                        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                                            {group.items.map((s) => (
+                                                <SubsystemTile
+                                                    key={s.id}
+                                                    subsystem={s}
+                                                    onAccess={() => trackAccess(s.id)}
+                                                />
+                                            ))}
+                                        </div>
+                                    </motion.div>
+                                );
+                            })
+                        )}
                 </motion.div>
             </main>
 
@@ -329,98 +347,129 @@ export default function MainDashboardClient({
     );
 }
 
-function SubsystemTile({ subsystem, onAccess }: { subsystem: SubsystemItem; onAccess?: () => void }) {
+function SubsystemTile({ subsystem, onAccess, className }: { subsystem: SubsystemItem; onAccess?: () => void; className?: string }) {
     const isComing = subsystem.status === "comingSoon";
     const Icon = subsystem.icon;
 
+    let accent: "cyan" | "indigo" | "emerald" | "amber" | "violet" | "rose" = "cyan";
+    const subId = subsystem.id.toUpperCase();
+
+    if (subId === "HRM") accent = "cyan";
+    else if (subId === "FIN") accent = "emerald";
+    else if (subId === "SCM") accent = "amber";
+    else if (subId === "CRM") accent = "indigo";
+    else if (subId === "BI") accent = "violet";
+    else if (subId === "ARF") accent = "rose";
+    else if (subsystem.category === "Customer & Engagement") accent = "indigo";
+    else if (subsystem.category === "Operations") accent = "amber";
+    else if (subsystem.category === "Governance & Assurance") accent = "rose";
+    else if (subsystem.category === "Monitoring & Oversight") accent = "violet";
+
     const content = (
-        <div
+        <GlassCard
+            accent={accent}
             className={cn(
-                "group relative overflow-hidden rounded-2xl border bg-background p-4 shadow-sm",
-                "transition-all duration-200",
-                "hover:border-primary/20 hover:shadow-md",
-                isComing && "cursor-not-allowed"
+                "h-full p-5 flex flex-col justify-between !shadow-none",
+                isComing && "cursor-not-allowed opacity-70",
+                className
             )}
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-10px" }}
         >
-            <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-                <div className="absolute -left-20 -top-20 h-56 w-56 rounded-full bg-primary/15 blur-2xl" />
-                <div className="absolute -bottom-24 -right-24 h-56 w-56 rounded-full bg-emerald-500/15 blur-2xl" />
-            </div>
+            <div className="relative flex flex-col h-full gap-3">
+                {/* Top Row: Icon/Tag + Meta */}
+                <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-2.5">
+                        <div
+                            className={cn(
+                                "flex shrink-0 items-center justify-center rounded-xl bg-slate-900/5 dark:bg-white/5 border border-slate-900/10 dark:border-white/10 shadow-sm backdrop-blur",
+                                "h-10 w-10"
+                            )}
+                        >
+                            <Icon className={cn(
+                                "text-slate-800 dark:text-slate-200",
+                                "h-4 w-4"
+                            )} />
+                        </div>
 
-            <div className="relative flex items-start gap-3">
-                <div
-                    className={cn(
-                        "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border bg-background shadow-xs",
-                        subsystem.accentClass
-                    )}
-                >
-                    <Icon className="h-5 w-5" />
-                </div>
-
-                <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                        <div className="truncate text-sm font-semibold">{subsystem.title}</div>
                         {subsystem.tag ? (
-                            <span className="inline-flex items-center rounded-full bg-zinc-900/5 px-2 py-0.5 text-[10px] font-semibold text-zinc-700 ring-1 ring-zinc-900/10 dark:bg-white/5 dark:text-zinc-200 dark:ring-white/10">
-                {subsystem.tag}
-              </span>
+                            <span className="shrink-0 inline-flex items-center rounded-lg bg-slate-200/50 px-2 py-0.5 text-[9px] font-black tracking-[0.2em] uppercase text-slate-900 ring-1 ring-slate-900/10 dark:bg-white/10 dark:text-white dark:ring-white/20">
+                                {subsystem.tag}
+                            </span>
                         ) : null}
                     </div>
 
-                    {subsystem.subtitle ? (
-                        <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                            {subsystem.subtitle}
+                    <div className="flex flex-col items-end gap-1.5 text-slate-400 shrink-0">
+                        <div className="flex items-center gap-2">
+                            {isComing ? (
+                                <Timer className="h-4 w-4 opacity-60" />
+                            ) : (
+                                <ArrowUpRight className="h-4 w-4 opacity-60" />
+                            )}
                         </div>
-                    ) : null}
-
-                    <div className="mt-2 text-[11px] text-muted-foreground">
-                        Category: {subsystem.category}
+                        <StatusBadge status={subsystem.status} />
                     </div>
                 </div>
 
-                <div className="mt-1 text-muted-foreground">
-                    {isComing ? (
-                        <Timer className="h-4 w-4 opacity-80" />
-                    ) : (
-                        <ArrowUpRight className="h-4 w-4 opacity-80 transition group-hover:opacity-100" />
-                    )}
+                {/* Middle Row: Title (Full Width) */}
+                <div className="min-w-0">
+                    <h3 className={cn(
+                        "font-black uppercase italic tracking-tighter leading-[0.85] break-words text-xl mb-0.5",
+                        "drop-shadow-[0_2px_3px_rgba(0,0,0,0.2)] dark:drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]",
+                        accent === "cyan" ? "text-cyan-700 dark:text-cyan-400" :
+                            accent === "indigo" ? "text-indigo-700 dark:text-indigo-400" :
+                                accent === "emerald" ? "text-emerald-700 dark:text-emerald-400" :
+                                    accent === "amber" ? "text-amber-700 dark:text-amber-400" :
+                                        accent === "rose" ? "text-rose-700 dark:text-rose-400" :
+                                            "text-violet-700 dark:text-violet-400"
+                    )}>
+                        {subsystem.title}
+                    </h3>
+
+                    {subsystem.subtitle ? (
+                        <p className="text-[10px] font-bold tracking-tight text-slate-500 italic leading-snug line-clamp-1 opacity-70">
+                            {subsystem.subtitle}
+                        </p>
+                    ) : null}
+                </div>
+
+                {/* Bottom Row: Category + Submodules */}
+                <div className="mt-auto pt-3 flex flex-col gap-3 border-t border-slate-900/5 dark:border-white/5">
+                    <div className="flex flex-wrap gap-1.5">
+                        {subsystem.submodules.slice(0, 4).map((m) => (
+                            <Badge
+                                key={m.id}
+                                variant="outline"
+                                className={cn(
+                                    "h-5 px-2 text-[9px] font-black tracking-widest uppercase bg-slate-200/30 dark:bg-black/20 border-slate-900/10 dark:border-white/10 text-slate-800 dark:text-slate-300",
+                                    m.status === "comingSoon" && "opacity-60"
+                                )}
+                            >
+                                {m.title}
+                            </Badge>
+                        ))}
+                        {subsystem.submodules.length > 4 && (
+                            <span className="text-[9px] font-black text-slate-400">+{subsystem.submodules.length - 4} MORE</span>
+                        )}
+                    </div>
+
+                    <div className="text-[10px] font-black uppercase tracking-widest text-slate-500/70">
+                        {subsystem.category}
+                    </div>
                 </div>
             </div>
-
-            <div className="relative mt-4 flex items-end justify-between gap-3">
-                <div className="flex flex-wrap gap-1.5">
-                    {subsystem.submodules.map((m) => (
-                        <Badge
-                            key={m.id}
-                            variant="secondary"
-                            className={cn(
-                                "h-5 px-2 text-[11px] font-medium",
-                                m.status === "comingSoon" && "opacity-80"
-                            )}
-                            title={m.status === "comingSoon" ? "Coming Soon" : "Active"}
-                        >
-                            {m.title}
-                        </Badge>
-                    ))}
-                </div>
-
-                <div className="shrink-0">
-                    <StatusBadge status={subsystem.status} />
-                </div>
-            </div>
-
-            <div className="pointer-events-none absolute inset-0 rounded-2xl ring-0 ring-primary/20 transition group-hover:ring-2" />
-        </div>
+        </GlassCard>
     );
 
-    if (isComing || !subsystem.href) return <HoverLift disabled>{content}</HoverLift>;
+    if (isComing || !subsystem.href) return <HoverLift disabled className={className}>{content}</HoverLift>;
 
     return (
-        <HoverLift>
+        <HoverLift className={className}>
             <Link
                 href={subsystem.href}
                 onClick={onAccess}
-                className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-2xl"
+                className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-[2rem] h-full"
                 aria-label={`Open ${subsystem.title}`}
             >
                 {content}

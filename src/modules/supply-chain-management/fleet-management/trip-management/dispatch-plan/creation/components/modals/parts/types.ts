@@ -2,6 +2,7 @@ export interface PlanDetailItem {
   detail_id: string | number;
   sales_order_id?: number;
   invoice_id?: number;
+  invoice_ids?: number[];
   order_no?: string;
   order_status?: string;
   true_order_status?: string;

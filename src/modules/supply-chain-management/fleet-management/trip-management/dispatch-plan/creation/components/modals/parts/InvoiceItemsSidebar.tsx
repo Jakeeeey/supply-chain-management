@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import {
   closestCenter,
@@ -72,7 +73,9 @@ function DraggableGroupedStop({
 
   const isManual = stop.isManualStop;
   const isInvoice = !stop.isManualStop && !stop.isPoStop;
-  const itemCount = stop.items.length;
+  const itemCount = isInvoice 
+    ? stop.items.reduce((sum, item) => sum + (item.invoice_ids?.length || (item.invoice_id ? 1 : 0)), 0)
+    : stop.items.length;
 
   return (
     <div
@@ -102,46 +105,52 @@ function DraggableGroupedStop({
 
         {/* Content */}
         <div className="flex-1 min-w-0 space-y-1">
-          <div className="flex items-start justify-between gap-2">
+          <div className="grid grid-cols-[1fr_auto] gap-2 items-start min-w-0">
             {stop.isManualStop ? (
               <div className="flex items-center gap-1.5 min-w-0">
                 <MapPin className="w-3 h-3 text-primary shrink-0" />
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="text-xs font-semibold text-foreground leading-tight truncate cursor-default" title={stop.remarks}>
-                      {stop.remarks}
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{stop.remarks}</p>
-                  </TooltipContent>
-                </Tooltip>
+                <div className="min-w-0 flex-1">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="text-xs font-semibold text-foreground leading-tight truncate cursor-default" title={stop.remarks}>
+                        {stop.remarks}
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{stop.remarks}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
               </div>
             ) : stop.isPoStop ? (
               <div className="flex items-center gap-1.5 min-w-0">
                 <Package className="w-3 h-3 text-amber-600 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="text-xs font-semibold text-foreground leading-tight truncate cursor-default" title={stop.po_no}>
+                        {stop.po_no}
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{stop.po_no}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </div>
+            ) : (
+              <div className="min-w-0">
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span className="text-xs font-semibold text-foreground leading-tight truncate cursor-default" title={stop.po_no}>
-                      {stop.po_no}
-                    </span>
+                    <div className="text-xs font-semibold text-foreground leading-tight truncate cursor-default" title={stop.customer_name}>
+                      {stop.customer_name}
+                    </div>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>{stop.po_no}</p>
+                    <p>{stop.customer_name}</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
-            ) : (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="text-xs font-semibold text-foreground leading-tight truncate cursor-default" title={stop.customer_name}>
-                    {stop.customer_name}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{stop.customer_name}</p>
-                </TooltipContent>
-              </Tooltip>
             )}
             
             <div className="flex flex-col items-end gap-1 shrink-0 translate-y-[-2px]">
@@ -196,10 +205,12 @@ function DraggableGroupedStop({
 
           {isInvoice && (
             <div className="flex items-center justify-between mt-1 gap-2">
-              <span className="text-[11px] text-muted-foreground flex items-center gap-1 truncate min-w-0">
-                <MapPin className="w-3 h-3 shrink-0" />
-                <span className="truncate">{stop.city}</span>
-              </span>
+              <div className="flex-1 min-w-0 flex items-center gap-1">
+                <MapPin className="w-3 h-3 shrink-0 text-muted-foreground" />
+                <span className="text-[11px] text-muted-foreground truncate block" title={stop.city}>
+                  {stop.city}
+                </span>
+              </div>
               <span className="text-xs font-semibold text-foreground tabular-nums shrink-0">
                 ₱
                 {Number(stop.totalAmount || 0).toLocaleString(undefined, {
@@ -216,17 +227,18 @@ function DraggableGroupedStop({
         <div className="bg-muted/30 border-t border-border/40 px-3 py-2 space-y-1.5">
           {stop.items.map((item) => (
             <div key={item.detail_id} className="flex items-center justify-between text-[11px]">
-              <span className="text-muted-foreground font-medium">{item.order_no}</span>
+              <span className="text-muted-foreground">Inv # :</span>
+              <span className="font-medium">{item.order_no}</span>
               <div className="flex items-center gap-2">
                 <Badge 
                   variant="secondary" 
-                  className="text-[8px] h-3 px-1 bg-muted-foreground/10 text-muted-foreground leading-none"
+                  className="text-[9px] h-3 px-1 bg-muted-foreground/10 text-muted-foreground leading-none"
                 >
                   {item.invoice_status || item.order_status}
                 </Badge>
-                <span className="text-foreground font-semibold">
+                {/* <span className="text-foreground font-semibold">
                   ₱{Number(item.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                </span>
+                </span> */}
               </div>
             </div>
           ))}
@@ -353,44 +365,48 @@ export function InvoiceItemsSidebar({
       </div>
 
       {/* Body */}
-      <div className="flex-1 overflow-y-auto px-4 py-3">
-        {selectedPlanIds.length === 0 && planDetails.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <ShoppingCart className="w-8 h-8 text-muted-foreground/20 mb-3" />
-            <p className="text-xs text-muted-foreground px-4">
-              Select a Pre-Dispatch Plan or add a manual stop to build your route.
-            </p>
-          </div>
-        ) : isLoadingDetails ? (
-          <div className="space-y-2">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-[72px] w-full rounded-lg" />
-            ))}
-          </div>
-        ) : (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-            modifiers={[restrictToVerticalAxis]}
-          >
-            <SortableContext
-              items={groupedPlanDetails.map((o) => o.id)}
-              strategy={verticalListSortingStrategy}
-            >
+      <div className="flex-1 min-h-0">
+        <ScrollArea className="h-full">
+          <div className="px-4 py-3">
+            {selectedPlanIds.length === 0 && planDetails.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <ShoppingCart className="w-8 h-8 text-muted-foreground/20 mb-3" />
+                <p className="text-xs text-muted-foreground px-4">
+                  Select a Pre-Dispatch Plan or add a manual stop to build your route.
+                </p>
+              </div>
+            ) : isLoadingDetails ? (
               <div className="space-y-2">
-                {groupedPlanDetails.map((stop, index) => (
-                  <DraggableGroupedStop
-                    key={stop.id}
-                    stop={stop}
-                    index={index}
-                    onDelete={handleDeleteStop}
-                  />
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-[72px] w-full rounded-lg" />
                 ))}
               </div>
-            </SortableContext>
-          </DndContext>
-        )}
+            ) : (
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+                modifiers={[restrictToVerticalAxis]}
+              >
+                <SortableContext
+                  items={groupedPlanDetails.map((o) => o.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="space-y-2">
+                    {groupedPlanDetails.map((stop, index) => (
+                      <DraggableGroupedStop
+                        key={stop.id}
+                        stop={stop}
+                        index={index}
+                        onDelete={handleDeleteStop}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
+            )}
+          </div>
+        </ScrollArea>
       </div>
 
       {/* Footer */}
@@ -448,7 +464,7 @@ export function InvoiceItemsSidebar({
                 })}
               </p>
               <Badge variant="secondary" className="text-[10px] h-5">
-                {planDetails.filter(i => !i.isManualStop).length} Invoice(s)
+                {planDetails.reduce((sum, i) => sum + (!i.isManualStop && !i.isPoStop ? (i.invoice_ids?.length || (i.invoice_id ? 1 : 0)) : 0), 0)} Invoice(s)
               </Badge>
             </div>
           </div>

@@ -217,7 +217,7 @@ export async function GET(request: Request) {
 
             const planInvoices = invoices
                 .filter((inv: { post_dispatch_plan_id: number }) => inv.post_dispatch_plan_id === plan.id)
-                .map((inv: { id: number; invoice_id: number; status: string; remarks: string; isCleared: boolean | number }) => {
+                .map((inv: { id: number; invoice_id: number; status: string; remarks: string }) => {
                     const salesInv = salesInvoices.find((s: { invoice_id: number; customer_code: string; order_id: string; invoice_no: string; invoice_date: string; total_amount: string | number }) => s.invoice_id === inv.invoice_id);
                     const custCodeRaw = salesInv?.customer_code || "";
                     const custCode = custCodeRaw.toString().trim().replace(/\s+/g, "");
@@ -241,7 +241,6 @@ export async function GET(request: Request) {
                         customerName: customerName,
                         amount: Number(salesInv?.total_amount) || 0,
                         remarks: inv.remarks || '',
-                        isCleared: !!inv.isCleared,
                         // Reconciliation data restoration
                         missingQtys: (() => {
                             const transaction = transactions.find((t: { sales_invoice_id: number; id: number }) => t.sales_invoice_id === inv.invoice_id);
@@ -357,7 +356,6 @@ export async function POST(request: Request) {
             return {
                 id: inv.id,
                 status: pdiStatus,
-                isCleared: 1,
                 remarks: inv.remarks || null,
             };
         });
@@ -538,7 +536,6 @@ export async function POST(request: Request) {
                 const payload: Record<string, unknown> = {
                     sales_invoice_id: inv.invoiceId,
                     nte: inv.remarks || '',
-                    isCleared: isPreSave ? 0 : 1, // Correctly set based on isPreSave flag
                     date_acknowledged: new Date().toISOString(),
                     variance_amount: Number.isNaN(varianceAmount) ? 0 : varianceAmount
                 };

@@ -265,7 +265,7 @@ export function PDPApproveModal({
                               {detail.customer_name || "—"}
                             </td>
                             <td className="p-2 align-middle text-[11px] text-muted-foreground border-b">
-                              {[detail.city, detail.province]
+                              {[detail.brgy, detail.city, detail.province]
                                 .filter(Boolean)
                                 .join(", ") || "—"}
                             </td>

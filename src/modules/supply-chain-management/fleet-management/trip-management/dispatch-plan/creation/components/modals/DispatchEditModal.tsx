@@ -291,6 +291,7 @@ export function DispatchEditModal({
       ...values,
       invoices: planDetails.map((details: PlanDetailItem, index: number) => ({
         invoice_id: details.invoice_id,
+        invoice_ids: details.invoice_ids,
         invoice_no: details.order_no,
         sequence: index + 1,
         remarks: details.remarks,

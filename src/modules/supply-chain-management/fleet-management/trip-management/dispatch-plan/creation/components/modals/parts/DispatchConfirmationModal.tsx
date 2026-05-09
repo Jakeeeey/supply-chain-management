@@ -44,7 +44,13 @@ export function DispatchConfirmationModal({
   );
   const startingPointName = startingPointNode?.branch_name || "Unknown";
 
-  const totalTransactions = planDetails.length;
+  const totalInvoices = planDetails.reduce(
+    (sum, d) => sum + (!d.isManualStop && !d.isPoStop ? (d.invoice_ids?.length || (d.invoice_id ? 1 : 0)) : 0),
+    0
+  );
+
+  const totalPoStops = planDetails.filter((d) => d.isPoStop).length;
+  const totalManualStops = planDetails.filter((d) => d.isManualStop).length;
 
   const totalStops = groupPlanDetails(planDetails).length;
 
@@ -90,10 +96,28 @@ export function DispatchConfirmationModal({
 
             <div className="flex flex-col gap-1 border-b border-border/40 pb-2 text-right">
               <span className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
-                Total Transactions
+                Total Invoices
               </span>
               <span className="font-medium text-foreground">
-                {totalTransactions}
+                {totalInvoices}
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-1 border-b border-border/40 pb-2">
+              <span className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                PO Stops
+              </span>
+              <span className="font-medium text-foreground">
+                {totalPoStops}
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-1 border-b border-border/40 pb-2 text-right">
+              <span className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                Manual Stops
+              </span>
+              <span className="font-medium text-foreground">
+                {totalManualStops}
               </span>
             </div>
 
@@ -177,11 +201,11 @@ export function DispatchConfirmationModal({
             {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Creating Dispatch...
+                Processing...
               </>
             ) : (
               <>
-                Confirm & Create
+                Confirm
                 <ArrowRight className="ml-2 h-4 w-4" />
               </>
             )}

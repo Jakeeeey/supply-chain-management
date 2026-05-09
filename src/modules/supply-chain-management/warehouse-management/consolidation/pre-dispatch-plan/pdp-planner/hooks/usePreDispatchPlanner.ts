@@ -137,6 +137,20 @@ export function usePreDispatchPlanner() {
     await refresh();
   };
 
+  /**
+   * Rejects a single dispatch plan with remarks.
+   */
+  const rejectPlan = async (id: number | string, remarks: string) => {
+    const response = await fetch(`${API_PATH}/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "reject", reject_remarks: remarks }),
+    });
+    const result = await response.json();
+    if (result.error) throw new Error(result.error);
+    await refresh();
+  };
+
   return {
     plansData,
     plansTotal,
@@ -154,5 +168,6 @@ export function usePreDispatchPlanner() {
 
     fetchPlanDetails,
     approvePlan,
+    rejectPlan,
   };
 }

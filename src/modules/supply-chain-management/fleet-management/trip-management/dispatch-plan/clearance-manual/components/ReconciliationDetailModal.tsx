@@ -357,9 +357,10 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                                         salesmanCode: detail?.header.salesman_code,
                                         branchId: detail?.header.branch_id,
                                         branchName: detail?.header.branch_name,
+                                        remarks: remarks
                                     };
                                     localStorage.setItem('scm_dispatch_return_data', JSON.stringify(returnData));
-                                    window.open('/scm/inventories/sales-return-rfid?fromClearance=true', '_blank');
+                                    window.open('/scm/inventories/sales-return-manual?fromClearance=true', '_blank');
                                 } else {
                                     if (!selectedReturnNo) {
                                         toast.error("Please select a Sales Return to link.");
@@ -371,7 +372,7 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                                         isLinking: true
                                     };
                                     localStorage.setItem('scm_dispatch_return_link_data', JSON.stringify(returnData));
-                                    window.open(`/scm/inventories/sales-return-rfid?fromClearance=true&editReturnNo=${selectedReturnNo}&prefillInvoiceNo=${reconciliation.invoiceNo}&prefillOrderNo=${reconciliation.orderNo}`, '_blank');
+                                    window.open(`/scm/inventories/sales-return-manual?fromClearance=true&editReturnNo=${selectedReturnNo}&prefillInvoiceNo=${reconciliation.invoiceNo}&prefillOrderNo=${reconciliation.orderNo}&prefillRemarks=${encodeURIComponent(remarks)}`, '_blank');
                                 }
                                 handleSave(); // Also save the clearance status
                             }} 

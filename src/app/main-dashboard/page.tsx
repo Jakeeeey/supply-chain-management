@@ -142,7 +142,6 @@ export default async function ERPMainDashboardPage() {
     return (
         <MainDashboardClient 
             initialSubsystems={subsystems} 
-            userFirstName={payload.FirstName || "User"}
             userFullName={userFullName}
             userEmail={userEmail}
         />

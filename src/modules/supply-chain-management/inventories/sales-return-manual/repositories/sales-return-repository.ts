@@ -89,7 +89,7 @@ async function directusMutate<T>(
 export async function getRawReturns(
   page: number = 1,
   limit: number = 10,
-  filters: { salesman?: string; customer?: string; status?: string } = {},
+  filters: { salesman?: string; customer?: string; status?: string; invoiceNo?: string } = {},
 ) {
   const allowedFields =
     "return_id,return_number,invoice_no,customer_code,salesman_id,total_amount,status,return_date,remarks,order_id,isThirdParty,created_at,price_type";
@@ -102,6 +102,8 @@ export async function getRawReturns(
     url += `&filter[customer_code][_eq]=${encodeURIComponent(filters.customer)}`;
   if (filters.status && filters.status !== "All")
     url += `&filter[status][_eq]=${filters.status}`;
+  if (filters.invoiceNo)
+    url += `&filter[invoice_no][_eq]=${encodeURIComponent(filters.invoiceNo)}`;
 
   return directusGet<{ data: Record<string, unknown>[]; meta?: { filter_count?: number } }>(url);
 }
@@ -142,7 +144,7 @@ export async function getRawReferences() {
       "/items/salesman?limit=-1&fields=id,salesman_name,salesman_code,price_type,branch_code&filter[isActive][_eq]=1",
     ),
     directusGet<{ data: Record<string, unknown>[] }>(
-      "/items/customer?limit=-1&fields=id,customer_code,customer_name,store_name&filter[isActive][_eq]=1",
+      "/items/customer?limit=-1&fields=id,customer_code,customer_name,store_name,discount_type&filter[isActive][_eq]=1",
     ),
     directusGet<{ data: Record<string, unknown>[] }>(
       "/items/branches?limit=-1&fields=id,branch_name",
@@ -190,6 +192,17 @@ export async function getRawProductCatalog() {
   ]);
 }
 
+
+/**
+ * Fetches supplier_category_discount_per_customer records for a specific customer.
+ */
+export async function getRawSupplierCategoryDiscount(customerCode: string) {
+  if (!customerCode) return { data: [] };
+  return directusGet<{ data: Record<string, unknown>[] }>(
+    `/items/supplier_category_discount_per_customer?limit=-1&filter[customer_code][_eq]=${encodeURIComponent(customerCode)}&filter[deleted_at][_null]=true`
+  );
+}
+
 /**
  * Fetches invoice list (unposted) optionally filtered by customer code.
  */
@@ -198,7 +211,7 @@ export async function getRawInvoices(
   customerCode?: string,
 ) {
   let url =
-    "/items/sales_invoice?limit=-1&fields=invoice_id,invoice_no,customer_code,order_id,salesman_id,isPosted,total_amount&filter[isPosted][_null]=true";
+    "/items/sales_invoice?limit=-1&fields=invoice_id,invoice_no,customer_code,order_id,salesman_id,isPosted,total_amount";
 
   if (customerCode) {
     url += `&filter[customer_code][_eq]=${encodeURIComponent(customerCode)}`;

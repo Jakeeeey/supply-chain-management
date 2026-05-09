@@ -2,11 +2,67 @@
 import { NextRequest, NextResponse } from "next/server"
 import { decodeJwtPayload, COOKIE_NAME } from "@/lib/auth-utils"
 
-const PROTECTED_PREFIXES = ["/dashboard", "/scm", "/fm", "/hrm", "/bia", "/arf", "/cafeteria"]
 const PUBLIC_FILE = /\.(.*)$/
+const BASELINE_PREFIXES = ["/main-dashboard"]
 
-function isProtectedPath(pathname: string) {
-    return PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))
+// Edge Memory Cache
+let CACHED_PREFIXES: string[] = [...BASELINE_PREFIXES]
+let LAST_FETCH_TIME = 0
+const CACHE_TTL = 300000 // 5 minutes
+
+async function getDynamicProtectedPrefixes() {
+    const now = Date.now()
+
+    // Check if cache is fresh
+    if (LAST_FETCH_TIME > 0 && (now - LAST_FETCH_TIME) < CACHE_TTL) {
+        return CACHED_PREFIXES
+    }
+
+    const directusBase = process.env.NEXT_PUBLIC_API_BASE_URL
+    const directusToken = process.env.DIRECTUS_STATIC_TOKEN
+
+    if (!directusBase || !directusToken) {
+        return CACHED_PREFIXES // Fallback to baseline if config is missing
+    }
+
+    try {
+        const filter = encodeURIComponent(JSON.stringify({ status: { _eq: "active" } }))
+        const url = `${directusBase.replace(/\/$/, "")}/items/subsystems?fields=base_path&filter=${filter}&limit=-1`
+
+        const res = await fetch(url, {
+            headers: { "Authorization": `Bearer ${directusToken}` },
+            cache: 'no-store'
+        })
+
+        if (!res.ok) throw new Error("Directus Registry")
+
+        const { data } = await res.json()
+        const dynamicPaths = (data || [])
+            .map((s: { base_path?: string }) => s.base_path?.trim())
+            .filter(Boolean) as string[]
+
+        // Merge baseline with dynamic paths and deduplicate
+        const merged = Array.from(new Set([...BASELINE_PREFIXES, ...dynamicPaths]))
+
+        CACHED_PREFIXES = merged
+        LAST_FETCH_TIME = now
+
+        return CACHED_PREFIXES
+    } catch (error) {
+        console.error("[Middleware] Registry Fetch Failed:", error)
+
+        // Fail-Fast: If we have no cache at all (beyond baseline), we redirect to error
+        if (CACHED_PREFIXES.length <= BASELINE_PREFIXES.length) {
+            throw error
+        }
+
+        // Otherwise, use stale cache (Graceful Degradation)
+        return CACHED_PREFIXES
+    }
+}
+
+function isProtectedPath(pathname: string, prefixes: string[]) {
+    return prefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`))
 }
 
 
@@ -36,7 +92,18 @@ export async function middleware(req: NextRequest) {
         return NextResponse.next()
     }
 
-    if (!isProtectedPath(pathname)) {
+    let prefixes: string[] = []
+    try {
+        prefixes = await getDynamicProtectedPrefixes()
+    } catch {
+        // Fatal initialization error (API Down + No Cache)
+        const url = req.nextUrl.clone()
+        url.pathname = "/error/service-down"
+        url.searchParams.set("service", "Directus Registry")
+        return NextResponse.redirect(url)
+    }
+
+    if (!isProtectedPath(pathname, prefixes)) {
         return NextResponse.next()
     }
 
@@ -50,13 +117,13 @@ export async function middleware(req: NextRequest) {
     const payload = decodeJwtPayload(token);
 
     // Map path to subsystem ID and specific module slug (e.g. /hrm -> hrm)
-    const subsystemMatch = PROTECTED_PREFIXES.find((p) => pathname.startsWith(p));
+    const subsystemMatch = prefixes.find((p) => pathname.startsWith(p));
 
     if (subsystemMatch) {
         const subsystemId = subsystemMatch.replace("/", "");
 
         // Dashboard is always allowed if logged in
-        if (subsystemId === "dashboard" || subsystemId === "main-dashboard") {
+        if (subsystemId === "main-dashboard") {
             return NextResponse.next();
         }
 
