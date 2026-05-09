@@ -40,6 +40,7 @@ import {
   CustomerOption,
   BranchOption,
 } from "../providers/fetchProviders";
+import { resolveFinalDiscount } from "../utils/discount-resolver";
 
 interface Props {
   isOpen: boolean;
@@ -214,6 +215,54 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       );
     }
   }, [priceType, lineDiscountOptions, items.length]);
+
+  // 🟢 NEW: Effect to automatically update discounts when Customer changes
+  useEffect(() => {
+    if (items.length > 0 && customerCode) {
+      const updateDiscounts = async () => {
+        try {
+          const catalog = await SalesReturnProvider.getFullCatalog(customerCode);
+          const customer = customers.find((c) => c.code === customerCode);
+          const customerDiscountType = customer?.discountType || null;
+
+          setItems((prevItems) =>
+            prevItems.map((item) => {
+              const productInfo = catalog.products?.find((p: any) => p.product_id === Number(item.productId));
+              if (!productInfo) return item;
+
+              const newDiscountType = resolveFinalDiscount(
+                productInfo,
+                customerCode,
+                catalog,
+                customerDiscountType
+              );
+
+              let newDiscountAmt = 0;
+              if (newDiscountType) {
+                const selectedOption = lineDiscountOptions.find(
+                  (d) => d.id.toString() === newDiscountType?.toString(),
+                );
+                if (selectedOption) {
+                  const percentage = parseFloat(selectedOption.total_percent) || 0;
+                  newDiscountAmt = Math.round((item.grossAmount || 0) * (percentage / 100) * 100) / 100;
+                }
+              }
+
+              return {
+                ...item,
+                discountType: newDiscountType,
+                discountAmount: newDiscountAmt,
+                totalAmount: Math.round(((item.grossAmount || 0) - newDiscountAmt) * 100) / 100,
+              };
+            })
+          );
+        } catch (error) {
+          console.error("Failed to update discounts on customer change", error);
+        }
+      };
+      updateDiscounts();
+    }
+  }, [customerCode, customers, lineDiscountOptions, items.length]);
 
   const handleSelectSalesman = useCallback((salesman: SalesmanOption) => {
     setSelectedSalesmanId(salesman.id.toString());
@@ -538,6 +587,21 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
             Number(resultRecord.unitPrice) ||
             0) * 100) / 100;
 
+          const incomingDiscountType = item.discountType || "";
+          let initialDiscountAmt = 0;
+          const initialGross = Math.round(unitPrice * qty * 100) / 100;
+
+          if (incomingDiscountType) {
+            const selectedOption = lineDiscountOptions.find(
+              (d) => d.id.toString() === incomingDiscountType.toString(),
+            );
+            if (selectedOption) {
+              const percentage = parseFloat(selectedOption.total_percent) || 0;
+              initialDiscountAmt =
+                Math.round(initialGross * (percentage / 100) * 100) / 100;
+            }
+          }
+
           updated.push({
             ...item,
             productId,
@@ -547,10 +611,10 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
             unit: item.unit || "Pcs",
             quantity: qty,
             unitPrice: unitPrice,
-            grossAmount: Math.round(unitPrice * qty * 100) / 100,
-            discountType: "",
-            discountAmount: 0,
-            totalAmount: Math.round(unitPrice * qty * 100) / 100,
+            grossAmount: initialGross,
+            discountType: incomingDiscountType,
+            discountAmount: initialDiscountAmt,
+            totalAmount: Math.round((initialGross - initialDiscountAmt) * 100) / 100,
             reason: "",
             returnType: "",
           } as SalesReturnItem);
@@ -1459,6 +1523,8 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         onClose={() => setIsProductLookupOpen(false)}
         onConfirm={handleAddProducts}
         priceType={priceType} // 🟢 Pass prop
+        customerCode={customerCode} // 🟢 Pass prop
+        customerDiscountType={customers.find(c => c.code === customerCode)?.discountType} // 🟢 Pass prop
       />
 
       {/* SUCCESS MODAL */}

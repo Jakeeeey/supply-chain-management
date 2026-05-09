@@ -468,7 +468,18 @@ export function UpdateSalesReturnModal({
         } else {
           const price = Math.round((Number(item.unitPrice) || Number(item.price) || 0) * 100) / 100;
           const gross = Math.round(price * qty * 100) / 100;
-          const discAmt = Number(item.discountAmount) || 0;
+          const incomingDiscountType = item.discountType || "";
+          let initialDiscountAmt = 0;
+
+          if (incomingDiscountType && incomingDiscountType !== "No Discount") {
+            const selectedDisc = discountOptions.find(
+              (d) => d.id.toString() === incomingDiscountType.toString(),
+            );
+            if (selectedDisc) {
+              const percentage = parseFloat(selectedDisc.total_percent) || 0;
+              initialDiscountAmt = Math.round(gross * (percentage / 100) * 100) / 100;
+            }
+          }
 
           updated.push({
             id: `added-${Date.now()}-${index}-${Math.floor(Math.random() * 10000)}`,
@@ -479,9 +490,9 @@ export function UpdateSalesReturnModal({
             quantity: qty,
             unitPrice: price,
             grossAmount: gross,
-            discountType: item.discountType || null,
-            discountAmount: discAmt,
-            totalAmount: Math.round((gross - discAmt) * 100) / 100,
+            discountType: incomingDiscountType || null,
+            discountAmount: initialDiscountAmt,
+            totalAmount: Math.round((gross - initialDiscountAmt) * 100) / 100,
             reason: item.reason || "",
             returnType: "", // 🟢 Force empty string to trigger validation for new items
           });
@@ -1709,6 +1720,7 @@ export function UpdateSalesReturnModal({
         onClose={() => setIsProductLookupOpen(false)}
         onConfirm={handleAddProductsToEdit}
         priceType={headerData.priceType || "A"}
+        customerCode={headerData.customerCode}
       />
 
       <Dialog
