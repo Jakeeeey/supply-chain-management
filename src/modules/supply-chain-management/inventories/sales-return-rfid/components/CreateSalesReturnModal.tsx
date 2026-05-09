@@ -39,20 +39,6 @@ import {
   PriceTypeOption,
 } from "../type";
 
-interface SalesReturnGroup {
-  key: string;
-  code: string;
-  description: string;
-  unit: string;
-  returnType: string;
-  unitPrice: number;
-  totalQty: number;
-  totalGross: number;
-  totalDiscount: number;
-  totalNet: number;
-  children: { item: SalesReturnItem; idx: number }[];
-}
-
 // Import Child Modal
 import { ProductLookupModal } from "./ProductLookupModal";
 // Import Provider & Types
@@ -61,6 +47,7 @@ import {
   SalesmanOption,
   CustomerOption,
   BranchOption,
+  Product,
 } from "../providers/fetchProviders";
 import { resolveFinalDiscount } from "../utils/discount-resolver";
 // Import RFID Scanner Hook
@@ -137,7 +124,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   // --- RFID State ---
   const [rfidScanning, setRfidScanning] = useState(false);
   const [lastScannedRfid, setLastScannedRfid] = useState("");
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
   // --- 3. CART STATE ---
   const [items, setItems] = useState<SalesReturnItem[]>([]);
@@ -201,19 +187,16 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       const updateDiscounts = async () => {
         try {
           const catalog = await SalesReturnProvider.getFullCatalog(customerCode);
-          const customer = customers.find((c) => c.code === customerCode);
-          const customerDiscountType = customer?.discountType || null;
 
           setItems((prevItems) =>
             prevItems.map((item) => {
-              const productInfo = catalog.products?.find((p: any) => p.product_id === Number(item.productId));
+              const productInfo = catalog.products?.find((p: Product) => p.product_id === Number(item.productId));
               if (!productInfo) return item;
 
               const newDiscountType = resolveFinalDiscount(
                 productInfo,
                 customerCode,
-                catalog,
-                customerDiscountType
+                catalog
               );
 
               let newDiscountAmt = 0;
@@ -385,11 +368,11 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
       // Auto-clear display after 2 seconds
       setTimeout(() => setLastScannedRfid(""), 2000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("RFID lookup failed:", err);
       setLastScannedRfid(""); // Clear checkmark
       toast.error("RFID Lookup Failed", {
-        description: err.message || "An unexpected error occurred during scanning. Please try again.",
+        description: (err as Error).message || "An unexpected error occurred during scanning. Please try again.",
       });
     } finally {
       setRfidScanning(false);
@@ -1663,7 +1646,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         onConfirm={handleAddProducts}
         priceType={priceType} // 🟢 Pass prop
         customerCode={customerCode} // 🟢 Pass prop
-        customerDiscountType={customers.find(c => c.code === customerCode)?.discountType} // 🟢 Pass prop
       />
 
       {/* SUCCESS MODAL */}

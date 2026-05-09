@@ -77,20 +77,6 @@ import { createRoot } from "react-dom/client";
 import { useRfidScanner } from "../hooks/useRfidScanner";
 import { useSearchParams } from "next/navigation";
 
-interface SalesReturnGroup {
-  key: string;
-  code: string;
-  description: string;
-  unit: string;
-  returnType: string;
-  unitPrice: number;
-  totalQty: number;
-  totalGross: number;
-  totalDiscount: number;
-  totalNet: number;
-  children: { item: SalesReturnItem; idx: number }[];
-}
-
 interface Props {
   returnId: number;
   initialData: SalesReturn;
@@ -265,7 +251,6 @@ export function UpdateSalesReturnModal({
   // RFID State
   const [rfidScanning, setRfidScanning] = useState(false);
   const [lastScannedRfid, setLastScannedRfid] = useState("");
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null);
 
 
@@ -493,11 +478,11 @@ export function UpdateSalesReturnModal({
 
       toast.success(`Tag accepted for ${details[selectedRowIndex].description}`);
       setTimeout(() => setLastScannedRfid(""), 2000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("RFID lookup failed:", err);
       setLastScannedRfid("");
       toast.error("RFID Lookup Failed", {
-        description: err.message || "An unexpected error occurred during scanning. Please try again.",
+        description: (err as Error).message || "An unexpected error occurred during scanning. Please try again.",
       });
     } finally {
       setRfidScanning(false);

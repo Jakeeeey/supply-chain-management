@@ -14,9 +14,7 @@ export function resolveFinalDiscount(
   catalog: {
     connections: ProductSupplierConnection[];
     supplierCategoryDiscount?: SupplierCategoryDiscount[];
-  },
-  // customerDefaultDiscountType is now ignored per new requirements
-  _customerDefaultDiscountType?: string | number | null
+  }
 ): string | number | null {
   if (!customerCode) return null;
 

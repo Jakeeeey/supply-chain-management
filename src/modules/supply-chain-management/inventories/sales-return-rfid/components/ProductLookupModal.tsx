@@ -26,6 +26,7 @@ import {
   Unit,
   Product,
   ProductSupplierConnection,
+  ProductCatalog,
 } from "../type";
 import { SalesReturnProvider } from "../providers/fetchProviders";
 import { cn } from "@/lib/utils";
@@ -37,7 +38,6 @@ interface Props {
   onConfirm: (items: SalesReturnItem[]) => void;
   priceType: string; // 🟢 NEW
   customerCode?: string; // 🟢 NEW: Pass selected customer code
-  customerDiscountType?: string | number | null; // 🟢 NEW: Pass selected customer default discount
 }
 
 export function ProductLookupModal({
@@ -46,7 +46,6 @@ export function ProductLookupModal({
   onConfirm,
   priceType = "A", // 🟢 NEW
   customerCode,
-  customerDiscountType,
 }: Props) {
   // --- STATES ---
   const [searchCode, setSearchCode] = useState("");
@@ -60,7 +59,7 @@ export function ProductLookupModal({
   const [categoriesList, setCategoriesList] = useState<Category[]>([]);
   const [suppliersList, setSuppliersList] = useState<Supplier[]>([]);
   const [unitsList, setUnitsList] = useState<Unit[]>([]);
-  const [catalogData, setCatalogData] = useState<any>(null); // Keep full catalog for resolving
+  const [catalogData, setCatalogData] = useState<ProductCatalog | null>(null); // Keep full catalog for resolving
   const [supplierConnections, setSupplierConnections] = useState<
     ProductSupplierConnection[]
   >([]);
@@ -108,7 +107,7 @@ export function ProductLookupModal({
       };
       loadData();
     }
-  }, [isOpen]);
+  }, [isOpen, customerCode]);
 
   // --- 2. CLICK OUTSIDE HANDLERS ---
   useEffect(() => {
@@ -292,8 +291,7 @@ export function ProductLookupModal({
         const tiedDiscount = resolveFinalDiscount(
           product,
           customerCode,
-          catalogData || { connections: supplierConnections },
-          customerDiscountType
+          catalogData || { connections: supplierConnections }
         );
 
         const unitOrder = unitsList.find(u => u.unit_id === product.unit_of_measurement)?.order || 0;

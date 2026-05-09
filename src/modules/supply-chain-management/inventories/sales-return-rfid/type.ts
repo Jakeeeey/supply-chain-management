@@ -131,6 +131,16 @@ export interface API_SalesReturnType {
   description: string;
 }
 
+export interface ProductCatalog {
+  brands: Brand[];
+  categories: Category[];
+  suppliers: Supplier[];
+  units: Unit[];
+  connections: ProductSupplierConnection[];
+  products: Product[];
+  supplierCategoryDiscount?: SupplierCategoryDiscount[];
+}
+
 // --- PRICE TYPE OPTIONS (from price_types table) ---
 export interface PriceTypeOption {
   price_type_id: number;

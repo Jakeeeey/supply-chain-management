@@ -145,7 +145,6 @@ export async function GET(req: NextRequest) {
       case "rfid-lookup": {
         const rfid = url.searchParams.get("rfid");
         const rfidBranchId = Number(url.searchParams.get("branchId"));
-        const customerCode = url.searchParams.get("customerCode") || undefined;
 
         if (!rfid || !rfidBranchId) {
           return json(
@@ -165,7 +164,7 @@ export async function GET(req: NextRequest) {
           );
         }
 
-        const result = await lookupRfid(rfid, rfidBranchId, rfidToken, customerCode);
+        const result = await lookupRfid(rfid, rfidBranchId, rfidToken);
         return json({ data: result });
       }
 

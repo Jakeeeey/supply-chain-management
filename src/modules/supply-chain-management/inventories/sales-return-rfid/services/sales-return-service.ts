@@ -22,7 +22,6 @@ import type {
 } from "../type";
 
 import * as repo from "../repositories/sales-return-repository";
-import { resolveFinalDiscount } from "../utils/discount-resolver";
 
 // =============================================================================
 // HELPERS
