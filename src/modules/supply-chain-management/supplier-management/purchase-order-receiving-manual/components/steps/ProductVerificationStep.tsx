@@ -3,9 +3,10 @@
 import * as React from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, ChevronRight, Plus, Trash2 } from "lucide-react";
+import { CheckCircle2, ChevronRight, Plus, Trash2, Search } from "lucide-react";
 import { useReceivingProductsManual } from "../../providers/ReceivingProductsManualProvider";
 import { AddExtraProductModal } from "../AddExtraProductModal";
 import { cn } from "@/lib/utils";
@@ -19,18 +20,27 @@ export function ProductVerificationStep({ onContinue }: { onContinue: () => void
     } = useReceivingProductsManual();
 
     const [isAddModalOpen, setIsAddModalOpen] = React.useState(false);
+    const [searchQuery, setSearchQuery] = React.useState("");
 
     const allItems = React.useMemo(() => {
         const allocs = Array.isArray(selectedPO?.allocations) ? selectedPO!.allocations : [];
-        return allocs.flatMap((a) => {
+        const flattened = allocs.flatMap((a) => {
             const items = Array.isArray(a?.items) ? a.items : [];
             return items.map((it) => ({
                 ...it,
                 id: String(it.id),
                 branchName: a?.branch?.name ?? "Unassigned",
             }));
-        });
-    }, [selectedPO]);
+        }).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+
+        if (!searchQuery.trim()) return flattened;
+
+        const query = searchQuery.toLowerCase().trim();
+        return flattened.filter(item => 
+            (item.name || "").toLowerCase().includes(query) || 
+            (item.barcode || "").toLowerCase().includes(query)
+        );
+    }, [selectedPO, searchQuery]);
 
     const canContinue = verifiedProductIds.length > 0;
 
@@ -55,6 +65,15 @@ export function ProductVerificationStep({ onContinue }: { onContinue: () => void
                 <div className="mb-4 flex items-center justify-between">
                     <div className="text-base font-semibold text-primary uppercase tracking-wider">Expected Products Checklist</div>
                     <div className="flex items-center gap-3">
+                        <div className="relative w-64 group">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                            <Input
+                                placeholder="Search product or SKU..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="h-8 pl-9 text-[11px] font-medium border-primary/20 focus-visible:ring-primary/20 focus-visible:border-primary"
+                            />
+                        </div>
                         <Button 
                             variant="outline" 
                             size="sm" 
