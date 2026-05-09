@@ -93,6 +93,7 @@ export async function getPurchaseOrders(query?: string, branchId?: number) {
  */
 export async function createDispatchPlan(
   data: DispatchCreationFormValues,
+  currentUserId: number,
 ): Promise<{ success: true; id: number }> {
   // 1. Insert plan header
   const planPayload: PlanHeaderPayload = {
@@ -103,9 +104,8 @@ export async function createDispatchPlan(
     starting_point: data.starting_point,
     status: "For Approval",
     amount: data.amount,
-    // encoder_id falls back to driver_id when no explicit encoder is provided.
-    // This is the default behavior because the driver is typically the one encoding the dispatch.
-    encoder_id: data.encoder_id ?? data.driver_id,
+    // encoder_id falls back to currentUserId when no explicit encoder is provided.
+    encoder_id: data.encoder_id ?? currentUserId,
     estimated_time_of_dispatch: new Date(
       data.estimated_time_of_dispatch,
     ).toISOString(),
@@ -129,7 +129,7 @@ export async function createDispatchPlan(
     post_dispatch_plan_id: newPlanId,
     dispatch_plan_id: pdpId,
     linked_at: new Date().toISOString(),
-    linked_by: data.driver_id,
+    linked_by: currentUserId,
   }));
 
   // Separate sequence into Invoices and Others
@@ -213,6 +213,7 @@ export async function createDispatchPlan(
 export async function updateTrip(
   planId: number,
   data: UpdateTripValues,
+  currentUserId: number,
 ): Promise<{ success: true }> {
   const newPdpIds = data.pre_dispatch_plan_ids;
 
@@ -240,7 +241,7 @@ export async function updateTrip(
         post_dispatch_plan_id: planId,
         dispatch_plan_id: id,
         linked_at: new Date().toISOString(),
-        linked_by: data.driver_id,
+        linked_by: currentUserId,
       }));
       await repo.batchCreate("post_dispatch_dispatch_plans", newJunctionPayloads);
     })());
@@ -372,7 +373,7 @@ export async function updateTrip(
     ).toISOString(),
     remarks: data.remarks,
     amount: data.amount,
-    encoder_id: data.encoder_id ?? data.driver_id,
+    encoder_id: data.encoder_id ?? currentUserId,
   };
 
   if (newPdpIds && newPdpIds.length > 0) {
