@@ -105,7 +105,8 @@ export async function GET(req: NextRequest) {
       }
 
       case "products": {
-        const data = await fetchProductCatalog();
+        const customerCode = url.searchParams.get("customerCode") || undefined;
+        const data = await fetchProductCatalog(customerCode);
         return json({ data });
       }
 
@@ -144,6 +145,7 @@ export async function GET(req: NextRequest) {
       case "rfid-lookup": {
         const rfid = url.searchParams.get("rfid");
         const rfidBranchId = Number(url.searchParams.get("branchId"));
+        const customerCode = url.searchParams.get("customerCode") || undefined;
 
         if (!rfid || !rfidBranchId) {
           return json(
@@ -163,7 +165,7 @@ export async function GET(req: NextRequest) {
           );
         }
 
-        const result = await lookupRfid(rfid, rfidBranchId, rfidToken);
+        const result = await lookupRfid(rfid, rfidBranchId, rfidToken, customerCode);
         return json({ data: result });
       }
 

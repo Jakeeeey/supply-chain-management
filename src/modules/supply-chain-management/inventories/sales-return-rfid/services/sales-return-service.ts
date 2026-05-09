@@ -22,6 +22,7 @@ import type {
 } from "../type";
 
 import * as repo from "../repositories/sales-return-repository";
+import { resolveFinalDiscount } from "../utils/discount-resolver";
 
 // =============================================================================
 // HELPERS
@@ -141,12 +142,12 @@ export async function fetchReturnDetails(
   // Fetch all RFIDs associated with these detail lines
   const detailIds = rawItems.map((item: any) => item.detail_id || item.id);
   const rfidMap = new Map<number, string[]>();
-  
+
   if (detailIds.length > 0) {
     try {
       // Create a batched query to get all RFIDs for the relevant detail items
       const rfidRes = await repo.getRawRfidsByDetailIds(detailIds);
-      
+
       const rfidData = rfidRes.data || [];
       for (const row of rfidData) {
         const dId = Number(row.sales_return_detail_id);
@@ -166,9 +167,9 @@ export async function fetchReturnDetails(
       typeof detail.product_id === "object" && detail.product_id !== null
         ? detail.product_id
         : {
-            product_code: "N/A",
-            product_name: `Unknown (ID: ${detail.product_id})`,
-          };
+          product_code: "N/A",
+          product_name: `Unknown (ID: ${detail.product_id})`,
+        };
 
     const unitId =
       typeof product.unit_of_measurement === "object"
@@ -220,6 +221,7 @@ export async function fetchReturnDetails(
       priceD: product.priceD,
       priceE: product.priceE,
       unitMultiplier: product.unit_of_measurement_count || 1,
+      unitOrder: unit ? unit.order : 0,
     } as SalesReturnItem;
   });
 }
@@ -263,6 +265,7 @@ export async function fetchReferences(): Promise<{
     label: item.salesman_name,
     code: item.salesman_code || "N/A",
     branch: branchMap.get(item.branch_code) || "N/A",
+    branchId: item.branch_code,
   }));
 
   // Form-formatted salesmen
@@ -317,16 +320,23 @@ export async function fetchReferences(): Promise<{
 /**
  * Fetches the product catalog for the ProductLookupModal.
  */
-export async function fetchProductCatalog(): Promise<{
+export async function fetchProductCatalog(customerCode?: string): Promise<{
   brands: Brand[];
   categories: Category[];
   suppliers: Supplier[];
   units: Unit[];
   connections: ProductSupplierConnection[];
+  supplierCategoryDiscount: any[];
   products: Product[];
 }> {
-  const [brandsRes, categoriesRes, suppliersRes, unitsRes, connectionsRes, productsRes] =
-    await repo.getRawProductCatalog();
+  const catalogData = await repo.getRawProductCatalog();
+  const [brandsRes, categoriesRes, suppliersRes, unitsRes, connectionsRes, productsRes] = catalogData;
+
+  let scdpcRes = { data: [] as any[] };
+
+  if (customerCode) {
+    scdpcRes = await repo.getRawSupplierCategoryDiscount(customerCode);
+  }
 
   const connections = ((connectionsRes.data || []) as any[]).map((item: any) => ({
     id: item.id,
@@ -335,6 +345,15 @@ export async function fetchProductCatalog(): Promise<{
       typeof item.product_id === "object"
         ? item.product_id.product_id
         : item.product_id,
+    discount_type: item.discount_type,
+  }));
+
+  const supplierCategoryDiscount = (scdpcRes.data || []).map((item: any) => ({
+    id: item.id,
+    customer_code: item.customer_code,
+    supplier_id: item.supplier_id,
+    category_id: item.category_id,
+    discount_type: item.discount_type,
   }));
 
   return {
@@ -343,6 +362,7 @@ export async function fetchProductCatalog(): Promise<{
     suppliers: (suppliersRes.data || []) as unknown as Supplier[],
     units: (unitsRes.data || []) as unknown as Unit[],
     connections: connections as ProductSupplierConnection[],
+    supplierCategoryDiscount,
     products: (productsRes.data || []) as unknown as Product[],
   };
 }
@@ -568,8 +588,8 @@ export async function updateReturn(
       const gross = Math.round(Number(item.quantity) * Number(item.unitPrice) * 100) / 100;
       const discId =
         item.discountType &&
-        item.discountType !== "No Discount" &&
-        item.discountType !== ""
+          item.discountType !== "No Discount" &&
+          item.discountType !== ""
           ? Number(item.discountType)
           : null;
       const percentage = discId ? lineDiscountMap.get(discId) || 0 : 0;
@@ -646,8 +666,8 @@ export async function updateReturn(
     const gross = Math.round(Number(item.quantity) * Number(item.unitPrice) * 100) / 100;
     const discId =
       item.discountType &&
-      item.discountType !== "No Discount" &&
-      item.discountType !== ""
+        item.discountType !== "No Discount" &&
+        item.discountType !== ""
         ? Number(item.discountType)
         : null;
     const percentage = discId ? lineDiscountMap.get(discId) || 0 : 0;
@@ -686,6 +706,30 @@ export async function updateReturn(
       }
     } else {
       await repo.updateReturnDetail(item.id, detailPayload);
+
+      // 🟢 Sync RFID Tags for existing items
+      if (item.rfidTags && Array.isArray(item.rfidTags)) {
+        // 1. Fetch current tags from DB
+        const existingTagsRes = await repo.getRfidTagsByDetailId(item.id);
+        const existingTags = (existingTagsRes.data || []) as any[];
+
+        // 2. Identify tags to delete
+        const tagsToDelete = existingTags.filter(et => !item.rfidTags.includes(et.rfid_tag));
+        for (const t of tagsToDelete) {
+          await repo.deleteRfidTag(t.id);
+        }
+
+        // 3. Identify tags to add
+        const currentTagStrings = existingTags.map(et => et.rfid_tag);
+        const tagsToAdd = item.rfidTags.filter((tag: string) => !currentTagStrings.includes(tag));
+        for (const tag of tagsToAdd) {
+          await repo.createRfidTag({
+            sales_return_detail_id: item.id,
+            rfid_tag: tag,
+            created_by: userId,
+          });
+        }
+      }
     }
   }
 
@@ -742,58 +786,33 @@ export async function lookupRfid(
   rfidTag: string,
   branchId: number,
   token: string,
-): Promise<{
-  productId: number;
-  productCode: string;
-  productName: string;
-  unitPrice: number;
-  unitShortcut: string;
-  unitOfMeasurementCount: number;
-  priceA: number;
-  priceB?: number;
-  priceC?: number;
-  priceD?: number;
-  priceE?: number;
-  unitMultiplier?: number;
-} | null> {
-  const results = await repo.getSpringRfidLookup(rfidTag, branchId, token);
-  if (!results || results.length === 0) return null;
+): Promise<{ isOnInventory: boolean; productId?: number } | null> {
+  const SPRING_URL = process.env.SPRING_API_BASE_URL;
+  if (!SPRING_URL) throw new Error("SPRING_API_BASE_URL is not defined");
 
-  const firstResult = results[0];
-  const productId = Number(firstResult.productId);
-  if (!productId) return null;
+  const targetUrl = `${SPRING_URL.replace(/\/$/, "")}/api/view-rfid-onhand?rfid=${encodeURIComponent(rfidTag)}&branch_id=${branchId}`;
 
-  // Fetch product details from Directus
   try {
-    const productRes = await repo.getRawProductById(productId);
-    const product = productRes.data as any;
-    if (!product) return null;
+    const res = await fetch(targetUrl, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+    });
 
-    // Resolve unit shortcut
-    const unitsRes = await repo.getRawUnits();
-    const units = (unitsRes.data || []) as any[];
-    const unitId =
-      typeof product.unit_of_measurement === "object"
-        ? product.unit_of_measurement?.unit_id
-        : product.unit_of_measurement;
-    const matchedUnit = units.find((u: any) => u.unit_id === unitId);
+    if (!res.ok) {
+      return { isOnInventory: false };
+    }
 
-    return {
-      productId: product.product_id,
-      productCode: product.product_code || "N/A",
-      productName: product.product_name || product.description || "Unknown",
-      unitPrice: Number(product.priceA) || 0,
-      unitShortcut: matchedUnit?.unit_shortcut || "Pcs",
-      unitOfMeasurementCount: Number(product.unit_of_measurement_count) || 1,
-      priceA: Number(product.priceA) || 0,
-      priceB: Number(product.priceB) || 0,
-      priceC: Number(product.priceC) || 0,
-      priceD: Number(product.priceD) || 0,
-      priceE: Number(product.priceE) || 0,
-      unitMultiplier: Number(product.unit_of_measurement_count) || 1,
-    };
+    const results = await res.json();
+    const isOnInventory = Array.isArray(results) && results.length > 0;
+    const productId = isOnInventory ? Number(results[0].productId) : undefined;
+
+    return { isOnInventory, productId };
   } catch (err) {
     console.error("[Sales Return RFID] Product lookup failed:", err);
-    return null;
+    throw err instanceof Error ? err : new Error(String(err));
   }
 }

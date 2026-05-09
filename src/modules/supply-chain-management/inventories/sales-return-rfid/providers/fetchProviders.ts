@@ -71,7 +71,7 @@ export const SalesReturnProvider = {
 
   // --- 2. DROPDOWN HELPERS (Filters) ---
   async getSalesmenList(): Promise<
-    { value: string; label: string; code: string; branch: string }[]
+    { value: string; label: string; code: string; branch: string; branchId: number }[]
   > {
     const refs = await this._getReferences();
     return refs.salesmen;
@@ -150,6 +150,10 @@ export const SalesReturnProvider = {
   async getProducts(): Promise<Product[]> {
     const catalog = await this._getProductCatalog();
     return catalog.products;
+  },
+
+  async getFullCatalog(customerCode?: string): Promise<any> {
+    return this._getProductCatalog(customerCode);
   },
 
   // --- 5. CRUD OPERATIONS ---
@@ -245,24 +249,30 @@ export const SalesReturnProvider = {
   },
 
   // --- INTERNAL: Cached product catalog fetcher ---
-  _productCatalogCache: null as any,
-  _productCatalogCacheTime: 0,
+  _productCatalogCache: {} as Record<string, any>,
+  _productCatalogCacheTime: {} as Record<string, number>,
 
-  async _getProductCatalog() {
+  async _getProductCatalog(customerCode?: string) {
     const now = Date.now();
+    const cacheKey = customerCode || "default";
+
     // Cache product catalog for 30 seconds
     if (
-      this._productCatalogCache &&
-      now - this._productCatalogCacheTime < 30000
+      this._productCatalogCache[cacheKey] &&
+      now - (this._productCatalogCacheTime[cacheKey] || 0) < 30000
     ) {
-      return this._productCatalogCache;
+      return this._productCatalogCache[cacheKey];
     }
-    const res = await fetch(`${API_BASE}?action=products`, {
+
+    const params = new URLSearchParams({ action: "products" });
+    if (customerCode) params.set("customerCode", customerCode);
+
+    const res = await fetch(`${API_BASE}?${params}`, {
       cache: "no-store",
     });
     const result = await handleResponse<any>(res);
-    this._productCatalogCache = result;
-    this._productCatalogCacheTime = now;
+    this._productCatalogCache[cacheKey] = result;
+    this._productCatalogCacheTime[cacheKey] = now;
     return result;
   },
 
@@ -276,40 +286,21 @@ export const SalesReturnProvider = {
   async lookupRfid(
     rfidTag: string,
     branchId: number,
+    customerCode?: string,
   ): Promise<{
-    productId: number;
-    productCode: string;
-    productName: string;
-    unitPrice: number;
-    unitShortcut: string;
-    unitOfMeasurementCount: number;
-    // 🟢 Added for price recalculation
-    priceA: number;
-    priceB?: number;
-    priceC?: number;
-    priceD?: number;
-    priceE?: number;
-    unitMultiplier?: number;
+    isOnInventory: boolean;
+    productId?: number;
   } | null> {
     const params = new URLSearchParams({
       action: "rfid-lookup",
       rfid: rfidTag,
       branchId: String(branchId),
     });
+    if (customerCode) params.set("customerCode", customerCode);
     const res = await fetch(`${API_BASE}?${params}`, { cache: "no-store" });
     return handleResponse<{
-      productId: number;
-      productCode: string;
-      productName: string;
-      unitPrice: number;
-      unitShortcut: string;
-      unitOfMeasurementCount: number;
-      priceA: number;
-      priceB?: number;
-      priceC?: number;
-      priceD?: number;
-      priceE?: number;
-      unitMultiplier?: number;
+      isOnInventory: boolean;
+      productId?: number;
     } | null>(res);
   },
 

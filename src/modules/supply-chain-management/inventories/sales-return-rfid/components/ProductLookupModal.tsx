@@ -29,12 +29,15 @@ import {
 } from "../type";
 import { SalesReturnProvider } from "../providers/fetchProviders";
 import { cn } from "@/lib/utils";
+import { resolveFinalDiscount } from "../utils/discount-resolver";
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: (items: SalesReturnItem[]) => void;
   priceType: string; // 🟢 NEW
+  customerCode?: string; // 🟢 NEW: Pass selected customer code
+  customerDiscountType?: string | number | null; // 🟢 NEW: Pass selected customer default discount
 }
 
 export function ProductLookupModal({
@@ -42,6 +45,8 @@ export function ProductLookupModal({
   onClose,
   onConfirm,
   priceType = "A", // 🟢 NEW
+  customerCode,
+  customerDiscountType,
 }: Props) {
   // --- STATES ---
   const [searchCode, setSearchCode] = useState("");
@@ -55,6 +60,7 @@ export function ProductLookupModal({
   const [categoriesList, setCategoriesList] = useState<Category[]>([]);
   const [suppliersList, setSuppliersList] = useState<Supplier[]>([]);
   const [unitsList, setUnitsList] = useState<Unit[]>([]);
+  const [catalogData, setCatalogData] = useState<any>(null); // Keep full catalog for resolving
   const [supplierConnections, setSupplierConnections] = useState<
     ProductSupplierConnection[]
   >([]);
@@ -86,21 +92,14 @@ export function ProductLookupModal({
       const loadData = async () => {
         setIsLoading(true);
         try {
-          const [brands, cats, supps, units, connections, prods] =
-            await Promise.all([
-              SalesReturnProvider.getBrands(),
-              SalesReturnProvider.getCategories(),
-              SalesReturnProvider.getSuppliers(),
-              SalesReturnProvider.getUnits(),
-              SalesReturnProvider.getProductSupplierConnections(),
-              SalesReturnProvider.getProducts(),
-            ]);
-          setBrandsList(Array.isArray(brands) ? brands : []);
-          setCategoriesList(Array.isArray(cats) ? cats : []);
-          setSuppliersList(Array.isArray(supps) ? supps : []);
-          setUnitsList(Array.isArray(units) ? units : []);
-          setSupplierConnections(Array.isArray(connections) ? connections : []);
-          setProducts(Array.isArray(prods) ? prods : []);
+          const catalog = await SalesReturnProvider.getFullCatalog(customerCode);
+          setCatalogData(catalog);
+          setBrandsList(Array.isArray(catalog.brands) ? catalog.brands : []);
+          setCategoriesList(Array.isArray(catalog.categories) ? catalog.categories : []);
+          setSuppliersList(Array.isArray(catalog.suppliers) ? catalog.suppliers : []);
+          setUnitsList(Array.isArray(catalog.units) ? catalog.units : []);
+          setSupplierConnections(Array.isArray(catalog.connections) ? catalog.connections : []);
+          setProducts(Array.isArray(catalog.products) ? catalog.products : []);
         } catch (error) {
           console.error("Failed to load data", error);
         } finally {
@@ -201,13 +200,7 @@ export function ProductLookupModal({
         : false;
     }
 
-    // 🟢 RULE: Only show products with unit order 1 or 2 in the lookup modal.
-    // Order 3 products are for RFID scanning only and should not appear here.
-    const unitObj = unitsList.find((u) => u.unit_id === p.unit_of_measurement);
-    const unitOrder = unitObj?.order ?? 0;
-    const matchesUnitOrder = unitOrder === 1 || unitOrder === 2;
-
-    return matchesSearch && matchesBrand && matchesCategory && matchesSupplier && matchesUnitOrder;
+    return matchesSearch && matchesBrand && matchesCategory && matchesSupplier;
   });
 
   // Reset page when filters change
@@ -295,6 +288,18 @@ export function ProductLookupModal({
         };
         return updatedItems;
       } else {
+        // 🟢 Resolve final discount based on hierarchy
+        const tiedDiscount = resolveFinalDiscount(
+          product,
+          customerCode,
+          catalogData || { connections: supplierConnections },
+          customerDiscountType
+        );
+
+        const unitOrder = unitsList.find(u => u.unit_id === product.unit_of_measurement)?.order || 0;
+        const initialQty = unitOrder === 3 ? 0 : 1;
+        const initialGross = initialQty * selectedPrice;
+
         // 🟢 FIX: Added 'grossAmount' and 'discountType'
         const newItem: SalesReturnItem = {
           tempId: `added-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -303,12 +308,12 @@ export function ProductLookupModal({
           code: product.product_code || "N/A",
           description: product.product_name,
           unit: unitLabel,
-          quantity: 1,
+          quantity: initialQty,
           unitPrice: selectedPrice,
-          grossAmount: selectedPrice, // 1 * price
-          discountType: null,
+          grossAmount: initialGross, // 0 if Box, selectedPrice if not
+          discountType: tiedDiscount,
           discountAmount: 0,
-          totalAmount: selectedPrice,
+          totalAmount: initialGross,
           returnType: "",
           reason: "",
           // 🟢 Store additional price info for recalculation
@@ -318,6 +323,7 @@ export function ProductLookupModal({
           priceD: product.priceD,
           priceE: product.priceE,
           unitMultiplier: product.unit_of_measurement_count || 1,
+          unitOrder: unitOrder,
         };
         return [...prevItems, newItem];
       }
@@ -329,6 +335,7 @@ export function ProductLookupModal({
     setSelectedItems((prev) =>
       prev.map((item) => {
         if (item.tempId === tempId) {
+          if (item.unitOrder === 3) return item; // 🟢 Box units stay at 0
           const newQty = item.quantity + change;
           if (newQty < 1) return item;
           return {
@@ -345,10 +352,11 @@ export function ProductLookupModal({
 
   const setItemQuantityDirect = (tempId: string | undefined, qty: number) => {
     if (!tempId) return;
-    const safeQty = Math.max(1, Math.floor(qty));
     setSelectedItems((prev) =>
       prev.map((item) => {
         if (item.tempId === tempId) {
+          if (item.unitOrder === 3) return item; // 🟢 Box units stay at 0
+          const safeQty = Math.max(1, Math.floor(qty));
           return {
             ...item,
             quantity: safeQty,
@@ -855,7 +863,7 @@ export function ProductLookupModal({
                       {/* Controls Row */}
                       <div className="flex items-center justify-between mt-2 pt-2 border-t border-border">
                         {/* Qty Stepper */}
-                        <div className="flex items-center bg-muted/30 rounded-md border border-border h-7">
+                        <div className={`flex items-center bg-muted/30 rounded-md border border-border h-7 ${item.unitOrder === 3 ? "opacity-50 pointer-events-none" : ""}`}>
                           <button
                             className="px-2 h-full text-muted-foreground hover:text-primary hover:bg-background rounded-l-md disabled:opacity-30 transition-colors"
                             onClick={() => updateItemQuantity(item.tempId, -1)}
