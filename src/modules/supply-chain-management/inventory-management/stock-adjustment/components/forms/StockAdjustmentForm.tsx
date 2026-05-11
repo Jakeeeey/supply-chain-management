@@ -315,10 +315,10 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
             variant="ghost"
             size="icon"
             onClick={() => onRemove(index)}
-            disabled={isReadOnly || !!dbId}
-            className={`shrink-0 self-end mb-0.5 rounded-full transition-all ${isReadOnly ? "hidden" : "hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500 text-muted-foreground/50"
-              } ${!!dbId && !isReadOnly ? "opacity-50 cursor-not-allowed grayscale" : ""}`}
-            title={!!dbId && !isReadOnly ? "Existing items cannot be deleted" : "Remove item"}
+            disabled={isReadOnly}
+            className={`shrink-0 self-end mb-0.5 rounded-full transition-all ${isReadOnly ? "hidden" : "hover:bg-red-50 dark:hover:bg-red-950/30 text-red-500/50 hover:text-red-600"
+              }`}
+            title="Remove item"
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -524,6 +524,7 @@ export function StockAdjustmentForm({
   const [supplierInputValue, setSupplierInputValue] = useState("");
   const [branchSearch, setBranchSearch] = useState("");
   const [supplierSearch, setSupplierSearch] = useState("");
+  const [deletingIndex, setDeletingIndex] = useState<number | null>(null);
 
   // --- Memoize product options to prevent expensive re-mapping in every row ---
   const productOptions = useMemo(() => {
@@ -1272,7 +1273,7 @@ export function StockAdjustmentForm({
                         isProductsLoading={isProductsLoading}
                         isLoadingDetails={loadingRows.has(index)}
                         onProductSelect={handleProductSelect}
-                        onRemove={remove}
+                        onRemove={(idx) => setDeletingIndex(idx)}
                         setValue={form.setValue}
                         onOpenScanner={handleOpenScanner}
                         isReadOnly={isReadOnly}
@@ -1504,6 +1505,50 @@ export function StockAdjustmentForm({
               className="flex-1 h-11 font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-100 dark:shadow-none rounded-lg"
             >
               Confirm and Post
+            </Button>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Item Delete Confirmation */}
+      <AlertDialog
+        open={deletingIndex !== null}
+        onOpenChange={(open) => !open && setDeletingIndex(null)}
+      >
+        <AlertDialogContent className="max-w-md bg-card p-6 rounded-xl shadow-2xl border-none">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-red-600" />
+              Remove Item
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground py-4">
+              Are you sure you want to remove this item from the adjustment list?
+              {deletingIndex !== null && form.getValues(`items.${deletingIndex}.db_id`) && (
+                <span className="block mt-2 font-bold text-red-500/80">
+                  Note: This is an existing record. Removing it will delete it from this adjustment once you save.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex items-center gap-3 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setDeletingIndex(null)}
+              className="flex-1 h-11 font-bold text-muted-foreground border-border hover:bg-muted rounded-lg"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (deletingIndex !== null) {
+                  remove(deletingIndex);
+                  setDeletingIndex(null);
+                  toast.success("Item removed from list");
+                }
+              }}
+              className="flex-1 h-11 font-bold bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-100 dark:shadow-none rounded-lg"
+            >
+              Confirm and Remove
             </Button>
           </div>
         </AlertDialogContent>
