@@ -44,7 +44,7 @@ export type User = z.infer<typeof UserSchema>;
 export const StockAdjustmentItemSchema = z.object({
   id: z.number().optional(),
   stock_adjustment_id: z.number().optional(),
-  product_id: z.any(), // Can be number or expanded object
+  product_id: z.number().min(1, "Product selection is required"),
   quantity: z.number().min(0.01, "Quantity must be greater than 0"),
   branch_id: z.any().optional(),
   remarks: z.string().optional(),

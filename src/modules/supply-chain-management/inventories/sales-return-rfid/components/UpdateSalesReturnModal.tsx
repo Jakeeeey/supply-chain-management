@@ -15,6 +15,8 @@ import {
   Search,
   ChevronDown,
   ScanLine,
+  Check,
+  ChevronsUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -45,6 +47,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 
 import { SalesReturnProvider } from "../providers/fetchProviders";
@@ -82,6 +97,71 @@ interface Props {
   onClose: () => void;
   onSuccess: () => void;
 }
+
+// 🟢 LOCAL SEARCHABLE SELECT TO FIX SCROLL ISSUES IN DIALOG
+const LocalSearchableSelect = ({
+  options,
+  value,
+  onValueChange,
+  placeholder = "Select...",
+  className,
+  disabled = false,
+}: {
+  options: { value: string; label: string }[];
+  value: string;
+  onValueChange: (val: string) => void;
+  placeholder?: string;
+  className?: string;
+  disabled?: boolean;
+}) => {
+  const [open, setOpen] = useState(false);
+  const selectedLabel = options.find((opt) => opt.value === value)?.label;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen} modal={true}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className={cn("w-full justify-between font-normal", !value && "text-muted-foreground", className)}
+          disabled={disabled}
+        >
+          <span className="truncate">{selectedLabel || placeholder}</span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+        <Command>
+          <CommandInput placeholder={`Search ${placeholder.toLowerCase()}...`} />
+          <CommandList className="max-h-[200px] overflow-y-auto">
+            <CommandEmpty>No results found.</CommandEmpty>
+            <CommandGroup>
+              {options.map((opt) => (
+                <CommandItem
+                  key={opt.value}
+                  value={opt.label}
+                  onSelect={() => {
+                    onValueChange(opt.value);
+                    setOpen(false);
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      value === opt.value ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  {opt.label}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+};
 
 const ReadOnlyField = ({
   label,
@@ -1033,25 +1113,25 @@ export function UpdateSalesReturnModal({
                               {/* Return Type */}
                               <TableCell className="align-middle p-2">
                                 {canEditAll ? (
-                                  <Select value={item.returnType as string} onValueChange={(val) => { handleDetailChange(idx, "returnType", val); setReturnTypeError(false); }}>
-                                    <SelectTrigger className={`h-9 w-full text-xs bg-background ${returnTypeError && (!item.returnType || item.returnType === "") ? "border-destructive ring-1 ring-destructive/30 bg-destructive/5" : "border-border"}`}>
-                                      <SelectValue placeholder="Select type" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {returnTypeOptions.length > 0 ? (
-                                        returnTypeOptions.map((type) => (
-                                          <SelectItem key={type.type_id} value={type.type_name}>
-                                            {type.type_name}
-                                          </SelectItem>
-                                        ))
-                                      ) : (
-                                        <>
-                                          <SelectItem value="Good Order">Good Order</SelectItem>
-                                          <SelectItem value="Bad Order">Bad Order</SelectItem>
-                                        </>
-                                      )}
-                                    </SelectContent>
-                                  </Select>
+                                  <LocalSearchableSelect
+                                    value={item.returnType || ""}
+                                    onValueChange={(val) => {
+                                      handleDetailChange(idx, "returnType", val);
+                                      setReturnTypeError(false);
+                                    }}
+                                    options={returnTypeOptions.length > 0 
+                                      ? returnTypeOptions.map((type) => ({ value: type.type_name, label: type.type_name }))
+                                      : [
+                                          { value: "Good Order", label: "Good Order" },
+                                          { value: "Bad Order", label: "Bad Order" }
+                                        ]
+                                    }
+                                    placeholder="Select type"
+                                    className={cn(
+                                      "h-9 text-xs",
+                                      returnTypeError && (!item.returnType || item.returnType === "") && "border-destructive ring-1 ring-destructive/30 bg-destructive/5 text-destructive"
+                                    )}
+                                  />
                                 ) : (
                                   <Badge variant="outline" className="font-normal">{item.returnType || "Unassigned"}</Badge>
                                 )}
@@ -1289,37 +1369,25 @@ export function UpdateSalesReturnModal({
                                 </TableCell>
                                 <TableCell className="align-middle p-2">
                                   {canEditAll ? (
-                                    <Select
-                                      value={item.returnType as string}
-                                      onValueChange={(val) =>
-                                        handleDetailChange(idx, "returnType", val)
+                                    <LocalSearchableSelect
+                                      value={item.returnType || ""}
+                                      onValueChange={(val) => {
+                                        handleDetailChange(idx, "returnType", val);
+                                        setReturnTypeError(false);
+                                      }}
+                                      options={returnTypeOptions.length > 0 
+                                        ? returnTypeOptions.map((type) => ({ value: type.type_name, label: type.type_name }))
+                                        : [
+                                            { value: "Good Order", label: "Good Order" },
+                                            { value: "Bad Order", label: "Bad Order" }
+                                          ]
                                       }
-                                    >
-                                      <SelectTrigger className="h-9 w-full text-sm border-border bg-background">
-                                        <SelectValue placeholder="Select type" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {returnTypeOptions.length > 0 ? (
-                                          returnTypeOptions.map((type) => (
-                                            <SelectItem
-                                              key={type.type_id}
-                                              value={type.type_name}
-                                            >
-                                              {type.type_name}
-                                            </SelectItem>
-                                          ))
-                                        ) : (
-                                          <>
-                                            <SelectItem value="Good Order">
-                                              Good Order
-                                            </SelectItem>
-                                            <SelectItem value="Bad Order">
-                                              Bad Order
-                                            </SelectItem>
-                                          </>
-                                        )}
-                                      </SelectContent>
-                                    </Select>
+                                      placeholder="Select type"
+                                      className={cn(
+                                        "h-9 text-sm",
+                                        returnTypeError && (!item.returnType || item.returnType === "") && "border-destructive ring-1 ring-destructive/30 bg-destructive/5 text-destructive"
+                                      )}
+                                    />
                                   ) : (
                                     <Badge
                                       variant="secondary"
@@ -1396,6 +1464,7 @@ export function UpdateSalesReturnModal({
                                   });
                                   setOrderSearch(inv.order_id);
                                   setInvoiceDropdownSearch(inv.invoice_no);
+                                  setAppliedInvoiceId(Number(inv.id));
                                   setIsOrderDropdownOpen(false);
                                 }}
                               >
@@ -1458,6 +1527,7 @@ export function UpdateSalesReturnModal({
                                   });
                                   setInvoiceDropdownSearch(inv.invoice_no);
                                   setOrderSearch(inv.order_id);
+                                  setAppliedInvoiceId(Number(inv.id));
                                   setIsInvoiceDropdownOpen(false);
                                 }}
                               >
@@ -1629,6 +1699,24 @@ export function UpdateSalesReturnModal({
               />
             </div>
             <div className="max-h-[300px] overflow-y-auto border rounded-md divide-y">
+              {/* 🟢 NEW: Clear Selection Option */}
+              <div
+                className="p-3 hover:bg-destructive/10 cursor-pointer flex items-center gap-3 transition-colors text-destructive font-medium border-b"
+                onClick={() => {
+                  setStatusCardData((prev) => ({
+                    ...prev!,
+                    appliedTo: "",
+                  }));
+                  setAppliedInvoiceId(null);
+                  setIsInvoiceLookupOpen(false);
+                }}
+              >
+                <div className="h-8 w-8 rounded-full bg-destructive/10 flex items-center justify-center">
+                  <X className="h-4 w-4" />
+                </div>
+                <div className="text-sm">Clear Selection (Unlink)</div>
+              </div>
+
               {filteredInvoices.length === 0 ? (
                 <div className="p-4 text-center text-sm text-muted-foreground">
                   No invoices found.

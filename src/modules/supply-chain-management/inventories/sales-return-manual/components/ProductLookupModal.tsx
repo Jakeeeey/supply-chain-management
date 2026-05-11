@@ -26,15 +26,18 @@ import {
   Unit,
   Product,
   ProductSupplierConnection,
+  ProductCatalog,
 } from "../type";
 import { SalesReturnProvider } from "../providers/fetchProviders";
 import { cn } from "@/lib/utils";
+import { resolveFinalDiscount } from "../utils/discount-resolver";
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: (items: SalesReturnItem[]) => void;
   priceType: string; // 🟢 NEW
+  customerCode?: string; // 🟢 NEW: Pass selected customer code
 }
 
 export function ProductLookupModal({
@@ -42,6 +45,7 @@ export function ProductLookupModal({
   onClose,
   onConfirm,
   priceType = "A", // 🟢 NEW
+  customerCode,
 }: Props) {
   // --- STATES ---
   const [searchCode, setSearchCode] = useState("");
@@ -55,6 +59,7 @@ export function ProductLookupModal({
   const [categoriesList, setCategoriesList] = useState<Category[]>([]);
   const [suppliersList, setSuppliersList] = useState<Supplier[]>([]);
   const [unitsList, setUnitsList] = useState<Unit[]>([]);
+  const [catalogData, setCatalogData] = useState<ProductCatalog | null>(null); // Keep full catalog for resolving
   const [supplierConnections, setSupplierConnections] = useState<
     ProductSupplierConnection[]
   >([]);
@@ -86,21 +91,14 @@ export function ProductLookupModal({
       const loadData = async () => {
         setIsLoading(true);
         try {
-          const [brands, cats, supps, units, connections, prods] =
-            await Promise.all([
-              SalesReturnProvider.getBrands(),
-              SalesReturnProvider.getCategories(),
-              SalesReturnProvider.getSuppliers(),
-              SalesReturnProvider.getUnits(),
-              SalesReturnProvider.getProductSupplierConnections(),
-              SalesReturnProvider.getProducts(),
-            ]);
-          setBrandsList(Array.isArray(brands) ? brands : []);
-          setCategoriesList(Array.isArray(cats) ? cats : []);
-          setSuppliersList(Array.isArray(supps) ? supps : []);
-          setUnitsList(Array.isArray(units) ? units : []);
-          setSupplierConnections(Array.isArray(connections) ? connections : []);
-          setProducts(Array.isArray(prods) ? prods : []);
+          const catalog = await SalesReturnProvider.getFullCatalog(customerCode);
+          setCatalogData(catalog);
+          setBrandsList(Array.isArray(catalog.brands) ? catalog.brands : []);
+          setCategoriesList(Array.isArray(catalog.categories) ? catalog.categories : []);
+          setSuppliersList(Array.isArray(catalog.suppliers) ? catalog.suppliers : []);
+          setUnitsList(Array.isArray(catalog.units) ? catalog.units : []);
+          setSupplierConnections(Array.isArray(catalog.connections) ? catalog.connections : []);
+          setProducts(Array.isArray(catalog.products) ? catalog.products : []);
         } catch (error) {
           console.error("Failed to load data", error);
         } finally {
@@ -109,7 +107,7 @@ export function ProductLookupModal({
       };
       loadData();
     }
-  }, [isOpen]);
+  }, [isOpen, customerCode]);
 
   // --- 2. CLICK OUTSIDE HANDLERS ---
   useEffect(() => {
@@ -290,6 +288,13 @@ export function ProductLookupModal({
         };
         return updatedItems;
       } else {
+        // 🟢 Resolve final discount based on hierarchy
+        const tiedDiscount = resolveFinalDiscount(
+          product,
+          customerCode,
+          catalogData || { connections: supplierConnections }
+        );
+
         // 🟢 FIX: Added 'grossAmount' and 'discountType'
         const newItem: SalesReturnItem = {
           tempId: `added-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -301,7 +306,7 @@ export function ProductLookupModal({
           quantity: 1,
           unitPrice: selectedPrice,
           grossAmount: selectedPrice, // 🟢 Added (1 * price)
-          discountType: null, // 🟢 Added (default to null)
+          discountType: tiedDiscount, // 🟢 Automatically set tied discount
           discountAmount: 0,
           totalAmount: selectedPrice,
           returnType: "", // 🟢 Empty default as requested

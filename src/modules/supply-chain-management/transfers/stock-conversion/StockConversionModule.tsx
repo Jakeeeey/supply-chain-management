@@ -7,7 +7,7 @@ import { useRFIDScanner } from "./hooks/useRFIDScanner";
 import { StockConversionTable } from "./components/StockConversionTable";
 import { StockConversionModal } from "./components/StockConversionModal";
 import { RFIDManagementModal } from "./components/RFIDManagementModal";
-import type { StockConversionProduct, RFIDTag } from "./types/stock-conversion.types";
+import type { StockConversionProduct, RFIDTag, UnitTarget } from "./types/stock-conversion.types";
 import { ModuleSkeleton } from "@/components/shared/ModuleSkeleton";
 import ErrorPage from "@/components/shared/ErrorPage";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -190,11 +190,7 @@ export default function StockConversionModule({
     }
   });
 
-  const handleConfirmUnitConversion = useCallback(async (
-    qtyToConvert: number,
-    targetUnit: { unitId: number; targetProductId?: number; name?: string },
-    convertedQuantity: number
-  ) => {
+  const handleUnitModalConfirm = useCallback(async (qtyToConvert: number, targetUnit: UnitTarget, convertedQuantity: number) => {
     setPendingConversion({
       qtyToConvert,
       targetUnitId: targetUnit.unitId,
@@ -229,6 +225,8 @@ export default function StockConversionModule({
       userId: userRef.current.id || 24,
       rfidTags: [] as RFIDTag[],
       sourceRfidTags: scannedSourceRfids.length > 0 ? scannedSourceRfids : undefined,
+      sourceFactor: selectedProduct.conversionFactor || 1,
+      targetFactor: targetUnit.conversionFactor || 1,
     };
 
     setIsSubmitting(true);
@@ -258,6 +256,8 @@ export default function StockConversionModule({
       userId: userRef.current.id || 24,
       rfidTags: tags,
       sourceRfidTags: scannedSourceRfids.length > 0 ? scannedSourceRfids : undefined,
+      sourceFactor: selectedProduct.conversionFactor || 1,
+      targetFactor: (selectedProduct.availableUnits?.find(u => u.unitId === pendingConversion.targetUnitId)?.conversionFactor) || 1,
     };
 
     setIsSubmitting(true);
@@ -313,7 +313,7 @@ export default function StockConversionModule({
         product={selectedProduct}
         isOpen={isUnitModalOpen}
         onClose={() => setIsUnitModalOpen(false)}
-        onConfirm={handleConfirmUnitConversion}
+        onConfirm={handleUnitModalConfirm}
         sourceQuantity={scannedSourceRfids.length > 0 ? scannedSourceRfids.length : undefined}
       />
 

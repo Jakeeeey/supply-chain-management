@@ -107,6 +107,25 @@ export interface ProductSupplierConnection {
   id: number;
   supplier_id: number;
   product_id: number;
+  discount_type: number | string | null;
+}
+
+export interface SupplierCategoryDiscount {
+  id: number;
+  customer_code: string;
+  supplier_id: number;
+  category_id: number;
+  discount_type: number | string | null;
+}
+
+export interface ProductCatalog {
+  brands: Brand[];
+  categories: Category[];
+  suppliers: Supplier[];
+  units: Unit[];
+  connections: ProductSupplierConnection[];
+  products: Product[];
+  supplierCategoryDiscount?: SupplierCategoryDiscount[];
 }
 
 // --- API LOOKUPS ---
@@ -158,6 +177,7 @@ export interface CustomerOption {
   id: number;
   name: string; // Changed from 'customer_name' to 'name'
   code?: string; // Optional: Add this if your API returns a customer code
+  discountType?: number | string | null;
 }
 
 // If you need the full object elsewhere, we can keep a separate type for that,

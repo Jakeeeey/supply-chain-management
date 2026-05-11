@@ -49,21 +49,24 @@ interface DirectusResponse {
 
 
 function now() {
-    return new Date();
+    const date = new Date();
+    const phOffset = 8 * 60; // 8 hours in minutes
+    const localOffset = date.getTimezoneOffset(); // in minutes
+    return new Date(date.getTime() + (phOffset + localOffset) * 60000);
 }
 
 function isoDateOnlyFrom(value?: string | Date | number | null) {
-    if (!value) return now().toISOString().slice(0, 10);
+    if (!value) return now().toISOString().replace("Z", "").slice(0, 10);
     const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return now().toISOString().slice(0, 10);
+    if (Number.isNaN(d.getTime())) return now().toISOString().replace("Z", "").slice(0, 10);
     return d.toISOString().slice(0, 10);
 }
 
 function isoDateTimeFrom(value?: string | Date | number | null) {
-    if (!value) return now().toISOString();
+    if (!value) return now().toISOString().replace("Z", "");
     const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return now().toISOString();
-    return d.toISOString();
+    if (Number.isNaN(d.getTime())) return now().toISOString().replace("Z", "");
+    return d.toISOString().replace("Z", "");
 }
 
 function timeHHMMSSFrom(value?: string | Date | number | null) {
@@ -252,7 +255,7 @@ interface Allocation {
     items?: AllocationItem[];
 }
 
-function buildPoProductLines(input: { allocations?: Allocation[] }, poId: number, discountMap: Map<string, { pct: number }>) {
+function buildPoProductLines(input: { allocations?: Allocation[] }, poId: number, discountMap: Map<string, { pct: number }>, isInvoice: boolean) {
     const allocations = Array.isArray(input?.allocations) ? input.allocations : [];
     const lines: Record<string, unknown>[] = [];
 
@@ -281,9 +284,9 @@ function buildPoProductLines(input: { allocations?: Allocation[] }, poId: number
             const discAmtTotal = Number((lineGross * (discPercent / 100)).toFixed(2));
             const lineNet = lineGross - discAmtTotal;
             
-            const vatExcl = Number((lineNet / 1.12).toFixed(2));
-            const vatAmt = Number((lineNet - vatExcl).toFixed(2));
-            const ewtAmt = Number((vatExcl * 0.01).toFixed(2));
+            const vatExcl = isInvoice ? Number((lineNet / 1.12).toFixed(2)) : lineNet;
+            const vatAmt = isInvoice ? Number((lineNet - vatExcl).toFixed(2)) : 0;
+            const ewtAmt = isInvoice ? Number((vatExcl * 0.01).toFixed(2)) : 0;
             
             const discountedPricePerUnit = Number((lineNet / ordered_quantity).toFixed(2));
 
@@ -346,9 +349,9 @@ async function createManyPurchaseOrderProducts(base: string, lines: Record<strin
     return { ok: false, json: parsed.json, message: msg, status: r.status };
 }
 
-async function ensurePoProducts(base: string, poId: number, input: { allocations?: Allocation[] }) {
+async function ensurePoProducts(base: string, poId: number, input: { allocations?: Allocation[] }, isInvoice: boolean) {
     const discountMap = await fetchDiscountTypesMap(base);
-    const lines = buildPoProductLines(input, poId, discountMap);
+    const lines = buildPoProductLines(input, poId, discountMap, isInvoice);
 
     if (!lines.length) {
         return { created: 0, skipped: true, reason: "No allocation lines" };
@@ -409,7 +412,12 @@ export async function POST(req: NextRequest) {
 
             if (existingPoId) {
                 try {
-                    const linesMeta = await ensurePoProducts(base, existingPoId, input);
+                    const isInvoiceFlag = 
+                        String(input?.is_invoice || "").toLowerCase() === "true" ||
+                        String(input?.isInvoice || "").toLowerCase() === "true" ||
+                        input?.is_invoice === true ||
+                        input?.isInvoice === true;
+                    const linesMeta = await ensurePoProducts(base, existingPoId, input, isInvoiceFlag);
                     return NextResponse.json({
                         data: existing,
                         meta: { alreadyExists: true, purchase_order_no: poNumber, po_products: linesMeta },
@@ -454,11 +462,9 @@ export async function POST(req: NextRequest) {
             String(input?.is_invoice || "").toLowerCase() === "true" ||
             String(input?.isInvoice || "").toLowerCase() === "true" ||
             input?.is_invoice === true ||
-            input?.isInvoice === true ||
-            input?.receiving_type === 2 ||
-            input?.receivingType === 2;
+            input?.isInvoice === true;
 
-        const receiving_type = isInvoiceFlag ? 2 : 3;
+        const receiving_type = 1; // Always 1 for "RECEIVE FROM PO"
         const receipt_required = intOrDefault(input?.receipt_required ?? input?.receiptRequired, 1);
         const price_type = strOrDefault(input?.price_type ?? input?.priceType, "Cost Per Unit");
         const inventory_status = intOrDefault(input?.inventory_status ?? input?.inventoryStatus, 1);
@@ -474,9 +480,9 @@ export async function POST(req: NextRequest) {
 
             gross_amount,
             discounted_amount,
-            vat_amount,
+            vat_amount: isInvoiceFlag ? vat_amount : 0,
             total_amount,
-            withholding_tax_amount,
+            withholding_tax_amount: isInvoiceFlag ? withholding_tax_amount : 0,
 
             payment_type,
             payment_status,
@@ -536,7 +542,7 @@ export async function POST(req: NextRequest) {
 
         if (createdPoId) {
             try {
-                const linesMeta = await ensurePoProducts(base, createdPoId, input);
+                const linesMeta = await ensurePoProducts(base, createdPoId, input, isInvoiceFlag);
 
                 return NextResponse.json({
                     data: created,
