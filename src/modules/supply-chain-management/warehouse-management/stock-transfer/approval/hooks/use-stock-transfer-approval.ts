@@ -58,7 +58,7 @@ export function useStockTransferApproval() {
         const group = base.selectedGroup!;
         await Promise.all(group.items.map(async (item: OrderGroupItem) => {
           const product = item.product_id as ProductRow;
-          const pid = product?.product_id;
+          const pid = product?.product_id || item.product_id;
 
           const params = new URLSearchParams({
             branchName: sourceBranchName,

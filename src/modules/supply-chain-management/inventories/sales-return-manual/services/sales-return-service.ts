@@ -293,16 +293,23 @@ export async function fetchReferences(): Promise<{
 /**
  * Fetches the product catalog for the ProductLookupModal.
  */
-export async function fetchProductCatalog(): Promise<{
+export async function fetchProductCatalog(customerCode?: string): Promise<{
   brands: Brand[];
   categories: Category[];
   suppliers: Supplier[];
   units: Unit[];
   connections: ProductSupplierConnection[];
+  supplierCategoryDiscount: any[];
   products: Product[];
 }> {
-  const [brandsRes, categoriesRes, suppliersRes, unitsRes, connectionsRes, productsRes] =
-    await repo.getRawProductCatalog();
+  const catalogData = await repo.getRawProductCatalog();
+  const [brandsRes, categoriesRes, suppliersRes, unitsRes, connectionsRes, productsRes] = catalogData;
+
+  let scdpcRes = { data: [] as any[] };
+
+  if (customerCode) {
+    scdpcRes = await repo.getRawSupplierCategoryDiscount(customerCode);
+  }
 
   const connections = ((connectionsRes.data || []) as any[]).map((item: any) => ({
     id: item.id,
@@ -311,6 +318,15 @@ export async function fetchProductCatalog(): Promise<{
       typeof item.product_id === "object"
         ? item.product_id.product_id
         : item.product_id,
+    discount_type: item.discount_type,
+  }));
+
+  const supplierCategoryDiscount = (scdpcRes.data || []).map((item: any) => ({
+    id: item.id,
+    customer_code: item.customer_code,
+    supplier_id: item.supplier_id,
+    category_id: item.category_id,
+    discount_type: item.discount_type,
   }));
 
   return {
@@ -319,9 +335,11 @@ export async function fetchProductCatalog(): Promise<{
     suppliers: (suppliersRes.data || []) as unknown as Supplier[],
     units: (unitsRes.data || []) as unknown as Unit[],
     connections: connections as ProductSupplierConnection[],
+    supplierCategoryDiscount,
     products: (productsRes.data || []) as unknown as Product[],
   };
 }
+
 
 /**
  * Fetches invoices, optionally filtered by customer code.

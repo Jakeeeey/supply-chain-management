@@ -111,8 +111,8 @@ export function NavUser({ user, onLogout, subsystemSlug }: NavUserProps) {
                             <div className="grid flex-1 text-left text-sm leading-tight">
                                 <span className="truncate font-medium">{user.name}</span>
                                 <span className="truncate text-xs text-muted-foreground">
-                  {user.email}
-                </span>
+                                    {user.email}
+                                </span>
                             </div>
 
                             <ChevronsUpDown className="ml-auto size-4 opacity-70" />
@@ -182,10 +182,10 @@ export function NavUser({ user, onLogout, subsystemSlug }: NavUserProps) {
                                 onClick={handleLogout}
                                 disabled={loggingOut}
                             >
-                <span className="inline-flex items-center">
-                  <LogOut className="mr-2 size-4" />
-                    {loggingOut ? "Logging out..." : "Log out"}
-                </span>
+                                <span className="inline-flex items-center">
+                                    <LogOut className="mr-2 size-4" />
+                                    {loggingOut ? "Logging out..." : "Log out"}
+                                </span>
                             </button>
                         </DropdownMenuItem>
                     </DropdownMenuContent>

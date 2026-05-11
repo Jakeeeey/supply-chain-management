@@ -20,6 +20,7 @@ import type {
   API_LineDiscount,
   API_SalesReturnType,
   PriceTypeOption,
+  ProductCatalog,
 } from "../type";
 
 const API_BASE = "/api/scm/inventories/sales-return-manual";
@@ -153,6 +154,10 @@ export const SalesReturnProvider = {
     return catalog.products;
   },
 
+  async getFullCatalog(customerCode?: string): Promise<ProductCatalog> {
+    return this._getProductCatalog(customerCode);
+  },
+
   // --- 5. CRUD OPERATIONS ---
   async submitReturn(payload: any): Promise<any> {
     const res = await fetch(API_BASE, {
@@ -246,27 +251,33 @@ export const SalesReturnProvider = {
   },
 
   // --- INTERNAL: Cached product catalog fetcher ---
-  _productCatalogCache: null as any,
-  _productCatalogCacheTime: 0,
+  _productCatalogCache: {} as Record<string, ProductCatalog>,
+  _productCatalogCacheTime: {} as Record<string, number>,
 
-  async _getProductCatalog() {
+  async _getProductCatalog(customerCode?: string): Promise<ProductCatalog> {
     const now = Date.now();
+    const cacheKey = customerCode || "default";
+
     // Cache product catalog for 30 seconds
     if (
-      this._productCatalogCache &&
-      now - this._productCatalogCacheTime < 30000
+      this._productCatalogCache[cacheKey] &&
+      now - (this._productCatalogCacheTime[cacheKey] || 0) < 30000
     ) {
-      return this._productCatalogCache;
+      return this._productCatalogCache[cacheKey];
     }
-    const res = await fetch(`${API_BASE}?action=products`, {
+
+    const params = new URLSearchParams({ action: "products" });
+    if (customerCode) params.set("customerCode", customerCode);
+
+    const res = await fetch(`${API_BASE}?${params}`, {
       cache: "no-store",
     });
     const result = await handleResponse<any>(res);
-    this._productCatalogCache = result;
-    this._productCatalogCacheTime = now;
+    this._productCatalogCache[cacheKey] = result;
+    this._productCatalogCacheTime[cacheKey] = now;
     return result;
   },
 };
 
 // Re-export types for backward compatibility
-export type { SalesmanOption, BranchOption, CustomerOption };
+export type { SalesmanOption, BranchOption, CustomerOption, Product, ProductCatalog };

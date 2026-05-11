@@ -170,7 +170,10 @@ export const SalesReturnFilters = ({ logic }: { logic: SalesReturnReportHook }) 
             Salesman
           </label>
           <SearchableSelect
-            options={options.salesmen}
+            options={options.salesmen.map((s) => ({
+              value: String(s.value),
+              label: s.code ? `[${s.code}] ${s.label}` : s.label,
+            }))}
             value={filters.salesmanId || ""}
             onChange={(v) => handleFilterChange("salesmanId", v)}
             placeholder="All Salesmen"
