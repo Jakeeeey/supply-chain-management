@@ -108,6 +108,9 @@ export async function fetchReturns(
     createdAt: item.created_at
       ? new Date(item.created_at).toLocaleDateString()
       : "-",
+    receivedAt: item.received_at
+      ? new Date(item.received_at).toLocaleDateString()
+      : "-",
   }));
 
   return { data: mappedData, total: result.meta?.filter_count || 0 };
@@ -174,7 +177,7 @@ export async function fetchReturnDetails(
     );
 
     return {
-      id: detail.detail_id || detail.id,
+      id: detail.id || detail.detail_id,
       productId: product.product_id,
       code: product.product_code || "N/A",
       description:
@@ -207,7 +210,7 @@ export async function fetchReturnDetails(
         ? Number(detail.sales_return_type_id)
         : "",
       returnType: returnTypeObj ? returnTypeObj.type_name : "Good Order",
-      serialNumbers: serialMap.get(detail.detail_id || detail.id) || [],
+      serialNumbers: serialMap.get(detail.id || detail.detail_id) || [],
       priceA: product.priceA,
       priceB: product.priceB,
       priceC: product.priceC,
@@ -215,6 +218,7 @@ export async function fetchReturnDetails(
       priceE: product.priceE,
       unitMultiplier: product.unit_of_measurement_count || 1,
       unitOrder: unit ? unit.order : 0,
+      isSerialized: product.is_serialized === 1,
     } as SalesReturnItem;
   });
 }
@@ -464,6 +468,7 @@ export async function submitReturn(payload: any, userId: number): Promise<any> {
     remarks: payload.remarks || "Created via Web App",
     order_id: payload.orderNo || "",
     isThirdParty: payload.isThirdParty ? 1 : 0,
+    received_at: null,
   };
 
   const headerResult = await repo.createReturnHeader(headerPayload);
@@ -611,12 +616,12 @@ export async function updateReturn(
 
   const currentItems = await fetchReturnDetails(payload.returnId, payload.returnNo);
   const payloadIds = payload.items
-    .filter((item: any) => typeof item.id === "number")
-    .map((item: any) => item.id);
+    .filter((item: any) => item.id && !String(item.id).startsWith("added-"))
+    .map((item: any) => Number(item.id));
 
-  const itemsToDelete = currentItems.filter(dbItem => !payloadIds.includes(dbItem.id));
+  const itemsToDelete = currentItems.filter(dbItem => !payloadIds.includes(Number(dbItem.id)));
   for (const item of itemsToDelete) {
-    if (item.id) await repo.deleteReturnDetail(item.id as number);
+    if (item.id) await repo.deleteReturnDetail(Number(item.id));
   }
 
   for (const item of payload.items) {
@@ -656,11 +661,11 @@ export async function updateReturn(
           });
         }
       }
-    } else {
-      await repo.updateReturnDetail(item.id, detailPayload);
+    } else if (item.id) {
+      await repo.updateReturnDetail(Number(item.id), detailPayload);
 
       if (item.serialNumbers && Array.isArray(item.serialNumbers)) {
-        const existingSerialsRes = await repo.getSerialsByDetailId(item.id);
+        const existingSerialsRes = await repo.getSerialsByDetailId(Number(item.id));
         const existingSerials = (existingSerialsRes.data || []) as any[];
 
         const serialsToDelete = existingSerials.filter(es => !item.serialNumbers.includes(es.serial_number));
@@ -670,12 +675,14 @@ export async function updateReturn(
         const serialsToAdd = item.serialNumbers.filter((sn: string) => !currentSerialStrings.includes(sn));
         for (const sn of serialsToAdd) {
           await repo.createSerialRecord({
-            sales_return_detail_id: item.id,
+            sales_return_detail_id: Number(item.id),
             serial_number: sn,
             created_by: userId,
           });
         }
       }
+    } else {
+      console.warn(`Skipping update for item with missing ID: ${item.description}`);
     }
   }
 
@@ -699,15 +706,25 @@ export async function updateStatus(
  */
 export async function checkSerialDuplicate(serialNumber: string) {
   const result = await repo.checkSerialDuplicate(serialNumber);
-  if (result.data && result.data.length > 0) {
+  
+  if (result && result.data && result.data.length > 0) {
     const firstMatch = result.data[0];
-    const returnNo = (firstMatch.sales_return_detail_id as any)?.return_no || "Unknown";
+    console.debug("Serial duplicate check match:", firstMatch);
+    
+    // Handle both object-expanded and flat ID responses
+    let returnNo = "Unknown";
+    if (firstMatch.sales_return_detail_id && typeof firstMatch.sales_return_detail_id === "object") {
+      returnNo = firstMatch.sales_return_detail_id.return_no || "Unknown";
+    } else if (firstMatch.return_no) {
+      returnNo = firstMatch.return_no;
+    }
+
     return {
       isDuplicate: true,
       returnNo,
     };
   }
-  return { isDuplicate: false };
+  return { isDuplicate: false, returnNo: null };
 }
 
 /**
@@ -716,8 +733,17 @@ export async function checkSerialDuplicate(serialNumber: string) {
 export async function checkSerialOnHand(
   serial: string,
   branchId: number,
-  token: string,
-): Promise<{ isOnInventory: boolean }> {
-  const isOnInventory = await repo.checkSerialOnHand(serial, branchId, token);
-  return { isOnInventory };
+  token: string): Promise<{ isOnInventory: boolean; branchId?: number; branchName?: string }> {
+  const data = await repo.getRawSerialOnHand(serial, branchId, token);
+  
+  if (data && data.length > 0) {
+    const item = data[0];
+    return {
+      isOnInventory: true,
+      branchId: item.branch_id || item.branch_code || item.branchCode,
+      branchName: item.branch_name || item.branchName,
+    };
+  }
+
+  return { isOnInventory: false };
 }

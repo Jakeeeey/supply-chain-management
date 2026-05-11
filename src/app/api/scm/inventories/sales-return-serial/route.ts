@@ -134,7 +134,7 @@ export async function GET(req: NextRequest) {
       case "check-serial-onhand": {
         const serial = url.searchParams.get("serial");
         const branchId = Number(url.searchParams.get("branchId"));
-        const token = req.cookies.get("vos_access_token")?.value;
+        const token = req.cookies.get("springboot_token")?.value || req.cookies.get("vos_access_token")?.value;
 
         if (!serial || isNaN(branchId)) {
           return json({ error: "serial and branchId are required" }, 400);

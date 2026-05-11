@@ -94,7 +94,7 @@ export async function getRawReturns(
   filters: { salesman?: string; customer?: string; status?: string; invoiceNo?: string } = {},
 ) {
   const allowedFields =
-    "return_id,return_number,invoice_no,customer_code,salesman_id,total_amount,status,return_date,remarks,order_id,isThirdParty,created_at,price_type";
+    "return_id,return_number,invoice_no,customer_code,salesman_id,total_amount,status,return_date,remarks,order_id,isThirdParty,created_at,price_type,received_at";
 
   let url = `/items/sales_return?page=${page}&limit=${limit}&meta=filter_count&fields=${allowedFields}&sort=-return_id`;
 
@@ -114,7 +114,7 @@ export async function getRawReturns(
  * Fetches raw sales return detail items for a specific return number.
  */
 export async function getRawReturnDetails(returnNo: string) {
-  const searchUrl = `/items/sales_return_details?filter[return_no][_eq]=${encodeURIComponent(returnNo)}&fields=*,product_id.*&limit=-1`;
+  const searchUrl = `/items/sales_return_details?filter[return_no][_eq]=${encodeURIComponent(returnNo)}&fields=*,product_id.*,product_id.is_serialized&limit=-1`;
   return directusGet<{ data: Record<string, unknown>[] }>(searchUrl);
 }
 
@@ -122,7 +122,7 @@ export async function getRawReturnDetails(returnNo: string) {
  * Fetches a single sales return header by ID (for status card).
  */
 export async function getRawReturnById(returnId: number) {
-  const fields = "return_id,isApplied,updated_at,status,isPosted,isReceived,order_id";
+  const fields = "return_id,isApplied,updated_at,status,isPosted,isReceived,order_id,received_at";
   return directusGet<{ data: Record<string, unknown> }>(
     `/items/sales_return/${returnId}?fields=${fields}`,
   );
@@ -143,7 +143,7 @@ export async function getRawLinkedInvoice(returnId: number) {
 export async function getRawReferences() {
   return Promise.all([
     directusGet<{ data: Record<string, unknown>[] }>(
-      "/items/salesman?limit=-1&fields=id,salesman_name,salesman_code,price_type,branch_code&filter[isActive][_eq]=1",
+      "/items/salesman?limit=-1&fields=id,salesman_name,salesman_code,price_type,branch_code&filter[isActive][_eq]=1&filter[division_id][_eq]=1",
     ),
     directusGet<{ data: Record<string, unknown>[] }>(
       "/items/customer?limit=-1&fields=id,customer_code,customer_name,store_name,discount_type&filter[isActive][_eq]=1",
@@ -185,12 +185,12 @@ export async function getRawProductCatalog() {
   return Promise.all([
     directusGet<{ data: Record<string, unknown>[] }>("/items/brand?limit=-1"),
     directusGet<{ data: Record<string, unknown>[] }>("/items/categories?limit=-1"),
-    directusGet<{ data: Record<string, unknown>[] }>("/items/suppliers?limit=-1"),
+    directusGet<{ data: Record<string, unknown>[] }>("/items/suppliers?limit=-1&filter[division_id][_eq]=1"),
     directusGet<{ data: Record<string, unknown>[] }>("/items/units?limit=-1"),
     directusGet<{ data: Record<string, unknown>[] }>(
       "/items/product_per_supplier?limit=-1",
     ),
-    directusGet<{ data: Record<string, unknown>[] }>("/items/products?limit=-1&filter[isActive][_eq]=1"),
+    directusGet<{ data: Record<string, unknown>[] }>("/items/products?limit=-1&filter[isActive][_eq]=1&fields=*,is_serialized"),
   ]);
 }
 
@@ -227,6 +227,43 @@ export async function getRawInvoices(salesmanId?: string, customerCode?: string)
  */
 export async function getRawUnits() {
   return directusGet<{ data: Record<string, unknown>[] }>("/items/units?limit=-1");
+}
+
+export async function getRawSerialOnHand(
+  serial: string,
+  branchId: number,
+  token: string,
+): Promise<any[]> {
+  const baseUrl = process.env.SPRING_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
+  if (!baseUrl) return [];
+
+  const inputSerial = serial.trim().toUpperCase();
+
+  try {
+    // Simplified Authoritative Check
+    const url = `${baseUrl.replace(/\/$/, "")}/api/v-serial-onhand/all?serialNumber=${encodeURIComponent(inputSerial)}`;
+    
+    const res = await fetch(url, {
+      method: "GET",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+
+    if (res.ok) {
+      const raw = await res.json();
+      const items = Array.isArray(raw) ? raw : (raw.data || raw.content || []);
+      
+      // Exact match verification
+      return items.filter((i: any) => 
+        String(i.serialNumber || i.serial_number || "").trim().toUpperCase() === inputSerial
+      );
+    }
+
+    return [];
+  } catch (error) {
+    console.error("[Sales Return Repo] Serial check failed:", error);
+    return [];
+  }
 }
 
 /**
@@ -405,53 +442,45 @@ export async function deleteSerialRecord(id: number) {
  * Checks if a serial number is already used in ANY sales return record.
  */
 export async function checkSerialDuplicate(serialNumber: string) {
-  const url = `/items/sales_return_serial?filter[serial_number][_eq]=${encodeURIComponent(serialNumber)}&fields=id,sales_return_detail_id.return_no`;
-  return directusGet<{ data: Record<string, unknown>[] }>(url);
+  const serial = serialNumber.trim().toUpperCase();
+  const encoded = encodeURIComponent(serial);
+  const encodedLower = encodeURIComponent(serial.toLowerCase());
+  
+  // Try multiple naming variations and filter types for robustness
+  const paths = [
+    // Exact match (Case-insensitive in most DBs, but we try both)
+    `/items/sales_return_serial?filter[serial_number][_eq]=${encoded}&fields=id,serial_number,sales_return_detail_id.*,sales_return_detail_id.sales_return_id.*&limit=1`,
+    `/items/sales_return_serial?filter[serial_number][_eq]=${encodedLower}&fields=id,serial_number,sales_return_detail_id.*,sales_return_detail_id.sales_return_id.*&limit=1`,
+    // Fallback to icontains if exact match misses due to hidden whitespace
+    `/items/sales_return_serial?filter[serial_number][_icontains]=${encoded}&fields=id,serial_number,sales_return_detail_id.*,sales_return_detail_id.sales_return_id.*&limit=1`
+  ];
+
+  for (const path of paths) {
+    try {
+      const res = await directusGet<{ data: any[] }>(path).catch(() => ({ data: [] }));
+      if (res?.data?.length > 0) {
+        // Authoritative post-filter
+        const match = res.data.find(i => String(i.serial_number || "").trim().toUpperCase() === serial);
+        if (match) return { data: [match] };
+      }
+    } catch (err) {
+      console.warn(`Duplicate check failed for path ${path}:`, err);
+    }
+  }
+
+  return { data: [] };
 }
 
 // =============================================================================
 // REPOSITORY METHODS — SERIAL LOOKUP (Spring Boot VOS API)
 // =============================================================================
 
-/**
- * Specifically checks if a serial number is currently "On Hand" (in stock) at a branch.
- */
-export async function checkSerialOnHand(
-  serial: string,
-  branchId: number,
-  token: string,
-): Promise<boolean> {
-  const SPRING_URL = process.env.SPRING_API_BASE_URL;
-  if (!SPRING_URL) return false;
-
-  // Endpoint for checking serial on-hand (matching v_serial_onhand logic)
-  const targetUrl = `${SPRING_URL.replace(/\/$/, "")}/api/view-serial-onhand?serial=${encodeURIComponent(serial)}&branch_id=${branchId}`;
-
-  try {
-    const res = await fetch(targetUrl, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      cache: "no-store",
-    });
-
-    if (!res.ok) return false;
-    const data = await res.json();
-    // If data is an array and has length > 0, it means it is currently on hand
-    return Array.isArray(data) && data.length > 0;
-  } catch (error) {
-    console.error("[Serial On-Hand Check Error]:", error);
-    return false;
-  }
-}
 
 /**
  * Fetches a single product by product_id with price and unit information.
  */
 export async function getRawProductById(productId: number) {
   return directusGet<{ data: Record<string, unknown> }>(
-    `/items/products/${productId}?fields=product_id,product_code,product_name,description,priceA,priceB,priceC,priceD,priceE,unit_of_measurement,unit_of_measurement_count`,
+    `/items/products/${productId}?fields=product_id,product_code,product_name,description,priceA,priceB,priceC,priceD,priceE,unit_of_measurement,unit_of_measurement_count,is_serialized`,
   );
 }

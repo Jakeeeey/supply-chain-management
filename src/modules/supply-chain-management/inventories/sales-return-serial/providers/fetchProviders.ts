@@ -208,14 +208,14 @@ export const SalesReturnProvider = {
   async checkSerialOnHand(
     serial: string,
     branchId: number,
-  ): Promise<{ isOnInventory: boolean }> {
+  ): Promise<{ isOnInventory: boolean; branchId?: number; branchName?: string }> {
     const params = new URLSearchParams({
       action: "check-serial-onhand",
       serial,
       branchId: String(branchId),
     });
     const res = await fetch(`${API_BASE}?${params}`, { cache: "no-store" });
-    return handleResponse<{ isOnInventory: boolean }>(res);
+    return handleResponse<{ isOnInventory: boolean; branchId?: number; branchName?: string }>(res);
   },
 
   // --- INTERNAL CACHES ---

@@ -274,15 +274,19 @@ export function ProductLookupModal({
       if (existingItemIndex !== -1) {
         const updatedItems = [...prevItems];
         const currentItem = updatedItems[existingItemIndex];
-        const newQuantity = currentItem.quantity + 1;
+        
+        // 🟢 Serialized items should not increment quantity here
+        if (currentItem.isSerialized) {
+          return prevItems; 
+        }
 
-        // Recalculate gross for existing item
+        const newQuantity = currentItem.quantity + 1;
         const newGross = newQuantity * currentItem.unitPrice;
 
         updatedItems[existingItemIndex] = {
           ...currentItem,
           quantity: newQuantity,
-          grossAmount: newGross, // 🟢 Update Gross
+          grossAmount: newGross,
           totalAmount: newGross - (currentItem.discountAmount || 0),
         };
         return updatedItems;
@@ -294,11 +298,10 @@ export function ProductLookupModal({
           catalogData || { connections: supplierConnections }
         );
 
-        const unitOrder = unitsList.find(u => u.unit_id === product.unit_of_measurement)?.order || 0;
-        const initialQty = unitOrder === 3 ? 0 : 1;
+        const isSerialized = product.is_serialized === 1;
+        const initialQty = isSerialized ? 0 : 1;
         const initialGross = initialQty * selectedPrice;
 
-        // 🟢 FIX: Added 'grossAmount' and 'discountType'
         const newItem: SalesReturnItem = {
           tempId: `added-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
           productId: product.product_id,
@@ -321,7 +324,8 @@ export function ProductLookupModal({
           priceD: product.priceD,
           priceE: product.priceE,
           unitMultiplier: product.unit_of_measurement_count || 1,
-          unitOrder: unitOrder,
+          unitOrder: unitsList.find(u => u.unit_id === product.unit_of_measurement)?.order || 0,
+          isSerialized: isSerialized,
         };
         return [...prevItems, newItem];
       }
@@ -333,7 +337,7 @@ export function ProductLookupModal({
     setSelectedItems((prev) =>
       prev.map((item) => {
         if (item.tempId === tempId) {
-          if (item.unitOrder === 3) return item; // 🟢 Box units stay at 0
+          if (item.isSerialized) return item; 
           const newQty = item.quantity + change;
           if (newQty < 1) return item;
           return {
@@ -353,7 +357,7 @@ export function ProductLookupModal({
     setSelectedItems((prev) =>
       prev.map((item) => {
         if (item.tempId === tempId) {
-          if (item.unitOrder === 3) return item; // 🟢 Box units stay at 0
+          if (item.isSerialized) return item;
           const safeQty = Math.max(1, Math.floor(qty));
           return {
             ...item,
@@ -685,15 +689,18 @@ export function ProductLookupModal({
 
                             return (
                                <div key={product.product_id} className="p-4 flex flex-col gap-3">
-                                  <div className="flex justify-between items-start">
-                                    <div className="flex flex-col">
-                                      <span className="text-xs text-muted-foreground font-mono">
+                                  <div className="flex justify-between items-start gap-2">
+                                    <div className="flex flex-col gap-0.5 min-w-0">
+                                      <span className="text-xs font-bold text-foreground truncate block">{product.product_name}</span>
+                                      <span className="text-[10px] text-muted-foreground flex items-center gap-1">
                                         Code: <span className="text-foreground font-medium">{product.product_code || product.barcode || "N/A"}</span>
                                       </span>
                                     </div>
-                                    <Badge variant="outline" className="font-normal text-xs bg-background">
-                                      {baseUnitName}
-                                    </Badge>
+                                    <div className="flex flex-col items-end gap-1 shrink-0">
+                                      <Badge variant="outline" className="font-normal text-[10px] h-4 px-1 bg-background">
+                                        {baseUnitName}
+                                      </Badge>
+                                    </div>
                                   </div>
                                   
                                   <div className="flex items-center justify-between mt-auto">
@@ -859,35 +866,41 @@ export function ProductLookupModal({
                       </div>
 
                       {/* Controls Row */}
-                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-border">
-                        {/* Qty Stepper */}
-                        <div className={`flex items-center bg-muted/30 rounded-md border border-border h-7 ${item.unitOrder === 3 ? "opacity-50 pointer-events-none" : ""}`}>
-                          <button
-                            className="px-2 h-full text-muted-foreground hover:text-primary hover:bg-background rounded-l-md disabled:opacity-30 transition-colors"
-                            onClick={() => updateItemQuantity(item.tempId, -1)}
-                            disabled={item.quantity <= 1}
-                          >
-                            <Minus className="h-3 w-3" />
-                          </button>
-                          <input
-                            type="number"
-                            min={1}
-                            value={item.quantity}
-                            onChange={(e) => {
-                              const val = parseInt(e.target.value, 10);
-                              if (!isNaN(val) && val > 0) {
-                                setItemQuantityDirect(item.tempId, val);
-                              }
-                            }}
-                            className="w-10 text-center text-xs font-bold text-foreground bg-transparent border-0 outline-none appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                          />
-                          <button
-                            className="px-2 h-full text-muted-foreground hover:text-primary hover:bg-background rounded-r-md transition-colors"
-                            onClick={() => updateItemQuantity(item.tempId, 1)}
-                          >
-                            <Plus className="h-3 w-3" />
-                          </button>
-                        </div>
+                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-border">
+                          {/* Qty Stepper */}
+                          {!item.isSerialized ? (
+                            <div className="flex items-center bg-muted/30 rounded-md border border-border h-7">
+                              <button
+                                className="px-2 h-full text-muted-foreground hover:text-primary hover:bg-background rounded-l-md disabled:opacity-30 transition-colors"
+                                onClick={() => updateItemQuantity(item.tempId, -1)}
+                                disabled={item.quantity <= 1}
+                              >
+                                <Minus className="h-3 w-3" />
+                              </button>
+                              <input
+                                type="number"
+                                min={1}
+                                value={item.quantity}
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value, 10);
+                                  if (!isNaN(val) && val > 0) {
+                                    setItemQuantityDirect(item.tempId, val);
+                                  }
+                                }}
+                                className="w-10 text-center text-xs font-bold text-foreground bg-transparent border-0 outline-none appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                              />
+                              <button
+                                className="px-2 h-full text-muted-foreground hover:text-primary hover:bg-background rounded-r-md transition-colors"
+                                onClick={() => updateItemQuantity(item.tempId, 1)}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="px-2 py-1 bg-primary/5 rounded border border-primary/10 text-[10px] font-bold text-primary uppercase tracking-tighter">
+                              Serial Driven
+                            </div>
+                          )}
                         {/* Item Total */}
                         <div className="text-right">
                           <span className="block text-sm font-bold text-foreground">

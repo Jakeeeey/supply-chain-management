@@ -13,7 +13,6 @@ import {
   CheckCircle,
   ScanLine,
   Loader2,
-  List,
   Package,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -130,6 +129,34 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const [isProductLookupOpen, setIsProductLookupOpen] = useState(false);
   const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null);
 
+  // --- 5. BRANCH LOCK STATE ---
+  const [lockedBranchId, setLockedBranchId] = useState<number | null>(null);
+
+  useEffect(() => {
+    const hasSerials = items.some((i) => i.serialNumbers && i.serialNumbers.length > 0);
+    if (!hasSerials) {
+      setLockedBranchId(null);
+    } else if (lockedBranchId === null && selectedSalesmanId) {
+      const salesman = salesmen.find((s) => s.id.toString() === selectedSalesmanId);
+      if (salesman && salesman.branchId) {
+        setLockedBranchId(salesman.branchId);
+      }
+    }
+  }, [items, selectedSalesmanId, salesmen, lockedBranchId]);
+
+  const currentSalesmanObj = salesmen.find((s) => s.id.toString() === selectedSalesmanId);
+  const currentBranchId = currentSalesmanObj?.branchId || null;
+  const isBranchLockedError = lockedBranchId !== null && currentBranchId !== null && lockedBranchId !== currentBranchId;
+
+  const handleClearItems = () => {
+    setItems([]);
+    setLockedBranchId(null);
+    if (currentBranchId) {
+      setLockedBranchId(currentBranchId);
+    }
+    toast.info("All items cleared. You may now add items for the new branch.");
+  };
+
   // --- 4. SEARCHABLE DROPDOWN STATES ---
   const [isSalesmanOpen, setIsSalesmanOpen] = useState(false);
   const [salesmanSearch, setSalesmanSearch] = useState("");
@@ -192,9 +219,14 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       };
       updateDiscounts();
     }
-  }, [customerCode, lineDiscountOptions]);
+  }, [customerCode, lineDiscountOptions, items.length]);
 
   const handleSelectSalesman = useCallback((salesman: SalesmanOption) => {
+    const hasSerials = items.some((i) => i.serialNumbers && i.serialNumbers.length > 0);
+    if (hasSerials && lockedBranchId !== null && lockedBranchId !== salesman.branchId) {
+      toast.error("Current items are not registered to this branch. Change to the appropriate Branch to proceed.", { duration: 5000 });
+    }
+
     setSelectedSalesmanId(salesman.id.toString());
     setSalesmanSearch(salesman.name);
     setSalesmanCode(salesman.code);
@@ -206,7 +238,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     setOrderSearch("");
     setInvoiceNo("");
     setInvoiceSearch("");
-  }, [branches]);
+  }, [items, lockedBranchId, branches]);
 
   const handleSelectCustomer = useCallback((customer: CustomerOption) => {
     setSelectedCustomerId(customer.id.toString());
@@ -223,31 +255,35 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
    * Manual Serial Entry Handler
    */
   const handleAddSerial = async () => {
-    const serial = serialInput.trim();
+    const serial = serialInput.trim().toUpperCase();
     if (!serial) return;
 
-    const selectedSalesmanObj = salesmen.find(
-      (s) => s.id.toString() === selectedSalesmanId,
-    );
+    const selectedSalesmanObj = salesmen.find(s => s.id.toString() === selectedSalesmanId);
     if (!selectedSalesmanObj) {
-      toast.error("Please select a Salesman before adding serials.");
+      toast.error("Missing Salesman", { description: "Please select a Salesman before adding serials." });
       return;
     }
 
     const branchId = selectedSalesmanObj.branchId;
     if (!branchId) {
-      toast.error("The selected salesman has no branch assigned.");
+      toast.error("Branch Assignment", { description: "The selected salesman has no branch assigned." });
       return;
     }
 
     if (selectedRowIndex === null) {
-      toast.warning("Please select a product row from the table before adding serial.");
+      toast.warning("Selection Required", { description: "Please select a product row from the table before adding serial." });
       return;
     }
 
     const selectedRow = items[selectedRowIndex];
-    if (selectedRow?.unitOrder !== 3) {
-      toast.error(`Serial entry is only allowed for Box units (Order 3).`);
+    if (!selectedRow) return;
+
+    // 1. Session Check (Global within Modal)
+    const isGlobalSessionDuplicate = items.some((item) => 
+      item.serialNumbers?.some(sn => sn.toUpperCase() === serial)
+    );
+    if (isGlobalSessionDuplicate) {
+      toast.error("Duplicate Serial", { description: `Serial "${serial}" is already added to this return session.` });
       return;
     }
 
@@ -255,38 +291,42 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     setLastAddedSerial(serial);
 
     try {
-      // 1. Global Duplicate Check
+      // 2. Database Check (Already Returned)
       const dupCheck = await SalesReturnProvider.checkSerialDuplicate(serial);
       if (dupCheck.isDuplicate) {
-        toast.error(`Serial "${serial}" already returned in SR #${dupCheck.returnNo}`);
-        return;
-      }
-
-      // 2. Inventory Check
-      const result = await SalesReturnProvider.checkSerialOnHand(serial, branchId);
-      if (result?.isOnInventory) {
-        toast.error("Already in Stock", {
-          description: "This item is already in the branch's inventory.",
-          duration: 5000,
+        setLastAddedSerial("");
+        toast.error("Already Returned", { 
+          description: `Serial "${serial}" was already returned in Transaction #${dupCheck.returnNo}` 
         });
         return;
       }
 
-      // 3. Local Duplicate Check
-      if (items.some((i) => i.serialNumbers?.includes(serial))) {
-        toast.warning("Serial already added in this session.");
+      // 3. Database Check (On-Hand / In Stock - Global)
+      const finalBranchId = Number(branchId) || 0;
+      const result = await SalesReturnProvider.checkSerialOnHand(serial, finalBranchId);
+      if (result && result.isOnInventory) {
+        setLastAddedSerial("");
+        toast.error("Serial Number already in stock");
         return;
       }
 
-      // 4. Accept
       setItems((prev) => {
+        // Final Session Check (Race Condition Protection)
+        const exists = prev.some((item) => 
+          item.serialNumbers?.some(sn => sn.toUpperCase() === serial)
+        );
+        if (exists) {
+          toast.warning("Serial Number already added");
+          return prev;
+        }
+
         const next = [...prev];
         const row = next[selectedRowIndex];
         if (!row) return prev;
 
+        const isSerialized = row.isSerialized === 1 || row.isSerialized === true;
         const newSerials = [...(row.serialNumbers || []), serial];
-        const newQty = newSerials.length;
-        
+        const newQty = isSerialized ? newSerials.length : row.quantity;
         const unitPrice = Number(row.unitPrice) || 0;
         const grossAmount = Math.round(unitPrice * newQty * 100) / 100;
         
@@ -310,49 +350,15 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         return next;
       });
 
-      toast.success(`Serial accepted for ${items[selectedRowIndex].description}`);
+      toast.success("Serial Added", { description: `Serial ${serial} successfully tagged for ${items[selectedRowIndex].description}` });
       setSerialInput("");
+      setTimeout(() => setLastAddedSerial(""), 2000);
     } catch (err: unknown) {
-      console.error("Serial validation failed:", err);
-      toast.error("Validation Failed", {
-        description: (err as Error).message || "An unexpected error occurred.",
-      });
+      setLastAddedSerial("");
+      toast.error("Validation Failed", { description: (err as Error).message || "An unexpected error occurred." });
     } finally {
       setIsValidatingSerial(false);
     }
-  };
-
-  const handleRemoveSerial = (rowIdx: number, serial: string) => {
-    setItems((prev) => {
-      const next = [...prev];
-      const row = next[rowIdx];
-      if (!row) return prev;
-
-      const newSerials = (row.serialNumbers || []).filter(s => s !== serial);
-      const newQty = newSerials.length;
-      
-      const unitPrice = Number(row.unitPrice) || 0;
-      const grossAmount = Math.round(unitPrice * newQty * 100) / 100;
-      
-      let discountAmt = 0;
-      if (row.discountType) {
-        const opt = lineDiscountOptions.find(d => d.id.toString() === row.discountType?.toString());
-        if (opt) {
-          const percentage = parseFloat(opt.total_percent) || 0;
-          discountAmt = Math.round(grossAmount * (percentage / 100) * 100) / 100;
-        }
-      }
-
-      next[rowIdx] = {
-        ...row,
-        serialNumbers: newSerials,
-        quantity: newQty,
-        grossAmount,
-        discountAmount: discountAmt,
-        totalAmount: Math.round((grossAmount - discountAmt) * 100) / 100,
-      };
-      return next;
-    });
   };
 
   // --- 5. INITIAL LOAD ---
@@ -388,6 +394,69 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       loadData();
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (items.length > 0) {
+      setItems((prevItems) =>
+        prevItems.map((item) => {
+          const basePrice = resolvePrice(item, priceType);
+          const newUnitPrice = basePrice;
+          const newGross = Math.round(item.quantity * newUnitPrice * 100) / 100;
+          let newDiscountAmt = 0;
+          if (item.discountType) {
+            const selectedOption = lineDiscountOptions.find(
+              (d) => d.id.toString() === item.discountType?.toString(),
+            );
+            if (selectedOption) {
+              const percentage = parseFloat(selectedOption.total_percent) || 0;
+              newDiscountAmt = Math.round(newGross * (percentage / 100) * 100) / 100;
+            }
+          }
+          return {
+            ...item,
+            unitPrice: newUnitPrice,
+            grossAmount: newGross,
+            discountAmount: newDiscountAmt,
+            totalAmount: Math.round((newGross - newDiscountAmt) * 100) / 100,
+          };
+        })
+      );
+    }
+  }, [priceType, lineDiscountOptions, items.length]);
+
+  useEffect(() => {
+    if (isOpen && fromClearance === "true" && customers.length > 0) {
+      const storedData = localStorage.getItem('scm_dispatch_return_data');
+      if (storedData) {
+        try {
+          const data = JSON.parse(storedData);
+          const foundCustomer = customers.find(c =>
+            (data.customerCode && c.code === data.customerCode) ||
+            (data.customerName && c.name === data.customerName)
+          );
+          if (foundCustomer) handleSelectCustomer(foundCustomer);
+          const foundSalesman = salesmen.find(s =>
+            (data.salesmanId && s.id === data.salesmanId) ||
+            (data.salesmanCode && s.code === data.salesmanCode) ||
+            (data.salesmanName && s.name === data.salesmanName)
+          );
+          if (foundSalesman) handleSelectSalesman(foundSalesman);
+          setInvoiceNo(data.invoiceNo || "");
+          setInvoiceSearch(data.invoiceNo || "");
+          setOrderNo(data.orderNo || "");
+          setOrderSearch(data.orderNo || "");
+          setRemarks(data.remarks || "");
+          if (data.branchName) setBranchName(data.branchName);
+          localStorage.removeItem('scm_dispatch_return_data');
+          const url = new URL(window.location.href);
+          url.searchParams.delete('fromClearance');
+          window.history.replaceState({}, '', url.toString());
+        } catch (e) {
+          console.error("Failed to parse clearance return data", e);
+        }
+      }
+    }
+  }, [isOpen, fromClearance, customers, salesmen, handleSelectCustomer, handleSelectSalesman]);
 
   useEffect(() => {
     if (selectedSalesmanId && customerCode) {
@@ -447,13 +516,25 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     setInvoiceSearch("");
     setAppliedInvoiceId(null);
     setIsThirdParty(false);
-    setInvoiceOptions([]);
     setSerialInput("");
+    setInvoiceOptions([]);
   };
 
   const handleClose = () => {
     resetForm();
     onClose();
+  };
+
+  const filteredSalesmen = salesmen.filter((s) => s.name.toLowerCase().includes(salesmanSearch.toLowerCase()));
+  const filteredCustomers = customers.filter((c) => c.name.toLowerCase().includes(customerSearch.toLowerCase()));
+  const filteredInvoices = invoiceOptions.filter((inv) => inv.invoice_no.toLowerCase().includes(invoiceSearch.toLowerCase()));
+  const filteredOrders = invoiceOptions.filter((inv) => inv.order_id.toLowerCase().includes(orderSearch.toLowerCase()));
+
+  const handleOpenProductLookup = () => {
+    if (!returnDate) { toast.error("Please select a Return Date."); return; }
+    if (!selectedSalesmanId) { toast.error("Please select a Salesman."); return; }
+    if (!selectedCustomerId) { toast.error("Please select a Customer."); return; }
+    setIsProductLookupOpen(true);
   };
 
   const handleCreateReturn = async () => {
@@ -463,6 +544,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
     if (!returnDate) { toast.error("Return Date is required."); return; }
     if (items.length === 0) { toast.error("Please add at least one product."); return; }
+    if (isBranchLockedError) { toast.error("Invalid Branch."); return; }
     if (!orderNo.trim()) { toast.error("Order No. is required."); setOrderError(true); return; }
     if (!invoiceNo.trim()) { toast.error("Invoice No. is required."); setInvoiceError(true); return; }
 
@@ -491,10 +573,11 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       };
 
       await SalesReturnProvider.submitReturn(payload);
+      toast.success("Transaction Success", { description: "Sales return record has been successfully created." });
       setSuccessOpen(true);
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error(err);
-      toast.error("Failed to create Sales Return.");
+      toast.error("Submission Failed", { description: err.message || "An error occurred while creating the sales return." });
     } finally {
       setIsSubmitting(false);
     }
@@ -513,11 +596,13 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         const rawId = item.product_id || item.productId || item.id;
         const productId = Number(rawId);
         const existingIndex = updated.findIndex((i) => i.productId === productId && i.unit === item.unit && i.unitPrice === Number(item.unitPrice));
-        const incomingQty = item.unitOrder === 3 ? 0 : (item.quantity || 1);
+        const incomingQty = item.isSerialized ? 0 : (item.quantity || 1);
 
         if (existingIndex >= 0) {
           const existing = updated[existingIndex];
-          existing.quantity += incomingQty;
+          if (!item.isSerialized) {
+            existing.quantity += incomingQty;
+          }
           existing.grossAmount = Math.round(existing.quantity * existing.unitPrice * 100) / 100;
           if (existing.discountType) {
             const opt = lineDiscountOptions.find((d) => d.id.toString() === existing.discountType?.toString());
@@ -547,6 +632,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
             reason: "",
             returnType: "",
             serialNumbers: [],
+            isSerialized: item.isSerialized,
           } as SalesReturnItem);
         }
       });
@@ -554,313 +640,287 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     });
   };
 
-  const totalNet = items.reduce((sum, i) => sum + i.totalAmount, 0);
+  const handleItemChange = (index: number, field: keyof SalesReturnItem, value: any) => {
+    setItems((prev) => {
+      const updated = [...prev];
+      const item = { ...updated[index], [field]: value } as SalesReturnItem;
+      if (field === "quantity" || field === "unitPrice") {
+        item.grossAmount = Math.round(item.quantity * item.unitPrice * 100) / 100;
+        if (item.discountType) {
+          const opt = lineDiscountOptions.find(d => d.id.toString() === item.discountType?.toString());
+          if (opt) item.discountAmount = Math.round(item.grossAmount * (parseFloat(opt.total_percent) / 100) * 100) / 100;
+        }
+      }
+      if (field === "discountType") {
+        if (!value) { item.discountAmount = 0; }
+        else {
+          const opt = lineDiscountOptions.find(d => d.id.toString() === value.toString());
+          if (opt) item.discountAmount = Math.round(item.grossAmount * (parseFloat(opt.total_percent) / 100) * 100) / 100;
+        }
+      }
+      item.totalAmount = Math.round((item.grossAmount - item.discountAmount) * 100) / 100;
+      updated[index] = item;
+      return updated;
+    });
+  };
+
+  const totalGross = Math.round(items.reduce((sum, i) => sum + (i.grossAmount || 0), 0) * 100) / 100;
+  const totalDiscount = Math.round(items.reduce((sum, i) => sum + (i.discountAmount || 0), 0) * 100) / 100;
+  const totalNet = Math.round(items.reduce((sum, i) => sum + i.totalAmount, 0) * 100) / 100;
+
+  if (!isOpen) return null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="w-full max-w-[95vw] lg:max-w-7xl h-[90vh] flex flex-col p-0 overflow-hidden bg-background border-0 shadow-2xl rounded-xl [&>button]:hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-2 md:p-4 animate-in fade-in duration-300">
+      <div className="bg-background w-full h-full md:max-w-[1300px] md:h-[95vh] md:rounded-xl shadow-2xl flex flex-col overflow-hidden ring-1 ring-white/20 animate-in zoom-in-95 duration-300 ease-out">
         {/* HEADER */}
-        <div className="px-8 py-5 border-b border-border flex justify-between items-center bg-background shrink-0">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-primary/10 rounded-xl">
-              <FileText className="h-6 w-6 text-primary" />
-            </div>
+        <div className="flex justify-between items-center px-6 py-4 border-b border-border bg-background">
+          <div className="flex items-center gap-3">
+            <div className="bg-primary/10 p-2 rounded-lg"><FileText className="h-5 w-5 text-primary" /></div>
             <div>
-              <DialogTitle className="text-2xl font-bold tracking-tight text-foreground">
-                Create Sales Return (Serial)
-              </DialogTitle>
-              <p className="text-sm text-muted-foreground">Fill in the details to create a new record</p>
+              <h2 className="text-lg font-bold text-foreground">Create Sales Return</h2>
+              <p className="text-xs text-muted-foreground">Fill in the details below to process a return</p>
             </div>
           </div>
-          <Button variant="ghost" size="icon" onClick={handleClose} className="rounded-full hover:bg-muted transition-colors">
-            <X className="h-5 w-5" />
-          </Button>
+          <button onClick={handleClose} className="bg-destructive hover:bg-destructive text-white p-2 rounded-md shadow-sm transition-all duration-200 active:scale-95 flex items-center justify-center"><X className="h-5 w-5" /></button>
         </div>
 
-        {/* MAIN BODY */}
-        <div className="flex-1 overflow-y-auto px-8 py-6 space-y-8 bg-muted/20">
-          {/* HEADER FORM */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 bg-background p-6 rounded-2xl border border-border shadow-sm">
-            <div className="md:col-span-3 space-y-2">
-              <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Return Date</label>
-              <Input type="date" className="h-11 bg-muted/30 border-border focus:ring-2 focus:ring-primary/20 transition-all" value={returnDate} onChange={e => setReturnDate(e.target.value)} />
-            </div>
-
-            <div className="md:col-span-3 space-y-2 relative" ref={salesmanWrapperRef}>
-              <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Salesman</label>
-              <div className="relative">
-                <Input className="h-11 pl-10 bg-muted/30 border-border" placeholder="Select Salesman..." value={salesmanSearch} onChange={e => { setSalesmanSearch(e.target.value); setIsSalesmanOpen(true); }} onFocus={() => setIsSalesmanOpen(true)} />
-                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              </div>
-              {isSalesmanOpen && (
-                <div className="absolute top-[calc(100%+8px)] left-0 w-full z-50 bg-background border border-border rounded-xl shadow-xl max-h-60 overflow-y-auto p-1 animate-in fade-in zoom-in-95 duration-100">
-                  {salesmen.filter(s => s.name.toLowerCase().includes(salesmanSearch.toLowerCase())).map(s => (
-                    <div key={s.id} className="px-4 py-2.5 text-sm cursor-pointer hover:bg-primary/10 rounded-lg transition-colors flex justify-between items-center" onClick={() => handleSelectSalesman(s)}>
-                      <span className="font-medium">{s.name}</span>
-                      <Badge variant="outline" className="text-[10px] uppercase font-bold opacity-60">{s.code}</Badge>
-                    </div>
-                  ))}
+        {/* BODY */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
+          <div className="bg-background p-5 rounded-lg border border-border shadow-sm relative">
+            <div className="absolute top-0 left-0 w-1 h-full bg-primary rounded-l-lg"></div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-4">
+              <div className="space-y-1.5 relative" ref={salesmanWrapperRef}>
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Salesman <span className="text-destructive">*</span></label>
+                <div className="relative group">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary" />
+                  <input type="text" className="w-full h-9 border border-border rounded-md text-sm pl-9 pr-8 bg-background outline-none focus:ring-2 focus:border-primary shadow-sm" placeholder="Search Salesman..." value={salesmanSearch} onChange={e => { setSalesmanSearch(e.target.value); setIsSalesmanOpen(true); }} onFocus={() => setIsSalesmanOpen(true)} />
+                  <ChevronDown className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
-              )}
-            </div>
-
-            <div className="md:col-span-4 space-y-2 relative" ref={customerWrapperRef}>
-              <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Customer</label>
-              <div className="relative">
-                <Input className="h-11 pl-10 bg-muted/30 border-border" placeholder="Select Customer..." value={customerSearch} onChange={e => { setCustomerSearch(e.target.value); setIsCustomerOpen(true); }} onFocus={() => setIsCustomerOpen(true)} />
-                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                {isSalesmanOpen && (
+                  <div className="absolute top-[calc(100%+4px)] left-0 w-full z-20 bg-background border border-border rounded-md shadow-xl max-h-60 overflow-y-auto font-medium">
+                    {filteredSalesmen.map(s => <div key={s.id} className="px-4 py-2.5 text-sm cursor-pointer hover:bg-primary/10 text-foreground" onClick={() => handleSelectSalesman(s)}>{s.name}</div>)}
+                  </div>
+                )}
               </div>
-              {isCustomerOpen && (
-                <div className="absolute top-[calc(100%+8px)] left-0 w-full z-50 bg-background border border-border rounded-xl shadow-xl max-h-60 overflow-y-auto p-1 animate-in fade-in zoom-in-95 duration-100">
-                  {customers.filter(c => c.name.toLowerCase().includes(customerSearch.toLowerCase())).map(c => (
-                    <div key={c.id} className="px-4 py-2.5 text-sm cursor-pointer hover:bg-primary/10 rounded-lg transition-colors flex justify-between items-center" onClick={() => handleSelectCustomer(c)}>
-                      <span className="font-medium">{c.name}</span>
-                      <Badge variant="outline" className="text-[10px] uppercase font-bold opacity-60">{c.code}</Badge>
-                    </div>
-                  ))}
+              <div className="space-y-1.5"><label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Salesman Code</label><div className="h-9 w-full bg-muted/20 border border-border rounded-md px-3 flex items-center text-sm font-medium text-foreground italic shadow-sm">{salesmanCode || "-"}</div></div>
+              <div className="space-y-1.5 relative" ref={customerWrapperRef}>
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Customer <span className="text-destructive">*</span></label>
+                <div className="relative group">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary" />
+                  <input type="text" className="w-full h-9 border border-border rounded-md text-sm pl-9 pr-8 bg-background outline-none focus:ring-2 focus:border-primary shadow-sm" placeholder="Search Customer..." value={customerSearch} onChange={e => { setCustomerSearch(e.target.value); setIsCustomerOpen(true); }} onFocus={() => setIsCustomerOpen(true)} />
+                  <ChevronDown className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
-              )}
-            </div>
-
-            <div className="md:col-span-2 space-y-2">
-              <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Price Type</label>
-              <Select value={priceType} onValueChange={setPriceType}>
-                <SelectTrigger className="h-11 bg-muted/30 border-border rounded-xl"><SelectValue /></SelectTrigger>
-                <SelectContent className="rounded-xl border-border shadow-xl">
-                  {priceTypeOptions.map(p => <SelectItem key={p.price_type_id} value={p.price_type_name}>{p.price_type_name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+                {isCustomerOpen && (
+                  <div className="absolute top-[calc(100%+4px)] left-0 w-full z-20 bg-background border border-border rounded-md shadow-xl max-h-60 overflow-y-auto font-medium">
+                    {filteredCustomers.map(c => <div key={c.id} className="px-4 py-2.5 text-sm cursor-pointer hover:bg-primary/10 text-foreground" onClick={() => handleSelectCustomer(c)}><div className="flex flex-col"><span>{c.name}</span><span className="text-[10px] text-muted-foreground font-mono">{c.code}</span></div></div>)}
+                  </div>
+                )}
+              </div>
+              <div className="space-y-1.5"><label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Customer Code</label><div className="h-9 w-full bg-muted/20 border border-border rounded-md px-3 flex items-center text-sm font-medium text-foreground italic shadow-sm">{customerCode || "-"}</div></div>
+              <div className="space-y-1.5"><label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Branch</label><div className="h-9 w-full bg-muted/20 border border-border rounded-md px-3 flex items-center text-sm font-medium text-foreground italic shadow-sm">{branchName || "-"}</div></div>
+              <div className="space-y-1.5"><label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Return Date <span className="text-destructive">*</span></label><Input type="date" value={returnDate} onChange={e => setReturnDate(e.target.value)} className="h-9 w-full bg-background border-border shadow-sm text-sm" /></div>
+              <div className="space-y-1.5"><label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Received Date</label><div className="h-9 w-full bg-muted/20 border border-border rounded-md px-3 flex items-center text-sm font-medium text-muted-foreground italic shadow-sm opacity-60">(Auto-generated)</div></div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Price Type <span className="text-destructive">*</span></label>
+                <Select value={priceType} onValueChange={setPriceType}>
+                  <SelectTrigger className="w-full h-9 border-border bg-background shadow-sm text-sm"><SelectValue placeholder="Select Price Type" /></SelectTrigger>
+                  <SelectContent className="z-[200]">
+                    {priceTypeOptions.map(pt => <SelectItem key={pt.price_type_id} value={pt.price_type_name}>Type {pt.price_type_name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center space-x-2 pt-2 col-span-2 lg:col-span-4 translate-y-2">
+                <Checkbox id="create-isThirdParty" checked={isThirdParty} onCheckedChange={c => setIsThirdParty(c as boolean)} className="data-[state=checked]:bg-primary border-border" />
+                <label htmlFor="create-isThirdParty" className="text-sm font-medium text-foreground cursor-pointer select-none">Third Party Transaction</label>
+              </div>
             </div>
           </div>
 
-          {/* PRODUCT TABLE */}
-          <div className="bg-background rounded-2xl border border-border shadow-md overflow-hidden flex flex-col">
-            <div className="px-6 py-4 border-b border-border bg-muted/10 flex justify-between items-center">
-              <h3 className="font-bold flex items-center gap-2"><List className="h-4 w-4 text-primary" /> Return Items</h3>
-              <Button onClick={() => setIsProductLookupOpen(true)} variant="outline" size="sm" className="h-9 px-4 rounded-lg bg-background hover:bg-primary hover:text-white transition-all shadow-sm border-primary/20 text-primary">
-                <Plus className="h-4 w-4 mr-2" /> Browse Catalog
-              </Button>
+          <div className="bg-background rounded-lg border border-border shadow-sm overflow-hidden flex flex-col">
+            <div className="flex justify-between items-center px-5 py-4 bg-background border-b border-border">
+              <h3 className="font-bold text-foreground flex items-center gap-2"><div className="bg-primary/10 p-1.5 rounded text-primary"><Calculator className="h-4 w-4" /></div>Products Summary</h3>
+              <div className="flex items-center gap-3">
+                <Button size="sm" onClick={handleOpenProductLookup} className="bg-primary hover:bg-primary text-white shadow-primary/20 shadow-md h-9"><Plus className="h-4 w-4 mr-1.5" /> Add Product</Button>
+                {isBranchLockedError && <Button size="sm" variant="destructive" onClick={handleClearItems} className="shadow-md h-9 gap-2">Clear All Items</Button>}
+              </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left border-collapse">
+            <div className="overflow-x-auto relative pb-4">
+              <table className="w-full text-sm text-left min-w-[1500px]">
                 <thead>
-                  <tr className="bg-muted/30 border-b border-border">
-                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Product Details</th>
-                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground w-24 text-center">Unit</th>
-                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground w-24 text-center">Qty</th>
-                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground w-32 text-right">Price</th>
-                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground w-32 text-right">Total</th>
-                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground w-48">Return Type</th>
-                    <th className="px-4 py-4 w-12"></th>
+                  <tr className="bg-primary text-white">
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-28">Code</th>
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider">Description</th>
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-20">Unit</th>
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-28 text-center">Qty</th>
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-32 text-right">Unit Price</th>
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-32 text-right">Gross</th>
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-40">Disc. Type</th>
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-36 text-right">Disc. Amt</th>
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-40 text-right">Total</th>
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-48">Reason</th>
+                    <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-48">Return Type</th>
+                    <th className="sticky right-0 z-10 px-2 py-3 w-12 bg-primary"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-border">
-                  {items.map((item, idx) => (
-                    <tr key={idx} className={cn("group transition-colors cursor-pointer", selectedRowIndex === idx ? "bg-primary/5" : "hover:bg-muted/10")} onClick={() => setSelectedRowIndex(idx)}>
-                      <td className="px-6 py-5">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="font-bold text-foreground leading-none">{item.description}</span>
-                          <span className="text-[10px] font-mono text-muted-foreground uppercase">{item.code}</span>
+                <tbody className="divide-y divide-gray-100">
+                  {items.length === 0 ? (
+                    <tr><td colSpan={12} className="px-6 py-16 text-center text-muted-foreground bg-muted/30"><div className="flex flex-col items-center gap-2"><FileText className="h-8 w-8 text-muted-foreground mb-1" /><p>No items added yet.</p><span className="text-xs">Click "Add Product" to browse catalog.</span></div></td></tr>
+                  ) : items.map((item, idx) => (
+                    <tr key={idx} onClick={() => setSelectedRowIndex(idx)} className={cn("hover:bg-muted/10 transition-colors duration-200 border-b border-border cursor-pointer group", selectedRowIndex === idx && "bg-primary/5 ring-1 ring-inset ring-primary/20")}>
+                      <td className="px-4 py-2 font-mono text-sm text-foreground"><div className="flex items-center gap-2">{selectedRowIndex === idx ? <div className="w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_rgba(var(--primary),0.5)] animate-pulse" /> : <div className="w-2 h-2 rounded-full bg-muted-foreground/20" />}<span>{item.code}</span></div></td>
+                      <td className="px-4 py-2 text-foreground font-medium">{item.description}</td>
+                      <td className="px-4 py-2"><Badge variant="outline" className="bg-background">{item.unit}</Badge></td>
+                      <td className="px-4 py-2 text-center" onClick={e => e.stopPropagation()}>
+                        <div className="flex flex-col items-center gap-1">
+                          {item.isSerialized === 1 || item.isSerialized === true ? (
+                            <Badge variant="outline" className="font-bold min-w-[40px] flex justify-center border-primary/40 bg-primary/10 text-primary shadow-sm">{item.quantity}</Badge>
+                          ) : (
+                            <input 
+                              type="number" 
+                              className="w-16 h-8 text-center border border-border rounded bg-background text-sm font-bold focus:ring-1 focus:ring-primary outline-none"
+                              value={item.quantity}
+                              onChange={e => handleItemChange(idx, "quantity", Math.max(1, parseInt(e.target.value) || 0))}
+                            />
+                          )}
                         </div>
                       </td>
-                      <td className="px-6 py-5 text-center"><Badge variant="outline" className="bg-muted/50 font-medium">{item.unit}</Badge></td>
-                      <td className="px-6 py-5 text-center">
-                        {item.unitOrder === 3 ? (
-                          <div className="flex justify-center"><Badge className="bg-emerald-500 text-white font-bold h-7 px-3">{item.quantity}</Badge></div>
-                        ) : (
-                          <div className="flex justify-center" onClick={e => e.stopPropagation()}>
-                            <Input type="number" className="h-8 w-16 text-center text-xs font-bold bg-muted/20" value={item.quantity} onChange={e => {
-                              const q = Number(e.target.value);
-                              setItems(prev => {
-                                const next = [...prev];
-                                next[idx].quantity = q;
-                                const gross = Math.round(q * next[idx].unitPrice * 100) / 100;
-                                next[idx].grossAmount = gross;
-                                let discAmt = 0;
-                                if (next[idx].discountType) {
-                                  const opt = lineDiscountOptions.find(d => d.id.toString() === next[idx].discountType?.toString());
-                                  if (opt) discAmt = Math.round(gross * (parseFloat(opt.total_percent) / 100) * 100) / 100;
-                                }
-                                next[idx].discountAmount = discAmt;
-                                next[idx].totalAmount = Math.round((gross - discAmt) * 100) / 100;
-                                return next;
-                              });
-                            }} />
-                          </div>
-                        )}
+                      <td className="px-3 py-2 text-right text-sm whitespace-nowrap">₱{item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      <td className="px-3 py-2 text-right text-muted-foreground font-mono text-sm whitespace-nowrap">₱{item.grossAmount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      <td className="px-4 py-2" onClick={e => e.stopPropagation()}>
+                        <Select value={item.discountType?.toString() || "none"} onValueChange={val => handleItemChange(idx, "discountType", val === "none" ? "" : val)}>
+                          <SelectTrigger className="w-full h-8 px-2 text-sm border-border bg-background"><SelectValue placeholder="None" /></SelectTrigger>
+                          <SelectContent className="z-[200]"><SelectItem value="none">None</SelectItem>{lineDiscountOptions.map(opt => <SelectItem key={opt.id} value={opt.id.toString()}>{opt.discount_type}</SelectItem>)}</SelectContent>
+                        </Select>
                       </td>
-                      <td className="px-6 py-5 text-right font-mono text-xs">₱{item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                      <td className="px-6 py-5 text-right font-bold text-primary font-mono">₱{item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                      <td className="px-6 py-5" onClick={e => e.stopPropagation()}>
-                        <SearchableSelect value={item.returnType || ""} onValueChange={v => setItems(prev => { const n = [...prev]; n[idx].returnType = v; return n; })} options={returnTypeOptions.map(r => ({ value: r.type_name, label: r.type_name }))} className={cn("h-8 text-xs bg-muted/20", returnTypeError && !item.returnType && "border-destructive ring-1 ring-destructive/50")} />
+                      <td className="px-4 py-2 text-right text-muted-foreground font-mono text-sm whitespace-nowrap">₱{item.discountAmount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      <td className="px-3 py-2 text-right font-bold text-sm text-foreground whitespace-nowrap">₱{item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      <td className="px-4 py-2" onClick={e => e.stopPropagation()}><input type="text" placeholder="Enter reason" className="w-full border border-border rounded h-8 text-sm px-2 outline-none focus:border-primary" value={item.reason || ""} onChange={e => handleItemChange(idx, "reason", e.target.value)} /></td>
+                      <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
+                        <SearchableSelect value={item.returnType || ""} onValueChange={val => { handleItemChange(idx, "returnType", val); setReturnTypeError(false); }} options={returnTypeOptions.map(t => ({ value: t.type_name, label: t.type_name }))} placeholder="Select type" className={cn("h-8 text-sm px-2", returnTypeError && (!item.returnType || item.returnType === "") && "border-destructive ring-1 ring-destructive/30 bg-destructive/5 text-destructive")} />
                       </td>
-                      <td className="px-4 py-5"><button onClick={() => setItems(prev => prev.filter((_, i) => i !== idx))} className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-all opacity-0 group-hover:opacity-100"><Trash2 className="h-4 w-4" /></button></td>
+                      <td className="sticky right-0 z-10 px-2 py-2 text-center bg-background border-l border-transparent group-hover:border-primary/20"><button onClick={e => { e.stopPropagation(); setItems(prev => prev.filter((_, i) => i !== idx)); if (selectedRowIndex === idx) setSelectedRowIndex(null); }} className="text-destructive/70 hover:text-destructive h-7 w-7 rounded-md flex items-center justify-center transition-colors"><Trash2 className="h-4 w-4" /></button></td>
                     </tr>
                   ))}
-                  {items.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="py-20 text-center text-muted-foreground italic">
-                        <div className="flex flex-col items-center gap-3">
-                          <Package className="h-10 w-10 opacity-20" />
-                          <p>No items added yet. Search from the catalog to begin.</p>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
             </div>
           </div>
 
-          {/* SERIAL INPUT SECTION (Only shows when a Box unit is selected) */}
-          {selectedRowIndex !== null && items[selectedRowIndex]?.unitOrder === 3 && (
-            <div className="bg-background rounded-2xl border-2 border-primary/20 shadow-lg p-6 animate-in slide-in-from-bottom-4 duration-300">
-               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-                 <div>
-                   <h4 className="text-lg font-black flex items-center gap-2 uppercase tracking-tight text-foreground">
-                     <span className="bg-primary text-white p-1.5 rounded-lg text-[10px] font-black">SERIAL ENTRY</span> 
-                     {items[selectedRowIndex].description}
-                   </h4>
-                   <p className="text-xs text-muted-foreground mt-0.5">Manually enter serial numbers for this product</p>
-                 </div>
-                 <div className="flex items-center gap-3 w-full md:w-auto">
-                    <div className="relative flex-1 md:flex-none min-w-[280px]">
-                      <Input className="h-11 pl-10 pr-12 text-sm font-mono border-primary/30 focus:ring-primary/20" placeholder="Type serial and press Enter..." value={serialInput} onChange={e => setSerialInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleAddSerial()} disabled={isValidatingSerial} />
-                      <ScanLine className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      {isValidatingSerial ? (
-                        <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" />
-                      ) : (
-                        <Plus className="absolute right-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-primary cursor-pointer hover:scale-110 transition-transform" onClick={handleAddSerial} />
-                      )}
-                    </div>
-                    <Badge className="bg-primary hover:bg-primary h-11 px-6 rounded-xl text-xs font-black shadow-lg shadow-primary/20">
-                      {items[selectedRowIndex].serialNumbers?.length || 0} TOTAL
-                    </Badge>
-                 </div>
-               </div>
-
-               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 max-h-[180px] overflow-y-auto pr-2 custom-scrollbar p-1">
-                 {(items[selectedRowIndex].serialNumbers || []).map((sn, snIdx) => (
-                   <div key={snIdx} className="flex justify-between items-center bg-muted/40 px-3 py-2 rounded-xl border border-border group hover:border-primary/50 transition-all hover:bg-background hover:shadow-sm">
-                     <span className="text-[10px] font-mono font-black truncate text-foreground">{sn}</span>
-                     <button onClick={() => handleRemoveSerial(selectedRowIndex, sn)} className="text-muted-foreground hover:text-destructive transition-colors"><X className="h-3 w-3" /></button>
-                   </div>
-                 ))}
-                 {(items[selectedRowIndex].serialNumbers || []).length === 0 && (
-                   <div className="col-span-full py-4 text-center text-xs text-muted-foreground border border-dashed rounded-xl">
-                     Wait for serial numbers to be entered...
-                   </div>
-                 )}
-               </div>
+          {selectedRowIndex !== null && items[selectedRowIndex] && (
+            <div className="bg-background rounded-lg border-2 border-primary/20 shadow-md p-5 mb-6 animate-in slide-in-from-bottom-4 duration-300">
+              <div className="flex justify-between items-center mb-4">
+                <h4 className="font-bold text-foreground flex items-center gap-2 text-base"><div className="bg-emerald-500/10 p-1.5 rounded text-emerald-600"><ScanLine className="h-5 w-5" /></div>Serial Management for: <span className="text-primary underline decoration-primary/30 underline-offset-4">{items[selectedRowIndex].description}</span></h4>
+                <div className="flex items-center gap-3">
+                  <div className="relative group">
+                    <Input className="h-9 w-64 pl-10 pr-10 text-sm font-mono border-primary/30 focus:ring-primary/20" placeholder="Type serial and press Enter..." value={serialInput} onChange={e => setSerialInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleAddSerial()} disabled={isValidatingSerial} />
+                    <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary" />
+                    {isValidatingSerial ? <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" /> : <Plus className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary cursor-pointer" onClick={handleAddSerial} />}
+                  </div>
+                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 px-3 py-1 font-bold">{items[selectedRowIndex].serialNumbers?.length || 0} TOTAL</Badge>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 max-h-40 overflow-y-auto p-1">
+                {(items[selectedRowIndex].serialNumbers || []).map(sn => (
+                  <div key={sn} className="flex items-center justify-between bg-muted/20 border border-border px-3 py-2 rounded-md hover:border-primary/30 transition-all group hover:shadow-sm">
+                    <span className="text-[10px] font-mono font-bold text-foreground truncate">{sn}</span>
+                    <button onClick={() => {
+                      setItems(prev => {
+                        const next = [...prev];
+                        const row = next[selectedRowIndex];
+                        const newSerials = row.serialNumbers!.filter(s => s !== sn);
+                        const isSerialized = row.isSerialized === 1 || row.isSerialized === true;
+                        const newQty = isSerialized ? newSerials.length : row.quantity;
+                        const gross = Math.round(row.unitPrice * newQty * 100) / 100;
+                        let discAmt = 0;
+                        if (row.discountType) {
+                          const opt = lineDiscountOptions.find(d => d.id.toString() === row.discountType?.toString());
+                          if (opt) discAmt = Math.round(gross * (parseFloat(opt.total_percent) / 100) * 100) / 100;
+                        }
+                        next[selectedRowIndex] = { 
+                          ...row, 
+                          serialNumbers: newSerials, 
+                          quantity: newQty, 
+                          grossAmount: gross, 
+                          discountAmount: discAmt, 
+                          totalAmount: Math.round((gross - discAmt) * 100) / 100 
+                        };
+                        return next;
+                      });
+                    }} className="p-1 text-destructive/50 hover:text-destructive transition-colors"><X className="h-3 w-3" /></button>
+                  </div>
+                ))}
+                {(items[selectedRowIndex].serialNumbers || []).length === 0 && <div className="col-span-full py-8 text-center border border-dashed rounded-lg text-muted-foreground italic">No serial numbers entered yet.</div>}
+              </div>
             </div>
           )}
 
-          {/* BOTTOM FORM */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 space-y-6">
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-background p-6 rounded-2xl border border-border shadow-sm">
-                 <div className="space-y-2 relative" ref={orderWrapperRef}>
-                   <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Order No. <span className="text-destructive">*</span></label>
-                   <Input className={cn("h-11 bg-muted/30", orderError && !orderNo.trim() && "border-destructive ring-destructive/20 ring-2")} placeholder="Enter Order #" value={orderNo} onChange={e => { setOrderNo(e.target.value); setOrderSearch(e.target.value); setIsOrderOpen(true); }} onFocus={() => setIsOrderOpen(true)} />
-                   {isOrderOpen && (
-                     <div className="absolute bottom-[calc(100%+8px)] left-0 w-full z-50 bg-background border border-border rounded-xl shadow-xl max-h-48 overflow-y-auto p-1">
-                        {invoiceOptions.filter(inv => inv.order_id.toLowerCase().includes(orderSearch.toLowerCase())).map(inv => (
-                          <div key={inv.order_id} className="px-4 py-2 text-xs cursor-pointer hover:bg-primary/10 rounded-lg flex justify-between items-center" onClick={() => { setOrderNo(inv.order_id); setOrderSearch(inv.order_id); setInvoiceNo(inv.invoice_no); setInvoiceSearch(inv.invoice_no); setAppliedInvoiceId(Number(inv.id)); setIsOrderOpen(false); }}>
-                            <span className="font-bold">{inv.order_id}</span>
-                            <Badge variant="outline" className="text-[9px] opacity-60">INV: {inv.invoice_no}</Badge>
-                          </div>
-                        ))}
-                     </div>
-                   )}
-                 </div>
-                 <div className="space-y-2 relative" ref={invoiceWrapperRef}>
-                   <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Invoice No. <span className="text-destructive">*</span></label>
-                   <Input className={cn("h-11 bg-muted/30", invoiceError && !invoiceNo.trim() && "border-destructive ring-destructive/20 ring-2")} placeholder="Enter Invoice #" value={invoiceNo} onChange={e => { setInvoiceNo(e.target.value); setInvoiceSearch(e.target.value); setIsInvoiceOpen(true); }} onFocus={() => setIsInvoiceOpen(true)} />
-                   {isInvoiceOpen && (
-                     <div className="absolute bottom-[calc(100%+8px)] left-0 w-full z-50 bg-background border border-border rounded-xl shadow-xl max-h-48 overflow-y-auto p-1">
-                        {invoiceOptions.filter(inv => inv.invoice_no.toLowerCase().includes(invoiceSearch.toLowerCase())).map(inv => (
-                          <div key={inv.invoice_no} className="px-4 py-2 text-xs cursor-pointer hover:bg-primary/10 rounded-lg flex justify-between items-center" onClick={() => { setInvoiceNo(inv.invoice_no); setInvoiceSearch(inv.invoice_no); setOrderNo(inv.order_id); setOrderSearch(inv.order_id); setAppliedInvoiceId(Number(inv.id)); setIsInvoiceOpen(false); }}>
-                            <span className="font-bold">{inv.invoice_no}</span>
-                            <Badge variant="outline" className="text-[9px] opacity-60">ORD: {inv.order_id}</Badge>
-                          </div>
-                        ))}
-                     </div>
-                   )}
-                 </div>
-               </div>
-               <div className="bg-background p-6 rounded-2xl border border-border shadow-sm space-y-2">
-                 <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Internal Remarks</label>
-                 <Textarea placeholder="Add internal notes or instructions regarding this return..." className="min-h-[120px] bg-muted/30 border-border rounded-xl resize-none focus:ring-primary/20" value={remarks} onChange={e => setRemarks(e.target.value)} />
-               </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-20">
+            <div className="space-y-4 bg-background p-5 rounded-lg border border-border shadow-sm h-full">
+              <h4 className="font-bold text-foreground text-sm mb-2">Additional Information</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5" ref={orderWrapperRef}>
+                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Order No. <span className="text-destructive">*</span></label>
+                  <div className="relative group">
+                    <input type="text" className={cn("w-full h-9 border rounded-md text-sm px-3 pr-8 bg-background outline-none transition-all shadow-sm", orderError ? "border-destructive bg-destructive/5 ring-1 ring-destructive" : "border-border focus:ring-2 focus:border-primary")} placeholder="Search Order No..." value={orderSearch || orderNo} onChange={e => { setOrderSearch(e.target.value); setOrderNo(e.target.value); setIsOrderOpen(true); }} onFocus={() => setIsOrderOpen(true)} />
+                    <ChevronDown className="h-3 w-3 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    {isOrderOpen && (
+                      <div className="absolute bottom-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto divide-y">
+                        <div className="px-3 py-2 text-xs font-medium cursor-pointer hover:bg-destructive/10 text-destructive flex items-center gap-2" onClick={() => { setOrderNo(""); setOrderSearch(""); setAppliedInvoiceId(null); setIsOrderOpen(false); }}><X className="h-3 w-3" /> Clear Selection</div>
+                        {filteredOrders.map(inv => <div key={inv.id} className="px-3 py-2 text-sm cursor-pointer hover:bg-primary/10 text-foreground" onClick={() => { setOrderNo(inv.order_id); setOrderSearch(inv.order_id); setInvoiceNo(inv.invoice_no); setInvoiceSearch(inv.invoice_no); setAppliedInvoiceId(Number(inv.id)); setIsOrderOpen(false); }}><div className="flex flex-col"><span className="font-medium">{inv.order_id}</span><span className="text-[10px] text-muted-foreground">Invoice: {inv.invoice_no}</span></div></div>)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-1.5" ref={invoiceWrapperRef}>
+                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Invoice No. <span className="text-destructive">*</span></label>
+                  <div className="relative group">
+                    <input type="text" className={cn("w-full h-9 border rounded-md text-sm px-3 pr-8 bg-background outline-none transition-all shadow-sm", invoiceError ? "border-destructive bg-destructive/5 ring-1 ring-destructive" : "border-border focus:ring-2 focus:border-primary")} placeholder="Search Invoice No..." value={invoiceSearch || invoiceNo} onChange={e => { setInvoiceSearch(e.target.value); setInvoiceNo(e.target.value); setIsInvoiceOpen(true); }} onFocus={() => setIsInvoiceOpen(true)} />
+                    <ChevronDown className="h-3 w-3 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    {isInvoiceOpen && (
+                      <div className="absolute bottom-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto divide-y">
+                        <div className="px-3 py-2 text-xs font-medium cursor-pointer hover:bg-destructive/10 text-destructive flex items-center gap-2" onClick={() => { setInvoiceNo(""); setInvoiceSearch(""); setAppliedInvoiceId(null); setIsInvoiceOpen(false); }}><X className="h-3 w-3" /> Clear Selection</div>
+                        {filteredInvoices.map(inv => <div key={inv.id} className="px-3 py-2 text-sm cursor-pointer hover:bg-primary/10 text-foreground" onClick={() => { setInvoiceNo(inv.invoice_no); setInvoiceSearch(inv.invoice_no); setAppliedInvoiceId(Number(inv.id)); setOrderNo(inv.order_id); setOrderSearch(inv.order_id); setIsInvoiceOpen(false); }}><div className="flex flex-col"><span className="font-medium">{inv.invoice_no}</span><span className="text-[10px] text-muted-foreground">Order: {inv.order_id}</span></div></div>)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-1.5"><label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Remarks</label><Textarea value={remarks} onChange={e => setRemarks(e.target.value)} className="resize-none h-24 border-border focus:border-primary focus:bg-background" placeholder="Add any notes regarding this return..." /></div>
             </div>
 
-            <div className="space-y-6">
-               <div className="bg-background p-6 rounded-2xl border border-border shadow-sm space-y-6">
-                 <div className="flex items-center space-x-3 p-4 bg-muted/50 rounded-xl border border-border/50 cursor-pointer hover:bg-muted/80 transition-all" onClick={() => setIsThirdParty(!isThirdParty)}>
-                   <Checkbox id="isThirdParty" checked={isThirdParty} onCheckedChange={v => setIsThirdParty(v === true)} />
-                   <div className="grid gap-1.5 leading-none">
-                     <label htmlFor="isThirdParty" className="text-sm font-bold leading-none cursor-pointer">Third Party Return</label>
-                     <p className="text-[10px] text-muted-foreground">Check if returned from outside distributors</p>
-                   </div>
-                 </div>
-
-                 <div className="pt-4 space-y-4">
-                    <div className="flex justify-between items-center text-xs px-1">
-                      <span className="text-muted-foreground font-medium uppercase tracking-wider">Subtotal Gross</span>
-                      <span className="font-mono font-bold">₱{items.reduce((acc, i) => acc + i.grossAmount, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-xs px-1">
-                      <span className="text-muted-foreground font-medium uppercase tracking-wider">Total Discounts</span>
-                      <span className="font-mono font-bold text-destructive">-₱{items.reduce((acc, i) => acc + i.discountAmount, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="h-px bg-border my-2" />
-                    <div className="bg-primary/5 p-4 rounded-xl border border-primary/20 space-y-1">
-                      <div className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">Net Return Amount</div>
-                      <div className="text-3xl font-black text-primary tracking-tighter">
-                        ₱{totalNet.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </div>
-                    </div>
-                 </div>
-               </div>
-
-               <Button className="w-full h-16 rounded-2xl text-lg font-black uppercase tracking-widest shadow-xl shadow-primary/30 hover:scale-[1.02] active:scale-95 transition-all group" onClick={handleCreateReturn} disabled={isSubmitting}>
-                 {isSubmitting ? <Loader2 className="h-6 w-6 animate-spin" /> : <><Save className="h-6 w-6 mr-3 group-hover:rotate-12 transition-transform" /> Save Transaction</>}
-               </Button>
+            <div className="bg-background rounded-lg border border-border p-0 shadow-sm overflow-hidden h-fit">
+              <div className="p-4 bg-muted/30 border-b border-border"><h4 className="font-bold text-foreground">Financial Summary</h4></div>
+              <div className="p-6 space-y-4">
+                <div className="flex justify-between items-center text-sm text-muted-foreground"><span>Total Gross Amount</span><span className="font-medium text-foreground tabular-nums">₱{totalGross.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between items-center text-sm text-destructive"><span>Total Discount</span><span className="font-medium tabular-nums">- ₱{totalDiscount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+                <div className="h-px bg-border my-2"></div>
+                <div className="flex justify-between items-center"><span className="font-black text-foreground">Total Net Amount</span><span className="text-2xl font-black text-primary tabular-nums">₱{totalNet.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* FOOTER */}
-        <div className="px-8 py-4 border-t border-border flex justify-between items-center bg-muted/5 shrink-0">
-           <div className="flex items-center gap-6 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-              <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500" /> Branch: {branchName || "Not Selected"}</div>
-              <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-blue-500" /> Items: {items.length}</div>
-           </div>
-           <Button variant="ghost" onClick={handleClose} className="font-bold text-muted-foreground hover:text-foreground">Cancel Transaction</Button>
+        <div className="px-6 py-4 border-t border-border bg-background flex justify-between items-center">
+          <Button variant="outline" onClick={handleClose} className="h-10 px-6 font-semibold border-border hover:bg-muted transition-colors">Cancel</Button>
+          <div className="flex items-center gap-3">
+            <Button onClick={handleCreateReturn} disabled={isSubmitting} className="h-11 px-10 bg-primary hover:bg-primary/90 text-white font-bold shadow-lg shadow-primary/20 transition-all active:scale-95 flex items-center gap-2">{isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Save className="h-5 w-5" /> Process Sales Return</>}</Button>
+          </div>
         </div>
-      </DialogContent>
+      </div>
 
-      {/* Child Modals */}
       <ProductLookupModal isOpen={isProductLookupOpen} onClose={() => setIsProductLookupOpen(false)} onConfirm={handleAddProducts} priceType={priceType} customerCode={customerCode} />
 
       <Dialog open={isSuccessOpen} onOpenChange={setSuccessOpen}>
-        <DialogContent className="max-w-md p-10 text-center rounded-3xl border-0 shadow-2xl animate-in zoom-in-95 duration-300">
-           <div className="flex flex-col items-center gap-6">
-              <div className="bg-emerald-100 text-emerald-600 p-6 rounded-full animate-bounce">
-                <CheckCircle className="h-16 w-16" />
-              </div>
-              <div className="space-y-2">
-                <DialogTitle className="text-3xl font-black text-foreground">Return Created!</DialogTitle>
-                <p className="text-muted-foreground font-medium">The sales return record has been successfully saved to the system database.</p>
-              </div>
-              <Button onClick={handleFinalize} className="w-full h-14 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-lg shadow-lg shadow-emerald-200 transition-all active:scale-95">
-                BACK TO HISTORY
-              </Button>
-           </div>
+        <DialogContent className="max-w-[400px] text-center p-8 bg-background border-border rounded-xl">
+          <div className="flex flex-col items-center gap-4">
+            <div className="bg-emerald-100 dark:bg-emerald-500/10 p-4 rounded-full text-emerald-600 dark:text-emerald-400 animate-bounce"><CheckCircle className="h-12 w-12" /></div>
+            <DialogTitle className="text-2xl font-bold text-foreground">Return Created!</DialogTitle>
+            <p className="text-sm text-muted-foreground leading-relaxed">The sales return has been successfully recorded in the system inventory.</p>
+            <Button onClick={handleFinalize} className="w-full bg-primary hover:bg-primary/90 text-white font-bold h-11 mt-2">Close & Finish</Button>
+          </div>
         </DialogContent>
       </Dialog>
-    </Dialog>
+    </div>
   );
 }

@@ -29,6 +29,7 @@ export interface SalesReturnItem {
   priceE?: number;
   unitMultiplier?: number;
   unitOrder?: number;
+  isSerialized?: number | boolean;
 }
 
 export interface SalesReturn {
@@ -100,6 +101,7 @@ export interface Product {
   priceC?: number;
   priceD?: number;
   priceE?: number;
+  is_serialized?: number;
 }
 
 // ... rest of the file ...
