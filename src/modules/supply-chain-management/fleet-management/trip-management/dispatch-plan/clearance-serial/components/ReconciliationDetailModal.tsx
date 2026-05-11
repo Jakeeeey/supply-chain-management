@@ -8,7 +8,6 @@ import {
     AlertTriangle,
     Loader2,
     Scan,
-    Keyboard,
 } from 'lucide-react';
 import {
     Dialog,
@@ -33,14 +32,11 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
 import { InvoiceDetail, ReconciliationRow, SerialMapping } from '../types';
 import { fetchInvoiceDetails } from '../providers/fetchProviders';
 import ScanningModal from './ScanningModal';
-import { Input } from '@/components/ui/input';
 
 interface ReconciliationDetailModalProps {
     isOpen: boolean;
@@ -64,11 +60,7 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
     const [scannedQtys, setScannedQtys] = useState<Record<string | number, number>>({});
     const [scannedSerials, setScannedSerials] = useState<Record<string | number, string[]>>({});
     const [isScanningOpen, setIsScanningOpen] = useState(false);
-    const [isManualInputOpen, setIsManualInputOpen] = useState(false);
     const [selectedLineIds, setSelectedLineIds] = useState<Set<string | number>>(new Set());
-
-    // Local Serial Input State
-    const [serialInputs, setSerialInputs] = useState<Record<string | number, string>>({});
 
     // 🟢 Link Sales Return State
     const [returnMode, setReturnMode] = useState<'create' | 'link'>('create');
