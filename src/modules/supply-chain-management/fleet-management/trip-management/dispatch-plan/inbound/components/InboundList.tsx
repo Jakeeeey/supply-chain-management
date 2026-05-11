@@ -65,7 +65,7 @@ export function InboundList({ plans, loading, onSuccess }: InboundListProps) {
                                         <Truck className="h-4 w-4" />
                                         <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-70">DP Number</span>
                                     </div>
-                                    <h3 className="text-2xl font-black tracking-tighter transition-colors group-hover:text-rose-600 truncate">
+                                    <h3 className="text-2xl font-black tracking-tighter transition-colors group-hover:text-rose-600 break-all">
                                         {plan.doc_no}
                                     </h3>
                                 </div>

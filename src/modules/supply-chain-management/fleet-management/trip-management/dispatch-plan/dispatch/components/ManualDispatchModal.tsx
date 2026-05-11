@@ -94,7 +94,7 @@ export function ManualDispatchModal({ plan, users, open, onOpenChange, onSuccess
                     user_id: h.id,
                     is_present: h.present
                 })),
-                time_of_dispatch: new Date(dispatchDate).toISOString(),
+                time_of_dispatch: dispatchDate,
                 remarks
             });
 
@@ -177,7 +177,19 @@ export function ManualDispatchModal({ plan, users, open, onOpenChange, onSuccess
                                             <div key={idx} className="flex gap-2 items-center">
                                                 <div className="flex-1 flex gap-2 items-center">
                                                     <SearchableSelect 
-                                                        options={users.map(u => ({ value: u.user_id.toString(), label: `${u.user_fname} ${u.user_lname}` }))}
+                                                        options={users
+                                                            .filter(u => {
+                                                                const userIdStr = u.user_id.toString();
+                                                                // Exclude driver
+                                                                if (userIdStr === driverId) return false;
+                                                                // Exclude other selected helpers
+                                                                const otherSelectedHelperIds = helperConfig
+                                                                    .filter((_, i) => i !== idx)
+                                                                    .map(hc => hc.id.toString());
+                                                                return !otherSelectedHelperIds.includes(userIdStr);
+                                                            })
+                                                            .map(u => ({ value: u.user_id.toString(), label: `${u.user_fname} ${u.user_lname}` }))
+                                                        }
                                                         value={h.id.toString()}
                                                         onValueChange={(val) => handleUpdateHelper(idx, parseInt(val))}
                                                         placeholder="Select Helper"
@@ -234,15 +246,21 @@ export function ManualDispatchModal({ plan, users, open, onOpenChange, onSuccess
                                             {driverPresent ? 'Present' : 'Absent'}
                                         </div>
                                     </div>
-                                    <div className="flex flex-wrap gap-2 pt-1">
-                                        {helperConfig.filter(h => h.id > 0).map(h => (
-                                            <div key={h.id} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-background border border-border/60">
-                                                <span className="text-[10px] font-black uppercase tracking-wider text-foreground/70">
-                                                    {users.find(u => u.user_id === h.id)?.user_fname} {users.find(u => u.user_id === h.id)?.user_lname}
-                                                </span>
-                                                <div className={`h-1.5 w-1.5 rounded-full ${h.present ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                                            </div>
-                                        ))}
+                                    <div className="space-y-2 pt-1">
+                                        <span className="text-[10px] font-black uppercase text-muted-foreground tracking-tight">Helpers</span>
+                                        <div className="flex flex-wrap gap-2">
+                                            {helperConfig.filter(h => h.id > 0).map((h, idx) => (
+                                                <div key={`${h.id}-${idx}`} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-background border border-border/60">
+                                                    <span className="text-[10px] font-black uppercase tracking-wider text-foreground/70">
+                                                        {users.find(u => u.user_id === h.id)?.user_fname} {users.find(u => u.user_id === h.id)?.user_lname}
+                                                    </span>
+                                                    <div className={`h-1.5 w-1.5 rounded-full ${h.present ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                                                </div>
+                                            ))}
+                                            {helperConfig.filter(h => h.id > 0).length === 0 && (
+                                                <span className="text-[10px] font-bold text-muted-foreground/40 italic">No helpers assigned</span>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
 
@@ -268,22 +286,25 @@ export function ManualDispatchModal({ plan, users, open, onOpenChange, onSuccess
                                                                 <p className="text-[10px] font-black text-muted-foreground/60 tracking-widest uppercase">{cust.customer_code}</p>
                                                             </div>
                                                         </div>
-                                                        <div className="text-right shrink-0">
-                                                            <span className="text-[9px] font-black uppercase text-muted-foreground/60 tracking-widest block mb-1">Destination Address</span>
-                                                            <div className="flex items-center justify-end gap-1.5 text-xs font-bold text-foreground/80">
-                                                                <MapPin className="h-3 w-3 text-emerald-500" />
-                                                                <span className="max-w-[200px] truncate">{cust.address}</span>
+                                                        <div className="text-right shrink-0 space-y-2">
+                                                            <span className="text-[9px] font-black uppercase text-muted-foreground/60 tracking-widest block">Invoices</span>
+                                                            <div className="flex flex-col items-end gap-1.5">
+                                                                {cust.invoices.map((inv, idx) => (
+                                                                    <div key={idx} className="px-2 py-1 rounded-md bg-muted/20 border border-border/40 flex items-center gap-2">
+                                                                        <FileText className="h-3 w-3 text-muted-foreground/60" />
+                                                                        <span className="text-[10px] font-bold text-foreground/70">{inv.no} — ₱{inv.amount.toLocaleString()}</span>
+                                                                    </div>
+                                                                ))}
                                                             </div>
                                                         </div>
                                                     </div>
 
-                                                    <div className="flex flex-wrap gap-2 pt-1">
-                                                        {cust.invoices.map((inv, idx) => (
-                                                            <div key={idx} className="px-3 py-1.5 rounded-lg bg-muted/20 border border-border/40 flex items-center gap-2">
-                                                                <FileText className="h-3 w-3 text-muted-foreground/60" />
-                                                                <span className="text-[10px] font-bold text-foreground/70">{inv.no} — ₱{inv.amount.toLocaleString()}</span>
-                                                            </div>
-                                                        ))}
+                                                    <div className="pt-1">
+                                                        <span className="text-[9px] font-black uppercase text-muted-foreground/60 tracking-widest block mb-2">Destination Address</span>
+                                                        <div className="flex items-center gap-1.5 text-xs font-bold text-foreground/80 bg-muted/10 p-3 rounded-xl border border-border/40">
+                                                            <MapPin className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                                            <span>{cust.address}</span>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             ))}
