@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { KioskDispatchPlan, CustomerArrivalInfo, DeliveryStatus } from "../types";
-import { CheckCircle2, Truck, User, Loader2, AlertCircle, FileText, Users, UserCheck, Calendar, MapPin } from "lucide-react";
+import { CheckCircle2, Truck, User, Loader2, AlertCircle, FileText, Users, UserCheck, Calendar } from "lucide-react";
 import { fetchProvider } from "../providers/fetchProvider";
 import { toast } from "sonner";
 
