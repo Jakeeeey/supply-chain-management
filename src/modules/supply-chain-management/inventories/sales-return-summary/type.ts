@@ -68,6 +68,7 @@ export interface SummaryReturnHeader {
   customerName: string;
   storeName: string;
   salesmanName: string;
+  salesmanCode: string;
 
   invoiceNo: string;
   netTotal: number;

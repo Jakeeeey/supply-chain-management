@@ -102,7 +102,8 @@ export async function GET(req: NextRequest) {
       }
 
       case "products": {
-        const data = await fetchProductCatalog();
+        const customerCode = url.searchParams.get("customerCode") || undefined;
+        const data = await fetchProductCatalog(customerCode);
         return json({ data });
       }
 

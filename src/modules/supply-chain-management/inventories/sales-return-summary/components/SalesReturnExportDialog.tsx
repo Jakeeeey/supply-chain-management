@@ -133,7 +133,10 @@ export function SalesReturnExportDialog({
     [customers],
   );
   const salesmanItems = useMemo(
-    () => salesmen.map((s) => ({ value: s.value, label: s.label })),
+    () => salesmen.map((s) => ({
+      value: String(s.value),
+      label: s.code ? `[${s.code}] ${s.label}` : s.label,
+    })),
     [salesmen],
   );
   const supplierItems = useMemo(
@@ -204,9 +207,13 @@ export function SalesReturnExportDialog({
             return `<tr>
               <td class="font-mono">${header.returnNumber}</td>
               <td>${dateStr}</td>
-              <td>${header.salesmanName}</td>
-              <td class="truncate-text" title="${header.customerName}">${header.customerName}</td>
-              <td class="truncate-text">${item.supplierName || "-"}</td>
+              <td>
+                <div>${header.salesmanName}</div>
+                ${header.salesmanCode ? `<div style="font-size: 7px; color: #666; font-family: monospace; margin-top: 2px;">${header.salesmanCode}</div>` : ''}
+              </td>
+              <td class="wrap-text" title="${header.customerName}">${header.customerName}</td>
+              <td class="wrap-text">${item.supplierName || "-"}</td>
+              <td>${item.brandName || "-"}</td>
               <td>${item.productCategory || "-"}</td>
               <td class="wrap-text">${item.productName}</td>
               <td>${item.returnCategory || "-"}</td>
@@ -215,6 +222,7 @@ export function SalesReturnExportDialog({
               <td class="text-right">${Number(item.quantity).toLocaleString()}</td>
               <td class="text-right no-truncate amount-cell">${Number(item.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
               <td class="text-right no-truncate amount-cell">${Number(item.grossAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              <td class="text-center">${item.discountApplied || "-"}</td>
               <td class="text-right text-red-600 no-truncate amount-cell">(${Number(item.discountAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</td>
               <td class="text-right font-bold no-truncate amount-cell">${Number(item.netAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
               <td class="wrap-text text-gray-600">${header.remarks || "-"}</td>
@@ -228,7 +236,16 @@ export function SalesReturnExportDialog({
         return `${m}-${d}-${y}`;
       };
 
-      const fullHtml = `<!DOCTYPE html><html><head><title>Sales Return Summary</title><style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono&display=swap');@page { size: A4 landscape; margin: 8mm; }body { font-family: 'Inter', sans-serif; font-size: 8px; margin: 0; padding: 10px; color: #111; }.official-header { display: flex; align-items: center; border-bottom: 1px solid #999; padding-bottom: 12px; margin-bottom: 15px; }.logo-container { width: 140px; margin-right: 20px; }.logo-container img { width: 100%; height: auto; display: block; }.company-info { flex: 1; }.company-name { font-size: 20px; font-weight: 800; color: #000; line-height: 1; margin-bottom: 4px; letter-spacing: -0.5px; }.company-details { font-size: 11px; color: #000; margin-bottom: 2px; }.contact-email { font-size: 11px; color: #000; }.report-info { text-align: right; margin-bottom: 10px; }.report-title { font-size: 14px; font-weight: 700; text-transform: uppercase; }.report-period { font-size: 10px; color: #444; }table { width: 100%; border-collapse: collapse; font-size: 6.5px; table-layout: fixed; }th { background: #f3f4f6; border: 1px solid #999; padding: 3px 1px; text-align: left; font-weight: 700; text-transform: uppercase; }td { border: 1px solid #ccc; padding: 2px 1px; vertical-align: top; }.text-right { text-align: right; }.text-center { text-align: center; }.font-mono { font-family: 'JetBrains Mono', monospace; }.font-bold { font-weight: 700; }.text-red-600 { color: #dc2626; }.uppercase { text-transform: uppercase; }.truncate-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.wrap-text { white-space: normal; word-break: break-word; }.no-truncate { white-space: nowrap; }.amount-cell { min-width: 45px; }tfoot tr td { background-color: #f3f4f6; font-weight: bold; border-top: 1px solid #000; font-size: 7.5px; }@media print { th { background-color: #f3f4f6 !important; -webkit-print-color-adjust: exact; } }</style></head><body>
+      const getFilterLabel = (val: string, items: { value: string; label: string }[]) => {
+        if (!val || val === "All") return "All";
+        return items.find(i => i.value === val)?.label || val;
+      };
+
+      const salesmanLabel = getFilterLabel(salesmanId, salesmanItems);
+      const customerLabel = getFilterLabel(customerCode, customerItems);
+      const supplierLabel = supplierName || "All";
+
+      const fullHtml = `<!DOCTYPE html><html><head><title>Sales Return Summary</title><style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono&display=swap');@page { size: A4 landscape; margin: 8mm; }body { font-family: 'Inter', sans-serif; font-size: 8px; margin: 0; padding: 10px; color: #111; }.official-header { display: flex; align-items: center; border-bottom: 1px solid #999; padding-bottom: 12px; margin-bottom: 15px; }.logo-container { width: 140px; margin-right: 20px; }.logo-container img { width: 100%; height: auto; display: block; }.company-info { flex: 1; }.company-name { font-size: 20px; font-weight: 800; color: #000; line-height: 1; margin-bottom: 4px; letter-spacing: -0.5px; }.company-details { font-size: 11px; color: #000; margin-bottom: 2px; }.contact-email { font-size: 11px; color: #000; }.report-info { text-align: left; margin-bottom: 15px; }.report-title { font-size: 14px; font-weight: 700; text-transform: uppercase; margin-bottom: 8px; }.report-details { font-size: 9px; color: #333; display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding-bottom: 8px; }.header-column { display: flex; flex-direction: column; gap: 3px; }.detail-item { display: flex; gap: 4px; }table { width: 100%; border-collapse: collapse; font-size: 6.5px; table-layout: fixed; }th { background: #f3f4f6; border: 1px solid #999; padding: 3px 1px; text-align: left; font-weight: 700; text-transform: uppercase; }td { border: 1px solid #ccc; padding: 2px 1px; vertical-align: top; }.text-right { text-align: right; }.text-center { text-align: center; }.font-mono { font-family: 'JetBrains Mono', monospace; }.font-bold { font-weight: 700; }.text-red-600 { color: #dc2626; }.uppercase { text-transform: uppercase; }.wrap-text { white-space: normal; word-break: break-word; }.no-truncate { white-space: nowrap; }.amount-cell { min-width: 45px; }.grand-total-row td { background-color: #f3f4f6 !important; font-weight: bold; border-top: 2px solid #000; font-size: 7.5px; }@media print { th { background-color: #f3f4f6 !important; -webkit-print-color-adjust: exact; } .grand-total-row td { background-color: #f3f4f6 !important; -webkit-print-color-adjust: exact; } }</style></head><body>
       <div class="official-header">
         <div class="logo-container"><img src="${companyLogo}" alt="Logo" onerror="this.style.display='none'"/></div>
         <div class="company-info">
@@ -239,27 +256,51 @@ export function SalesReturnExportDialog({
       </div>
       <div class="report-info">
         <div class="report-title">Sales Return Summary</div>
-        <div class="report-period">Period: ${formatDateForHeader(dateFrom)} to ${formatDateForHeader(dateTo)}</div>
-        <div style="font-size: 8px; color: #666; margin-top: 2px;">Generated on ${new Date().toLocaleString()}</div>
+        <div class="report-details">
+          <div class="header-column">
+            <div class="detail-item"><strong>Salesman:</strong> ${salesmanLabel}</div>
+            <div class="detail-item"><strong>Customer:</strong> ${customerLabel}</div>
+            <div class="detail-item"><strong>Supplier:</strong> ${supplierLabel}</div>
+          </div>
+          <div class="header-column text-right">
+            <div class="detail-item"><strong>Period:</strong> ${formatDateForHeader(dateFrom)} to ${formatDateForHeader(dateTo)}</div>
+            <div class="detail-item"><strong>Generated:</strong> ${new Date().toLocaleString()}</div>
+          </div>
+        </div>
       </div>
       <table><thead><tr>
-        <th width="6.5%">Return No</th>
-        <th width="4.5%">Date</th>
-        <th width="5%">Salesman</th>
-        <th width="7.5%">Customer</th>
-        <th width="5.5%">Supplier</th>
-        <th width="5.5%">Category</th>
-        <th width="10%">Product</th>
-        <th width="4.5%">Type</th>
+        <th width="5.5%">Return No</th>
+        <th width="4%">Date</th>
+        <th width="5.5%">Salesman</th>
+        <th width="6%">Customer</th>
+        <th width="5%">Supplier</th>
+        <th width="4%">Brand</th>
+        <th width="4.5%">Category</th>
+        <th width="9%">Product</th>
+        <th width="5%">Return Type</th>
         <th width="4.5%">Reason</th>
-        <th width="2.5%">Unit</th>
-        <th width="3%">Qty</th>
-        <th width="7.5%">Price</th>
-        <th width="7.5%">Gross</th>
-        <th width="7.5%">Disc</th>
-        <th width="8.5%">Net</th>
-        <th width="8%">Remarks</th>
-      </tr></thead><tbody>${tableRows}</tbody><tfoot><tr><td colspan="10" class="text-right">GRAND TOTALS:</td><td class="text-right">${totalQty.toLocaleString()}</td><td></td><td class="text-right">${totalGross.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td><td class="text-right text-red-600">(${totalDisc.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</td><td class="text-right">${totalNet.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td><td></td></tr></tfoot></table></body></html>`;
+        <th width="2.5%" class="text-center">Unit</th>
+        <th width="3%" class="text-right">Qty</th>
+        <th width="5.5%" class="text-right">Price</th>
+        <th width="6.5%" class="text-right">Gross</th>
+        <th width="5%" class="text-center">Disc Type</th>
+        <th width="6%" class="text-right">Disc Amt</th>
+        <th width="6%" class="text-right">Net</th>
+        <th width="10%">Remarks</th>
+      </tr></thead>
+      <tbody>
+        ${tableRows}
+        <tr class="grand-total-row">
+          <td colspan="11" class="text-right font-bold">GRAND TOTALS:</td>
+          <td class="text-right font-bold">${totalQty.toLocaleString()}</td>
+          <td></td>
+          <td class="text-right font-bold">${totalGross.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          <td></td>
+          <td class="text-right font-bold text-red-600">(${totalDisc.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</td>
+          <td class="text-right font-bold">${totalNet.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          <td></td>
+        </tr>
+      </tbody></table></body></html>`;
 
       newWindow.document.write(fullHtml);
       newWindow.document.close();

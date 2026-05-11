@@ -129,7 +129,7 @@ export const stockAdjustmentService = {
    */
   async fetchById(id: number): Promise<StockAdjustmentDetail> {
     const headerRes = await directusFetch<{ data: StockAdjustmentHeader }>(
-      `${DIRECTUS_URL}/items/stock_adjustment_header/${id}?fields=*,branch_id.id,branch_id.branch_name,supplier_id.id,supplier_id.supplier_name,created_by.*,posted_by.*`
+      `${DIRECTUS_URL}/items/stock_adjustment_header/${id}?fields=*,branch_id.id,branch_id.branch_name,supplier_id.id,supplier_id.supplier_name,created_by.user_fname,created_by.user_lname,posted_by.user_fname,posted_by.user_lname`
     );
     const header = headerRes.data;
 
