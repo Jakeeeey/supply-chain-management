@@ -84,7 +84,7 @@ export function ManualInboundModal({ plan, open, onOpenChange, onSuccess }: Manu
                     user_id: parseInt(uid),
                     is_present: present
                 })),
-                time_of_arrival: new Date(arrivalDate).toISOString(),
+                time_of_arrival: arrivalDate,
                 remarks
             });
 
@@ -126,7 +126,7 @@ export function ManualInboundModal({ plan, open, onOpenChange, onSuccess }: Manu
                             </div>
                             <div className="flex items-center gap-3 px-4">
                                 <User className="h-5 w-5 text-muted-foreground" />
-                                <span className="text-xs font-black uppercase tracking-widest truncate max-w-[120px]">{plan.driver_name}</span>
+                                <span className="text-xs font-black uppercase tracking-widest">{plan.driver_name}</span>
                             </div>
                         </div>
                     </div>
@@ -242,16 +242,12 @@ export function ManualInboundModal({ plan, open, onOpenChange, onSuccess }: Manu
                                                             <div className="space-y-0.5">
                                                                 <div className="flex items-center gap-2">
                                                                     <p className="text-sm font-black uppercase truncate">{customer.customer_name}</p>
-                                                                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground/40 font-bold bg-muted/50 px-2 py-0.5 rounded-md">
-                                                                        <MapPin className="h-3 w-3" />
-                                                                        {customer.address}
-                                                                    </div>
                                                                 </div>
                                                                 <p className="text-[10px] font-black text-muted-foreground/60 tracking-widest uppercase">CODE: {customer.customer_code}</p>
                                                             </div>
-                                                            <div className="flex flex-wrap gap-2">
+                                                            <div className="flex flex-wrap gap-2 pt-2">
                                                                 {customer.invoices.map((inv, idx) => (
-                                                                    <div key={idx} className="px-3 py-1 rounded-lg bg-muted/20 border border-border/40 flex items-center gap-2">
+                                                                    <div key={idx} className="px-3 py-1.5 rounded-lg bg-muted/20 border border-border/40 flex items-center gap-2">
                                                                         <FileText className="h-3 w-3 text-muted-foreground/60" />
                                                                         <span className="text-[10px] font-bold text-foreground/70">{inv.no} • ₱{inv.amount.toLocaleString()}</span>
                                                                     </div>
