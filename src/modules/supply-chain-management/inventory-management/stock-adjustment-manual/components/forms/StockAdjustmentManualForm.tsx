@@ -480,8 +480,8 @@ export function StockAdjustmentManualForm({
             }
           }
 
-            // Robust check for isPosted (handles boolean, number, string, or Directus Buffer)
-            const resolvedIsPosted = isPostedStatus(data.isPosted);
+          // Robust check for isPosted (handles boolean, number, string, or Directus Buffer)
+          const resolvedIsPosted = isPostedStatus(data.isPosted);
 
           form.reset({
             doc_no: data.doc_no,
@@ -857,8 +857,8 @@ export function StockAdjustmentManualForm({
                     <ComboboxList>
                       {(() => {
                         const filtered = branches.filter(b =>
-                           b.branch_name.toLowerCase().includes(branchSearch.toLowerCase()) ||
-                           (b.branch_code ?? "").toLowerCase().includes(branchSearch.toLowerCase())
+                          b.branch_name.toLowerCase().includes(branchSearch.toLowerCase()) ||
+                          (b.branch_code ?? "").toLowerCase().includes(branchSearch.toLowerCase())
                         );
                         if (filtered.length === 0) return <ComboboxEmpty>No branches found.</ComboboxEmpty>;
                         return filtered.map(b => {
