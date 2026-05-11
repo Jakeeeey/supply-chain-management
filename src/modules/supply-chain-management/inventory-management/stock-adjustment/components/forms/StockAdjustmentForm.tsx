@@ -315,10 +315,10 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
             variant="ghost"
             size="icon"
             onClick={() => onRemove(index)}
-            disabled={isReadOnly || !!dbId}
-            className={`shrink-0 self-end mb-0.5 rounded-full transition-all ${isReadOnly ? "hidden" : "hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500 text-muted-foreground/50"
-              } ${!!dbId && !isReadOnly ? "opacity-50 cursor-not-allowed grayscale" : ""}`}
-            title={!!dbId && !isReadOnly ? "Existing items cannot be deleted" : "Remove item"}
+            disabled={isReadOnly}
+            className={`shrink-0 self-end mb-0.5 rounded-full transition-all ${isReadOnly ? "hidden" : "hover:bg-red-50 dark:hover:bg-red-950/30 text-red-500/50 hover:text-red-600"
+              }`}
+            title="Remove item"
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -524,6 +524,7 @@ export function StockAdjustmentForm({
   const [supplierInputValue, setSupplierInputValue] = useState("");
   const [branchSearch, setBranchSearch] = useState("");
   const [supplierSearch, setSupplierSearch] = useState("");
+  const [deletingIndex, setDeletingIndex] = useState<number | null>(null);
 
   // --- Memoize product options to prevent expensive re-mapping in every row ---
   const productOptions = useMemo(() => {
@@ -1272,7 +1273,7 @@ export function StockAdjustmentForm({
                         isProductsLoading={isProductsLoading}
                         isLoadingDetails={loadingRows.has(index)}
                         onProductSelect={handleProductSelect}
-                        onRemove={remove}
+                        onRemove={(idx) => setDeletingIndex(idx)}
                         setValue={form.setValue}
                         onOpenScanner={handleOpenScanner}
                         isReadOnly={isReadOnly}
