@@ -43,12 +43,6 @@ interface InventoryItem {
   running_inventory?: number;
 }
 
-interface RfidTag {
-  id?: number;
-  rfid_tag: string;
-  stock_adjustment_id: number;
-}
-
 interface RfidStatusItem {
   productId: number;
   quantity?: number;
