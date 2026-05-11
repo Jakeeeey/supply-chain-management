@@ -28,7 +28,6 @@ export async function PATCH(
         const token = request.cookies.get("vos_access_token")?.value;
         const userId = getUserIdFromToken(token);
 
-        console.log(`[API] Updating stock adjustment ID: ${id} with userId: ${userId}`);
         const data = await stockAdjustmentManualService.update(Number(id), { ...body, userId: userId || undefined });
         return NextResponse.json({ data });
     } catch (error) {

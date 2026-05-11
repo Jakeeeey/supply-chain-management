@@ -32,6 +32,9 @@ export function useStockAdjustmentManualForm() {
   const fetchBranches = useCallback(async () => {
     try {
       const response = await fetch("/api/scm/inventory-management/stock-adjustment-manual/branches");
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
       const result = await response.json();
       if (result.data) setBranches(result.data);
     } catch (err) {
@@ -46,6 +49,9 @@ export function useStockAdjustmentManualForm() {
       const response = await fetch(
         `/api/scm/inventory-management/stock-adjustment-manual/products${search ? `?search=${search}` : ""}`
       );
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
       const result = await response.json();
       setProducts(result.data || []);
     } catch (err) {
@@ -60,6 +66,9 @@ export function useStockAdjustmentManualForm() {
     setIsSuppliersLoading(true);
     try {
       const response = await fetch("/api/scm/inventory-management/stock-adjustment-manual/suppliers");
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
       const result = await response.json();
       if (result.data) setSuppliers(result.data);
     } catch (err) {
@@ -80,6 +89,9 @@ export function useStockAdjustmentManualForm() {
       const response = await fetch(
         `/api/scm/inventory-management/stock-adjustment-manual/products?${params.toString()}`
       );
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
       const result = await response.json();
       setProducts(result.data || []);
     } catch (err) {
@@ -114,6 +126,9 @@ export function useStockAdjustmentManualForm() {
   // ── Fetch a single adjustment for edit mode ───────────────────────
   const fetchById = useCallback(async (id: number): Promise<StockAdjustmentManualDetail> => {
     const response = await fetch(`/api/scm/inventory-management/stock-adjustment-manual/${id}`);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
     const result = await response.json();
     if (result.error) throw new Error(result.error);
     return result.data;
@@ -125,7 +140,9 @@ export function useStockAdjustmentManualForm() {
       const response = await fetch(
         `/api/scm/inventory-management/stock-adjustment-manual/inventory?productId=${productId}&branchId=${branchId}`
       );
-      if (!response.ok) return 0;
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
       const result = await response.json();
       return result.currentStock || 0;
     } catch (err) {
@@ -138,6 +155,9 @@ export function useStockAdjustmentManualForm() {
   const fetchNextDocNo = useCallback(async (type: "IN" | "OUT"): Promise<string> => {
     try {
       const response = await fetch(`/api/scm/inventory-management/stock-adjustment-manual/next-doc-no?type=${type}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
       const result = await response.json();
       return result.doc_no;
     } catch (err) {
