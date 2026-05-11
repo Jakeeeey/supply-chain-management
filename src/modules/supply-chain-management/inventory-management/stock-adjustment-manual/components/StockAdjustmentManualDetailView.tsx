@@ -309,7 +309,16 @@ export function StockAdjustmentManualDetailView({ id, onBack }: StockAdjustmentM
                   <p className="text-blue-100/70 text-[10px] uppercase font-bold tracking-widest">Created By</p>
                   <div className="flex items-center gap-2 font-bold text-lg">
                     <User className="h-4 w-4 text-blue-200" />
-                    {typeof data.created_by === 'object' ? `${data.created_by?.user_fname} ${data.created_by?.user_lname}` : data.created_by || "System"}
+                    {(() => {
+                      const createdBy = data.created_by;
+                      if (typeof createdBy === 'object' && createdBy !== null) {
+                        const fname = createdBy.user_fname || "";
+                        const lname = createdBy.user_lname || "";
+                        const fullName = `${fname} ${lname}`.trim();
+                        return fullName || "System User";
+                      }
+                      return createdBy || "System User";
+                    })()}
                   </div>
                 </div>
 

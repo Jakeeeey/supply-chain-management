@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { useForm, useFieldArray, useWatch, Control, UseFormSetValue } from "react-hook-form";
+import { useForm, useFieldArray, useWatch, Control, UseFormSetValue, useFormState, FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Plus,
@@ -23,6 +23,7 @@ import {
   StockAdjustmentItem,
 } from "../../types/stock-adjustment.schema";
 import { useStockAdjustmentForm } from "../../hooks/useStockAdjustmentForm";
+import { isPostedStatus } from "../../utils/status-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -112,6 +113,11 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
 
   const dbId = useWatch({ control, name: `items.${index}.db_id` });
 
+  const { errors } = useFormState({ control });
+  const rowError = Array.isArray(errors.items)
+    ? (errors.items[index] as FieldErrors<StockAdjustmentItem>)
+    : undefined;
+
   const totalCost = Number(quantity || 0) * Number(costPerUnit || 0);
 
   return (
@@ -166,6 +172,7 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
               placeholder="Select Product"
               disabled={isProductsLoading || isReadOnly || !!dbId}
               showClear
+              className={rowError?.product_id ? "border-red-500 bg-red-50 dark:bg-red-900/10" : ""}
             />
             <ComboboxContent>
               <ComboboxList>
@@ -214,6 +221,11 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
               </ComboboxList>
             </ComboboxContent>
           </Combobox>
+          {rowError?.product_id && (
+            <p className="text-[10px] text-red-500 font-bold mt-1 animate-in fade-in slide-in-from-top-1 duration-200">
+              {rowError.product_id.message}
+            </p>
+          )}
         </div>
 
         {/* Unit */}
@@ -244,9 +256,14 @@ const StockAdjustmentItemRow = React.memo(function StockAdjustmentItemRow({
             className={`h-10 border-input focus:ring-blue-500 rounded-md text-sm ${isReadOnly || (rfidCount && rfidCount > 0) || unitOrder === 3
               ? "bg-muted text-muted-foreground cursor-not-allowed font-bold"
               : ""
-              }`}
+              } ${rowError?.quantity ? "border-red-500 bg-red-50 dark:bg-red-900/10" : ""}`}
             min={0}
           />
+          {rowError?.quantity && (
+            <p className="text-[10px] text-red-500 font-bold mt-1 animate-in fade-in slide-in-from-top-1 duration-200">
+              {rowError.quantity.message}
+            </p>
+          )}
         </div>
 
         {/* RFID Scanner Trigger for Unit Order 3 */}
@@ -575,27 +592,25 @@ export function StockAdjustmentForm({
             }
           }
 
-            // Directus may return isPosted as a Buffer {type:'Buffer',data:[0|1]},
-            // a number (0 or 1), or a boolean. Normalise to a real boolean:
-            const rawPosted = data.isPosted as unknown;
-            const resolvedIsPosted =
-              rawPosted && typeof rawPosted === 'object' && 'data' in rawPosted
-                ? (rawPosted as { data: number[] }).data?.[0] === 1
-                : Number(rawPosted) === 1;
+          // Robust check for isPosted (handles boolean, number, string, or Directus Buffer)
+          const resolvedIsPosted = isPostedStatus(data.isPosted);
 
           form.reset({
-            doc_no: data.doc_no,
+            doc_no: data.doc_no || "",
             branch_id:
               typeof data.branch_id === "object"
-                ? data.branch_id?.id
-                : (data.branch_id || 0),
-            supplier_id: finalSupplierId,
-            type: data.type,
+                ? Number(data.branch_id?.id || 0)
+                : Number(data.branch_id || 0),
+            supplier_id: Number(finalSupplierId || 0),
+            type: (data.type?.toUpperCase() as "IN" | "OUT") || "IN",
             remarks: data.remarks || "",
             isPosted: resolvedIsPosted,
+            postedAt: data.postedAt || undefined,
+            posted_by: data.posted_by || undefined,
             items: data.items.map((item) => ({
               ...item,
-              product_id: String(
+              quantity: Number(item.quantity || 0),
+              product_id: Number(
                 (item.product_id as { id?: number; product_id?: number })?.id ||
                 (item.product_id as { id?: number; product_id?: number })?.product_id ||
                 item.product_id
@@ -608,12 +623,13 @@ export function StockAdjustmentForm({
                 (item.product_id as { product_code?: string })?.product_code ||
                 item.product_code ||
                 "",
-              cost_per_unit:
+              cost_per_unit: Number(
                 (item.product_id as { cost_per_unit?: number; price_per_unit?: number })?.cost_per_unit ||
                 (item.product_id as { cost_per_unit?: number; price_per_unit?: number })?.price_per_unit ||
                 item.cost_per_unit ||
-                0,
-              current_stock: item.current_stock || 0,
+                0
+              ),
+              current_stock: Number(item.current_stock || 0),
               unit_name:
                 item.unit_name ||
                 (item.product_id as { unit_name?: string })?.unit_name ||
@@ -621,11 +637,9 @@ export function StockAdjustmentForm({
               unit_order: (item.product_id as { unit_of_measurement?: { order: number } })?.unit_of_measurement?.order || 1,
               rfid_tags: item.rfid_tags || [],
               rfid_count: item.rfid_count || 0,
-              db_id: item.id,
+              db_id: Number(item.id || 0),
               has_rfid: (item.rfid_tags && item.rfid_tags.length > 0) || rfidProductIds.has(Number((item.product_id as { id?: number; product_id?: number })?.product_id || (item.product_id as { id?: number; product_id?: number })?.id || item.product_id)),
             })),
-            posted_by: data.posted_by,
-            postedAt: data.postedAt,
           });
         } catch (error) {
           toast.error("Failed to load adjustment details");
@@ -723,6 +737,10 @@ export function StockAdjustmentForm({
     }
   };
 
+  const onInvalid = () => {
+    toast.error("Please fill in all required fields correctly.");
+  };
+
   // ——————————————————————————————————————————————————————————————————————————————
   const onSubmit = useCallback(
     async (values: StockAdjustmentFormValues) => {
@@ -758,7 +776,7 @@ export function StockAdjustmentForm({
       product_id: 0,
       product_name: "",
       product_code: "",
-      quantity: 0,
+      quantity: 1,
       branch_id: form.getValues("branch_id"),
       type: form.getValues("type"),
       cost_per_unit: 0,
@@ -782,13 +800,13 @@ export function StockAdjustmentForm({
     async (index: number, product: StockAdjustmentProduct) => {
       if (!product) return;
 
-      const selectionId = String(product.id || product.product_id);
+      const selectionId = Number(product.id || product.product_id);
       const productId = product.product_id || product.id;
 
       const currentProductId = form.getValues(`items.${index}.product_id`);
       const isNewSelection = String(currentProductId) !== String(selectionId);
 
-      form.setValue(`items.${index}.product_id`, selectionId);
+      form.setValue(`items.${index}.product_id`, selectionId, { shouldValidate: true });
       form.setValue(`items.${index}.product_name`, product.product_name);
       form.setValue(`items.${index}.product_code`, product.product_code);
       form.setValue(`items.${index}.cost_per_unit`, product.cost_per_unit || product.price_per_unit || 0);
@@ -800,6 +818,11 @@ export function StockAdjustmentForm({
 
       const cachedStock = inventoryMap.get(Number(productId)) ?? 0;
       form.setValue(`items.${index}.current_stock`, cachedStock);
+
+      const currentQty = form.getValues(`items.${index}.quantity`);
+      if ((!currentQty || currentQty <= 0) && product.unit_of_measurement?.order !== 3) {
+        form.setValue(`items.${index}.quantity`, 1, { shouldValidate: true });
+      }
 
       const unitOrder = product.unit_of_measurement?.order;
       const hasRfid = rfidProductIds.has(Number(productId));
@@ -969,7 +992,7 @@ export function StockAdjustmentForm({
         </div>
       )}
 
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-6">
         <Card className="border-border shadow-sm bg-card">
           <CardHeader className="bg-card border-b border-border py-4 px-6">
             <CardTitle className="text-base font-bold text-foreground">
@@ -1028,8 +1051,8 @@ export function StockAdjustmentForm({
                     <ComboboxList>
                       {(() => {
                         const filtered = branches.filter(b =>
-                           b.branch_name.toLowerCase().includes(branchSearch.toLowerCase()) ||
-                           (b.branch_code ?? "").toLowerCase().includes(branchSearch.toLowerCase())
+                          b.branch_name.toLowerCase().includes(branchSearch.toLowerCase()) ||
+                          (b.branch_code ?? "").toLowerCase().includes(branchSearch.toLowerCase())
                         );
                         if (filtered.length === 0) return <ComboboxEmpty>No branches found.</ComboboxEmpty>;
                         return filtered.map(b => {
