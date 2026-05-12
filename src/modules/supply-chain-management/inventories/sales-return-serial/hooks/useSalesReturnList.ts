@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { SalesReturn } from "../type";
+import { SalesReturn } from "../types/sales-return.types";
 import { SalesReturnProvider } from "../providers/fetchProviders";
 
 export function useSalesReturnList() {

@@ -20,7 +20,7 @@ import type {
   API_LineDiscount,
   API_SalesReturnType,
   PriceTypeOption,
-} from "../type";
+} from "../types/sales-return.types";
 
 const API_BASE = "/api/scm/inventories/sales-return-serial";
 

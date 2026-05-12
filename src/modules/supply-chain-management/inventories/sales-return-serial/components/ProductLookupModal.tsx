@@ -27,10 +27,10 @@ import {
   Product,
   ProductSupplierConnection,
   ProductCatalog,
-} from "../type";
+} from "../types/sales-return.types";
 import { SalesReturnProvider } from "../providers/fetchProviders";
 import { cn } from "@/lib/utils";
-import { resolveFinalDiscount } from "../utils/discount-resolver";
+import { resolveFinalDiscount } from "../services/sales-return.helpers";
 
 interface Props {
   isOpen: boolean;

@@ -11,7 +11,7 @@ import { SalesReturnHistory } from "./components/SalesReturnHistory";
 import { CreateSalesReturnModal } from "./components/CreateSalesReturnModal";
 import { UpdateSalesReturnModal } from "./components/UpdateSalesReturnModal";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { SalesReturn } from "./type";
+import { SalesReturn } from "./types/sales-return.types";
 
 export default function SalesReturnModule() {
   const searchParams = useSearchParams();

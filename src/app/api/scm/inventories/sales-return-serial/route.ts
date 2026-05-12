@@ -14,7 +14,8 @@ import {
   submitReturn,
   updateReturn,
   updateStatus,
-} from "@/modules/supply-chain-management/inventories/sales-return-serial/services/sales-return-service";
+} from "@/modules/supply-chain-management/inventories/sales-return-serial/services";
+import { handleApiError, AppError } from "@/modules/supply-chain-management/inventories/sales-return-serial/services/sales-return.helpers";
 
 /**
  * Decodes the base64url payload of a JWT without verifying the signature.
@@ -148,8 +149,7 @@ export async function GET(req: NextRequest) {
         return json({ error: `Unknown action: ${action}` }, 400);
     }
   } catch (error: any) {
-    console.error("Sales Return Serial API GET Error:", error);
-    return json({ error: error.message || "Internal server error" }, 500);
+    return handleApiError(error, NextResponse);
   }
 }
 
@@ -162,18 +162,14 @@ export async function POST(req: NextRequest) {
     const userId = getUserIdFromToken(token);
     
     if (!userId) {
-      return json({ error: "Unauthorized: Invalid or missing session" }, 401);
+      throw new AppError("AUTH_DENIED", "Unauthorized: Invalid or missing session", 401);
     }
 
     const body = await req.json().catch(() => ({}));
     const data = await submitReturn(body, userId);
     return json({ data }, 201);
   } catch (error: any) {
-    console.error("Sales Return Serial API POST Error:", error);
-    return json(
-      { error: error.message || "Failed to create sales return" },
-      500,
-    );
+    return handleApiError(error, NextResponse);
   }
 }
 
@@ -189,7 +185,7 @@ export async function PATCH(req: NextRequest) {
       const id = url.searchParams.get("id");
       const status = url.searchParams.get("status");
       if (!id || !status) {
-        return json({ error: "id and status are required" }, 400);
+        throw new AppError("VALIDATION_FAILED", "id and status are required", 400);
       }
       const isReceived = url.searchParams.get("isReceived") === "true" ? 1 : undefined;
       const receivedAt = url.searchParams.get("receivedAt") || undefined;
@@ -203,17 +199,13 @@ export async function PATCH(req: NextRequest) {
     const userId = getUserIdFromToken(token);
     
     if (!userId) {
-      return json({ error: "Unauthorized: Invalid or missing session" }, 401);
+      throw new AppError("AUTH_DENIED", "Unauthorized: Invalid or missing session", 401);
     }
 
     const body = await req.json().catch(() => ({}));
     const data = await updateReturn(body, userId);
     return json({ data });
   } catch (error: any) {
-    console.error("Sales Return Serial API PATCH Error:", error);
-    return json(
-      { error: error.message || "Failed to update sales return" },
-      500,
-    );
+    return handleApiError(error, NextResponse);
   }
 }

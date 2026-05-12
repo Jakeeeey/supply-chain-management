@@ -38,7 +38,7 @@ import {
   API_SalesReturnType,
   InvoiceOption,
   PriceTypeOption,
-} from "../type";
+} from "../types/sales-return.types";
 
 // Import Child Modal
 import { ProductLookupModal } from "./ProductLookupModal";
@@ -50,7 +50,7 @@ import {
   BranchOption,
   Product,
 } from "../providers/fetchProviders";
-import { resolveFinalDiscount } from "../utils/discount-resolver";
+import { resolveFinalDiscount } from "../services/sales-return.helpers";
 
 import { useSearchParams } from "next/navigation";
 
@@ -118,6 +118,10 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const [orderSearch, setOrderSearch] = useState("");
   const [isOrderOpen, setIsOrderOpen] = useState(false);
   const orderWrapperRef = useRef<HTMLDivElement>(null);
+
+  // LOADING STATES
+  const [isLoadingForm, setIsLoadingForm] = useState(false);
+  const [isLoadingInvoices, setIsLoadingInvoices] = useState(false);
 
   // --- SERIAL STATE ---
   const [isValidatingSerial, setIsValidatingSerial] = useState(false);
@@ -365,6 +369,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   useEffect(() => {
     if (isOpen) {
       const loadData = async () => {
+        setIsLoadingForm(true);
         try {
           const [
             salesmenData,
@@ -389,6 +394,8 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
           setPriceTypeOptions(priceTypesData);
         } catch (error) {
           console.error("Failed to load form data", error);
+        } finally {
+          setIsLoadingForm(false);
         }
       };
       loadData();
@@ -461,6 +468,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   useEffect(() => {
     if (selectedSalesmanId && customerCode) {
       const fetchInv = async () => {
+        setIsLoadingInvoices(true);
         try {
           const data = await SalesReturnProvider.getInvoiceReturnList(
             selectedSalesmanId,
@@ -470,6 +478,8 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         } catch (error) {
           console.error("Failed to fetch invoices", error);
           setInvoiceOptions([]);
+        } finally {
+          setIsLoadingInvoices(false);
         }
       };
       fetchInv();
@@ -861,29 +871,37 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5" ref={orderWrapperRef}>
                   <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Order No. <span className="text-destructive">*</span></label>
-                  <div className="relative group">
-                    <input type="text" className={cn("w-full h-9 border rounded-md text-sm px-3 pr-8 bg-background outline-none transition-all shadow-sm", orderError ? "border-destructive bg-destructive/5 ring-1 ring-destructive" : "border-border focus:ring-2 focus:border-primary")} placeholder="Search Order No..." value={orderSearch || orderNo} onChange={e => { setOrderSearch(e.target.value); setOrderNo(e.target.value); setIsOrderOpen(true); }} onFocus={() => setIsOrderOpen(true)} />
-                    <ChevronDown className="h-3 w-3 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    {isOrderOpen && (
-                      <div className="absolute bottom-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto divide-y">
-                        <div className="px-3 py-2 text-xs font-medium cursor-pointer hover:bg-destructive/10 text-destructive flex items-center gap-2" onClick={() => { setOrderNo(""); setOrderSearch(""); setAppliedInvoiceId(null); setIsOrderOpen(false); }}><X className="h-3 w-3" /> Clear Selection</div>
-                        {filteredOrders.map(inv => <div key={inv.id} className="px-3 py-2 text-sm cursor-pointer hover:bg-primary/10 text-foreground" onClick={() => { setOrderNo(inv.order_id); setOrderSearch(inv.order_id); setInvoiceNo(inv.invoice_no); setInvoiceSearch(inv.invoice_no); setAppliedInvoiceId(Number(inv.id)); setIsOrderOpen(false); }}><div className="flex flex-col"><span className="font-medium">{inv.order_id}</span><span className="text-[10px] text-muted-foreground">Invoice: {inv.invoice_no}</span></div></div>)}
-                      </div>
-                    )}
-                  </div>
+                  {isLoadingInvoices ? (
+                    <div className="h-9 w-full bg-muted animate-pulse rounded-md border border-border"></div>
+                  ) : (
+                    <div className="relative group">
+                      <input type="text" className={cn("w-full h-9 border rounded-md text-sm px-3 pr-8 bg-background outline-none transition-all shadow-sm", orderError ? "border-destructive bg-destructive/5 ring-1 ring-destructive" : "border-border focus:ring-2 focus:border-primary")} placeholder="Search Order No..." value={orderSearch || orderNo} onChange={e => { setOrderSearch(e.target.value); setOrderNo(e.target.value); setIsOrderOpen(true); }} onFocus={() => setIsOrderOpen(true)} />
+                      <ChevronDown className="h-3 w-3 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      {isOrderOpen && (
+                        <div className="absolute bottom-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto divide-y">
+                          <div className="px-3 py-2 text-xs font-medium cursor-pointer hover:bg-destructive/10 text-destructive flex items-center gap-2" onClick={() => { setOrderNo(""); setOrderSearch(""); setAppliedInvoiceId(null); setIsOrderOpen(false); }}><X className="h-3 w-3" /> Clear Selection</div>
+                          {filteredOrders.map(inv => <div key={inv.id} className="px-3 py-2 text-sm cursor-pointer hover:bg-primary/10 text-foreground" onClick={() => { setOrderNo(inv.order_id); setOrderSearch(inv.order_id); setInvoiceNo(inv.invoice_no); setInvoiceSearch(inv.invoice_no); setAppliedInvoiceId(Number(inv.id)); setIsOrderOpen(false); }}><div className="flex flex-col"><span className="font-medium">{inv.order_id}</span><span className="text-[10px] text-muted-foreground">Invoice: {inv.invoice_no}</span></div></div>)}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-1.5" ref={invoiceWrapperRef}>
                   <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Invoice No. <span className="text-destructive">*</span></label>
-                  <div className="relative group">
-                    <input type="text" className={cn("w-full h-9 border rounded-md text-sm px-3 pr-8 bg-background outline-none transition-all shadow-sm", invoiceError ? "border-destructive bg-destructive/5 ring-1 ring-destructive" : "border-border focus:ring-2 focus:border-primary")} placeholder="Search Invoice No..." value={invoiceSearch || invoiceNo} onChange={e => { setInvoiceSearch(e.target.value); setInvoiceNo(e.target.value); setIsInvoiceOpen(true); }} onFocus={() => setIsInvoiceOpen(true)} />
-                    <ChevronDown className="h-3 w-3 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    {isInvoiceOpen && (
-                      <div className="absolute bottom-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto divide-y">
-                        <div className="px-3 py-2 text-xs font-medium cursor-pointer hover:bg-destructive/10 text-destructive flex items-center gap-2" onClick={() => { setInvoiceNo(""); setInvoiceSearch(""); setAppliedInvoiceId(null); setIsInvoiceOpen(false); }}><X className="h-3 w-3" /> Clear Selection</div>
-                        {filteredInvoices.map(inv => <div key={inv.id} className="px-3 py-2 text-sm cursor-pointer hover:bg-primary/10 text-foreground" onClick={() => { setInvoiceNo(inv.invoice_no); setInvoiceSearch(inv.invoice_no); setAppliedInvoiceId(Number(inv.id)); setOrderNo(inv.order_id); setOrderSearch(inv.order_id); setIsInvoiceOpen(false); }}><div className="flex flex-col"><span className="font-medium">{inv.invoice_no}</span><span className="text-[10px] text-muted-foreground">Order: {inv.order_id}</span></div></div>)}
-                      </div>
-                    )}
-                  </div>
+                  {isLoadingInvoices ? (
+                    <div className="h-9 w-full bg-muted animate-pulse rounded-md border border-border"></div>
+                  ) : (
+                    <div className="relative group">
+                      <input type="text" className={cn("w-full h-9 border rounded-md text-sm px-3 pr-8 bg-background outline-none transition-all shadow-sm", invoiceError ? "border-destructive bg-destructive/5 ring-1 ring-destructive" : "border-border focus:ring-2 focus:border-primary")} placeholder="Search Invoice No..." value={invoiceSearch || invoiceNo} onChange={e => { setInvoiceSearch(e.target.value); setInvoiceNo(e.target.value); setIsInvoiceOpen(true); }} onFocus={() => setIsInvoiceOpen(true)} />
+                      <ChevronDown className="h-3 w-3 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      {isInvoiceOpen && (
+                        <div className="absolute bottom-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto divide-y">
+                          <div className="px-3 py-2 text-xs font-medium cursor-pointer hover:bg-destructive/10 text-destructive flex items-center gap-2" onClick={() => { setInvoiceNo(""); setInvoiceSearch(""); setAppliedInvoiceId(null); setIsInvoiceOpen(false); }}><X className="h-3 w-3" /> Clear Selection</div>
+                          {filteredInvoices.map(inv => <div key={inv.id} className="px-3 py-2 text-sm cursor-pointer hover:bg-primary/10 text-foreground" onClick={() => { setInvoiceNo(inv.invoice_no); setInvoiceSearch(inv.invoice_no); setAppliedInvoiceId(Number(inv.id)); setOrderNo(inv.order_id); setOrderSearch(inv.order_id); setIsInvoiceOpen(false); }}><div className="flex flex-col"><span className="font-medium">{inv.invoice_no}</span><span className="text-[10px] text-muted-foreground">Order: {inv.order_id}</span></div></div>)}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="space-y-1.5"><label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Remarks</label><Textarea value={remarks} onChange={e => setRemarks(e.target.value)} className="resize-none h-24 border-border focus:border-primary focus:bg-background" placeholder="Add any notes regarding this return..." /></div>

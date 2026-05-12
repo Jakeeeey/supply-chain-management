@@ -69,7 +69,7 @@ import {
   InvoiceOption,
   API_LineDiscount,
   API_SalesReturnType,
-} from "../type";
+} from "../types/sales-return.types";
 import { ProductLookupModal } from "./ProductLookupModal";
 import { SalesReturnPrintSlip } from "./SalesReturnPrintSlip";
 import { createRoot } from "react-dom/client";
@@ -619,13 +619,13 @@ export function UpdateSalesReturnModal({
                 </div>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 max-h-40 overflow-y-auto p-1">
-                {(details[selectedRowIndex].serialNumbers || []).map(sn => (
+                {(details[selectedRowIndex].serialNumbers || []).map((sn: string) => (
                   <div key={sn} className="flex items-center justify-between bg-muted/20 border border-border px-3 py-2 rounded-md hover:border-primary/30 transition-all group hover:shadow-sm">
                     <span className="text-[10px] font-mono font-bold text-foreground truncate">{sn}</span>
                     {canEditAll && (
                       <button onClick={() => {
                         const row = details[selectedRowIndex];
-                        const newSerials = row.serialNumbers!.filter(s => s !== sn);
+                        const newSerials = row.serialNumbers!.filter((s: string) => s !== sn);
                         handleDetailChange(selectedRowIndex, { serialNumbers: newSerials });
                       }} className="p-1 text-destructive/50 hover:text-destructive transition-colors"><X className="h-3 w-3" /></button>
                     )}

@@ -1,6 +1,6 @@
 "use client";
 import React, { forwardRef } from "react";
-import { SalesReturnItem } from "../type";
+import { SalesReturnItem } from "../types/sales-return.types";
 
 // Extended interface to support the specific fields in the image
 interface PrintData {
@@ -112,7 +112,7 @@ export const SalesReturnPrintSlip = forwardRef<
       {/* --- DYNAMIC TABLES BY RETURN TYPE --- */}
       {Object.entries(groupedItems).map(([type, items]) => {
         const subtotal = items.reduce(
-          (sum, i) => sum + Number(i.totalAmount || 0),
+          (sum: number, i: SalesReturnItem) => sum + Number(i.totalAmount || 0),
           0,
         );
 
@@ -134,7 +134,7 @@ export const SalesReturnPrintSlip = forwardRef<
                 </tr>
               </thead>
               <tbody>
-                {items.map((item, idx) => (
+                {items.map((item: SalesReturnItem, idx: number) => (
                   <tr key={idx}>
                     <td className="align-top">{item.description}</td>
                     <td className="align-top">{item.unit || "Pieces"}</td>
