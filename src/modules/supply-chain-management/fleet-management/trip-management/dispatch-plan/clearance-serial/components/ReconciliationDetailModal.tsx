@@ -348,7 +348,7 @@ const ReconciliationDetailModal: React.FC<ReconciliationDetailModalProps> = ({
                                     editReturnNo: returnMode === 'link' ? selectedReturnNo : undefined
                                 };
                                 localStorage.setItem('scm_dispatch_return_data', JSON.stringify(returnData));
-                                window.open('/scm/inventories/sales-return-manual?fromClearance=true', '_blank');
+                                window.open('/scm/inventories/sales-return-serial?fromClearance=true', '_blank');
                                 handleSave();
                             }} 
                             disabled={(returnMode === 'link' && !selectedReturnNo) || !remarks.trim()}
