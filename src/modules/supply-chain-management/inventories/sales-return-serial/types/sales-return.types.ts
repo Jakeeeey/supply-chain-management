@@ -67,6 +67,7 @@ export interface Category {
 export interface Supplier {
   id: number;
   supplier_name: string;
+  division_id?: number;
 }
 
 export interface Unit {
