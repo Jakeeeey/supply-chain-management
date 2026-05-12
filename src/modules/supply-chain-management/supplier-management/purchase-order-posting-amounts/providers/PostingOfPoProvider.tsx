@@ -41,6 +41,7 @@ type Ctx = {
     postAllReceipts: (poId: string) => Promise<void>;
     revertReceipt: (poId: string, receiptNo: string) => Promise<void>;
     reverting: boolean;
+    poLoading: boolean;
 
     // success banner (no global toast dependency)
     successMsg: string;
@@ -67,6 +68,7 @@ export function PostingOfPoProvider({ children }: { children: React.ReactNode })
     const [postError, setPostError] = React.useState("");
 
     const [reverting, setReverting] = React.useState(false);
+    const [poLoading, setPoLoading] = React.useState(false);
 
     const [successMsg, setSuccessMsg] = React.useState("");
     const clearSuccess = React.useCallback(() => setSuccessMsg(""), []);
@@ -116,9 +118,15 @@ export function PostingOfPoProvider({ children }: { children: React.ReactNode })
         async (poId: string) => {
             setListError("");
             setPostError("");
+            setPoLoading(true);
             clearSuccess();
             const id = String(poId ?? "").trim();
-            if (!id) return;
+            if (!id) {
+                setPoLoading(false);
+                return;
+            }
+
+            const tid = toast.loading("Opening Purchase Order...");
 
             try {
                 const r = await fetch(API, {
@@ -128,11 +136,15 @@ export function PostingOfPoProvider({ children }: { children: React.ReactNode })
                 });
                 const data = await asJson(r);
                 setSelectedPO((data ?? null) as PurchaseOrder | null);
+                toast.success("PO loaded", { id: tid });
             } catch (e: unknown) {
                 const msg = String((e as Error)?.message ?? e);
                 if (msg.trim().toLowerCase() !== "fetch failed") {
                     setListError(msg);
                 }
+                toast.error("Failed to load PO", { id: tid, description: msg });
+            } finally {
+                setPoLoading(false);
             }
         },
         [clearSuccess]
@@ -278,6 +290,7 @@ export function PostingOfPoProvider({ children }: { children: React.ReactNode })
         postAllReceipts,
         revertReceipt,
         reverting,
+        poLoading,
 
         successMsg,
         clearSuccess,

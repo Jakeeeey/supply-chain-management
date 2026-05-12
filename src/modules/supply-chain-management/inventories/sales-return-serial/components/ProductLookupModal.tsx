@@ -12,6 +12,7 @@ import {
   Search,
   Box,
   ShoppingCart,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,10 +28,10 @@ import {
   Product,
   ProductSupplierConnection,
   ProductCatalog,
-} from "../type";
+} from "../types/sales-return.types";
 import { SalesReturnProvider } from "../providers/fetchProviders";
 import { cn } from "@/lib/utils";
-import { resolveFinalDiscount } from "../utils/discount-resolver";
+import { resolveFinalDiscount } from "../services/sales-return.helpers";
 
 interface Props {
   isOpen: boolean;
@@ -65,6 +66,7 @@ export function ProductLookupModal({
   >([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
 
   const [selectedItems, setSelectedItems] = useState<SalesReturnItem[]>([]);
 
@@ -274,15 +276,19 @@ export function ProductLookupModal({
       if (existingItemIndex !== -1) {
         const updatedItems = [...prevItems];
         const currentItem = updatedItems[existingItemIndex];
-        const newQuantity = currentItem.quantity + 1;
+        
+        // 🟢 Serialized items should not increment quantity here
+        if (currentItem.isSerialized) {
+          return prevItems; 
+        }
 
-        // Recalculate gross for existing item
+        const newQuantity = currentItem.quantity + 1;
         const newGross = newQuantity * currentItem.unitPrice;
 
         updatedItems[existingItemIndex] = {
           ...currentItem,
           quantity: newQuantity,
-          grossAmount: newGross, // 🟢 Update Gross
+          grossAmount: newGross,
           totalAmount: newGross - (currentItem.discountAmount || 0),
         };
         return updatedItems;
@@ -294,11 +300,10 @@ export function ProductLookupModal({
           catalogData || { connections: supplierConnections }
         );
 
-        const unitOrder = unitsList.find(u => u.unit_id === product.unit_of_measurement)?.order || 0;
-        const initialQty = unitOrder === 3 ? 0 : 1;
+        const isSerialized = product.is_serialized === 1;
+        const initialQty = isSerialized ? 0 : 1;
         const initialGross = initialQty * selectedPrice;
 
-        // 🟢 FIX: Added 'grossAmount' and 'discountType'
         const newItem: SalesReturnItem = {
           tempId: `added-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
           productId: product.product_id,
@@ -321,7 +326,8 @@ export function ProductLookupModal({
           priceD: product.priceD,
           priceE: product.priceE,
           unitMultiplier: product.unit_of_measurement_count || 1,
-          unitOrder: unitOrder,
+          unitOrder: unitsList.find(u => u.unit_id === product.unit_of_measurement)?.order || 0,
+          isSerialized: isSerialized,
         };
         return [...prevItems, newItem];
       }
@@ -333,7 +339,7 @@ export function ProductLookupModal({
     setSelectedItems((prev) =>
       prev.map((item) => {
         if (item.tempId === tempId) {
-          if (item.unitOrder === 3) return item; // 🟢 Box units stay at 0
+          if (item.isSerialized) return item; 
           const newQty = item.quantity + change;
           if (newQty < 1) return item;
           return {
@@ -353,7 +359,7 @@ export function ProductLookupModal({
     setSelectedItems((prev) =>
       prev.map((item) => {
         if (item.tempId === tempId) {
-          if (item.unitOrder === 3) return item; // 🟢 Box units stay at 0
+          if (item.isSerialized) return item;
           const safeQty = Math.max(1, Math.floor(qty));
           return {
             ...item,
@@ -373,9 +379,15 @@ export function ProductLookupModal({
   };
 
   const handleConfirm = () => {
-    onConfirm(selectedItems);
-    onClose();
-    setSelectedItems([]);
+    if (isConfirming) return;
+    setIsConfirming(true);
+    try {
+      onConfirm(selectedItems);
+      onClose();
+      setSelectedItems([]);
+    } finally {
+      setIsConfirming(false);
+    }
   };
 
   const resetFilters = () => {
@@ -634,19 +646,21 @@ export function ProductLookupModal({
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-5 pb-4">
                 {isLoading && (
                   <>
-                    {Array.from({ length: 8 }).map((_, i) => (
+                    {Array.from({ length: 12 }).map((_, i) => (
                       <div
                         key={i}
-                        className="bg-background rounded-lg border border-border shadow-sm p-5 animate-pulse flex flex-col gap-3"
+                        className="bg-background rounded-lg border border-border shadow-sm p-5 flex flex-col gap-4 animate-pulse"
                       >
-                        <div className="h-4 bg-muted rounded w-3/4"></div>
-                        <div className="h-3 bg-muted rounded w-1/2"></div>
-                        <div className="mt-auto flex justify-between items-center pt-4">
-                          <div>
-                            <div className="h-4 bg-muted rounded w-20 mb-1"></div>
-                            <div className="h-3 bg-muted rounded w-16"></div>
+                        <div className="space-y-2">
+                          <div className="h-4 bg-muted rounded w-5/6"></div>
+                          <div className="h-3 bg-muted rounded w-2/3"></div>
+                        </div>
+                        <div className="mt-auto pt-6 flex justify-between items-center border-t border-border/50">
+                          <div className="space-y-1.5">
+                            <div className="h-4 bg-muted rounded w-16"></div>
+                            <div className="h-2 bg-muted rounded w-12"></div>
                           </div>
-                          <div className="h-8 bg-muted rounded w-16"></div>
+                          <div className="h-8 bg-primary/20 rounded-md w-20"></div>
                         </div>
                       </div>
                     ))}
@@ -685,15 +699,18 @@ export function ProductLookupModal({
 
                             return (
                                <div key={product.product_id} className="p-4 flex flex-col gap-3">
-                                  <div className="flex justify-between items-start">
-                                    <div className="flex flex-col">
-                                      <span className="text-xs text-muted-foreground font-mono">
+                                  <div className="flex justify-between items-start gap-2">
+                                    <div className="flex flex-col gap-0.5 min-w-0">
+                                      <span className="text-xs font-bold text-foreground truncate block">{product.product_name}</span>
+                                      <span className="text-[10px] text-muted-foreground flex items-center gap-1">
                                         Code: <span className="text-foreground font-medium">{product.product_code || product.barcode || "N/A"}</span>
                                       </span>
                                     </div>
-                                    <Badge variant="outline" className="font-normal text-xs bg-background">
-                                      {baseUnitName}
-                                    </Badge>
+                                    <div className="flex flex-col items-end gap-1 shrink-0">
+                                      <Badge variant="outline" className="font-normal text-[10px] h-4 px-1 bg-background">
+                                        {baseUnitName}
+                                      </Badge>
+                                    </div>
                                   </div>
                                   
                                   <div className="flex items-center justify-between mt-auto">
@@ -859,35 +876,41 @@ export function ProductLookupModal({
                       </div>
 
                       {/* Controls Row */}
-                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-border">
-                        {/* Qty Stepper */}
-                        <div className={`flex items-center bg-muted/30 rounded-md border border-border h-7 ${item.unitOrder === 3 ? "opacity-50 pointer-events-none" : ""}`}>
-                          <button
-                            className="px-2 h-full text-muted-foreground hover:text-primary hover:bg-background rounded-l-md disabled:opacity-30 transition-colors"
-                            onClick={() => updateItemQuantity(item.tempId, -1)}
-                            disabled={item.quantity <= 1}
-                          >
-                            <Minus className="h-3 w-3" />
-                          </button>
-                          <input
-                            type="number"
-                            min={1}
-                            value={item.quantity}
-                            onChange={(e) => {
-                              const val = parseInt(e.target.value, 10);
-                              if (!isNaN(val) && val > 0) {
-                                setItemQuantityDirect(item.tempId, val);
-                              }
-                            }}
-                            className="w-10 text-center text-xs font-bold text-foreground bg-transparent border-0 outline-none appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                          />
-                          <button
-                            className="px-2 h-full text-muted-foreground hover:text-primary hover:bg-background rounded-r-md transition-colors"
-                            onClick={() => updateItemQuantity(item.tempId, 1)}
-                          >
-                            <Plus className="h-3 w-3" />
-                          </button>
-                        </div>
+                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-border">
+                          {/* Qty Stepper */}
+                          {!item.isSerialized ? (
+                            <div className="flex items-center bg-muted/30 rounded-md border border-border h-7">
+                              <button
+                                className="px-2 h-full text-muted-foreground hover:text-primary hover:bg-background rounded-l-md disabled:opacity-30 transition-colors"
+                                onClick={() => updateItemQuantity(item.tempId, -1)}
+                                disabled={item.quantity <= 1}
+                              >
+                                <Minus className="h-3 w-3" />
+                              </button>
+                              <input
+                                type="number"
+                                min={1}
+                                value={item.quantity}
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value, 10);
+                                  if (!isNaN(val) && val > 0) {
+                                    setItemQuantityDirect(item.tempId, val);
+                                  }
+                                }}
+                                className="w-10 text-center text-xs font-bold text-foreground bg-transparent border-0 outline-none appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                              />
+                              <button
+                                className="px-2 h-full text-muted-foreground hover:text-primary hover:bg-background rounded-r-md transition-colors"
+                                onClick={() => updateItemQuantity(item.tempId, 1)}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="px-2 py-1 bg-primary/5 rounded border border-primary/10 text-[10px] font-bold text-primary uppercase tracking-tighter">
+                              Serial Driven
+                            </div>
+                          )}
                         {/* Item Total */}
                         <div className="text-right">
                           <span className="block text-sm font-bold text-foreground">
@@ -920,11 +943,15 @@ export function ProductLookupModal({
                 </div>
               </div>
               <Button
-                className="w-full h-12 text-base font-semibold shadow-primary/20 shadow-lg bg-primary hover:bg-primary transition-all active:scale-[0.98]"
-                disabled={selectedItems.length === 0}
+                className="w-full h-12 text-base font-semibold shadow-primary/20 shadow-lg bg-primary hover:bg-primary transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                disabled={selectedItems.length === 0 || isConfirming}
                 onClick={handleConfirm}
               >
-                Confirm Selection
+                {isConfirming ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <>Confirm Selection</>
+                )}
               </Button>
             </div>
           </div>

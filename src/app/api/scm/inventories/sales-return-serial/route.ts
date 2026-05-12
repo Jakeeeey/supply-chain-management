@@ -1,9 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-// =============================================================================
-// Sales Return RFID — Next.js API Route (Server Gateway)
-// Thin wrapper around the service layer.
-// =============================================================================
+// src/app/api/scm/inventories/sales-return-serial/route.ts
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
 import {
   fetchReturns,
@@ -12,13 +9,14 @@ import {
   fetchProductCatalog,
   fetchInvoices,
   fetchStatusCard,
-  fetchRfidTags,
-  lookupRfid,
-  checkRfidDuplicate,
+  checkSerialDuplicate,
+  checkSerialOnHand,
   submitReturn,
   updateReturn,
   updateStatus,
-} from "@/modules/supply-chain-management/inventories/sales-return-rfid/services/sales-return-service";
+} from "@/modules/supply-chain-management/inventories/sales-return-serial/services";
+import { handleApiError, AppError } from "@/modules/supply-chain-management/inventories/sales-return-serial/services/sales-return.helpers";
+
 /**
  * Decodes the base64url payload of a JWT without verifying the signature.
  */
@@ -59,6 +57,7 @@ function getUserIdFromToken(token: string | undefined): number | null {
   const num = Number(idValue);
   return isNaN(num) ? null : num;
 }
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -117,15 +116,6 @@ export async function GET(req: NextRequest) {
         return json({ data });
       }
 
-      case "rfidTags": {
-        const detailId = url.searchParams.get("detailId");
-        if (!detailId) {
-          return json({ error: "detailId is required" }, 400);
-        }
-        const data = await fetchRfidTags(Number(detailId));
-        return json({ data });
-      }
-
       case "statusCard": {
         const id = url.searchParams.get("id");
         if (!id) {
@@ -135,36 +125,23 @@ export async function GET(req: NextRequest) {
         return json({ data });
       }
 
-      case "check-rfid-duplicate": {
-        const rfid = url.searchParams.get("rfid");
-        if (!rfid) return json({ error: "rfid is required" }, 400);
-        const result = await checkRfidDuplicate(rfid);
+      case "check-serial-duplicate": {
+        const serial = url.searchParams.get("serial");
+        if (!serial) return json({ error: "serial is required" }, 400);
+        const result = await checkSerialDuplicate(serial);
         return json({ data: result });
       }
 
-      case "rfid-lookup": {
-        const rfid = url.searchParams.get("rfid");
-        const rfidBranchId = Number(url.searchParams.get("branchId"));
+      case "check-serial-onhand": {
+        const serial = url.searchParams.get("serial");
+        const branchId = Number(url.searchParams.get("branchId"));
+        const token = req.cookies.get("springboot_token")?.value || req.cookies.get("vos_access_token")?.value;
 
-        if (!rfid || !rfidBranchId) {
-          return json(
-            { error: "rfid and branchId are required" },
-            400,
-          );
+        if (!serial || isNaN(branchId)) {
+          return json({ error: "serial and branchId are required" }, 400);
         }
 
-        let rfidToken = req.cookies.get("vos_access_token")?.value;
-        if (!rfidToken && process.env.NEXT_PUBLIC_AUTH_DISABLED === "true") {
-          rfidToken = "dev-mode-token"; // Placeholder when auth is disabled
-        }
-        if (!rfidToken) {
-          return json(
-            { error: "Unauthorized: Missing access token" },
-            401,
-          );
-        }
-
-        const result = await lookupRfid(rfid, rfidBranchId, rfidToken);
+        const result = await checkSerialOnHand(serial, branchId, token || "");
         return json({ data: result });
       }
 
@@ -172,8 +149,7 @@ export async function GET(req: NextRequest) {
         return json({ error: `Unknown action: ${action}` }, 400);
     }
   } catch (error: any) {
-    console.error("Sales Return RFID API GET Error:", error);
-    return json({ error: error.message || "Internal server error" }, 500);
+    return handleApiError(error, NextResponse);
   }
 }
 
@@ -185,20 +161,15 @@ export async function POST(req: NextRequest) {
     const token = req.cookies.get("vos_access_token")?.value;
     const userId = getUserIdFromToken(token);
     
-    // 🟢 Session token is now mandatory.
     if (!userId) {
-      return json({ error: "Unauthorized: Invalid or missing session" }, 401);
+      throw new AppError("AUTH_DENIED", "Unauthorized: Invalid or missing session", 401);
     }
 
     const body = await req.json().catch(() => ({}));
     const data = await submitReturn(body, userId);
     return json({ data }, 201);
   } catch (error: any) {
-    console.error("Sales Return RFID API POST Error:", error);
-    return json(
-      { error: error.message || "Failed to create sales return" },
-      500,
-    );
+    return handleApiError(error, NextResponse);
   }
 }
 
@@ -214,7 +185,7 @@ export async function PATCH(req: NextRequest) {
       const id = url.searchParams.get("id");
       const status = url.searchParams.get("status");
       if (!id || !status) {
-        return json({ error: "id and status are required" }, 400);
+        throw new AppError("VALIDATION_FAILED", "id and status are required", 400);
       }
       const isReceived = url.searchParams.get("isReceived") === "true" ? 1 : undefined;
       const receivedAt = url.searchParams.get("receivedAt") || undefined;
@@ -227,19 +198,14 @@ export async function PATCH(req: NextRequest) {
     const token = req.cookies.get("vos_access_token")?.value;
     const userId = getUserIdFromToken(token);
     
-    // 🟢 Session token is now mandatory.
     if (!userId) {
-      return json({ error: "Unauthorized: Invalid or missing session" }, 401);
+      throw new AppError("AUTH_DENIED", "Unauthorized: Invalid or missing session", 401);
     }
 
     const body = await req.json().catch(() => ({}));
     const data = await updateReturn(body, userId);
     return json({ data });
   } catch (error: any) {
-    console.error("Sales Return RFID API PATCH Error:", error);
-    return json(
-      { error: error.message || "Failed to update sales return" },
-      500,
-    );
+    return handleApiError(error, NextResponse);
   }
 }
