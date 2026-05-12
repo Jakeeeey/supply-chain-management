@@ -104,7 +104,7 @@ export function ManualInboundModal({ plan, open, onOpenChange, onSuccess }: Manu
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[1100px] w-[calc(100vw-32px)] rounded-3xl overflow-hidden p-0 border-none shadow-2xl flex flex-col max-h-[90vh]">
+            <DialogContent showCloseButton={false} className="sm:max-w-[1100px] w-[calc(100vw-32px)] rounded-3xl overflow-hidden p-0 border-none shadow-2xl flex flex-col max-h-[90vh]">
                 <div className="h-2 w-full bg-rose-500" />
 
                 <DialogHeader className="px-8 py-8 border-b bg-background/50 backdrop-blur-md shrink-0">

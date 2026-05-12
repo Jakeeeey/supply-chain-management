@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { KioskDispatchPlan, UserOption, CustomerDispatchInfo } from "../types";
-import { Truck, User, ArrowRight, Loader2, Plus, X, Calendar, MapPin, FileText, Users } from "lucide-react";
+import { Truck, User, ArrowRight, Loader2, Plus, Calendar, MapPin, FileText, Users } from "lucide-react";
 import { fetchProvider } from "../providers/fetchProvider";
 import { toast } from "sonner";
 import { SearchableSelect } from "./SearchableSelect";
@@ -79,9 +79,7 @@ export function ManualDispatchModal({ plan, users, open, onOpenChange, onSuccess
         setHelperConfig(newConfig);
     };
 
-    const handleRemoveHelper = (index: number) => {
-        setHelperConfig(prev => prev.filter((_, i) => i !== index));
-    };
+
 
     const handleConfirm = async () => {
         setIsSubmitting(true);
@@ -114,7 +112,7 @@ export function ManualDispatchModal({ plan, users, open, onOpenChange, onSuccess
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[700px] rounded-2xl p-0 overflow-hidden border-none shadow-2xl max-h-[90vh] flex flex-col">
+            <DialogContent showCloseButton={false} className="sm:max-w-[700px] rounded-2xl p-0 overflow-hidden border-none shadow-2xl max-h-[90vh] flex flex-col">
                 <div className="h-1.5 w-full bg-emerald-500 shrink-0" />
                 
                 <DialogHeader className="px-6 py-6 border-b bg-background/50 backdrop-blur-sm shrink-0">
@@ -206,14 +204,7 @@ export function ManualDispatchModal({ plan, users, open, onOpenChange, onSuccess
                                                         <Label htmlFor={`helper-${idx}-present`} className="text-[10px] font-black uppercase tracking-widest text-emerald-600 cursor-pointer whitespace-nowrap">Present</Label>
                                                     </div>
                                                 </div>
-                                                <Button 
-                                                    variant="outline" 
-                                                    size="icon" 
-                                                    className="h-12 w-12 rounded-xl border-muted-foreground/20 text-muted-foreground hover:text-destructive hover:border-destructive/30 hover:bg-destructive/5 transition-colors"
-                                                    onClick={() => handleRemoveHelper(idx)}
-                                                >
-                                                    <X className="h-4 w-4" />
-                                                </Button>
+
                                             </div>
                                         ))}
                                         {helperConfig.length === 0 && (
