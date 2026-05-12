@@ -79,9 +79,7 @@ export function ManualDispatchModal({ plan, users, open, onOpenChange, onSuccess
         setHelperConfig(newConfig);
     };
 
-    const handleRemoveHelper = (index: number) => {
-        setHelperConfig(prev => prev.filter((_, i) => i !== index));
-    };
+
 
     const handleConfirm = async () => {
         setIsSubmitting(true);
