@@ -638,6 +638,8 @@ type PostingPOItem = {
     netAmount: number;
     discountTypeId?: string;
     discountLabel?: string;
+    receiptNo?: string;
+    receiptDate?: string;
 };
 
 type PostingPODetail = {
