@@ -41,7 +41,7 @@ export default function SalesReturnModule() {
   const handleCloseModal = () => {
     setSelectedReturn(null);
     setCreateOpen(false);
-    
+
     // 🟢 Clear search parameters from URL so the auto-open triggered by fromClearance/editReturnNo doesn't re-run
     if (searchParams.toString()) {
       router.push(pathname);
@@ -75,7 +75,7 @@ export default function SalesReturnModule() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex flex-col gap-1">
           <h2 className="text-3xl font-bold text-foreground tracking-tight">
-            Sales Returns
+            Sales Returns RFID
           </h2>
           <p className="text-muted-foreground">Manage customer product returns</p>
         </div>
