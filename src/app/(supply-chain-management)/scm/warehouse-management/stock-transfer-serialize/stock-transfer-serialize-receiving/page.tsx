@@ -6,7 +6,6 @@ import {
     BreadcrumbPage,
     BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { cookies } from "next/headers"
@@ -26,9 +25,9 @@ export default async function Page() {
     };
 
     return (
-        <div className="flex h-full min-h-0 flex-col">
-            <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-2 bg-background print:hidden">
-                <div className="flex items-center gap-2 px-4">
+        <div className="flex h-screen w-full flex-col overflow-hidden bg-background">
+            <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border bg-background px-4 print:hidden">
+                <div className="flex items-center gap-2">
                     <SidebarTrigger className="-ml-1" />
                     <Separator
                         orientation="vertical"
@@ -51,14 +50,14 @@ export default async function Page() {
                     </Breadcrumb>
                 </div>
 
-                <div className="ml-auto px-4">
+                <div className="ml-auto">
                      <NavUser user={headerUser} />
                 </div>
             </header>
 
-            <ScrollArea className="min-h-0 flex-1">
+            <main className="flex-1 min-h-0 w-full overflow-hidden">
                 <ReceivePage />
-            </ScrollArea>
+            </main>
         </div>
     )
 }
