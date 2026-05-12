@@ -43,6 +43,8 @@ export type POItem = {
     netAmount?: number;
     discountTypeId?: string;
     discountLabel?: string;
+    receiptNo?: string;
+    receiptDate?: string;
 };
 
 export type POBranchAllocation = {

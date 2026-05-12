@@ -77,20 +77,6 @@ import { createRoot } from "react-dom/client";
 import { useRfidScanner } from "../hooks/useRfidScanner";
 import { useSearchParams } from "next/navigation";
 
-interface SalesReturnGroup {
-  key: string;
-  code: string;
-  description: string;
-  unit: string;
-  returnType: string;
-  unitPrice: number;
-  totalQty: number;
-  totalGross: number;
-  totalDiscount: number;
-  totalNet: number;
-  children: { item: SalesReturnItem; idx: number }[];
-}
-
 interface Props {
   returnId: number;
   initialData: SalesReturn;
@@ -236,7 +222,7 @@ export function UpdateSalesReturnModal({
   const [returnTypeOptions, setReturnTypeOptions] = useState<
     API_SalesReturnType[]
   >([]);
-  const [salesmenOptions, setSalesmenOptions] = useState<{ value: string; label: string; code: string; branch: string }[]>([]);
+  const [salesmenOptions, setSalesmenOptions] = useState<{ value: string; label: string; code: string; branch: string; branchId: number }[]>([]);
   const [customerOptions, setCustomerOptions] = useState<{ value: string; label: string }[]>([]);
 
   const [isProductLookupOpen, setIsProductLookupOpen] = useState(false);
@@ -265,7 +251,7 @@ export function UpdateSalesReturnModal({
   // RFID State
   const [rfidScanning, setRfidScanning] = useState(false);
   const [lastScannedRfid, setLastScannedRfid] = useState("");
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null);
 
 
 
@@ -404,33 +390,24 @@ export function UpdateSalesReturnModal({
       return;
     }
 
-    // Resolve branch from the salesman
     const salesmanOpt = salesmenOptions.find(
       (s) => String(s.value) === String(headerData.salesmanId),
     );
-    // Try to extract branchId from salesmanOpt
-    // The salesmenOptions have { value, label, code, branch } where branch is the branch name
-    // We need a numeric branchId. The headerData doesn't store branchId directly.
-    // We'll get it from the salesman's branch relationship via the form references.
-    let branchId: number | null = null;
-    try {
-      const formSalesmen = await SalesReturnProvider.getFormSalesmen();
-      const formSalesman = formSalesmen.find(
-        (s) => String(s.id) === String(headerData.salesmanId),
-      );
-      branchId = formSalesman?.branchId || null;
-    } catch {
-      // fallback: can't resolve branch
-    }
+    const branchId = salesmanOpt?.branchId || null;
 
     if (!branchId) {
       toast.error("Cannot determine branch for RFID lookup.");
       return;
     }
 
-    // Check for duplicate RFID already in details
-    if (details.some((item) => item.rfidTags?.includes(tag))) {
-      toast.error(`RFID tag "${tag}" is already in the list.`);
+    if (selectedRowIndex === null) {
+      toast.warning("Please select a product row from the table before scanning.");
+      return;
+    }
+
+    const selectedRow = details[selectedRowIndex];
+    if (selectedRow?.unitOrder !== 3) {
+      toast.error(`RFID tagging is only allowed for Box units (Order 3). "${selectedRow.description}" is using a "${selectedRow.unit}" unit.`);
       return;
     }
 
@@ -438,76 +415,74 @@ export function UpdateSalesReturnModal({
     setLastScannedRfid(tag);
 
     try {
-      // 🟢 NEW: Global Duplicate Check
+      // 1. Global Duplicate Check
       const dupCheck = await SalesReturnProvider.checkRfidDuplicate(tag);
       if (dupCheck.isDuplicate && dupCheck.returnNo !== headerData.returnNo) {
-        const errorMsg = `RFID tag "${tag}" is already linked to SR #${dupCheck.returnNo}.`;
-        toast.error(errorMsg, {
-          description: "This tag cannot be returned again as it exists in another record.",
-          duration: 6000,
-        });
+        setLastScannedRfid("");
+        toast.error(`Tag "${tag}" already returned in SR #${dupCheck.returnNo}`);
         return;
       }
 
+      // 2. Inventory Check
       const result = await SalesReturnProvider.lookupRfid(tag, branchId);
 
-      if (!result || !result.productId) {
-        const branchName = salesmanOpt?.branch || "this branch";
-        const errorMsg = `RFID tag "${tag}" is NOT registered to ${branchName}.`;
-        toast.error(errorMsg, {
-          description: "Please check if the scan is correct or if the item is in the wrong location.",
+      if (result?.isOnInventory) {
+        setLastScannedRfid("");
+        toast.error("Already in Stock", {
+          description: "This item is already in the branch's inventory. Sales Return is not allowed for on-hand items.",
           duration: 5000,
         });
         return;
       }
 
-      const currentPriceType = headerData.priceType || "A";
-      const priceKey = `price${currentPriceType}` as string;
-      const resultRecord = result as Record<string, unknown>;
-      const unitPrice =
-        Math.round((Number(resultRecord[priceKey]) ||
-        Number(resultRecord.unitPrice) ||
-        0) * 100) / 100;
-      const grossAmount = Math.round(unitPrice * 1 * 100) / 100;
+      // 3. Local Duplicate Check
+      if (details.some((i) => i.rfidTags?.includes(tag))) {
+        setLastScannedRfid("");
+        toast.warning("Tag already scanned in this session.");
+        return;
+      }
 
-      const newItem: SalesReturnItem = {
-        id: `added-rfid-${tag}-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
-        tempId: `rfid-${tag}`,
-        productId: result.productId,
-        product_id: result.productId,
-        code: result.productCode,
-        description: result.productName,
-        unit: result.unitShortcut,
-        quantity: 1,
-        unitPrice,
-        grossAmount,
-        discountType: "",
-        discountAmount: 0,
-        totalAmount: grossAmount,
-        reason: "",
-        returnType: "",
-        rfidTags: [tag],
-        priceA: result.priceA,
-        priceB: result.priceB,
-        priceC: result.priceC,
-        priceD: result.priceD,
-        priceE: result.priceE,
-        unitMultiplier: result.unitMultiplier || 1,
-      };
+      // 4. Accept Scan: Tag to selected row
+      setDetails((prev) => {
+        const next = [...prev];
+        const row = next[selectedRowIndex];
+        if (!row) return prev;
 
-      setDetails((prev) => [...prev, newItem]);
-      toast.success(`Successfully scanned: ${result.productName}`, {
-        description: `RFID: ${tag} | Registered to ${salesmanOpt?.branch || "branch"}`,
+        const newTags = [...(row.rfidTags || []), tag];
+        const newQty = newTags.length;
+        
+        // Recalculate amounts for this row
+        const unitPrice = Number(row.unitPrice) || 0;
+        const grossAmount = Math.round(unitPrice * newQty * 100) / 100;
+        
+        // Calculate discount
+        let discountAmt = 0;
+        if (row.discountType) {
+          const opt = discountOptions.find(d => d.id.toString() === row.discountType?.toString());
+          if (opt) {
+            const percentage = parseFloat(opt.total_percent) || 0;
+            discountAmt = Math.round(grossAmount * (percentage / 100) * 100) / 100;
+          }
+        }
+
+        next[selectedRowIndex] = {
+          ...row,
+          rfidTags: newTags,
+          quantity: newQty,
+          grossAmount,
+          discountAmount: discountAmt,
+          totalAmount: Math.round((grossAmount - discountAmt) * 100) / 100,
+        };
+        return next;
       });
 
-      // Auto-clear display after 2 seconds
+      toast.success(`Tag accepted for ${details[selectedRowIndex].description}`);
       setTimeout(() => setLastScannedRfid(""), 2000);
     } catch (err: unknown) {
-      console.error("RFID lookup error:", err);
-      const error = err as Error;
-      const errorMsg = `Failed to look up RFID tag "${tag}".`;
-      toast.error(errorMsg, {
-        description: error.message || "An unexpected error occurred during scan.",
+      console.error("RFID lookup failed:", err);
+      setLastScannedRfid("");
+      toast.error("RFID Lookup Failed", {
+        description: (err as Error).message || "An unexpected error occurred during scanning. Please try again.",
       });
     } finally {
       setRfidScanning(false);
@@ -599,14 +574,30 @@ export function UpdateSalesReturnModal({
           };
         } else {
           // Add as new row
+          const unitPrice = Math.round(Number(item.unitPrice || 0) * 100) / 100;
+          const grossAmount = Math.round(Number(item.grossAmount || 0) * 100) / 100;
+          const incomingDiscountType = item.discountType || "";
+          let initialDiscountAmt = 0;
+
+          if (incomingDiscountType && incomingDiscountType !== "No Discount") {
+            const selectedDisc = discountOptions.find(
+              (d) => d.id.toString() === incomingDiscountType.toString(),
+            );
+            if (selectedDisc) {
+              const percentage = parseFloat(selectedDisc.total_percent) || 0;
+              initialDiscountAmt = Math.round(grossAmount * (percentage / 100) * 100) / 100;
+            }
+          }
+
           updated.push({
             ...item,
             id: `added-${Date.now()}-${Math.random()}`, // Temp ID for new rows
             product_id: item.productId,
-            unitPrice: Math.round(Number(item.unitPrice || 0) * 100) / 100,
-            grossAmount: Math.round(Number(item.grossAmount || 0) * 100) / 100,
-            discountAmount: Math.round(Number(item.discountAmount || 0) * 100) / 100,
-            totalAmount: Math.round(Number(item.totalAmount || 0) * 100) / 100,
+            unitPrice,
+            grossAmount,
+            discountType: incomingDiscountType || null,
+            discountAmount: initialDiscountAmt,
+            totalAmount: Math.round((grossAmount - initialDiscountAmt) * 100) / 100,
           });
         }
       });
@@ -941,7 +932,7 @@ export function UpdateSalesReturnModal({
                         Qty
                       </TableHead>
                       <TableHead className="text-white font-semibold h-11 text-right min-w-[100px] uppercase text-xs">
-                        Price
+                        Unit Price
                       </TableHead>
                       <TableHead className="text-white font-semibold h-11 text-right min-w-[120px] uppercase text-xs">
                         Gross
@@ -995,431 +986,233 @@ export function UpdateSalesReturnModal({
                         </TableCell>
                       </TableRow>
                     ) : (
-                      <>
-                        {/* 1. RENDER MANUAL ITEMS (No RFID) */}
-                        {details.map((item, idx) => {
-                          const isManual = !item.rfidTags || item.rfidTags.length === 0;
-                          if (!isManual) return null;
-                          return (
-                            <TableRow
-                              key={item.id || idx}
-                              className="border-b border-border hover:bg-muted/20 transition-colors duration-200"
-                            >
-                              <TableCell className="text-sm text-foreground font-bold align-middle font-mono">
-                                {item.code}
-                              </TableCell>
-                              <TableCell className="align-middle">
-                                <div
-                                  className="text-sm text-foreground font-medium"
-                                  title={item.description}
-                                >
-                                  {item.description}
-                                </div>
-                                <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
-                                  {/* Just label, RFID tag moved to sub-row or tooltip if needed, but original had no extra div here */}
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-sm text-muted-foreground align-middle">
-                                <Badge
-                                  variant="outline"
-                                  className="text-foreground bg-background border-border font-normal"
-                                >
-                                  {item.unit}
+                      details.map((item, idx) => {
+                        const isSelected = selectedRowIndex === idx;
+                        return (
+                          <TableRow 
+                            key={item.id || idx} 
+                            onClick={() => {
+                              if (!canEditAll) return;
+                              if (item.unitOrder === 3) {
+                                setSelectedRowIndex(idx);
+                              } else {
+                                toast.info("RFID tagging is limited to Box units (Order 3).", {
+                                  description: `"${item.description}" uses "${item.unit}", which must be handled manually.`
+                                });
+                              }
+                            }}
+                            className={cn(
+                              "border-b border-border hover:bg-muted/10 transition-colors duration-200 cursor-pointer group",
+                              isSelected && "bg-primary/5 ring-1 ring-inset ring-primary/20",
+                              item.unitOrder !== 3 && "cursor-default hover:bg-transparent opacity-90"
+                            )}
+                          >
+                            <TableCell className="px-4 py-2 font-mono text-sm text-foreground">
+                              <div className="flex items-center gap-2">
+                                {isSelected ? (
+                                  <div className="w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_rgba(var(--primary),0.5)] animate-pulse" />
+                                ) : (
+                                  <div className="w-2 h-2 rounded-full bg-muted-foreground/20" />
+                                )}
+                                <span>{item.code}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="px-4 py-2 text-foreground">
+                              <div className="text-sm text-foreground font-medium" title={item.description}>
+                                {item.description}
+                              </div>
+                            </TableCell>
+                            <TableCell className="px-4 py-2">
+                              <Badge variant="outline" className="text-foreground bg-background border-border font-normal">
+                                {item.unit}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="px-4 py-2 text-center">
+                              <div className="flex flex-col items-center gap-1">
+                                <Badge variant="outline" className={cn(
+                                  "font-bold transition-all min-w-[40px] flex justify-center",
+                                  item.unitOrder === 3 ? "border-primary/40 bg-primary/10 text-primary shadow-sm" : "border-muted-foreground/30 bg-muted/10 text-muted-foreground opacity-70"
+                                )}>
+                                  {item.quantity}
                                 </Badge>
-                              </TableCell>
-                              {/* Quantity */}
-                              <TableCell className="text-center align-middle p-2">
-                                {canEditAll ? (
-                                  <Input
-                                    type="number"
-                                    className="h-9 w-full text-center text-sm border-border px-2"
-                                    value={item.quantity}
-                                    onChange={(e) =>
-                                      handleDetailChange(idx, "quantity", e.target.value)
-                                    }
-                                  />
-                                ) : (
-                                  <span className="text-sm font-semibold text-foreground">
-                                    {item.quantity}
-                                  </span>
-                                )}
-                              </TableCell>
-                              {/* Price */}
-                              <TableCell className="text-right align-middle p-2">
-                                {canEditAll ? (
-                                  <Input
-                                    type="number"
-                                    className="h-9 w-full text-right text-sm border-border px-2"
-                                    value={item.unitPrice}
-                                    onChange={(e) =>
-                                      handleDetailChange(idx, "unitPrice", e.target.value)
-                                    }
-                                  />
-                                ) : (
-                                  <span className="text-sm text-foreground">
-                                    {Number(item.unitPrice).toLocaleString()}
-                                  </span>
-                                )}
-                              </TableCell>
-                              <TableCell className="text-right text-sm text-muted-foreground align-middle font-mono whitespace-nowrap">
-                                {(Number(item.grossAmount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                              </TableCell>
-                              {/* Discount */}
-                              <TableCell className="align-middle p-2">
-                                {canEditAll ? (
-                                  <Select
-                                    value={item.discountType?.toString() || "No Discount"}
-                                    onValueChange={(val) => handleDetailChange(idx, "discountType", val)}
-                                  >
-                                    <SelectTrigger className="h-9 w-full text-xs border-border bg-background">
-                                      <SelectValue placeholder="None" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="No Discount">None</SelectItem>
-                                      {discountOptions.map((opt) => (
-                                        <SelectItem key={opt.id} value={opt.id.toString()}>
-                                          {opt.discount_type}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                ) : (
-                                  <span className="text-xs text-muted-foreground">
-                                    {discountOptions.find((d) => d.id.toString() == item.discountType)?.discount_type || "None"}
-                                  </span>
-                                )}
-                              </TableCell>
-                              <TableCell className="text-right align-middle p-2">
-                                <Input type="number" readOnly className="h-9 w-full text-right text-sm bg-muted/30 text-muted-foreground cursor-not-allowed" value={item.discountAmount ? Number(item.discountAmount).toFixed(2) : ""} />
-                              </TableCell>
-                              <TableCell className="text-right font-bold text-sm text-foreground align-middle whitespace-nowrap">
-                                ₱{(Number(item.totalAmount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                              </TableCell>
-                              {/* Reason */}
-                              <TableCell className="align-middle p-2">
-                                {canEditAll ? (
-                                  <Input
-                                    className="h-9 w-full text-sm border-border bg-background"
-                                    placeholder="Enter reason..."
-                                    value={item.reason}
-                                    onChange={(e) => handleDetailChange(idx, "reason", e.target.value)}
-                                  />
-                                ) : (
-                                  <span className="text-sm text-muted-foreground italic truncate block max-w-[120px]" title={item.reason || ""}>
-                                    {item.reason || "-"}
-                                  </span>
-                                )}
-                              </TableCell>
-                              {/* Return Type */}
-                              <TableCell className="align-middle p-2">
-                                {canEditAll ? (
-                                  <LocalSearchableSelect
-                                    value={item.returnType || ""}
-                                    onValueChange={(val) => {
-                                      handleDetailChange(idx, "returnType", val);
-                                      setReturnTypeError(false);
-                                    }}
-                                    options={returnTypeOptions.length > 0 
-                                      ? returnTypeOptions.map((type) => ({ value: type.type_name, label: type.type_name }))
-                                      : [
-                                          { value: "Good Order", label: "Good Order" },
-                                          { value: "Bad Order", label: "Bad Order" }
-                                        ]
-                                    }
-                                    placeholder="Select type"
-                                    className={cn(
-                                      "h-9 text-xs",
-                                      returnTypeError && (!item.returnType || item.returnType === "") && "border-destructive ring-1 ring-destructive/30 bg-destructive/5 text-destructive"
-                                    )}
-                                  />
-                                ) : (
-                                  <Badge variant="outline" className="font-normal">{item.returnType || "Unassigned"}</Badge>
-                                )}
-                              </TableCell>
-                              {canEditAll && (
-                                <TableCell className="align-middle p-2 text-center">
-                                  <button onClick={() => handleDeleteRow(idx)} className="text-destructive/70 hover:text-destructive transition-colors" title="Remove row">
-                                    <Trash2 className="h-4 w-4" />
-                                  </button>
-                                </TableCell>
+                                <span className="text-[9px] text-muted-foreground font-medium uppercase tracking-tighter">
+                                  {item.unitOrder === 3 ? "Box Units" : "Manual Qty"}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="px-3 py-2 text-right text-sm whitespace-nowrap">
+                              ₱{Number(item.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </TableCell>
+                            <TableCell className="px-3 py-2 text-right text-muted-foreground font-mono text-sm whitespace-nowrap">
+                              ₱{(Number(item.grossAmount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </TableCell>
+                            <TableCell className="px-4 py-2">
+                              {canEditAll ? (
+                                <Select
+                                  value={item.discountType?.toString() || "No Discount"}
+                                  onValueChange={(val) => handleDetailChange(idx, "discountType", val)}
+                                >
+                                  <SelectTrigger className="h-8 w-full text-sm border-border bg-background">
+                                    <SelectValue placeholder="None" />
+                                  </SelectTrigger>
+                                  <SelectContent className="z-[200]">
+                                    <SelectItem value="No Discount">None</SelectItem>
+                                    {discountOptions.map((opt) => (
+                                      <SelectItem key={opt.id} value={opt.id.toString()}>
+                                        {opt.discount_type}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <span className="text-sm text-muted-foreground">
+                                  {discountOptions.find(d => d.id.toString() == item.discountType)?.discount_type || "None"}
+                                </span>
                               )}
-                            </TableRow>
-                          );
-                        })}
-
-                        {/* 2. RENDER RFID ITEMS (Grouped) */}
-                        {Object.values(
-                          details.filter(i => i.rfidTags && i.rfidTags.length > 0).reduce((acc, item) => {
-                            // Find the true index in details
-                            const idx = details.findIndex(d => d === item);
-                            const rType = item.returnType || "Unassigned";
-                            const key = `${item.productId}-${item.unit}-${item.unitPrice}-${rType}`;
-                            if (!acc[key]) {
-                              acc[key] = {
-                                key,
-                                code: item.code,
-                                description: item.description,
-                                unit: item.unit,
-                                returnType: rType,
-                                unitPrice: item.unitPrice,
-                                totalQty: 0,
-                                totalGross: 0,
-                                totalDiscount: 0,
-                                totalNet: 0,
-                                children: [],
-                              };
-                            }
-                            acc[key].totalQty += Number(item.quantity) || 0;
-                            acc[key].totalGross += Number(item.grossAmount) || 0;
-                            acc[key].totalDiscount += Number(item.discountAmount) || 0;
-                            acc[key].totalNet += Number(item.totalAmount) || 0;
-                            acc[key].children.push({ item, idx });
-                            return acc;
-                          }, {} as Record<string, SalesReturnGroup>)
-                        ).map((group: SalesReturnGroup) => (
-                          <React.Fragment key={group.key}>
-                            {/* Parent Summary Row */}
-                            <TableRow className="bg-muted/10 font-semibold border-b border-border">
-                              {/* 🟢 REVISED: All inputs disabled if not Pending (canEditAll) */}
-                              <TableCell className="text-sm text-foreground align-middle font-mono">
-                                <div className="flex items-center gap-2">
-                                  {group.children.length > 0 ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => setExpandedGroups(prev => ({ ...prev, [group.key]: !prev[group.key] }))}
-                                      className="p-1 hover:bg-muted rounded-md transition-colors text-foreground"
-                                    >
-                                      <ChevronDown className={`h-4 w-4 transition-transform ${expandedGroups[group.key] ? 'rotate-180' : ''}`} />
-                                    </button>
-                                  ) : (
-                                    <div className="w-6" /> // spacer
+                            </TableCell>
+                            <TableCell className="px-4 py-2">
+                              <input
+                                type="number"
+                                readOnly
+                                disabled
+                                className="w-full text-right border border-border bg-muted/30 text-muted-foreground rounded h-8 text-sm outline-none cursor-not-allowed"
+                                value={item.discountAmount ? Number(item.discountAmount).toFixed(2) : "0.00"}
+                              />
+                            </TableCell>
+                            <TableCell className="px-3 py-2 text-right font-bold text-sm text-foreground whitespace-nowrap">
+                              ₱{Number(item.totalAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </TableCell>
+                            <TableCell className="px-4 py-2">
+                              {canEditAll ? (
+                                <input
+                                  type="text"
+                                  placeholder="Enter reason"
+                                  className="w-full border border-border rounded h-8 text-sm px-2 outline-none focus:border-primary"
+                                  value={item.reason || ""}
+                                  onChange={(e) => handleDetailChange(idx, "reason", e.target.value)}
+                                />
+                              ) : (
+                                <span className="text-sm text-muted-foreground italic truncate block max-w-[120px]" title={item.reason || ""}>
+                                  {item.reason || "-"}
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell className="px-3 py-2">
+                              {canEditAll ? (
+                                <LocalSearchableSelect
+                                  value={item.returnType || ""}
+                                  onValueChange={(val) => { handleDetailChange(idx, "returnType", val); setReturnTypeError(false); }}
+                                  options={returnTypeOptions.length > 0 
+                                    ? returnTypeOptions.map((type) => ({ value: type.type_name, label: type.type_name }))
+                                    : [
+                                        { value: "Good Order", label: "Good Order" },
+                                        { value: "Bad Order", label: "Bad Order" }
+                                      ]
+                                  }
+                                  placeholder="Select type"
+                                  className={cn(
+                                    "h-8 text-sm",
+                                    returnTypeError && (!item.returnType || item.returnType === "") && "border-destructive ring-1 ring-destructive/30 bg-destructive/5 text-destructive"
                                   )}
-                                  <span>{group.code}</span>
-                                </div>
-                              </TableCell>
-                              <TableCell className="align-middle">
-                                <div
-                                  className="text-sm text-foreground font-medium"
-                                  title={group.description}
+                                />
+                              ) : (
+                                <Badge variant="outline" className="font-normal">{item.returnType || "Unassigned"}</Badge>
+                              )}
+                            </TableCell>
+                            {canEditAll && (
+                              <TableCell className="sticky right-0 z-10 px-2 py-2 text-center bg-background border-l border-transparent group-hover:border-primary/20">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteRow(idx);
+                                    if (selectedRowIndex === idx) setSelectedRowIndex(null);
+                                  }}
+                                  className="text-destructive/70 hover:text-destructive h-7 w-7 rounded-md flex items-center justify-center transition-colors"
+                                  title="Remove Item"
                                 >
-                                  {group.description}
-                                </div>
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
                               </TableCell>
-                              <TableCell className="text-sm text-muted-foreground align-middle">
-                                <Badge
-                                  variant="outline"
-                                  className="text-foreground bg-background border-border font-normal"
-                                >
-                                  {group.unit}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-center align-middle p-2 text-primary text-sm font-bold">
-                                {group.totalQty}
-                              </TableCell>
-                              <TableCell className="text-right align-middle p-2" />
-                              <TableCell className="text-right align-middle" />
-                              <TableCell className="align-middle p-2" />
-                              <TableCell className="text-right align-middle p-2" />
-                              <TableCell className="text-right align-middle" />
-                              <TableCell className="align-middle p-2" />
-                              <TableCell className="align-middle p-2">
-                                {group.returnType !== "Unassigned" ? (
-                                  <Badge
-                                    variant="secondary"
-                                    className="bg-primary/20 text-primary hover:bg-primary/20 hover:text-primary font-medium"
-                                  >
-                                    {group.returnType}
-                                  </Badge>
-                                ) : (
-                                  <span className="text-muted-foreground/60 italic text-xs">Unassigned</span>
-                                )}
-                              </TableCell>
-                              {canEditAll && <TableCell />}
-                            </TableRow>
-
-                            {/* Child Rows (Individual Scans/Additions) */}
-                            {expandedGroups[group.key] && group.children.map(({ item, idx }: { item: SalesReturnItem, idx: number }) => (
-                              <TableRow
-                                key={item.id || idx}
-                                className="border-b border-border hover:bg-muted/20 transition-colors duration-200"
-                              >
-                                {/* 🟢 REVISED: All inputs disabled if not Pending (canEditAll) */}
-                                <TableCell colSpan={2} className="text-sm text-foreground font-bold align-middle pl-10 font-mono">
-                                  {item.rfidTags && item.rfidTags.length > 0 ? (
-                                    <div className="flex items-center gap-1.5 bg-background border border-border pl-2.5 pr-2 py-1 rounded-md w-fit truncate max-w-[200px]" title={item.rfidTags[0]}>
-                                      <span className="text-primary truncate">{item.rfidTags[0]}</span>
-                                      <span className="text-[10px] text-muted-foreground font-sans uppercase">RFID</span>
-                                    </div>
-                                  ) : null}
-                                </TableCell>
-                                <TableCell className="text-sm text-muted-foreground align-middle">
-                                </TableCell>
-                                <TableCell className="text-center align-middle p-2">
-                                  {canEditAll ? (
-                                    item.rfidTags && item.rfidTags.length > 0 ? (
-                                      <div className="text-center font-semibold text-sm">{item.quantity}</div>
-                                    ) : (
-                                      <Input
-                                        type="number"
-                                        className="h-9 w-full text-center text-sm border-border px-2"
-                                        value={item.quantity}
-                                        onChange={(e) =>
-                                          handleDetailChange(
-                                            idx,
-                                            "quantity",
-                                            e.target.value,
-                                          )
-                                        }
-                                      />
-                                    )
-                                  ) : (
-                                    <span className="text-sm font-semibold text-foreground">
-                                      {item.quantity}
-                                    </span>
-                                  )}
-                                </TableCell>
-                                <TableCell className="text-right align-middle p-2">
-                                  {canEditAll ? (
-                                    <Input
-                                      type="number"
-                                      className="h-9 w-full text-right text-sm border-border px-2"
-                                      value={item.unitPrice}
-                                      onChange={(e) =>
-                                        handleDetailChange(
-                                          idx,
-                                          "unitPrice",
-                                          e.target.value,
-                                        )
-                                      }
-                                    />
-                                  ) : (
-                                    <span className="text-sm text-foreground">
-                                      {Number(item.unitPrice).toLocaleString()}
-                                    </span>
-                                  )}
-                                </TableCell>
-                                <TableCell className="text-right text-sm text-muted-foreground align-middle font-mono whitespace-nowrap">
-                                  {(Number(item.grossAmount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                </TableCell>
-                                <TableCell className="align-middle p-2">
-                                  {canEditAll ? (
-                                    <Select
-                                      value={
-                                        item.discountType?.toString() || "No Discount"
-                                      }
-                                      onValueChange={(val) =>
-                                        handleDetailChange(idx, "discountType", val)
-                                      }
-                                    >
-                                      <SelectTrigger className="h-9 w-full text-sm border-border bg-background">
-                                        <SelectValue placeholder="None" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="No Discount">
-                                          None
-                                        </SelectItem>
-                                        {discountOptions.map((opt) => (
-                                          <SelectItem
-                                            key={opt.id}
-                                            value={opt.id.toString()}
-                                          >
-                                            {opt.discount_type}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  ) : (
-                                    <span className="text-sm text-muted-foreground">
-                                      {discountOptions.find(
-                                        (d) => d.id.toString() == item.discountType,
-                                      )?.discount_type || "None"}
-                                    </span>
-                                  )}
-                                </TableCell>
-                                <TableCell className="text-right align-middle p-2">
-                                  <Input
-                                    type="number"
-                                    readOnly
-                                    className="h-9 w-full text-right text-sm bg-muted/30 text-muted-foreground cursor-not-allowed"
-                                    value={item.discountAmount ? Number(item.discountAmount).toFixed(2) : ""}
-                                  />
-                                </TableCell>
-                                <TableCell className="text-right font-bold text-sm text-foreground align-middle">
-                                  {(Number(item.totalAmount) || 0).toLocaleString()}
-                                </TableCell>
-                                <TableCell className="align-middle p-2">
-                                  {canEditAll ? (
-                                    <Input
-                                      className="h-9 w-full text-sm border-border bg-background"
-                                      placeholder="Enter reason..."
-                                      value={item.reason}
-                                      onChange={(e) =>
-                                        handleDetailChange(
-                                          idx,
-                                          "reason",
-                                          e.target.value,
-                                        )
-                                      }
-                                    />
-                                  ) : (
-                                    <span className="text-sm text-muted-foreground italic">
-                                      {item.reason || "-"}
-                                    </span>
-                                  )}
-                                </TableCell>
-                                <TableCell className="align-middle p-2">
-                                  {canEditAll ? (
-                                    <LocalSearchableSelect
-                                      value={item.returnType || ""}
-                                      onValueChange={(val) => {
-                                        handleDetailChange(idx, "returnType", val);
-                                        setReturnTypeError(false);
-                                      }}
-                                      options={returnTypeOptions.length > 0 
-                                        ? returnTypeOptions.map((type) => ({ value: type.type_name, label: type.type_name }))
-                                        : [
-                                            { value: "Good Order", label: "Good Order" },
-                                            { value: "Bad Order", label: "Bad Order" }
-                                          ]
-                                      }
-                                      placeholder="Select type"
-                                      className={cn(
-                                        "h-9 text-sm",
-                                        returnTypeError && (!item.returnType || item.returnType === "") && "border-destructive ring-1 ring-destructive/30 bg-destructive/5 text-destructive"
-                                      )}
-                                    />
-                                  ) : (
-                                    <Badge
-                                      variant="secondary"
-                                      className="text-[10px] font-normal"
-                                    >
-                                      {item.returnType as React.ReactNode}
-                                    </Badge>
-                                  )}
-                                </TableCell>
-                                {canEditAll && (
-                                  <TableCell className="text-center align-middle">
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8 text-destructive hover:text-white hover:bg-destructive"
-                                      onClick={() => handleDeleteRow(idx)}
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </TableCell>
-                                )}
-                              </TableRow>
-                            ))}
-                          </React.Fragment>
-                        ))}
-                      </>
+                            )}
+                          </TableRow>
+                        )
+                      })
                     )}
                   </TableBody>
                 </Table>
               </div>
             </div>
           </div>
+
+          {/* 🟢 NEW: TAG MANAGEMENT SECTION */}
+          {canEditAll && selectedRowIndex !== null && details[selectedRowIndex] && (
+            <div className="bg-background rounded-lg border-2 border-primary/20 shadow-md p-5 mb-6 animate-in slide-in-from-bottom-4 duration-300">
+              <div className="flex justify-between items-center mb-4">
+                <h4 className="font-bold text-foreground flex items-center gap-2 text-base">
+                  <div className="bg-emerald-500/10 p-1.5 rounded text-emerald-600">
+                    <ScanLine className="h-5 w-5" />
+                  </div>
+                  Tagged RFIDs for: <span className="text-primary underline decoration-primary/30 underline-offset-4">{details[selectedRowIndex].description}</span>
+                </h4>
+                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 px-3 py-1 font-bold">
+                  {details[selectedRowIndex].rfidTags?.length || 0} ITEMS SCANNED
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {(!details[selectedRowIndex].rfidTags || details[selectedRowIndex].rfidTags!.length === 0) ? (
+                  <div className="col-span-full py-12 text-center border border-dashed rounded-lg text-muted-foreground bg-muted/5">
+                    <div className="flex flex-col items-center gap-2">
+                      <ScanLine className="h-8 w-8 opacity-20" />
+                      <p className="font-medium">No RFIDs tagged yet</p>
+                      <span className="text-xs">Start scanning to add items to this row.</span>
+                    </div>
+                  </div>
+                ) : (
+                  details[selectedRowIndex].rfidTags!.map((tag, tIdx) => (
+                    <div key={tag} className="flex items-center justify-between bg-muted/20 border border-border p-2.5 rounded-md hover:border-primary/30 transition-all group hover:shadow-sm">
+                      <div className="flex flex-col">
+                        <span className="text-xs font-mono font-bold text-foreground">{tag}</span>
+                        <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-black">Tag #{tIdx + 1}</span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setDetails(prev => {
+                            const next = [...prev];
+                            const row = next[selectedRowIndex];
+                            const newTags = row.rfidTags!.filter(t => t !== tag);
+                            const newQty = newTags.length;
+                            
+                            const unitPrice = Number(row.unitPrice) || 0;
+                            const gross = Math.round(unitPrice * newQty * 100) / 100;
+                            let discAmt = 0;
+                            if (row.discountType) {
+                              const opt = discountOptions.find(d => d.id.toString() === row.discountType?.toString());
+                              if (opt) discAmt = Math.round(gross * (parseFloat(opt.total_percent) / 100) * 100) / 100;
+                            }
+
+                            next[selectedRowIndex] = {
+                              ...row,
+                              rfidTags: newTags,
+                              quantity: newQty,
+                              grossAmount: gross,
+                              discountAmount: discAmt,
+                              totalAmount: Math.round((gross - discAmt) * 100) / 100
+                            };
+                            return next;
+                          });
+                        }}
+                        className="p-1.5 text-destructive/50 hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
+                        title="Remove Tag"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
 
           {/* BOTTOM FORM GRID */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-4">
@@ -1768,6 +1561,7 @@ export function UpdateSalesReturnModal({
         onClose={() => setIsProductLookupOpen(false)}
         onConfirm={handleConfirmProductLookup}
         priceType={headerData.priceType || "A"}
+        customerCode={headerData.customerCode}
       />
 
       {/* CONFIRM DIALOGS (Update, Success, Receive) remain same structure */}

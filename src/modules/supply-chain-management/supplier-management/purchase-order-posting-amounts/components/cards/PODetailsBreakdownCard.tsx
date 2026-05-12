@@ -61,59 +61,86 @@ export function PODetailsBreakdownCard() {
                     }, 0);
 
                     return (
-                        <div key={branchId} className="space-y-2 border border-border/50 rounded-lg p-3">
+                        <div key={branchId} className="space-y-4 border border-border/50 rounded-lg p-3">
                             <div className="flex items-center justify-between pb-2 border-b border-border/50">
-                                <span className="font-medium text-sm text-primary">{branchName}</span>
+                                <span className="font-bold text-base text-primary">{branchName}</span>
                                 <Badge variant="secondary" className="text-xs">
                                     {money(branchTotal, selectedPO.currency || "PHP")}
                                 </Badge>
                             </div>
                             
-                            <div className="overflow-x-auto">
-                                <Table className="w-full text-xs">
-                                    <TableHeader>
-                                        <TableRow className="border-border hover:bg-transparent">
-                                            <TableHead className="w-[120px] font-medium h-8 py-1">SKU/Barcode</TableHead>
-                                            <TableHead className="min-w-[150px] font-medium h-8 py-1">Item</TableHead>
-                                            <TableHead className="text-right font-medium h-8 py-1">Qty</TableHead>
-                                            <TableHead className="text-right font-medium h-8 py-1">Unit Price</TableHead>
-                                            <TableHead className="text-right font-medium h-8 py-1">Discount</TableHead>
-                                            <TableHead className="text-right font-medium h-8 py-1">Net Total</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {alloc.items.map((it) => {
-                                            const uprice = it.unitPrice || 0;
-                                            const qty = it.receivedQty || it.expectedQty || 0;
-                                            const gross = uprice * qty;
+                            <div className="space-y-4">
+                                {(() => {
+                                    const receiptsMap = new Map<string, typeof alloc.items>();
+                                    alloc.items.forEach(it => {
+                                        const rn = it.receiptNo || "PENDING";
+                                        const arr = receiptsMap.get(rn) || [];
+                                        arr.push(it);
+                                        receiptsMap.set(rn, arr);
+                                    });
 
-                                            let discountDisplay = "—";
-                                            const discountAmt = it.discountAmount ?? 0;
+                                    return Array.from(receiptsMap.entries()).map(([receiptNo, items]) => {
+                                        const receiptDate = items[0]?.receiptDate || "";
+                                        const isPending = receiptNo === "PENDING";
+                                        const receiptTitle = isPending ? "Pending Items" : `Receipt #: ${receiptNo}`;
+                                        const receiptDateLabel = isPending ? "" : (receiptDate ? ` • ${new Date(receiptDate).toLocaleDateString()}` : "");
 
-                                            if (it.discountLabel && discountAmt > 0) {
-                                                discountDisplay = `${it.discountLabel} ${money(discountAmt, selectedPO.currency || "PHP")}`;
-                                            } else if (discountAmt > 0) {
-                                                discountDisplay = money(discountAmt, selectedPO.currency || "PHP");
-                                            }
+                                        return (
+                                            <div key={receiptNo} className="space-y-2 border border-border/30 rounded-lg p-2 bg-muted/10">
+                                                <div className="flex items-center gap-2 px-2 py-1">
+                                                    <span className="font-semibold text-sm text-foreground">{receiptTitle}</span>
+                                                    <span className="text-xs text-muted-foreground">{receiptDateLabel}</span>
+                                                </div>
 
-                                            const netTotal = it.netAmount ?? (gross - discountAmt);
+                                                <div className="overflow-x-auto">
+                                                    <Table className="w-full text-xs">
+                                                        <TableHeader>
+                                                            <TableRow className="border-border hover:bg-transparent">
+                                                                <TableHead className="w-[120px] font-medium h-8 py-1">SKU/Barcode</TableHead>
+                                                                <TableHead className="min-w-[150px] font-medium h-8 py-1">Item</TableHead>
+                                                                <TableHead className="text-right font-medium h-8 py-1">Qty</TableHead>
+                                                                <TableHead className="text-right font-medium h-8 py-1">Unit Price</TableHead>
+                                                                <TableHead className="text-right font-medium h-8 py-1">Discount</TableHead>
+                                                                <TableHead className="text-right font-medium h-8 py-1">Net Total</TableHead>
+                                                            </TableRow>
+                                                        </TableHeader>
+                                                        <TableBody>
+                                                            {items.map((it, idx) => {
+                                                                const uprice = it.unitPrice || 0;
+                                                                const qty = it.receivedQty || it.expectedQty || 0;
+                                                                const gross = uprice * qty;
 
-                                            return (
-                                                <TableRow key={it.productId} className="border-border transition-colors hover:bg-muted/30">
-                                                    <TableCell className="h-8 py-1 align-middle text-muted-foreground">{it.barcode}</TableCell>
-                                                    <TableCell className="h-8 py-1 align-middle font-medium" title={it.name}>{it.name}</TableCell>
-                                                    <TableCell className="h-8 py-1 align-middle text-right">{qty}</TableCell>
-                                                    <TableCell className="h-8 py-1 align-middle text-right">
-                                                        {money(uprice, selectedPO.currency || "PHP")}
-                                                    </TableCell>
-                                                    <TableCell className="h-8 py-1 align-middle text-right text-muted-foreground">{discountDisplay}</TableCell>
-                                                    <TableCell className="h-8 py-1 align-middle text-right font-medium">{money(netTotal, selectedPO.currency || "PHP")}</TableCell>
+                                                                let discountDisplay = "—";
+                                                                const discountAmt = it.discountAmount ?? 0;
 
-                                                </TableRow>
-                                            );
-                                        })}
-                                    </TableBody>
-                                </Table>
+                                                                if (it.discountLabel && discountAmt > 0) {
+                                                                    discountDisplay = `${it.discountLabel} ${money(discountAmt, selectedPO.currency || "PHP")}`;
+                                                                } else if (discountAmt > 0) {
+                                                                    discountDisplay = money(discountAmt, selectedPO.currency || "PHP");
+                                                                }
+
+                                                                const netTotal = it.netAmount ?? (gross - discountAmt);
+
+                                                                return (
+                                                                    <TableRow key={it.id || idx} className="border-border transition-colors hover:bg-muted/30">
+                                                                        <TableCell className="h-8 py-1 align-middle text-muted-foreground">{it.barcode}</TableCell>
+                                                                        <TableCell className="h-8 py-1 align-middle font-medium" title={it.name}>{it.name}</TableCell>
+                                                                        <TableCell className="h-8 py-1 align-middle text-right">{qty}</TableCell>
+                                                                        <TableCell className="h-8 py-1 align-middle text-right">
+                                                                            {money(uprice, selectedPO.currency || "PHP")}
+                                                                        </TableCell>
+                                                                        <TableCell className="h-8 py-1 align-middle text-right text-muted-foreground">{discountDisplay}</TableCell>
+                                                                        <TableCell className="h-8 py-1 align-middle text-right font-medium">{money(netTotal, selectedPO.currency || "PHP")}</TableCell>
+                                                                    </TableRow>
+                                                                );
+                                                            })}
+                                                        </TableBody>
+                                                    </Table>
+                                                </div>
+                                            </div>
+                                        );
+                                    });
+                                })()}
                             </div>
                         </div>
                     );

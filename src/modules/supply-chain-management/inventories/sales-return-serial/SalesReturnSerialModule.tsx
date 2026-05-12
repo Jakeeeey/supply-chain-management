@@ -11,7 +11,7 @@ import { SalesReturnHistory } from "./components/SalesReturnHistory";
 import { CreateSalesReturnModal } from "./components/CreateSalesReturnModal";
 import { UpdateSalesReturnModal } from "./components/UpdateSalesReturnModal";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { SalesReturn } from "./type";
+import { SalesReturn } from "./types/sales-return.types";
 
 export default function SalesReturnModule() {
   const searchParams = useSearchParams();
@@ -75,7 +75,7 @@ export default function SalesReturnModule() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex flex-col gap-1">
           <h2 className="text-3xl font-bold text-foreground tracking-tight">
-            Sales Returns RFID
+            Sales Returns Serial
           </h2>
           <p className="text-muted-foreground">Manage customer product returns</p>
         </div>

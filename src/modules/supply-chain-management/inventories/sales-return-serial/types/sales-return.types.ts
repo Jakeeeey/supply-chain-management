@@ -20,7 +20,7 @@ export interface SalesReturnItem {
   totalAmount: number;
   reason?: string;
   returnType?: string;
-  rfidTags?: string[];
+  serialNumbers?: string[];
   // 🟢 Fields for Price Type Recalculation
   priceA?: number;
   priceB?: number;
@@ -29,6 +29,7 @@ export interface SalesReturnItem {
   priceE?: number;
   unitMultiplier?: number;
   unitOrder?: number;
+  isSerialized?: number | boolean;
 }
 
 export interface SalesReturn {
@@ -46,10 +47,12 @@ export interface SalesReturn {
   orderNo?: string;
   isThirdParty?: boolean;
   priceType?: string;
+  branchId?: number;
   isReceived?: boolean;
   receivedAt?: string;
   createdDate?: string;
   createdAt?: string;
+  appliedInvoiceId?: number | null;
 }
 
 // --- BASIC ENTITIES ---
@@ -99,6 +102,7 @@ export interface Product {
   priceC?: number;
   priceD?: number;
   priceE?: number;
+  is_serialized?: number;
 }
 
 // ... rest of the file ...
@@ -209,11 +213,11 @@ export interface InvoiceOption {
   amount?: number;
 }
 
-// RFID Tag record (sales_return_rfid table)
-export interface SalesReturnRfid {
+// Serial record (sales_return_serial table)
+export interface SalesReturnSerial {
   id: number;
   sales_return_detail_id: number;
-  rfid_tag: string;
+  serial_number: string;
   created_at?: string;
   created_by?: number;
 }
