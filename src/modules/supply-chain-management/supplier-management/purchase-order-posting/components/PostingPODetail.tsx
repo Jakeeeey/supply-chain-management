@@ -11,6 +11,7 @@ import { ProductsReceivingStatusCard } from "./cards/ProductsReceivingStatusCard
 import { ReceiptsCard } from "./cards/ReceiptsCard";
 import { PODetailsBreakdownCard } from "./cards/PODetailsBreakdownCard";
 import { PostingPOPrintAction } from "./PostingPOPrintAction";
+import { Skeleton } from "@/components/ui/skeleton";
 
 function statusBadge(status: string) {
     const s = String(status || "").toUpperCase();
@@ -33,8 +34,28 @@ function statusLabel(status: string) {
 }
 
 export function PostingPODetail() {
-    const { selectedPO, postError, successMsg, clearSuccess, postAllReceipts, posting } =
+    const { selectedPO, postError, successMsg, clearSuccess, postAllReceipts, posting, poLoading } =
         usePostingOfPo();
+
+    if (poLoading) {
+        return (
+            <Card className="p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                    <div className="space-y-2">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-24" />
+                    </div>
+                    <Skeleton className="h-8 w-20" />
+                </div>
+                <Skeleton className="h-24 w-full" />
+                <div className="grid grid-cols-2 gap-4">
+                    <Skeleton className="h-40 w-full" />
+                    <Skeleton className="h-40 w-full" />
+                </div>
+                <Skeleton className="h-64 w-full" />
+            </Card>
+        );
+    }
 
     if (!selectedPO) {
         return (

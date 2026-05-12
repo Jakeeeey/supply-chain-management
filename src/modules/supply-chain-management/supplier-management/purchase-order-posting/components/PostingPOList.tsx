@@ -88,7 +88,7 @@ export function PostingPOList() {
                     className="h-8 gap-2 text-[10px] font-black uppercase"
                     onClick={refreshList}
                 >
-                    <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
+                    <RefreshCw className={cn("h-3.5 w-3.5 text-muted-foreground", listLoading && "animate-spin")} />
                     Refresh
                 </Button>
             </div>

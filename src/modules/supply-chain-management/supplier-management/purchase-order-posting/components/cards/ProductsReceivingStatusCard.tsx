@@ -24,36 +24,49 @@ export function ProductsReceivingStatusCard() {
                                 No receiving lines found.
                             </div>
                         ) : (
-                            allocs.map((a) => (
-                                <div key={a.branch.id} className="rounded-lg border p-3">
-                                    <div className="mb-2 flex items-center justify-between gap-2">
-                                        <div className="text-sm font-medium">{a.branch.name}</div>
-                                        <Badge variant="outline">{a.items.length} items</Badge>
-                                    </div>
+                            allocs.map((a) => {
+                                const consolidated = new Map<string, typeof a.items[0]>();
+                                a.items.forEach(it => {
+                                    const existing = consolidated.get(it.productId);
+                                    if (existing) {
+                                        existing.receivedQty += (it.receivedQty || 0);
+                                    } else {
+                                        consolidated.set(it.productId, { ...it });
+                                    }
+                                });
+                                const uniqueItems = Array.from(consolidated.values());
 
-                                    <div className="space-y-2">
-                                        {a.items.map((it) => {
-                                            const expected = Number(it.expectedQty || 0);
-                                            const received = Number(it.receivedQty || 0);
-                                            const ok = expected > 0 ? received >= expected : received > 0;
+                                return (
+                                    <div key={a.branch.id} className="rounded-lg border p-3">
+                                        <div className="mb-2 flex items-center justify-between gap-2">
+                                            <div className="text-sm font-medium">{a.branch.name}</div>
+                                            <Badge variant="outline">{uniqueItems.length} items</Badge>
+                                        </div>
 
-                                            return (
-                                                <div key={it.id} className="flex items-start justify-between gap-3 text-xs">
-                                                    <div className="min-w-0">
-                                                        <div className="font-medium text-wrap">{it.name}</div>
-                                                        <div className="text-muted-foreground text-wrap">{it.barcode}</div>
+                                        <div className="space-y-2">
+                                            {uniqueItems.map((it) => {
+                                                const expected = Number(it.expectedQty || 0);
+                                                const received = Number(it.receivedQty || 0);
+                                                const ok = expected > 0 ? received >= expected : received > 0;
+
+                                                return (
+                                                    <div key={it.productId} className="flex items-start justify-between gap-3 text-xs">
+                                                        <div className="min-w-0">
+                                                            <div className="font-medium text-wrap">{it.name}</div>
+                                                            <div className="text-muted-foreground text-wrap">{it.barcode}</div>
+                                                        </div>
+                                                        <div className="shrink-0 flex items-center gap-2">
+                                                            <Badge variant={ok ? "outline" : "secondary"}>
+                                                                {received} / {expected}
+                                                            </Badge>
+                                                        </div>
                                                     </div>
-                                                    <div className="shrink-0 flex items-center gap-2">
-                                                        <Badge variant={ok ? "outline" : "secondary"}>
-                                                            {received} / {expected}
-                                                        </Badge>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
+                                                );
+                                            })}
+                                        </div>
                                     </div>
-                                </div>
-                            ))
+                                );
+                            })
                         )}
                     </div>
                 </ScrollArea>
