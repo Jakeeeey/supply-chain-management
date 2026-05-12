@@ -180,14 +180,29 @@ export async function fetchProductCatalog(customerCode?: string): Promise<{
     discount_type: item.discount_type,
   }));
 
+  const suppliers = (suppliersRes.data || []) as unknown as Supplier[];
+  const products = (productsRes.data || []) as unknown as Product[];
+
+  // 🟢 Filter products to only those linked to Division 1 suppliers
+  const allowedSupplierIds = new Set(suppliers.map((s) => s.id));
+  const allowedProductIds = new Set(
+    connections
+      .filter((conn) => allowedSupplierIds.has(conn.supplier_id))
+      .map((conn) => conn.product_id),
+  );
+
+  const filteredProducts = products.filter((p) =>
+    allowedProductIds.has(p.product_id),
+  );
+
   return {
     brands: (brandsRes.data || []) as unknown as Brand[],
     categories: (categoriesRes.data || []) as unknown as Category[],
-    suppliers: (suppliersRes.data || []) as unknown as Supplier[],
+    suppliers: suppliers,
     units: (unitsRes.data || []) as unknown as Unit[],
     connections: connections as ProductSupplierConnection[],
     supplierCategoryDiscount,
-    products: (productsRes.data || []) as unknown as Product[],
+    products: filteredProducts,
   };
 }
 
