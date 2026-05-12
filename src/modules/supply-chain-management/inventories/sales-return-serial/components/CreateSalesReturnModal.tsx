@@ -13,7 +13,6 @@ import {
   CheckCircle,
   ScanLine,
   Loader2,
-  Package,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -126,7 +125,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   // --- SERIAL STATE ---
   const [isValidatingSerial, setIsValidatingSerial] = useState(false);
   const [serialInput, setSerialInput] = useState("");
-  const [lastAddedSerial, setLastAddedSerial] = useState("");
 
   // --- 3. CART STATE ---
   const [items, setItems] = useState<SalesReturnItem[]>([]);
@@ -292,24 +290,20 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     }
 
     setIsValidatingSerial(true);
-    setLastAddedSerial(serial);
 
     try {
       // 2. Database Check (Already Returned)
       const dupCheck = await SalesReturnProvider.checkSerialDuplicate(serial);
       if (dupCheck.isDuplicate) {
-        setLastAddedSerial("");
         toast.error("Already Returned", { 
           description: `Serial "${serial}" was already returned in Transaction #${dupCheck.returnNo}` 
         });
         return;
       }
 
-      // 3. Database Check (On-Hand / In Stock - Global)
       const finalBranchId = Number(branchId) || 0;
       const result = await SalesReturnProvider.checkSerialOnHand(serial, finalBranchId);
       if (result && result.isOnInventory) {
-        setLastAddedSerial("");
         toast.error("Serial Number already in stock");
         return;
       }
@@ -356,9 +350,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
       toast.success("Serial Added", { description: `Serial ${serial} successfully tagged for ${items[selectedRowIndex].description}` });
       setSerialInput("");
-      setTimeout(() => setLastAddedSerial(""), 2000);
     } catch (err: unknown) {
-      setLastAddedSerial("");
       toast.error("Validation Failed", { description: (err as Error).message || "An unexpected error occurred." });
     } finally {
       setIsValidatingSerial(false);
@@ -569,10 +561,10 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       const payload = {
         invoiceNo,
         orderNo,
-        customer: customerCode,
-        salesmanId: selectedSalesmanId,
+        customerCode: customerCode,
+        salesmanId: Number(selectedSalesmanId),
         salesmanCode: salesmanCode,
-        branchId: branchId,
+        branchId: branchId ?? undefined,
         isThirdParty,
         totalAmount: totalNet,
         returnDate,
@@ -585,9 +577,9 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       await SalesReturnProvider.submitReturn(payload);
       toast.success("Transaction Success", { description: "Sales return record has been successfully created." });
       setSuccessOpen(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      toast.error("Submission Failed", { description: err.message || "An error occurred while creating the sales return." });
+      toast.error("Submission Failed", { description: (err as Error).message || "An error occurred while creating the sales return." });
     } finally {
       setIsSubmitting(false);
     }
@@ -601,11 +593,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
   const handleAddProducts = (newItems: Partial<SalesReturnItem>[]) => {
     setItems((prev) => {
-      let updated = [...prev];
-      
-      // Use a local set to track what we've processed in THIS batch 
-      // to handle cases where newItems might contain duplicates
-      const processedInBatch = new Set<string>();
+      const updated = [...prev];
 
       newItems.forEach((item) => {
         const rawId = item.product_id || item.productId || item.id;
@@ -614,9 +602,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         const productId = Number(rawId);
         const unit = item.unit || "Pcs";
         const unitPrice = Math.round(Number(item.unitPrice || 0) * 100) / 100;
-        
-        // Create a unique key for comparison in the main list
-        const uniqueKey = `${productId}-${unit}-${unitPrice}`;
         
         const isSerialized = item.isSerialized === 1 || item.isSerialized === true;
         const incomingQty = isSerialized ? 0 : (item.quantity || 1);
@@ -644,7 +629,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
           const initialGross = Math.round(unitPrice * incomingQty * 100) / 100;
           let discAmt = 0;
           if (item.discountType) {
-            const opt = lineDiscountOptions.find((d) => d.id.toString() === item.discountType?.toString());
+            const opt = lineDiscountOptions.find((d: API_LineDiscount) => d.id.toString() === item.discountType?.toString());
             if (opt) discAmt = Math.round(initialGross * (parseFloat(opt.total_percent) / 100) * 100) / 100;
           }
           
@@ -671,7 +656,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     });
   };
 
-  const handleItemChange = (index: number, field: keyof SalesReturnItem, value: any) => {
+  const handleItemChange = (index: number, field: keyof SalesReturnItem, value: SalesReturnItem[keyof SalesReturnItem]) => {
     setItems((prev) => {
       const updated = [...prev];
       const item = { ...updated[index], [field]: value } as SalesReturnItem;
@@ -839,7 +824,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {items.length === 0 ? (
-                    <tr><td colSpan={12} className="px-6 py-16 text-center text-muted-foreground bg-muted/30"><div className="flex flex-col items-center gap-2"><FileText className="h-8 w-8 text-muted-foreground mb-1" /><p>No items added yet.</p><span className="text-xs">Click "Add Product" to browse catalog.</span></div></td></tr>
+                    <tr><td colSpan={12} className="px-6 py-16 text-center text-muted-foreground bg-muted/30"><div className="flex flex-col items-center gap-2"><FileText className="h-8 w-8 text-muted-foreground mb-1" /><p>No items added yet.</p><span className="text-xs">Click &ldquo;Add Product&rdquo; to browse catalog.</span></div></td></tr>
                   ) : items.map((item, idx) => (
                     <tr key={idx} onClick={() => setSelectedRowIndex(idx)} className={cn("hover:bg-muted/10 transition-colors duration-200 border-b border-border cursor-pointer group", selectedRowIndex === idx && "bg-primary/5 ring-1 ring-inset ring-primary/20")}>
                       <td className="px-4 py-2 font-mono text-sm text-foreground"><div className="flex items-center gap-2">{selectedRowIndex === idx ? <div className="w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_rgba(var(--primary),0.5)] animate-pulse" /> : <div className="w-2 h-2 rounded-full bg-muted-foreground/20" />}<span>{item.code}</span></div></td>

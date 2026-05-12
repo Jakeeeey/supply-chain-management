@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import {
   X,
   Loader2,
@@ -9,19 +9,18 @@ import {
   Printer,
   Save,
   CheckCircle,
-  Link as LinkIcon,
-  FileText,
-  Search,
-  ChevronDown,
   ScanLine,
   Check,
   ChevronsUpDown,
+  FileText,
+  ChevronDown,
+  Link as LinkIcon,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -65,15 +64,14 @@ import { SalesReturnProvider } from "../providers/fetchProviders";
 import {
   SalesReturn,
   SalesReturnItem,
-  SalesReturnStatusCard,
   InvoiceOption,
   API_LineDiscount,
   API_SalesReturnType,
+  SalesReturnStatusCard,
 } from "../types/sales-return.types";
 import { ProductLookupModal } from "./ProductLookupModal";
 import { SalesReturnPrintSlip } from "./SalesReturnPrintSlip";
 import { createRoot } from "react-dom/client";
-import { useSearchParams } from "next/navigation";
 
 interface Props {
   returnId: number;
@@ -177,16 +175,19 @@ export function UpdateSalesReturnModal({
   onClose,
   onSuccess,
 }: Props) {
-  const searchParams = useSearchParams();
-  const prefillRemarks = searchParams.get("prefillRemarks");
-  const prefillInvoiceNo = searchParams.get("prefillInvoiceNo");
-  const prefillOrderNo = searchParams.get("prefillOrderNo");
 
   const [headerData, setHeaderData] = useState<SalesReturn>(initialData);
   const [details, setDetails] = useState<SalesReturnItem[]>([]);
-  const [statusCardData, setStatusCardData] = useState<SalesReturnStatusCard | null>(null);
   const [loading, setLoading] = useState(true);
+  const [invoiceOptions, setInvoiceOptions] = useState<InvoiceOption[]>([]);
+  const [invoiceSearch, setInvoiceSearch] = useState("");
+  const [orderSearch, setOrderSearch] = useState("");
+  const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
+  const [isOrderOpen, setIsOrderOpen] = useState(false);
   const [appliedInvoiceId, setAppliedInvoiceId] = useState<number | null>(null);
+
+  const invoiceWrapperRef = React.useRef<HTMLDivElement>(null);
+  const orderWrapperRef = React.useRef<HTMLDivElement>(null);
 
   const [discountOptions, setDiscountOptions] = useState<API_LineDiscount[]>([]);
   const [returnTypeOptions, setReturnTypeOptions] = useState<API_SalesReturnType[]>([]);
@@ -198,27 +199,15 @@ export function UpdateSalesReturnModal({
   const [isUpdateSuccessOpen, setIsUpdateSuccessOpen] = useState(false);
   const [isReceiveConfirmOpen, setIsReceiveConfirmOpen] = useState(false);
   const [isInvoiceLookupOpen, setIsInvoiceLookupOpen] = useState(false);
-
   const [isUpdating, setIsUpdating] = useState(false);
   const [isReceiving, setIsReceiving] = useState(false);
-  const [returnTypeError, setReturnTypeError] = useState(false);
-  const [orderError, setOrderError] = useState(false);
-  const [invoiceError, setInvoiceError] = useState(false);
 
-  const [invoiceOptions, setInvoiceOptions] = useState<InvoiceOption[]>([]);
-  const [invoiceSearch, setInvoiceSearch] = useState("");
-
-  const [isOrderDropdownOpen, setIsOrderDropdownOpen] = useState(false);
-  const [orderSearch, setOrderSearch] = useState("");
-  const orderDropdownRef = useRef<HTMLDivElement>(null);
-  const [isInvoiceDropdownOpen, setIsInvoiceDropdownOpen] = useState(false);
-  const [invoiceDropdownSearch, setInvoiceDropdownSearch] = useState("");
-  const invoiceDropdownRef = useRef<HTMLDivElement>(null);
-
-  // Serial State
-  const [isValidatingSerial, setIsValidatingSerial] = useState(false);
   const [serialInput, setSerialInput] = useState("");
   const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null);
+  const [isValidatingSerial, setIsValidatingSerial] = useState(false);
+
+  // statusCardData is fetched but not currently used in UI
+  const [statusCardData, setStatusCardData] = useState<SalesReturnStatusCard | null>(null);
 
   const isPending = headerData.status === "Pending";
   const isReceived = headerData.status === "Received";
@@ -243,31 +232,78 @@ export function UpdateSalesReturnModal({
         setReturnTypeOptions(retTypes);
         setSalesmenOptions(salesmen);
         setCustomerOptions(customers);
-        try {
-          const invoices = await SalesReturnProvider.getInvoiceReturnList(headerData.salesmanId?.toString(), headerData.customerCode);
-          setInvoiceOptions(invoices);
-        } catch { setInvoiceOptions([]); }
+        setAppliedInvoiceId(headerData.appliedInvoiceId || null);
+        setOrderSearch(headerData.orderNo || "");
+        setInvoiceSearch(headerData.invoiceNo || "");
       } catch (err) { console.error("Failed to load details", err); }
       finally { setLoading(false); }
     };
-    if (returnId) loadFullDetails();
-  }, [returnId, headerData.returnNo, headerData.customerCode, headerData.salesmanId]);
+    loadFullDetails();
+  }, [returnId, headerData.returnNo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (details.length > 0) {
-      setDetails((prev) => prev.map((item) => {
-        const key = `price${headerData.priceType}`;
-        const basePrice = Number((item as any)[key]) || Number(item.priceA) || Number(item.unitPrice) || 0;
-        const gross = Math.round(Number(item.quantity) * basePrice * 100) / 100;
-        let discAmt = 0;
-        if (item.discountType && item.discountType !== "No Discount") {
-          const opt = discountOptions.find(d => d.id.toString() === item.discountType?.toString());
-          if (opt) discAmt = Math.round(gross * (parseFloat(opt.total_percent) / 100) * 100) / 100;
+    if (headerData.salesmanId && headerData.customerCode) {
+      const fetchInv = async () => {
+        try {
+          const data = await SalesReturnProvider.getInvoiceReturnList(
+            headerData.salesmanId.toString(),
+            headerData.customerCode
+          );
+          setInvoiceOptions(data);
+        } catch {
+          setInvoiceOptions([]);
         }
-        return { ...item, unitPrice: basePrice, grossAmount: gross, discountAmount: discAmt, totalAmount: Math.round((gross - discAmt) * 100) / 100 };
-      }));
+      };
+      fetchInv();
     }
-  }, [headerData.priceType, discountOptions]);
+  }, [headerData.salesmanId, headerData.customerCode]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as Node;
+      if (invoiceWrapperRef.current && !invoiceWrapperRef.current.contains(target)) setIsInvoiceOpen(false);
+      if (orderWrapperRef.current && !orderWrapperRef.current.contains(target)) setIsOrderOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleDetailChange = (idx: number, updates: Partial<SalesReturnItem> & { newSerial?: string }) => {
+    setDetails((prev) => {
+      const next = [...prev];
+      const current = next[idx];
+      if (!current) return prev;
+      
+      const updatedItem = { ...current, ...updates };
+      
+      if (updates.newSerial) {
+        const serial = updates.newSerial.toUpperCase();
+        const alreadyHas = next.some(row => row.serialNumbers?.some(sn => sn.toUpperCase() === serial));
+        if (alreadyHas) {
+          toast.warning("Serial Number already added");
+          return prev;
+        }
+        updatedItem.serialNumbers = [...(current.serialNumbers || []), updates.newSerial];
+      }
+      
+      if (updatedItem.isSerialized === 1 || updatedItem.isSerialized === true) {
+        updatedItem.quantity = (updatedItem.serialNumbers || []).length;
+      }
+      
+      updatedItem.grossAmount = Math.round(Number(updatedItem.quantity) * Number(updatedItem.unitPrice) * 100) / 100;
+      
+      let discAmt = 0;
+      if (updatedItem.discountType) {
+        const opt = discountOptions.find((d: API_LineDiscount) => d.id.toString() === updatedItem.discountType?.toString());
+        if (opt) discAmt = Math.round(updatedItem.grossAmount * (parseFloat(opt.total_percent) / 100) * 100) / 100;
+      }
+      updatedItem.discountAmount = discAmt;
+      updatedItem.totalAmount = Math.round((updatedItem.grossAmount - discAmt) * 100) / 100;
+      
+      next[idx] = updatedItem;
+      return next;
+    });
+  };
 
   const handleAddSerial = async () => {
     const serial = serialInput.trim().toUpperCase();
@@ -275,7 +311,6 @@ export function UpdateSalesReturnModal({
     const selectedRow = details[selectedRowIndex];
     if (!selectedRow) return;
 
-    // 1. Session Check (Global within Modal)
     const isGlobalSessionDuplicate = details.some((item) => 
       item.serialNumbers?.some(sn => sn.toUpperCase() === serial)
     );
@@ -289,75 +324,27 @@ export function UpdateSalesReturnModal({
 
     setIsValidatingSerial(true);
     try {
-      // 2. Database Check (Already Returned)
       const dup = await SalesReturnProvider.checkSerialDuplicate(serial);
       if (dup.isDuplicate) {
-        toast.error("Already Returned", { 
-          description: `Serial "${serial}" is already recorded in Transaction #${dup.returnNo}` 
-        });
+        toast.error("Already Returned", { description: `Serial "${serial}" is already recorded in Transaction #${dup.returnNo}` });
         return;
       }
 
-      // 3. Database Check (On-Hand / In Stock - Global)
-      const finalBranchId = Number(branchId) || 0;
-      const result = await SalesReturnProvider.checkSerialOnHand(serial, finalBranchId); 
+      const result = await SalesReturnProvider.checkSerialOnHand(serial, Number(branchId) || 0); 
       if (result && result.isOnInventory) {
         toast.error("Serial Number already in stock");
         return;
       }
 
-      handleDetailChange(selectedRowIndex, { 
-        newSerial: serial,
-      });
+      handleDetailChange(selectedRowIndex, { newSerial: serial });
       setSerialInput("");
       toast.success("Serial Added", { description: `Serial ${serial} successfully tagged.` });
-    } catch (err: any) {
-      toast.error("Validation Failed", { description: err.message || "Could not verify serial number." });
+    } catch (err: unknown) {
+      setIsValidatingSerial(false);
+      toast.error("Validation Failed", { description: (err as Error).message || "An unexpected error occurred." });
     } finally {
       setIsValidatingSerial(false);
     }
-  };
-
-  const handleDetailChange = (index: number, updates: Record<string, any>) => {
-    setDetails((prev) => {
-      const next = [...prev];
-      if (!next[index]) return prev;
-      
-      const item = { ...next[index], ...updates };
-      
-      // Safety check for duplicate serial addition (Race condition protection)
-      if (updates.newSerial) {
-        const serial = updates.newSerial.toUpperCase();
-        const alreadyHas = next.some(row => row.serialNumbers?.some(sn => sn.toUpperCase() === serial));
-        if (alreadyHas) {
-          toast.warning("Serial Number already added");
-          return prev;
-        }
-        item.serialNumbers = [...(item.serialNumbers || []), updates.newSerial];
-      }
-      
-      const isSerialized = item.isSerialized === 1 || item.isSerialized === true;
-      if (isSerialized) {
-        item.quantity = (item.serialNumbers || []).length;
-      }
-
-      const qty = Number(item.quantity || 0);
-      const price = Number(item.unitPrice || 0);
-      const gross = Math.round(qty * price * 100) / 100;
-      
-      let discAmt = 0;
-      if (item.discountType && item.discountType !== "No Discount") {
-        const opt = discountOptions.find(d => d.id.toString() === item.discountType?.toString());
-        if (opt) discAmt = Math.round(gross * (parseFloat(opt.total_percent) / 100) * 100) / 100;
-      }
-      
-      item.grossAmount = gross;
-      item.discountAmount = discAmt;
-      item.totalAmount = Math.round((gross - discAmt) * 100) / 100;
-      
-      next[index] = item;
-      return next;
-    });
   };
 
   const handleDeleteRow = (index: number) => setDetails((prev) => prev.filter((_, i) => i !== index));
@@ -372,31 +359,28 @@ export function UpdateSalesReturnModal({
 
   const handleConfirmProductLookup = (newItems: Partial<SalesReturnItem>[]) => {
     setDetails((prev) => {
-      let updated = [...prev];
-      
+      const updated = [...prev];
       newItems.forEach((item) => {
         const rawId = item.product_id || item.productId || item.id;
         if (!rawId) return;
 
         const productId = Number(rawId);
-        const unit = item.unit || "Pcs";
         const unitPrice = Math.round(Number(item.unitPrice || 0) * 100) / 100;
-        
         const isSerialized = item.isSerialized === 1 || item.isSerialized === true;
-        const incomingQty = isSerialized ? 0 : (item.quantity || 1);
+        const incomingQty = isSerialized ? 0 : (Number(item.quantity) || 1);
 
         const existingIndex = updated.findIndex((i) => 
           i.productId === productId && 
-          i.unit === unit && 
-          Math.round(i.unitPrice * 100) / 100 === unitPrice
+          i.unit === (item.unit || "Pcs") && 
+          Math.round(Number(i.unitPrice) * 100) / 100 === unitPrice
         );
 
         if (existingIndex >= 0) {
           const existing = { ...updated[existingIndex] };
           if (!isSerialized) {
-            existing.quantity += incomingQty;
+            existing.quantity = Number(existing.quantity) + incomingQty;
           }
-          existing.grossAmount = Math.round(existing.quantity * existing.unitPrice * 100) / 100;
+          existing.grossAmount = Math.round(Number(existing.quantity) * Number(existing.unitPrice) * 100) / 100;
           if (existing.discountType) {
             const opt = discountOptions.find((d) => d.id.toString() === existing.discountType?.toString());
             if (opt) existing.discountAmount = Math.round(existing.grossAmount * (parseFloat(opt.total_percent) / 100) * 100) / 100;
@@ -417,7 +401,7 @@ export function UpdateSalesReturnModal({
             productId,
             code: item.code || "N/A",
             description: item.description || "Unknown Item",
-            unit,
+            unit: item.unit || "Pcs",
             quantity: incomingQty,
             unitPrice,
             grossAmount: initialGross,
@@ -451,8 +435,8 @@ export function UpdateSalesReturnModal({
       toast.success("Return Updated", { description: `Sales Return #${headerData.returnNo} has been successfully saved.` });
       setIsUpdateConfirmOpen(false);
       setIsUpdateSuccessOpen(true);
-    } catch (err: any) {
-      toast.error("Update Failed", { description: err.message || "Something went wrong while saving changes." });
+    } catch (err: unknown) {
+      toast.error("Update Failed", { description: (err as Error).message || "Something went wrong while saving changes." });
     }
     finally { setIsUpdating(false); }
   };
@@ -472,11 +456,11 @@ export function UpdateSalesReturnModal({
       });
       const now = new Date().toISOString();
       await SalesReturnProvider.updateStatus(headerData.id, "Received", true, now);
-      toast.success("Return Received", { description: `Sales Return #${headerData.returnNo} is now marked as RECEIVED.` });
+      toast.success("Return Received", { description: "Sales return has been successfully received and posted to inventory." });
       onSuccess();
       onClose();
-    } catch (err: any) {
-      toast.error("Process Failed", { description: err.message || "Something went wrong while finalizing the return." });
+    } catch (err: unknown) {
+      toast.error("Receive Failed", { description: (err as Error).message || "An error occurred while marking as received." });
     }
     finally { setIsReceiving(false); }
   };
@@ -585,7 +569,7 @@ export function UpdateSalesReturnModal({
                         {canEditAll && <TableCell><Skeleton className="h-4 w-8" /></TableCell>}
                       </TableRow>
                     )) : details.length === 0 ? (
-                      <TableRow><TableCell colSpan={12} className="px-6 py-16 text-center text-muted-foreground bg-muted/30"><div className="flex flex-col items-center gap-2"><FileText className="h-8 w-8 text-muted-foreground mb-1" /><p>No items added yet.</p><span className="text-xs">Click "Add Product" to browse catalog.</span></div></TableCell></TableRow>
+                      <TableRow><TableCell colSpan={12} className="px-6 py-16 text-center text-muted-foreground bg-muted/30"><div className="flex flex-col items-center gap-2"><FileText className="h-8 w-8 text-muted-foreground mb-1" /><p>No items added yet.</p><span className="text-xs">Click &ldquo;Add Product&rdquo; to browse catalog.</span></div></TableCell></TableRow>
                     ) : details.map((item, idx) => (
                       <TableRow key={idx} onClick={() => canEditAll && setSelectedRowIndex(idx)} className={cn("border-b border-border hover:bg-muted/10 transition-colors cursor-pointer", selectedRowIndex === idx && "bg-primary/5")}>
                         <TableCell className="font-mono text-sm">{item.code}</TableCell>
@@ -665,16 +649,60 @@ export function UpdateSalesReturnModal({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="md:col-span-2 space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5"><Label className="text-xs font-bold uppercase">Order No.</Label><Input disabled={!canEditAll} value={headerData.orderNo} onChange={e => setHeaderData({ ...headerData, orderNo: e.target.value })} /></div>
-                <div className="space-y-1.5"><Label className="text-xs font-bold uppercase">Invoice No.</Label><Input disabled={!canEditAll} value={headerData.invoiceNo} onChange={e => setHeaderData({ ...headerData, invoiceNo: e.target.value })} /></div>
+                <div className="space-y-1.5" ref={orderWrapperRef}>
+                  <Label className="text-xs font-bold uppercase tracking-wide">Order No.</Label>
+                  <div className="relative group">
+                    <Input disabled={!canEditAll} className="h-9 w-full bg-background border-border shadow-sm text-sm" placeholder="Search Order No..." value={orderSearch} onChange={e => { setOrderSearch(e.target.value); setHeaderData({ ...headerData, orderNo: e.target.value }); setIsOrderOpen(true); }} onFocus={() => setIsOrderOpen(true)} />
+                    <ChevronDown className="h-3 w-3 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    {isOrderOpen && (
+                      <div className="absolute bottom-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto divide-y">
+                        <div className="px-3 py-2 text-xs font-medium cursor-pointer hover:bg-destructive/10 text-destructive flex items-center gap-2" onClick={() => { setOrderSearch(""); setHeaderData({ ...headerData, orderNo: "", invoiceNo: "" }); setInvoiceSearch(""); setAppliedInvoiceId(null); setIsOrderOpen(false); }}><X className="h-3 w-3" /> Clear Selection</div>
+                        {invoiceOptions.filter(inv => inv.order_id?.toLowerCase().includes(orderSearch.toLowerCase())).map(inv => (
+                          <div key={inv.id} className="px-3 py-2 text-sm cursor-pointer hover:bg-primary/10 text-foreground" onClick={() => { setOrderSearch(inv.order_id || ""); setHeaderData({ ...headerData, orderNo: inv.order_id || "", invoiceNo: inv.invoice_no || "" }); setInvoiceSearch(inv.invoice_no || ""); setAppliedInvoiceId(Number(inv.id)); setIsOrderOpen(false); }}>
+                            <div className="flex flex-col"><span className="font-medium">{inv.order_id}</span><span className="text-[10px] text-muted-foreground">Invoice: {inv.invoice_no}</span></div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-1.5" ref={invoiceWrapperRef}>
+                  <Label className="text-xs font-bold uppercase tracking-wide">Invoice No.</Label>
+                  <div className="relative group">
+                    <Input disabled={!canEditAll} className="h-9 w-full bg-background border-border shadow-sm text-sm" placeholder="Search Invoice No..." value={invoiceSearch} onChange={e => { setInvoiceSearch(e.target.value); setHeaderData({ ...headerData, invoiceNo: e.target.value }); setIsInvoiceOpen(true); }} onFocus={() => setIsInvoiceOpen(true)} />
+                    <ChevronDown className="h-3 w-3 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    {isInvoiceOpen && (
+                      <div className="absolute bottom-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto divide-y">
+                        <div className="px-3 py-2 text-xs font-medium cursor-pointer hover:bg-destructive/10 text-destructive flex items-center gap-2" onClick={() => { setInvoiceSearch(""); setHeaderData({ ...headerData, invoiceNo: "", orderNo: "" }); setOrderSearch(""); setAppliedInvoiceId(null); setIsInvoiceOpen(false); }}><X className="h-3 w-3" /> Clear Selection</div>
+                        {invoiceOptions.filter(inv => inv.invoice_no?.toLowerCase().includes(invoiceSearch.toLowerCase())).map(inv => (
+                          <div key={inv.id} className="px-3 py-2 text-sm cursor-pointer hover:bg-primary/10 text-foreground" onClick={() => { setInvoiceSearch(inv.invoice_no || ""); setHeaderData({ ...headerData, invoiceNo: inv.invoice_no || "", orderNo: inv.order_id || "" }); setOrderSearch(inv.order_id || ""); setAppliedInvoiceId(Number(inv.id)); setIsInvoiceOpen(false); }}>
+                            <div className="flex flex-col"><span className="font-medium">{inv.invoice_no}</span><span className="text-[10px] text-muted-foreground">Order: {inv.order_id}</span></div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
               <div className="space-y-1.5"><Label className="text-xs font-bold uppercase">Remarks</Label><Textarea disabled={!canEditLimited} className="min-h-[100px]" value={headerData.remarks || ""} onChange={e => setHeaderData({ ...headerData, remarks: e.target.value })} /></div>
             </div>
-            <div className="bg-background p-6 rounded-xl border border-primary/20 shadow-sm space-y-4">
+            <div className="bg-background p-6 rounded-xl border border-primary/20 shadow-sm space-y-4 relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-1 h-full bg-primary"></div>
               <div className="flex justify-between text-sm"><span>Gross Amount</span><span className="font-bold">₱{totalGross.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
               <div className="flex justify-between text-sm"><span>Discount Amount</span><span className="font-bold text-destructive">-₱{totalDiscount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
               <div className="h-px bg-border"></div>
               <div className="flex justify-between items-center"><span className="font-black">Net Amount</span><span className="text-2xl font-black text-primary">₱{totalNet.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+              <div className="h-px bg-border my-2"></div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground font-medium">Applied to</span>
+                {canEditLimited ? (
+                  <Button variant="ghost" size="sm" className="h-6 text-xs border-primary/20 text-primary hover:bg-primary/10 px-2" onClick={() => setIsInvoiceLookupOpen(true)}>
+                    {statusCardData?.appliedTo || invoiceOptions.find(i => Number(i.id) === appliedInvoiceId)?.invoice_no || "Select Invoice"} <LinkIcon className="ml-1 h-3 w-3" />
+                  </Button>
+                ) : (
+                  <span className="font-bold">{statusCardData?.appliedTo || "-"}</span>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -689,6 +717,34 @@ export function UpdateSalesReturnModal({
       </DialogContent>
 
       <ProductLookupModal isOpen={isProductLookupOpen} onClose={() => setIsProductLookupOpen(false)} onConfirm={handleConfirmProductLookup} priceType={headerData.priceType || "A"} customerCode={headerData.customerCode} />
+
+      <Dialog open={isInvoiceLookupOpen} onOpenChange={setIsInvoiceLookupOpen}>
+        <DialogContent className="max-w-md">
+          <DialogTitle>Select Invoice <Badge variant="secondary" className="ml-2">{invoiceOptions.length}</Badge></DialogTitle>
+          <div className="space-y-4 mt-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Search Invoice No..." className="pl-10" value={invoiceSearch} onChange={e => setInvoiceSearch(e.target.value)} />
+            </div>
+            <div className="max-h-[300px] overflow-y-auto border rounded-md divide-y shadow-inner">
+              <div className="p-3 hover:bg-destructive/10 cursor-pointer flex items-center gap-3 transition-colors text-destructive font-medium" onClick={() => { setAppliedInvoiceId(null); setStatusCardData(prev => prev ? { ...prev, appliedTo: "" } : null); setIsInvoiceLookupOpen(false); }}>
+                <div className="h-8 w-8 rounded-full bg-destructive/10 flex items-center justify-center"><X className="h-4 w-4" /></div>
+                <div className="text-sm">Clear Selection (Unlink)</div>
+              </div>
+              {invoiceOptions.filter(inv => inv.invoice_no.toLowerCase().includes(invoiceSearch.toLowerCase())).map(inv => (
+                <div key={inv.id} className="p-3 hover:bg-primary/5 cursor-pointer flex items-center justify-between transition-all" onClick={() => { setAppliedInvoiceId(Number(inv.id)); setStatusCardData(prev => prev ? { ...prev, appliedTo: inv.invoice_no } : null); setInvoiceSearch(inv.invoice_no); setOrderSearch(inv.order_id || ""); setHeaderData({ ...headerData, invoiceNo: inv.invoice_no, orderNo: inv.order_id || "" }); setIsInvoiceLookupOpen(false); }}>
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary"><FileText className="h-4 w-4" /></div>
+                    <div className="flex flex-col"><span className="text-sm font-bold">{inv.invoice_no}</span><span className="text-[10px] text-muted-foreground">Order: {inv.order_id}</span></div>
+                  </div>
+                  <span className="text-xs font-mono font-bold text-primary">₱{Number(inv.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+              ))}
+              {invoiceOptions.length === 0 && <div className="p-8 text-center text-sm text-muted-foreground italic">No invoices found for this salesman/customer.</div>}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isUpdateConfirmOpen} onOpenChange={setIsUpdateConfirmOpen}>
         <DialogContent className="max-w-[400px] text-center p-8">

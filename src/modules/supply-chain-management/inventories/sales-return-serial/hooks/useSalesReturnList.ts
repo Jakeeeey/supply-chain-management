@@ -39,7 +39,7 @@ export function useSalesReturnList() {
       // 2. Fetch Returns, Customers, and Salesmen in parallel
       // When searching: fetch ALL returns (limit=-1) so we can filter by name client-side
       // When not searching: use normal server-side pagination
-      const [returnsResult, customersList, salesmenList] = await Promise.all([
+      const [returnsResult, customersList, salesmenList, filterSalesmenList] = await Promise.all([
         SalesReturnProvider.getReturns(
           isSearching ? 1 : page,
           isSearching ? -1 : pageSize,
@@ -47,11 +47,12 @@ export function useSalesReturnList() {
         ),
         SalesReturnProvider.getCustomersList(),
         SalesReturnProvider.getSalesmenList(),
+        SalesReturnProvider.getFilterSalesmenList(),
       ]);
 
       // 3. Update Options State (for Filter Dropdowns)
       setOptions({
-        salesmen: salesmenList,
+        salesmen: filterSalesmenList,
         customers: customersList,
       });
 

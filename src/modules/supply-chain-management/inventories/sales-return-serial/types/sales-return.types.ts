@@ -52,6 +52,7 @@ export interface SalesReturn {
   receivedAt?: string;
   createdDate?: string;
   createdAt?: string;
+  appliedInvoiceId?: number | null;
 }
 
 // --- BASIC ENTITIES ---

@@ -15,7 +15,6 @@ import type {
   PriceTypeOption 
 } from "../types/sales-return.types";
 import * as lookupRepo from "./sales-return-lookup.repo";
-import * as queryRepo from "./sales-return-query.repo";
 
 /**
  * Builds a Map<discount_type_id, total_percentage> by summing linked
@@ -49,6 +48,7 @@ async function buildDiscountPercentMap(): Promise<Map<number, number>> {
  */
 export async function fetchReferences(): Promise<{
   salesmen: { value: string; label: string; code: string; branch: string; branchId: number }[];
+  filterSalesmen: { value: string; label: string; code: string; branch: string; branchId: number }[];
   formSalesmen: SalesmanOption[];
   customers: { value: string; label: string }[];
   formCustomers: CustomerOption[];
@@ -83,13 +83,25 @@ export async function fetchReferences(): Promise<{
     branchId: item.branch_code,
   }));
 
-  const formSalesmen: SalesmanOption[] = salesmenData.map((item: any) => ({
-    id: item.id,
-    name: item.salesman_name,
-    code: item.salesman_code,
-    priceType: item.price_type || "A",
-    branchId: item.branch_code,
-  }));
+  const filterSalesmen = salesmenData
+    .filter((item: any) => (item.isActive === 1 || item.isActive === true) && Number(item.division_id) === 1)
+    .map((item: any) => ({
+      value: item.id.toString(),
+      label: item.salesman_name,
+      code: item.salesman_code || "N/A",
+      branch: branchMap.get(item.branch_code) || "N/A",
+      branchId: item.branch_code,
+    }));
+
+  const formSalesmen: SalesmanOption[] = salesmenData
+    .filter((item: any) => (item.isActive === 1 || item.isActive === true) && Number(item.division_id) === 1)
+    .map((item: any) => ({
+      id: item.id,
+      name: item.salesman_name,
+      code: item.salesman_code,
+      priceType: item.price_type || "A",
+      branchId: item.branch_code,
+    }));
 
   const customers = customersData.map((item: any) => ({
     value: item.customer_code,
@@ -117,6 +129,7 @@ export async function fetchReferences(): Promise<{
 
   return {
     salesmen,
+    filterSalesmen,
     formSalesmen,
     customers,
     formCustomers,

@@ -11,10 +11,6 @@ import type {
   CustomerOption,
   BranchOption,
   InvoiceOption,
-  Brand,
-  Category,
-  Supplier,
-  Unit,
   Product,
   ProductCatalog,
   API_LineDiscount,
@@ -75,6 +71,13 @@ export const SalesReturnProvider = {
   > {
     const refs = await this._getReferences();
     return refs.salesmen;
+  },
+
+  async getFilterSalesmenList(): Promise<
+    { value: string; label: string; code: string; branch: string; branchId: number }[]
+  > {
+    const refs = await this._getReferences();
+    return refs.filterSalesmen;
   },
 
   async getCustomersList(): Promise<{ value: string; label: string }[]> {
@@ -145,10 +148,11 @@ export const SalesReturnProvider = {
     appliedInvoiceId?: number;
     isThirdParty?: boolean;
   }): Promise<any> {
+    const { returnId, ...rest } = payload;
     const res = await fetch(API_BASE, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ id: returnId, ...rest }),
     });
     return handleResponse(res);
   },
