@@ -41,6 +41,7 @@ export function useSerializeDispatch() {
 
         return {
           ...st,
+          scannedQty: itemSerials.length,
           scannedSerialQty: itemSerials.length,
           scannedSerials: itemSerials,
         } as SerialOrderGroupItem;

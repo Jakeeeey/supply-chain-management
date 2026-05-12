@@ -4,7 +4,8 @@ import type {
 } from "../types/serialize.types";
 import type { 
   StockTransferRow,
-  ProductRow 
+  ProductRow,
+  OrderGroup,
 } from "../../stock-transfer/types/stock-transfer.types";
 
 /**
@@ -76,4 +77,80 @@ export async function bulkUpdateTransfers(items: TransferUpdatePayload[]): Promi
       bulkUpdateItems("items/stock_transfer", ids, JSON.parse(dataJson))
     )
   );
+}
+
+/**
+ * Fetches stock transfers grouped by order_no with pagination and search support.
+ * This version paginates by unique order numbers to ensure the sidebar fills correctly.
+ */
+export async function fetchStockTransferGroups(params: {
+  status: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<{ data: OrderGroup[]; hasMore: boolean }> {
+  const { status, search, limit = 10, offset = 0 } = params;
+
+  // 1. Fetch unique order numbers matching the criteria
+  // We use a larger limit for the inner fetch if needed, but the primary goal 
+  // is to get the set of order_nos for this 'page' of orders.
+  const distinctQueryParams: Record<string, any> = {
+    "filter[status][_in]": status,
+    // "filter[source_branch][division_id][_eq]": 1,
+    "fields": "order_no,date_encoded",
+    "sort": "-date_encoded",
+    "limit": -1, // We'll handle the unique slicing in JS for simplicity with Directus
+  };
+
+  if (search) {
+    distinctQueryParams["_or"] = [
+      { order_no: { _icontains: search } },
+      { source_branch: { branch_name: { _icontains: search } } },
+      { target_branch: { branch_name: { _icontains: search } } },
+    ];
+  }
+
+  const distinctRes = await fetchItems<any>("items/stock_transfer", distinctQueryParams);
+  const allRows = distinctRes.data || [];
+  
+  // Get unique order numbers in order of date_encoded
+  const uniqueOrderNos: string[] = [];
+  const seen = new Set<string>();
+  for (const row of allRows) {
+    if (!seen.has(row.order_no)) {
+      seen.add(row.order_no);
+      uniqueOrderNos.push(row.order_no);
+    }
+  }
+
+  // Slice for the current page of GROUPS
+  const pagedOrderNos = uniqueOrderNos.slice(offset, offset + limit);
+  const hasMore = uniqueOrderNos.length > offset + limit;
+
+  if (pagedOrderNos.length === 0) {
+    return { data: [], hasMore: false };
+  }
+
+  // 2. Fetch full details for the specific order numbers on this page
+  const detailsQueryParams: Record<string, any> = {
+    "filter[order_no][_in]": pagedOrderNos.join(","),
+    "limit": -1,
+    "sort": "-date_encoded",
+    "fields": "*,product_id.*,source_branch.*,target_branch.*",
+  };
+
+  const detailsRes = await fetchItems<StockTransferRow>("items/stock_transfer", detailsQueryParams);
+  const rawData = detailsRes.data || [];
+
+  // Use the helper to group the details
+  const { groupByOrderNo } = await import("../../stock-transfer/services/stock-transfer.helpers");
+  const groups = groupByOrderNo(rawData);
+
+  // Sort groups to match the order of pagedOrderNos
+  const sortedGroups = pagedOrderNos.map(no => groups.find(g => g.orderNo === no)).filter(Boolean) as OrderGroup[];
+
+  return {
+    data: sortedGroups,
+    hasMore,
+  };
 }

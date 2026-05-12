@@ -1,4 +1,4 @@
-import type { StockTransferRow, ProductRow } from "../../stock-transfer/types/stock-transfer.types";
+import type { StockTransferRow, ProductRow, OrderGroupItem } from "../../stock-transfer/types/stock-transfer.types";
 
 /** Row from the `stock_transfer_serial` tracking collection. */
 export interface StockTransferSerialRow {
@@ -39,12 +39,11 @@ export interface SerialScanLog {
 }
 
 /**
- * Extension of the base OrderGroupItem to include serial tracking.
+ * Enhanced item for Serialized workflow.
  */
-export interface SerialOrderGroupItem extends StockTransferRow {
+export interface SerialOrderGroupItem extends OrderGroupItem {
   scannedSerialQty?: number;
   receivedSerialQty?: number;
   scannedSerials?: string[];
   receivedSerials?: string[];
-  isLoosePack?: boolean;
 }

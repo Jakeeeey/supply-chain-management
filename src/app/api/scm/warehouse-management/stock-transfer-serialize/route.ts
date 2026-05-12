@@ -27,6 +27,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(result);
     }
 
+    if (action === "list_groups") {
+      const status = searchParams.get("status") || "";
+      const search = searchParams.get("search") || "";
+      const limit = Number(searchParams.get("limit") || 25);
+      const offset = Number(searchParams.get("offset") || 0);
+
+      const result = await service.listTransferGroups({ status, search, limit, offset });
+      return NextResponse.json(result);
+    }
+
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   } catch (err) {
     console.error("[Stock Transfer Serialize API] GET Error:", err);

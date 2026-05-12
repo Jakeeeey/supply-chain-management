@@ -41,6 +41,7 @@ export function useSerializeReceive() {
 
         return {
           ...st,
+          receivedQty: itemSerials.length,
           receivedSerialQty: itemSerials.length,
           receivedSerials: itemSerials,
         } as SerialOrderGroupItem;

@@ -74,3 +74,15 @@ export async function updateTransferWithSerials(payload: UpdateSerializeTransfer
 
   return { success: true };
 }
+
+/**
+ * Lists paginated stock transfer groups for the selection sidebar.
+ */
+export async function listTransferGroups(params: {
+  status: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}) {
+  return await repo.fetchStockTransferGroups(params);
+}
