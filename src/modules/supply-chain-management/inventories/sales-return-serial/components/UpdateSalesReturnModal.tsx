@@ -429,7 +429,7 @@ export function UpdateSalesReturnModal({
         remarks: headerData.remarks || "",
         invoiceNo: headerData.invoiceNo,
         orderNo: headerData.orderNo,
-        appliedInvoiceId: appliedInvoiceId ?? undefined,
+        appliedInvoiceId: appliedInvoiceId,
         isThirdParty: headerData.isThirdParty,
       });
       toast.success("Return Updated", { description: `Sales Return #${headerData.returnNo} has been successfully saved.` });
@@ -451,7 +451,7 @@ export function UpdateSalesReturnModal({
         remarks: headerData.remarks || "",
         invoiceNo: headerData.invoiceNo,
         orderNo: headerData.orderNo,
-        appliedInvoiceId: appliedInvoiceId ?? undefined,
+        appliedInvoiceId: appliedInvoiceId,
         isThirdParty: headerData.isThirdParty,
       });
       const now = new Date().toISOString();
@@ -732,7 +732,11 @@ export function UpdateSalesReturnModal({
                 <div className="text-sm">Clear Selection (Unlink)</div>
               </div>
               {invoiceOptions.filter(inv => inv.invoice_no.toLowerCase().includes(invoiceSearch.toLowerCase())).map(inv => (
-                <div key={inv.id} className="p-3 hover:bg-primary/5 cursor-pointer flex items-center justify-between transition-all" onClick={() => { setAppliedInvoiceId(Number(inv.id)); setStatusCardData(prev => prev ? { ...prev, appliedTo: inv.invoice_no } : null); setInvoiceSearch(inv.invoice_no); setOrderSearch(inv.order_id || ""); setHeaderData({ ...headerData, invoiceNo: inv.invoice_no, orderNo: inv.order_id || "" }); setIsInvoiceLookupOpen(false); }}>
+                <div key={inv.id} className="p-3 hover:bg-primary/5 cursor-pointer flex items-center justify-between transition-all" onClick={() => { 
+                  setAppliedInvoiceId(Number(inv.id)); 
+                  setStatusCardData(prev => prev ? { ...prev, appliedTo: inv.invoice_no } : null); 
+                  setIsInvoiceLookupOpen(false); 
+                }}>
                   <div className="flex items-center gap-3">
                     <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary"><FileText className="h-4 w-4" /></div>
                     <div className="flex flex-col"><span className="text-sm font-bold">{inv.invoice_no}</span><span className="text-[10px] text-muted-foreground">Order: {inv.order_id}</span></div>

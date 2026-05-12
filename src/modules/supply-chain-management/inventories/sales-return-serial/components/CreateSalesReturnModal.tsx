@@ -571,7 +571,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         priceType,
         remarks,
         items: items,
-        appliedInvoiceId: appliedInvoiceId ?? undefined,
+        appliedInvoiceId: appliedInvoiceId,
       };
 
       await SalesReturnProvider.submitReturn(payload);
@@ -946,7 +946,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                       {isInvoiceOpen && (
                         <div className="absolute bottom-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto divide-y">
                           <div className="px-3 py-2 text-xs font-medium cursor-pointer hover:bg-destructive/10 text-destructive flex items-center gap-2" onClick={() => { setInvoiceNo(""); setInvoiceSearch(""); setAppliedInvoiceId(null); setIsInvoiceOpen(false); }}><X className="h-3 w-3" /> Clear Selection</div>
-                          {filteredInvoices.map(inv => <div key={inv.id} className="px-3 py-2 text-sm cursor-pointer hover:bg-primary/10 text-foreground" onClick={() => { setInvoiceNo(inv.invoice_no); setInvoiceSearch(inv.invoice_no); setAppliedInvoiceId(Number(inv.id)); setOrderNo(inv.order_id); setOrderSearch(inv.order_id); setIsInvoiceOpen(false); }}><div className="flex flex-col"><span className="font-medium">{inv.invoice_no}</span><span className="text-[10px] text-muted-foreground">Order: {inv.order_id}</span></div></div>)}
+                          {filteredInvoices.map(inv => <div key={inv.id} className="px-3 py-2 text-sm cursor-pointer hover:bg-primary/10 text-foreground" onClick={() => { setInvoiceNo(inv.invoice_no); setInvoiceSearch(inv.invoice_no); setOrderNo(inv.order_id); setOrderSearch(inv.order_id); setAppliedInvoiceId(Number(inv.id)); setIsInvoiceOpen(false); }}><div className="flex flex-col"><span className="font-medium">{inv.invoice_no}</span><span className="text-[10px] text-muted-foreground">Order: {inv.order_id}</span></div></div>)}
                         </div>
                       )}
                     </div>
