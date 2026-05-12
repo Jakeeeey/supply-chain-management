@@ -18,9 +18,9 @@ import {
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useStockAdjustmentForm } from "../hooks/useStockAdjustmentForm";
-import { 
+import {
   StockAdjustmentDetail as DetailType,
-  StockAdjustmentProduct 
+  StockAdjustmentProduct
 } from "../types/stock-adjustment.schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -34,6 +34,7 @@ import {
   TableRow
 } from "@/components/ui/table";
 import { format } from "date-fns";
+import { isPostedStatus } from "../utils/status-utils";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface StockAdjustmentDetailProps {
@@ -73,7 +74,8 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
 
   if (!data) return <div className="p-12 text-center font-bold">Record not found.</div>;
 
-  const isPosted = !!data.isPosted;
+  // Robust check for isPosted (handles boolean, number, string, or Directus Buffer)
+  const isPosted = isPostedStatus(data.isPosted);
 
   const generatePDF = () => {
     if (!data) return;
@@ -85,7 +87,7 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
     doc.setFontSize(18); // Reduced from 22
     doc.setTextColor(37, 99, 235); // blue-600
     doc.text("STOCK ADJUSTMENT SLIP", pageWidth / 2, 15, { align: "center" });
-    
+
     doc.setDrawColor(37, 99, 235);
     doc.setLineWidth(0.5);
     doc.line(pageWidth / 2 - 12, 18, pageWidth / 2 + 12, 18);
@@ -93,7 +95,7 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
     // --- Metadata Section ---
     doc.setFontSize(9); // Reduced from 10
     doc.setTextColor(100, 116, 139); // slate-500
-    
+
     // Left Column
     doc.setFont("helvetica", "bold");
     doc.text("Document No:", 20, 30);
@@ -162,7 +164,7 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
     doc.setTextColor(100, 116, 139);
     doc.setFont("helvetica", "normal");
     doc.text("Total Adjusted Amount", pageWidth - 20, finalY, { align: 'right' });
-    
+
     // Remarks on the left
     doc.setFontSize(8);
     doc.setTextColor(100, 116, 139);
@@ -178,9 +180,9 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
     doc.setFontSize(14); // Reduced from 16
     doc.setFont("helvetica", "bold");
     doc.setTextColor(30, 58, 138);
-    const formattedAmount = Math.abs(data.amount || 0).toLocaleString(undefined, { 
-      minimumFractionDigits: 2, 
-      maximumFractionDigits: 2 
+    const formattedAmount = Math.abs(data.amount || 0).toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
     });
     doc.text(formattedAmount, pageWidth - 20, finalY + 7, { align: 'right' });
 
@@ -197,11 +199,11 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
     doc.setFontSize(8);
     doc.setTextColor(100, 116, 139); // slate-500
     doc.setFont("helvetica", "normal");
-    
+
     // Set thin line style
     doc.setLineWidth(0.2);
     doc.setDrawColor(148, 163, 184); // slate-400
-    
+
     // Prepared By
     doc.text("PREPARED BY:", 20, sigY);
     doc.line(20, sigY + 12, 70, sigY + 12);
@@ -307,7 +309,16 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
                   <p className="text-blue-100/70 text-[10px] uppercase font-bold tracking-widest">Created By</p>
                   <div className="flex items-center gap-2 font-bold text-lg">
                     <User className="h-4 w-4 text-blue-200" />
-                    {typeof data.created_by === 'object' ? `${data.created_by?.user_fname} ${data.created_by?.user_lname}` : data.created_by || "System"}
+                    {(() => {
+                      const createdBy = data.created_by;
+                      if (typeof createdBy === 'object' && createdBy !== null) {
+                        const fname = createdBy.user_fname || "";
+                        const lname = createdBy.user_lname || "";
+                        const fullName = `${fname} ${lname}`.trim();
+                        return fullName || "System User";
+                      }
+                      return createdBy || "System User";
+                    })()}
                   </div>
                 </div>
 
@@ -359,7 +370,13 @@ export function StockAdjustmentDetailView({ id, onBack }: StockAdjustmentDetailP
                       <p className="font-bold text-blue-700 dark:text-blue-300">
                         {(() => {
                           const postedBy = data.posted_by;
-                          return typeof postedBy === 'object' ? `${postedBy?.user_fname} ${postedBy?.user_lname}` : postedBy || "System User";
+                          if (typeof postedBy === 'object' && postedBy !== null) {
+                            const fname = postedBy.user_fname || "";
+                            const lname = postedBy.user_lname || "";
+                            const fullName = `${fname} ${lname}`.trim();
+                            return fullName || "System User";
+                          }
+                          return postedBy || "System User";
                         })()}
                       </p>
                     </div>
