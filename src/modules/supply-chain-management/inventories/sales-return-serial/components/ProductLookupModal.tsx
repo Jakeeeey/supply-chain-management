@@ -12,6 +12,7 @@ import {
   Search,
   Box,
   ShoppingCart,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,6 +66,7 @@ export function ProductLookupModal({
   >([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
 
   const [selectedItems, setSelectedItems] = useState<SalesReturnItem[]>([]);
 
@@ -377,9 +379,15 @@ export function ProductLookupModal({
   };
 
   const handleConfirm = () => {
-    onConfirm(selectedItems);
-    onClose();
-    setSelectedItems([]);
+    if (isConfirming) return;
+    setIsConfirming(true);
+    try {
+      onConfirm(selectedItems);
+      onClose();
+      setSelectedItems([]);
+    } finally {
+      setIsConfirming(false);
+    }
   };
 
   const resetFilters = () => {
@@ -638,19 +646,21 @@ export function ProductLookupModal({
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-5 pb-4">
                 {isLoading && (
                   <>
-                    {Array.from({ length: 8 }).map((_, i) => (
+                    {Array.from({ length: 12 }).map((_, i) => (
                       <div
                         key={i}
-                        className="bg-background rounded-lg border border-border shadow-sm p-5 animate-pulse flex flex-col gap-3"
+                        className="bg-background rounded-lg border border-border shadow-sm p-5 flex flex-col gap-4 animate-pulse"
                       >
-                        <div className="h-4 bg-muted rounded w-3/4"></div>
-                        <div className="h-3 bg-muted rounded w-1/2"></div>
-                        <div className="mt-auto flex justify-between items-center pt-4">
-                          <div>
-                            <div className="h-4 bg-muted rounded w-20 mb-1"></div>
-                            <div className="h-3 bg-muted rounded w-16"></div>
+                        <div className="space-y-2">
+                          <div className="h-4 bg-muted rounded w-5/6"></div>
+                          <div className="h-3 bg-muted rounded w-2/3"></div>
+                        </div>
+                        <div className="mt-auto pt-6 flex justify-between items-center border-t border-border/50">
+                          <div className="space-y-1.5">
+                            <div className="h-4 bg-muted rounded w-16"></div>
+                            <div className="h-2 bg-muted rounded w-12"></div>
                           </div>
-                          <div className="h-8 bg-muted rounded w-16"></div>
+                          <div className="h-8 bg-primary/20 rounded-md w-20"></div>
                         </div>
                       </div>
                     ))}
@@ -933,11 +943,15 @@ export function ProductLookupModal({
                 </div>
               </div>
               <Button
-                className="w-full h-12 text-base font-semibold shadow-primary/20 shadow-lg bg-primary hover:bg-primary transition-all active:scale-[0.98]"
-                disabled={selectedItems.length === 0}
+                className="w-full h-12 text-base font-semibold shadow-primary/20 shadow-lg bg-primary hover:bg-primary transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                disabled={selectedItems.length === 0 || isConfirming}
                 onClick={handleConfirm}
               >
-                Confirm Selection
+                {isConfirming ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <>Confirm Selection</>
+                )}
               </Button>
             </div>
           </div>

@@ -601,16 +601,36 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
   const handleAddProducts = (newItems: Partial<SalesReturnItem>[]) => {
     setItems((prev) => {
-      const updated = [...prev];
+      let updated = [...prev];
+      
+      // Use a local set to track what we've processed in THIS batch 
+      // to handle cases where newItems might contain duplicates
+      const processedInBatch = new Set<string>();
+
       newItems.forEach((item) => {
         const rawId = item.product_id || item.productId || item.id;
+        if (!rawId) return;
+
         const productId = Number(rawId);
-        const existingIndex = updated.findIndex((i) => i.productId === productId && i.unit === item.unit && i.unitPrice === Number(item.unitPrice));
-        const incomingQty = item.isSerialized ? 0 : (item.quantity || 1);
+        const unit = item.unit || "Pcs";
+        const unitPrice = Math.round(Number(item.unitPrice || 0) * 100) / 100;
+        
+        // Create a unique key for comparison in the main list
+        const uniqueKey = `${productId}-${unit}-${unitPrice}`;
+        
+        const isSerialized = item.isSerialized === 1 || item.isSerialized === true;
+        const incomingQty = isSerialized ? 0 : (item.quantity || 1);
+
+        const existingIndex = updated.findIndex((i) => 
+          i.productId === productId && 
+          i.unit === unit && 
+          Math.round(i.unitPrice * 100) / 100 === unitPrice
+        );
 
         if (existingIndex >= 0) {
-          const existing = updated[existingIndex];
-          if (!item.isSerialized) {
+          // CLONE to avoid direct mutation
+          const existing = { ...updated[existingIndex] };
+          if (!isSerialized) {
             existing.quantity += incomingQty;
           }
           existing.grossAmount = Math.round(existing.quantity * existing.unitPrice * 100) / 100;
@@ -619,30 +639,31 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
             if (opt) existing.discountAmount = Math.round(existing.grossAmount * (parseFloat(opt.total_percent) / 100) * 100) / 100;
           }
           existing.totalAmount = Math.round((existing.grossAmount - existing.discountAmount) * 100) / 100;
+          updated[existingIndex] = existing;
         } else {
-          const unitPrice = Math.round(Number(item.unitPrice || 0) * 100) / 100;
           const initialGross = Math.round(unitPrice * incomingQty * 100) / 100;
           let discAmt = 0;
           if (item.discountType) {
             const opt = lineDiscountOptions.find((d) => d.id.toString() === item.discountType?.toString());
             if (opt) discAmt = Math.round(initialGross * (parseFloat(opt.total_percent) / 100) * 100) / 100;
           }
+          
           updated.push({
             ...item,
             productId,
             code: item.code || "N/A",
             description: item.description || "Unknown Item",
-            unit: item.unit || "Pcs",
+            unit,
             quantity: incomingQty,
             unitPrice,
             grossAmount: initialGross,
             discountType: item.discountType || "",
             discountAmount: discAmt,
             totalAmount: Math.round((initialGross - discAmt) * 100) / 100,
-            reason: "",
-            returnType: "",
-            serialNumbers: [],
-            isSerialized: item.isSerialized,
+            reason: item.reason || "",
+            returnType: item.returnType || "",
+            serialNumbers: item.serialNumbers || [],
+            isSerialized: isSerialized,
           } as SalesReturnItem);
         }
       });
@@ -702,43 +723,86 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-5 gap-y-4">
               <div className="space-y-1.5 relative" ref={salesmanWrapperRef}>
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Salesman <span className="text-destructive">*</span></label>
-                <div className="relative group">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary" />
-                  <input type="text" className="w-full h-9 border border-border rounded-md text-sm pl-9 pr-8 bg-background outline-none focus:ring-2 focus:border-primary shadow-sm" placeholder="Search Salesman..." value={salesmanSearch} onChange={e => { setSalesmanSearch(e.target.value); setIsSalesmanOpen(true); }} onFocus={() => setIsSalesmanOpen(true)} />
-                  <ChevronDown className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                </div>
+                {isLoadingForm ? (
+                  <div className="h-9 w-full bg-muted animate-pulse rounded-md border border-border"></div>
+                ) : (
+                  <div className="relative group">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary" />
+                    <input type="text" className="w-full h-9 border border-border rounded-md text-sm pl-9 pr-8 bg-background outline-none focus:ring-2 focus:border-primary shadow-sm" placeholder="Search Salesman..." value={salesmanSearch} onChange={e => { setSalesmanSearch(e.target.value); setIsSalesmanOpen(true); }} onFocus={() => setIsSalesmanOpen(true)} />
+                    <ChevronDown className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
+                )}
                 {isSalesmanOpen && (
                   <div className="absolute top-[calc(100%+4px)] left-0 w-full z-20 bg-background border border-border rounded-md shadow-xl max-h-60 overflow-y-auto font-medium">
                     {filteredSalesmen.map(s => <div key={s.id} className="px-4 py-2.5 text-sm cursor-pointer hover:bg-primary/10 text-foreground" onClick={() => handleSelectSalesman(s)}>{s.name}</div>)}
                   </div>
                 )}
               </div>
-              <div className="space-y-1.5"><label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Salesman Code</label><div className="h-9 w-full bg-muted/20 border border-border rounded-md px-3 flex items-center text-sm font-medium text-foreground italic shadow-sm">{salesmanCode || "-"}</div></div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Salesman Code</label>
+                {isLoadingForm ? (
+                  <div className="h-9 w-full bg-muted animate-pulse rounded-md border border-border"></div>
+                ) : (
+                  <div className="h-9 w-full bg-muted/20 border border-border rounded-md px-3 flex items-center text-sm font-medium text-foreground italic shadow-sm">{salesmanCode || "-"}</div>
+                )}
+              </div>
               <div className="space-y-1.5 relative" ref={customerWrapperRef}>
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Customer <span className="text-destructive">*</span></label>
-                <div className="relative group">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary" />
-                  <input type="text" className="w-full h-9 border border-border rounded-md text-sm pl-9 pr-8 bg-background outline-none focus:ring-2 focus:border-primary shadow-sm" placeholder="Search Customer..." value={customerSearch} onChange={e => { setCustomerSearch(e.target.value); setIsCustomerOpen(true); }} onFocus={() => setIsCustomerOpen(true)} />
-                  <ChevronDown className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                </div>
+                {isLoadingForm ? (
+                  <div className="h-9 w-full bg-muted animate-pulse rounded-md border border-border"></div>
+                ) : (
+                  <div className="relative group">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary" />
+                    <input type="text" className="w-full h-9 border border-border rounded-md text-sm pl-9 pr-8 bg-background outline-none focus:ring-2 focus:border-primary shadow-sm" placeholder="Search Customer..." value={customerSearch} onChange={e => { setCustomerSearch(e.target.value); setIsCustomerOpen(true); }} onFocus={() => setIsCustomerOpen(true)} />
+                    <ChevronDown className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
+                )}
                 {isCustomerOpen && (
                   <div className="absolute top-[calc(100%+4px)] left-0 w-full z-20 bg-background border border-border rounded-md shadow-xl max-h-60 overflow-y-auto font-medium">
                     {filteredCustomers.map(c => <div key={c.id} className="px-4 py-2.5 text-sm cursor-pointer hover:bg-primary/10 text-foreground" onClick={() => handleSelectCustomer(c)}><div className="flex flex-col"><span>{c.name}</span><span className="text-[10px] text-muted-foreground font-mono">{c.code}</span></div></div>)}
                   </div>
                 )}
               </div>
-              <div className="space-y-1.5"><label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Customer Code</label><div className="h-9 w-full bg-muted/20 border border-border rounded-md px-3 flex items-center text-sm font-medium text-foreground italic shadow-sm">{customerCode || "-"}</div></div>
-              <div className="space-y-1.5"><label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Branch</label><div className="h-9 w-full bg-muted/20 border border-border rounded-md px-3 flex items-center text-sm font-medium text-foreground italic shadow-sm">{branchName || "-"}</div></div>
-              <div className="space-y-1.5"><label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Return Date <span className="text-destructive">*</span></label><Input type="date" value={returnDate} onChange={e => setReturnDate(e.target.value)} className="h-9 w-full bg-background border-border shadow-sm text-sm" /></div>
-              <div className="space-y-1.5"><label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Received Date</label><div className="h-9 w-full bg-muted/20 border border-border rounded-md px-3 flex items-center text-sm font-medium text-muted-foreground italic shadow-sm opacity-60">(Auto-generated)</div></div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Customer Code</label>
+                {isLoadingForm ? (
+                  <div className="h-9 w-full bg-muted animate-pulse rounded-md border border-border"></div>
+                ) : (
+                  <div className="h-9 w-full bg-muted/20 border border-border rounded-md px-3 flex items-center text-sm font-medium text-foreground italic shadow-sm">{customerCode || "-"}</div>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Branch</label>
+                {isLoadingForm ? (
+                  <div className="h-9 w-full bg-muted animate-pulse rounded-md border border-border"></div>
+                ) : (
+                  <div className="h-9 w-full bg-muted/20 border border-border rounded-md px-3 flex items-center text-sm font-medium text-foreground italic shadow-sm">{branchName || "-"}</div>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Return Date <span className="text-destructive">*</span></label>
+                {isLoadingForm ? (
+                  <div className="h-9 w-full bg-muted animate-pulse rounded-md border border-border"></div>
+                ) : (
+                  <Input type="date" value={returnDate} onChange={e => setReturnDate(e.target.value)} className="h-9 w-full bg-background border-border shadow-sm text-sm" />
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Received Date</label>
+                <div className="h-9 w-full bg-muted/20 border border-border rounded-md px-3 flex items-center text-sm font-medium text-muted-foreground italic shadow-sm opacity-60">(Auto-generated)</div>
+              </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Price Type <span className="text-destructive">*</span></label>
-                <Select value={priceType} onValueChange={setPriceType}>
-                  <SelectTrigger className="w-full h-9 border-border bg-background shadow-sm text-sm"><SelectValue placeholder="Select Price Type" /></SelectTrigger>
-                  <SelectContent className="z-[200]">
-                    {priceTypeOptions.map(pt => <SelectItem key={pt.price_type_id} value={pt.price_type_name}>Type {pt.price_type_name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                {isLoadingForm ? (
+                  <div className="h-9 w-full bg-muted animate-pulse rounded-md border border-border"></div>
+                ) : (
+                  <Select value={priceType} onValueChange={setPriceType}>
+                    <SelectTrigger className="w-full h-9 border-border bg-background shadow-sm text-sm"><SelectValue placeholder="Select Price Type" /></SelectTrigger>
+                    <SelectContent className="z-[200]">
+                      {priceTypeOptions.map(pt => <SelectItem key={pt.price_type_id} value={pt.price_type_name}>Type {pt.price_type_name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
               <div className="flex items-center space-x-2 pt-2 col-span-2 lg:col-span-4 translate-y-2">
                 <Checkbox id="create-isThirdParty" checked={isThirdParty} onCheckedChange={c => setIsThirdParty(c as boolean)} className="data-[state=checked]:bg-primary border-border" />

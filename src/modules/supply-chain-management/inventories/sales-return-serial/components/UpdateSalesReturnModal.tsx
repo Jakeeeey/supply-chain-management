@@ -163,7 +163,7 @@ const ReadOnlyField = ({
     </Label>
     <div className="w-full h-9 px-3 flex items-center bg-muted/20 border border-border rounded-md text-sm font-medium text-foreground shadow-sm truncate">
       {isLoading ? (
-        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-4 w-5/6 opacity-50" />
       ) : (
         <span className="truncate">{value || "-"}</span>
       )}
@@ -372,16 +372,27 @@ export function UpdateSalesReturnModal({
 
   const handleConfirmProductLookup = (newItems: Partial<SalesReturnItem>[]) => {
     setDetails((prev) => {
-      const updated = [...prev];
+      let updated = [...prev];
+      
       newItems.forEach((item) => {
         const rawId = item.product_id || item.productId || item.id;
+        if (!rawId) return;
+
         const productId = Number(rawId);
-        const existingIndex = updated.findIndex((i) => i.productId === productId && i.unit === item.unit && i.unitPrice === Number(item.unitPrice));
+        const unit = item.unit || "Pcs";
+        const unitPrice = Math.round(Number(item.unitPrice || 0) * 100) / 100;
+        
         const isSerialized = item.isSerialized === 1 || item.isSerialized === true;
         const incomingQty = isSerialized ? 0 : (item.quantity || 1);
 
+        const existingIndex = updated.findIndex((i) => 
+          i.productId === productId && 
+          i.unit === unit && 
+          Math.round(i.unitPrice * 100) / 100 === unitPrice
+        );
+
         if (existingIndex >= 0) {
-          const existing = updated[existingIndex];
+          const existing = { ...updated[existingIndex] };
           if (!isSerialized) {
             existing.quantity += incomingQty;
           }
@@ -391,31 +402,32 @@ export function UpdateSalesReturnModal({
             if (opt) existing.discountAmount = Math.round(existing.grossAmount * (parseFloat(opt.total_percent) / 100) * 100) / 100;
           }
           existing.totalAmount = Math.round((existing.grossAmount - existing.discountAmount) * 100) / 100;
+          updated[existingIndex] = existing;
         } else {
-          const unitPrice = Math.round(Number(item.unitPrice || 0) * 100) / 100;
           const initialGross = Math.round(unitPrice * incomingQty * 100) / 100;
           let discAmt = 0;
           if (item.discountType) {
             const opt = discountOptions.find((d) => d.id.toString() === item.discountType?.toString());
             if (opt) discAmt = Math.round(initialGross * (parseFloat(opt.total_percent) / 100) * 100) / 100;
           }
+          
           updated.push({
             ...item,
             id: `added-${Date.now()}-${productId}`,
             productId,
             code: item.code || "N/A",
             description: item.description || "Unknown Item",
-            unit: item.unit || "Pcs",
+            unit,
             quantity: incomingQty,
             unitPrice,
             grossAmount: initialGross,
             discountType: item.discountType || "",
             discountAmount: discAmt,
             totalAmount: Math.round((initialGross - discAmt) * 100) / 100,
-            reason: "",
-            returnType: "",
-            serialNumbers: [],
-            isSerialized: item.isSerialized,
+            reason: item.reason || "",
+            returnType: item.returnType || "",
+            serialNumbers: item.serialNumbers || [],
+            isSerialized: isSerialized,
           } as SalesReturnItem);
         }
       });
@@ -517,11 +529,11 @@ export function UpdateSalesReturnModal({
             <ReadOnlyField label="Salesman" value={salesmenOptions.find(s => String(s.value) === String(headerData.salesmanId))?.label} isLoading={loading} />
             <ReadOnlyField label="Salesman Code" value={salesmenOptions.find(s => String(s.value) === String(headerData.salesmanId))?.code} isLoading={loading} />
             <ReadOnlyField label="Customer" value={customerOptions.find(c => String(c.value) === String(headerData.customerCode))?.label} isLoading={loading} />
-            <ReadOnlyField label="Customer Code" value={headerData.customerCode} />
+            <ReadOnlyField label="Customer Code" value={headerData.customerCode} isLoading={loading} />
             <ReadOnlyField label="Branch" value={salesmenOptions.find(s => String(s.value) === String(headerData.salesmanId))?.branch} isLoading={loading} />
-            <ReadOnlyField label="Return Date" value={headerData.returnDate} />
+            <ReadOnlyField label="Return Date" value={headerData.returnDate} isLoading={loading} />
             <ReadOnlyField label="Received Date" value={headerData.receivedAt} isLoading={loading} />
-            <ReadOnlyField label="Price Type" value={headerData.priceType} />
+            <ReadOnlyField label="Price Type" value={headerData.priceType} isLoading={loading} />
             <div className="flex items-center space-x-2 pt-2 col-span-2 lg:col-span-4">
               <Checkbox id="isThirdParty" checked={headerData.isThirdParty || false} disabled={!canEditAll} onCheckedChange={checked => setHeaderData({ ...headerData, isThirdParty: checked as boolean })} />
               <Label htmlFor="isThirdParty" className="text-sm font-medium text-foreground cursor-pointer">Third Party Transaction</Label>
@@ -558,7 +570,20 @@ export function UpdateSalesReturnModal({
                   </TableHeader>
                   <TableBody>
                     {loading ? Array.from({ length: 5 }).map((_, i) => (
-                      <TableRow key={i}><TableCell colSpan={12}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
+                      <TableRow key={i}>
+                        <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-48" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-12" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-10 mx-auto" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                        {canEditAll && <TableCell><Skeleton className="h-4 w-8" /></TableCell>}
+                      </TableRow>
                     )) : details.length === 0 ? (
                       <TableRow><TableCell colSpan={12} className="px-6 py-16 text-center text-muted-foreground bg-muted/30"><div className="flex flex-col items-center gap-2"><FileText className="h-8 w-8 text-muted-foreground mb-1" /><p>No items added yet.</p><span className="text-xs">Click "Add Product" to browse catalog.</span></div></TableCell></TableRow>
                     ) : details.map((item, idx) => (
