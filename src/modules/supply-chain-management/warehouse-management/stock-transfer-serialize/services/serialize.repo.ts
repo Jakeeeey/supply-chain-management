@@ -103,11 +103,9 @@ export async function fetchStockTransferGroups(params: {
   };
 
   if (search) {
-    distinctQueryParams["_or"] = [
-      { order_no: { _icontains: search } },
-      { source_branch: { branch_name: { _icontains: search } } },
-      { target_branch: { branch_name: { _icontains: search } } },
-    ];
+    distinctQueryParams["filter[_or][0][order_no][_icontains]"] = search;
+    distinctQueryParams["filter[_or][1][source_branch][branch_name][_icontains]"] = search;
+    distinctQueryParams["filter[_or][2][target_branch][branch_name][_icontains]"] = search;
   }
 
   const distinctRes = await fetchItems<any>("items/stock_transfer", distinctQueryParams);
