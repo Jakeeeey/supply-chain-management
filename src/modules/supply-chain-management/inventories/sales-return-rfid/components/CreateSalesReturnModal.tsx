@@ -61,6 +61,68 @@ interface Props {
   onSuccess?: () => void;
 }
 
+interface SalesReturnGroup {
+  key: string;
+  code: string;
+  description: string;
+  unit: string;
+  returnType: string;
+  unitPrice: number;
+  totalQty: number;
+  totalGross: number;
+  totalDiscount: number;
+  totalNet: number;
+  children: { item: SalesReturnItem; idx: number }[];
+}
+
+// =============================================================================
+// OPTIMIZED SUB-COMPONENTS (PERFORMANCE FIX)
+// =============================================================================
+
+const RemarksInputSection = React.memo(({ value, onChange }: { value: string, onChange: (val: string) => void }) => {
+  const [localRemarks, setLocalRemarks] = useState(value);
+
+  useEffect(() => {
+    setLocalRemarks(value);
+  }, [value]);
+
+  return (
+    <div className="space-y-1.5">
+      <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
+        Remarks
+      </label>
+      <Textarea
+        value={localRemarks}
+        onChange={(e) => setLocalRemarks(e.target.value)}
+        onBlur={() => onChange(localRemarks)}
+        className="resize-none h-24 border-border focus:border-primary focus:bg-background"
+        placeholder="Add any notes regarding this return..."
+      />
+    </div>
+  );
+});
+RemarksInputSection.displayName = "RemarksInputSection";
+
+const ReasonInputSection = React.memo(({ value, onChange }: { value: string, onChange: (val: string) => void }) => {
+  const [localReason, setLocalReason] = useState(value);
+
+  useEffect(() => {
+    setLocalReason(value);
+  }, [value]);
+
+  return (
+    <input
+      type="text"
+      placeholder="Enter reason"
+      className="w-full border border-border rounded h-8 text-sm px-2 outline-none focus:border-primary"
+      value={localReason}
+      onChange={(e) => setLocalReason(e.target.value)}
+      onBlur={() => onChange(localReason)}
+    />
+  );
+});
+ReasonInputSection.displayName = "ReasonInputSection";
+
 export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const searchParams = useSearchParams();
   const fromClearance = searchParams.get("fromClearance");
@@ -1303,15 +1365,12 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                             <td className="px-3 py-2 text-right font-bold text-sm text-foreground whitespace-nowrap">
                               ₱{item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </td>
-                            <td className="px-4 py-2">
-                              <input
-                                type="text"
-                                placeholder="Enter reason"
-                                className="w-full border border-border rounded h-8 text-sm px-2 outline-none focus:border-primary"
-                                value={item.reason || ""}
-                                onChange={(e) => handleItemChange(idx, "reason", e.target.value)}
-                              />
-                            </td>
+                             <td className="px-4 py-2">
+                               <ReasonInputSection
+                                 value={item.reason || ""}
+                                 onChange={(val) => handleItemChange(idx, "reason", val)}
+                               />
+                             </td>
                             <td className="px-3 py-2">
                               <SearchableSelect
                                 value={item.returnType || ""}
@@ -1564,17 +1623,10 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                   </div>
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
-                  Remarks
-                </label>
-                <Textarea
-                  value={remarks}
-                  onChange={(e) => setRemarks(e.target.value)}
-                  className="resize-none h-24 border-border focus:border-primary focus:bg-background"
-                  placeholder="Add any notes regarding this return..."
-                />
-              </div>
+              <RemarksInputSection
+                value={remarks}
+                onChange={setRemarks}
+              />
             </div>
 
             <div className="bg-background rounded-lg border border-border p-0 shadow-sm overflow-hidden h-fit">

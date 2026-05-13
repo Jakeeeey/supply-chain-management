@@ -84,6 +84,58 @@ interface Props {
   onSuccess: () => void;
 }
 
+// =============================================================================
+// OPTIMIZED SUB-COMPONENTS (PERFORMANCE FIX)
+// =============================================================================
+
+const RemarksInputSection = React.memo(({ value, onChange, disabled }: { value: string, onChange: (val: string) => void, disabled?: boolean }) => {
+  const [localRemarks, setLocalRemarks] = useState(value);
+
+  useEffect(() => {
+    setLocalRemarks(value);
+  }, [value]);
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs uppercase font-bold text-muted-foreground">
+        Remarks
+      </Label>
+      <Textarea
+        readOnly={disabled}
+        className={cn(
+          "min-h-[100px] border-border rounded-md focus:border-primary",
+          disabled ? "bg-muted/30 border-border" : "bg-background",
+        )}
+        value={localRemarks}
+        onChange={(e) => setLocalRemarks(e.target.value)}
+        onBlur={() => onChange(localRemarks)}
+      />
+    </div>
+  );
+});
+RemarksInputSection.displayName = "RemarksInputSection";
+
+const ReasonInputSection = React.memo(({ value, onChange, disabled }: { value: string, onChange: (val: string) => void, disabled?: boolean }) => {
+  const [localReason, setLocalReason] = useState(value);
+
+  useEffect(() => {
+    setLocalReason(value);
+  }, [value]);
+
+  return (
+    <input
+      type="text"
+      placeholder="Enter reason"
+      className="w-full border border-border rounded h-8 text-sm px-2 outline-none focus:border-primary"
+      value={localReason}
+      onChange={(e) => setLocalReason(e.target.value)}
+      onBlur={() => onChange(localReason)}
+      disabled={disabled}
+    />
+  );
+});
+ReasonInputSection.displayName = "ReasonInputSection";
+
 // 🟢 LOCAL SEARCHABLE SELECT TO FIX SCROLL ISSUES IN DIALOG
 const LocalSearchableSelect = ({
   options,
@@ -201,7 +253,7 @@ export function UpdateSalesReturnModal({
             : prefillRemarks,
         };
       });
-      
+
       // Clean up URL to prevent re-applying on refresh
       const url = new URL(window.location.href);
       url.searchParams.delete('prefillRemarks');
@@ -321,9 +373,9 @@ export function UpdateSalesReturnModal({
         prevDetails.map((item) => {
           const key = `price${headerData.priceType}` as string;
           const basePrice = Number(item[key as keyof SalesReturnItem]) || Number(item.priceA) || Number(item.unitPrice) || 0;
-          
+
           const newUnitPrice = basePrice;
-          
+
           const newGross = Math.round(Number(item.quantity) * newUnitPrice * 100) / 100;
           let newDiscountAmt = 0;
 
@@ -450,11 +502,11 @@ export function UpdateSalesReturnModal({
 
         const newTags = [...(row.rfidTags || []), tag];
         const newQty = newTags.length;
-        
+
         // Recalculate amounts for this row
         const unitPrice = Number(row.unitPrice) || 0;
         const grossAmount = Math.round(unitPrice * newQty * 100) / 100;
-        
+
         // Calculate discount
         let discountAmt = 0;
         if (row.discountType) {
@@ -611,7 +663,7 @@ export function UpdateSalesReturnModal({
     setReturnTypeError(false);
     setOrderError(false);
     setInvoiceError(false);
-    
+
     if (!headerData.orderNo || !headerData.orderNo.toString().trim()) {
       toast.error("Order No. is required.");
       setOrderError(true);
@@ -639,7 +691,7 @@ export function UpdateSalesReturnModal({
     setReturnTypeError(false);
     setOrderError(false);
     setInvoiceError(false);
-    
+
     if (!headerData.orderNo || !headerData.orderNo.toString().trim()) {
       toast.error("Order No. is required.");
       setOrderError(true);
@@ -834,7 +886,7 @@ export function UpdateSalesReturnModal({
             <ReadOnlyField label="Return Date" value={headerData.returnDate} />
             <ReadOnlyField label="Received Date" value={headerData.createdAt} />
             <ReadOnlyField label="Price Type" value={headerData.priceType} />
-            
+
             <div className="flex items-center space-x-2 pt-2 col-span-2 lg:col-span-4">
               <Checkbox
                 id="isThirdParty"
@@ -897,7 +949,7 @@ export function UpdateSalesReturnModal({
                           : lastScannedRfid
                             ? `✓ ${lastScannedRfid.slice(0, 16)}...`
                             : details.filter((i) => i.rfidTags && i.rfidTags.length > 0)
-                                .length > 0
+                              .length > 0
                               ? `${details.filter((i) => i.rfidTags && i.rfidTags.length > 0).length} RFID items`
                               : "Scan RFID..."}
                       </div>
@@ -989,8 +1041,8 @@ export function UpdateSalesReturnModal({
                       details.map((item, idx) => {
                         const isSelected = selectedRowIndex === idx;
                         return (
-                          <TableRow 
-                            key={item.id || idx} 
+                          <TableRow
+                            key={item.id || idx}
                             onClick={() => {
                               if (!canEditAll) return;
                               if (item.unitOrder === 3) {
@@ -1084,12 +1136,9 @@ export function UpdateSalesReturnModal({
                             </TableCell>
                             <TableCell className="px-4 py-2">
                               {canEditAll ? (
-                                <input
-                                  type="text"
-                                  placeholder="Enter reason"
-                                  className="w-full border border-border rounded h-8 text-sm px-2 outline-none focus:border-primary"
+                                <ReasonInputSection
                                   value={item.reason || ""}
-                                  onChange={(e) => handleDetailChange(idx, "reason", e.target.value)}
+                                  onChange={(val) => handleDetailChange(idx, "reason", val)}
                                 />
                               ) : (
                                 <span className="text-sm text-muted-foreground italic truncate block max-w-[120px]" title={item.reason || ""}>
@@ -1102,12 +1151,12 @@ export function UpdateSalesReturnModal({
                                 <LocalSearchableSelect
                                   value={item.returnType || ""}
                                   onValueChange={(val) => { handleDetailChange(idx, "returnType", val); setReturnTypeError(false); }}
-                                  options={returnTypeOptions.length > 0 
+                                  options={returnTypeOptions.length > 0
                                     ? returnTypeOptions.map((type) => ({ value: type.type_name, label: type.type_name }))
                                     : [
-                                        { value: "Good Order", label: "Good Order" },
-                                        { value: "Bad Order", label: "Bad Order" }
-                                      ]
+                                      { value: "Good Order", label: "Good Order" },
+                                      { value: "Bad Order", label: "Bad Order" }
+                                    ]
                                   }
                                   placeholder="Select type"
                                   className={cn(
@@ -1182,7 +1231,7 @@ export function UpdateSalesReturnModal({
                             const row = next[selectedRowIndex];
                             const newTags = row.rfidTags!.filter(t => t !== tag);
                             const newQty = newTags.length;
-                            
+
                             const unitPrice = Number(row.unitPrice) || 0;
                             const gross = Math.round(unitPrice * newQty * 100) / 100;
                             let discAmt = 0;
@@ -1227,11 +1276,10 @@ export function UpdateSalesReturnModal({
                     <div className="relative group">
                       <input
                         type="text"
-                        className={`w-full h-9 border rounded-md text-sm px-3 pr-8 bg-background outline-none transition-all shadow-sm ${
-                          orderError
+                        className={`w-full h-9 border rounded-md text-sm px-3 pr-8 bg-background outline-none transition-all shadow-sm ${orderError
                             ? "border-destructive bg-destructive/5 ring-1 ring-destructive"
                             : "border-border focus:ring-2 focus:border-primary"
-                        }`}
+                          }`}
                         placeholder="Search Order No..."
                         value={orderSearch || headerData.orderNo || ""}
                         onChange={(e) => {
@@ -1290,11 +1338,10 @@ export function UpdateSalesReturnModal({
                     <div className="relative group">
                       <input
                         type="text"
-                        className={`w-full h-9 border rounded-md text-sm px-3 pr-8 bg-background outline-none transition-all shadow-sm ${
-                          invoiceError
+                        className={`w-full h-9 border rounded-md text-sm px-3 pr-8 bg-background outline-none transition-all shadow-sm ${invoiceError
                             ? "border-destructive bg-destructive/5 ring-1 ring-destructive"
                             : "border-border focus:ring-2 focus:border-primary"
-                        }`}
+                          }`}
                         placeholder="Search Invoice No..."
                         value={invoiceDropdownSearch || headerData.invoiceNo || ""}
                         onChange={(e) => {
@@ -1345,25 +1392,11 @@ export function UpdateSalesReturnModal({
                   )}
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label className="text-xs uppercase font-bold text-muted-foreground">
-                  Remarks
-                </Label>
-                {/* 🟢 REVISED: Editable if Pending or Received (canEditLimited) */}
-                <Textarea
-                  readOnly={!canEditLimited}
-                  className={cn(
-                    "min-h-[100px] border-border rounded-md focus:border-primary",
-                    !canEditLimited
-                      ? "bg-muted/30 border-border"
-                      : "bg-background",
-                  )}
-                  value={headerData.remarks || ""}
-                  onChange={(e) =>
-                    setHeaderData({ ...headerData, remarks: e.target.value })
-                  }
-                />
-              </div>
+              <RemarksInputSection
+                value={headerData.remarks || ""}
+                onChange={(val) => setHeaderData({ ...headerData, remarks: val })}
+                disabled={!canEditLimited}
+              />
             </div>
 
             {/* FINANCIAL SUMMARY */}
