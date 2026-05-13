@@ -226,6 +226,24 @@ const RemarksInputSection = React.memo(({ value, onChange, disabled }: { value: 
 });
 RemarksInputSection.displayName = "RemarksInputSection";
 
+const ReasonInputSection = React.memo(({ value, onChange, disabled }: { value: string; onChange: (val: string) => void; disabled?: boolean }) => {
+  const [localValue, setLocalValue] = useState(value);
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
+  return (
+    <Input
+      className="h-8"
+      value={localValue}
+      onChange={(e) => setLocalValue(e.target.value)}
+      onBlur={() => onChange(localValue)}
+      disabled={disabled}
+    />
+  );
+});
+ReasonInputSection.displayName = "ReasonInputSection";
+
 export function UpdateSalesReturnModal({
   returnId,
   initialData,
@@ -649,7 +667,7 @@ export function UpdateSalesReturnModal({
                         </TableCell>
                         <TableCell className="text-right">₱{Number(item.discountAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
                         <TableCell className="text-right font-bold">₱{Number(item.totalAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                        <TableCell><Input className="h-8" disabled={!canEditAll} value={item.reason || ""} onChange={e => handleDetailChange(idx, { reason: e.target.value })} /></TableCell>
+                        <TableCell onClick={e => e.stopPropagation()}><ReasonInputSection value={item.reason || ""} onChange={val => handleDetailChange(idx, { reason: val })} disabled={!canEditAll} /></TableCell>
                         <TableCell>
                           <LocalSearchableSelect value={item.returnType || ""} onValueChange={v => handleDetailChange(idx, { returnType: v })} options={returnTypeOptions.map(t => ({ value: t.type_name, label: t.type_name }))} disabled={!canEditAll} />
                         </TableCell>

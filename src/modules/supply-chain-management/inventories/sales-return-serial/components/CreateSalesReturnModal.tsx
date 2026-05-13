@@ -115,6 +115,25 @@ const RemarksInputSection = React.memo(({ value, onChange }: { value: string; on
 });
 RemarksInputSection.displayName = "RemarksInputSection";
 
+const ReasonInputSection = React.memo(({ value, onChange, disabled }: { value: string; onChange: (val: string) => void; disabled?: boolean }) => {
+  const [localValue, setLocalValue] = useState(value);
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
+  return (
+    <Input
+      className="h-8"
+      value={localValue}
+      onChange={(e) => setLocalValue(e.target.value)}
+      onBlur={() => onChange(localValue)}
+      disabled={disabled}
+    />
+  );
+
+});
+ReasonInputSection.displayName = "ReasonInputSection";
+
 export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const searchParams = useSearchParams();
   const fromClearance = searchParams.get("fromClearance");
@@ -902,7 +921,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                       </td>
                       <td className="px-4 py-2 text-right text-muted-foreground font-mono text-sm whitespace-nowrap">₱{item.discountAmount?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                       <td className="px-3 py-2 text-right font-bold text-sm text-foreground whitespace-nowrap">₱{item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                      <td className="px-4 py-2" onClick={e => e.stopPropagation()}><input type="text" placeholder="Enter reason" className="w-full border border-border rounded h-8 text-sm px-2 outline-none focus:border-primary" value={item.reason || ""} onChange={e => handleItemChange(idx, "reason", e.target.value)} /></td>
+                      <td className="px-4 py-2" onClick={e => e.stopPropagation()}><ReasonInputSection value={item.reason || ""} onChange={val => handleItemChange(idx, "reason", val)} /></td>
                       <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
                         <SearchableSelect value={item.returnType || ""} onValueChange={val => { handleItemChange(idx, "returnType", val); setReturnTypeError(false); }} options={returnTypeOptions.map(t => ({ value: t.type_name, label: t.type_name }))} placeholder="Select type" className={cn("h-8 text-sm px-2", returnTypeError && (!item.returnType || item.returnType === "") && "border-destructive ring-1 ring-destructive/30 bg-destructive/5 text-destructive")} />
                       </td>
