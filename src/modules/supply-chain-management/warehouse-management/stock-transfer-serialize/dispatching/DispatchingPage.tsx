@@ -19,6 +19,7 @@ export default function DispatchingPage() {
     loadMore,
     hasMore,
     handleSerialInput,
+    updateManualQty,
     dispatchOrder,
     recentScans,
     getBranchName,
@@ -44,6 +45,7 @@ export default function DispatchingPage() {
         selectedGroup={selectedGroup}
         processing={processing}
         handleSerialInput={handleSerialInput}
+        updateManualQty={updateManualQty}
         dispatchOrder={dispatchOrder}
       />
 

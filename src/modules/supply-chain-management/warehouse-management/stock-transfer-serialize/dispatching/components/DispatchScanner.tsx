@@ -5,7 +5,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import {
-  Truck, ScanLine, Loader2, CheckCircle2, Activity, Target, Package,
+  Truck, ScanLine, Loader2, CheckCircle2, Activity, Target, Package, Minus, Plus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,7 @@ interface DispatchScannerProps {
   selectedGroup: OrderGroup | null;
   processing: boolean;
   handleSerialInput: (serial: string) => void;
+  updateManualQty: (productId: number, delta: number) => void;
   dispatchOrder: (orderNo: string) => void;
 }
 
@@ -25,6 +26,7 @@ export function DispatchScanner({
   selectedGroup,
   processing,
   handleSerialInput,
+  updateManualQty,
   dispatchOrder,
 }: DispatchScannerProps) {
   const [serialInput, setSerialInput] = useState('');
@@ -129,7 +131,33 @@ export function DispatchScanner({
                       {product?.product_name || 'Unknown'}
                     </TableCell>
                     <TableCell className="text-right tabular-nums text-sm font-semibold">
-                      {scanned}
+                      {product?.is_serialized === 0 ? (
+                        <div className="flex items-center justify-end">
+                          <div className="flex h-7 items-center divide-x divide-border overflow-hidden rounded-md border border-border bg-muted/20">
+                            <button
+                              type="button"
+                              onClick={() => updateManualQty(productId, -1)}
+                              disabled={scanned <= 0}
+                              className="flex h-full w-7 items-center justify-center transition-colors hover:bg-muted disabled:opacity-30 text-foreground/50 hover:text-foreground"
+                            >
+                              <Minus className="h-3 w-3" />
+                            </button>
+                            <span className="flex h-full min-w-[32px] items-center justify-center px-2 text-xs font-bold text-foreground">
+                              {scanned}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => updateManualQty(productId, 1)}
+                              disabled={scanned >= targetQty}
+                              className="flex h-full w-7 items-center justify-center transition-colors hover:bg-muted disabled:opacity-30 text-foreground/50 hover:text-foreground"
+                            >
+                              <Plus className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        scanned
+                      )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums text-sm text-muted-foreground">
                       {targetQty}

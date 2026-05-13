@@ -7,7 +7,7 @@ import {
 import { Card, CardContent } from '@/components/ui/card';
 import {
   Download, Box, Loader2, CheckCircle2,
-  Activity, CheckCircle
+  Activity, CheckCircle, Minus, Plus
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,7 @@ interface ReceiveScannerProps {
   selectedGroup: OrderGroup | null;
   processing: boolean;
   handleSerialInput: (serial: string) => void;
+  updateManualQty: (productId: number, delta: number) => void;
   receiveOrder: (orderNo: string) => void;
 }
 
@@ -27,6 +28,7 @@ export function ReceiveScanner({
   selectedGroup,
   processing,
   handleSerialInput,
+  updateManualQty,
   receiveOrder,
 }: ReceiveScannerProps) {
   const [serialInput, setSerialInput] = useState('');
@@ -182,7 +184,35 @@ export function ReceiveScanner({
                       <TableCell className="font-mono text-xs text-muted-foreground">
                         {productId}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums font-semibold text-foreground">{verified}</TableCell>
+                      <TableCell className="text-right tabular-nums font-semibold text-foreground">
+                        {product?.is_serialized === 0 ? (
+                          <div className="flex items-center justify-end">
+                            <div className="flex h-7 items-center divide-x divide-border overflow-hidden rounded-md border border-border bg-muted/20">
+                              <button
+                                type="button"
+                                onClick={() => updateManualQty(productId, -1)}
+                                disabled={verified <= 0}
+                                className="flex h-full w-7 items-center justify-center transition-colors hover:bg-muted disabled:opacity-30 text-foreground/50 hover:text-foreground"
+                              >
+                                <Minus className="h-3 w-3" />
+                              </button>
+                              <span className="flex h-full min-w-[32px] items-center justify-center px-2 text-xs font-bold text-foreground">
+                                {verified}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => updateManualQty(productId, 1)}
+                                disabled={verified >= targetQty}
+                                className="flex h-full w-7 items-center justify-center transition-colors hover:bg-muted disabled:opacity-30 text-foreground/50 hover:text-foreground"
+                              >
+                                <Plus className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          verified
+                        )}
+                      </TableCell>
                       <TableCell className="text-right tabular-nums font-semibold text-muted-foreground/60">{targetQty}</TableCell>
                       <TableCell>
                         <div className="h-1.5 overflow-hidden rounded-full bg-muted">

@@ -19,6 +19,7 @@ export default function ReceivePage() {
     loadMore,
     hasMore,
     handleSerialInput,
+    updateManualQty,
     receiveOrder,
     recentScans,
     getBranchName,
@@ -44,6 +45,7 @@ export default function ReceivePage() {
         selectedGroup={selectedGroup}
         processing={processing}
         handleSerialInput={handleSerialInput}
+        updateManualQty={updateManualQty}
         receiveOrder={receiveOrder}
       />
 

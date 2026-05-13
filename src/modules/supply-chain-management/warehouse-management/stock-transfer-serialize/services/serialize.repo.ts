@@ -136,7 +136,7 @@ export async function fetchStockTransferGroups(params: {
     "filter[order_no][_in]": pagedOrderNos.join(","),
     "limit": -1,
     "sort": "-date_encoded",
-    "fields": "*,product_id.*,source_branch.*,target_branch.*",
+    "fields": "*,product_id.*,product_id.is_serialized,source_branch.*,target_branch.*",
   };
 
   const detailsRes = await fetchItems<StockTransferRow>("items/stock_transfer", detailsQueryParams);
