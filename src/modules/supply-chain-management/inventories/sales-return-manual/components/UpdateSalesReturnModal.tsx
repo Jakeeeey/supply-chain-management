@@ -89,6 +89,55 @@ interface SalesReturnGroup {
   children: { item: SalesReturnItem; idx: number }[];
 }
 
+// =============================================================================
+// OPTIMIZED SUB-COMPONENTS (PERFORMANCE FIX)
+// =============================================================================
+
+const RemarksInputSection = React.memo(({ value, onChange, disabled }: { value: string, onChange: (val: string) => void, disabled?: boolean }) => {
+  const [localRemarks, setLocalRemarks] = useState(value);
+
+  useEffect(() => {
+    setLocalRemarks(value);
+  }, [value]);
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs uppercase font-bold text-muted-foreground">
+        Remarks
+      </Label>
+      <Textarea
+        value={localRemarks}
+        onChange={(e) => setLocalRemarks(e.target.value)}
+        onBlur={() => onChange(localRemarks)}
+        disabled={disabled}
+        className="resize-none min-h-[120px] border-border focus:border-primary bg-background shadow-sm"
+        placeholder="Enter return remarks..."
+      />
+    </div>
+  );
+});
+RemarksInputSection.displayName = "RemarksInputSection";
+
+const ReasonInputSection = React.memo(({ value, onChange, disabled }: { value: string, onChange: (val: string) => void, disabled?: boolean }) => {
+  const [localReason, setLocalReason] = useState(value);
+
+  useEffect(() => {
+    setLocalReason(value);
+  }, [value]);
+
+  return (
+    <Input
+      className="h-9 w-full text-sm border-border bg-background"
+      placeholder="Enter reason..."
+      value={localReason}
+      onChange={(e) => setLocalReason(e.target.value)}
+      onBlur={() => onChange(localReason)}
+      disabled={disabled}
+    />
+  );
+});
+ReasonInputSection.displayName = "ReasonInputSection";
+
 interface Props {
   returnId: number;
   initialData: SalesReturn;
@@ -951,11 +1000,9 @@ export function UpdateSalesReturnModal({
                               {/* Reason */}
                               <TableCell className="align-middle p-2">
                                 {canEditAll ? (
-                                  <Input
-                                    className="h-9 w-full text-sm border-border bg-background"
-                                    placeholder="Enter reason..."
-                                    value={item.reason}
-                                    onChange={(e) => handleDetailChange(idx, "reason", e.target.value)}
+                                  <ReasonInputSection
+                                    value={item.reason || ""}
+                                    onChange={(val) => handleDetailChange(idx, "reason", val)}
                                   />
                                 ) : (
                                   <span className="text-sm text-muted-foreground italic truncate block max-w-[120px]" title={item.reason || ""}>
@@ -1214,26 +1261,18 @@ export function UpdateSalesReturnModal({
                             <TableCell className="text-right font-bold text-sm text-foreground align-middle">
                               {(Number(item.totalAmount) || 0).toLocaleString()}
                             </TableCell>
-                            <TableCell className="align-middle p-2">
-                              {canEditAll ? (
-                                <Input
-                                  className="h-9 w-full text-sm border-border bg-background"
-                                  placeholder="Enter reason..."
-                                  value={item.reason}
-                                  onChange={(e) =>
-                                    handleDetailChange(
-                                      idx,
-                                      "reason",
-                                      e.target.value,
-                                    )
-                                  }
-                                />
-                              ) : (
-                                <span className="text-sm text-muted-foreground italic">
-                                  {item.reason || "-"}
-                                </span>
-                              )}
-                            </TableCell>
+                             <TableCell className="align-middle p-2">
+                               {canEditAll ? (
+                                 <ReasonInputSection
+                                   value={item.reason || ""}
+                                   onChange={(val) => handleDetailChange(idx, "reason", val)}
+                                 />
+                               ) : (
+                                 <span className="text-sm text-muted-foreground italic">
+                                   {item.reason || "-"}
+                                 </span>
+                               )}
+                             </TableCell>
                             <TableCell className="align-middle p-2">
                               {canEditAll ? (
                                 <LocalSearchableSelect
@@ -1419,25 +1458,11 @@ export function UpdateSalesReturnModal({
                   )}
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label className="text-xs uppercase font-bold text-muted-foreground">
-                  Remarks
-                </Label>
-                {/* 🟢 REVISED: Editable if Pending or Received (canEditLimited) */}
-                <Textarea
-                  readOnly={!canEditLimited}
-                  className={cn(
-                    "min-h-[100px] border-border rounded-md focus:border-primary",
-                    !canEditLimited
-                      ? "bg-muted/30 border-border"
-                      : "bg-background",
-                  )}
-                  value={headerData.remarks || ""}
-                  onChange={(e) =>
-                    setHeaderData({ ...headerData, remarks: e.target.value })
-                  }
-                />
-              </div>
+              <RemarksInputSection
+                value={headerData.remarks || ""}
+                onChange={(val) => setHeaderData({ ...headerData, remarks: val })}
+                disabled={!canEditLimited}
+              />
             </div>
 
             {/* FINANCIAL SUMMARY */}

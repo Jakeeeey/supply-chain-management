@@ -216,23 +216,35 @@ export async function updateReturn(
   await transactionRepo.updateReturnHeader(payload.id as number, headerPayload);
 
   // Handle junction
-  if (rawPayload.appliedInvoiceId) {
+  const hasAppliedInvoiceProp = Object.prototype.hasOwnProperty.call(rawPayload, "appliedInvoiceId");
+
+  if (hasAppliedInvoiceProp) {
     try {
       const linkResult = await lookupRepo.getJunctionLink(payload.id as number);
       const existingLinks = (linkResult.data || []) as any[];
-      if (existingLinks.length > 0) {
-        await transactionRepo.updateJunctionLink(existingLinks[0].id, {
-          invoice_no: rawPayload.appliedInvoiceId,
-          linked_by: userId,
-        });
+
+      if (rawPayload.appliedInvoiceId) {
+        if (existingLinks.length > 0) {
+          await transactionRepo.updateJunctionLink(existingLinks[0].id, {
+            invoice_no: rawPayload.appliedInvoiceId,
+            linked_by: userId,
+          });
+        } else {
+          await transactionRepo.createJunctionLink({
+            return_no: payload.id,
+            invoice_no: rawPayload.appliedInvoiceId,
+            linked_by: userId,
+          });
+        }
       } else {
-        await transactionRepo.createJunctionLink({
-          return_no: payload.id,
-          invoice_no: rawPayload.appliedInvoiceId,
-          linked_by: userId,
-        });
+        // Unlink if it was explicitly set to null/falsy
+        if (existingLinks.length > 0) {
+          await transactionRepo.deleteJunctionLink(existingLinks[0].id);
+        }
       }
-    } catch { /* ignore */ }
+    } catch (e) {
+      console.error("Failed to update junction link during update", e);
+    }
   }
 
   const currentItems = await fetchReturnDetails(payload.id as number, payload.returnNo as string);

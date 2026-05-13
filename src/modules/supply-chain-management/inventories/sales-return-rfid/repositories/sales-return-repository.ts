@@ -354,6 +354,16 @@ export async function updateJunctionLink(
   );
 }
 
+/**
+ * Deletes an existing junction link.
+ */
+export async function deleteJunctionLink(linkId: number) {
+  return directusMutate<void>(
+    `/items/sales_invoice_sales_return/${linkId}`,
+    "DELETE",
+  );
+}
+
 // =============================================================================
 // REPOSITORY METHODS — RFID
 // =============================================================================

@@ -10,7 +10,7 @@ export async function getRawLinkedInvoice(returnId: number) {
 export async function getRawReferences() {
   return Promise.all([
     directusGet<{ data: Record<string, unknown>[] }>(
-      "/items/salesman?limit=-1&fields=id,salesman_name,salesman_code,price_type,branch_code,isActive,division_id",
+      "/items/salesman?limit=-1&fields=id,salesman_name,salesman_code,price_type,branch_code,isActive,division_id&filter[division_id][_eq]=1",
     ),
     directusGet<{ data: Record<string, unknown>[] }>(
       "/items/customer?limit=-1&fields=id,customer_code,customer_name,store_name,discount_type&filter[isActive][_eq]=1",

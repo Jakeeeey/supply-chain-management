@@ -81,6 +81,13 @@ export async function updateJunctionLink(
   );
 }
 
+export async function deleteJunctionLink(linkId: number) {
+  return directusMutate<void>(
+    `/items/sales_invoice_sales_return/${linkId}`,
+    "DELETE",
+  );
+}
+
 export async function createSerialRecord(payload: Record<string, unknown>) {
   return directusMutate<{ data: Record<string, unknown> }>(
     "/items/sales_return_serial",
