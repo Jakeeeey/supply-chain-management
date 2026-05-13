@@ -61,20 +61,6 @@ interface Props {
   onSuccess?: () => void;
 }
 
-interface SalesReturnGroup {
-  key: string;
-  code: string;
-  description: string;
-  unit: string;
-  returnType: string;
-  unitPrice: number;
-  totalQty: number;
-  totalGross: number;
-  totalDiscount: number;
-  totalNet: number;
-  children: { item: SalesReturnItem; idx: number }[];
-}
-
 // =============================================================================
 // OPTIMIZED SUB-COMPONENTS (PERFORMANCE FIX)
 // =============================================================================
