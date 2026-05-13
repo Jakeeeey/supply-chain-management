@@ -11,7 +11,7 @@ export async function getRawReturns(
   const allowedFields =
     "return_id,return_number,invoice_no,customer_code,salesman_id,total_amount,status,return_date,remarks,order_id,isThirdParty,created_at,price_type,received_at";
 
-  let url = `/items/sales_return?page=${page}&limit=${limit}&meta=filter_count&fields=${allowedFields}&sort=-return_id`;
+  let url = `/items/sales_return?page=${page}&limit=${limit}&meta=filter_count&fields=${allowedFields}&sort=-return_id&filter[salesman_id][division_id][_eq]=1`;
 
   if (filters.salesman && filters.salesman !== "All")
     url += `&filter[salesman_id][_eq]=${filters.salesman}`;

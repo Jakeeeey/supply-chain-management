@@ -59,6 +59,62 @@ interface Props {
   onSuccess?: () => void;
 }
 
+// --- OPTIMIZED SUB-COMPONENTS TO PREVENT LAG ---
+const SerialInputSection = React.memo(({ onAdd, disabled }: { onAdd: (val: string) => void; disabled: boolean }) => {
+  const [localValue, setLocalValue] = useState("");
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && localValue.trim()) {
+      onAdd(localValue.trim());
+      setLocalValue("");
+    }
+  };
+  return (
+    <div className="relative group">
+      <Input
+        className="h-9 w-64 pl-10 pr-10 text-sm font-mono border-primary/30 focus:ring-primary/20"
+        placeholder="Type serial and press Enter..."
+        value={localValue}
+        onChange={(e) => setLocalValue(e.target.value)}
+        onKeyDown={handleKeyDown}
+        disabled={disabled}
+      />
+      <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary" />
+      {disabled ? (
+        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" />
+      ) : (
+        <Plus
+          className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary cursor-pointer"
+          onClick={() => {
+            if (localValue.trim()) {
+              onAdd(localValue.trim());
+              setLocalValue("");
+            }
+          }}
+        />
+      )}
+    </div>
+  );
+});
+SerialInputSection.displayName = "SerialInputSection";
+
+const RemarksInputSection = React.memo(({ value, onChange }: { value: string; onChange: (val: string) => void }) => {
+  const [localValue, setLocalValue] = useState(value);
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
+  return (
+    <Textarea
+      value={localValue}
+      onChange={(e) => setLocalValue(e.target.value)}
+      onBlur={() => onChange(localValue)}
+      className="resize-none h-24 border-border focus:border-primary focus:bg-background"
+      placeholder="Add any notes regarding this return..."
+    />
+  );
+});
+RemarksInputSection.displayName = "RemarksInputSection";
+
 export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const searchParams = useSearchParams();
   const fromClearance = searchParams.get("fromClearance");
@@ -124,7 +180,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
   // --- SERIAL STATE ---
   const [isValidatingSerial, setIsValidatingSerial] = useState(false);
-  const [serialInput, setSerialInput] = useState("");
 
   // --- 3. CART STATE ---
   const [items, setItems] = useState<SalesReturnItem[]>([]);
@@ -256,8 +311,8 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   /**
    * Manual Serial Entry Handler
    */
-  const handleAddSerial = async () => {
-    const serial = serialInput.trim().toUpperCase();
+  const handleAddSerial = async (serialVal?: string) => {
+    const serial = (serialVal || "").trim().toUpperCase();
     if (!serial) return;
 
     const selectedSalesmanObj = salesmen.find(s => s.id.toString() === selectedSalesmanId);
@@ -349,7 +404,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       });
 
       toast.success("Serial Added", { description: `Serial ${serial} successfully tagged for ${items[selectedRowIndex].description}` });
-      setSerialInput("");
     } catch (err: unknown) {
       toast.error("Validation Failed", { description: (err as Error).message || "An unexpected error occurred." });
     } finally {
@@ -513,12 +567,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     setPriceType("A");
     setRemarks("");
     setOrderNo("");
-    setOrderSearch("");
-    setInvoiceNo("");
-    setInvoiceSearch("");
-    setAppliedInvoiceId(null);
-    setIsThirdParty(false);
-    setSerialInput("");
     setInvoiceOptions([]);
   };
 
@@ -871,11 +919,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
               <div className="flex justify-between items-center mb-4">
                 <h4 className="font-bold text-foreground flex items-center gap-2 text-base"><div className="bg-emerald-500/10 p-1.5 rounded text-emerald-600"><ScanLine className="h-5 w-5" /></div>Serial Management for: <span className="text-primary underline decoration-primary/30 underline-offset-4">{items[selectedRowIndex].description}</span></h4>
                 <div className="flex items-center gap-3">
-                  <div className="relative group">
-                    <Input className="h-9 w-64 pl-10 pr-10 text-sm font-mono border-primary/30 focus:ring-primary/20" placeholder="Type serial and press Enter..." value={serialInput} onChange={e => setSerialInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleAddSerial()} disabled={isValidatingSerial} />
-                    <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary" />
-                    {isValidatingSerial ? <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" /> : <Plus className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary cursor-pointer" onClick={handleAddSerial} />}
-                  </div>
+                  <SerialInputSection onAdd={(serial) => handleAddSerial(serial)} disabled={isValidatingSerial} />
                   <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 px-3 py-1 font-bold">{items[selectedRowIndex].serialNumbers?.length || 0} TOTAL</Badge>
                 </div>
               </div>
@@ -953,7 +997,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                   )}
                 </div>
               </div>
-              <div className="space-y-1.5"><label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Remarks</label><Textarea value={remarks} onChange={e => setRemarks(e.target.value)} className="resize-none h-24 border-border focus:border-primary focus:bg-background" placeholder="Add any notes regarding this return..." /></div>
+              <div className="space-y-1.5"><label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">Remarks</label><RemarksInputSection value={remarks} onChange={setRemarks} /></div>
             </div>
 
             <div className="bg-background rounded-lg border border-border p-0 shadow-sm overflow-hidden h-fit">
