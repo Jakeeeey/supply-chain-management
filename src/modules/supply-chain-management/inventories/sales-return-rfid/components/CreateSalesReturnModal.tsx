@@ -1178,15 +1178,6 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                     </div>
                   </div>
                 </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setIsProductLookupOpen(true)}
-                  className="gap-2 h-9 border-primary/50 text-primary hover:bg-primary/5 shadow-sm font-semibold"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Product
-                </Button>
                 {isBranchLockedError && (
                   <Button
                     size="sm"
