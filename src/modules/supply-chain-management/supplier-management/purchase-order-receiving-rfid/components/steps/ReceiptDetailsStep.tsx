@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { Pencil, XCircle } from "lucide-react";
 import {
     Select,
     SelectContent,
@@ -159,14 +160,16 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
                                         {h.isPosted ? "Posted" : "Unposted"}
                                     </Badge>
                                     {!h.isPosted && (
-                                        <button
-                                            type="button"
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
                                             onClick={() => loadReceipt(h.receiptNo)}
                                             disabled={editingReceiptId === h.receiptNo}
-                                            className="ml-2 text-amber-600 hover:text-amber-800 font-medium text-[10px] uppercase underline disabled:opacity-50 disabled:no-underline"
+                                            className="h-7 px-3 text-[10px] font-black uppercase tracking-wider gap-1.5 border-amber-500/30 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
                                         >
+                                            <Pencil className="h-3 w-3" />
                                             {editingReceiptId === h.receiptNo ? "Editing..." : "Edit"}
-                                        </button>
+                                        </Button>
                                     )}
                                 </div>
                             </div>
@@ -183,13 +186,15 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
                             <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-500/30">
                                 Editing Mode
                             </Badge>
-                            <button
-                                type="button"
+                            <Button
+                                variant="ghost"
+                                size="sm"
                                 onClick={clearEditingReceiptId}
-                                className="text-[10px] uppercase font-semibold text-muted-foreground hover:text-foreground underline"
+                                className="h-7 px-3 text-[10px] font-black uppercase tracking-wider gap-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors"
                             >
+                                <XCircle className="h-3 w-3" />
                                 Cancel Edit
-                            </button>
+                            </Button>
                         </div>
                     )}
                 </div>

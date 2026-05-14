@@ -467,7 +467,23 @@ export async function POST(req: NextRequest) {
                 const k = keyLine(toNum(po.purchase_order_id), pid, bid);
                 const p = productsMap.get(pid);
                 const pors = porIdsByKey.get(k) || [];
-                const receivedQty = pors.reduce((sum, id) => sum + effectiveReceivedQty(porRows.find(r => toNum(r.purchase_order_product_id) === id)), 0);
+
+                // ✅ Break down received quantities into posted vs unposted
+                let postedQty = 0;
+                let unpostedQty = 0;
+                const unpostedReceipts: { receiptNo: string; quantity: number }[] = [];
+                for (const porId of pors) {
+                    const r = porRows.find(pr => toNum(pr.purchase_order_product_id) === porId);
+                    if (!r) continue;
+                    const qty = Math.max(0, toNum(r.received_quantity ?? 0));
+                    const hasReceipt = Boolean(toStr(r.receipt_no));
+                    if (toNum(r.isPosted) === 1) {
+                        postedQty += qty;
+                    } else if (hasReceipt && qty > 0) {
+                        unpostedQty += qty;
+                        unpostedReceipts.push({ receiptNo: toStr(r.receipt_no), quantity: qty });
+                    }
+                }
 
                 const lineDiscountTypeId = productLinksMap.get(pid)?.discount_type;
                 let lineDiscountPercent = headerDiscountPercent;
@@ -479,23 +495,21 @@ export async function POST(req: NextRequest) {
                 }
 
                 const dAmt = toNum(ln.unit_price) * (lineDiscountPercent / 100);
-                const remainingQty = Math.max(0, toNum(ln.ordered_quantity) - receivedQty);
+                const orderedQty = toNum(ln.ordered_quantity);
+                const trueRemaining = Math.max(0, orderedQty - postedQty - unpostedQty);
 
-                const hasUnposted = pors.some(id => {
-                    const r = porRows.find(pr => toNum(pr.purchase_order_product_id) === id);
-                    return r && toNum(r.isPosted) === 0 && Boolean(r.receipt_no);
-                });
-
-                // ✅ Include if there is still a balance to receive, OR if it's part of an unposted receipt (so it can be edited)
-                if (remainingQty > 0 || hasUnposted) {
+                // ✅ Include if there is still a true remaining balance, OR if it's part of an unposted receipt
+                if (trueRemaining > 0 || unpostedReceipts.length > 0) {
                     const existing = allocationsMap.get(bid) || [];
                     allocationsMap.set(bid, [...existing, {
                         id: pors[0] ? String(pors[0]) : `${pid}-${bid}`, porId: String(pors[0] || ""),
                         productId: String(pid), branchId: String(bid), name: toStr(p?.product_name, `Product #${pid}`),
                         barcode: productDisplayCode(p, pid), uom: String(p?.unit_of_measurement?.unit_shortcut ?? "BOX").toUpperCase(),
-                        expectedQty: remainingQty, receivedQty: 0, requiresRfid: false,
+                        expectedQty: orderedQty, originalOrderedQty: orderedQty,
+                        postedQty, unpostedQty, unpostedReceipts,
+                        receivedQty: postedQty + unpostedQty, requiresRfid: false,
                         isReceived: false, unitPrice: toNum(ln.unit_price),
-                        discountType: lineDiscountTypeStr, discountAmount: dAmt, netAmount: 0 // Net amount for THIS session
+                        discountType: lineDiscountTypeStr, discountAmount: dAmt, netAmount: 0
                     }]);
                 }
             }
@@ -514,7 +528,24 @@ export async function POST(req: NextRequest) {
                 const bid = Number(parts[2]);
                 const p = productsMap.get(pid);
                 const pors = porIdsByKey.get(k) || [];
-                const receivedQty = pors.reduce((sum, id) => sum + effectiveReceivedQty(porRows.find(r => toNum(r.purchase_order_product_id) === id)), 0);
+
+                // ✅ Break down extra item quantities
+                let postedQty = 0;
+                let unpostedQty = 0;
+                const unpostedReceipts: { receiptNo: string; quantity: number }[] = [];
+                for (const porId of pors) {
+                    const r = porRows.find(pr => toNum(pr.purchase_order_product_id) === porId);
+                    if (!r) continue;
+                    const qty = Math.max(0, toNum(r.received_quantity ?? 0));
+                    const hasReceipt = Boolean(toStr(r.receipt_no));
+                    if (toNum(r.isPosted) === 1) {
+                        postedQty += qty;
+                    } else if (hasReceipt && qty > 0) {
+                        unpostedQty += qty;
+                        unpostedReceipts.push({ receiptNo: toStr(r.receipt_no), quantity: qty });
+                    }
+                }
+
                 const openRow = pors.map(id => porRows.find(r => toNum(r.purchase_order_product_id) === id)).find(r => r && !toStr(r.receipt_no));
                 const porIdStr = openRow ? String(openRow.purchase_order_product_id) : `${pid}-${bid}`;
 
@@ -535,7 +566,9 @@ export async function POST(req: NextRequest) {
                     id: porIdStr, porId: porIdStr,
                     productId: String(pid), branchId: String(bid), name: toStr(p?.product_name, `Product #${pid}`),
                     barcode: productDisplayCode(p, pid), uom: String(p?.unit_of_measurement?.unit_shortcut ?? "BOX").toUpperCase(),
-                    expectedQty: 0, receivedQty: 0, requiresRfid: false,
+                    expectedQty: 0, originalOrderedQty: 0,
+                    postedQty, unpostedQty, unpostedReceipts,
+                    receivedQty: postedQty + unpostedQty, requiresRfid: false,
                     isReceived: false, unitPrice: uPrice,
                     discountType: lineDiscountTypeStr, discountAmount: dAmt, netAmount: 0,
                     isExtra: true

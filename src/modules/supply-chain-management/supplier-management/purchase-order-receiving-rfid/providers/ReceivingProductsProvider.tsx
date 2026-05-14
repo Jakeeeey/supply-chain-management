@@ -458,6 +458,8 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
         setLocalScannedRfids([]);
         setVerifiedPorIds([]);
         setActiveProductId(null);
+        setEditingReceiptId(null);
+        setMetaDataByPorId({});
         if (opts?.clearStorage && opts?.poId) {
             clearDraft(opts.poId);
         }

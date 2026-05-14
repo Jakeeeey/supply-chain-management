@@ -26,6 +26,10 @@ export type ReceivingPOItem = {
     uom: string;
     uomCount?: number;
     expectedQty: number;
+    originalOrderedQty?: number;
+    postedQty?: number;
+    unpostedQty?: number;
+    unpostedReceipts?: { receiptNo: string; quantity: number }[];
     receivedQty: number;
     requiresRfid: true;
     taggedQty: number;
@@ -334,6 +338,8 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
         setSaveError("");
         setManualCounts({});
         setVerifiedProductIds([]);
+        setEditingReceiptId(null);
+        setMetaDataByPorId({});
         if (opts?.clearStorage && opts?.poId) {
             clearDraft(opts.poId);
         }

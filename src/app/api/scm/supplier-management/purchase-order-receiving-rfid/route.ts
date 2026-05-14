@@ -693,7 +693,7 @@ export async function POST(req: NextRequest) {
                     barcode: productDisplayCode(p, pid),
                     uom: String(p?.unit_of_measurement?.unit_shortcut ?? p?.unit_of_measurement?.unit_name ?? "BOX").toUpperCase(),
                     uomCount: Number(p?.unit_of_measurement_count) || 1,
-                    expectedQty: remainingQty,
+                    expectedQty: orderedQty,
                     receivedQty,
                     requiresRfid: true,
                     taggedQty: taggedCountByKey.get(k) || 0,
