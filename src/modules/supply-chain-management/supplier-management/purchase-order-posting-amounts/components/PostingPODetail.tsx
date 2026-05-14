@@ -28,8 +28,8 @@ function statusBadge(status: string) {
 
 function statusLabel(status: string) {
     const s = String(status || "").toUpperCase();
-    if (s === "FOR_POSTING" || s === "FOR POSTING") return "FOR POSTING";
-    if (s === "PARTIAL_POSTED") return "PARTIAL POSTED";
+    if (s === "FOR_POSTING" || s === "FOR POSTING") return "AWAITING AMOUNTS";
+    if (s === "PARTIAL_POSTED") return "PARTIAL - AWAITING AMOUNTS";
     return s;
 }
 

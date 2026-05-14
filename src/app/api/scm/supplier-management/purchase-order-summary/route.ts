@@ -78,6 +78,7 @@ interface PORRow {
     receipt_date: string | null;
     received_date: string | null;
     isPosted: number | string;
+    is_posted_amounts?: number | string; // ✅ financial posting status
     unit_price: number | string;
     discounted_amount: number | string;
     total_amount: number | string;
@@ -124,8 +125,8 @@ export async function POST(req: NextRequest) {
             const popJson = await fetchJson<{ data: POProductRow[] }>(popUrl);
             const allocationsRows = popJson?.data ?? [];
 
-            // 2. Fetch all receiving rows for this PO
-            const porUrl = `${base}/items/purchase_order_receiving?limit=-1&filter[purchase_order_id][_eq]=${poId}&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted,unit_price,discounted_amount,total_amount,batch_no,expiry_date`;
+            // 2. Fetch all receiving rows for this PO - ✅ added is_posted_amounts
+            const porUrl = `${base}/items/purchase_order_receiving?limit=-1&filter[purchase_order_id][_eq]=${poId}&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted,is_posted_amounts,unit_price,discounted_amount,total_amount,batch_no,expiry_date`;
             const porJson = await fetchJson<{ data: PORRow[] }>(porUrl);
             const porRows = porJson?.data ?? [];
 
@@ -194,7 +195,14 @@ export async function POST(req: NextRequest) {
 
             // PROCESS RECEIPTS (Transaction History)
             const receivedRows = porRows.filter(r => toStr(r.receipt_no));
-            const receiptMap = new Map<string, { receiptNo: string; receiptDate: string; isPosted: boolean; items: { productName: string; branchName: string; quantity: number; unitPrice: number; discount: number; total: number; batchNo: string; expiryDate: string; }[]; }>();
+            const receiptMap = new Map<string, { 
+                receiptNo: string; 
+                receiptDate: string; 
+                isPosted: boolean; 
+                isPostedAmounts: boolean;
+                statusLabel: string;
+                items: { productName: string; branchName: string; quantity: number; unitPrice: number; discount: number; total: number; batchNo: string; expiryDate: string; }[]; 
+            }>();
 
             for (const row of receivedRows) {
                 const rno = toStr(row.receipt_no);
@@ -202,7 +210,9 @@ export async function POST(req: NextRequest) {
                     receiptMap.set(rno, {
                         receiptNo: rno,
                         receiptDate: toStr(row.receipt_date || row.received_date),
-                        isPosted: toNum(row.isPosted) === 1,
+                        isPosted: true,
+                        isPostedAmounts: true,
+                        statusLabel: "",
                         items: [],
                     });
                 }
@@ -218,7 +228,21 @@ export async function POST(req: NextRequest) {
                     batchNo: toStr(row.batch_no),
                     expiryDate: toStr(row.expiry_date),
                 });
+
+                // Group-level posting checks
                 if (toNum(row.isPosted) !== 1) receipt.isPosted = false;
+                if (toNum(row.is_posted_amounts) !== 1) receipt.isPostedAmounts = false;
+            }
+
+            // Assign status labels after grouping
+            for (const r of Array.from(receiptMap.values())) {
+                if (!r.isPosted) {
+                    r.statusLabel = "UNPOSTED"; // Warehouse hasn't posted
+                } else if (!r.isPostedAmounts) {
+                    r.statusLabel = "READY FOR AMOUNTS"; // Posted to inventory, but financials pending
+                } else {
+                    r.statusLabel = "AMOUNTS POSTED"; // Fully finalized
+                }
             }
 
             const receipts = Array.from(receiptMap.values()).sort((a, b) => b.receiptNo.localeCompare(a.receiptNo));

@@ -39,8 +39,6 @@ type Ctx = {
     postError: string;
     postReceipt: (poId: string, receiptNo: string) => Promise<void>;
     postAllReceipts: (poId: string) => Promise<void>;
-    revertReceipt: (poId: string, receiptNo: string) => Promise<void>;
-    reverting: boolean;
     poLoading: boolean;
 
     // success banner (no global toast dependency)
@@ -67,7 +65,6 @@ export function PostingOfPoProvider({ children }: { children: React.ReactNode })
     const [posting, setPosting] = React.useState(false);
     const [postError, setPostError] = React.useState("");
 
-    const [reverting, setReverting] = React.useState(false);
     const [poLoading, setPoLoading] = React.useState(false);
 
     const [successMsg, setSuccessMsg] = React.useState("");
@@ -224,49 +221,6 @@ export function PostingOfPoProvider({ children }: { children: React.ReactNode })
         [openPO, refreshList, clearSuccess]
     );
 
-    const revertReceipt = React.useCallback(
-        async (poId: string, receiptNo: string) => {
-            setReverting(true);
-            setPostError("");
-            clearSuccess();
-
-            try {
-                const r = await fetch(API, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ action: "revert_receipt", poId, receiptNo }),
-                });
-                const data = await asJson(r);
-
-                toast.success("Receipt reverted successfully!", {
-                    description: `Receipt ${receiptNo} has been returned to receiving.`,
-                });
-
-                setSuccessMsg(`Receipt ${receiptNo} reverted to receiving.`);
-
-                // If no remaining receipts, clear selection so the module "reloads"
-                if (data?.noRemainingReceipts) {
-                    setSelectedPO(null);
-                    toast.info("PO has no more receipts. Returning to list.");
-                }
-
-                await refreshList();
-                // Only re-open PO if it still has receipts
-                if (!data?.noRemainingReceipts) {
-                    await openPO(poId);
-                }
-            } catch (e: unknown) {
-                const err = e as Error;
-                const msg = String(err?.message ?? err);
-
-                toast.error("Failed to revert receipt", { description: msg });
-                setPostError(msg);
-            } finally {
-                setReverting(false);
-            }
-        },
-        [openPO, refreshList, clearSuccess]
-    );
 
     const value: Ctx = {
         list,
@@ -288,8 +242,6 @@ export function PostingOfPoProvider({ children }: { children: React.ReactNode })
         postError,
         postReceipt,
         postAllReceipts,
-        revertReceipt,
-        reverting,
         poLoading,
 
         successMsg,
