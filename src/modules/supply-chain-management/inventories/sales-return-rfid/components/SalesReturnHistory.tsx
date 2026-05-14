@@ -151,7 +151,7 @@ interface SalesReturnHistoryProps {
   pageSize: number;
   totalPages: number;
   filters: { salesman: string; customer: string; status: string };
-  salesmenOptions: { value: string; label: string }[];
+  salesmenOptions: { value: string; label: string; code?: string }[];
   customerOptions: { value: string; label: string }[];
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: number) => void;
@@ -242,11 +242,12 @@ export function SalesReturnHistory({
   );
 
   // --- Selected labels for filter buttons ---
-  const selectedSalesmanLabel =
-    filters.salesman === "All"
-      ? "All Salesmen"
-      : salesmenOptions.find((s) => s.value === filters.salesman)?.label ||
-        "All Salesmen";
+  const selectedSalesmanLabel = useMemo(() => {
+    if (filters.salesman === "All") return "All Salesmen";
+    const found = salesmenOptions.find((s) => s.value === filters.salesman);
+    if (!found) return "All Salesmen";
+    return found.code ? `[${found.code}] ${found.label}` : found.label;
+  }, [filters.salesman, salesmenOptions]);
   const selectedCustomerLabel =
     filters.customer === "All"
       ? "All Customers"
@@ -314,7 +315,7 @@ export function SalesReturnHistory({
                             : "opacity-0",
                         )}
                       />
-                      {s.label}
+                      {s.code ? `[${s.code}] ${s.label}` : s.label}
                     </CommandItem>
                   ))}
                 </CommandGroup>
