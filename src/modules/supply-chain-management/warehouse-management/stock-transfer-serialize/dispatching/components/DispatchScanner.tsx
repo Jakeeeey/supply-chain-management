@@ -10,7 +10,6 @@ import {
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { OrderGroup, ProductRow } from '../../../stock-transfer/types/stock-transfer.types';
 
@@ -255,6 +254,7 @@ function HeaderMetric({
 }) {
   return (
     <div className="flex items-center gap-2 bg-background px-4 py-2">
+      <Icon className="h-4 w-4 text-muted-foreground/40" />
       <div>
         <p className="text-[10px] text-muted-foreground">{label}</p>
         <p className="text-sm font-semibold leading-none text-foreground">{value}</p>

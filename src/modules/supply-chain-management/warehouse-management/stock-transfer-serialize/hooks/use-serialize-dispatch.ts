@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSerializeBase } from './use-serialize-base';
 import { serializeLifecycleService } from '../services/api-serialize';
 import { toast } from 'sonner';

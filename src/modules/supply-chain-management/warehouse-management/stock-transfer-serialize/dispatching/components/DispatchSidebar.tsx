@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import type { OrderGroup } from '../../../stock-transfer/types/stock-transfer.types';
+import type { OrderGroup, BranchRow } from '../../../stock-transfer/types/stock-transfer.types';
 
 interface DispatchSidebarProps {
   orderGroups: OrderGroup[];
@@ -91,8 +91,8 @@ export function DispatchSidebar({
                         </div>
                         <p className="text-[11px] text-muted-foreground mt-0.5">
                           {typeof group.sourceBranch === 'object' && group.sourceBranch 
-                             ? (group.sourceBranch as any).branch_name 
-                             : getBranchName(group.sourceBranch as any)}
+                             ? (group.sourceBranch as BranchRow).branch_name 
+                             : getBranchName(group.sourceBranch as number | null)}
                           {" · "}
                           <span className="font-semibold">{group.items.length} items</span>
                         </p>
@@ -118,8 +118,8 @@ export function DispatchSidebar({
                       </p>
                       <p className="text-[10px] font-medium text-muted-foreground truncate max-w-[100px]">
                          {typeof group.targetBranch === 'object' && group.targetBranch 
-                              ? (group.targetBranch as any).branch_name 
-                              : getBranchName(group.targetBranch as any)}
+                              ? (group.targetBranch as BranchRow).branch_name 
+                              : getBranchName(group.targetBranch as number | null)}
                       </p>
                     </div>
                   </button>

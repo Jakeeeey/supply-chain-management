@@ -1,10 +1,9 @@
-import { fetchItems, createItems, updateItem, bulkUpdateItems } from "../../stock-transfer/services/api";
+import { fetchItems, createItems, bulkUpdateItems } from "../../stock-transfer/services/api";
 import type { 
   StockTransferSerialRow,
 } from "../types/serialize.types";
 import type { 
   StockTransferRow,
-  ProductRow,
   OrderGroup,
 } from "../../stock-transfer/types/stock-transfer.types";
 
@@ -94,7 +93,7 @@ export async function fetchStockTransferGroups(params: {
   // 1. Fetch unique order numbers matching the criteria
   // We use a larger limit for the inner fetch if needed, but the primary goal 
   // is to get the set of order_nos for this 'page' of orders.
-  const distinctQueryParams: Record<string, any> = {
+  const distinctQueryParams: Record<string, string | number | boolean | undefined> = {
     "filter[status][_in]": status,
     // "filter[source_branch][division_id][_eq]": 1,
     "fields": "order_no,date_encoded",
@@ -108,7 +107,7 @@ export async function fetchStockTransferGroups(params: {
     distinctQueryParams["filter[_or][2][target_branch][branch_name][_icontains]"] = search;
   }
 
-  const distinctRes = await fetchItems<any>("items/stock_transfer", distinctQueryParams);
+  const distinctRes = await fetchItems<StockTransferRow>("items/stock_transfer", distinctQueryParams);
   const allRows = distinctRes.data || [];
   
   // Get unique order numbers in order of date_encoded
@@ -130,7 +129,7 @@ export async function fetchStockTransferGroups(params: {
   }
 
   // 2. Fetch full details for the specific order numbers on this page
-  const detailsQueryParams: Record<string, any> = {
+  const detailsQueryParams: Record<string, string | number | boolean | undefined> = {
     "filter[order_no][_in]": pagedOrderNos.join(","),
     "limit": -1,
     "sort": "-date_encoded",

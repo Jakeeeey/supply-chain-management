@@ -1,4 +1,4 @@
-import type { StockTransferRow, ProductRow, OrderGroupItem } from "../../stock-transfer/types/stock-transfer.types";
+import type { OrderGroupItem } from "../../stock-transfer/types/stock-transfer.types";
 
 /** Row from the `stock_transfer_serial` tracking collection. */
 export interface StockTransferSerialRow {
