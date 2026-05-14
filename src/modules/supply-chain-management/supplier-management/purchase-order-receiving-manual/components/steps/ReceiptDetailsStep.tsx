@@ -44,7 +44,6 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
         loadReceipt,
         editingReceiptId,
         clearEditingReceiptId,
-        clearReceiptSaved // Use if we want to cancel edit (optional, we can just clear editingReceiptId if needed, wait we didn't expose clearEdit)
     } = useReceivingProductsManual();
 
     const branchesLabel = React.useMemo(() => {

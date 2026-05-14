@@ -1,4 +1,4 @@
-import { SummaryFilters, SummaryResult, SummaryReturnHeader, SummaryReturnItem } from "../type";
+import { SummaryFilters, SummaryResult, SummaryReturnHeader, SummaryReturnItem, SummarySupplierOption, SummaryCustomerOption, SummarySalesmanOption } from "../type";
 import * as Repo from "./sales-return-summary.repo";
 import * as Helpers from "./sales-return-summary.helpers";
 
@@ -164,7 +164,7 @@ export async function fetchLookups(): Promise<LookupData> {
   return lookupCache;
 }
 
-export async function getCustomersList() {
+export async function getCustomersList(): Promise<SummaryCustomerOption[]> {
   const lookups = await fetchLookups();
   return lookups.rawCustomers.map((c) => ({
     value: String(c.customer_code),
@@ -173,7 +173,7 @@ export async function getCustomersList() {
   }));
 }
 
-export async function getSalesmenList() {
+export async function getSalesmenList(): Promise<SummarySalesmanOption[]> {
   const lookups = await fetchLookups();
   return lookups.rawSalesmen.map((s) => {
     const b = lookups.rawBranches.find((x) => String(x.id) === String(s.branch_code));

@@ -683,7 +683,6 @@ export async function POST(req: NextRequest) {
                 const porIdStr = openRow ? String(openRow.purchase_order_product_id) : `${pid}-${bid}`;
 
                 const orderedQty = toNum(ln.ordered_quantity);
-                const remainingQty = Math.max(0, orderedQty - receivedQty);
 
                 const item: POItem = {
                     id: porIdStr,

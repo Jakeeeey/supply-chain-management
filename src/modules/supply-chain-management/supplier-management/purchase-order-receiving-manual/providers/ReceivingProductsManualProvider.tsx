@@ -254,7 +254,7 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
     const clearEditingReceiptId = React.useCallback(() => {
         setEditingReceiptId(null);
         setReceiptNo("");
-        setReceiptDate("");
+        setReceiptDate(todayYMD());
         setManualCounts({});
         setVerifiedProductIds([]);
         setMetaDataByPorId({});
@@ -647,9 +647,9 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
             const counts: Record<string, number> = {};
             const verifiedIds: string[] = [];
             
-            const meta: Record<string, any> = {};
+            const meta: Record<string, { lotId?: string; batchNo?: string; expiryDate?: string }> = {};
             
-            items.forEach((it: any) => {
+            items.forEach((it: { product_id: string; branch_id: string; received_quantity: number; lot_id?: string; batch_no?: string; expiry_date?: string }) => {
                 const pid = String(it.product_id);
                 const bid = String(it.branch_id);
                 let targetId = `${pid}-${bid}`;
@@ -675,7 +675,7 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
             setManualCounts(counts);
             setVerifiedProductIds(verifiedIds);
             setMetaDataByPorId(meta);
-        } catch (e) {
+        } catch {
             toast.error("Failed to load receipt details");
         }
     }, [selectedPO]);
@@ -812,7 +812,7 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
         } finally {
             setSavingReceipt(false);
         }
-    }, [selectedPO, receiptNo, receiptType, receiptDate, manualCounts, refreshList, resetSession, receiverId, verifiedProductIds]);
+    }, [selectedPO, receiptNo, receiptType, receiptDate, manualCounts, refreshList, resetSession, receiverId, verifiedProductIds, editingReceiptId]);
 
     const value: Ctx = {
         list,

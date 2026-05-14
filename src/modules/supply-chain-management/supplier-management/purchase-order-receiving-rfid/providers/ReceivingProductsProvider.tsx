@@ -1088,7 +1088,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
             const newCounts: Record<string, number> = {};
             const newVerifiedIds: string[] = [];
 
-            rfids.forEach((it: any) => {
+            rfids.forEach((it: { rfid_code: string; purchase_order_product_id: string; product_id: string; created_at?: string }) => {
                 const rfid = String(it.rfid_code);
                 const porId = String(it.purchase_order_product_id);
                 const pid = String(it.product_id);
@@ -1128,9 +1128,9 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
             });
             
             // ✅ Restore Metadata from POR items
-            const meta: Record<string, any> = {};
+            const meta: Record<string, { lotId?: string; batchNo?: string; expiryDate?: string }> = {};
             const items = j?.data?.items || [];
-            items.forEach((it: any) => {
+            items.forEach((it: { purchase_order_product_id: string; lot_id?: string; batch_no?: string; expiry_date?: string }) => {
                 const porId = String(it.purchase_order_product_id);
                 if (it.lot_id || it.batch_no || it.expiry_date) {
                     meta[porId] = {
@@ -1146,7 +1146,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
             setScannedCountByPorId(newCounts);
             setVerifiedPorIds(newVerifiedIds);
             setMetaDataByPorId(meta);
-        } catch (e) {
+        } catch {
             toast.error("Failed to load receipt details");
         }
     }, [selectedPO]);
@@ -1274,7 +1274,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
         } finally {
             setSavingReceipt(false);
         }
-    }, [selectedPO, receiptNo, receiptType, receiptDate, scannedCountByPorId, refreshList, resetSession, localScannedRfids, activity, receiverId, verifiedPorIds]);
+    }, [selectedPO, receiptNo, receiptType, receiptDate, scannedCountByPorId, refreshList, resetSession, localScannedRfids, activity, receiverId, verifiedPorIds, editingReceiptId]);
 
     const value: Ctx = {
         list,
