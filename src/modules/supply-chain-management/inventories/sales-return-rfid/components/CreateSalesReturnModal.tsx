@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -27,6 +28,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { cn } from "@/lib/utils";
 
 import {
   SalesReturnItem,
@@ -36,20 +39,6 @@ import {
   PriceTypeOption,
 } from "../type";
 
-interface SalesReturnGroup {
-  key: string;
-  code: string;
-  description: string;
-  unit: string;
-  returnType: string;
-  unitPrice: number;
-  totalQty: number;
-  totalGross: number;
-  totalDiscount: number;
-  totalNet: number;
-  children: { item: SalesReturnItem; idx: number }[];
-}
-
 // Import Child Modal
 import { ProductLookupModal } from "./ProductLookupModal";
 // Import Provider & Types
@@ -58,7 +47,9 @@ import {
   SalesmanOption,
   CustomerOption,
   BranchOption,
+  Product,
 } from "../providers/fetchProviders";
+import { resolveFinalDiscount } from "../utils/discount-resolver";
 // Import RFID Scanner Hook
 import { useRfidScanner } from "../hooks/useRfidScanner";
 
@@ -69,6 +60,54 @@ interface Props {
   onClose: () => void;
   onSuccess?: () => void;
 }
+
+// =============================================================================
+// OPTIMIZED SUB-COMPONENTS (PERFORMANCE FIX)
+// =============================================================================
+
+const RemarksInputSection = React.memo(({ value, onChange }: { value: string, onChange: (val: string) => void }) => {
+  const [localRemarks, setLocalRemarks] = useState(value);
+
+  useEffect(() => {
+    setLocalRemarks(value);
+  }, [value]);
+
+  return (
+    <div className="space-y-1.5">
+      <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
+        Remarks
+      </label>
+      <Textarea
+        value={localRemarks}
+        onChange={(e) => setLocalRemarks(e.target.value)}
+        onBlur={() => onChange(localRemarks)}
+        className="resize-none h-24 border-border focus:border-primary focus:bg-background"
+        placeholder="Add any notes regarding this return..."
+      />
+    </div>
+  );
+});
+RemarksInputSection.displayName = "RemarksInputSection";
+
+const ReasonInputSection = React.memo(({ value, onChange }: { value: string, onChange: (val: string) => void }) => {
+  const [localReason, setLocalReason] = useState(value);
+
+  useEffect(() => {
+    setLocalReason(value);
+  }, [value]);
+
+  return (
+    <input
+      type="text"
+      placeholder="Enter reason"
+      className="w-full border border-border rounded h-8 text-sm px-2 outline-none focus:border-primary"
+      value={localReason}
+      onChange={(e) => setLocalReason(e.target.value)}
+      onBlur={() => onChange(localReason)}
+    />
+  );
+});
+ReasonInputSection.displayName = "ReasonInputSection";
 
 export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const searchParams = useSearchParams();
@@ -103,6 +142,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
   // INVOICE STATE
   const [invoiceNo, setInvoiceNo] = useState("");
+  const [appliedInvoiceId, setAppliedInvoiceId] = useState<number | null>(null);
   const [remarks, setRemarks] = useState("");
 
   // --- 2. DATA LISTS ---
@@ -132,11 +172,11 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   // --- RFID State ---
   const [rfidScanning, setRfidScanning] = useState(false);
   const [lastScannedRfid, setLastScannedRfid] = useState("");
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
   // --- 3. CART STATE ---
   const [items, setItems] = useState<SalesReturnItem[]>([]);
   const [isProductLookupOpen, setIsProductLookupOpen] = useState(false);
+  const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null);
 
   // --- 5. BRANCH LOCK STATE ---
   const [lockedBranchId, setLockedBranchId] = useState<number | null>(null);
@@ -188,6 +228,51 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     const price = Number(productRecord[key]) || Number(productRecord.priceA) || Number(productRecord.unitPrice) || 0;
     return Math.round(price * 100) / 100;
   };
+
+  // 🟢 NEW: Effect to automatically update discounts when Customer changes
+  useEffect(() => {
+    if (items.length > 0 && customerCode) {
+      const updateDiscounts = async () => {
+        try {
+          const catalog = await SalesReturnProvider.getFullCatalog(customerCode);
+
+          setItems((prevItems) =>
+            prevItems.map((item) => {
+              const productInfo = catalog.products?.find((p: Product) => p.product_id === Number(item.productId));
+              if (!productInfo) return item;
+
+              const newDiscountType = resolveFinalDiscount(
+                productInfo,
+                customerCode,
+                catalog
+              );
+
+              let newDiscountAmt = 0;
+              if (newDiscountType) {
+                const selectedOption = lineDiscountOptions.find(
+                  (d) => d.id.toString() === newDiscountType?.toString(),
+                );
+                if (selectedOption) {
+                  const percentage = parseFloat(selectedOption.total_percent) || 0;
+                  newDiscountAmt = Math.round((item.grossAmount || 0) * (percentage / 100) * 100) / 100;
+                }
+              }
+
+              return {
+                ...item,
+                discountType: newDiscountType,
+                discountAmount: newDiscountAmt,
+                totalAmount: Math.round(((item.grossAmount || 0) - newDiscountAmt) * 100) / 100,
+              };
+            })
+          );
+        } catch (error) {
+          console.error("Failed to update discounts on customer change", error);
+        }
+      };
+      updateDiscounts();
+    }
+  }, [customerCode, customers, lineDiscountOptions, items.length]);
 
   const handleSelectSalesman = useCallback((salesman: SalesmanOption) => {
     const hasRfid = items.some((i) => i.rfidTags && i.rfidTags.length > 0);
@@ -251,81 +336,91 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       return;
     }
 
+    if (selectedRowIndex === null) {
+      toast.warning("Please select a product row from the table before scanning.");
+      return;
+    }
+
+    const selectedRow = items[selectedRowIndex];
+    if (selectedRow?.unitOrder !== 3) {
+      toast.error(`RFID tagging is only allowed for Box units (Order 3). "${selectedRow.description}" is using a "${selectedRow.unit}" unit.`);
+      return;
+    }
+
     setRfidScanning(true);
     setLastScannedRfid(tag);
 
     try {
-      // 🟢 NEW: Global Duplicate Check
+      // 1. Global Duplicate Check (Has this tag been returned before?)
       const dupCheck = await SalesReturnProvider.checkRfidDuplicate(tag);
       if (dupCheck.isDuplicate) {
-        const errorMsg = `RFID tag "${tag}" is already linked to SR #${dupCheck.returnNo}.`;
-        toast.error(errorMsg, {
-          description: "This tag cannot be returned again as it exists in another record.",
-          duration: 6000,
-        });
+        setLastScannedRfid("");
+        toast.error(`Tag "${tag}" already returned in SR #${dupCheck.returnNo}`);
         return;
       }
 
+      // 2. Inventory Check (Is it currently on-hand?)
       const result = await SalesReturnProvider.lookupRfid(tag, branchId);
 
-      if (!result || !result.productId) {
-        const errorMsg = `RFID tag "${tag}" is NOT registered to ${branchName || "this branch"}.`;
-        toast.error(errorMsg, {
-          description: "Please check if the scan is correct or if the item is in the wrong location.",
+      if (result?.isOnInventory) {
+        setLastScannedRfid("");
+        toast.error("Already in Stock", {
+          description: "This item is already in the branch's inventory. Sales Return is not allowed for on-hand items.",
           duration: 5000,
         });
         return;
       }
 
+      // 3. Local Duplicate Check (Is it already in our current session?)
       if (items.some((i) => i.rfidTags?.includes(tag))) {
-        const errorMsg = `RFID tag "${tag}" is already in the list.`;
-        toast.warning(errorMsg);
+        setLastScannedRfid("");
+        toast.warning("Tag already scanned in this session.");
         return;
       }
 
-      // Build item from lookup result
-      const unitPrice = resolvePrice(result, priceType);
-      const grossAmount = Math.round(unitPrice * 1 * 100) / 100;
+      // 4. Accept Scan: Tag to selected row
+      setItems((prev) => {
+        const next = [...prev];
+        const row = next[selectedRowIndex];
+        if (!row) return prev;
 
-      const newItem: SalesReturnItem = {
-        id: `rfid-${tag}-${Date.now()}`,
-        tempId: `rfid-${tag}`,
-        productId: result.productId,
-        product_id: result.productId,
-        code: result.productCode,
-        description: result.productName,
-        unit: result.unitShortcut,
-        quantity: 1,
-        unitPrice,
-        grossAmount,
-        discountType: "",
-        discountAmount: 0,
-        totalAmount: grossAmount,
-        reason: "",
-        returnType: "",
-        rfidTags: [tag],
-        // 🟢 Store additional price info for recalculation
-        priceA: result.priceA,
-        priceB: result.priceB,
-        priceC: result.priceC,
-        priceD: result.priceD,
-        priceE: result.priceE,
-        unitMultiplier: result.unitMultiplier || 1,
-      };
+        const newTags = [...(row.rfidTags || []), tag];
+        const newQty = newTags.length;
+        
+        // Recalculate amounts for this row
+        const unitPrice = Number(row.unitPrice) || 0;
+        const grossAmount = Math.round(unitPrice * newQty * 100) / 100;
+        
+        // Calculate discount
+        let discountAmt = 0;
+        if (row.discountType) {
+          const opt = lineDiscountOptions.find(d => d.id.toString() === row.discountType?.toString());
+          if (opt) {
+            const percentage = parseFloat(opt.total_percent) || 0;
+            discountAmt = Math.round(grossAmount * (percentage / 100) * 100) / 100;
+          }
+        }
 
-      setItems((prev) => [...prev, newItem]);
-      toast.success(`Successfully scanned: ${result.productName}`, {
-        description: `RFID: ${tag} | Registered to ${branchName}`,
+        next[selectedRowIndex] = {
+          ...row,
+          rfidTags: newTags,
+          quantity: newQty,
+          grossAmount,
+          discountAmount: discountAmt,
+          totalAmount: Math.round((grossAmount - discountAmt) * 100) / 100,
+        };
+        return next;
       });
+
+      toast.success(`Tag accepted for ${items[selectedRowIndex].description}`);
 
       // Auto-clear display after 2 seconds
       setTimeout(() => setLastScannedRfid(""), 2000);
     } catch (err: unknown) {
-      console.error("RFID lookup error:", err);
-      const error = err as Error;
-      const errorMsg = `Failed to look up RFID tag "${tag}".`;
-      toast.error(errorMsg, {
-        description: error.message || "An unexpected error occurred during scan.",
+      console.error("RFID lookup failed:", err);
+      setLastScannedRfid(""); // Clear checkmark
+      toast.error("RFID Lookup Failed", {
+        description: (err as Error).message || "An unexpected error occurred during scanning. Please try again.",
       });
     } finally {
       setRfidScanning(false);
@@ -551,6 +646,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     setOrderSearch("");
     setInvoiceNo("");
     setInvoiceSearch("");
+    setAppliedInvoiceId(null);
     setIsThirdParty(false);
     setLastScannedRfid("");
     setRfidScanning(false);
@@ -661,6 +757,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         priceType,
         remarks,
         items: items,
+        appliedInvoiceId: appliedInvoiceId ?? undefined,
       };
 
       await SalesReturnProvider.submitReturn(payload);
@@ -696,11 +793,11 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
             return i.productId === productId && i.unit === item.unit && i.unitPrice === Number(item.unitPrice) && existingIsRfid === isRfidItem;
           }
         );
-        const qty = item.quantity || 1;
+        const incomingQty = item.unitOrder === 3 ? 0 : (item.quantity || 1);
 
         if (existingIndex >= 0) {
           const existing = updated[existingIndex];
-          existing.quantity += qty;
+          existing.quantity += incomingQty;
           existing.grossAmount = Math.round(existing.quantity * existing.unitPrice * 100) / 100;
 
           if (existing.discountType) {
@@ -718,6 +815,22 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
             existing.rfidTags = [...(existing.rfidTags || []), ...item.rfidTags];
           }
         } else {
+          const incomingDiscountType = item.discountType || "";
+          let initialDiscountAmt = 0;
+          const unitPrice = Math.round(Number(item.unitPrice || 0) * 100) / 100;
+          const initialGross = Math.round(unitPrice * incomingQty * 100) / 100;
+
+          if (incomingDiscountType) {
+            const selectedOption = lineDiscountOptions.find(
+              (d) => d.id.toString() === incomingDiscountType.toString(),
+            );
+            if (selectedOption) {
+              const percentage = parseFloat(selectedOption.total_percent) || 0;
+              initialDiscountAmt =
+                Math.round(initialGross * (percentage / 100) * 100) / 100;
+            }
+          }
+
           updated.push({
             ...item,
             productId,
@@ -725,12 +838,12 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
             code: item.code || "N/A",
             description: item.description || "Unknown Item",
             unit: item.unit || "Pcs",
-            quantity: qty,
-            unitPrice: Math.round(Number(item.unitPrice || 0) * 100) / 100,
-            grossAmount: Math.round((item.unitPrice || 0) * qty * 100) / 100,
-            discountType: "",
-            discountAmount: 0,
-            totalAmount: Math.round((item.unitPrice || 0) * qty * 100) / 100,
+            quantity: incomingQty,
+            unitPrice,
+            grossAmount: initialGross,
+            discountType: incomingDiscountType,
+            discountAmount: initialDiscountAmt,
+            totalAmount: Math.round((initialGross - initialDiscountAmt) * 100) / 100,
             reason: "",
             returnType: "",
           } as SalesReturnItem);
@@ -1102,7 +1215,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                       Qty
                     </th>
                     <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-32 text-right">
-                      Price
+                      Unit Price
                     </th>
                     <th className="px-3 py-3 font-semibold text-xs uppercase tracking-wider w-32 text-right">
                       Gross
@@ -1140,14 +1253,35 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                     </tr>
                   ) : (
                     <>
-                      {/* 1. RENDER MANUAL ITEMS (No RFID) */}
                       {items.map((item, idx) => {
-                        const isManual = !item.rfidTags || item.rfidTags.length === 0;
-                        if (!isManual) return null;
+                        const isSelected = selectedRowIndex === idx;
                         return (
-                          <tr key={idx} className="hover:bg-muted/20 transition-colors duration-200 border-b border-border">
-                            <td className="px-4 py-2 font-mono text-sm text-foreground font-bold">
-                              {item.code}
+                          <tr 
+                            key={item.id || idx} 
+                            onClick={() => {
+                              if (item.unitOrder === 3) {
+                                setSelectedRowIndex(idx);
+                              } else {
+                                toast.info("RFID tagging is limited to Box units (Order 3).", {
+                                  description: `"${item.description}" uses "${item.unit}", which must be handled manually.`
+                                });
+                              }
+                            }}
+                            className={cn(
+                              "hover:bg-muted/10 transition-colors duration-200 border-b border-border cursor-pointer group",
+                              isSelected && "bg-primary/5 ring-1 ring-inset ring-primary/20",
+                              item.unitOrder !== 3 && "cursor-default hover:bg-transparent opacity-90"
+                            )}
+                          >
+                            <td className="px-4 py-2 font-mono text-sm text-foreground">
+                              <div className="flex items-center gap-2">
+                                {isSelected ? (
+                                  <div className="w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_rgba(var(--primary),0.5)] animate-pulse" />
+                                ) : (
+                                  <div className="w-2 h-2 rounded-full bg-muted-foreground/20" />
+                                )}
+                                <span>{item.code}</span>
+                              </div>
                             </td>
                             <td className="px-4 py-2 text-foreground">
                               <div className="text-sm text-foreground font-medium" title={item.description}>
@@ -1155,18 +1289,22 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                               </div>
                             </td>
                             <td className="px-4 py-2">
-                              <span className="bg-background text-foreground px-2 py-0.5 rounded text-sm border border-border">
+                              <span className="bg-background text-foreground px-2 py-0.5 rounded text-sm border border-border font-normal">
                                 {item.unit}
                               </span>
                             </td>
                             <td className="px-4 py-2 text-center">
-                              <input
-                                type="number"
-                                min="1"
-                                className="w-full text-center border border-border rounded h-8 text-sm focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none"
-                                value={item.quantity}
-                                onChange={(e) => handleItemChange(idx, "quantity", parseFloat(e.target.value) || 0)}
-                              />
+                              <div className="flex flex-col items-center gap-1">
+                                <Badge variant="outline" className={cn(
+                                  "font-bold transition-all min-w-[40px] flex justify-center",
+                                  item.unitOrder === 3 ? "border-primary/40 bg-primary/10 text-primary shadow-sm" : "border-muted-foreground/30 bg-muted/10 text-muted-foreground opacity-70"
+                                )}>
+                                  {item.quantity}
+                                </Badge>
+                                <span className="text-[9px] text-muted-foreground font-medium uppercase tracking-tighter">
+                                  {item.unitOrder === 3 ? "Box Units" : "Manual Qty"}
+                                </span>
+                              </div>
                             </td>
                             <td className="px-3 py-2 text-right text-sm whitespace-nowrap">
                               ₱{item.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -1198,53 +1336,43 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                                 readOnly
                                 disabled
                                 className="w-full text-right border border-border bg-muted/30 text-muted-foreground rounded h-8 text-sm outline-none cursor-not-allowed"
-                                value={item.discountAmount ? Number(item.discountAmount).toFixed(2) : ""}
+                                value={item.discountAmount ? Number(item.discountAmount).toFixed(2) : "0.00"}
                               />
                             </td>
                             <td className="px-3 py-2 text-right font-bold text-sm text-foreground whitespace-nowrap">
                               ₱{item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </td>
-                            <td className="px-4 py-2">
-                              <input
-                                type="text"
-                                placeholder="Enter reason"
-                                className="w-full border border-border rounded h-8 text-sm px-2 outline-none focus:border-primary"
-                                value={item.reason || ""}
-                                onChange={(e) => handleItemChange(idx, "reason", e.target.value)}
-                              />
-                            </td>
+                             <td className="px-4 py-2">
+                               <ReasonInputSection
+                                 value={item.reason || ""}
+                                 onChange={(val) => handleItemChange(idx, "reason", val)}
+                               />
+                             </td>
                             <td className="px-3 py-2">
-                              <Select
+                              <SearchableSelect
                                 value={item.returnType || ""}
                                 onValueChange={(val) => { handleItemChange(idx, "returnType", val); setReturnTypeError(false); }}
-                              >
-                                <SelectTrigger
-                                  className={`w-full h-8 px-2 text-sm transition-colors [&>span]:truncate ${returnTypeError && (!item.returnType || item.returnType === "")
-                                      ? "border-destructive ring-1 ring-destructive/30 bg-destructive/5 text-destructive"
-                                      : "border-border bg-background focus:ring-1 focus:ring-primary"
-                                    }`}
-                                >
-                                  <SelectValue placeholder="Select type" />
-                                </SelectTrigger>
-                                <SelectContent className="z-[200]">
-                                  {returnTypeOptions.length > 0 ? (
-                                    returnTypeOptions.map((type) => (
-                                      <SelectItem key={type.type_id} value={type.type_name}>
-                                        {type.type_name}
-                                      </SelectItem>
-                                    ))
-                                  ) : (
-                                    <>
-                                      <SelectItem value="Good Order">Good Order</SelectItem>
-                                      <SelectItem value="Bad Order">Bad Order</SelectItem>
-                                    </>
-                                  )}
-                                </SelectContent>
-                              </Select>
+                                options={returnTypeOptions.length > 0 
+                                  ? returnTypeOptions.map((type) => ({ value: type.type_name, label: type.type_name }))
+                                  : [
+                                      { value: "Good Order", label: "Good Order" },
+                                      { value: "Bad Order", label: "Bad Order" }
+                                    ]
+                                }
+                                placeholder="Select type"
+                                className={cn(
+                                  "h-8 text-sm px-2",
+                                  returnTypeError && (!item.returnType || item.returnType === "") && "border-destructive ring-1 ring-destructive/30 bg-destructive/5 text-destructive"
+                                )}
+                              />
                             </td>
                             <td className="sticky right-0 z-10 px-2 py-2 text-center bg-background border-l border-transparent group-hover:border-primary/20">
                               <button
-                                onClick={() => handleRemoveItem(idx)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveItem(idx);
+                                  if (selectedRowIndex === idx) setSelectedRowIndex(null);
+                                }}
                                 className="text-destructive/70 hover:text-destructive h-7 w-7 rounded-md flex items-center justify-center transition-colors"
                                 title="Remove Item"
                               >
@@ -1254,206 +1382,82 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                           </tr>
                         );
                       })}
-
-                      {/* 2. RENDER RFID ITEMS (Grouped) */}
-                      {Object.values(
-                        items.filter(i => i.rfidTags && i.rfidTags.length > 0).reduce((acc, item) => {
-                          const idx = items.findIndex(d => d === item);
-                          const rType = item.returnType || "Unassigned";
-                          const key = `${item.productId}-${item.unit}-${item.unitPrice}-${rType}`;
-                          if (!acc[key]) {
-                            acc[key] = {
-                              key,
-                              code: item.code,
-                              description: item.description,
-                              unit: item.unit,
-                              returnType: rType,
-                              unitPrice: item.unitPrice,
-                              totalQty: 0,
-                              totalGross: 0,
-                              totalDiscount: 0,
-                              totalNet: 0,
-                              children: [],
-                            };
-                          }
-                          acc[key].totalQty += Number(item.quantity) || 0;
-                          acc[key].totalGross += Number(item.grossAmount) || 0;
-                          acc[key].totalDiscount += Number(item.discountAmount) || 0;
-                          acc[key].totalNet += Number(item.totalAmount) || 0;
-                          acc[key].children.push({ item, idx });
-                          return acc;
-                        }, {} as Record<string, SalesReturnGroup>)
-                      ).map((group: SalesReturnGroup) => (
-                        <React.Fragment key={group.key}>
-                          {/* Parent Summary Row */}
-                          <tr className="bg-muted/10 font-semibold border-b border-border">
-                            <td className="px-4 py-2 font-mono text-sm text-foreground">
-                              <div className="flex items-center gap-2">
-                                {group.children.length > 0 ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => setExpandedGroups(prev => ({ ...prev, [group.key]: !prev[group.key] }))}
-                                    className="p-1 hover:bg-muted rounded-md transition-colors text-foreground"
-                                  >
-                                    <ChevronDown className={`h-4 w-4 transition-transform ${expandedGroups[group.key] ? 'rotate-180' : ''}`} />
-                                  </button>
-                                ) : (
-                                  <div className="w-6" /> // spacer
-                                )}
-                                <span>{group.code}</span>
-                              </div>
-                            </td>
-                            <td className="px-4 py-2 text-foreground">
-                              <div className="text-sm text-foreground font-medium" title={group.description}>
-                                {group.description}
-                              </div>
-                            </td>
-                            <td className="px-4 py-2">
-                              <span className="bg-background text-foreground px-2 py-0.5 rounded text-sm border border-border font-normal">
-                                {group.unit}
-                              </span>
-                            </td>
-                            <td className="px-4 py-2 text-center text-primary text-sm font-bold">
-                              {group.totalQty}
-                            </td>
-                            <td className="px-4 py-2 text-right text-muted-foreground">
-                              -
-                            </td>
-                            <td className="px-4 py-2 text-right text-muted-foreground font-mono text-sm">
-                              ₱{group.totalGross.toLocaleString()}
-                            </td>
-                            <td className="px-4 py-2 text-center text-muted-foreground">
-                              -
-                            </td>
-                            <td className="px-4 py-2 text-right text-muted-foreground font-mono text-sm">
-                              ₱{group.totalDiscount.toLocaleString()}
-                            </td>
-                            <td className="px-4 py-2 text-right font-bold text-primary text-sm">
-                              ₱{group.totalNet.toLocaleString()}
-                            </td>
-                            <td className="px-4 py-2 text-center text-muted-foreground">
-                              -
-                            </td>
-                            <td className="px-4 py-2">
-                              {group.returnType !== "Unassigned" ? (
-                                <span className="bg-primary/20 text-primary px-2 py-0.5 rounded text-xs font-medium">
-                                  {group.returnType}
-                                </span>
-                              ) : (
-                                <span className="text-muted-foreground/60 italic text-xs">Unassigned</span>
-                              )}
-                            </td>
-                            <td></td>
-                          </tr>
-
-                          {/* Child Rows (Individual Scans/Additions) */}
-                          {expandedGroups[group.key] && group.children.map(({ item, idx }: { item: SalesReturnItem, idx: number }) => (
-                            <tr key={item.id || idx} className="hover:bg-muted/20 transition-colors duration-200 border-b border-border">
-                              <td className="px-4 py-2 font-mono text-sm text-foreground font-bold pl-10" colSpan={2}>
-                                {item.rfidTags && item.rfidTags.length > 0 ? (
-                                  <div className="flex items-center gap-1.5 bg-background border border-border pl-2.5 pr-2 py-1 rounded-md w-fit truncate max-w-[200px]" title={item.rfidTags[0]}>
-                                    <span className="text-primary truncate">{item.rfidTags[0]}</span>
-                                    <span className="text-[10px] text-muted-foreground font-sans uppercase">RFID</span>
-                                  </div>
-                                ) : null}
-                              </td>
-                              <td className="px-4 py-2"></td>
-                              <td className="px-4 py-2">
-                                <div className="text-center font-semibold text-sm">{item.quantity}</div>
-                              </td>
-                              <td className="px-4 py-2 text-right text-sm">
-                                ₱{item.unitPrice.toLocaleString()}
-                              </td>
-                              <td className="px-4 py-2 text-right text-muted-foreground font-mono text-sm">
-                                ₱{(item.grossAmount || 0).toLocaleString()}
-                              </td>
-                              <td className="px-4 py-2">
-                                <Select
-                                  value={item.discountType?.toString() || "none"}
-                                  onValueChange={(val) => handleItemChange(idx, "discountType", val === "none" ? "" : val)}
-                                >
-                                  <SelectTrigger className="w-full h-8 px-2 text-sm border-border bg-background focus:ring-1 focus:ring-primary">
-                                    <SelectValue placeholder="None" />
-                                  </SelectTrigger>
-                                  <SelectContent className="z-[200]">
-                                    <SelectItem value="none">None</SelectItem>
-                                    {lineDiscountOptions.map((opt) => (
-                                      <SelectItem key={opt.id} value={opt.id.toString()}>
-                                        {opt.discount_type}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </td>
-                              <td className="px-4 py-2">
-                                <input
-                                  type="number"
-                                  readOnly
-                                  disabled
-                                  className="w-full text-right border border-border bg-muted/30 text-muted-foreground rounded h-8 text-sm outline-none cursor-not-allowed"
-                                  value={item.discountAmount ? Number(item.discountAmount).toFixed(2) : ""}
-                                />
-                              </td>
-                              <td className="px-4 py-2 text-right font-bold text-foreground text-sm">
-                                ₱{item.totalAmount.toLocaleString()}
-                              </td>
-                              <td className="px-4 py-2">
-                                <input
-                                  type="text"
-                                  placeholder="Enter reason..."
-                                  className="w-full border border-border rounded h-8 text-sm px-2 outline-none focus:border-primary"
-                                  value={item.reason || ""}
-                                  onChange={(e) => handleItemChange(idx, "reason", e.target.value)}
-                                />
-                              </td>
-                              <td className="px-4 py-2">
-                                <Select
-                                  value={item.returnType || ""}
-                                  onValueChange={(val) => { handleItemChange(idx, "returnType", val); setReturnTypeError(false); }}
-                                >
-                                  <SelectTrigger
-                                    className={`w-full h-8 px-2 text-sm transition-colors [&>span]:truncate ${returnTypeError && (!item.returnType || item.returnType === "")
-                                        ? "border-destructive ring-1 ring-destructive/30 bg-destructive/5 text-destructive"
-                                        : "border-border bg-background focus:ring-1 focus:ring-primary"
-                                      }`}
-                                  >
-                                    <SelectValue placeholder="Select type" />
-                                  </SelectTrigger>
-                                  <SelectContent className="z-[200]">
-                                    {returnTypeOptions.length > 0 ? (
-                                      returnTypeOptions.map((type) => (
-                                        <SelectItem key={type.type_id} value={type.type_name}>
-                                          {type.type_name}
-                                        </SelectItem>
-                                      ))
-                                    ) : (
-                                      <>
-                                        <SelectItem value="Good Order">Good Order</SelectItem>
-                                        <SelectItem value="Bad Order">Bad Order</SelectItem>
-                                      </>
-                                    )}
-                                  </SelectContent>
-                                </Select>
-                              </td>
-                              <td className="sticky right-0 z-10 px-2 py-2 text-center bg-background border-l border-transparent group-hover:border-primary/20">
-                                <button
-                                  onClick={() => handleRemoveItem(idx)}
-                                  className="text-destructive/70 hover:text-destructive h-7 w-7 rounded-md flex items-center justify-center transition-colors"
-                                  title="Remove Item"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </React.Fragment>
-                      ))}
                     </>
                   )}
                 </tbody>
               </table>
             </div>
           </div>
+
+          {/* 🟢 NEW: TAG MANAGEMENT SECTION */}
+          {selectedRowIndex !== null && items[selectedRowIndex] && (
+            <div className="bg-background rounded-lg border-2 border-primary/20 shadow-md p-5 mb-6 animate-in slide-in-from-bottom-4 duration-300">
+              <div className="flex justify-between items-center mb-4">
+                <h4 className="font-bold text-foreground flex items-center gap-2 text-base">
+                  <div className="bg-emerald-500/10 p-1.5 rounded text-emerald-600">
+                    <ScanLine className="h-5 w-5" />
+                  </div>
+                  Tagged RFIDs for: <span className="text-primary underline decoration-primary/30 underline-offset-4">{items[selectedRowIndex].description}</span>
+                </h4>
+                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 px-3 py-1 font-bold">
+                  {items[selectedRowIndex].rfidTags?.length || 0} ITEMS SCANNED
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {(!items[selectedRowIndex].rfidTags || items[selectedRowIndex].rfidTags!.length === 0) ? (
+                  <div className="col-span-full py-12 text-center border border-dashed rounded-lg text-muted-foreground bg-muted/5">
+                    <div className="flex flex-col items-center gap-2">
+                      <ScanLine className="h-8 w-8 opacity-20" />
+                      <p className="font-medium">No RFIDs tagged yet</p>
+                      <span className="text-xs">Start scanning to add items to this row.</span>
+                    </div>
+                  </div>
+                ) : (
+                  items[selectedRowIndex].rfidTags!.map((tag, tIdx) => (
+                    <div key={tag} className="flex items-center justify-between bg-muted/20 border border-border p-2.5 rounded-md hover:border-primary/30 transition-all group hover:shadow-sm">
+                      <div className="flex flex-col">
+                        <span className="text-xs font-mono font-bold text-foreground">{tag}</span>
+                        <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-black">Tag #{tIdx + 1}</span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setItems(prev => {
+                            const next = [...prev];
+                            const row = next[selectedRowIndex];
+                            const newTags = row.rfidTags!.filter(t => t !== tag);
+                            const newQty = newTags.length;
+                            
+                            const unitPrice = Number(row.unitPrice) || 0;
+                            const gross = Math.round(unitPrice * newQty * 100) / 100;
+                            let discAmt = 0;
+                            if (row.discountType) {
+                              const opt = lineDiscountOptions.find(d => d.id.toString() === row.discountType?.toString());
+                              if (opt) discAmt = Math.round(gross * (parseFloat(opt.total_percent) / 100) * 100) / 100;
+                            }
+
+                            next[selectedRowIndex] = {
+                              ...row,
+                              rfidTags: newTags,
+                              quantity: newQty,
+                              grossAmount: gross,
+                              discountAmount: discAmt,
+                              totalAmount: Math.round((gross - discAmt) * 100) / 100
+                            };
+                            return next;
+                          });
+                        }}
+                        className="p-1.5 text-destructive/50 hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
+                        title="Remove Tag"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
 
           {/* 3. BOTTOM SUMMARY */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-20">
@@ -1484,7 +1488,19 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                     />
                     <ChevronDown className="h-3 w-3 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     {isOrderOpen && (
-                      <div className="absolute bottom-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto">
+                      <div className="absolute bottom-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto divide-y">
+                        {/* 🟢 Clear Option */}
+                        <div
+                          className="px-3 py-2 text-xs font-medium cursor-pointer hover:bg-destructive/10 text-destructive flex items-center gap-2"
+                          onClick={() => {
+                            setOrderNo("");
+                            setOrderSearch("");
+                            setAppliedInvoiceId(null);
+                            setIsOrderOpen(false);
+                          }}
+                        >
+                          <X className="h-3 w-3" /> Clear Selection
+                        </div>
                         {filteredOrders.length > 0 ? (
                           filteredOrders.map((inv) => (
                             <div
@@ -1497,6 +1513,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                                 // Auto-fill invoice
                                 setInvoiceNo(inv.invoice_no);
                                 setInvoiceSearch(inv.invoice_no);
+                                setAppliedInvoiceId(Number(inv.id));
                               }}
                             >
                               <div className="flex flex-col">
@@ -1533,12 +1550,25 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                         setInvoiceSearch(e.target.value);
                         setInvoiceNo(e.target.value);
                         setIsInvoiceOpen(true);
+                        setAppliedInvoiceId(null);
                       }}
                       onFocus={() => setIsInvoiceOpen(true)}
                     />
                     <ChevronDown className="h-3 w-3 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     {isInvoiceOpen && (
-                      <div className="absolute bottom-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto">
+                      <div className="absolute bottom-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto divide-y">
+                        {/* 🟢 Clear Option */}
+                        <div
+                          className="px-3 py-2 text-xs font-medium cursor-pointer hover:bg-destructive/10 text-destructive flex items-center gap-2"
+                          onClick={() => {
+                            setInvoiceNo("");
+                            setInvoiceSearch("");
+                            setAppliedInvoiceId(null);
+                            setIsInvoiceOpen(false);
+                          }}
+                        >
+                          <X className="h-3 w-3" /> Clear Selection
+                        </div>
                         {filteredInvoices.length > 0 ? (
                           filteredInvoices.map((inv) => (
                             <div
@@ -1547,6 +1577,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                               onClick={() => {
                                 setInvoiceNo(inv.invoice_no);
                                 setInvoiceSearch(inv.invoice_no);
+                                setAppliedInvoiceId(Number(inv.id));
                                 setIsInvoiceOpen(false);
                                 // Auto-fill order
                                 setOrderNo(inv.order_id);
@@ -1569,17 +1600,10 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                   </div>
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
-                  Remarks
-                </label>
-                <Textarea
-                  value={remarks}
-                  onChange={(e) => setRemarks(e.target.value)}
-                  className="resize-none h-24 border-border focus:border-primary focus:bg-background"
-                  placeholder="Add any notes regarding this return..."
-                />
-              </div>
+              <RemarksInputSection
+                value={remarks}
+                onChange={setRemarks}
+              />
             </div>
 
             <div className="bg-background rounded-lg border border-border p-0 shadow-sm overflow-hidden h-fit">
@@ -1650,6 +1674,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         onClose={() => setIsProductLookupOpen(false)}
         onConfirm={handleAddProducts}
         priceType={priceType} // 🟢 Pass prop
+        customerCode={customerCode} // 🟢 Pass prop
       />
 
       {/* SUCCESS MODAL */}

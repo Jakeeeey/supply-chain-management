@@ -144,7 +144,7 @@ export async function getRawReferences() {
       "/items/salesman?limit=-1&fields=id,salesman_name,salesman_code,price_type,branch_code&filter[isActive][_eq]=1",
     ),
     directusGet<{ data: Record<string, unknown>[] }>(
-      "/items/customer?limit=-1&fields=id,customer_code,customer_name,store_name&filter[isActive][_eq]=1",
+      "/items/customer?limit=-1&fields=id,customer_code,customer_name,store_name,discount_type&filter[isActive][_eq]=1",
     ),
     directusGet<{ data: Record<string, unknown>[] }>(
       "/items/branches?limit=-1&fields=id,branch_name",
@@ -190,6 +190,17 @@ export async function getRawProductCatalog() {
     ),
     directusGet<{ data: Record<string, unknown>[] }>("/items/products?limit=-1&filter[isActive][_eq]=1"),
   ]);
+}
+
+
+/**
+ * Fetches supplier_category_discount_per_customer records for a specific customer.
+ */
+export async function getRawSupplierCategoryDiscount(customerCode: string) {
+  if (!customerCode) return { data: [] };
+  return directusGet<{ data: Record<string, unknown>[] }>(
+    `/items/supplier_category_discount_per_customer?limit=-1&filter[customer_code][_eq]=${encodeURIComponent(customerCode)}&filter[deleted_at][_null]=true`
+  );
 }
 
 /**
@@ -343,6 +354,16 @@ export async function updateJunctionLink(
   );
 }
 
+/**
+ * Deletes an existing junction link.
+ */
+export async function deleteJunctionLink(linkId: number) {
+  return directusMutate<void>(
+    `/items/sales_invoice_sales_return/${linkId}`,
+    "DELETE",
+  );
+}
+
 // =============================================================================
 // REPOSITORY METHODS — RFID
 // =============================================================================
@@ -409,11 +430,14 @@ export async function getSpringRfidLookup(
   rfidTag: string,
   branchId: number,
   token: string,
-): Promise<{ productId: number; [key: string]: unknown }[]> {
+): Promise<{ productId: number;[key: string]: unknown }[]> {
   const SPRING_URL = process.env.SPRING_API_BASE_URL;
   if (!SPRING_URL) throw new Error("SPRING_API_BASE_URL is not defined");
 
-  const targetUrl = `${SPRING_URL.replace(/\/$/, "")}/api/view-rfid-onhand?rfid=${encodeURIComponent(rfidTag)}&branchId=${branchId}`;
+  const targetUrl = `${SPRING_URL.replace(/\/$/, "")}/api/view-rfid-onhand?rfid=${encodeURIComponent(rfidTag)}&branch_id=${branchId}`;
+
+  // 🟢 Diagnostic Log: Help verify the URL and BranchId in terminal
+  console.log(`[Spring RFID Lookup] URL: ${targetUrl}`);
 
   const springRes = await fetch(targetUrl, {
     method: "GET",
@@ -430,6 +454,37 @@ export async function getSpringRfidLookup(
   }
 
   return springRes.json();
+}
+
+/**
+ * Specifically checks if an RFID tag is currently "On Hand" (in stock) at a branch.
+ */
+export async function checkRfidOnHand(
+  rfidTag: string,
+  branchId: number,
+  token: string,
+): Promise<boolean> {
+  const SPRING_URL = process.env.SPRING_API_BASE_URL;
+  if (!SPRING_URL) return false;
+
+  const targetUrl = `${SPRING_URL.replace(/\/$/, "")}/api/view-rfid-onhand?rfid=${encodeURIComponent(rfidTag)}&branch_id=${branchId}`;
+
+  try {
+    const res = await fetch(targetUrl, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+    });
+
+    if (!res.ok) return false;
+    const data = await res.json();
+    return Array.isArray(data) && data.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 /**

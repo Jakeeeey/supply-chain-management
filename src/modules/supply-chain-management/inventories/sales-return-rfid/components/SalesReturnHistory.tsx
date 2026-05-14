@@ -151,7 +151,7 @@ interface SalesReturnHistoryProps {
   pageSize: number;
   totalPages: number;
   filters: { salesman: string; customer: string; status: string };
-  salesmenOptions: { value: string; label: string }[];
+  salesmenOptions: { value: string; label: string; code?: string }[];
   customerOptions: { value: string; label: string }[];
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: number) => void;
@@ -242,16 +242,18 @@ export function SalesReturnHistory({
   );
 
   // --- Selected labels for filter buttons ---
-  const selectedSalesmanLabel =
-    filters.salesman === "All"
-      ? "All Salesmen"
-      : salesmenOptions.find((s) => s.value === filters.salesman)?.label ||
-        "All Salesmen";
-  const selectedCustomerLabel =
-    filters.customer === "All"
-      ? "All Customers"
-      : customerOptions.find((c) => c.value === filters.customer)?.label ||
-        "All Customers";
+  const selectedSalesmanLabel = useMemo(() => {
+    if (filters.salesman === "All") return "All Salesmen";
+    const found = salesmenOptions.find((s) => s.value === filters.salesman);
+    if (!found) return "All Salesmen";
+    return found.code ? `[${found.code}] ${found.label}` : found.label;
+  }, [filters.salesman, salesmenOptions]);
+  const selectedCustomerLabel = useMemo(() => {
+    if (filters.customer === "All") return "All Customers";
+    const found = customerOptions.find((c) => c.value === filters.customer);
+    if (!found) return "All Customers";
+    return `[${found.value}] ${found.label}`;
+  }, [filters.customer, customerOptions]);
 
   return (
     <div className="space-y-4">
@@ -314,7 +316,7 @@ export function SalesReturnHistory({
                             : "opacity-0",
                         )}
                       />
-                      {s.label}
+                      {s.code ? `[${s.code}] ${s.label}` : s.label}
                     </CommandItem>
                   ))}
                 </CommandGroup>
@@ -377,7 +379,7 @@ export function SalesReturnHistory({
                             : "opacity-0",
                         )}
                       />
-                      {c.label}
+                      {`[${c.value}] ${c.label}`}
                     </CommandItem>
                   ))}
                 </CommandGroup>

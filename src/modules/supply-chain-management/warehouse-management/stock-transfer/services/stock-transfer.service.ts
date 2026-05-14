@@ -119,9 +119,13 @@ export async function updateTransferStatus(payload: UpdateTransferPayload): Prom
   const validated = UpdateStockTransferSchema.parse(payload);
   
   // 2. Normalize updates (handle both 'items' and 'ids' formats)
-  const updates = validated.items || (validated.ids || []).map(id => ({
+  const now = new Date().toISOString();
+  const updates = (validated.items || (validated.ids || []).map(id => ({
     id,
     status: validated.status || "Unknown"
+  }))).map(u => ({
+    ...u,
+    ...(u.status === "Received" ? { date_received: now, receiver_id: validated.userId || null } : {})
   }));
 
   if (updates.length === 0) return { success: true };
@@ -145,7 +149,7 @@ export async function updateTransferStatus(payload: UpdateTransferPayload): Prom
 /**
  * Specifically handles manual receiving where received_quantity is auto-filled.
  */
-export async function manualReceiveItems(ids: number[], status: string): Promise<{ success: boolean }> {
+export async function manualReceiveItems(ids: number[], status: string, userId?: number): Promise<{ success: boolean }> {
   // Fetch ONLY the rows we need instead of the entire table
   const targetItems = await repo.fetchStockTransfersByIds(ids);
 
@@ -159,10 +163,13 @@ export async function manualReceiveItems(ids: number[], status: string): Promise
   }));
 
   // Use bulk update — one request per unique payload shape
+  const now = new Date().toISOString();
   await repo.updateTransfersStatus(updates.map(u => ({
     id: u.id,
     status: u.status,
-    allocated_quantity: u.received_quantity
+    allocated_quantity: u.received_quantity,
+    date_received: now,
+    receiver_id: userId || null
   })));
 
   // Also set received_quantity individually where it varies per row
@@ -170,7 +177,9 @@ export async function manualReceiveItems(ids: number[], status: string): Promise
     updates.map(u =>
       repo.updateTransfer(u.id, {
         status: u.status,
-        received_quantity: u.received_quantity
+        received_quantity: u.received_quantity,
+        date_received: now,
+        receiver_id: userId || null
       })
     )
   );

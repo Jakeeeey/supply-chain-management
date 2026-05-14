@@ -129,6 +129,7 @@ interface DataTableProps<TData, TValue> {
   onSelectionChange?: (selectedRows: TData[]) => void;
   actionComponent?: React.ReactNode;
   autoResetPageIndex?: boolean;
+  showSelectionCount?: boolean;
 }
 
 export function POCreationDataTable<TData, TValue>({
@@ -149,6 +150,7 @@ export function POCreationDataTable<TData, TValue>({
   onSelectionChange,
   actionComponent,
   autoResetPageIndex = true,
+  showSelectionCount = true,
 }: DataTableProps<TData, TValue>) {
   "use no memo"
   const [internalSorting, setInternalSorting] = React.useState<SortingState>(
@@ -369,10 +371,17 @@ export function POCreationDataTable<TData, TValue>({
 
       {/* Pagination Controls */}
       <div className="flex items-center justify-between px-2">
-        <div className="flex-1 text-sm text-muted-foreground font-medium">
-          {table.getFilteredSelectedRowModel().rows.length} of{" "}
-          {table.getFilteredRowModel().rows.length} row(s) selected.
-        </div>
+        {showSelectionCount ? (
+          <div className="flex-1 text-sm text-muted-foreground font-medium">
+            {table.getFilteredSelectedRowModel().rows.length > 0 ? (
+              `${table.getFilteredSelectedRowModel().rows.length} of ${table.getFilteredRowModel().rows.length} row(s) selected.`
+            ) : (
+              `${table.getFilteredRowModel().rows.length} of ${table.getFilteredRowModel().rows.length} row(s) selected.`
+            )}
+          </div>
+        ) : (
+          <div className="flex-1" />
+        )}
         <div className="flex items-center space-x-6 lg:space-x-8">
           <div className="flex items-center space-x-2">
             <p className="text-sm font-bold">Rows per page</p>

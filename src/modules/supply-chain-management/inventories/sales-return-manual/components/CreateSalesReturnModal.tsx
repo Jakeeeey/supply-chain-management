@@ -20,6 +20,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { cn } from "@/lib/utils";
 import { useSearchParams } from "next/navigation";
 import {
   SalesReturnItem,
@@ -37,7 +39,9 @@ import {
   SalesmanOption,
   CustomerOption,
   BranchOption,
+  Product,
 } from "../providers/fetchProviders";
+import { resolveFinalDiscount } from "../utils/discount-resolver";
 
 interface Props {
   isOpen: boolean;
@@ -58,6 +62,54 @@ interface SalesReturnGroup {
   totalNet: number;
   children: { item: SalesReturnItem; idx: number }[];
 }
+
+// =============================================================================
+// OPTIMIZED SUB-COMPONENTS (PERFORMANCE FIX)
+// =============================================================================
+
+const RemarksInputSection = React.memo(({ value, onChange }: { value: string, onChange: (val: string) => void }) => {
+  const [localRemarks, setLocalRemarks] = useState(value);
+
+  useEffect(() => {
+    setLocalRemarks(value);
+  }, [value]);
+
+  return (
+    <div className="space-y-1.5">
+      <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
+        Remarks
+      </label>
+      <Textarea
+        value={localRemarks}
+        onChange={(e) => setLocalRemarks(e.target.value)}
+        onBlur={() => onChange(localRemarks)}
+        className="resize-none h-24 border-border focus:border-primary focus:bg-background"
+        placeholder="Add any notes regarding this return..."
+      />
+    </div>
+  );
+});
+RemarksInputSection.displayName = "RemarksInputSection";
+
+const ReasonInputSection = React.memo(({ value, onChange }: { value: string, onChange: (val: string) => void }) => {
+  const [localReason, setLocalReason] = useState(value);
+
+  useEffect(() => {
+    setLocalReason(value);
+  }, [value]);
+
+  return (
+    <input
+      type="text"
+      placeholder="Enter reason"
+      className="w-full border border-border rounded h-8 text-sm px-2 outline-none focus:border-primary"
+      value={localReason}
+      onChange={(e) => setLocalReason(e.target.value)}
+      onBlur={() => onChange(localReason)}
+    />
+  );
+});
+ReasonInputSection.displayName = "ReasonInputSection";
 
 export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
   const searchParams = useSearchParams();
@@ -89,6 +141,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
 
   // INVOICE STATE
   const [invoiceNo, setInvoiceNo] = useState("");
+  const [appliedInvoiceId, setAppliedInvoiceId] = useState<number | null>(null);
   const [remarks, setRemarks] = useState("");
 
   // --- 2. DATA LISTS ---
@@ -211,6 +264,51 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
       );
     }
   }, [priceType, lineDiscountOptions, items.length]);
+
+  // 🟢 NEW: Effect to automatically update discounts when Customer changes
+  useEffect(() => {
+    if (items.length > 0 && customerCode) {
+      const updateDiscounts = async () => {
+        try {
+          const catalog = await SalesReturnProvider.getFullCatalog(customerCode);
+
+          setItems((prevItems) =>
+            prevItems.map((item) => {
+              const productInfo = catalog.products?.find((p: Product) => p.product_id === Number(item.productId));
+              if (!productInfo) return item;
+
+              const newDiscountType = resolveFinalDiscount(
+                productInfo,
+                customerCode,
+                catalog
+              );
+
+              let newDiscountAmt = 0;
+              if (newDiscountType) {
+                const selectedOption = lineDiscountOptions.find(
+                  (d) => d.id.toString() === newDiscountType?.toString(),
+                );
+                if (selectedOption) {
+                  const percentage = parseFloat(selectedOption.total_percent) || 0;
+                  newDiscountAmt = Math.round((item.grossAmount || 0) * (percentage / 100) * 100) / 100;
+                }
+              }
+
+              return {
+                ...item,
+                discountType: newDiscountType,
+                discountAmount: newDiscountAmt,
+                totalAmount: Math.round(((item.grossAmount || 0) - newDiscountAmt) * 100) / 100,
+              };
+            })
+          );
+        } catch (error) {
+          console.error("Failed to update discounts on customer change", error);
+        }
+      };
+      updateDiscounts();
+    }
+  }, [customerCode, customers, lineDiscountOptions, items.length]);
 
   const handleSelectSalesman = useCallback((salesman: SalesmanOption) => {
     setSelectedSalesmanId(salesman.id.toString());
@@ -380,6 +478,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
     setOrderSearch("");
     setInvoiceNo("");
     setInvoiceSearch("");
+    setAppliedInvoiceId(null);
     setIsThirdParty(false);
     setInvoiceOptions([]);
   };
@@ -469,6 +568,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         priceType,
         remarks,
         items: items,
+        appliedInvoiceId: appliedInvoiceId ?? undefined,
       };
 
       await SalesReturnProvider.submitReturn(payload);
@@ -533,6 +633,21 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
             Number(resultRecord.unitPrice) ||
             0) * 100) / 100;
 
+          const incomingDiscountType = item.discountType || "";
+          let initialDiscountAmt = 0;
+          const initialGross = Math.round(unitPrice * qty * 100) / 100;
+
+          if (incomingDiscountType) {
+            const selectedOption = lineDiscountOptions.find(
+              (d) => d.id.toString() === incomingDiscountType.toString(),
+            );
+            if (selectedOption) {
+              const percentage = parseFloat(selectedOption.total_percent) || 0;
+              initialDiscountAmt =
+                Math.round(initialGross * (percentage / 100) * 100) / 100;
+            }
+          }
+
           updated.push({
             ...item,
             productId,
@@ -542,10 +657,10 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
             unit: item.unit || "Pcs",
             quantity: qty,
             unitPrice: unitPrice,
-            grossAmount: Math.round(unitPrice * qty * 100) / 100,
-            discountType: "",
-            discountAmount: 0,
-            totalAmount: Math.round(unitPrice * qty * 100) / 100,
+            grossAmount: initialGross,
+            discountType: incomingDiscountType,
+            discountAmount: initialDiscountAmt,
+            totalAmount: Math.round((initialGross - initialDiscountAmt) * 100) / 100,
             reason: "",
             returnType: "",
           } as SalesReturnItem);
@@ -984,48 +1099,33 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                             <td className="px-3 py-2 text-right font-bold text-sm text-foreground whitespace-nowrap">
                               ₱{item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </td>
-                            <td className="px-4 py-2">
-                              <input
-                                type="text"
-                                placeholder="Enter reason"
-                                className="w-full border border-border rounded h-8 text-sm px-2 outline-none focus:border-primary"
-                                value={item.reason || ""}
-                                onChange={(e) => handleItemChange(idx, "reason", e.target.value)}
-                              />
-                            </td>
+                             <td className="px-4 py-2">
+                               <ReasonInputSection
+                                 value={item.reason || ""}
+                                 onChange={(val) => handleItemChange(idx, "reason", val)}
+                               />
+                             </td>
                             <td className="px-3 py-2">
                               {/* 🟢 Implemented Shadcn Select for Return Type with Validation */}
-                              <Select
+                              <SearchableSelect
                                 value={item.returnType || ""}
                                 onValueChange={(val) => {
                                   handleItemChange(idx, "returnType", val);
                                   setReturnTypeError(false);
                                 }}
-                              >
-                                <SelectTrigger 
-                                  className={`w-full h-8 text-sm px-2 bg-background focus:ring-1 transition-colors shadow-sm ${
-                                    returnTypeError && (!item.returnType || item.returnType === "")
-                                      ? "border-destructive ring-1 ring-destructive/30 bg-destructive/5 text-destructive"
-                                      : "border-border focus:ring-primary"
-                                  }`}
-                                >
-                                  <SelectValue placeholder="Select type..." />
-                                </SelectTrigger>
-                                <SelectContent className="bg-background z-50">
-                                  {returnTypeOptions.length > 0 ? (
-                                    returnTypeOptions.map((type) => (
-                                      <SelectItem key={type.type_id} value={type.type_name}>
-                                        {type.type_name}
-                                      </SelectItem>
-                                    ))
-                                  ) : (
-                                    <>
-                                      <SelectItem value="Good Order">Good Order</SelectItem>
-                                      <SelectItem value="Bad Order">Bad Order</SelectItem>
-                                    </>
-                                  )}
-                                </SelectContent>
-                              </Select>
+                                options={returnTypeOptions.length > 0 
+                                  ? returnTypeOptions.map((type) => ({ value: type.type_name, label: type.type_name }))
+                                  : [
+                                      { value: "Good Order", label: "Good Order" },
+                                      { value: "Bad Order", label: "Bad Order" }
+                                    ]
+                                }
+                                placeholder="Select type..."
+                                className={cn(
+                                  "h-8 text-sm px-2",
+                                  returnTypeError && (!item.returnType || item.returnType === "") && "border-destructive ring-1 ring-destructive/30 bg-destructive/5 text-destructive"
+                                )}
+                              />
                             </td>
                             <td className="sticky right-0 z-10 px-2 py-2 text-center bg-background border-l border-transparent group-hover:border-primary/20">
                               <button
@@ -1182,13 +1282,10 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                               <td className="px-4 py-2 text-right font-bold text-foreground text-sm">
                                 ₱{item.totalAmount.toLocaleString()}
                               </td>
-                              <td className="px-4 py-2">
-                                <input
-                                  type="text"
-                                  placeholder="Enter reason..."
-                                  className="w-full border border-border rounded h-8 text-sm px-2 outline-none focus:border-primary"
+                               <td className="px-4 py-2">
+                                <ReasonInputSection
                                   value={item.reason || ""}
-                                  onChange={(e) => handleItemChange(idx, "reason", e.target.value)}
+                                  onChange={(val) => handleItemChange(idx, "reason", val)}
                                 />
                               </td>
                               <td className="px-3 py-2">
@@ -1275,7 +1372,19 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                     />
                     <ChevronDown className="h-3 w-3 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     {isOrderOpen && (
-                      <div className="absolute bottom-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto">
+                      <div className="absolute bottom-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto divide-y">
+                        {/* 🟢 Clear Option */}
+                        <div
+                          className="px-3 py-2 text-xs font-medium cursor-pointer hover:bg-destructive/10 text-destructive flex items-center gap-2"
+                          onClick={() => {
+                            setOrderNo("");
+                            setOrderSearch("");
+                            setAppliedInvoiceId(null);
+                            setIsOrderOpen(false);
+                          }}
+                        >
+                          <X className="h-3 w-3" /> Clear Selection
+                        </div>
                         {filteredOrders.length > 0 ? (
                           filteredOrders.map((inv) => (
                             <div
@@ -1288,6 +1397,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                                 // Auto-fill invoice
                                 setInvoiceNo(inv.invoice_no);
                                 setInvoiceSearch(inv.invoice_no);
+                                setAppliedInvoiceId(Number(inv.id));
                               }}
                             >
                               <div className="flex flex-col">
@@ -1325,12 +1435,25 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                         setInvoiceSearch(e.target.value);
                         setInvoiceNo(e.target.value);
                         setIsInvoiceOpen(true);
+                        setAppliedInvoiceId(null);
                       }}
                       onFocus={() => setIsInvoiceOpen(true)}
                     />
                     <ChevronDown className="h-3 w-3 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     {isInvoiceOpen && (
-                      <div className="absolute bottom-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto">
+                      <div className="absolute bottom-[calc(100%+4px)] left-0 w-full z-50 bg-background border border-border rounded-md shadow-xl max-h-48 overflow-y-auto divide-y">
+                        {/* 🟢 Clear Option */}
+                        <div
+                          className="px-3 py-2 text-xs font-medium cursor-pointer hover:bg-destructive/10 text-destructive flex items-center gap-2"
+                          onClick={() => {
+                            setInvoiceNo("");
+                            setInvoiceSearch("");
+                            setAppliedInvoiceId(null);
+                            setIsInvoiceOpen(false);
+                          }}
+                        >
+                          <X className="h-3 w-3" /> Clear Selection
+                        </div>
                         {filteredInvoices.length > 0 ? (
                           filteredInvoices.map((inv) => (
                             <div
@@ -1339,6 +1462,7 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                               onClick={() => {
                                 setInvoiceNo(inv.invoice_no);
                                 setInvoiceSearch(inv.invoice_no);
+                                setAppliedInvoiceId(Number(inv.id));
                                 setIsInvoiceOpen(false);
                                 // Auto-fill order
                                 setOrderNo(inv.order_id);
@@ -1361,17 +1485,10 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
                   </div>
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
-                  Remarks
-                </label>
-                <Textarea
-                  value={remarks}
-                  onChange={(e) => setRemarks(e.target.value)}
-                  className="resize-none h-24 border-border focus:border-primary focus:bg-background"
-                  placeholder="Add any notes regarding this return..."
-                />
-              </div>
+              <RemarksInputSection
+                value={remarks}
+                onChange={setRemarks}
+              />
             </div>
 
             <div className="bg-background rounded-lg border border-border p-0 shadow-sm overflow-hidden h-fit">
@@ -1438,7 +1555,8 @@ export function CreateSalesReturnModal({ isOpen, onClose, onSuccess }: Props) {
         isOpen={isProductLookupOpen}
         onClose={() => setIsProductLookupOpen(false)}
         onConfirm={handleAddProducts}
-        priceType={priceType} // 🟢 Pass prop
+        priceType={priceType}
+        customerCode={customerCode}
       />
 
       {/* SUCCESS MODAL */}

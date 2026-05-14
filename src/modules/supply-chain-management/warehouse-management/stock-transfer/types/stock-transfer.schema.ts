@@ -92,6 +92,8 @@ export const UpdateStockTransferSchema = z.object({
   rfids: z.array(RfidTrackingSchema).optional(),
   /** Type of scan: DISPATCH or RECEIVE. */
   scanType: RfidScanTypeSchema.optional(),
+  /** ID of the user performing the update. */
+  userId: z.number().optional(),
 }).superRefine((data, ctx) => {
   const hasItems = data.items && data.items.length > 0;
   const hasIds = data.ids && data.ids.length > 0;

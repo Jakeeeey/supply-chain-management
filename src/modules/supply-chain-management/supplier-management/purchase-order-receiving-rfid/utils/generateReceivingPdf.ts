@@ -79,6 +79,7 @@ export type ReceivingPdfData = {
     branchLabel: string;
     isFullyReceived: boolean;
     priceType: string;
+    isInvoice?: boolean;
     items: Array<{
         name: string;
         barcode: string;
@@ -86,6 +87,7 @@ export type ReceivingPdfData = {
         expectedQty: number;
         receivedQtyNow: number;
         unitPrice?: number;
+        discountType?: string;
         discountAmount?: number;
         batchNo?: string;
         lotId?: string;
@@ -144,7 +146,15 @@ export async function generateReceivingPdf(
             sumDiscount += (received * discountAmount);
             sumNet += net;
 
-            return [name, barcode, uom, String(expected), String(received), formatMoney(price), formatMoney(received * discountAmount), formatMoney(net)];
+            const batchExpLines = [
+                item.batchNo ? `Batch: ${item.batchNo}` : "",
+                item.lotId ? `Lot: ${item.lotId}` : "",
+                item.expiryDate ? `Exp: ${item.expiryDate}` : ""
+            ].filter(Boolean).join("\n");
+
+            const discType = safeStr(item.discountType);
+
+            return [barcode, name, batchExpLines || "—", uom, String(expected), String(received), formatMoney(price), discType, formatMoney(received * discountAmount), formatMoney(net)];
         });
 
         // 2. Render Receipt Details (PO Number, Receipt No, Date, Supplier, Branch)
@@ -154,10 +164,10 @@ export async function generateReceivingPdf(
         doc.setTextColor(50, 50, 50);
 
         // Title
-        const statusText = data.isFullyReceived ? "FULLY RECEIVED" : "PARTIAL RECEIVING";
+        const statusText = data.isFullyReceived ? "FULLY RECEIVED" : "PARTIALLY RECEIVED";
         doc.setFontSize(10);
         doc.setFont("helvetica", "bold");
-        doc.setTextColor(data.isFullyReceived ? 22 : 194, data.isFullyReceived ? 163 : 120, data.isFullyReceived ? 74 : 10);
+        doc.setTextColor(data.isFullyReceived ? 46 : 230, data.isFullyReceived ? 125 : 126, data.isFullyReceived ? 50 : 34);
         doc.text(`RECEIVING RECEIPT — ${statusText}`, pageWidth / 2, detailsY, { align: "center" });
 
         doc.setFontSize(8);
@@ -168,12 +178,12 @@ export async function generateReceivingPdf(
         doc.setFont("helvetica", "bold");
         doc.text("Supplier:", 10, infoY);
         doc.setFont("helvetica", "normal");
-        doc.text(supplierName, 28, infoY);
+        doc.text(supplierName, 30, infoY);
 
         doc.setFont("helvetica", "bold");
         doc.text("Branch:", 10, infoY + 5);
         doc.setFont("helvetica", "normal");
-        doc.text(branchLabel, 28, infoY + 5);
+        doc.text(branchLabel, 30, infoY + 5);
 
         // Right Column: PO#, Receipt#, Date, Type
         const rightMarginX = pageWidth - 10;
@@ -200,13 +210,14 @@ export async function generateReceivingPdf(
         // 3. Render Main Table
         autoTable(doc, {
             startY: infoY + 22,
-            margin: { left: 10, right: 10 },
-            head: [["Product", "Barcode", "UOM", "Expected", "Received", "Price", "Disc", "Net"]],
+            margin: { top: startY, left: 10, right: 10 },
+            head: [["Barcode", "Product", "Batch/Exp", "UOM", "Order Qty", "Received", "Unit Price", "Disc Type", "Disc Amt", "Net Amt"]],
             body: tableBody,
             foot: [[
-                { content: "TOTALS", colSpan: 3, styles: { halign: "right", fillColor: [245, 245, 245], fontSize: 7, textColor: [50, 50, 50], fontStyle: "bold" } },
+                { content: "TOTALS", colSpan: 4, styles: { halign: "right", fillColor: [245, 245, 245], fontSize: 7, textColor: [50, 50, 50], fontStyle: "bold" } },
                 { content: String(sumExpected), styles: { halign: "right", fillColor: [245, 245, 245], fontSize: 7, textColor: [50, 50, 50], fontStyle: "bold" } },
                 { content: String(sumReceived), styles: { halign: "right", fillColor: [245, 245, 245], fontSize: 7, textColor: [50, 50, 50], fontStyle: "bold" } },
+                { content: "—", styles: { halign: "right", fillColor: [245, 245, 245], fontSize: 7, textColor: [50, 50, 50], fontStyle: "bold" } },
                 { content: "—", styles: { halign: "right", fillColor: [245, 245, 245], fontSize: 7, textColor: [50, 50, 50], fontStyle: "bold" } },
                 { content: formatMoney(sumDiscount), styles: { halign: "right", fillColor: [245, 245, 245], fontSize: 7, textColor: [50, 50, 50], fontStyle: "bold" } },
                 { content: formatMoney(sumNet), styles: { halign: "right", fillColor: [245, 245, 245], fontSize: 7, textColor: [50, 50, 50], fontStyle: "bold" } },
@@ -216,18 +227,20 @@ export async function generateReceivingPdf(
             headStyles: { fillColor: [100, 100, 100], textColor: [255, 255, 255], fontSize: 7, fontStyle: "bold", halign: "center" },
             bodyStyles: { fontSize: 7, textColor: [50, 50, 50] },
             columnStyles: {
-                0: { cellWidth: "auto" },
-                1: { cellWidth: 22 },
-                2: { cellWidth: 12 },
-                3: { halign: "right", cellWidth: 16 },
-                4: { halign: "right", cellWidth: 16 },
-                5: { halign: "right", cellWidth: 18 },
+                0: { cellWidth: 20 },
+                1: { cellWidth: "auto" },
+                2: { cellWidth: 28, fontSize: 6 },
+                3: { cellWidth: 12 },
+                4: { halign: "right", cellWidth: 14 },
+                5: { halign: "right", cellWidth: 14 },
                 6: { halign: "right", cellWidth: 18 },
-                7: { halign: "right", cellWidth: 20, fontStyle: "bold" },
+                7: { halign: "center", cellWidth: 15 },
+                8: { halign: "right", cellWidth: 18 },
+                9: { halign: "right", cellWidth: 20, fontStyle: "bold" },
             },
-            didDrawPage: (pageData) => {
-                // Repeat header on subsequent pages
-                if (pageData.pageNumber > 1 && config.elements) {
+            didDrawPage: () => {
+                // Always render template elements on every page
+                if (config.elements) {
                     Object.values(config.elements).forEach(el => {
                         renderElement(doc, el as PdfElementConfig, companyData);
                     });
@@ -286,30 +299,39 @@ export async function generateReceivingPdf(
         doc.text("Net Total:", labelX, finalY + lineHeight * 2 + 3);
         doc.text(`${formatMoney(sumNet)}`, rightColX, finalY + lineHeight * 2 + 3, { align: "right" });
 
-        // Add VAT and EWT
-        doc.setFont("helvetica", "normal");
-        doc.text("VAT Details:", labelX, finalY + lineHeight * 3 + 3);
-        doc.text(`${isExclusive ? "+" : ""}${formatMoney(vatAmount)}`, rightColX, finalY + lineHeight * 3 + 3, { align: "right" });
+        const isInvoice = Boolean(data.isInvoice);
+        let currentY = finalY + lineHeight * 2 + 9;
 
-        doc.text("EWT (1%):", labelX, finalY + lineHeight * 4 + 3);
-        doc.setTextColor(150, 50, 50);
-        doc.text(`-${formatMoney(whtAmount)}`, rightColX, finalY + lineHeight * 4 + 3, { align: "right" });
+        if (isInvoice) {
+            // Add VAT and EWT
+            doc.setFont("helvetica", "normal");
+            doc.text("VAT Details:", labelX, finalY + lineHeight * 3 + 3);
+            doc.text(`${isExclusive ? "+" : ""}${formatMoney(vatAmount)}`, rightColX, finalY + lineHeight * 3 + 3, { align: "right" });
 
-        doc.setDrawColor(180, 180, 180);
-        doc.setLineWidth(0.5);
-        doc.line(labelX, finalY + lineHeight * 4 + 5, rightColX, finalY + lineHeight * 4 + 5);
+            doc.text("EWT (1%):", labelX, finalY + lineHeight * 4 + 3);
+            doc.setTextColor(150, 50, 50);
+            doc.text(`-${formatMoney(whtAmount)}`, rightColX, finalY + lineHeight * 4 + 3, { align: "right" });
+
+            doc.setDrawColor(180, 180, 180);
+            doc.setLineWidth(0.5);
+            doc.line(labelX, finalY + lineHeight * 4 + 5, rightColX, finalY + lineHeight * 4 + 5);
+
+            currentY = finalY + lineHeight * 5 + 6;
+        }
 
         doc.setTextColor(50, 50, 50);
         doc.setFontSize(10);
         doc.setFont("helvetica", "bold");
-        doc.text("Grand Total:", labelX, finalY + lineHeight * 5 + 6);
-        doc.text(`PHP ${formatMoney(grandTotal)}`, rightColX, finalY + lineHeight * 5 + 6, { align: "right" });
+        doc.text("Grand Total:", labelX, currentY);
+        doc.text(`PHP ${formatMoney(grandTotal)}`, rightColX, currentY, { align: "right" });
 
         // Standardized Footnote
-        doc.setFont("helvetica", "italic");
-        doc.setFontSize(7);
-        doc.setTextColor(100, 100, 100);
-        doc.text("Note: VAT and EWT figures are for reference and have not been deducted from the total.", labelX - 20, finalY + lineHeight * 5 + 12);
+        if (isInvoice) {
+            doc.setFont("helvetica", "italic");
+            doc.setFontSize(7);
+            doc.setTextColor(100, 100, 100);
+            doc.text("Note: VAT and EWT figures are for reference and have not been deducted from the total.", labelX - 20, currentY + 6);
+        }
 
         // 5. Signatures
         renderSignatures(doc, finalY + lineHeight * 5 + 25, "");

@@ -14,6 +14,8 @@ import {
   FileText,
   Search,
   ChevronDown,
+  Check,
+  ChevronsUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -44,6 +46,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { useSearchParams } from "next/navigation";
 
@@ -74,12 +89,126 @@ interface SalesReturnGroup {
   children: { item: SalesReturnItem; idx: number }[];
 }
 
+// =============================================================================
+// OPTIMIZED SUB-COMPONENTS (PERFORMANCE FIX)
+// =============================================================================
+
+const RemarksInputSection = React.memo(({ value, onChange, disabled }: { value: string, onChange: (val: string) => void, disabled?: boolean }) => {
+  const [localRemarks, setLocalRemarks] = useState(value);
+
+  useEffect(() => {
+    setLocalRemarks(value);
+  }, [value]);
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs uppercase font-bold text-muted-foreground">
+        Remarks
+      </Label>
+      <Textarea
+        value={localRemarks}
+        onChange={(e) => setLocalRemarks(e.target.value)}
+        onBlur={() => onChange(localRemarks)}
+        disabled={disabled}
+        className="resize-none min-h-[120px] border-border focus:border-primary bg-background shadow-sm"
+        placeholder="Enter return remarks..."
+      />
+    </div>
+  );
+});
+RemarksInputSection.displayName = "RemarksInputSection";
+
+const ReasonInputSection = React.memo(({ value, onChange, disabled }: { value: string, onChange: (val: string) => void, disabled?: boolean }) => {
+  const [localReason, setLocalReason] = useState(value);
+
+  useEffect(() => {
+    setLocalReason(value);
+  }, [value]);
+
+  return (
+    <Input
+      className="h-9 w-full text-sm border-border bg-background"
+      placeholder="Enter reason..."
+      value={localReason}
+      onChange={(e) => setLocalReason(e.target.value)}
+      onBlur={() => onChange(localReason)}
+      disabled={disabled}
+    />
+  );
+});
+ReasonInputSection.displayName = "ReasonInputSection";
+
 interface Props {
   returnId: number;
   initialData: SalesReturn;
   onClose: () => void;
   onSuccess: () => void;
 }
+
+// 🟢 LOCAL SEARCHABLE SELECT TO FIX SCROLL ISSUES IN DIALOG
+const LocalSearchableSelect = ({
+  options,
+  value,
+  onValueChange,
+  placeholder = "Select...",
+  className,
+  disabled = false,
+}: {
+  options: { value: string; label: string }[];
+  value: string;
+  onValueChange: (val: string) => void;
+  placeholder?: string;
+  className?: string;
+  disabled?: boolean;
+}) => {
+  const [open, setOpen] = useState(false);
+  const selectedLabel = options.find((opt) => opt.value === value)?.label;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen} modal={true}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className={cn("w-full justify-between font-normal", !value && "text-muted-foreground", className)}
+          disabled={disabled}
+        >
+          <span className="truncate">{selectedLabel || placeholder}</span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+        <Command>
+          <CommandInput placeholder={`Search ${placeholder.toLowerCase()}...`} />
+          <CommandList className="max-h-[200px] overflow-y-auto">
+            <CommandEmpty>No results found.</CommandEmpty>
+            <CommandGroup>
+              {options.map((opt) => (
+                <CommandItem
+                  key={opt.value}
+                  value={opt.label}
+                  onSelect={() => {
+                    onValueChange(opt.value);
+                    setOpen(false);
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      value === opt.value ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  {opt.label}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+};
 
 const ReadOnlyField = ({
   label,
@@ -388,7 +517,18 @@ export function UpdateSalesReturnModal({
         } else {
           const price = Math.round((Number(item.unitPrice) || Number(item.price) || 0) * 100) / 100;
           const gross = Math.round(price * qty * 100) / 100;
-          const discAmt = Number(item.discountAmount) || 0;
+          const incomingDiscountType = item.discountType || "";
+          let initialDiscountAmt = 0;
+
+          if (incomingDiscountType && incomingDiscountType !== "No Discount") {
+            const selectedDisc = discountOptions.find(
+              (d) => d.id.toString() === incomingDiscountType.toString(),
+            );
+            if (selectedDisc) {
+              const percentage = parseFloat(selectedDisc.total_percent) || 0;
+              initialDiscountAmt = Math.round(gross * (percentage / 100) * 100) / 100;
+            }
+          }
 
           updated.push({
             id: `added-${Date.now()}-${index}-${Math.floor(Math.random() * 10000)}`,
@@ -399,9 +539,9 @@ export function UpdateSalesReturnModal({
             quantity: qty,
             unitPrice: price,
             grossAmount: gross,
-            discountType: item.discountType || null,
-            discountAmount: discAmt,
-            totalAmount: Math.round((gross - discAmt) * 100) / 100,
+            discountType: incomingDiscountType || null,
+            discountAmount: initialDiscountAmt,
+            totalAmount: Math.round((gross - initialDiscountAmt) * 100) / 100,
             reason: item.reason || "",
             returnType: "", // 🟢 Force empty string to trigger validation for new items
           });
@@ -860,11 +1000,9 @@ export function UpdateSalesReturnModal({
                               {/* Reason */}
                               <TableCell className="align-middle p-2">
                                 {canEditAll ? (
-                                  <Input
-                                    className="h-9 w-full text-sm border-border bg-background"
-                                    placeholder="Enter reason..."
-                                    value={item.reason}
-                                    onChange={(e) => handleDetailChange(idx, "reason", e.target.value)}
+                                  <ReasonInputSection
+                                    value={item.reason || ""}
+                                    onChange={(val) => handleDetailChange(idx, "reason", val)}
                                   />
                                 ) : (
                                   <span className="text-sm text-muted-foreground italic truncate block max-w-[120px]" title={item.reason || ""}>
@@ -874,28 +1012,25 @@ export function UpdateSalesReturnModal({
                               </TableCell>
                               <TableCell className="align-middle p-2">
                                 {canEditAll ? (
-                                  <Select 
-                                    value={item.returnType || ""} 
-                                    onValueChange={(val) => { handleDetailChange(idx, "returnType", val); setReturnTypeError(false); }}
-                                  >
-                                    <SelectTrigger className={`h-9 w-full text-xs bg-background transition-colors ${returnTypeError && (!item.returnType || item.returnType === "") ? "border-destructive ring-1 ring-destructive/30 bg-destructive/5 text-destructive" : "border-border focus:ring-primary"}`}>
-                                      <SelectValue placeholder="Select type" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {returnTypeOptions.length > 0 ? (
-                                        returnTypeOptions.map((type) => (
-                                          <SelectItem key={type.type_id} value={type.type_name}>
-                                            {type.type_name}
-                                          </SelectItem>
-                                        ))
-                                      ) : (
-                                        <>
-                                          <SelectItem value="Good Order">Good Order</SelectItem>
-                                          <SelectItem value="Bad Order">Bad Order</SelectItem>
-                                        </>
-                                      )}
-                                    </SelectContent>
-                                  </Select>
+                                  <LocalSearchableSelect
+                                    value={item.returnType || ""}
+                                    onValueChange={(val) => {
+                                      handleDetailChange(idx, "returnType", val);
+                                      setReturnTypeError(false);
+                                    }}
+                                    options={returnTypeOptions.length > 0 
+                                      ? returnTypeOptions.map((type) => ({ value: type.type_name, label: type.type_name }))
+                                      : [
+                                          { value: "Good Order", label: "Good Order" },
+                                          { value: "Bad Order", label: "Bad Order" }
+                                        ]
+                                    }
+                                    placeholder="Select type"
+                                    className={cn(
+                                      "h-9 text-xs",
+                                      returnTypeError && (!item.returnType || item.returnType === "") && "border-destructive ring-1 ring-destructive/30 bg-destructive/5 text-destructive"
+                                    )}
+                                  />
                                 ) : (
                                   <Badge variant="outline" className="font-normal">{item.returnType || "Unassigned"}</Badge>
                                 )}
@@ -1126,60 +1261,39 @@ export function UpdateSalesReturnModal({
                             <TableCell className="text-right font-bold text-sm text-foreground align-middle">
                               {(Number(item.totalAmount) || 0).toLocaleString()}
                             </TableCell>
+                             <TableCell className="align-middle p-2">
+                               {canEditAll ? (
+                                 <ReasonInputSection
+                                   value={item.reason || ""}
+                                   onChange={(val) => handleDetailChange(idx, "reason", val)}
+                                 />
+                               ) : (
+                                 <span className="text-sm text-muted-foreground italic">
+                                   {item.reason || "-"}
+                                 </span>
+                               )}
+                             </TableCell>
                             <TableCell className="align-middle p-2">
                               {canEditAll ? (
-                                <Input
-                                  className="h-9 w-full text-sm border-border bg-background"
-                                  placeholder="Enter reason..."
-                                  value={item.reason}
-                                  onChange={(e) =>
-                                    handleDetailChange(
-                                      idx,
-                                      "reason",
-                                      e.target.value,
-                                    )
-                                  }
-                                />
-                              ) : (
-                                <span className="text-sm text-muted-foreground italic">
-                                  {item.reason || "-"}
-                                </span>
-                              )}
-                            </TableCell>
-                            <TableCell className="align-middle p-2">
-                              {canEditAll ? (
-                                <Select
+                                <LocalSearchableSelect
                                   value={item.returnType || ""}
                                   onValueChange={(val) => {
                                     handleDetailChange(idx, "returnType", val);
                                     setReturnTypeError(false);
                                   }}
-                                >
-                                  <SelectTrigger className={`h-9 w-full text-sm bg-background transition-colors ${returnTypeError && (!item.returnType || item.returnType === "") ? "border-destructive ring-1 ring-destructive/30 bg-destructive/5 text-destructive" : "border-border focus:ring-primary"}`}>
-                                    <SelectValue placeholder="Select type" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {returnTypeOptions.length > 0 ? (
-                                      returnTypeOptions.map((type) => (
-                                        <SelectItem
-                                          key={type.type_id}
-                                          value={type.type_name}
-                                        >
-                                          {type.type_name}
-                                        </SelectItem>
-                                      ))
-                                    ) : (
-                                      <>
-                                        <SelectItem value="Good Order">
-                                          Good Order
-                                        </SelectItem>
-                                        <SelectItem value="Bad Order">
-                                          Bad Order
-                                        </SelectItem>
-                                      </>
-                                    )}
-                                  </SelectContent>
-                                </Select>
+                                  options={returnTypeOptions.length > 0 
+                                    ? returnTypeOptions.map((type) => ({ value: type.type_name, label: type.type_name }))
+                                    : [
+                                        { value: "Good Order", label: "Good Order" },
+                                        { value: "Bad Order", label: "Bad Order" }
+                                      ]
+                                  }
+                                  placeholder="Select type"
+                                  className={cn(
+                                    "h-9 text-sm",
+                                    returnTypeError && (!item.returnType || item.returnType === "") && "border-destructive ring-1 ring-destructive/30 bg-destructive/5 text-destructive"
+                                  )}
+                                />
                               ) : (
                                 <Badge
                                   variant="secondary"
@@ -1256,6 +1370,7 @@ export function UpdateSalesReturnModal({
                                   });
                                   setOrderSearch(inv.order_id);
                                   setInvoiceDropdownSearch(inv.invoice_no);
+                                  setAppliedInvoiceId(Number(inv.id));
                                   setIsOrderDropdownOpen(false);
                                 }}
                               >
@@ -1318,6 +1433,7 @@ export function UpdateSalesReturnModal({
                                   });
                                   setInvoiceDropdownSearch(inv.invoice_no);
                                   setOrderSearch(inv.order_id);
+                                  setAppliedInvoiceId(Number(inv.id));
                                   setIsInvoiceDropdownOpen(false);
                                 }}
                               >
@@ -1342,25 +1458,11 @@ export function UpdateSalesReturnModal({
                   )}
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label className="text-xs uppercase font-bold text-muted-foreground">
-                  Remarks
-                </Label>
-                {/* 🟢 REVISED: Editable if Pending or Received (canEditLimited) */}
-                <Textarea
-                  readOnly={!canEditLimited}
-                  className={cn(
-                    "min-h-[100px] border-border rounded-md focus:border-primary",
-                    !canEditLimited
-                      ? "bg-muted/30 border-border"
-                      : "bg-background",
-                  )}
-                  value={headerData.remarks || ""}
-                  onChange={(e) =>
-                    setHeaderData({ ...headerData, remarks: e.target.value })
-                  }
-                />
-              </div>
+              <RemarksInputSection
+                value={headerData.remarks || ""}
+                onChange={(val) => setHeaderData({ ...headerData, remarks: val })}
+                disabled={!canEditLimited}
+              />
             </div>
 
             {/* FINANCIAL SUMMARY */}
@@ -1467,16 +1569,6 @@ export function UpdateSalesReturnModal({
         </div>
       </DialogContent>
 
-      {/* --- NESTED MODALS --- */}
-      {isProductLookupOpen && (
-        <ProductLookupModal
-          isOpen={isProductLookupOpen}
-          onClose={() => setIsProductLookupOpen(false)}
-          onConfirm={handleAddProductsToEdit}
-          priceType={headerData.priceType || "A"} // 🟢 Pass prop
-        />
-      )}
-
       {/* 2. INVOICE LOOKUP - 🟢 REVISED: Shows Amount */}
       <Dialog open={isInvoiceLookupOpen} onOpenChange={setIsInvoiceLookupOpen}>
         <DialogContent className="max-w-md">
@@ -1499,6 +1591,24 @@ export function UpdateSalesReturnModal({
               />
             </div>
             <div className="max-h-[300px] overflow-y-auto border rounded-md divide-y">
+              {/* 🟢 NEW: Clear Selection Option */}
+              <div
+                className="p-3 hover:bg-destructive/10 cursor-pointer flex items-center gap-3 transition-colors text-destructive font-medium border-b"
+                onClick={() => {
+                  setStatusCardData((prev) => ({
+                    ...prev!,
+                    appliedTo: "",
+                  }));
+                  setAppliedInvoiceId(null);
+                  setIsInvoiceLookupOpen(false);
+                }}
+              >
+                <div className="h-8 w-8 rounded-full bg-destructive/10 flex items-center justify-center">
+                  <X className="h-4 w-4" />
+                </div>
+                <div className="text-sm">Clear Selection (Unlink)</div>
+              </div>
+
               {filteredInvoices.length === 0 ? (
                 <div className="p-4 text-center text-sm text-muted-foreground">
                   No invoices found.
@@ -1625,6 +1735,7 @@ export function UpdateSalesReturnModal({
         onClose={() => setIsProductLookupOpen(false)}
         onConfirm={handleAddProductsToEdit}
         priceType={headerData.priceType || "A"}
+        customerCode={headerData.customerCode}
       />
 
       <Dialog

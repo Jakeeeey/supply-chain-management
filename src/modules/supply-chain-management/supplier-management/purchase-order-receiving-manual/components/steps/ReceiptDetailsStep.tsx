@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { Pencil, XCircle } from "lucide-react";
 import {
     Select,
     SelectContent,
@@ -40,6 +41,9 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
         setReceiptType,
         receiptDate,
         setReceiptDate,
+        loadReceipt,
+        editingReceiptId,
+        clearEditingReceiptId,
     } = useReceivingProductsManual();
 
     const branchesLabel = React.useMemo(() => {
@@ -155,6 +159,18 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
                                     >
                                         {h.isPosted ? "Posted" : "Unposted"}
                                     </Badge>
+                                    {!h.isPosted && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => loadReceipt(h.receiptNo)}
+                                            disabled={editingReceiptId === h.receiptNo}
+                                            className="h-7 px-3 text-[10px] font-black uppercase tracking-wider gap-1.5 border-amber-500/30 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                                        >
+                                            <Pencil className="h-3 w-3" />
+                                            {editingReceiptId === h.receiptNo ? "Editing..." : "Edit"}
+                                        </Button>
+                                    )}
                                 </div>
                             </div>
                         ))}
@@ -163,15 +179,40 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
             )}
 
             <Card className="p-4">
-                <div className="text-sm font-semibold">Receipt Details</div>
+                <div className="flex items-center justify-between">
+                    <div className="text-sm font-semibold">{editingReceiptId ? "Edit Existing Receipt" : "Receipt Details"}</div>
+                    {editingReceiptId && (
+                        <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-500/30">
+                                Editing Mode
+                            </Badge>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={clearEditingReceiptId}
+                                className="h-7 px-3 text-[10px] font-black uppercase tracking-wider gap-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors"
+                            >
+                                <XCircle className="h-3 w-3" />
+                                Cancel Edit
+                            </Button>
+                        </div>
+                    )}
+                </div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                    Create receipt first, then continue to product verification.
+                    {editingReceiptId 
+                        ? "You are currently modifying an unposted receipt."
+                        : "Create receipt first, then continue to product verification."}
                 </div>
 
-                <div className="mt-4 grid gap-4">
+                <div className="mt-4 grid gap-4 max-w-md">
                     <div className="grid gap-2">
                         <Label>Receipt Number *</Label>
-                        <Input value={receiptNo} onChange={(e) => setReceiptNo(e.target.value)} placeholder="Enter receipt number" />
+                        <Input 
+                            value={receiptNo} 
+                            onChange={(e) => setReceiptNo(e.target.value)} 
+                            placeholder="Enter receipt number" 
+                            disabled={!!editingReceiptId} // Disable changing receipt number while editing
+                        />
                     </div>
 
                     <div className="grid gap-2">
@@ -198,8 +239,6 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
                             onChange={(e) => setReceiptDate(e.target.value)}
                         />
                     </div>
-
-
 
                     <Button type="button" className="w-full" onClick={handleContinue}>
                         Continue Product Verification
