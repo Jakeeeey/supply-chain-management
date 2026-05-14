@@ -68,6 +68,9 @@ export function DispatchEditModal({
 
   const {
     approvedPlans,
+    filteredPlans,
+    readinessFilter,
+    setReadinessFilter,
     isLoadingPlans,
     planDetails,
     isLoadingDetails,
@@ -92,15 +95,7 @@ export function DispatchEditModal({
     name: "starting_point",
   });
 
-  // Reload approved plans when branch changes (skip during initial load)
-  useEffect(() => {
-    if (isInitialLoadRef.current) return;
-    if (selectedBranch && selectedBranch > 0) {
-      loadApprovedPlans(selectedBranch, 1, "", false, form.getValues("pre_dispatch_plan_ids"));
-    } else {
-      setApprovedPlans([]);
-    }
-  }, [selectedBranch, loadApprovedPlans, form, setApprovedPlans]);
+
 
   // Load existing plan data when modal opens
   useEffect(() => {
@@ -236,6 +231,9 @@ export function DispatchEditModal({
               <div className="flex divide-x divide-border/50 flex-1 min-h-0">
                 <PdpListSidebar
                   approvedPlans={approvedPlans}
+                  filteredPlans={filteredPlans}
+                  readinessFilter={readinessFilter}
+                  onFilterChange={setReadinessFilter}
                   isLoadingPlans={isLoadingPlans}
                   searchQuery={searchQuery}
                   onSearchChange={onSearchChange}

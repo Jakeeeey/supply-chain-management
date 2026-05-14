@@ -1,6 +1,6 @@
 "use client";
 
-import type { EnrichedApprovedPlan, EnrichedPlanDetail } from "../types/dispatch.types";
+import type { EnrichedApprovedPlan, EnrichedPlanDetail, ReadinessFilter } from "../types/dispatch.types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { UseFormReturn } from "react-hook-form";
 import { DispatchCreationFormValues } from "../types/dispatch.schema";
@@ -21,6 +21,9 @@ interface UseDispatchFormStateOptions {
 
 interface UseDispatchFormStateReturn {
   approvedPlans: EnrichedApprovedPlan[];
+  filteredPlans: EnrichedApprovedPlan[];
+  readinessFilter: ReadinessFilter;
+  setReadinessFilter: (filter: ReadinessFilter) => void;
   isLoadingPlans: boolean;
   planDetails: EnrichedPlanDetail[];
   isLoadingDetails: boolean;
@@ -78,8 +81,17 @@ export function useDispatchFormState({
   const [planDetails, setPlanDetails] = useState<EnrichedPlanDetail[]>([]);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [readinessFilter, setReadinessFilter] = useState<ReadinessFilter>("all");
+
+  // ── Debounce search ───────────────────────────────────────
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedSearch(searchQuery), 400);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
   // ── Derived: total weight ─────────────────────────────────
   const totalWeight = useMemo(
     () => planDetails.reduce((sum, d) => sum + (d.weight || 0), 0),
@@ -99,6 +111,7 @@ export function useDispatchFormState({
     const total = planDetails.reduce((sum, d) => sum + (d.amount || 0), 0);
     form.setValue("amount", total);
   }, [planDetails, form]);
+
 
   // ── Load approved plans from API ──────────────────────────
   const loadApprovedPlans = useCallback(
@@ -142,6 +155,28 @@ export function useDispatchFormState({
     },
     [],
   );
+
+  // ── Auto-reload when branch/search/page changes ───────────
+  const selectedBranch = form.watch("starting_point");
+  
+  useEffect(() => {
+    if (selectedBranch && selectedBranch > 0) {
+      loadApprovedPlans(
+        selectedBranch,
+        page,
+        debouncedSearch,
+        page > 1,
+        form.getValues("pre_dispatch_plan_ids")
+      );
+    }
+  }, [selectedBranch, page, debouncedSearch, loadApprovedPlans, form]);
+
+  // ── Derived: filtered plans ───────────────────────────────
+  const filteredPlans = useMemo(() => {
+    if (readinessFilter === "all") return approvedPlans;
+    if (readinessFilter === "ready") return approvedPlans.filter(p => p.is_selectable);
+    return approvedPlans.filter(p => p.readiness_reason === readinessFilter);
+  }, [approvedPlans, readinessFilter]);
   // ── Handle PDP selection toggle ───────────────────────────
   const handlePlanSelect = useCallback(
     async (pdpIdStr: string) => {
@@ -241,6 +276,9 @@ export function useDispatchFormState({
 
   return {
     approvedPlans,
+    filteredPlans,
+    readinessFilter,
+    setReadinessFilter,
     isLoadingPlans,
     planDetails,
     isLoadingDetails,

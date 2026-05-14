@@ -62,6 +62,9 @@ export function DispatchCreationModal({
 
   const {
     approvedPlans,
+    filteredPlans,
+    readinessFilter,
+    setReadinessFilter,
     isLoadingPlans,
     planDetails,
     isLoadingDetails,
@@ -105,12 +108,7 @@ export function DispatchCreationModal({
     }
   }, [open, form, onSearchChange, setPlanDetails]);
 
-  // Load plans when branch changes
-  useEffect(() => {
-    if (selectedBranch && selectedBranch > 0) {
-      loadApprovedPlans(selectedBranch, 1, "");
-    }
-  }, [selectedBranch, loadApprovedPlans]);
+
 
   const onSubmit = async (values: DispatchCreationFormValues) => {
     const payload = {
@@ -181,6 +179,9 @@ export function DispatchCreationModal({
               <div className="flex divide-x divide-border/50 flex-1 min-h-0">
                 <PdpListSidebar
                   approvedPlans={approvedPlans}
+                  filteredPlans={filteredPlans}
+                  readinessFilter={readinessFilter}
+                  onFilterChange={setReadinessFilter}
                   isLoadingPlans={isLoadingPlans}
                   searchQuery={searchQuery}
                   onSearchChange={onSearchChange}

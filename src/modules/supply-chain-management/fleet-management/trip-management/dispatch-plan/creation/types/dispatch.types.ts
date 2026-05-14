@@ -2,6 +2,8 @@
 // All shared types for the dispatch-creation feature module.
 // No Zod here — see dispatch.schema.ts for validation schemas.
 
+export type ReadinessFilter = "all" | "ready" | "Invalid Status" | "Unconsolidated" | "Partial Picking";
+
 // ─── Master-Data Lookup Options ─────────────────────────────
 
 /** Driver record from the `user` collection (department = 8). */
@@ -185,6 +187,23 @@ export interface CustomerRow {
   city: string;
 }
 
+/** Row from the `consolidator_dispatches` collection. */
+export interface ConsolidatorDispatchRow {
+  id: number;
+  consolidator_id: number;
+  dispatch_no: string;
+}
+
+/** Row from the `consolidator_details` collection. */
+export interface ConsolidatorDetailRow {
+  id: number;
+  consolidator_id: number;
+  product_id: number;
+  ordered_quantity: number;
+  picked_quantity: number;
+  applied_quantity: number;
+}
+
 /** Row from the `post_dispatch_plan_others` collection for fetch. */
 export interface PostDispatchOtherRowDetail {
   id: number;
@@ -202,6 +221,7 @@ export interface EnrichedApprovedPlan extends RawDispatchPlan {
   total_items: number;
   total_weight: number;
   is_selectable: boolean;
+  readiness_reason?: "Invalid Status" | "Unconsolidated" | "Partial Picking" | null;
 }
 
 /** Enriched detail row returned by `fetchPlanDetails`. */

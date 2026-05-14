@@ -4,6 +4,8 @@
 
 import type {
   ClusterRow,
+  ConsolidatorDetailRow,
+  ConsolidatorDispatchRow,
   DirectusResponse,
   EnrichedApprovedPlan,
   RawDispatchPlan,
@@ -151,24 +153,77 @@ export async function fetchApprovedPreDispatchPlans(
   }
   // --- WEIGHT CALCULATION END ---
 
-  // Build a set of currently linked PDP IDs for edit mode
-  const currentPlanIdSet = new Set<number>(
-    currentPlanId
-      ? Array.isArray(currentPlanId)
-        ? currentPlanId
-        : [currentPlanId]
-      : [],
-  );
+  // 3. --- CONSOLIDATION CHECK START ---
+  const planNos = plans.map((p) => p.dispatch_no);
+  const consolidationReasonMap = new Map<number, "Unconsolidated" | "Partial Picking" | null>();
 
-  if (!soIds.length && currentPlanIdSet.size === 0) return { data: [] };
+  if (planNos.length > 0) {
+    const consolidatorDispatchesRes = await fetchItems<ConsolidatorDispatchRow>(
+      "/items/consolidator_dispatches",
+      {
+        "filter[dispatch_no][_in]": planNos.join(","),
+        fields: "consolidator_id,dispatch_no",
+        limit: -1,
+      },
+    );
+    const consolidatorDispatches = consolidatorDispatchesRes.data || [];
+    const consolidatorIds = [
+      ...new Set(consolidatorDispatches.map((cd) => cd.consolidator_id)),
+    ];
 
-  // 3. (No longer fetching invoices as we only use Sales Order status for Sidebar filtering)
+    const consolidationPickingMap = new Map<number, boolean>(); // true = complete, false = partial
+
+    if (consolidatorIds.length > 0) {
+      const { data: consolidationDetails } = await fetchItemsInChunks<ConsolidatorDetailRow>(
+        "/items/consolidator_details",
+        "consolidator_id",
+        consolidatorIds,
+        { fields: "consolidator_id,picked_quantity,applied_quantity" },
+      );
+
+      const consolidatorPickingStatus = new Map<number, boolean>();
+      // Initialize all as true (complete)
+      consolidatorIds.forEach((id) => consolidatorPickingStatus.set(id, true));
+
+      consolidationDetails.forEach((cd) => {
+        const cId = cd.consolidator_id;
+        if (Number(cd.picked_quantity) !== Number(cd.applied_quantity)) {
+          consolidatorPickingStatus.set(cId, false);
+        }
+      });
+
+      consolidatorPickingStatus.forEach((isComplete, cId) => {
+        consolidationPickingMap.set(cId, isComplete);
+      });
+    }
+
+    // Map plan ID to its consolidation reason
+    plans.forEach((p) => {
+      const linkedConsolidators = consolidatorDispatches.filter(
+        (cd) => cd.dispatch_no === p.dispatch_no,
+      );
+
+      if (linkedConsolidators.length === 0) {
+        consolidationReasonMap.set(p.dispatch_id, "Unconsolidated");
+      } else {
+        const allComplete = linkedConsolidators.every(
+          (cd) => consolidationPickingMap.get(cd.consolidator_id) === true,
+        );
+        consolidationReasonMap.set(
+          p.dispatch_id,
+          allComplete ? null : "Partial Picking",
+        );
+      }
+    });
+  }
+  // --- CONSOLIDATION CHECK END ---
+
   const clusterMap = new Map(
     (clustersRes.data || []).map((c) => [c.id, c.cluster_name]),
   );
 
   const detailCountMap = new Map<number, number>();
-  const planReadyMap = new Map<number, boolean>(); // Track if entire plan is selectable
+  const planStatusReadyMap = new Map<number, boolean>(); // Track if status is valid
 
   details.forEach((d) => {
     const dPlanId = d.dispatch_id;
@@ -177,29 +232,37 @@ export async function fetchApprovedPreDispatchPlans(
     // Count ALL items
     detailCountMap.set(dPlanId, (detailCountMap.get(dPlanId) || 0) + 1);
 
-    // Check readiness of the plan
+    // Check status readiness
     const soId = Number(d.sales_order_id);
-    const isSoReady = orderStatusMap.has(soId) ? READY_STATUSES.includes(orderStatusMap.get(soId)!) : false;
+    const orderStatus = orderStatusMap.get(soId);
+    const isSoStatusReady = orderStatus ? READY_STATUSES.includes(orderStatus) : false;
     
-    if (!planReadyMap.has(dPlanId)) {
-        planReadyMap.set(dPlanId, true);
+    if (!planStatusReadyMap.has(dPlanId)) {
+      planStatusReadyMap.set(dPlanId, true);
     }
-    if (!isSoReady) {
-        planReadyMap.set(dPlanId, false);
+    if (!isSoStatusReady) {
+      planStatusReadyMap.set(dPlanId, false);
     }
   });
 
-  const enrichedData = plans
-    .map((p) => {
-        const total_items = detailCountMap.get(p.dispatch_id) || 0;
-        return {
-          ...p,
-          cluster_name: clusterMap.get(p.cluster_id || -1) || "Unassigned",
-          total_items,
-          total_weight: planWeightMap.get(p.dispatch_id) || 0,
-          is_selectable: total_items > 0 && (planReadyMap.get(p.dispatch_id) ?? false),
-        };
-    });
+  const enrichedData = plans.map((p) => {
+    const total_items = detailCountMap.get(p.dispatch_id) || 0;
+    const isStatusReady = planStatusReadyMap.get(p.dispatch_id) ?? false;
+    const consolidationReason = consolidationReasonMap.get(p.dispatch_id);
+
+    let readiness_reason: EnrichedApprovedPlan["readiness_reason"] = null;
+    if (!isStatusReady) readiness_reason = "Invalid Status";
+    else if (consolidationReason) readiness_reason = consolidationReason;
+
+    return {
+      ...p,
+      cluster_name: clusterMap.get(p.cluster_id || -1) || "Unassigned",
+      total_items,
+      total_weight: planWeightMap.get(p.dispatch_id) || 0,
+      is_selectable: total_items > 0 && readiness_reason === null,
+      readiness_reason,
+    };
+  });
 
   return { data: enrichedData };
 }
