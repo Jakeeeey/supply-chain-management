@@ -53,6 +53,7 @@ export interface ProductRow {
   product_brand?: ProductBrand | number;
   product_category?: ProductCategory | number;
   product_per_supplier?: ProductPerSupplier[];
+  is_serialized?: number;
 }
 
 // ─── Stock Transfer Row Shapes ──────────────────────────────
