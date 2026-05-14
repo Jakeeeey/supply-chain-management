@@ -187,6 +187,11 @@ type Ctx = {
     receiptSaved: ReceiptSavedInfo | null;
     clearReceiptSaved: () => void;
 
+    // ✅ NEW: Edit Receipt
+    editingReceiptId: string | null;
+    loadReceipt: (receiptNo: string) => void;
+    clearEditingReceiptId: () => void;
+
     scanRFID: (rfidOverride?: string) => Promise<void>;
     removeActivity: (id: string) => void;
     saveReceipt: (porMetaData?: Record<string, { lotId: string; batchNo: string; expiryDate: string }>) => Promise<void>;
@@ -349,6 +354,19 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
     const [receiptSaved, setReceiptSaved] = React.useState<ReceiptSavedInfo | null>(null);
     const clearReceiptSaved = React.useCallback(() => setReceiptSaved(null), []);
 
+    // ✅ NEW: Edit Receipt
+    const [editingReceiptId, setEditingReceiptId] = React.useState<string | null>(null);
+    const clearEditingReceiptId = React.useCallback(() => {
+        setEditingReceiptId(null);
+        setReceiptNo("");
+        setReceiptDate("");
+        setActivity([]);
+        setLocalScannedRfids([]);
+        setScannedCountByPorId({});
+        setVerifiedPorIds([]);
+        setMetaDataByPorId({});
+    }, []);
+
 
 
     // ✅ LOTS: dropdown options
@@ -440,6 +458,8 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
         setLocalScannedRfids([]);
         setVerifiedPorIds([]);
         setActiveProductId(null);
+        setEditingReceiptId(null);
+        setMetaDataByPorId({});
         if (opts?.clearStorage && opts?.poId) {
             clearDraft(opts.poId);
         }
@@ -1047,6 +1067,89 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
         setActivePorId(porId);
     }, []);
 
+    const loadReceipt = React.useCallback(async (rNo: string) => {
+        if (!selectedPO) return;
+        setEditingReceiptId(rNo);
+        setReceiptNo(rNo);
+        
+        const hist = selectedPO.history?.find(h => h.receiptNo === rNo);
+        if (hist?.receiptDate) setReceiptDate(hist.receiptDate.split("T")[0]);
+
+        try {
+            const r = await fetch(API_URL, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "load_receipt", poId: selectedPO.id, receiptNo: rNo })
+            });
+            const j = await asJson(r);
+            const rfids = j?.data?.rfids || [];
+            
+            const newActivity: ActivityRow[] = [];
+            const newLocalRfids: typeof localScannedRfids = [];
+            const newCounts: Record<string, number> = {};
+            const newVerifiedIds: string[] = [];
+
+            rfids.forEach((it: { rfid_code: string; purchase_order_product_id: string; product_id: string; created_at?: string }) => {
+                const rfid = String(it.rfid_code);
+                const porId = String(it.purchase_order_product_id);
+                const pid = String(it.product_id);
+
+                let productName = `Product #${pid}`;
+                let branchId = "";
+                selectedPO.allocations.forEach(a => {
+                    a.items.forEach(i => {
+                        if (i.porId === porId || i.id === porId) {
+                            productName = i.name;
+                            branchId = a.branch.id;
+                        }
+                    });
+                });
+
+                newLocalRfids.push({
+                    rfid,
+                    productId: pid,
+                    branchId,
+                    status: "known",
+                    porId,
+                    productName
+                });
+
+                newActivity.unshift({
+                    id: rfid,
+                    rfid,
+                    productName,
+                    productId: pid,
+                    porId,
+                    time: it.created_at ? new Date(it.created_at).toLocaleTimeString() : new Date().toLocaleTimeString(),
+                    status: "ok"
+                });
+
+                newCounts[porId] = (newCounts[porId] || 0) + 1;
+                if (!newVerifiedIds.includes(porId)) newVerifiedIds.push(porId);
+            });
+            
+            // ✅ Restore Metadata from POR items
+            const meta: Record<string, { lotId?: string; batchNo?: string; expiryDate?: string }> = {};
+            const items = j?.data?.items || [];
+            items.forEach((it: { purchase_order_product_id: string; lot_id?: string; batch_no?: string; expiry_date?: string }) => {
+                const porId = String(it.purchase_order_product_id);
+                if (it.lot_id || it.batch_no || it.expiry_date) {
+                    meta[porId] = {
+                        lotId: it.lot_id ? String(it.lot_id) : undefined,
+                        batchNo: it.batch_no || undefined,
+                        expiryDate: it.expiry_date || undefined
+                    };
+                }
+            });
+
+            setLocalScannedRfids(newLocalRfids);
+            setActivity(newActivity);
+            setScannedCountByPorId(newCounts);
+            setVerifiedPorIds(newVerifiedIds);
+            setMetaDataByPorId(meta);
+        } catch {
+            toast.error("Failed to load receipt details");
+        }
+    }, [selectedPO]);
 
     const saveReceipt = React.useCallback(async (porMetaData?: Record<string, { lotId: string; batchNo: string; expiryDate: string }>) => {
         setSaveError("");
@@ -1089,7 +1192,8 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                     receiptDate: receiptDate.trim(),
                     porCounts: counts,
                     porMetaData: porMetaData ?? {},
-                    newTags
+                    newTags,
+                    isEdit: !!editingReceiptId
                 }),
             });
             const j = await asJson(r);
@@ -1170,7 +1274,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
         } finally {
             setSavingReceipt(false);
         }
-    }, [selectedPO, receiptNo, receiptType, receiptDate, scannedCountByPorId, refreshList, resetSession, localScannedRfids, activity, receiverId, verifiedPorIds]);
+    }, [selectedPO, receiptNo, receiptType, receiptDate, scannedCountByPorId, refreshList, resetSession, localScannedRfids, activity, receiverId, verifiedPorIds, editingReceiptId]);
 
     const value: Ctx = {
         list,
@@ -1208,6 +1312,10 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
 
         receiptSaved,
         clearReceiptSaved,
+
+        editingReceiptId,
+        loadReceipt,
+        clearEditingReceiptId,
 
         scanRFID,
         removeActivity,

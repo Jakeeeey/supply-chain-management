@@ -1,4 +1,4 @@
-import { SummaryFilters, SummaryResult, SummaryReturnHeader, SummaryReturnItem } from "../type";
+import { SummaryFilters, SummaryResult, SummaryReturnHeader, SummaryReturnItem, SummarySupplierOption, SummaryCustomerOption, SummarySalesmanOption } from "../type";
 import * as Repo from "./sales-return-summary.repo";
 import * as Helpers from "./sales-return-summary.helpers";
 
@@ -164,7 +164,7 @@ export async function fetchLookups(): Promise<LookupData> {
   return lookupCache;
 }
 
-export async function getCustomersList() {
+export async function getCustomersList(): Promise<SummaryCustomerOption[]> {
   const lookups = await fetchLookups();
   return lookups.rawCustomers.map((c) => ({
     value: String(c.customer_code),
@@ -173,7 +173,7 @@ export async function getCustomersList() {
   }));
 }
 
-export async function getSalesmenList() {
+export async function getSalesmenList(): Promise<SummarySalesmanOption[]> {
   const lookups = await fetchLookups();
   return lookups.rawSalesmen.map((s) => {
     const b = lookups.rawBranches.find((x) => String(x.id) === String(s.branch_code));
@@ -186,12 +186,12 @@ export async function getSalesmenList() {
   });
 }
 
-export async function getSuppliersList() {
+export async function getSuppliersList(): Promise<SummarySupplierOption[]> {
   const lookups = await fetchLookups();
   return lookups.rawSuppliers.map((s) => ({
     id: String(s.id),
     name: String(s.supplier_name),
-    shortcut: String(s.supplier_shortcut),
+    shortcut: String(s.supplier_shortcut || ""),
   }));
 }
 
@@ -318,11 +318,23 @@ export async function getSummaryReturnsWithItems(
   }).filter(row => row.items.length > 0);
 
   if (f.supplierName && f.supplierName !== "All") {
-    const needle = String(f.supplierName).toLowerCase();
+    const selectedSup = lookups.supplierMap.get(String(f.supplierName));
+    const needleName = (selectedSup?.["supplier_name"] as string || "").toLowerCase();
+    const needleShortcut = (selectedSup?.["supplier_shortcut"] as string || "").toLowerCase();
+    const needleId = String(f.supplierName).toLowerCase();
+
     data = data
       .map((row) => ({
         ...row,
-        items: row.items.filter((it) => (it.supplierName || "").toLowerCase().includes(needle)),
+        items: row.items.filter((it) => {
+          const val = (it.supplierName || "").toLowerCase();
+          // Match against Name OR Shortcut OR ID (fallback)
+          return (
+            (needleName && val.includes(needleName)) ||
+            (needleShortcut && val.includes(needleShortcut)) ||
+            val.includes(needleId)
+          );
+        }),
       }))
       .filter((row) => row.items.length > 0);
     total = data.length;

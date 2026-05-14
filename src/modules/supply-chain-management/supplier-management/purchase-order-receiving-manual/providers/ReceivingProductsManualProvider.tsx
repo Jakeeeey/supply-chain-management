@@ -26,6 +26,10 @@ export type ReceivingPOItem = {
     uom: string;
     uomCount?: number;
     expectedQty: number;
+    originalOrderedQty?: number;
+    postedQty?: number;
+    unpostedQty?: number;
+    unpostedReceipts?: { receiptNo: string; quantity: number }[];
     receivedQty: number;
     requiresRfid: true;
     taggedQty: number;
@@ -139,6 +143,11 @@ type Ctx = {
     receiptSaved: ReceiptSavedInfo | null;
     clearReceiptSaved: () => void;
 
+    // ✅ NEW: Edit Receipt
+    editingReceiptId: string | null;
+    loadReceipt: (receiptNo: string) => void;
+    clearEditingReceiptId: () => void;
+
     saveReceipt: (porMetaData?: Record<string, { lotNo: string; batchNo?: string; expiryDate: string }>) => Promise<void>;
     savingReceipt: boolean;
     saveError: string;
@@ -239,6 +248,17 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
     const [receiptSaved, setReceiptSaved] = React.useState<ReceiptSavedInfo | null>(null);
     const clearReceiptSaved = React.useCallback(() => setReceiptSaved(null), []);
     const [verifiedProductIds, setVerifiedProductIds] = React.useState<string[]>([]);
+    
+    // ✅ NEW: Edit Receipt
+    const [editingReceiptId, setEditingReceiptId] = React.useState<string | null>(null);
+    const clearEditingReceiptId = React.useCallback(() => {
+        setEditingReceiptId(null);
+        setReceiptNo("");
+        setReceiptDate(todayYMD());
+        setManualCounts({});
+        setVerifiedProductIds([]);
+        setMetaDataByPorId({});
+    }, []);
 
     // ✅ METADATA
     const [metaDataByPorId, setMetaDataByPorId] = React.useState<Record<string, { batchNo?: string; lotNo?: string; lotId?: string; expiryDate?: string }>>({});
@@ -318,6 +338,8 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
         setSaveError("");
         setManualCounts({});
         setVerifiedProductIds([]);
+        setEditingReceiptId(null);
+        setMetaDataByPorId({});
         if (opts?.clearStorage && opts?.poId) {
             clearDraft(opts.poId);
         }
@@ -605,6 +627,59 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
         }
     }, []);
 
+    const loadReceipt = React.useCallback(async (rNo: string) => {
+        if (!selectedPO) return;
+        setEditingReceiptId(rNo);
+        setReceiptNo(rNo);
+        
+        // Find receipt date from history
+        const hist = selectedPO.history?.find(h => h.receiptNo === rNo);
+        if (hist?.receiptDate) setReceiptDate(hist.receiptDate.split("T")[0]);
+
+        try {
+            const r = await fetch(API_URL, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "load_receipt", poId: selectedPO.id, receiptNo: rNo })
+            });
+            const j = await asJson(r);
+            const items = j?.data?.items || [];
+            
+            const counts: Record<string, number> = {};
+            const verifiedIds: string[] = [];
+            
+            const meta: Record<string, { lotId?: string; batchNo?: string; expiryDate?: string }> = {};
+            
+            items.forEach((it: { product_id: string; branch_id: string; received_quantity: number; lot_id?: string; batch_no?: string; expiry_date?: string }) => {
+                const pid = String(it.product_id);
+                const bid = String(it.branch_id);
+                let targetId = `${pid}-${bid}`;
+                selectedPO.allocations.forEach(a => {
+                    a.items.forEach(i => {
+                        if (i.productId === pid && i.branchId === bid) targetId = i.id;
+                    });
+                });
+                
+                counts[targetId] = Number(it.received_quantity);
+                if (!verifiedIds.includes(pid)) verifiedIds.push(pid);
+
+                // ✅ Restore Metadata
+                if (it.lot_id || it.batch_no || it.expiry_date) {
+                    meta[targetId] = {
+                        lotId: it.lot_id ? String(it.lot_id) : undefined,
+                        batchNo: it.batch_no || undefined,
+                        expiryDate: it.expiry_date || undefined
+                    };
+                }
+            });
+            
+            setManualCounts(counts);
+            setVerifiedProductIds(verifiedIds);
+            setMetaDataByPorId(meta);
+        } catch {
+            toast.error("Failed to load receipt details");
+        }
+    }, [selectedPO]);
+
     const saveReceipt = React.useCallback(async (porMetaData?: Record<string, { lotNo: string; batchNo?: string; expiryDate: string }>) => {
         setSaveError("");
 
@@ -636,6 +711,16 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
         );
         const snapshotCounts = { ...counts };
 
+        // ✅ Only send counts for items that are currently verified (checked)
+        const filteredCounts: Record<string, number> = {};
+        Object.entries(counts).forEach(([id, qty]) => {
+            // Find the item to get its productId
+            const item = snapshotItems.find(it => it.id === id);
+            if (item && verifiedProductIds.includes(item.productId)) {
+                filteredCounts[id] = qty;
+            }
+        });
+
         setSavingReceipt(true);
         try {
             const oldReceiptNo = receiptNo.trim();
@@ -650,8 +735,9 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
                     receiptNo: oldReceiptNo,
                     receiptType: receiptType.trim(),
                     receiptDate: receiptDate.trim(),
-                    porCounts: counts,
+                    porCounts: filteredCounts,
                     porMetaData: porMetaData ?? {},
+                    isEdit: !!editingReceiptId,
                 }),
             });
             const j = await asJson(r);
@@ -726,7 +812,7 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
         } finally {
             setSavingReceipt(false);
         }
-    }, [selectedPO, receiptNo, receiptType, receiptDate, manualCounts, refreshList, resetSession, receiverId, verifiedProductIds]);
+    }, [selectedPO, receiptNo, receiptType, receiptDate, manualCounts, refreshList, resetSession, receiverId, verifiedProductIds, editingReceiptId]);
 
     const value: Ctx = {
         list,
@@ -758,6 +844,10 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
 
         receiptSaved,
         clearReceiptSaved,
+        
+        editingReceiptId,
+        loadReceipt,
+        clearEditingReceiptId,
 
         saveReceipt,
         savingReceipt,
