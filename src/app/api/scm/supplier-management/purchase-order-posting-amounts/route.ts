@@ -1011,7 +1011,7 @@ export async function POST(req: NextRequest) {
                     porDiscMap.set(id, itemDiscPct > 0 ? (unitPrice * (itemDiscPct / 100)) : 0);
                 });
 
-                let emittedRows = 0;
+
 
                 for (const [receiptNo, receiptRows] of Array.from(rowsByReceipt.entries())) {
                     const receivedQty = receiptRows.reduce((sum, r) => sum + effectiveReceivedQty(r), 0);
@@ -1049,7 +1049,7 @@ export async function POST(req: NextRequest) {
                     const arr = itemsByBranch.get(bid) ?? [];
                     arr.push(item);
                     itemsByBranch.set(bid, arr);
-                    emittedRows++;
+
                 }
 
                 // ✅ No fallback item needed — only inventory-posted receipt rows are shown
