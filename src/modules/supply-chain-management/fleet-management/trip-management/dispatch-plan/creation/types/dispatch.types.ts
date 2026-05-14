@@ -206,7 +206,7 @@ export interface EnrichedApprovedPlan extends RawDispatchPlan {
 
 /** Enriched detail row returned by `fetchPlanDetails`. */
 export interface EnrichedPlanDetail {
-  detail_id: number | string | undefined;
+  detail_id: number | string;
   sales_order_id?: number;
   invoice_id?: number;
   invoice_ids?: number[];
@@ -259,7 +259,6 @@ export interface UpdateHeaderPayload {
 
 /** Post-dispatch plan details enriched with staff and junction data. */
 export interface PostDispatchPlanDetails {
-  [key: string]: unknown;
   id: number;
   doc_no: string;
   dispatch_id: number;

@@ -9,22 +9,22 @@ import {
 } from "@/components/ui/dialog";
 import { Form } from "@/components/ui/form";
 import { useDispatchCreation } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/creation/hooks/useDispatchCreation";
+import { useDispatchFormState } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/creation/hooks/useDispatchFormState";
 import { dispatchCreationLifecycleService } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/creation/services/lifecycle";
 import {
   DispatchCreationFormSchema,
   DispatchCreationFormValues,
 } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/creation/types/dispatch.schema";
+import type { EnrichedPlanDetail } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/creation/types/dispatch.types";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Truck } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useEffect, useRef, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { DispatchModalSkeleton } from "./DispatchSkeleton";
 import { InvoiceItemsSidebar } from "./parts/InvoiceItemsSidebar";
 import { PdpListSidebar } from "./parts/PdpListSidebar";
 import { TripConfigurationForm } from "./parts/TripConfigurationForm";
-import { PlanDetailItem } from "./parts/types";
-import { EnrichedApprovedPlan } from "../../types/dispatch.types";
 
 interface DispatchEditModalProps {
   open: boolean;
@@ -44,15 +44,6 @@ export function DispatchEditModal({
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const isInitialLoadRef = useRef(false);
-
-  const [approvedPlans, setApprovedPlans] = useState<EnrichedApprovedPlan[]>([]);
-  const [isLoadingPlans, setIsLoadingPlans] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [planDetails, setPlanDetails] = useState<PlanDetailItem[]>([]);
-  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
-  
-  const [, setPage] = useState(1);
-  const [hasMore] = useState(false);
 
   useEffect(() => {
     if (open && !masterData) {
@@ -75,123 +66,43 @@ export function DispatchEditModal({
     },
   });
 
-  const selectedBranch = form.watch("starting_point");
+  const {
+    approvedPlans,
+    isLoadingPlans,
+    planDetails,
+    isLoadingDetails,
+    searchQuery,
+    hasMore,
+    handlePlanSelect,
+    onSearchChange,
+    onLoadMore,
+    setPlanDetails,
+    setApprovedPlans,
+    loadApprovedPlans,
+    totalWeight,
+    vehicleCapacity,
+  } = useDispatchFormState({
+    form,
+    tripId: planId,
+    vehicles: masterData?.vehicles,
+  });
 
-  const loadApprovedPlans = useCallback(async (
-    branchId: number,
-    currentPdpIds?: number[],
-  ) => {
-    setIsLoadingPlans(true);
-    try {
-      const url = new URL(
-        "/api/scm/fleet-management/trip-management/dispatch-plan/creation",
-        window.location.origin,
-      );
-      url.searchParams.append("type", "approved_plans");
-      url.searchParams.append("branch_id", String(branchId));
-      if (currentPdpIds && currentPdpIds.length > 0) {
-        url.searchParams.append("current_plan_id", currentPdpIds.join(","));
-      }
+  const selectedBranch = useWatch({
+    control: form.control,
+    name: "starting_point",
+  });
 
-      const res = await fetch(url.toString(), { cache: "no-store" });
-      const result = await res.json();
-      if (result.error) throw new Error(result.error);
-      setApprovedPlans(result.data || []);
-    } catch {
-      toast.error("Failed to load approved pre-dispatch plans");
-    } finally {
-      setIsLoadingPlans(false);
-    }
-  }, []);
-
+  // Reload approved plans when branch changes (skip during initial load)
   useEffect(() => {
-    // Skip during initial load — the fetch effect handles the first call
     if (isInitialLoadRef.current) return;
     if (selectedBranch && selectedBranch > 0) {
-      loadApprovedPlans(selectedBranch, form.getValues("pre_dispatch_plan_ids"));
+      loadApprovedPlans(selectedBranch, 1, "", false, form.getValues("pre_dispatch_plan_ids"));
     } else {
       setApprovedPlans([]);
     }
-  }, [selectedBranch, loadApprovedPlans, form]);
+  }, [selectedBranch, loadApprovedPlans, form, setApprovedPlans]);
 
-  const handlePlanSelect = async (pdpIdStr: string) => {
-    const selectedPdpId = Number(pdpIdStr);
-    const pdp = approvedPlans.find((p) => p.dispatch_id === selectedPdpId);
-    if (!pdp) return;
-
-    const currentIds = form.getValues("pre_dispatch_plan_ids") || [];
-    const isSelected = currentIds.includes(selectedPdpId);
-
-    let newIds: number[];
-    if (isSelected) {
-      newIds = currentIds.filter((id) => id !== selectedPdpId);
-    } else {
-      newIds = [...currentIds, selectedPdpId];
-    }
-
-    form.setValue("pre_dispatch_plan_ids", newIds, { shouldValidate: true });
-
-    if (newIds.length > 0) {
-      const firstPlan = approvedPlans.find((p) => p.dispatch_id === newIds[0]);
-      if (firstPlan && newIds.length === 1) {
-        if (firstPlan.driver_id)
-          form.setValue("driver_id", Number(firstPlan.driver_id));
-        if (firstPlan.vehicle_id)
-          form.setValue("vehicle_id", Number(firstPlan.vehicle_id));
-        if (firstPlan.branch_id)
-          form.setValue("starting_point", Number(firstPlan.branch_id));
-      }
-    }
-
-    if (newIds.length === 0) {
-      setPlanDetails([]);
-      return;
-    }
-
-    setIsLoadingDetails(true);
-
-    // Save current sequence and manual/PO stops
-    const currentSeqMap = new Map();
-    planDetails.forEach((d, idx) => {
-      if (d.order_no) currentSeqMap.set(d.order_no, idx);
-      if (d.isManualStop) currentSeqMap.set(d.detail_id, idx);
-      if (d.isPoStop) currentSeqMap.set(d.detail_id, idx);
-    });
-    
-    const retainedStops = planDetails.filter(d => d.isManualStop || d.isPoStop);
-
-    try {
-      // Pass planId as trip_id to ensure already-dispatched invoices are included.
-      const res = await fetch(
-        `/api/scm/fleet-management/trip-management/dispatch-plan/creation?type=plan_details&plan_ids=${newIds.join(",")}&trip_id=${planId}`,
-        { cache: "no-store" },
-      );
-      const result = await res.json();
-      if (result.error) throw new Error(result.error);
-      
-      const fetchedItems = result.data || [];
-      // Filter out manual/PO stops from the API response because we already have them in retainedStops
-      // (and retainedStops might have unsaved local edits or sequence changes).
-      const fetchedInvoices = fetchedItems.filter((i: { isManualStop?: boolean; isPoStop?: boolean }) => !i.isManualStop && !i.isPoStop);
-      
-      const combined = [...fetchedInvoices, ...retainedStops];
-      
-      combined.sort((a, b) => {
-        const keyA = a.isManualStop || a.isPoStop ? a.detail_id : a.order_no;
-        const keyB = b.isManualStop || b.isPoStop ? b.detail_id : b.order_no;
-        const seqA = currentSeqMap.has(keyA) ? currentSeqMap.get(keyA) : 9999;
-        const seqB = currentSeqMap.has(keyB) ? currentSeqMap.get(keyB) : 9999;
-        return seqA - seqB;
-      });
-
-      setPlanDetails(combined);
-    } catch {
-      toast.error("Failed to load plan details");
-    } finally {
-      setIsLoadingDetails(false);
-    }
-  };
-
+  // Load existing plan data when modal opens
   useEffect(() => {
     if (open && planId) {
       const fetchDetails = async () => {
@@ -225,15 +136,13 @@ export function DispatchEditModal({
 
           if (loadedIds.length > 0) {
             // Fetch plan details (sales invoices) for the right sidebar
-            setIsLoadingDetails(true);
             const detailPlanIds = loadedIds.join(",");
             const detailsRes = await fetch(
               `/api/scm/fleet-management/trip-management/dispatch-plan/creation?type=plan_details&plan_ids=${detailPlanIds}&trip_id=${planId}`,
             );
             const detailsResult = await detailsRes.json();
-            const loadedDetails: PlanDetailItem[] = detailsResult.data || [];
+            const loadedDetails: EnrichedPlanDetail[] = detailsResult.data || [];
             setPlanDetails(loadedDetails);
-            setIsLoadingDetails(false);
 
             // Recalculate amount as SUM of sales invoice amounts
             const totalAmount = loadedDetails.reduce(
@@ -242,16 +151,13 @@ export function DispatchEditModal({
             );
             form.setValue("amount", totalAmount);
 
-            // Manually load approved plans (including the Dispatched ones)
-            // so the left sidebar highlights the linked PDPs
-            await loadApprovedPlans(branchId, loadedIds);
+            // Load approved plans (including the Dispatched ones)
+            await loadApprovedPlans(branchId, 1, "", false, loadedIds);
           }
         } catch (error: unknown) {
           toast.error(error instanceof Error ? error.message : "Could not load plan details");
         } finally {
           setIsLoading(false);
-          // Allow the branch-change effect to work again after initial load
-          // Use a longer delay to ensure React has flushed all batched renders
           setTimeout(() => {
             isInitialLoadRef.current = false;
           }, 500);
@@ -263,33 +169,14 @@ export function DispatchEditModal({
       setPlanDetails([]);
       setApprovedPlans([]);
     }
-  }, [open, planId, form, loadApprovedPlans]);
-
-  /** Synch form amount with actual planDetails (invoices) sum */
-  useEffect(() => {
-    const total = planDetails.reduce((sum, d) => sum + (d.amount || 0), 0);
-    form.setValue("amount", total);
-  }, [planDetails, form]);
-
-  /** Calculate total weight of selected items */
-  const totalWeight = useMemo(() => {
-    return planDetails.reduce((sum, d) => sum + (d.weight || 0), 0);
-  }, [planDetails]);
-
-  /** Find selected vehicle and its capacity */
-  const selectedVehicleId = form.watch("vehicle_id");
-  const vehicleCapacity = useMemo(() => {
-    if (!masterData?.vehicles || !selectedVehicleId) return 0;
-    const v = masterData.vehicles.find((v) => v.vehicle_id === selectedVehicleId);
-    return Number(v?.maximum_weight || 0);
-  }, [masterData, selectedVehicleId]);
+  }, [open, planId, form, loadApprovedPlans, setPlanDetails, setApprovedPlans]);
 
   const onSubmit = async (values: DispatchCreationFormValues) => {
     if (!planId) return;
 
     const payload = {
       ...values,
-      invoices: planDetails.map((details: PlanDetailItem, index: number) => ({
+      invoices: planDetails.map((details: EnrichedPlanDetail, index: number) => ({
         invoice_id: details.invoice_id,
         invoice_ids: details.invoice_ids,
         invoice_no: details.order_no,
@@ -351,11 +238,8 @@ export function DispatchEditModal({
                   approvedPlans={approvedPlans}
                   isLoadingPlans={isLoadingPlans}
                   searchQuery={searchQuery}
-                  onSearchChange={(val) => {
-                    setSearchQuery(val);
-                    setPage(1);
-                  }}
-                  onLoadMore={() => setPage(p => p + 1)}
+                  onSearchChange={onSearchChange}
+                  onLoadMore={onLoadMore}
                   hasMore={hasMore}
                   selectedPlanIds={form.watch("pre_dispatch_plan_ids") || []}
                   onPlanSelect={handlePlanSelect}
