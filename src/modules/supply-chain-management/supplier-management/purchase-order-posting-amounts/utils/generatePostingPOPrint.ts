@@ -169,7 +169,7 @@ export async function generatePostingPOPrint(data: PrintData): Promise<jsPDF> {
                     5: { cellWidth: 35, halign: 'right', textColor: [80, 80, 80] },
                     6: { cellWidth: 30, halign: 'right', fontStyle: 'bold' },
                 },
-                didDrawPage: (data) => {
+                didDrawPage: () => {
                     if (config.elements) {
                         Object.values(config.elements).forEach(el => {
                             renderElement(doc, el as PdfElementConfig, companyData as CompanyData);

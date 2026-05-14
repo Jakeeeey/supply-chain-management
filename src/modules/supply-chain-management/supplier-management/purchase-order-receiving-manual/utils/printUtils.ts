@@ -191,7 +191,7 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
                     7: { halign: "right", cellWidth: 18 },
                     8: { halign: "right", cellWidth: 20, fontStyle: "bold" },
                 },
-                didDrawPage: (data) => {
+                didDrawPage: () => {
                     // Always render template elements on every page
                     if (config.elements) {
                         Object.values(config.elements).forEach(el => {

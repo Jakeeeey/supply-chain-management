@@ -1170,7 +1170,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
         } finally {
             setSavingReceipt(false);
         }
-    }, [selectedPO, receiptNo, receiptType, receiptDate, scannedCountByPorId, refreshList, resetSession, localScannedRfids, activity, receiverId]);
+    }, [selectedPO, receiptNo, receiptType, receiptDate, scannedCountByPorId, refreshList, resetSession, localScannedRfids, activity, receiverId, verifiedPorIds]);
 
     const value: Ctx = {
         list,

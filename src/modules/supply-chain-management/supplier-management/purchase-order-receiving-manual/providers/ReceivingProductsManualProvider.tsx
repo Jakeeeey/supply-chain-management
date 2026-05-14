@@ -726,7 +726,7 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
         } finally {
             setSavingReceipt(false);
         }
-    }, [selectedPO, receiptNo, receiptType, receiptDate, manualCounts, refreshList, resetSession, receiverId]);
+    }, [selectedPO, receiptNo, receiptType, receiptDate, manualCounts, refreshList, resetSession, receiverId, verifiedProductIds]);
 
     const value: Ctx = {
         list,

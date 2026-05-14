@@ -238,7 +238,7 @@ export async function generateReceivingPdf(
                 8: { halign: "right", cellWidth: 18 },
                 9: { halign: "right", cellWidth: 20, fontStyle: "bold" },
             },
-            didDrawPage: (pageData) => {
+            didDrawPage: () => {
                 // Always render template elements on every page
                 if (config.elements) {
                     Object.values(config.elements).forEach(el => {
