@@ -79,6 +79,7 @@ export type ReceivingPdfData = {
     branchLabel: string;
     isFullyReceived: boolean;
     priceType: string;
+    isInvoice?: boolean;
     items: Array<{
         name: string;
         barcode: string;
@@ -209,7 +210,7 @@ export async function generateReceivingPdf(
         // 3. Render Main Table
         autoTable(doc, {
             startY: infoY + 22,
-            margin: { left: 10, right: 10 },
+            margin: { top: startY, left: 10, right: 10 },
             head: [["Barcode", "Product", "Batch/Exp", "UOM", "Order Qty", "Received", "Unit Price", "Disc Type", "Disc Amt", "Net Amt"]],
             body: tableBody,
             foot: [[
@@ -237,9 +238,9 @@ export async function generateReceivingPdf(
                 8: { halign: "right", cellWidth: 18 },
                 9: { halign: "right", cellWidth: 20, fontStyle: "bold" },
             },
-            didDrawPage: (pageData) => {
-                // Repeat header on subsequent pages
-                if (pageData.pageNumber > 1 && config.elements) {
+            didDrawPage: () => {
+                // Always render template elements on every page
+                if (config.elements) {
                     Object.values(config.elements).forEach(el => {
                         renderElement(doc, el as PdfElementConfig, companyData);
                     });
@@ -298,30 +299,39 @@ export async function generateReceivingPdf(
         doc.text("Net Total:", labelX, finalY + lineHeight * 2 + 3);
         doc.text(`${formatMoney(sumNet)}`, rightColX, finalY + lineHeight * 2 + 3, { align: "right" });
 
-        // Add VAT and EWT
-        doc.setFont("helvetica", "normal");
-        doc.text("VAT Details:", labelX, finalY + lineHeight * 3 + 3);
-        doc.text(`${isExclusive ? "+" : ""}${formatMoney(vatAmount)}`, rightColX, finalY + lineHeight * 3 + 3, { align: "right" });
+        const isInvoice = Boolean(data.isInvoice);
+        let currentY = finalY + lineHeight * 2 + 9;
 
-        doc.text("EWT (1%):", labelX, finalY + lineHeight * 4 + 3);
-        doc.setTextColor(150, 50, 50);
-        doc.text(`-${formatMoney(whtAmount)}`, rightColX, finalY + lineHeight * 4 + 3, { align: "right" });
+        if (isInvoice) {
+            // Add VAT and EWT
+            doc.setFont("helvetica", "normal");
+            doc.text("VAT Details:", labelX, finalY + lineHeight * 3 + 3);
+            doc.text(`${isExclusive ? "+" : ""}${formatMoney(vatAmount)}`, rightColX, finalY + lineHeight * 3 + 3, { align: "right" });
 
-        doc.setDrawColor(180, 180, 180);
-        doc.setLineWidth(0.5);
-        doc.line(labelX, finalY + lineHeight * 4 + 5, rightColX, finalY + lineHeight * 4 + 5);
+            doc.text("EWT (1%):", labelX, finalY + lineHeight * 4 + 3);
+            doc.setTextColor(150, 50, 50);
+            doc.text(`-${formatMoney(whtAmount)}`, rightColX, finalY + lineHeight * 4 + 3, { align: "right" });
+
+            doc.setDrawColor(180, 180, 180);
+            doc.setLineWidth(0.5);
+            doc.line(labelX, finalY + lineHeight * 4 + 5, rightColX, finalY + lineHeight * 4 + 5);
+
+            currentY = finalY + lineHeight * 5 + 6;
+        }
 
         doc.setTextColor(50, 50, 50);
         doc.setFontSize(10);
         doc.setFont("helvetica", "bold");
-        doc.text("Grand Total:", labelX, finalY + lineHeight * 5 + 6);
-        doc.text(`PHP ${formatMoney(grandTotal)}`, rightColX, finalY + lineHeight * 5 + 6, { align: "right" });
+        doc.text("Grand Total:", labelX, currentY);
+        doc.text(`PHP ${formatMoney(grandTotal)}`, rightColX, currentY, { align: "right" });
 
         // Standardized Footnote
-        doc.setFont("helvetica", "italic");
-        doc.setFontSize(7);
-        doc.setTextColor(100, 100, 100);
-        doc.text("Note: VAT and EWT figures are for reference and have not been deducted from the total.", labelX - 20, finalY + lineHeight * 5 + 12);
+        if (isInvoice) {
+            doc.setFont("helvetica", "italic");
+            doc.setFontSize(7);
+            doc.setTextColor(100, 100, 100);
+            doc.text("Note: VAT and EWT figures are for reference and have not been deducted from the total.", labelX - 20, currentY + 6);
+        }
 
         // 5. Signatures
         renderSignatures(doc, finalY + lineHeight * 5 + 25, "");

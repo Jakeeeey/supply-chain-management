@@ -79,7 +79,8 @@ export function PODetailsBreakdownCard() {
                                         receiptsMap.set(rn, arr);
                                     });
 
-                                    return Array.from(receiptsMap.entries()).map(([receiptNo, items]) => {
+                                    return Array.from(receiptsMap.entries()).map(([receiptNo, rawItems]) => {
+                                        const items = [...rawItems].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
                                         const receiptDate = items[0]?.receiptDate || "";
                                         const isPending = receiptNo === "PENDING";
                                         const receiptTitle = isPending ? "Pending Items" : `Receipt #: ${receiptNo}`;

@@ -1111,32 +1111,34 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
                 return (Number(it.receivedQty) + scannedNow) >= Number(it.expectedQty);
             });
 
-            const savedItems: SavedItem[] = (allItems as ReceivingPOItem[]).map((it) => {
-                const porId = String(it.porId || it.id);
-                const scannedNow = Number(countsMap[porId] || 0);
-                const itemRfids = activity
-                    .filter((a: ActivityRow) => a.status === "ok" && String(a.porId) === porId)
-                    .map((a: ActivityRow) => a.rfid);
+            const savedItems: SavedItem[] = (allItems as ReceivingPOItem[])
+                .filter((it) => verifiedPorIds.includes(String(it.porId || it.id)))
+                .map((it) => {
+                    const porId = String(it.porId || it.id);
+                    const scannedNow = Number(countsMap[porId] || 0);
+                    const itemRfids = activity
+                        .filter((a: ActivityRow) => a.status === "ok" && String(a.porId) === porId)
+                        .map((a: ActivityRow) => a.rfid);
 
-                const meta = (porMetaData && typeof porMetaData === "object") ? porMetaData[porId] : null;
+                    const meta = (porMetaData && typeof porMetaData === "object") ? porMetaData[porId] : null;
 
-                return {
-                    productId: it.productId,
-                    name: it.name,
-                    barcode: it.barcode,
-                    expectedQty: Number(it.expectedQty),
-                    receivedQtyAtStart: Number(it.receivedQty) - scannedNow, // already matched in detail
-                    receivedQtyNow: scannedNow,
-                    rfids: Array.from(new Set(itemRfids)),
-                    lotId: meta?.lotId,
-                    batchNo: meta?.batchNo,
-                    expiryDate: meta?.expiryDate,
-                    unitPrice: Number(it.unitPrice) || 0,
-                    discountAmount: Number(it.discountAmount) || 0,
-                    discountType: it.discountType || "No Discount",
-                    uom: it.uom || "BOX"
-                };
-            });
+                    return {
+                        productId: it.productId,
+                        name: it.name,
+                        barcode: it.barcode,
+                        expectedQty: Number(it.expectedQty),
+                        receivedQtyAtStart: Number(it.receivedQty) - scannedNow, // already matched in detail
+                        receivedQtyNow: scannedNow,
+                        rfids: Array.from(new Set(itemRfids)),
+                        lotId: meta?.lotId,
+                        batchNo: meta?.batchNo,
+                        expiryDate: meta?.expiryDate,
+                        unitPrice: Number(it.unitPrice) || 0,
+                        discountAmount: Number(it.discountAmount) || 0,
+                        discountType: it.discountType || "No Discount",
+                        uom: it.uom || "BOX"
+                    };
+                });
 
             toast.success(`Receipt ${oldReceiptNo} saved successfully!`);
 
@@ -1168,7 +1170,7 @@ export function ReceivingProductsProvider({ children, receiverId }: { children: 
         } finally {
             setSavingReceipt(false);
         }
-    }, [selectedPO, receiptNo, receiptType, receiptDate, scannedCountByPorId, refreshList, resetSession, localScannedRfids, activity, receiverId]);
+    }, [selectedPO, receiptNo, receiptType, receiptDate, scannedCountByPorId, refreshList, resetSession, localScannedRfids, activity, receiverId, verifiedPorIds]);
 
     const value: Ctx = {
         list,
