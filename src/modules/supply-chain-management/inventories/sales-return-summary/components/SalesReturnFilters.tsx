@@ -188,7 +188,7 @@ export const SalesReturnFilters = ({ logic }: { logic: SalesReturnReportHook }) 
           <SearchableSelect
             options={options.suppliers.map((s: SummarySupplierOption) => ({
               value: String(s.id),
-              label: s.name,
+              label: s.shortcut ? `[${s.shortcut}] ${s.name}` : s.name,
             }))}
             value={filters.supplierName || ""}
             onChange={(v) => handleFilterChange("supplierName", v)}
