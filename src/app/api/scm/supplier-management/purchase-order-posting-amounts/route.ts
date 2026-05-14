@@ -528,7 +528,7 @@ function buildReceiptSummary(porRows: PORRow[], priceMap?: Map<number, number>, 
         // ✅ Only show receipts that are fully inventory-posted
         if (!allPosted) continue;
 
-        const statusLabel = allAmountPosted ? "AMOUNTS POSTED" : "READY FOR AMOUNTS";
+        const statusLabel = allAmountPosted ? "POSTED AMOUNTS" : "POSTED INVENTORY";
 
         receipts.push({
             receiptNo,
@@ -554,7 +554,7 @@ function buildReceiptSummary(porRows: PORRow[], priceMap?: Map<number, number>, 
 
     const receiptsCount = receipts.length;
     // ✅ Count receipts that are inventory-posted BUT NOT yet amount-posted (ready for action)
-    const unpostedReceiptsCount = receipts.filter((r) => r.isPosted === 1 && r.statusLabel === "READY FOR AMOUNTS").length;
+    const unpostedReceiptsCount = receipts.filter((r) => r.isPosted === 0).length;
 
     return { receipts, receiptsCount, unpostedReceiptsCount };
 }
@@ -819,6 +819,12 @@ export async function GET() {
                 listTotal = Number((toNum(po?.total_amount) - toNum(po?.discounted_amount)).toFixed(2));
             }
 
+            const itemsInReceipts = new Set<number>();
+            for (const r of readyRows) {
+                const pid = toNum(r?.product_id);
+                if (pid) itemsInReceipts.add(pid);
+            }
+
             list.push({
                 id: String(poId),
                 poNumber,
@@ -830,7 +836,7 @@ export async function GET() {
                 }),
                 totalAmount: listTotal,
                 currency: "PHP",
-                itemsCount: products.size,
+                itemsCount: itemsInReceipts.size > 0 ? itemsInReceipts.size : products.size,
                 branchesCount: branches.size,
                 receiptsCount: rs.receiptsCount,
                 unpostedReceiptsCount: rs.unpostedReceiptsCount,

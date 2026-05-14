@@ -102,9 +102,13 @@ export async function generatePostingPOPrint(data: PrintData): Promise<jsPDF> {
         doc.text("Allocations Breakdown", margin, y);
         y += 2;
 
+        const postedReceiptNos = new Set(
+            (po.receipts || []).filter(r => r.isPosted === 1 || r.isPosted === true).map(r => r.receiptNo)
+        );
+
         (po.allocations || []).forEach(alloc => {
             const receivedItems = alloc.items
-                .filter(it => (it.receivedQty || 0) > 0)
+                .filter(it => (it.receivedQty || 0) > 0 && it.receiptNo && postedReceiptNos.has(it.receiptNo))
                 .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
             if (!receivedItems.length) return;
 
@@ -220,7 +224,7 @@ export async function generatePostingPOPrint(data: PrintData): Promise<jsPDF> {
         let sumNet = 0;
 
         (po.allocations || []).forEach(alloc => {
-            alloc.items.filter(it => (it.receivedQty || 0) > 0).forEach(it => {
+            alloc.items.filter(it => (it.receivedQty || 0) > 0 && it.receiptNo && postedReceiptNos.has(it.receiptNo)).forEach(it => {
                 const uprice = it.unitPrice || 0;
                 const qty = it.receivedQty || 0;
                 const gross = it.grossAmount || (uprice * qty);

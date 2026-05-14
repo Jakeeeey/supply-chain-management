@@ -51,18 +51,18 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  try {
-    const base = getDirectusBase();
-    const apiUrl = `${base}/items/purchase_order?limit=-1`;
+    try {
+        const base = getDirectusBase();
+        const apiUrl = `${base}/items/purchase_order?limit=-1`;
 
-    const data = await fetchJson(apiUrl);
-    return NextResponse.json(data);
+        const data = await fetchJson(apiUrl);
+        return NextResponse.json(data);
 
-  } catch (error: unknown) {
-    const err = error as Error;
-    console.error("Route Error:", err);
-    return NextResponse.json({ error: err?.message || "Internal Server Error" }, { status: 500 });
-  }
+    } catch (error: unknown) {
+        const err = error as Error;
+        console.error("Route Error:", err);
+        return NextResponse.json({ error: err?.message || "Internal Server Error" }, { status: 500 });
+    }
 }
 
 // =====================
@@ -169,7 +169,7 @@ export async function POST(req: NextRequest) {
             const allocations = allocationsRows.map(row => {
                 const pid = toNum(row.product_id);
                 const bid = toNum(row.branch_id);
-                
+
                 // Aggregate received quantity for this specific (Product, Branch)
                 const totalReceived = porRows
                     .filter(r => toNum(r.product_id) === pid && toNum(r.branch_id) === bid)
@@ -195,13 +195,13 @@ export async function POST(req: NextRequest) {
 
             // PROCESS RECEIPTS (Transaction History)
             const receivedRows = porRows.filter(r => toStr(r.receipt_no));
-            const receiptMap = new Map<string, { 
-                receiptNo: string; 
-                receiptDate: string; 
-                isPosted: boolean; 
+            const receiptMap = new Map<string, {
+                receiptNo: string;
+                receiptDate: string;
+                isPosted: boolean;
                 isPostedAmounts: boolean;
                 statusLabel: string;
-                items: { productName: string; branchName: string; quantity: number; unitPrice: number; discount: number; total: number; batchNo: string; expiryDate: string; }[]; 
+                items: { productName: string; branchName: string; quantity: number; unitPrice: number; discount: number; total: number; batchNo: string; expiryDate: string; }[];
             }>();
 
             for (const row of receivedRows) {
@@ -239,9 +239,9 @@ export async function POST(req: NextRequest) {
                 if (!r.isPosted) {
                     r.statusLabel = "UNPOSTED"; // Warehouse hasn't posted
                 } else if (!r.isPostedAmounts) {
-                    r.statusLabel = "READY FOR AMOUNTS"; // Posted to inventory, but financials pending
+                    r.statusLabel = "POSTED INVENTORY"; // Posted to inventory, but financials pending
                 } else {
-                    r.statusLabel = "AMOUNTS POSTED"; // Fully finalized
+                    r.statusLabel = "POSTED AMOUNTS"; // Fully finalized
                 }
             }
 

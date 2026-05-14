@@ -112,9 +112,14 @@ export async function generatePostingPOPrint(data: PrintData): Promise<jsPDF> {
             doc.text(`Branch: ${alloc.branch?.name || "Unknown"}`, margin, y);
             y += 2;
 
+            const postedReceiptNos = new Set(
+                (po.receipts || []).filter(r => r.isPosted === 1 || r.isPosted === true).map(r => r.receiptNo)
+            );
+
             const receiptsMap = new Map<string, typeof alloc.items>();
             alloc.items.forEach(it => {
-                const rn = it.receiptNo || "PENDING";
+                const rn = it.receiptNo;
+                if (!rn || !postedReceiptNos.has(rn)) return; // Skip items from unposted receipts
                 const arr = receiptsMap.get(rn) || [];
                 arr.push(it);
                 receiptsMap.set(rn, arr);

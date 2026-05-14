@@ -35,8 +35,8 @@ export function ReceiptCard({ receipt }: { receipt: PostingReceipt }) {
     const disabledReason = !poReady
         ? "PO is not ready. Complete receiving first."
         : isPosted
-        ? "Receipt already posted."
-        : "";
+            ? "Receipt already posted."
+            : "";
 
     return (
         <Card className="p-3">
@@ -61,15 +61,11 @@ export function ReceiptCard({ receipt }: { receipt: PostingReceipt }) {
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                    <Badge 
-                        variant="outline" 
-                        className={
-                            isPosted 
-                                ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30" 
-                                : "bg-teal-500/15 text-teal-700 dark:text-teal-400 border-teal-500/30"
-                        }
+                    <Badge
+                        variant="outline"
+                        className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
                     >
-                        {receipt.statusLabel || (isPosted ? "AMOUNTS POSTED" : "READY FOR AMOUNTS")}
+                        {receipt.statusLabel || (isPosted ? "POSTED AMOUNTS" : "POSTED INVENTORY")}
                     </Badge>
 
                     {canPost && (
@@ -98,4 +94,4 @@ export function ReceiptCard({ receipt }: { receipt: PostingReceipt }) {
             />
         </Card>
     );
-}
+}
