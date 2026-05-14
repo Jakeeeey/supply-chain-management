@@ -691,45 +691,67 @@ export async function POST(req: NextRequest) {
 
             const meta = (porMetaData && typeof porMetaData === "object") ? porMetaData : {};
             
-            // ✅ Handle Edit Mode: Overwrite existing rows for this receipt
+            // ✅ Handle Edit Mode: Overwrite existing rows
             if (isEdit) {
-                const existingRows = porRows.filter(r => toStr(r.receipt_no) === receiptNo);
-                for (const row of existingRows) {
-                    const porId = String(row.purchase_order_product_id);
-                    const qty = porCounts[porId] !== undefined ? toNum(porCounts[porId]) : 0; // 0 if unchecked
+                const currentReceiptRows = porRows.filter(r => toStr(r.receipt_no) === receiptNo);
+                for (const row of currentReceiptRows) {
+                    const porId = toNum(row.purchase_order_product_id);
+                    const qty = toNum(porCounts[porId] || 0);
                     const m = meta[porId] || {};
                     const pId = toNum(row.product_id);
                     const uPrice = toNum(row.unit_price || 0);
                     
-                    let linePct = poDiscountPercent, dtId = ensureId(row.discount_type);
-                    if (dtId) {
-                        const dt = discountMap.get(String(dtId));
-                        if (dt) linePct = dt.pct;
+                    if (qty <= 0) {
+                        // ✅ Item was removed from the receipt during edit - DETACH IT
+                        await fetchJson(`${base}/items/${POR_COLLECTION}/${porId}`, { 
+                            method: "PATCH", 
+                            body: JSON.stringify({ 
+                                receipt_no: null, 
+                                receipt_date: null, 
+                                received_quantity: 0, 
+                                received_date: null, 
+                                isPosted: 0,
+                                discounted_amount: 0,
+                                vat_amount: 0,
+                                withholding_amount: 0,
+                                total_amount: 0,
+                                lot_id: null,
+                                batch_no: null,
+                                expiry_date: null
+                            }) 
+                        });
                     } else {
-                        const linkId = ensureId(linksMap.get(pId)?.discount_type);
-                        if (linkId) { const dt = discountMap.get(String(linkId)); if (dt) { linePct = dt.pct; dtId = linkId; } }
-                        if (!dtId) dtId = ensureId(dType);
+                        // ✅ Standard update for existing item
+                        let linePct = poDiscountPercent, dtId = ensureId(row.discount_type);
+                        if (dtId) {
+                            const dt = discountMap.get(String(dtId));
+                            if (dt) linePct = dt.pct;
+                        } else {
+                            const linkId = ensureId(linksMap.get(pId)?.discount_type);
+                            if (linkId) { const dt = discountMap.get(String(linkId)); if (dt) { linePct = dt.pct; dtId = linkId; } }
+                            if (!dtId) dtId = ensureId(dType);
+                        }
+
+                        const lineGross = uPrice * qty;
+                        const lineDisc = Number((lineGross * (linePct / 100)).toFixed(2));
+                        const lineNet = lineGross - lineDisc;
+                        const poIsInvoice = (toNum(po?.vat_amount) > 0) || (toNum(po?.withholding_tax_amount) > 0);
+                        const vatExclTotal = poIsInvoice ? Number((lineNet / 1.12).toFixed(2)) : lineNet;
+                        const vatAmtTotal = poIsInvoice ? Number((lineNet - vatExclTotal).toFixed(2)) : 0;
+                        const ewtAmtTotal = poIsInvoice ? Number((vatExclTotal * 0.01).toFixed(2)) : 0;
+
+                        const patch: Record<string, unknown> = {
+                            receipt_no: receiptNo, receipt_date: receiptDate, received_quantity: qty, received_date: nowISO(), isPosted: 0,
+                            discount_type: dtId || null, discounted_amount: lineDisc,
+                            vat_amount: vatAmtTotal, withholding_amount: ewtAmtTotal,
+                            total_amount: Number(lineGross.toFixed(2))
+                        };
+                        if (m.lotNo) patch.lot_id = toNum(m.lotNo);
+                        if (m.batchNo) patch.batch_no = m.batchNo;
+                        if (m.expiryDate) patch.expiry_date = m.expiryDate;
+
+                        await fetchJson(`${base}/items/${POR_COLLECTION}/${porId}`, { method: "PATCH", body: JSON.stringify(patch) });
                     }
-
-                    const lineGross = uPrice * qty;
-                    const lineDisc = Number((lineGross * (linePct / 100)).toFixed(2));
-                    const lineNet = lineGross - lineDisc;
-                    const poIsInvoice = (toNum(po?.vat_amount) > 0) || (toNum(po?.withholding_tax_amount) > 0);
-                    const vatExclTotal = poIsInvoice ? Number((lineNet / 1.12).toFixed(2)) : lineNet;
-                    const vatAmtTotal = poIsInvoice ? Number((lineNet - vatExclTotal).toFixed(2)) : 0;
-                    const ewtAmtTotal = poIsInvoice ? Number((vatExclTotal * 0.01).toFixed(2)) : 0;
-
-                    const patch: Record<string, unknown> = {
-                        receipt_no: receiptNo, receipt_date: receiptDate, received_quantity: qty, received_date: nowISO(), isPosted: 0,
-                        discount_type: dtId || null, discounted_amount: lineDisc,
-                        vat_amount: vatAmtTotal, withholding_amount: ewtAmtTotal,
-                        total_amount: Number(lineGross.toFixed(2))
-                    };
-                    if (m.lotNo) patch.lot_id = toNum(m.lotNo);
-                    if (m.batchNo) patch.batch_no = m.batchNo;
-                    if (m.expiryDate) patch.expiry_date = m.expiryDate;
-
-                    await fetchJson(`${base}/items/${POR_COLLECTION}/${porId}`, { method: "PATCH", body: JSON.stringify(patch) });
                     delete porCounts[porId]; // Remove so we don't process it below
                 }
             }

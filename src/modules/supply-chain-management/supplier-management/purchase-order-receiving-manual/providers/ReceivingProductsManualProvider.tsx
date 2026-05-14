@@ -711,6 +711,16 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
         );
         const snapshotCounts = { ...counts };
 
+        // ✅ Only send counts for items that are currently verified (checked)
+        const filteredCounts: Record<string, number> = {};
+        Object.entries(counts).forEach(([id, qty]) => {
+            // Find the item to get its productId
+            const item = snapshotItems.find(it => it.id === id);
+            if (item && verifiedProductIds.includes(item.productId)) {
+                filteredCounts[id] = qty;
+            }
+        });
+
         setSavingReceipt(true);
         try {
             const oldReceiptNo = receiptNo.trim();
@@ -725,7 +735,7 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
                     receiptNo: oldReceiptNo,
                     receiptType: receiptType.trim(),
                     receiptDate: receiptDate.trim(),
-                    porCounts: counts,
+                    porCounts: filteredCounts,
                     porMetaData: porMetaData ?? {},
                     isEdit: !!editingReceiptId,
                 }),
