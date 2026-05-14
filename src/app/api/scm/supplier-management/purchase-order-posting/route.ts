@@ -819,6 +819,12 @@ export async function GET() {
                 listTotal = Number((toNum(po?.total_amount) - toNum(po?.discounted_amount)).toFixed(2));
             }
 
+            const itemsInReceipts = new Set<number>();
+            for (const r of unpostedRows) {
+                const pid = toNum(r?.product_id);
+                if (pid) itemsInReceipts.add(pid);
+            }
+
             list.push({
                 id: String(poId),
                 poNumber,
@@ -831,7 +837,7 @@ export async function GET() {
                 }),
                 totalAmount: listTotal,
                 currency: "PHP",
-                itemsCount: products.size,
+                itemsCount: itemsInReceipts.size > 0 ? itemsInReceipts.size : products.size,
                 branchesCount: branches.size,
                 receiptsCount: rs.receiptsCount,
                 unpostedReceiptsCount: rs.unpostedReceiptsCount,
