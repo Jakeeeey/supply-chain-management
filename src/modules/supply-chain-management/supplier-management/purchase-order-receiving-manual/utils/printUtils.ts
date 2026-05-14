@@ -165,7 +165,7 @@ export async function generateOfficialSupplierReceiptV5(data: ReceiptData) {
 
             autoTable(doc, {
                 startY: detailsY + 15,
-                margin: { top: startY, left: 10, right: 10 },
+                margin: { left: 10, right: 10 },
                 head: [["Barcode", "Product", "Batch/Exp", "UOM", "Order Qty", "Received", "Unit Price", "Disc Amt", "Net Amt"]],
                 body: tableRows,
                 foot: [[

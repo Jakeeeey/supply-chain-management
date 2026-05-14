@@ -209,7 +209,7 @@ export async function generateReceivingPdf(
         // 3. Render Main Table
         autoTable(doc, {
             startY: infoY + 22,
-            margin: { top: startY, left: 10, right: 10 },
+            margin: { left: 10, right: 10 },
             head: [["Barcode", "Product", "Batch/Exp", "UOM", "Order Qty", "Received", "Unit Price", "Disc Type", "Disc Amt", "Net Amt"]],
             body: tableBody,
             foot: [[
