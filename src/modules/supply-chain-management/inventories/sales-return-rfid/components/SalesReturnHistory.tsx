@@ -248,11 +248,12 @@ export function SalesReturnHistory({
     if (!found) return "All Salesmen";
     return found.code ? `[${found.code}] ${found.label}` : found.label;
   }, [filters.salesman, salesmenOptions]);
-  const selectedCustomerLabel =
-    filters.customer === "All"
-      ? "All Customers"
-      : customerOptions.find((c) => c.value === filters.customer)?.label ||
-        "All Customers";
+  const selectedCustomerLabel = useMemo(() => {
+    if (filters.customer === "All") return "All Customers";
+    const found = customerOptions.find((c) => c.value === filters.customer);
+    if (!found) return "All Customers";
+    return `[${found.value}] ${found.label}`;
+  }, [filters.customer, customerOptions]);
 
   return (
     <div className="space-y-4">
@@ -378,7 +379,7 @@ export function SalesReturnHistory({
                             : "opacity-0",
                         )}
                       />
-                      {c.label}
+                      {`[${c.value}] ${c.label}`}
                     </CommandItem>
                   ))}
                 </CommandGroup>
