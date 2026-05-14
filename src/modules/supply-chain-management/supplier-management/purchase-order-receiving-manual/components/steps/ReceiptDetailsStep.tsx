@@ -40,6 +40,10 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
         setReceiptType,
         receiptDate,
         setReceiptDate,
+        loadReceipt,
+        editingReceiptId,
+        clearEditingReceiptId,
+        clearReceiptSaved // Use if we want to cancel edit (optional, we can just clear editingReceiptId if needed, wait we didn't expose clearEdit)
     } = useReceivingProductsManual();
 
     const branchesLabel = React.useMemo(() => {
@@ -155,6 +159,16 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
                                     >
                                         {h.isPosted ? "Posted" : "Unposted"}
                                     </Badge>
+                                    {!h.isPosted && (
+                                        <button
+                                            type="button"
+                                            onClick={() => loadReceipt(h.receiptNo)}
+                                            disabled={editingReceiptId === h.receiptNo}
+                                            className="ml-2 text-amber-600 hover:text-amber-800 font-medium text-[10px] uppercase underline disabled:opacity-50 disabled:no-underline"
+                                        >
+                                            {editingReceiptId === h.receiptNo ? "Editing..." : "Edit"}
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         ))}
@@ -163,15 +177,38 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
             )}
 
             <Card className="p-4">
-                <div className="text-sm font-semibold">Receipt Details</div>
+                <div className="flex items-center justify-between">
+                    <div className="text-sm font-semibold">{editingReceiptId ? "Edit Existing Receipt" : "Receipt Details"}</div>
+                    {editingReceiptId && (
+                        <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-500/30">
+                                Editing Mode
+                            </Badge>
+                            <button
+                                type="button"
+                                onClick={clearEditingReceiptId}
+                                className="text-[10px] uppercase font-semibold text-muted-foreground hover:text-foreground underline"
+                            >
+                                Cancel Edit
+                            </button>
+                        </div>
+                    )}
+                </div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                    Create receipt first, then continue to product verification.
+                    {editingReceiptId 
+                        ? "You are currently modifying an unposted receipt."
+                        : "Create receipt first, then continue to product verification."}
                 </div>
 
                 <div className="mt-4 grid gap-4">
                     <div className="grid gap-2">
                         <Label>Receipt Number *</Label>
-                        <Input value={receiptNo} onChange={(e) => setReceiptNo(e.target.value)} placeholder="Enter receipt number" />
+                        <Input 
+                            value={receiptNo} 
+                            onChange={(e) => setReceiptNo(e.target.value)} 
+                            placeholder="Enter receipt number" 
+                            disabled={!!editingReceiptId} // Disable changing receipt number while editing
+                        />
                     </div>
 
                     <div className="grid gap-2">
