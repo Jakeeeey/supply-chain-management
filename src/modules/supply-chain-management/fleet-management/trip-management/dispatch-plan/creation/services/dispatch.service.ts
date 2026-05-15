@@ -1,6 +1,7 @@
 import {
   generateDispatchNo,
   prepareStaffPayload,
+  processRouteStops,
 } from "./dispatch.helpers";
 import * as repo from "./dispatch.repo";
 import { fetchItems } from "./api";
@@ -12,8 +13,6 @@ import type {
   PlanHeaderPayload,
   PostDispatchBudgetRow,
   PostDispatchPlanDetails,
-  PostDispatchInvoiceRow,
-  PostDispatchOtherRow,
   PostDispatchPurchaseRow,
   UpdateHeaderPayload,
 } from "../types/dispatch.types";
@@ -132,58 +131,18 @@ export async function createDispatchPlan(
     linked_by: currentUserId,
   }));
 
-  // Separate sequence into Invoices and Others
-  const invoicePayloads: Omit<PostDispatchInvoiceRow, "id">[] = [];
-  const othersPayloads: PostDispatchOtherRow[] = [];
-  const purchasePayloads: PostDispatchPurchaseRow[] = []; // Added this line
+  // Process route stops (invoices, manual stops, POs)
+  const { invoicePayloads, othersPayloads, purchasePayloads } =
+    processRouteStops(newPlanId, data.invoices);
 
-  if (data.invoices && data.invoices.length > 0) {
-    data.invoices.forEach((item) => {
-      // 1. Only manual stops go to 'others'
-      if (item.isManualStop) {
-        othersPayloads.push({
-          post_dispatch_plan_id: newPlanId,
-          remarks: item.remarks || "Manual Stop",
-          distance: item.distance || 0,
-          sequence: item.sequence,
-          status: item.status || "Not Fulfilled",
-        });
-      }
-
-      // 2. Only real invoices go into 'post_dispatch_invoices'
-      // Expand invoice_ids (all non-void invoices for this SO) into individual rows
-      if (!item.isManualStop && !item.isPoStop) {
-        const ids = item.invoice_ids || (item.invoice_id ? [item.invoice_id] : []);
-        ids.forEach((invId) => {
-          invoicePayloads.push({
-            post_dispatch_plan_id: newPlanId,
-            invoice_id: invId,
-            sequence: item.sequence,
-            status: item.status || "Not Fulfilled",
-          });
-        });
-      }
-
-      // 3. Purchase Orders go into 'post_dispatch_purchases'
-      if (item.isPoStop && item.po_id) { // Added this block
-        purchasePayloads.push({
-          post_dispatch_plan_id: newPlanId,
-          po_id: item.po_id,
-          distance: item.distance || 0,
-          sequence: item.sequence,
-          status: item.status || "Not Fulfilled",
-        });
-      }
-    });
-  } else {
-    // Fallback: fetch default sequence from database (only invoices)
+  // Fallback: fetch default sequence from database when no explicit stops
+  if (invoicePayloads.length === 0 && othersPayloads.length === 0 && purchasePayloads.length === 0) {
     const invoiceIds = await repo.fetchPdpInvoiceIds(data.pre_dispatch_plan_ids);
     invoiceIds.forEach((id, index) => {
-      const seq = index + 1;
       invoicePayloads.push({
         post_dispatch_plan_id: newPlanId,
         invoice_id: id,
-        sequence: seq,
+        sequence: index + 1,
         status: "Not Fulfilled",
       });
     });
@@ -247,61 +206,21 @@ export async function updateTrip(
     })());
   }
 
-  // 2. Sync Invoices, Others & Purchases // Modified comment
-  const newInvoicePayloads: Omit<PostDispatchInvoiceRow, "id">[] = [];
-  const newOthersPayloads: PostDispatchOtherRow[] = [];
-  const newPurchasePayloads: PostDispatchPurchaseRow[] = []; // Added this line
+  // 2. Process route stops (invoices, manual stops, POs)
+  const {
+    invoicePayloads: newInvoicePayloads,
+    othersPayloads: newOthersPayloads,
+    purchasePayloads: newPurchasePayloads,
+  } = processRouteStops(planId, data.invoices);
 
-  if (data.invoices && data.invoices.length > 0) {
-    data.invoices.forEach((item, idx) => {
-      const seq = item.sequence || idx + 1;
-      
-      // Manual stops only go to 'others'
-      if (item.isManualStop) {
-        newOthersPayloads.push({
-          post_dispatch_plan_id: planId,
-          remarks: item.remarks || "Manual Stop",
-          distance: item.distance || 0,
-          sequence: seq,
-          status: item.status || "Not Fulfilled",
-        });
-      }
-
-      // Only real invoices go to 'post_dispatch_invoices'
-      // Expand invoice_ids (all non-void invoices for this SO) into individual rows
-      if (!item.isManualStop && !item.isPoStop) {
-        const ids = item.invoice_ids || (item.invoice_id ? [item.invoice_id] : []);
-        ids.forEach((invId) => {
-          newInvoicePayloads.push({
-            post_dispatch_plan_id: planId,
-            invoice_id: invId,
-            sequence: seq,
-            status: item.status || "Not Fulfilled",
-          });
-        });
-      }
-
-      // Purchases go to 'post_dispatch_purchases'
-      if (item.isPoStop && item.po_id) { // Added this block
-        newPurchasePayloads.push({
-          post_dispatch_plan_id: planId,
-          po_id: item.po_id,
-          distance: item.distance || 0,
-          sequence: seq,
-          status: item.status || "Not Fulfilled",
-        });
-      }
-    });
-  }
- else if (newPdpIds && newPdpIds.length > 0) {
-    // Auto-sync from PDPs if no explicit sequence provided
+  // Fallback: auto-sync from PDPs if no explicit sequence provided
+  if (newInvoicePayloads.length === 0 && newOthersPayloads.length === 0 && newPurchasePayloads.length === 0 && newPdpIds && newPdpIds.length > 0) {
     const invIds = await repo.fetchPdpInvoiceIds(newPdpIds);
     invIds.forEach((id, idx) => {
-      const seq = idx + 1;
       newInvoicePayloads.push({
         post_dispatch_plan_id: planId,
         invoice_id: id,
-        sequence: seq,
+        sequence: idx + 1,
         status: "Not Fulfilled",
       });
     });
