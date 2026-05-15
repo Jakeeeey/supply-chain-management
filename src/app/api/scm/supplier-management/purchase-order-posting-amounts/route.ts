@@ -59,12 +59,7 @@ function toStr(v: unknown, fb = "") {
     return s ? s : fb;
 }
 function toNum(v: unknown): number {
-    if (v && typeof v === "object") {
-        const obj = v as Record<string, unknown>;
-        return toNum(obj.id ?? obj.value ?? obj.product_id ?? obj.supplier_id ?? obj.branch_id ?? 0);
-    }
-    const s = String(v ?? "").replace(/,/g, "").trim();
-    const n = Number(s);
+    const n = parseFloat(String(v ?? "").replace(/,/g, ""));
     return Number.isFinite(n) ? n : 0;
 }
 function nowISO() {

@@ -58,10 +58,12 @@ export function ProductVerificationStep({ onContinue, onBack }: { onContinue: ()
                 const inThisReceipt = (item.unpostedReceipts || []).some(
                     r => r.receiptNo === editingReceiptId
                 );
-                return inThisReceipt || trueRemaining > 0 || item.isExtra;
+                const isNewOrInThisReceipt = item.isExtra && (!(item.unpostedReceipts && item.unpostedReceipts.length > 0) || inThisReceipt);
+                return inThisReceipt || trueRemaining > 0 || isNewOrInThisReceipt;
             } else {
-                // New receipt mode: only show items with a true remaining balance
-                return trueRemaining > 0 || item.isExtra;
+                // New receipt mode: only show items with a true remaining balance or newly added extras
+                const isNewlyAddedExtra = item.isExtra && !(item.unpostedReceipts && item.unpostedReceipts.length > 0);
+                return trueRemaining > 0 || isNewlyAddedExtra;
             }
         });
     }, [selectedPO, editingReceiptId]);

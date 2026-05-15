@@ -718,6 +718,8 @@ export async function POST(req: NextRequest) {
 
             const meta = (porMetaData && typeof porMetaData === "object") ? porMetaData : {};
             
+            const processedPorIds = new Set<number>();
+            
             // ✅ Handle Edit Mode: Overwrite existing rows
             if (isEdit) {
                 const currentReceiptRows = porRows.filter(r => toStr(r.receipt_no) === receiptNo);
@@ -729,24 +731,33 @@ export async function POST(req: NextRequest) {
                     const uPrice = toNum(row.unit_price || 0);
                     
                     if (qty <= 0) {
-                        // ✅ Item was removed from the receipt during edit - DETACH IT
-                        await fetchJson(`${base}/items/${POR_COLLECTION}/${porId}`, { 
-                            method: "PATCH", 
-                            body: JSON.stringify({ 
-                                receipt_no: null, 
-                                receipt_date: null, 
-                                received_quantity: 0, 
-                                received_date: null, 
-                                isPosted: 0,
-                                discounted_amount: 0,
-                                vat_amount: 0,
-                                withholding_amount: 0,
-                                total_amount: 0,
-                                lot_id: null,
-                                batch_no: null,
-                                expiry_date: null
-                            }) 
-                        });
+                        // ✅ Item was removed from the receipt during edit - DETACH OR DELETE IT
+                        const r = porRows.find(x => toNum(x.purchase_order_product_id) === porId);
+                        const isExtra = r ? !lines.some(l => toNum(l.product_id) === toNum(r.product_id) && toNum(l.branch_id) === toNum(r.branch_id)) : false;
+
+                        if (isExtra) {
+                            // Extra products should be permanently deleted if removed from the receipt
+                            await fetchJson(`${base}/items/${POR_COLLECTION}/${porId}`, { method: "DELETE" });
+                        } else {
+                            // Standard products stay in the database but are reset
+                            await fetchJson(`${base}/items/${POR_COLLECTION}/${porId}`, { 
+                                method: "PATCH", 
+                                body: JSON.stringify({ 
+                                    receipt_no: null, 
+                                    receipt_date: null, 
+                                    received_quantity: 0, 
+                                    received_date: null, 
+                                    isPosted: 0,
+                                    discounted_amount: 0,
+                                    vat_amount: 0,
+                                    withholding_amount: 0,
+                                    total_amount: 0,
+                                    lot_id: null,
+                                    batch_no: null,
+                                    expiry_date: null
+                                }) 
+                            });
+                        }
                     } else {
                         // ✅ Standard update for existing item
                         let linePct = poDiscountPercent, dtId = ensureId(row.discount_type);
@@ -779,6 +790,7 @@ export async function POST(req: NextRequest) {
 
                         await fetchJson(`${base}/items/${POR_COLLECTION}/${porId}`, { method: "PATCH", body: JSON.stringify(patch) });
                     }
+                    processedPorIds.add(porId);
                     delete porCounts[porId]; // Remove so we don't process it below
                 }
             }
@@ -820,6 +832,36 @@ export async function POST(req: NextRequest) {
                 if (m.expiryDate) patch.expiry_date = m.expiryDate;
 
                 await fetchJson(`${base}/items/${POR_COLLECTION}/${porId}`, { method: "PATCH", body: JSON.stringify(patch) });
+                processedPorIds.add(toNum(porId));
+            }
+
+            // ✅ GLOBAL CLEANUP: Find all OTHER draft rows (reverted/orphaned) for this PO and clean them up
+            const allPorsForPo = await fetchPORByPOIds(base, [thePoId]);
+            const draftsToClean = allPorsForPo.filter(r => !toStr(r.receipt_no) && !processedPorIds.has(toNum(r.purchase_order_product_id)));
+
+            for (const dr of draftsToClean) {
+                const drId = toNum(dr.purchase_order_product_id);
+                const isExtra = !lines.some(l => toNum(l.product_id) === toNum(dr.product_id) && toNum(l.branch_id) === toNum(dr.branch_id));
+
+                if (isExtra) {
+                    // Permanently delete orphaned extra items
+                    await fetchJson(`${base}/items/${POR_COLLECTION}/${drId}`, { method: "DELETE" }).catch(() => {});
+                } else if (toNum(dr.received_quantity) > 0) {
+                    // Reset standard items to 0 if they were previously part of a reverted receipt
+                    await fetchJson(`${base}/items/${POR_COLLECTION}/${drId}`, { 
+                        method: "PATCH", 
+                        body: JSON.stringify({ 
+                            received_quantity: 0, 
+                            total_amount: 0, 
+                            discounted_amount: 0,
+                            vat_amount: 0,
+                            withholding_amount: 0,
+                            receipt_no: null,
+                            receipt_date: null,
+                            received_date: null
+                        }) 
+                    }).catch(() => {});
+                }
             }
 
             const fLines = await fetchPOProductsByPOId(base, thePoId), fPors = await fetchPORByPOIds(base, [thePoId]);
