@@ -70,7 +70,6 @@ export function DispatchCreationModal({
     isLoadingDetails,
     searchQuery,
     hasMore,
-    loadApprovedPlans,
     handlePlanSelect,
     onSearchChange,
     onLoadMore,
@@ -90,6 +89,16 @@ export function DispatchCreationModal({
     name: "starting_point",
   });
 
+  const selectedPlanIds = useWatch({
+    control: form.control,
+    name: "pre_dispatch_plan_ids",
+  }) || [];
+
+  const amount = useWatch({
+    control: form.control,
+    name: "amount",
+  }) || 0;
+
   // Reset selected plans when branch changes
   useEffect(() => {
     form.setValue("pre_dispatch_plan_ids", []);
@@ -100,11 +109,13 @@ export function DispatchCreationModal({
   // Reset all state when modal opens/closes
   useEffect(() => {
     if (open) {
-      form.reset();
-      onSearchChange("");
-      setIsConfirming(false);
-      setPendingPayload(null);
-      setPlanDetails([]);
+      setTimeout(() => {
+        form.reset();
+        onSearchChange("");
+        setIsConfirming(false);
+        setPendingPayload(null);
+        setPlanDetails([]);
+      }, 0);
     }
   }, [open, form, onSearchChange, setPlanDetails]);
 
@@ -187,7 +198,7 @@ export function DispatchCreationModal({
                   onSearchChange={onSearchChange}
                   onLoadMore={onLoadMore}
                   hasMore={hasMore}
-                  selectedPlanIds={form.watch("pre_dispatch_plan_ids") || []}
+                  selectedPlanIds={selectedPlanIds}
                   onPlanSelect={handlePlanSelect}
                   selectedBranch={selectedBranch}
                   currentTotalWeight={totalWeight}
@@ -200,11 +211,11 @@ export function DispatchCreationModal({
                 />
 
                 <InvoiceItemsSidebar
-                  selectedPlanIds={form.watch("pre_dispatch_plan_ids") || []}
+                  selectedPlanIds={selectedPlanIds}
                   planDetails={planDetails}
                   isLoadingDetails={isLoadingDetails}
                   onReorder={setPlanDetails}
-                  selectedAmount={form.watch("amount") || 0}
+                  selectedAmount={amount}
                   totalWeight={totalWeight}
                   vehicleCapacity={vehicleCapacity}
                   selectedBranch={selectedBranch}
@@ -214,7 +225,7 @@ export function DispatchCreationModal({
               {/* Footer */}
               <div className="flex items-center justify-between px-6 py-4 border-t border-border/50 bg-muted/10">
                 <p className="text-xs text-muted-foreground">
-                  {form.watch("pre_dispatch_plan_ids")?.length > 0 &&
+                  {selectedPlanIds.length > 0 &&
                   planDetails.length > 0 &&
                   planDetails.some(
                     (o) =>
@@ -224,7 +235,7 @@ export function DispatchCreationModal({
                       o.true_order_status !== "On Hold",
                   )
                     ? "⚠ Some items are not ready for dispatch (must be For Loading or On Hold)."
-                    : form.watch("pre_dispatch_plan_ids")?.length > 0
+                    : selectedPlanIds.length > 0
                       ? "Ready to dispatch — review details before confirming."
                       : "Select a pre-dispatch plan to continue."}
                 </p>
@@ -243,7 +254,7 @@ export function DispatchCreationModal({
                     size="sm"
                     disabled={
                       isSubmitting ||
-                      !form.watch("pre_dispatch_plan_ids")?.length ||
+                      !selectedPlanIds.length ||
                       planDetails.length === 0 ||
                       planDetails.some(
                         (o) =>

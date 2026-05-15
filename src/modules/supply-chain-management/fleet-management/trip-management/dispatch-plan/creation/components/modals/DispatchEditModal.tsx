@@ -95,6 +95,16 @@ export function DispatchEditModal({
     name: "starting_point",
   });
 
+  const selectedPlanIds = useWatch({
+    control: form.control,
+    name: "pre_dispatch_plan_ids",
+  }) || [];
+
+  const amount = useWatch({
+    control: form.control,
+    name: "amount",
+  }) || 0;
+
 
 
   // Load existing plan data when modal opens
@@ -239,7 +249,7 @@ export function DispatchEditModal({
                   onSearchChange={onSearchChange}
                   onLoadMore={onLoadMore}
                   hasMore={hasMore}
-                  selectedPlanIds={form.watch("pre_dispatch_plan_ids") || []}
+                  selectedPlanIds={selectedPlanIds}
                   onPlanSelect={handlePlanSelect}
                   selectedBranch={selectedBranch}
                   currentTotalWeight={totalWeight}
@@ -252,11 +262,11 @@ export function DispatchEditModal({
                 />
 
                 <InvoiceItemsSidebar
-                  selectedPlanIds={form.watch("pre_dispatch_plan_ids") || []}
+                  selectedPlanIds={selectedPlanIds}
                   planDetails={planDetails}
                   isLoadingDetails={isLoadingDetails}
                   onReorder={setPlanDetails}
-                  selectedAmount={form.watch("amount") || 0}
+                  selectedAmount={amount}
                   totalWeight={totalWeight}
                   vehicleCapacity={vehicleCapacity}
                   selectedBranch={selectedBranch}
@@ -265,7 +275,7 @@ export function DispatchEditModal({
 
               <div className="flex items-center justify-between px-6 py-4 border-t border-border/50 bg-muted/10">
                 <p className="text-xs text-muted-foreground">
-                  {form.watch("pre_dispatch_plan_ids")?.length > 0
+                  {selectedPlanIds.length > 0
                     ? "Adjust details and reorder invoices if needed before saving."
                     : "Review and update dispatch trip details."}
                 </p>
