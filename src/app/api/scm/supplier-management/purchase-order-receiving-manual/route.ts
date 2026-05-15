@@ -169,12 +169,16 @@ interface PORow {
     receipt_date?: string | null;
     received_date?: string | null;
     isPosted?: string | number;
-    lot_id?: string | number;
-    batch_no?: string;
-    expiry_date?: string;
+    lot_id?: string | number | null;
+    batch_no?: string | null;
+    expiry_date?: string | null;
     unit_price?: string | number;
     discount_type?: string | number | null;
     is_reverted?: string | number | null;
+    discounted_amount?: number;
+    vat_amount?: number;
+    withholding_amount?: number;
+    total_amount?: number;
 }
 
 interface POProductRow {
@@ -733,7 +737,7 @@ export async function POST(req: NextRequest) {
 
             const meta = (porMetaData && typeof porMetaData === "object") ? porMetaData : {};
             const processedPorIds = new Set<number>();
-            const batchUpdatePayloads: any[] = [];
+            const batchUpdatePayloads: Partial<PORow>[] = [];
             const deleteIds: number[] = [];
 
             try {
@@ -777,7 +781,7 @@ export async function POST(req: NextRequest) {
                             const vatAmtTotal = poIsInvoice ? Number((lineNet - vatExclTotal).toFixed(2)) : 0;
                             const ewtAmtTotal = poIsInvoice ? Number((vatExclTotal * 0.01).toFixed(2)) : 0;
 
-                            const patch: any = {
+                            const patch: Partial<PORow> = {
                                 purchase_order_product_id: porId,
                                 receipt_no: receiptNo, receipt_date: receiptDate, received_quantity: qty, received_date: nowISO(), isPosted: 0,
                                 is_reverted: 0, discount_type: dtId || null, discounted_amount: lineDisc,
@@ -820,7 +824,7 @@ export async function POST(req: NextRequest) {
                     const vatAmtTotal = poIsInvoice ? Number((lineNet - vatExclTotal).toFixed(2)) : 0;
                     const ewtAmtTotal = poIsInvoice ? Number((vatExclTotal * 0.01).toFixed(2)) : 0;
 
-                    const patch: any = {
+                    const patch: Partial<PORow> = {
                         purchase_order_product_id: porId,
                         receipt_no: receiptNo, receipt_date: receiptDate, received_quantity: qty, received_date: nowISO(), isPosted: 0,
                         is_reverted: 0, discount_type: dtId || null, discounted_amount: lineDisc,
@@ -848,9 +852,10 @@ export async function POST(req: NextRequest) {
                         body: JSON.stringify(deleteIds)
                     });
                 }
-            } catch (error: any) {
-                console.error("Critical Save Failure:", error);
-                return bad(`Transaction failed: ${error.message || "Unknown error during database write."}`);
+            } catch (error: unknown) {
+                const err = error as Error;
+                console.error("Critical Save Failure:", err);
+                return bad(`Transaction failed: ${err.message || "Unknown error during database write."}`);
             }
 
             // ✅ GLOBAL CLEANUP: Find all OTHER draft rows (reverted/orphaned) for this PO and clean them up
