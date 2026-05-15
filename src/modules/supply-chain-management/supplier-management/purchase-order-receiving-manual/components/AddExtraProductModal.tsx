@@ -201,7 +201,7 @@ export function AddExtraProductModal({ isOpen, onClose }: AddExtraProductModalPr
                                                     <div className="font-bold text-sm leading-tight" title={p.name}>{p.name}</div>
                                                     <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mt-1 flex items-center gap-2">
                                                         SKU: {p.sku}
-                                                        {p.discountPercent > 0 && <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 hover:bg-indigo-50 border-indigo-100 px-1.5 h-4 text-[9px] font-bold">{p.discountType} ({p.discountPercent}%)</Badge>}
+                                                        {p.discountPercent > 0 && <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 hover:bg-indigo-50 border-indigo-100 px-1.5 h-4 text-[9px] font-bold">{p.discountType}</Badge>}
                                                         {added && <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-none px-1 h-3.5 text-[8px] font-black tracking-tighter">IN LIST</Badge>}
                                                     </div>
                                                 </div>

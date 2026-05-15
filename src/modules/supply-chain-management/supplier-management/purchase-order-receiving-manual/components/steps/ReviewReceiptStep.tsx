@@ -38,6 +38,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
         receiptSaved,
         lots,
         setMetaDataByPorId,
+        verifiedProductIds,
     } = useReceivingProductsManual();
 
     const [clientSaveError, setClientSaveError] = React.useState("");
@@ -128,8 +129,11 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
     }, [selectedPO]);
 
     const receivedItems = React.useMemo(() => {
-        return allItems.filter(it => (safeCounts[String(it.id)] ?? 0) > 0);
-    }, [allItems, safeCounts]);
+        return allItems.filter(it => 
+            (safeCounts[String(it.id)] ?? 0) > 0 && 
+            verifiedProductIds.includes(String(it.productId))
+        );
+    }, [allItems, safeCounts, verifiedProductIds]);
 
     const executeSave = async () => {
         const metaData: Record<string, { lotNo: string; batchNo?: string; expiryDate: string }> = {};

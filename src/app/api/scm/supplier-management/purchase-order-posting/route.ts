@@ -59,12 +59,7 @@ function toStr(v: unknown, fb = "") {
     return s ? s : fb;
 }
 function toNum(v: unknown): number {
-    if (v && typeof v === "object") {
-        const obj = v as Record<string, unknown>;
-        return toNum(obj.id ?? obj.value ?? obj.product_id ?? obj.supplier_id ?? obj.branch_id ?? 0);
-    }
-    const s = String(v ?? "").replace(/,/g, "").trim();
-    const n = Number(s);
+    const n = parseFloat(String(v ?? "").replace(/,/g, ""));
     return Number.isFinite(n) ? n : 0;
 }
 function nowISO() {
@@ -182,6 +177,7 @@ interface PORRow {
     unit_price: number | string;
     total_amount: number | string;
     discount_type?: number | string | null;
+    is_reverted?: number | string | null;
 }
 interface ReceivingItem {
     receiving_item_id: number;
@@ -192,7 +188,7 @@ interface ReceivingItem {
 }
 
 const POR_SAFE_FIELDS =
-    "purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted,discounted_amount,vat_amount,withholding_amount,total_amount,unit_price,discount_type";
+    "purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted,is_reverted,discounted_amount,vat_amount,withholding_amount,total_amount,unit_price,discount_type";
 
 // =====================
 // FETCHERS
@@ -385,6 +381,7 @@ function hasReceiptEvidence(por: PORRow) {
 }
 
 function effectiveReceivedQty(por: PORRow) {
+    if (toNum(por?.is_reverted) === 1) return 0;
     // IMPORTANT: treat numeric/string consistently
     const posted = toNum(por?.isPosted) === 1;
     if (posted) return Math.max(0, toNum(por?.received_quantity ?? 0));
@@ -496,6 +493,7 @@ function buildReceiptSummary(porRows: PORRow[]) {
     const groups = new Map<string, PORRow[]>();
 
     for (const r of porRows ?? []) {
+        if (toNum(r?.is_reverted) === 1) continue;
         const rn = toStr(r?.receipt_no);
         if (!rn) continue;
         const arr = groups.get(rn) ?? [];
@@ -690,6 +688,7 @@ export async function GET() {
         const porCandidateUrl =
             `${base}/items/${POR_COLLECTION}?limit=-1` +
             `&filter[isPosted][_eq]=0` +
+            `&filter[is_reverted][_neq]=1` +
             `&filter[_or][0][receipt_no][_nnull]=true` +
             `&filter[_or][1][receipt_date][_nnull]=true` +
             `&filter[_or][2][received_date][_nnull]=true` +
@@ -808,7 +807,7 @@ export async function GET() {
             const fullyReceived = fully && !allPosted;
 
             // Align totalAmount with what's actually being posted
-            const unpostedRows = porRows.filter(r => toNum(r.isPosted) === 0 && (toNum(r.received_quantity) > 0 || toStr(r.receipt_no)));
+            const unpostedRows = porRows.filter(r => toNum(r.isPosted) === 0 && (toNum(r.received_quantity) > 0 || toStr(r.receipt_no)) && toNum(r.is_reverted) !== 1);
             let listTotal = 0;
             if (unpostedRows.length > 0) {
                 // Inventory module trusts stored values in POR for listTotal
@@ -1427,9 +1426,12 @@ export async function POST(req: NextRequest) {
 
 
         // -------------------------
-        // revert_receipt — revert a single unposted receipt back to receiving.
-        // Only the POR rows for the specified receiptNo are affected.
-        // Already-posted receipts and other unposted receipts are NOT touched.
+        // revert_receipt — NON-DESTRUCTIVE "Draft Transformation" revert.
+        // Clears only the receipt_no and receipt_date to hide the receipt from
+        // Post Inventory, while preserving all item data (quantities, batches,
+        // expiry, financials, RFID tags) in the database.
+        // The PO status is rolled back to 9 (Partially Received) so the PO
+        // reappears in the Receiving Manual module with all data pre-filled.
         // -------------------------
         if (action === "revert_receipt") {
             const poId = toNum(body?.poId);
@@ -1457,102 +1459,38 @@ export async function POST(req: NextRequest) {
                 );
             }
 
-            // 4. Reset each target POR row: clear quantities, financials, and receipt metadata
-            const lines = await fetchPOProductsByPOId(base, poId);
-            const targetPorIds: number[] = [];
-            const targetPopIds: number[] = [];
-
+            // 4. REVERT FLAG: Set is_reverted=1 to mark this receipt as reverted.
+            //    Everything else is PRESERVED:
+            //    - receipt_no, receipt_date → KEPT (for identification in Receiving Manual)
+            //    - received_quantity → KEPT (for data restoration in Edit Mode)
+            //    - batch_no, expiry_date, lot_id → KEPT
+            //    - discounted_amount, vat_amount, withholding_amount, total_amount → KEPT
+            //    - RFID tags (purchase_order_receiving_items) → KEPT
             for (const r of targetRows) {
                 const porId = toNum(r?.purchase_order_product_id);
                 if (!porId) continue;
-                targetPorIds.push(porId);
-
-                const pop = lines.find(ln => toNum(ln.product_id) === toNum(r.product_id) && toNum(ln.branch_id) === toNum(r.branch_id));
-                const popId = toNum(pop?.purchase_order_product_id);
-                if (popId) targetPopIds.push(popId);
-
-                if (pop) {
-                    await patchPOR(base, porId, {
-                        received_quantity: 0,
-                        receipt_no: null,
-                        receipt_date: null,
-                        received_date: null,
-                        discounted_amount: 0,
-                        vat_amount: 0,
-                        withholding_amount: 0,
-                        total_amount: 0,
-                    });
-                } else {
-                    // Extra product: delete completely to prevent ghost records
-                    try {
-                        await fetch(`${base}/items/${POR_COLLECTION}`, {
-                            method: "DELETE",
-                            headers: directusHeaders(),
-                            body: JSON.stringify([porId]),
-                        });
-                    } catch (err) {
-                        console.error("Failed to delete extra POR item during revert:", err);
-                    }
-                }
+                await patchPOR(base, porId, {
+                    is_reverted: 1,
+                });
             }
 
-            // 4.5. Delete associated RFID tags (legacy POP linkages)
+            const lines = await fetchPOProductsByPOId(base, poId);
 
-            const allLinkIds = [...targetPorIds, ...targetPopIds];
-
-            if (allLinkIds.length > 0) {
-                try {
-                    const linkedItems = await fetchReceivingItems(base, allLinkIds);
-                    const itemIdsToDelete = linkedItems.map(it => toNum(it.receiving_item_id)).filter(id => id > 0);
-                    if (itemIdsToDelete.length > 0) {
-                        const deleteUrl = `${base}/items/${POR_ITEMS_COLLECTION}`;
-                        await fetch(deleteUrl, {
-                            method: "DELETE",
-                            headers: directusHeaders(),
-                            body: JSON.stringify(itemIdsToDelete),
-                        });
-                    }
-                } catch (err) {
-                    console.error("Failed to delete RFID tags during receipt revert:", err);
-                }
-            }
-
-            // 5. Re-evaluate PO status based on remaining activity
-            const updatedPorRows = await fetchPORByPOIds(base, [poId]);
-
-            const hasAnyRemainingReceipts = updatedPorRows.some(
-                (r) => toStr(r?.receipt_no) || effectiveReceivedQty(r) > 0
-            );
-            const hasAnyPosted = updatedPorRows.some(
-                (r) => toNum(r?.isPosted) === 1
-            );
-
-            // Determine next status:
-            // - If posted receipts exist but PO not fully received -> 9 (Partially Received)
-            // - If any unposted receipts with activity remain -> 9 (Partially Received)
-            // - If no activity at all remains -> 3 (Approved / For Receiving)
-            let nextStatus: number;
-            if (hasAnyPosted || hasAnyRemainingReceipts) {
-                nextStatus = 9; // Partially Received
-            } else {
-                nextStatus = 3; // Approved / For Receiving
-            }
+            // 5. Set PO status to 9 (Partially Received) so it appears in Receiving
+            //    (Receiving filters: inventory_status IN 3, 9, 11, 12)
+            const nextStatus = 9;
 
             const poUpdate: Record<string, unknown> = {
                 inventory_status: nextStatus,
             };
-            // Clear date_received only if nothing remains
-            if (!hasAnyRemainingReceipts && !hasAnyPosted) {
-                poUpdate.date_received = null;
-            }
 
             try {
                 await patchPO(base, poId, poUpdate);
             } catch {}
 
             // 6. Update 'received' flag in purchase_order_products
-            // Since we reverted, re-evaluate if the PO products are fully posted
-            const updatedPorIdsByKeyRevert = buildPorIdsByKey(updatedPorRows);
+            //    Re-evaluate based on POSTED receipts only (the reverted ones are now drafts)
+            const updatedPorIdsByKeyRevert = buildPorIdsByKey(porRows);
             const popSyncPromisesRevert = lines.map(async (ln) => {
                 const pid = toNum(ln.product_id);
                 const bid = toNum(ln.branch_id ?? 0);
@@ -1560,7 +1498,7 @@ export async function POST(req: NextRequest) {
                 const pors = updatedPorIdsByKeyRevert.get(k) || [];
                 
                 const totalPosted = pors.reduce((sum, id) => {
-                    const row = updatedPorRows.find(r => toNum(r.purchase_order_product_id) === id && toNum(r.isPosted) === 1);
+                    const row = porRows.find(r => toNum(r.purchase_order_product_id) === id && toNum(r.isPosted) === 1);
                     return sum + (row ? toNum(row.received_quantity) : 0);
                 }, 0);
                 
@@ -1582,7 +1520,7 @@ export async function POST(req: NextRequest) {
                 receiptNo,
                 revertedCount: targetRows.length,
                 newStatus: nextStatus,
-                noRemainingReceipts: !hasAnyRemainingReceipts && !hasAnyPosted,
+                noRemainingReceipts: false,
             });
         }
 
