@@ -727,6 +727,10 @@ export async function POST(req: NextRequest) {
                 }
             }
 
+            // ✅ CRITICAL FIX: Re-fetch porRows here so that newly created rows (from above) 
+            // are included in the list, providing their unit_price and discount_type for calculations.
+            const updatedPorRows = await fetchPORByPOIds(base, [thePoId]);
+
             const meta = (porMetaData && typeof porMetaData === "object") ? porMetaData : {};
             const processedPorIds = new Set<number>();
             const batchUpdatePayloads: any[] = [];
@@ -735,7 +739,7 @@ export async function POST(req: NextRequest) {
             try {
                 // ✅ Step 1: Collect updates for Edit Mode
                 if (isEdit) {
-                    const currentReceiptRows = porRows.filter(r => toStr(r.receipt_no) === receiptNo);
+                    const currentReceiptRows = updatedPorRows.filter(r => toStr(r.receipt_no) === receiptNo);
                     for (const row of currentReceiptRows) {
                         const porId = toNum(row.purchase_order_product_id);
                         const qty = toNum(porCounts[porId] || 0);
@@ -795,7 +799,7 @@ export async function POST(req: NextRequest) {
                     const porId = toNum(porIdStr);
                     const qty = toNum(qtyNum); if (qty <= 0) continue;
                     const m = meta[porIdStr] || {};
-                    const pr = porRows.find(x => toNum(x.purchase_order_product_id) === porId);
+                    const pr = updatedPorRows.find(x => toNum(x.purchase_order_product_id) === porId);
                     const uPrice = toNum(pr?.unit_price || 0), pId = toNum(pr?.product_id);
 
                     let linePct = poDiscountPercent, dtId = ensureId(pr?.discount_type);

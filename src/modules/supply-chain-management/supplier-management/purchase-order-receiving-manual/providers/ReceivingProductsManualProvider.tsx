@@ -353,6 +353,7 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
         setManualCounts({});
         setVerifiedProductIds([]);
         setMetaDataByPorId({});
+        setEditingReceiptId(null);
         if (opts?.clearStorage && opts?.poId) {
             clearDraft(opts.poId);
         }
