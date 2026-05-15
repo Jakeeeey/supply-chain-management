@@ -430,6 +430,13 @@ export async function POST(req: NextRequest) {
         const body = await req.json().catch(() => ({}));
         const action = toStr(body.action);
 
+        if (action === "load_receipt") {
+            const { poId, receiptNo } = body;
+            const url = `${base}/items/${POR_COLLECTION}?limit=-1&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&filter[receipt_no][_eq]=${encodeURIComponent(receiptNo)}&fields=purchase_order_product_id,product_id,branch_id,received_quantity,lot_id,batch_no,expiry_date`;
+            const j = await fetchJson<{ data: Record<string, unknown>[] }>(url);
+            return ok({ items: j?.data || [] });
+        }
+
         if (action === "open_po" || action === "verify_po") {
             const poId = toNum(body.poId || body.barcode);
             const poUrl = `${base}/items/${PO_COLLECTION}/${poId}?fields=*,discount_type.*,discount_type.line_per_discount_type.line_id.*`;
@@ -460,7 +467,23 @@ export async function POST(req: NextRequest) {
                 const k = keyLine(toNum(po.purchase_order_id), pid, bid);
                 const p = productsMap.get(pid);
                 const pors = porIdsByKey.get(k) || [];
-                const receivedQty = pors.reduce((sum, id) => sum + effectiveReceivedQty(porRows.find(r => toNum(r.purchase_order_product_id) === id)), 0);
+
+                // ✅ Break down received quantities into posted vs unposted
+                let postedQty = 0;
+                let unpostedQty = 0;
+                const unpostedReceipts: { receiptNo: string; quantity: number }[] = [];
+                for (const porId of pors) {
+                    const r = porRows.find(pr => toNum(pr.purchase_order_product_id) === porId);
+                    if (!r) continue;
+                    const qty = Math.max(0, toNum(r.received_quantity ?? 0));
+                    const hasReceipt = Boolean(toStr(r.receipt_no));
+                    if (toNum(r.isPosted) === 1) {
+                        postedQty += qty;
+                    } else if (hasReceipt && qty > 0) {
+                        unpostedQty += qty;
+                        unpostedReceipts.push({ receiptNo: toStr(r.receipt_no), quantity: qty });
+                    }
+                }
 
                 const lineDiscountTypeId = productLinksMap.get(pid)?.discount_type;
                 let lineDiscountPercent = headerDiscountPercent;
@@ -472,20 +495,84 @@ export async function POST(req: NextRequest) {
                 }
 
                 const dAmt = toNum(ln.unit_price) * (lineDiscountPercent / 100);
-                const remainingQty = Math.max(0, toNum(ln.ordered_quantity) - receivedQty);
+                const orderedQty = toNum(ln.ordered_quantity);
+                const trueRemaining = Math.max(0, orderedQty - postedQty - unpostedQty);
 
-                // ✅ Only include if there is still a balance to receive, or if user wants to see all (User said "show products not yet received")
-                if (remainingQty > 0) {
+                // ✅ Include if there is still a true remaining balance, OR if it's part of an unposted receipt
+                if (trueRemaining > 0 || unpostedReceipts.length > 0) {
                     const existing = allocationsMap.get(bid) || [];
                     allocationsMap.set(bid, [...existing, {
                         id: pors[0] ? String(pors[0]) : `${pid}-${bid}`, porId: String(pors[0] || ""),
                         productId: String(pid), branchId: String(bid), name: toStr(p?.product_name, `Product #${pid}`),
                         barcode: productDisplayCode(p, pid), uom: String(p?.unit_of_measurement?.unit_shortcut ?? "BOX").toUpperCase(),
-                        expectedQty: remainingQty, receivedQty: 0, requiresRfid: false,
+                        expectedQty: orderedQty, originalOrderedQty: orderedQty,
+                        postedQty, unpostedQty, unpostedReceipts,
+                        receivedQty: postedQty + unpostedQty, requiresRfid: false,
                         isReceived: false, unitPrice: toNum(ln.unit_price),
-                        discountType: lineDiscountTypeStr, discountAmount: dAmt, netAmount: 0 // Net amount for THIS session
+                        discountType: lineDiscountTypeStr, discountAmount: dAmt, netAmount: 0
                     }]);
                 }
+            }
+
+            const lineKeys = new Set(lines.map(l => keyLine(toNum(po.purchase_order_id), toNum(l.product_id), toNum(l.branch_id ?? 0))));
+            const extraPorRows = porRows.filter(r => !lineKeys.has(keyLine(toNum(po.purchase_order_id), toNum(r.product_id), toNum(r.branch_id ?? 0))));
+            const extraKeys = Array.from(new Set(extraPorRows.map(r => keyLine(toNum(po.purchase_order_id), toNum(r.product_id), toNum(r.branch_id ?? 0)))));
+            const missingProductIds = extraPorRows.map(r => toNum(r.product_id)).filter(pid => !productsMap.has(pid));
+            if (missingProductIds.length > 0) {
+                const missingMap = await fetchProductsMap(base, missingProductIds);
+                missingMap.forEach((val, key) => productsMap.set(key, val));
+            }
+            for (const k of extraKeys) {
+                const parts = k.split("::");
+                const pid = Number(parts[1]);
+                const bid = Number(parts[2]);
+                const p = productsMap.get(pid);
+                const pors = porIdsByKey.get(k) || [];
+
+                // ✅ Break down extra item quantities
+                let postedQty = 0;
+                let unpostedQty = 0;
+                const unpostedReceipts: { receiptNo: string; quantity: number }[] = [];
+                for (const porId of pors) {
+                    const r = porRows.find(pr => toNum(pr.purchase_order_product_id) === porId);
+                    if (!r) continue;
+                    const qty = Math.max(0, toNum(r.received_quantity ?? 0));
+                    const hasReceipt = Boolean(toStr(r.receipt_no));
+                    if (toNum(r.isPosted) === 1) {
+                        postedQty += qty;
+                    } else if (hasReceipt && qty > 0) {
+                        unpostedQty += qty;
+                        unpostedReceipts.push({ receiptNo: toStr(r.receipt_no), quantity: qty });
+                    }
+                }
+
+                const openRow = pors.map(id => porRows.find(r => toNum(r.purchase_order_product_id) === id)).find(r => r && !toStr(r.receipt_no));
+                const porIdStr = openRow ? String(openRow.purchase_order_product_id) : `${pid}-${bid}`;
+
+                let lineDiscountTypeStr = dType ? toStr(dType.discount_type || dType.name, "Standard") : "Standard";
+                let dAmt = 0;
+                const uPrice = toNum(p?.cost_per_unit || 0);
+                const lineDiscountTypeId = productLinksMap.get(pid)?.discount_type;
+                let lineDiscountPercent = headerDiscountPercent;
+                const resId = ensureId(lineDiscountTypeId);
+                if (resId) {
+                    const dt = discountMap.get(String(resId));
+                    if (dt) { lineDiscountPercent = dt.pct; lineDiscountTypeStr = dt.name; }
+                }
+                dAmt = uPrice * (lineDiscountPercent / 100);
+
+                const existing = allocationsMap.get(bid) || [];
+                allocationsMap.set(bid, [...existing, {
+                    id: porIdStr, porId: porIdStr,
+                    productId: String(pid), branchId: String(bid), name: toStr(p?.product_name, `Product #${pid}`),
+                    barcode: productDisplayCode(p, pid), uom: String(p?.unit_of_measurement?.unit_shortcut ?? "BOX").toUpperCase(),
+                    expectedQty: 0, originalOrderedQty: 0,
+                    postedQty, unpostedQty, unpostedReceipts,
+                    receivedQty: postedQty + unpostedQty, requiresRfid: false,
+                    isReceived: false, unitPrice: uPrice,
+                    discountType: lineDiscountTypeStr, discountAmount: dAmt, netAmount: 0,
+                    isExtra: true
+                }]);
             }
 
             const uniqueReceipts = Array.from(new Set(porRows.map(r => r.receipt_no).filter(Boolean)));
@@ -545,7 +632,7 @@ export async function POST(req: NextRequest) {
         }
 
         if (action === "save_receipt") {
-            const { poId, receiptNo, receiptDate, porCounts, porMetaData, receiverId } = body;
+            const { poId, receiptNo, receiptDate, porCounts, porMetaData, receiverId, isEdit } = body;
             const thePoId = toNum(poId);
             if (!thePoId) return bad("Missing PO ID");
 
@@ -603,6 +690,73 @@ export async function POST(req: NextRequest) {
             }
 
             const meta = (porMetaData && typeof porMetaData === "object") ? porMetaData : {};
+            
+            // ✅ Handle Edit Mode: Overwrite existing rows
+            if (isEdit) {
+                const currentReceiptRows = porRows.filter(r => toStr(r.receipt_no) === receiptNo);
+                for (const row of currentReceiptRows) {
+                    const porId = toNum(row.purchase_order_product_id);
+                    const qty = toNum(porCounts[porId] || 0);
+                    const m = meta[porId] || {};
+                    const pId = toNum(row.product_id);
+                    const uPrice = toNum(row.unit_price || 0);
+                    
+                    if (qty <= 0) {
+                        // ✅ Item was removed from the receipt during edit - DETACH IT
+                        await fetchJson(`${base}/items/${POR_COLLECTION}/${porId}`, { 
+                            method: "PATCH", 
+                            body: JSON.stringify({ 
+                                receipt_no: null, 
+                                receipt_date: null, 
+                                received_quantity: 0, 
+                                received_date: null, 
+                                isPosted: 0,
+                                discounted_amount: 0,
+                                vat_amount: 0,
+                                withholding_amount: 0,
+                                total_amount: 0,
+                                lot_id: null,
+                                batch_no: null,
+                                expiry_date: null
+                            }) 
+                        });
+                    } else {
+                        // ✅ Standard update for existing item
+                        let linePct = poDiscountPercent, dtId = ensureId(row.discount_type);
+                        if (dtId) {
+                            const dt = discountMap.get(String(dtId));
+                            if (dt) linePct = dt.pct;
+                        } else {
+                            const linkId = ensureId(linksMap.get(pId)?.discount_type);
+                            if (linkId) { const dt = discountMap.get(String(linkId)); if (dt) { linePct = dt.pct; dtId = linkId; } }
+                            if (!dtId) dtId = ensureId(dType);
+                        }
+
+                        const lineGross = uPrice * qty;
+                        const lineDisc = Number((lineGross * (linePct / 100)).toFixed(2));
+                        const lineNet = lineGross - lineDisc;
+                        const poIsInvoice = (toNum(po?.vat_amount) > 0) || (toNum(po?.withholding_tax_amount) > 0);
+                        const vatExclTotal = poIsInvoice ? Number((lineNet / 1.12).toFixed(2)) : lineNet;
+                        const vatAmtTotal = poIsInvoice ? Number((lineNet - vatExclTotal).toFixed(2)) : 0;
+                        const ewtAmtTotal = poIsInvoice ? Number((vatExclTotal * 0.01).toFixed(2)) : 0;
+
+                        const patch: Record<string, unknown> = {
+                            receipt_no: receiptNo, receipt_date: receiptDate, received_quantity: qty, received_date: nowISO(), isPosted: 0,
+                            discount_type: dtId || null, discounted_amount: lineDisc,
+                            vat_amount: vatAmtTotal, withholding_amount: ewtAmtTotal,
+                            total_amount: Number(lineGross.toFixed(2))
+                        };
+                        if (m.lotNo) patch.lot_id = toNum(m.lotNo);
+                        if (m.batchNo) patch.batch_no = m.batchNo;
+                        if (m.expiryDate) patch.expiry_date = m.expiryDate;
+
+                        await fetchJson(`${base}/items/${POR_COLLECTION}/${porId}`, { method: "PATCH", body: JSON.stringify(patch) });
+                    }
+                    delete porCounts[porId]; // Remove so we don't process it below
+                }
+            }
+
+            // Normal processing for NEW items added to the receipt
             for (const [porId, qtyNum] of Object.entries(porCounts)) {
                 const qty = toNum(qtyNum); if (qty <= 0) continue;
                 const m = meta[porId] || {};

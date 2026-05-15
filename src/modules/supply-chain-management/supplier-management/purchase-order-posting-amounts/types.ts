@@ -43,6 +43,8 @@ export type POItem = {
     netAmount?: number;
     discountTypeId?: string;
     discountLabel?: string;
+    receiptNo?: string;
+    receiptDate?: string;
 };
 
 export type POBranchAllocation = {
@@ -57,6 +59,7 @@ export type PostingReceipt = {
     isPosted: 0 | 1 | boolean;   // API returns 0|1; UI normalises to boolean
     linesCount: number;
     totalReceivedQty: number;
+    statusLabel?: string;
 };
 
 export type PurchaseOrder = {

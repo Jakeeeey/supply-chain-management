@@ -612,6 +612,23 @@ export async function POST(req: NextRequest) {
         const base = getDirectusBase();
         const body = await req.json().catch(() => ({}));
         const action = toStr(body.action);
+
+        if (action === "load_receipt") {
+            const { poId, receiptNo } = body;
+            const url = `${base}/items/${POR_COLLECTION}?limit=-1&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&filter[receipt_no][_eq]=${encodeURIComponent(receiptNo)}&fields=purchase_order_product_id,product_id,branch_id,received_quantity,lot_id,batch_no,expiry_date`;
+            const j = await fetchJson<{ data: Record<string, unknown>[] }>(url);
+            
+            const porIds = (j?.data || []).map(r => toNum(r.purchase_order_product_id)).filter(id => id > 0);
+            let rfids: Record<string, unknown>[] = [];
+            if (porIds.length > 0) {
+                const rfidUrl = `${base}/items/${POR_ITEMS_COLLECTION}?limit=-1&filter[purchase_order_product_id][_in]=${porIds.join(",")}&fields=rfid_code,product_id,purchase_order_product_id,created_at`;
+                const rfidJ = await fetchJson<{ data: Record<string, unknown>[] }>(rfidUrl);
+                rfids = rfidJ?.data || [];
+            }
+            
+            return ok({ items: j?.data || [], rfids });
+        }
+
         if (action === "open_po") {
             const poId = toNum(body.poId);
             if (!poId) return bad("Missing PO ID");
@@ -666,7 +683,6 @@ export async function POST(req: NextRequest) {
                 const porIdStr = openRow ? String(openRow.purchase_order_product_id) : `${pid}-${bid}`;
 
                 const orderedQty = toNum(ln.ordered_quantity);
-                const remainingQty = Math.max(0, orderedQty - receivedQty);
 
                 const item: POItem = {
                     id: porIdStr,
@@ -676,7 +692,7 @@ export async function POST(req: NextRequest) {
                     barcode: productDisplayCode(p, pid),
                     uom: String(p?.unit_of_measurement?.unit_shortcut ?? p?.unit_of_measurement?.unit_name ?? "BOX").toUpperCase(),
                     uomCount: Number(p?.unit_of_measurement_count) || 1,
-                    expectedQty: remainingQty,
+                    expectedQty: orderedQty,
                     receivedQty,
                     requiresRfid: true,
                     taggedQty: taggedCountByKey.get(k) || 0,
@@ -948,6 +964,7 @@ export async function POST(req: NextRequest) {
             const porMetaData = body.porMetaData as Record<string, Record<string, unknown>>;
             const receiverId = body.receiverId;
             const newTags = body.newTags as Array<{ rfid: string; productId: string; porId?: string }>;
+            const isEdit = !!body.isEdit;
 
             if (!poId) return bad("Missing poId.");
             if (!receiptNo) return bad("Missing receipt number.");
@@ -1014,6 +1031,25 @@ export async function POST(req: NextRequest) {
                     });
                 } else {
                     realPorIdsByLocalKey.set(key, toNum(key));
+                }
+            }
+
+            // ✅ Handle Edit Mode: Remove tags that were deleted from the UI
+            if (isEdit) {
+                const existingRows = porRows.filter(r => toStr(r.receipt_no) === receiptNo);
+                const existingPorIds = existingRows.map(r => toNum(r.purchase_order_product_id)).filter(id => id > 0);
+                
+                if (existingPorIds.length > 0) {
+                    const rfidUrl = `${base}/items/${POR_ITEMS_COLLECTION}?limit=-1&filter[purchase_order_product_id][_in]=${existingPorIds.join(",")}&fields=receiving_item_id,rfid_code`;
+                    const existingRfidsRes = await fetchJson<{ data: Array<{ receiving_item_id: number, rfid_code: string }> }>(rfidUrl).catch(() => null);
+                    const existingRfids = existingRfidsRes?.data || [];
+                    
+                    const newRfidCodes = new Set(Array.isArray(newTags) ? newTags.map(t => t.rfid) : []);
+                    const toDelete = existingRfids.filter(r => !newRfidCodes.has(r.rfid_code));
+                    
+                    for (const r of toDelete) {
+                        await fetchJson(`${base}/items/${POR_ITEMS_COLLECTION}/${r.receiving_item_id}`, { method: "DELETE" }).catch(() => {});
+                    }
                 }
             }
 

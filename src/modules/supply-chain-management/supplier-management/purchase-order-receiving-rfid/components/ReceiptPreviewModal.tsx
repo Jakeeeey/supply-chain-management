@@ -60,6 +60,7 @@ export function ReceiptPreviewModal({
             branchLabel: "All Branches",
             isFullyReceived: data.isFullyReceived,
             priceType: priceType,
+            isInvoice: isInvoice,
             items: data.items.map((it) => ({
                 name: it.name,
                 barcode: it.barcode,

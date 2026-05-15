@@ -8,14 +8,17 @@ import {
 import type { DispatchPlanSummary } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/creation/components/data-table";
 import { useCallback, useEffect, useState } from "react";
 
+/**
+ * Composer hook for the Dispatch Creation module.
+ * Manages master data, summary table, and trip creation/submission.
+ * Sidebar state (PDP list, plan details) is managed by useDispatchFormState.
+ */
 export function useDispatchCreation() {
+  // ── Master Data ───────────────────────────────────────────
   const [masterData, setMasterData] =
     useState<DispatchCreationMasterData | null>(null);
   const [isLoadingMasterData, setIsLoadingMasterData] = useState(true);
   const [errorMasterData, setErrorMasterData] = useState<string | null>(null);
-
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const fetchMasterData = useCallback(async () => {
     setIsLoadingMasterData(true);
@@ -34,6 +37,7 @@ export function useDispatchCreation() {
     }
   }, []);
 
+  // ── Summary Table ─────────────────────────────────────────
   const [dispatchSummary, setDispatchSummary] = useState<DispatchPlanSummary[]>([]);
   const [isLoadingSummary, setIsLoadingSummary] = useState(false);
 
@@ -47,30 +51,26 @@ export function useDispatchCreation() {
       const result = await res.json();
       if (result.error) throw new Error(result.error);
 
-      const rawData = result.data || [];
+      const rawData: DispatchPlanSummary[] = result.data || [];
 
-      // Fetch budgeting data for enrichment (Use internal API proxy)
+      // Enrich with budget totals
       try {
         const budgetRes = await fetch(
           "/api/scm/fleet-management/trip-management/dispatch-plan/creation?type=budget_summary",
         );
         const budgetResult = await budgetRes.json();
-        const budgets = budgetResult.data || [];
+        const budgets: { post_dispatch_plan_id: number; amount: number }[] = budgetResult.data || [];
 
         const budgetMap = new Map<string, number>();
-        budgets.forEach((b: { post_dispatch_plan_id: number; amount: number }) => {
+        budgets.forEach((b) => {
           const pid = String(b.post_dispatch_plan_id);
           budgetMap.set(pid, (budgetMap.get(pid) || 0) + Number(b.amount || 0));
         });
 
-        interface RawPlan {
-          id: number | string;
-          customerTransactions?: { amount?: number | string }[];
-        }
-
-        const enriched = (rawData as RawPlan[]).map((p) => {
-          const totalValue = (p.customerTransactions || []).reduce(
-            (acc: number, t: { amount?: number | string }) => acc + Number(t.amount || 0),
+        const enriched: DispatchPlanSummary[] = rawData.map((p) => {
+          const customerTransactions = (p.customerTransactions || []) as { amount?: number | string }[];
+          const totalValue = customerTransactions.reduce(
+            (acc: number, t) => acc + Number(t.amount || 0),
             0,
           );
           return {
@@ -80,10 +80,10 @@ export function useDispatchCreation() {
           };
         });
 
-        setDispatchSummary(enriched as unknown as DispatchPlanSummary[]);
+        setDispatchSummary(enriched);
       } catch (budgetErr) {
         console.error("Failed to enrich budget data:", budgetErr);
-        setDispatchSummary(rawData); // Fallback to raw data
+        setDispatchSummary(rawData);
       }
     } catch (err: unknown) {
       console.error("Failed to load dispatch summary:", err instanceof Error ? err.message : "An error occurred");
@@ -92,17 +92,22 @@ export function useDispatchCreation() {
     }
   }, []);
 
+  // ── Initial Load ──────────────────────────────────────────
   useEffect(() => {
     fetchMasterData();
     fetchSummary();
   }, [fetchMasterData, fetchSummary]);
+
+  // ── Trip Creation ─────────────────────────────────────────
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const createTrip = async (values: DispatchCreationFormValues) => {
     setIsSubmitting(true);
     setSubmitError(null);
     try {
       await dispatchCreationLifecycleService.createTrip(values);
-      fetchSummary(); // Refresh summary after creation
+      fetchSummary();
     } catch (err: unknown) {
       setSubmitError(
         err instanceof Error ? err.message : "An unexpected error occurred during trip creation.",

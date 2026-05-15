@@ -140,7 +140,11 @@ export function SalesReturnExportDialog({
     [salesmen],
   );
   const supplierItems = useMemo(
-    () => suppliers.map((s) => ({ value: s.name, label: s.name })),
+    () =>
+      suppliers.map((s) => ({
+        value: String(s.id),
+        label: s.shortcut ? `[${s.shortcut}] ${s.name}` : s.name,
+      })),
     [suppliers],
   );
 
@@ -243,7 +247,7 @@ export function SalesReturnExportDialog({
 
       const salesmanLabel = getFilterLabel(salesmanId, salesmanItems);
       const customerLabel = getFilterLabel(customerCode, customerItems);
-      const supplierLabel = supplierName || "All";
+      const supplierLabel = getFilterLabel(supplierName, supplierItems);
 
       const fullHtml = `<!DOCTYPE html><html><head><title>Sales Return Summary</title><style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono&display=swap');@page { size: A4 landscape; margin: 8mm; }body { font-family: 'Inter', sans-serif; font-size: 8px; margin: 0; padding: 10px; color: #111; }.official-header { display: flex; align-items: center; border-bottom: 1px solid #999; padding-bottom: 12px; margin-bottom: 15px; }.logo-container { width: 140px; margin-right: 20px; }.logo-container img { width: 100%; height: auto; display: block; }.company-info { flex: 1; }.company-name { font-size: 20px; font-weight: 800; color: #000; line-height: 1; margin-bottom: 4px; letter-spacing: -0.5px; }.company-details { font-size: 11px; color: #000; margin-bottom: 2px; }.contact-email { font-size: 11px; color: #000; }.report-info { text-align: left; margin-bottom: 15px; }.report-title { font-size: 14px; font-weight: 700; text-transform: uppercase; margin-bottom: 8px; }.report-details { font-size: 9px; color: #333; display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding-bottom: 8px; }.header-column { display: flex; flex-direction: column; gap: 3px; }.detail-item { display: flex; gap: 4px; }table { width: 100%; border-collapse: collapse; font-size: 6.5px; table-layout: fixed; }th { background: #f3f4f6; border: 1px solid #999; padding: 3px 1px; text-align: left; font-weight: 700; text-transform: uppercase; }td { border: 1px solid #ccc; padding: 2px 1px; vertical-align: top; }.text-right { text-align: right; }.text-center { text-align: center; }.font-mono { font-family: 'JetBrains Mono', monospace; }.font-bold { font-weight: 700; }.text-red-600 { color: #dc2626; }.uppercase { text-transform: uppercase; }.wrap-text { white-space: normal; word-break: break-word; }.no-truncate { white-space: nowrap; }.amount-cell { min-width: 45px; }.grand-total-row td { background-color: #f3f4f6 !important; font-weight: bold; border-top: 2px solid #000; font-size: 7.5px; }@media print { th { background-color: #f3f4f6 !important; -webkit-print-color-adjust: exact; } .grand-total-row td { background-color: #f3f4f6 !important; -webkit-print-color-adjust: exact; } }</style></head><body>
       <div class="official-header">

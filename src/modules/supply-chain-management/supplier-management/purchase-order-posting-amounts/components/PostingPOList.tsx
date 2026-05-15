@@ -24,8 +24,8 @@ function statusBadge(status: string) {
 
 function statusLabel(status: string) {
     const s = String(status || "").toUpperCase();
-    if (s === "FOR_POSTING" || s === "FOR POSTING") return "FOR POSTING";
-    if (s === "PARTIAL_POSTED") return "PARTIAL POSTED";
+    if (s === "FOR_POSTING" || s === "FOR POSTING") return "AWAITING AMOUNTS";
+    if (s === "PARTIAL_POSTED") return "PARTIAL - AWAITING AMOUNTS";
     return s;
 }
 
@@ -88,7 +88,7 @@ export function PostingPOList() {
                     className="h-8 gap-2 text-[10px] font-black uppercase"
                     onClick={refreshList}
                 >
-                    <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
+                    <RefreshCw className={cn("h-3.5 w-3.5 text-muted-foreground", listLoading && "animate-spin")} />
                     Refresh
                 </Button>
             </div>
@@ -221,12 +221,7 @@ export function PostingPOList() {
                                             </span>
                                         </div>
 
-                                        {po.status === "PARTIAL_POSTED" && (
-                                            <div className="mt-2 text-[9px] font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1">
-                                                <div className="h-1 w-1 rounded-full bg-current animate-pulse" />
-                                                PARTIALLY POSTED — AWAITING RECEIVING
-                                            </div>
-                                        )}
+
                                     </div>
 
                                     <div className="flex items-center h-9 self-center">
