@@ -150,27 +150,36 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
                                     <span className="text-muted-foreground">
                                         {h.itemsCount} {h.itemsCount === 1 ? "item" : "items"}
                                     </span>
-                                    <Badge
-                                        variant="outline"
-                                        className={cn(
-                                            "text-[10px] uppercase h-4 px-1 leading-none border-amber-500/30",
-                                            h.isPosted ? "bg-amber-100 text-amber-800" : "bg-white text-muted-foreground"
-                                        )}
-                                    >
-                                        {h.isPosted ? "Posted" : "Unposted"}
-                                    </Badge>
-                                    {!h.isPosted && (
-                                        <Button
+                                    {h.isReverted ? (
+                                        <>
+                                            <Badge
+                                                variant="outline"
+                                                className="text-[10px] uppercase h-4 px-1 leading-none border-orange-500/40 bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300"
+                                            >
+                                                Reverted
+                                            </Badge>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-5 px-1.5 text-[10px] text-orange-700 hover:text-orange-900 hover:bg-orange-100"
+                                                onClick={() => loadReceipt(h.receiptNo)}
+                                            >
+                                                <Pencil className="h-3 w-3 mr-0.5" />
+                                                Edit
+                                            </Button>
+                                        </>
+                                    ) : (
+                                        <Badge
                                             variant="outline"
-                                            size="sm"
-                                            onClick={() => loadReceipt(h.receiptNo)}
-                                            disabled={editingReceiptId === h.receiptNo}
-                                            className="h-7 px-3 text-[10px] font-black uppercase tracking-wider gap-1.5 border-amber-500/30 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                                            className={cn(
+                                                "text-[10px] uppercase h-4 px-1 leading-none border-amber-500/30",
+                                                h.isPosted ? "bg-amber-100 text-amber-800" : "bg-white text-muted-foreground"
+                                            )}
                                         >
-                                            <Pencil className="h-3 w-3" />
-                                            {editingReceiptId === h.receiptNo ? "Editing..." : "Edit"}
-                                        </Button>
+                                            {h.isPosted ? "Posted" : "Unposted"}
+                                        </Badge>
                                     )}
+
                                 </div>
                             </div>
                         ))}
@@ -180,29 +189,23 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
 
             <Card className="p-4">
                 <div className="flex items-center justify-between">
-                    <div className="text-sm font-semibold">{editingReceiptId ? "Edit Existing Receipt" : "Receipt Details"}</div>
+                    <div className="text-sm font-semibold">Receipt Details</div>
                     {editingReceiptId && (
-                        <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-500/30">
-                                Editing Mode
-                            </Badge>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={clearEditingReceiptId}
-                                className="h-7 px-3 text-[10px] font-black uppercase tracking-wider gap-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors"
-                            >
-                                <XCircle className="h-3 w-3" />
-                                Cancel Edit
-                            </Button>
-                        </div>
+                        <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-orange-700 hover:bg-orange-100" onClick={clearEditingReceiptId}>
+                            <XCircle className="h-3 w-3 mr-1" />
+                            Cancel Edit
+                        </Button>
                     )}
                 </div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                    {editingReceiptId 
-                        ? "You are currently modifying an unposted receipt."
-                        : "Create receipt first, then continue to product verification."}
-                </div>
+                {editingReceiptId ? (
+                    <div className="mt-1 text-xs font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded px-2 py-1">
+                        Editing reverted receipt: <span className="font-mono">{editingReceiptId}</span>
+                    </div>
+                ) : (
+                    <div className="mt-1 text-xs text-muted-foreground">
+                        Create receipt first, then continue to product verification.
+                    </div>
+                )}
 
                 <div className="mt-4 grid gap-4 max-w-md">
                     <div className="grid gap-2">
@@ -211,7 +214,6 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
                             value={receiptNo} 
                             onChange={(e) => setReceiptNo(e.target.value)} 
                             placeholder="Enter receipt number" 
-                            disabled={!!editingReceiptId} // Disable changing receipt number while editing
                         />
                     </div>
 

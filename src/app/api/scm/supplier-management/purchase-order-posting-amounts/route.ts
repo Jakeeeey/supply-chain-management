@@ -59,12 +59,7 @@ function toStr(v: unknown, fb = "") {
     return s ? s : fb;
 }
 function toNum(v: unknown): number {
-    if (v && typeof v === "object") {
-        const obj = v as Record<string, unknown>;
-        return toNum(obj.id ?? obj.value ?? obj.product_id ?? obj.supplier_id ?? obj.branch_id ?? 0);
-    }
-    const s = String(v ?? "").replace(/,/g, "").trim();
-    const n = Number(s);
+    const n = parseFloat(String(v ?? "").replace(/,/g, ""));
     return Number.isFinite(n) ? n : 0;
 }
 function nowISO() {
@@ -165,6 +160,7 @@ interface PORRow {
     withholding_amount: number | string;
     unit_price: number | string;
     total_amount: number | string;
+    is_reverted?: number | string | null;
 }
 interface ReceivingItem {
     receiving_item_id: number;
@@ -370,6 +366,7 @@ function hasReceiptEvidence(por: PORRow) {
 }
 
 function effectiveReceivedQty(por: PORRow) {
+    if (toNum(por?.is_reverted) === 1) return 0;
     // IMPORTANT: treat numeric/string consistently
     const posted = toNum(por?.isPosted) === 1;
     if (posted) return Math.max(0, toNum(por?.received_quantity ?? 0));
@@ -482,6 +479,7 @@ function buildReceiptSummary(porRows: PORRow[], priceMap?: Map<number, number>, 
     const groups = new Map<string, PORRow[]>();
 
     for (const r of porRows ?? []) {
+        if (toNum(r?.is_reverted) === 1) continue;
         const rn = toStr(r?.receipt_no);
         if (!rn) continue;
         const arr = groups.get(rn) ?? [];
@@ -704,7 +702,7 @@ export async function GET() {
             const poId = toNum(po?.purchase_order_id);
             const pors = porRowsAllPre.filter(r => toNum(r.purchase_order_id) === poId);
             // ✅ Gate: At least 1 receipt must be inventory-posted AND not yet amount-posted
-            const hasReadyReceipts = pors.some((r) => toNum(r?.isPosted) === 1 && toNum(r?.is_posted_amounts) !== 1);
+            const hasReadyReceipts = pors.some((r) => toNum(r?.isPosted) === 1 && toNum(r?.is_posted_amounts) !== 1 && toNum(r?.is_reverted) !== 1);
             return hasReadyReceipts;
         }).map(p => toNum(p?.purchase_order_id)).filter(Boolean) as number[];
 
@@ -954,6 +952,15 @@ export async function POST(req: NextRequest) {
                 }
             });
 
+            let detailGross = 0;
+            let detailDisc = 0;
+            let detailVat = 0;
+            let detailWht = 0;
+            let detailTotal = 0;
+            const poIsInvoice = (toNum(po?.vat_amount) > 0) || (toNum(po?.withholding_tax_amount) > 0);
+
+            const allValidItems: PostingPOItem[] = [];
+
             for (const keyStr of Array.from(allKeys)) {
                 const [pid, bid] = keyStr.split("-").map(Number);
                 if (!pid || !bid) continue;
@@ -1021,8 +1028,8 @@ export async function POST(req: NextRequest) {
                     const primaryPorId = toNum(receiptRows[0]?.purchase_order_product_id);
 
                     const lineGrossAmt = unitPrice * receivedQty;
-                    const lineDiscount = Number((lineGrossAmt * (itemDiscPct / 100)).toFixed(2));
-                    const lineNet = Number((lineGrossAmt - lineDiscount).toFixed(2));
+                    const lineDiscount = lineGrossAmt * (itemDiscPct / 100);
+                    const lineNet = lineGrossAmt - lineDiscount;
 
                     const item: PostingPOItem = {
                         id: String(primaryPorId || `extra-${pid}-${bid}-${receiptNo}`),
@@ -1037,18 +1044,43 @@ export async function POST(req: NextRequest) {
                         rfids,
                         isReceived,
                         unitPrice,
-                        grossAmount: lineGrossAmt,
-                        discountAmount: lineDiscount,
-                        netAmount: lineNet,
+                        grossAmount: Number(lineGrossAmt.toFixed(2)),
+                        discountAmount: Number(lineDiscount.toFixed(2)),
+                        netAmount: Number(lineNet.toFixed(2)),
                         discountTypeId: discountTypeId || undefined,
                         discountLabel: resolvedLabel !== "—" ? resolvedLabel : undefined,
                         receiptNo: receiptNo || undefined,
                         receiptDate: toStr(receiptRows[0]?.receipt_date) || toStr(receiptRows[0]?.received_date) || undefined,
                     };
 
+                    // For summary calculation, we use high-precision lineNet to avoid drift
+                    const itemHighPrecision = {
+                        ...item,
+                        grossAmount: lineGrossAmt,
+                        discountAmount: lineDiscount,
+                        netAmount: lineNet,
+                    };
+
                     const arr = itemsByBranch.get(bid) ?? [];
                     arr.push(item);
                     itemsByBranch.set(bid, arr);
+
+                    if (receivedQty > 0) {
+                        allValidItems.push(item);
+                        
+                        // Track high-precision values for the summary totals
+                        detailGross += itemHighPrecision.grossAmount;
+                        detailDisc += itemHighPrecision.discountAmount;
+
+                        if (poIsInvoice) {
+                            const rowVatExcl = itemHighPrecision.netAmount / 1.12;
+                            const rowVat = itemHighPrecision.netAmount - rowVatExcl;
+                            const rowWht = rowVatExcl * 0.01;
+
+                            detailVat += rowVat;
+                            detailWht += rowWht;
+                        }
+                    }
 
                 }
 
@@ -1071,34 +1103,19 @@ export async function POST(req: NextRequest) {
 
             const branchName = branchesLabelFromLines(lines, branchesMap);
 
-            let detailGross = 0;
-            let detailDisc = 0;
-            let detailVat = 0;
-            let detailWht = 0;
-            let detailTotal = 0;
+            // ✅ OPTION B: Rounding Adjustment for Standard Accounting
+            // Ensure the sum of the rounded line items exactly matches the formula-based high-precision total
+            if (allValidItems.length > 0) {
+                const targetTotalDisc = Number(detailDisc.toFixed(2));
+                let sumRoundedDisc = 0;
+                for (const it of allValidItems) sumRoundedDisc += it.discountAmount;
 
-            // ALWAYS calculate footer dynamically from exact items to reflect price changes and correct formulas
-            const poIsInvoice = (toNum(po?.vat_amount) > 0) || (toNum(po?.withholding_tax_amount) > 0);
-            
-            for (const arr of Array.from(itemsByBranch.values())) {
-                for (const item of arr) {
-                    if (item.receivedQty > 0) {
-                        detailGross += item.grossAmount;
-                        detailDisc += item.discountAmount;
-                        
-                        if (poIsInvoice) {
-                            // Standardize VAT-Inclusive Financial Formulas
-                            // 1. VAT Exclusive = net_amount / 1.12
-                            // 2. VAT Amount = net_amount - vat_exclusive
-                            // 3. EWT Amount = vat_exclusive * 0.01
-                            const rowVatExcl = Number((item.netAmount / 1.12).toFixed(2));
-                            const rowVat = Number((item.netAmount - rowVatExcl).toFixed(2));
-                            const rowWht = Number((rowVatExcl * 0.01).toFixed(2));
-
-                            detailVat += rowVat;
-                            detailWht += rowWht;
-                        }
-                    }
+                const diffDisc = Number((targetTotalDisc - sumRoundedDisc).toFixed(2));
+                if (diffDisc !== 0) {
+                    // Apply adjustment to the last item to hide the rounding discrepancy
+                    const lastItem = allValidItems[allValidItems.length - 1];
+                    lastItem.discountAmount = Number((lastItem.discountAmount + diffDisc).toFixed(2));
+                    lastItem.netAmount = Number((lastItem.grossAmount - lastItem.discountAmount).toFixed(2));
                 }
             }
 
