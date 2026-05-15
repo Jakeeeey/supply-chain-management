@@ -468,10 +468,11 @@ export async function POST(req: NextRequest) {
                 const p = productsMap.get(pid);
                 const pors = porIdsByKey.get(k) || [];
 
-                // ✅ Break down received quantities into posted vs unposted
+                // ✅ Break down received quantities into posted vs unposted vs draft
                 let postedQty = 0;
                 let unpostedQty = 0;
                 const unpostedReceipts: { receiptNo: string; quantity: number }[] = [];
+                let hasDraftData = false;
                 for (const porId of pors) {
                     const r = porRows.find(pr => toNum(pr.purchase_order_product_id) === porId);
                     if (!r) continue;
@@ -482,6 +483,10 @@ export async function POST(req: NextRequest) {
                     } else if (hasReceipt && qty > 0) {
                         unpostedQty += qty;
                         unpostedReceipts.push({ receiptNo: toStr(r.receipt_no), quantity: qty });
+                    } else if (!hasReceipt && qty > 0) {
+                        // Draft row (reverted receipt) — don't count toward posted/unposted
+                        // but flag so the item is included in allocations
+                        hasDraftData = true;
                     }
                 }
 
@@ -498,8 +503,8 @@ export async function POST(req: NextRequest) {
                 const orderedQty = toNum(ln.ordered_quantity);
                 const trueRemaining = Math.max(0, orderedQty - postedQty - unpostedQty);
 
-                // ✅ Include if there is still a true remaining balance, OR if it's part of an unposted receipt
-                if (trueRemaining > 0 || unpostedReceipts.length > 0) {
+                // ✅ Include if there is still a true remaining balance, OR unposted receipts, OR draft data from revert
+                if (trueRemaining > 0 || unpostedReceipts.length > 0 || hasDraftData) {
                     const existing = allocationsMap.get(bid) || [];
                     allocationsMap.set(bid, [...existing, {
                         id: pors[0] ? String(pors[0]) : `${pid}-${bid}`, porId: String(pors[0] || ""),
@@ -529,10 +534,11 @@ export async function POST(req: NextRequest) {
                 const p = productsMap.get(pid);
                 const pors = porIdsByKey.get(k) || [];
 
-                // ✅ Break down extra item quantities
+                // ✅ Break down extra item quantities (including draft)
                 let postedQty = 0;
                 let unpostedQty = 0;
                 const unpostedReceipts: { receiptNo: string; quantity: number }[] = [];
+                let hasDraftData = false;
                 for (const porId of pors) {
                     const r = porRows.find(pr => toNum(pr.purchase_order_product_id) === porId);
                     if (!r) continue;
@@ -543,6 +549,8 @@ export async function POST(req: NextRequest) {
                     } else if (hasReceipt && qty > 0) {
                         unpostedQty += qty;
                         unpostedReceipts.push({ receiptNo: toStr(r.receipt_no), quantity: qty });
+                    } else if (!hasReceipt && qty > 0) {
+                        hasDraftData = true;
                     }
                 }
 
@@ -561,19 +569,37 @@ export async function POST(req: NextRequest) {
                 }
                 dAmt = uPrice * (lineDiscountPercent / 100);
 
-                const existing = allocationsMap.get(bid) || [];
-                allocationsMap.set(bid, [...existing, {
-                    id: porIdStr, porId: porIdStr,
-                    productId: String(pid), branchId: String(bid), name: toStr(p?.product_name, `Product #${pid}`),
-                    barcode: productDisplayCode(p, pid), uom: String(p?.unit_of_measurement?.unit_shortcut ?? "BOX").toUpperCase(),
-                    expectedQty: 0, originalOrderedQty: 0,
-                    postedQty, unpostedQty, unpostedReceipts,
-                    receivedQty: postedQty + unpostedQty, requiresRfid: false,
-                    isReceived: false, unitPrice: uPrice,
-                    discountType: lineDiscountTypeStr, discountAmount: dAmt, netAmount: 0,
-                    isExtra: true
-                }]);
+                // ✅ Include extra items ONLY if they have draft data (reverted receipt)
+                //    (Do not include if they have postedQty or unpostedQty, as they belong to existing receipts)
+                if (hasDraftData) {
+                    const existing = allocationsMap.get(bid) || [];
+                    allocationsMap.set(bid, [...existing, {
+                        id: porIdStr, porId: porIdStr,
+                        productId: String(pid), branchId: String(bid), name: toStr(p?.product_name, `Product #${pid}`),
+                        barcode: productDisplayCode(p, pid), uom: String(p?.unit_of_measurement?.unit_shortcut ?? "BOX").toUpperCase(),
+                        expectedQty: 0, originalOrderedQty: 0,
+                        postedQty, unpostedQty, unpostedReceipts,
+                        receivedQty: postedQty + unpostedQty, requiresRfid: false,
+                        isReceived: false, unitPrice: uPrice,
+                        discountType: lineDiscountTypeStr, discountAmount: dAmt, netAmount: 0,
+                        isExtra: true
+                    }]);
+                }
             }
+
+            // ✅ Build draftData: POR rows where receipt_no is null but received_quantity > 0
+            //    These are rows created by the "Draft Transformation" revert in Post Inventory.
+            //    The frontend uses this to auto-populate the workbench.
+            const draftRows = porRows.filter(r => !toStr(r.receipt_no) && toNum(r.received_quantity) > 0 && toNum(r.isPosted) !== 1);
+            const draftData = draftRows.map(r => ({
+                porId: toNum(r.purchase_order_product_id),
+                productId: toNum(r.product_id),
+                branchId: toNum(r.branch_id),
+                receivedQuantity: toNum(r.received_quantity),
+                batchNo: toStr(r.batch_no) || null,
+                expiryDate: toStr(r.expiry_date) || null,
+                lotId: r.lot_id ? toNum(r.lot_id) : null,
+            }));
 
             const uniqueReceipts = Array.from(new Set(porRows.map(r => r.receipt_no).filter(Boolean)));
             const history = uniqueReceipts.map(rno => {
@@ -589,7 +615,8 @@ export async function POST(req: NextRequest) {
                 priceType: toStr(getVal(po, "price_type", "priceType"), "Cost Per Unit"),
                 isInvoice: (toNum(getVal(po, "vat_amount", "vatAmount")) > 0) || (toNum(getVal(po, "withholding_tax_amount", "withholdingTaxAmount")) > 0),
                 createdAt: po.date_encoded ? new Date(po.date_encoded).toISOString() : new Date().toISOString(),
-                history
+                history,
+                draftData: draftData.length > 0 ? draftData : undefined,
             });
         }
 
@@ -773,7 +800,7 @@ export async function POST(req: NextRequest) {
                     if (!dtId) dtId = ensureId(dType);
                 }
 
-                const newQty = toNum(pr?.received_quantity || 0) + qty;
+                const newQty = qty;
                 const lineGross = uPrice * newQty;
                 const lineDisc = Number((lineGross * (linePct / 100)).toFixed(2));
                 const lineNet = lineGross - lineDisc;
