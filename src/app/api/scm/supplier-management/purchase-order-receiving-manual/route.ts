@@ -358,7 +358,7 @@ async function ensureOpenReceivingRow(args: {
 }) {
     const { base, poId, productId, branchId, unitPrice, discountTypeId, discountPercent, isInvoice } = args;
 
-    const findUrl = `${base}/items/${POR_COLLECTION}?limit=1&sort=-purchase_order_product_id&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&filter[product_id][_eq]=${encodeURIComponent(String(productId))}&filter[branch_id][_eq]=${encodeURIComponent(String(branchId))}&filter[isPosted][_eq]=0&fields=purchase_order_product_id,received_quantity,receipt_no`;
+    const findUrl = `${base}/items/${POR_COLLECTION}?limit=1&sort=-purchase_order_product_id&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&filter[product_id][_eq]=${encodeURIComponent(String(productId))}&filter[branch_id][_eq]=${encodeURIComponent(String(branchId))}&filter[isPosted][_eq]=0&filter[receipt_no][_null]=true&fields=purchase_order_product_id,received_quantity,receipt_no`;
     const found = await fetchJson<{ data: Record<string, unknown>[] }>(findUrl);
     const row = Array.isArray(found?.data) ? found.data[0] : null;
     if (row?.purchase_order_product_id) return { porId: toNum(row.purchase_order_product_id), receivedQty: toNum(row.received_quantity), created: false };
@@ -507,11 +507,14 @@ export async function POST(req: NextRequest) {
                 const orderedQty = toNum(ln.ordered_quantity);
                 const trueRemaining = Math.max(0, orderedQty - postedQty - unpostedQty);
 
+                const draftRow = pors.map(id => porRows.find(r => toNum(r.purchase_order_product_id) === id)).find(r => r && !toStr(r.receipt_no));
+                const porIdStr = draftRow ? String(draftRow.purchase_order_product_id) : `${pid}-${bid}`;
+
                 // ✅ Include if there is still a true remaining balance, OR unposted receipts, OR draft data from revert
                 if (trueRemaining > 0 || unpostedReceipts.length > 0 || hasDraftData) {
                     const existing = allocationsMap.get(bid) || [];
                     allocationsMap.set(bid, [...existing, {
-                        id: pors[0] ? String(pors[0]) : `${pid}-${bid}`, porId: String(pors[0] || ""),
+                        id: porIdStr, porId: draftRow ? String(draftRow.purchase_order_product_id) : "",
                         productId: String(pid), branchId: String(bid), name: toStr(p?.product_name, `Product #${pid}`),
                         barcode: productDisplayCode(p, pid), uom: String(p?.unit_of_measurement?.unit_shortcut ?? "BOX").toUpperCase(),
                         expectedQty: orderedQty, originalOrderedQty: orderedQty,

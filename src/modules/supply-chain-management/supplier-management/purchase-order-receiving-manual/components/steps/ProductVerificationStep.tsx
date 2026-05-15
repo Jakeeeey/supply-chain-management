@@ -60,9 +60,11 @@ export function ProductVerificationStep({ onContinue, onBack }: { onContinue: ()
                 const isNewOrInThisReceipt = item.isExtra && (!(item.unpostedReceipts && item.unpostedReceipts.length > 0) || inThisReceipt);
                 return inThisReceipt || trueRemaining > 0 || isNewOrInThisReceipt;
             } else {
-                // New receipt mode: only show items with a true remaining balance or newly added extras
+                // New receipt mode: show items with a true remaining balance, OR newly added extras,
+                // OR items that have existing unposted receipts (allowing for over-delivery in separate receipts)
                 const isNewlyAddedExtra = item.isExtra && !(item.unpostedReceipts && item.unpostedReceipts.length > 0);
-                return trueRemaining > 0 || isNewlyAddedExtra;
+                const hasExistingUnposted = (item.unpostedReceipts || []).length > 0;
+                return trueRemaining > 0 || isNewlyAddedExtra || hasExistingUnposted;
             }
         });
     }, [selectedPO, editingReceiptId]);
