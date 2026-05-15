@@ -7,13 +7,11 @@ import { Badge } from "@/components/ui/badge";
 import type { PostingReceipt } from "../../types";
 import { formatPostedAt, safeText } from "../../utils/format";
 import { ConfirmPostReceiptDialog } from "../dialogs/ConfirmPostReceiptDialog";
-import { ConfirmRevertReceiptDialog } from "../dialogs/ConfirmRevertReceiptDialog";
 import { usePostingOfPo } from "../../providers/PostingOfPoProvider";
 
 export function ReceiptCard({ receipt }: { receipt: PostingReceipt }) {
-    const { selectedPO, postReceipt, posting, revertReceipt, reverting } = usePostingOfPo();
+    const { selectedPO, postReceipt, posting } = usePostingOfPo();
     const [open, setOpen] = React.useState(false);
-    const [revertOpen, setRevertOpen] = React.useState(false);
 
     if (!selectedPO) return null;
 
@@ -32,13 +30,13 @@ export function ReceiptCard({ receipt }: { receipt: PostingReceipt }) {
         poStatus === "PARTIAL" ||
         poStatus === "PARTIAL_POSTED";
 
-    const canRevert = !!selectedPO.id && !isPosted;
+    const canPost = !!selectedPO.id && !isPosted && poReady;
 
     const disabledReason = !poReady
         ? "PO is not ready. Complete receiving first."
         : isPosted
-        ? "Receipt already posted."
-        : "";
+            ? "Receipt already posted."
+            : "";
 
     return (
         <Card className="p-3">
@@ -63,23 +61,24 @@ export function ReceiptCard({ receipt }: { receipt: PostingReceipt }) {
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                    <Badge variant={isPosted ? "outline" : "secondary"}>
-                        {isPosted ? "POSTED" : "UNPOSTED"}
+                    <Badge
+                        variant="outline"
+                        className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
+                    >
+                        {receipt.statusLabel || (isPosted ? "POSTED AMOUNTS" : "POSTED INVENTORY")}
                     </Badge>
 
-                    {canRevert && (
+                    {canPost && (
                         <Button
                             type="button"
                             size="sm"
-                            variant="outline"
-                            disabled={reverting || posting}
-                            onClick={() => setRevertOpen(true)}
-                            className="text-orange-600 border-orange-300 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-700 dark:hover:bg-orange-950"
+                            disabled={posting}
+                            onClick={() => setOpen(true)}
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase text-[10px] h-8 rounded-lg shadow-sm"
                         >
-                            {reverting ? "Reverting..." : "Revert"}
+                            {posting ? "Posting..." : "Post"}
                         </Button>
                     )}
-
                 </div>
             </div>
 
@@ -93,18 +92,6 @@ export function ReceiptCard({ receipt }: { receipt: PostingReceipt }) {
                     await postReceipt(selectedPO.id, receipt.receiptNo);
                 }}
             />
-
-            <ConfirmRevertReceiptDialog
-                open={revertOpen}
-                onOpenChange={setRevertOpen}
-                loading={reverting}
-                receiptNo={receipt.receiptNo}
-                onConfirm={async () => {
-                    setRevertOpen(false);
-                    if (!selectedPO?.id) return;
-                    await revertReceipt(selectedPO.id, receipt.receiptNo);
-                }}
-            />
         </Card>
     );
-}
+}
