@@ -774,8 +774,7 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
             }
         });
 
-        setSavingReceipt(true);
-        try {
+        const savePromise = (async () => {
             const oldReceiptNo = receiptNo.trim();
 
             const r = await fetch(API_URL, {
@@ -793,22 +792,26 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
                     isEdit: !!editingReceiptId,
                 }),
             });
-            const j = await asJson(r);
 
+            if (!r.ok) {
+                const errData = await r.json().catch(() => ({}));
+                throw new Error(errData?.error || `Server error: ${r.status}`);
+            }
+
+            const j = await asJson(r);
             const detail = j?.data?.detail ?? null;
+            
             if (detail) {
                 setSelectedPO(detail);
                 setPoBarcode(detail?.poNumber ?? "");
             }
 
-            // ✅ Build saved items from API detail if available, else fallback to snapshot
             const sourceAllocs = detail?.allocations ?? snapshotAllocs;
             const sourceItems = (Array.isArray(sourceAllocs) ? sourceAllocs : []).flatMap(
                 (a: { items: ReceivingPOItem[] }) => Array.isArray(a?.items) ? a.items : []
             );
             const itemsToUse = sourceItems.length > 0 ? sourceItems : snapshotItems;
 
-            // Calculate if fully received
             const isFullyReceivedNow = itemsToUse.every((it: ReceivingPOItem) => {
                 const scannedNow = Number(snapshotCounts[it.id] || 0);
                 return (Number(it.receivedQty) + scannedNow) >= Number(it.expectedQty);
@@ -817,9 +820,7 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
             const savedItems: SavedItem[] = itemsToUse
                 .filter((it: ReceivingPOItem) => verifiedProductIds.includes(it.productId))
                 .map((it: ReceivingPOItem) => {
-                    // ✅ Try literal ID first, then fallback to productId-branchId key
                     const scannedNow = Number(snapshotCounts[it.id] || snapshotCounts[`${it.productId}-${it.branchId}`] || 0);
-
                     return {
                         productId: String(it.productId),
                         name: String(it.name),
@@ -836,10 +837,7 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
                         rfids: []
                     };
                 });
-            
-            toast.success(`Receipt ${oldReceiptNo} saved successfully!`);
 
-            // ✅ mark success for UI
             setReceiptSaved({
                 poId: String(poId),
                 receiptNo: oldReceiptNo,
@@ -854,14 +852,23 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
             refreshList();
             resetSession({ clearStorage: true, poId: String(poId) });
 
-            // ✅ prepare a new receipt immediately
             setReceiptDate(todayYMD());
             setReceiptNo("");
             setReceiptType("");
+            
+            return j;
+        })();
+
+        toast.promise(savePromise, {
+            loading: "Saving receipt to database...",
+            success: "Receipt successfully recorded.",
+            error: (err) => `Critical Error: ${err.message || "Could not save receipt."}`
+        });
+
+        try {
+            await savePromise;
         } catch (e: unknown) {
-            const msg = (e as Error)?.message ?? String(e);
-            setSaveError(msg);
-            toast.error(`Save failed: ${msg}`);
+            setSaveError((e as Error).message);
         } finally {
             setSavingReceipt(false);
         }

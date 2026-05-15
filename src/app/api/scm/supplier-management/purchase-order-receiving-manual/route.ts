@@ -728,124 +728,125 @@ export async function POST(req: NextRequest) {
             }
 
             const meta = (porMetaData && typeof porMetaData === "object") ? porMetaData : {};
-            
             const processedPorIds = new Set<number>();
-            
-            // ✅ Handle Edit Mode: Overwrite existing rows
-            if (isEdit) {
-                const currentReceiptRows = porRows.filter(r => toStr(r.receipt_no) === receiptNo);
-                for (const row of currentReceiptRows) {
-                    const porId = toNum(row.purchase_order_product_id);
-                    const qty = toNum(porCounts[porId] || 0);
-                    const m = meta[porId] || {};
-                    const pId = toNum(row.product_id);
-                    const uPrice = toNum(row.unit_price || 0);
-                    
-                    if (qty <= 0) {
-                        // ✅ Item was removed from the receipt during edit - DETACH OR DELETE IT
-                        const r = porRows.find(x => toNum(x.purchase_order_product_id) === porId);
-                        const isExtra = r ? !lines.some(l => toNum(l.product_id) === toNum(r.product_id) && toNum(l.branch_id) === toNum(r.branch_id)) : false;
+            const batchUpdatePayloads: any[] = [];
+            const deleteIds: number[] = [];
 
-                        if (isExtra) {
-                            // Extra products should be permanently deleted if removed from the receipt
-                            await fetchJson(`${base}/items/${POR_COLLECTION}/${porId}`, { method: "DELETE" });
+            try {
+                // ✅ Step 1: Collect updates for Edit Mode
+                if (isEdit) {
+                    const currentReceiptRows = porRows.filter(r => toStr(r.receipt_no) === receiptNo);
+                    for (const row of currentReceiptRows) {
+                        const porId = toNum(row.purchase_order_product_id);
+                        const qty = toNum(porCounts[porId] || 0);
+                        const m = meta[porId] || {};
+                        const pId = toNum(row.product_id);
+                        const uPrice = toNum(row.unit_price || 0);
+                        
+                        if (qty <= 0) {
+                            const isExtra = !lines.some(l => toNum(l.product_id) === toNum(row.product_id) && toNum(l.branch_id) === toNum(row.branch_id));
+                            if (isExtra) deleteIds.push(porId);
+                            else {
+                                batchUpdatePayloads.push({
+                                    purchase_order_product_id: porId,
+                                    receipt_no: null, receipt_date: null, received_quantity: 0, received_date: null, isPosted: 0,
+                                    is_reverted: 0, discounted_amount: 0, vat_amount: 0, withholding_amount: 0, total_amount: 0,
+                                    lot_id: null, batch_no: null, expiry_date: null
+                                });
+                            }
                         } else {
-                            // Standard products stay in the database but are reset
-                            await fetchJson(`${base}/items/${POR_COLLECTION}/${porId}`, { 
-                                method: "PATCH", 
-                                body: JSON.stringify({ 
-                                    receipt_no: null, 
-                                    receipt_date: null, 
-                                    received_quantity: 0, 
-                                    received_date: null, 
-                                    isPosted: 0,
-                                    discounted_amount: 0,
-                                    vat_amount: 0,
-                                    withholding_amount: 0,
-                                    total_amount: 0,
-                                    lot_id: null,
-                                    batch_no: null,
-                                    expiry_date: null
-                                }) 
-                            });
+                            let linePct = poDiscountPercent, dtId = ensureId(row.discount_type);
+                            if (dtId) {
+                                const dt = discountMap.get(String(dtId));
+                                if (dt) linePct = dt.pct;
+                            } else {
+                                const linkId = ensureId(linksMap.get(pId)?.discount_type);
+                                if (linkId) { const dt = discountMap.get(String(linkId)); if (dt) { linePct = dt.pct; dtId = linkId; } }
+                                if (!dtId) dtId = ensureId(dType);
+                            }
+
+                            const lineGross = uPrice * qty;
+                            const lineDisc = Number((lineGross * (linePct / 100)).toFixed(2));
+                            const lineNet = lineGross - lineDisc;
+                            const poIsInvoice = (toNum(po?.vat_amount) > 0) || (toNum(po?.withholding_tax_amount) > 0);
+                            const vatExclTotal = poIsInvoice ? Number((lineNet / 1.12).toFixed(2)) : lineNet;
+                            const vatAmtTotal = poIsInvoice ? Number((lineNet - vatExclTotal).toFixed(2)) : 0;
+                            const ewtAmtTotal = poIsInvoice ? Number((vatExclTotal * 0.01).toFixed(2)) : 0;
+
+                            const patch: any = {
+                                purchase_order_product_id: porId,
+                                receipt_no: receiptNo, receipt_date: receiptDate, received_quantity: qty, received_date: nowISO(), isPosted: 0,
+                                is_reverted: 0, discount_type: dtId || null, discounted_amount: lineDisc,
+                                vat_amount: vatAmtTotal, withholding_amount: ewtAmtTotal,
+                                total_amount: Number(lineGross.toFixed(2))
+                            };
+                            if (m.lotNo) patch.lot_id = toNum(m.lotNo);
+                            if (m.batchNo) patch.batch_no = m.batchNo;
+                            if (m.expiryDate) patch.expiry_date = m.expiryDate;
+                            batchUpdatePayloads.push(patch);
                         }
-                    } else {
-                        // ✅ Standard update for existing item
-                        let linePct = poDiscountPercent, dtId = ensureId(row.discount_type);
-                        if (dtId) {
-                            const dt = discountMap.get(String(dtId));
-                            if (dt) linePct = dt.pct;
-                        } else {
-                            const linkId = ensureId(linksMap.get(pId)?.discount_type);
-                            if (linkId) { const dt = discountMap.get(String(linkId)); if (dt) { linePct = dt.pct; dtId = linkId; } }
-                            if (!dtId) dtId = ensureId(dType);
-                        }
-
-                        const lineGross = uPrice * qty;
-                        const lineDisc = Number((lineGross * (linePct / 100)).toFixed(2));
-                        const lineNet = lineGross - lineDisc;
-                        const poIsInvoice = (toNum(po?.vat_amount) > 0) || (toNum(po?.withholding_tax_amount) > 0);
-                        const vatExclTotal = poIsInvoice ? Number((lineNet / 1.12).toFixed(2)) : lineNet;
-                        const vatAmtTotal = poIsInvoice ? Number((lineNet - vatExclTotal).toFixed(2)) : 0;
-                        const ewtAmtTotal = poIsInvoice ? Number((vatExclTotal * 0.01).toFixed(2)) : 0;
-
-                        const patch: Record<string, unknown> = {
-                            receipt_no: receiptNo, receipt_date: receiptDate, received_quantity: qty, received_date: nowISO(), isPosted: 0,
-                            is_reverted: 0,
-                            discount_type: dtId || null, discounted_amount: lineDisc,
-                            vat_amount: vatAmtTotal, withholding_amount: ewtAmtTotal,
-                            total_amount: Number(lineGross.toFixed(2))
-                        };
-                        if (m.lotNo) patch.lot_id = toNum(m.lotNo);
-                        if (m.batchNo) patch.batch_no = m.batchNo;
-                        if (m.expiryDate) patch.expiry_date = m.expiryDate;
-
-                        await fetchJson(`${base}/items/${POR_COLLECTION}/${porId}`, { method: "PATCH", body: JSON.stringify(patch) });
+                        processedPorIds.add(porId);
+                        delete porCounts[porId];
                     }
+                }
+
+                // ✅ Step 2: Collect updates for NEW items
+                for (const [porIdStr, qtyNum] of Object.entries(porCounts)) {
+                    const porId = toNum(porIdStr);
+                    const qty = toNum(qtyNum); if (qty <= 0) continue;
+                    const m = meta[porIdStr] || {};
+                    const pr = porRows.find(x => toNum(x.purchase_order_product_id) === porId);
+                    const uPrice = toNum(pr?.unit_price || 0), pId = toNum(pr?.product_id);
+
+                    let linePct = poDiscountPercent, dtId = ensureId(pr?.discount_type);
+                    if (dtId) {
+                        const dt = discountMap.get(String(dtId));
+                        if (dt) linePct = dt.pct;
+                    } else {
+                        const linkId = ensureId(linksMap.get(pId)?.discount_type);
+                        if (linkId) { const dt = discountMap.get(String(linkId)); if (dt) { linePct = dt.pct; dtId = linkId; } }
+                        if (!dtId) dtId = ensureId(dType);
+                    }
+
+                    const lineGross = uPrice * qty;
+                    const lineDisc = Number((lineGross * (linePct / 100)).toFixed(2));
+                    const lineNet = lineGross - lineDisc;
+                    const poIsInvoice = (toNum(po?.vat_amount) > 0) || (toNum(po?.withholding_tax_amount) > 0);
+                    const vatExclTotal = poIsInvoice ? Number((lineNet / 1.12).toFixed(2)) : lineNet;
+                    const vatAmtTotal = poIsInvoice ? Number((lineNet - vatExclTotal).toFixed(2)) : 0;
+                    const ewtAmtTotal = poIsInvoice ? Number((vatExclTotal * 0.01).toFixed(2)) : 0;
+
+                    const patch: any = {
+                        purchase_order_product_id: porId,
+                        receipt_no: receiptNo, receipt_date: receiptDate, received_quantity: qty, received_date: nowISO(), isPosted: 0,
+                        is_reverted: 0, discount_type: dtId || null, discounted_amount: lineDisc,
+                        vat_amount: vatAmtTotal, withholding_amount: ewtAmtTotal,
+                        total_amount: Number(lineGross.toFixed(2))
+                    };
+                    if (m.lotNo) patch.lot_id = toNum(m.lotNo);
+                    if (m.batchNo) patch.batch_no = m.batchNo;
+                    if (m.expiryDate) patch.expiry_date = m.expiryDate;
+                    batchUpdatePayloads.push(patch);
                     processedPorIds.add(porId);
-                    delete porCounts[porId]; // Remove so we don't process it below
-                }
-            }
-
-            // Normal processing for NEW items added to the receipt
-            for (const [porId, qtyNum] of Object.entries(porCounts)) {
-                const qty = toNum(qtyNum); if (qty <= 0) continue;
-                const m = meta[porId] || {};
-                const pr = (await fetchJson<{ data: PORow }>(`${base}/items/${POR_COLLECTION}/${porId}?fields=unit_price,discount_type,received_quantity,product_id`)).data;
-                const uPrice = toNum(pr?.unit_price || 0), pId = toNum(pr?.product_id);
-
-                let linePct = poDiscountPercent, dtId = ensureId(pr?.discount_type);
-                if (dtId) {
-                    const dt = discountMap.get(String(dtId));
-                    if (dt) linePct = dt.pct;
-                } else {
-                    const linkId = ensureId(linksMap.get(pId)?.discount_type);
-                    if (linkId) { const dt = discountMap.get(String(linkId)); if (dt) { linePct = dt.pct; dtId = linkId; } }
-                    if (!dtId) dtId = ensureId(dType);
                 }
 
-                const newQty = qty;
-                const lineGross = uPrice * newQty;
-                const lineDisc = Number((lineGross * (linePct / 100)).toFixed(2));
-                const lineNet = lineGross - lineDisc;
-                const poIsInvoice = (toNum(po?.vat_amount) > 0) || (toNum(po?.withholding_tax_amount) > 0);
-                const vatExclTotal = poIsInvoice ? Number((lineNet / 1.12).toFixed(2)) : lineNet;
-                const vatAmtTotal = poIsInvoice ? Number((lineNet - vatExclTotal).toFixed(2)) : 0;
-                const ewtAmtTotal = poIsInvoice ? Number((vatExclTotal * 0.01).toFixed(2)) : 0;
+                // ✅ Step 3: Execute ATOMIC Batch Operations
+                if (batchUpdatePayloads.length > 0) {
+                    await fetchJson(`${base}/items/${POR_COLLECTION}`, {
+                        method: "PATCH",
+                        body: JSON.stringify(batchUpdatePayloads)
+                    });
+                }
 
-                const patch: Record<string, unknown> = {
-                    receipt_no: receiptNo, receipt_date: receiptDate, received_quantity: newQty, received_date: nowISO(), isPosted: 0,
-                    is_reverted: 0,
-                    discount_type: dtId || null, discounted_amount: lineDisc,
-                    vat_amount: vatAmtTotal, withholding_amount: ewtAmtTotal,
-                    total_amount: Number(lineGross.toFixed(2))
-                };
-                if (m.lotNo) patch.lot_id = toNum(m.lotNo);
-                if (m.batchNo) patch.batch_no = m.batchNo;
-                if (m.expiryDate) patch.expiry_date = m.expiryDate;
-
-                await fetchJson(`${base}/items/${POR_COLLECTION}/${porId}`, { method: "PATCH", body: JSON.stringify(patch) });
-                processedPorIds.add(toNum(porId));
+                if (deleteIds.length > 0) {
+                    await fetchJson(`${base}/items/${POR_COLLECTION}`, {
+                        method: "DELETE",
+                        body: JSON.stringify(deleteIds)
+                    });
+                }
+            } catch (error: any) {
+                console.error("Critical Save Failure:", error);
+                return bad(`Transaction failed: ${error.message || "Unknown error during database write."}`);
             }
 
             // ✅ GLOBAL CLEANUP: Find all OTHER draft rows (reverted/orphaned) for this PO and clean them up
