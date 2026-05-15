@@ -174,6 +174,7 @@ interface PORow {
     expiry_date?: string;
     unit_price?: string | number;
     discount_type?: string | number | null;
+    is_reverted?: string | number | null;
 }
 
 interface POProductRow {
@@ -244,7 +245,7 @@ async function fetchPORByPOIds(base: string, poIds: number[]) {
     if (!poIds.length) return [] as PORow[];
     const rows: PORow[] = [];
     for (const ids of chunk(Array.from(new Set(poIds)), 250)) {
-        const url = `${base}/items/${POR_COLLECTION}?limit=-1&filter[purchase_order_id][_in]=${encodeURIComponent(ids.join(","))}&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted,lot_id,batch_no,expiry_date,unit_price,discount_type`;
+        const url = `${base}/items/${POR_COLLECTION}?limit=-1&filter[purchase_order_id][_in]=${encodeURIComponent(ids.join(","))}&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted,is_reverted,lot_id,batch_no,expiry_date,unit_price,discount_type`;
         const j = await fetchJson<{ data: PORow[] }>(url);
         rows.push(...(j?.data ?? []));
     }
@@ -305,6 +306,7 @@ function productDisplayCode(p: ProductRow | null | undefined, productId: number)
 }
 
 function effectiveReceivedQty(por: PORow | null | undefined) {
+    if (toNum(por?.is_reverted) === 1) return 0;
     const posted = toNum(por?.isPosted) === 1;
     if (posted) return Math.max(0, toNum(por?.received_quantity ?? 0));
     const evidence = Boolean(toStr(por?.receipt_no) || toStr(por?.receipt_date) || toStr(por?.received_date));
@@ -432,7 +434,7 @@ export async function POST(req: NextRequest) {
 
         if (action === "load_receipt") {
             const { poId, receiptNo } = body;
-            const url = `${base}/items/${POR_COLLECTION}?limit=-1&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&filter[receipt_no][_eq]=${encodeURIComponent(receiptNo)}&fields=purchase_order_product_id,product_id,branch_id,received_quantity,lot_id,batch_no,expiry_date`;
+            const url = `${base}/items/${POR_COLLECTION}?limit=-1&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&filter[receipt_no][_eq]=${encodeURIComponent(receiptNo)}&fields=purchase_order_product_id,product_id,branch_id,received_quantity,lot_id,batch_no,expiry_date,receipt_date,is_reverted`;
             const j = await fetchJson<{ data: Record<string, unknown>[] }>(url);
             return ok({ items: j?.data || [] });
         }
@@ -478,14 +480,16 @@ export async function POST(req: NextRequest) {
                     if (!r) continue;
                     const qty = Math.max(0, toNum(r.received_quantity ?? 0));
                     const hasReceipt = Boolean(toStr(r.receipt_no));
-                    if (toNum(r.isPosted) === 1) {
+                    const isReverted = toNum(r.is_reverted) === 1;
+                    if (isReverted) {
+                        // Reverted receipt — don't count toward any totals, but flag for inclusion
+                        hasDraftData = true;
+                    } else if (toNum(r.isPosted) === 1) {
                         postedQty += qty;
                     } else if (hasReceipt && qty > 0) {
                         unpostedQty += qty;
                         unpostedReceipts.push({ receiptNo: toStr(r.receipt_no), quantity: qty });
                     } else if (!hasReceipt && qty > 0) {
-                        // Draft row (reverted receipt) — don't count toward posted/unposted
-                        // but flag so the item is included in allocations
                         hasDraftData = true;
                     }
                 }
@@ -544,7 +548,10 @@ export async function POST(req: NextRequest) {
                     if (!r) continue;
                     const qty = Math.max(0, toNum(r.received_quantity ?? 0));
                     const hasReceipt = Boolean(toStr(r.receipt_no));
-                    if (toNum(r.isPosted) === 1) {
+                    const isReverted = toNum(r.is_reverted) === 1;
+                    if (isReverted) {
+                        hasDraftData = true;
+                    } else if (toNum(r.isPosted) === 1) {
                         postedQty += qty;
                     } else if (hasReceipt && qty > 0) {
                         unpostedQty += qty;
@@ -604,7 +611,8 @@ export async function POST(req: NextRequest) {
             const uniqueReceipts = Array.from(new Set(porRows.map(r => r.receipt_no).filter(Boolean)));
             const history = uniqueReceipts.map(rno => {
                 const rs = porRows.filter(r => r.receipt_no === rno);
-                return { receiptNo: rno, receiptDate: rs[0]?.receipt_date || rs[0]?.received_date || "", isPosted: rs.every(r => toNum(r.isPosted) === 1), itemsCount: rs.length };
+                const isReverted = rs.some(r => toNum(r.is_reverted) === 1);
+                return { receiptNo: rno, receiptDate: rs[0]?.receipt_date || rs[0]?.received_date || "", isPosted: rs.every(r => toNum(r.isPosted) === 1), isReverted, itemsCount: rs.length };
             }).sort((a,b) => (b.receiptNo ?? "").localeCompare(a.receiptNo ?? ""));
 
             return ok({
@@ -780,6 +788,7 @@ export async function POST(req: NextRequest) {
 
                         const patch: Record<string, unknown> = {
                             receipt_no: receiptNo, receipt_date: receiptDate, received_quantity: qty, received_date: nowISO(), isPosted: 0,
+                            is_reverted: 0,
                             discount_type: dtId || null, discounted_amount: lineDisc,
                             vat_amount: vatAmtTotal, withholding_amount: ewtAmtTotal,
                             total_amount: Number(lineGross.toFixed(2))
@@ -823,6 +832,7 @@ export async function POST(req: NextRequest) {
 
                 const patch: Record<string, unknown> = {
                     receipt_no: receiptNo, receipt_date: receiptDate, received_quantity: newQty, received_date: nowISO(), isPosted: 0,
+                    is_reverted: 0,
                     discount_type: dtId || null, discounted_amount: lineDisc,
                     vat_amount: vatAmtTotal, withholding_amount: ewtAmtTotal,
                     total_amount: Number(lineGross.toFixed(2))

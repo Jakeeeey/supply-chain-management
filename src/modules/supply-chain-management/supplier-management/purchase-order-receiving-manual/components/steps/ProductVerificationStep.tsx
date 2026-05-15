@@ -29,7 +29,7 @@ export function ProductVerificationStep({ onContinue, onBack }: { onContinue: ()
         removeExtraProductLocally,
         manualCounts,
         setManualCounts,
-        editingReceiptId
+        editingReceiptId,
     } = useReceivingProductsManual();
 
     const [isAddModalOpen, setIsAddModalOpen] = React.useState(false);
@@ -46,7 +46,6 @@ export function ProductVerificationStep({ onContinue, onBack }: { onContinue: ()
             }));
         }).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 
-        // ✅ Filter based on New vs Edit mode
         return all.filter(item => {
             const ordered = Number(item.originalOrderedQty ?? item.expectedQty ?? 0);
             const posted = Number(item.postedQty ?? 0);
@@ -56,7 +55,7 @@ export function ProductVerificationStep({ onContinue, onBack }: { onContinue: ()
             if (editingReceiptId) {
                 // Edit mode: show items IN this receipt + items with remaining balance
                 const inThisReceipt = (item.unpostedReceipts || []).some(
-                    r => r.receiptNo === editingReceiptId
+                    (r: { receiptNo: string }) => r.receiptNo === editingReceiptId
                 );
                 const isNewOrInThisReceipt = item.isExtra && (!(item.unpostedReceipts && item.unpostedReceipts.length > 0) || inThisReceipt);
                 return inThisReceipt || trueRemaining > 0 || isNewOrInThisReceipt;

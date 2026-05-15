@@ -177,6 +177,7 @@ interface PORRow {
     unit_price: number | string;
     total_amount: number | string;
     discount_type?: number | string | null;
+    is_reverted?: number | string | null;
 }
 interface ReceivingItem {
     receiving_item_id: number;
@@ -187,7 +188,7 @@ interface ReceivingItem {
 }
 
 const POR_SAFE_FIELDS =
-    "purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted,discounted_amount,vat_amount,withholding_amount,total_amount,unit_price,discount_type";
+    "purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted,is_reverted,discounted_amount,vat_amount,withholding_amount,total_amount,unit_price,discount_type";
 
 // =====================
 // FETCHERS
@@ -380,6 +381,7 @@ function hasReceiptEvidence(por: PORRow) {
 }
 
 function effectiveReceivedQty(por: PORRow) {
+    if (toNum(por?.is_reverted) === 1) return 0;
     // IMPORTANT: treat numeric/string consistently
     const posted = toNum(por?.isPosted) === 1;
     if (posted) return Math.max(0, toNum(por?.received_quantity ?? 0));
@@ -491,6 +493,7 @@ function buildReceiptSummary(porRows: PORRow[]) {
     const groups = new Map<string, PORRow[]>();
 
     for (const r of porRows ?? []) {
+        if (toNum(r?.is_reverted) === 1) continue;
         const rn = toStr(r?.receipt_no);
         if (!rn) continue;
         const arr = groups.get(rn) ?? [];
@@ -685,6 +688,7 @@ export async function GET() {
         const porCandidateUrl =
             `${base}/items/${POR_COLLECTION}?limit=-1` +
             `&filter[isPosted][_eq]=0` +
+            `&filter[is_reverted][_neq]=1` +
             `&filter[_or][0][receipt_no][_nnull]=true` +
             `&filter[_or][1][receipt_date][_nnull]=true` +
             `&filter[_or][2][received_date][_nnull]=true` +
@@ -803,7 +807,7 @@ export async function GET() {
             const fullyReceived = fully && !allPosted;
 
             // Align totalAmount with what's actually being posted
-            const unpostedRows = porRows.filter(r => toNum(r.isPosted) === 0 && (toNum(r.received_quantity) > 0 || toStr(r.receipt_no)));
+            const unpostedRows = porRows.filter(r => toNum(r.isPosted) === 0 && (toNum(r.received_quantity) > 0 || toStr(r.receipt_no)) && toNum(r.is_reverted) !== 1);
             let listTotal = 0;
             if (unpostedRows.length > 0) {
                 // Inventory module trusts stored values in POR for listTotal
@@ -1455,9 +1459,10 @@ export async function POST(req: NextRequest) {
                 );
             }
 
-            // 4. DRAFT TRANSFORMATION: Clear only receipt_no and receipt_date.
+            // 4. REVERT FLAG: Set is_reverted=1 to mark this receipt as reverted.
             //    Everything else is PRESERVED:
-            //    - received_quantity → KEPT (for workbench pre-fill)
+            //    - receipt_no, receipt_date → KEPT (for identification in Receiving Manual)
+            //    - received_quantity → KEPT (for data restoration in Edit Mode)
             //    - batch_no, expiry_date, lot_id → KEPT
             //    - discounted_amount, vat_amount, withholding_amount, total_amount → KEPT
             //    - RFID tags (purchase_order_receiving_items) → KEPT
@@ -1465,9 +1470,7 @@ export async function POST(req: NextRequest) {
                 const porId = toNum(r?.purchase_order_product_id);
                 if (!porId) continue;
                 await patchPOR(base, porId, {
-                    receipt_no: null,
-                    receipt_date: null,
-                    received_date: null,
+                    is_reverted: 1,
                 });
             }
 
