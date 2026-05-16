@@ -39,6 +39,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
         lots,
         setMetaDataByPorId,
         verifiedProductIds,
+        editingReceiptId,
     } = useReceivingProductsManual();
 
     const [clientSaveError, setClientSaveError] = React.useState("");
@@ -150,7 +151,8 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
 
     const handleSaveReceipt = React.useCallback(async () => {
         const status = (selectedPO?.status || "").toUpperCase();
-        if (status === "CLOSED" || status === "RECEIVED") {
+        // Allow saving if we are in Edit Mode (reverted/unposted receipt)
+        if (!editingReceiptId && (status === "CLOSED" || status === "RECEIVED")) {
             setClientSaveError("PO is already completed.");
             return;
         }
@@ -210,7 +212,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
         });
 
         await saveReceipt(metaData);
-    }, [saveReceipt, selectedPO?.status, allItems, safeCounts, lotNumbers, batchNumbers, expiryDates]);
+    }, [saveReceipt, selectedPO?.status, allItems, safeCounts, lotNumbers, batchNumbers, expiryDates, editingReceiptId]);
 
     const totalEntered = Object.values(safeCounts).reduce((a: number, b: number) => a + Number(b), 0);
     const totalExpected = allItems.reduce((a: number, b: ReceivingPOItem) => a + Number(b.expectedQty || 0), 0);
