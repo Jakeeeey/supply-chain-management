@@ -64,6 +64,7 @@ type RawProduct = { product_id?: string | number; id?: string | number; product_
 type RawDiscountType = { id?: string | number; discount_type?: string; name?: string; total_percent?: string | number; percent?: string | number };
 
 const BOX_UOM_ID = 11;
+const PIECE_UOM_ID = 1;
 const FALLBACK_NO_DISCOUNT_ID = "24";
 
 function normalizeSupplier(raw: RawSupplier): Supplier {
@@ -627,7 +628,7 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
 
                         return np;
                     })
-                    .filter((np: any) => np.uomId === BOX_UOM_ID)
+                    .filter((np: any) => np.uomId === BOX_UOM_ID || np.uomId === PIECE_UOM_ID)
                 );
                 setIsInvoice(false);
             } catch (e: unknown) {
@@ -908,19 +909,28 @@ export default function CreatePurchaseOrderModule({ encoderId, preparerName }: {
                 }),
             };
 
-            const json = await provider.createPurchaseOrder(payload);
+            const savePromise = provider.createPurchaseOrder(payload);
 
-            console.log("PO RESPONSE:", (json as any)?.data ?? json);
-            setIsLocked(true);
-            toast.success("Purchase Order created successfully!", {
-                description: `PO ${poNumber} has been saved and locked.`,
+            toast.promise(savePromise, {
+                loading: "Creating Purchase Order...",
+                success: (json: any) => {
+                    console.log("PO RESPONSE:", json?.data ?? json);
+                    setIsLocked(true);
+                    return `Purchase Order ${poNumber} created successfully!`;
+                },
+                error: (err: any) => {
+                    const msg = String(err?.message ?? err);
+                    setError(msg);
+                    return `Failed to create PO: ${msg}`;
+                },
             });
+
+            const json = await savePromise;
             return json;
         } catch (e: unknown) {
             const err = e as Error;
             const msg = String(err?.message ?? err);
             setError(msg);
-            toast.error("Failed to create Purchase Order", { description: msg });
             throw new Error(msg);
         } finally {
             setIsSaving(false);

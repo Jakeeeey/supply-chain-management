@@ -899,52 +899,58 @@ async function buildPurchaseOrderDetail(base: string, poId: number) {
 }
 
 async function syncPoProductFinancialsOnApproval(base: string, poId: number, isInvoice: boolean) {
-    try {
-        // Fetch header to get fallback discount_type
-        const headerUrl = `${base}/items/${PO_COLLECTION}/${poId}?fields=discount_type`;
-        const headerJson = await fetchJson<{ data: { discount_type: string | number | null } }>(headerUrl);
-        const headerDtId = headerJson?.data?.discount_type ? String(headerJson.data.discount_type) : null;
+    // Fetch header to get fallback discount_type
+    const headerUrl = `${base}/items/${PO_COLLECTION}/${poId}?fields=discount_type.id`;
+    const headerJson = await fetchJson<{ data: { discount_type: { id: string | number } | string | number | null } }>(headerUrl);
+    const dtRaw = headerJson?.data?.discount_type;
+    const headerDtId = typeof dtRaw === "object" && dtRaw ? String(dtRaw.id) : (dtRaw ? String(dtRaw) : null);
 
-        const lines = await fetchPOProductsByPOId(base, poId);
-        const discountMap = await fetchDiscountTypesMap(base);
+    const lines = await fetchPOProductsByPOId(base, poId);
+    const discountMap = await fetchDiscountTypesMap(base);
+    
+    const updates: Array<Record<string, unknown>> = [];
+
+    for (const l of lines) {
+        const lid = toNum(l.purchase_order_product_id);
+        if (!lid) continue;
+
+        const qty = toNum(l.ordered_quantity);
+        const unitPrice = toNum(l.unit_price);
         
-        for (const l of lines) {
-            const lid = toNum(l.purchase_order_product_id);
-            if (!lid) continue;
+        // Financial Calculations (VAT-Inclusive Logic)
+        const dtId = (l.discount_type ? String(l.discount_type) : null) || headerDtId;
+        const discPercent = dtId ? (discountMap.get(dtId)?.pct ?? 0) : 0;
+        
+        const lineGross = qty * unitPrice;
+        const discAmtTotal = Number((lineGross * (discPercent / 100)).toFixed(2));
+        const lineNet = lineGross - discAmtTotal;
+        
+        const vatExcl = isInvoice ? Number((lineNet / 1.12).toFixed(2)) : lineNet;
+        const vatAmt = isInvoice ? Number((lineNet - vatExcl).toFixed(2)) : 0;
+        const ewtAmt = isInvoice ? Number((vatExcl * 0.01).toFixed(2)) : 0;
+        
+        const discountedPricePerUnit = qty > 0 ? Number((lineNet / qty).toFixed(2)) : 0;
 
-            const qty = toNum(l.ordered_quantity);
-            const unitPrice = toNum(l.unit_price);
-            
-            // Financial Calculations (VAT-Inclusive Logic)
-            // Fallback to header discount if line item discount is missing
-            const dtId = (l.discount_type ? String(l.discount_type) : null) || headerDtId;
-            const discPercent = dtId ? (discountMap.get(dtId)?.pct ?? 0) : 0;
-            
-            const lineGross = qty * unitPrice;
-            const discAmtTotal = Number((lineGross * (discPercent / 100)).toFixed(2));
-            const lineNet = lineGross - discAmtTotal;
-            
-            const vatExcl = isInvoice ? Number((lineNet / 1.12).toFixed(2)) : lineNet;
-            const vatAmt = isInvoice ? Number((lineNet - vatExcl).toFixed(2)) : 0;
-            const ewtAmt = isInvoice ? Number((vatExcl * 0.01).toFixed(2)) : 0;
-            
-            const discountedPricePerUnit = qty > 0 ? Number((lineNet / qty).toFixed(2)) : 0;
+        updates.push({
+            purchase_order_product_id: lid, // Primary Key for Batch Update
+            approved_price: toStr(toFixedMoney(unitPrice)),
+            discounted_price: toStr(toFixedMoney(discountedPricePerUnit)),
+            vat_amount: toStr(toFixedMoney(vatAmt)),
+            withholding_amount: toStr(toFixedMoney(ewtAmt)),
+            total_amount: toStr(toFixedMoney(lineNet)), 
+            discount_type: dtId, 
+            received: 0, 
+        });
+    }
 
-            const patch = {
-                approved_price: toStr(toFixedMoney(unitPrice)),
-                discounted_price: toStr(toFixedMoney(discountedPricePerUnit)),
-                vat_amount: toStr(toFixedMoney(vatAmt)),
-                withholding_amount: toStr(toFixedMoney(ewtAmt)),
-                total_amount: toStr(toFixedMoney(lineNet)), // Total is Net (VAT-inclusive)
-                discount_type: dtId, // Sync/Lock the discount type
-                received: 0, // Reset/Init to 0 on approval
-            };
-
-            const url = `${base}/items/${PO_PRODUCTS_COLLECTION}/${lid}`;
-            await fetchJson(url, { method: "PATCH", body: JSON.stringify(patch) });
-        }
-    } catch (e: unknown) {
-        console.error("[approval-po] Failed to sync product financials:", (e as Error).message);
+    if (updates.length > 0) {
+        // ✅ Directus Custom PK Workaround: Use parallel single-item PATCH
+        await Promise.all(updates.map(u => {
+            const pk = u.purchase_order_product_id;
+            const payload = { ...u };
+            delete payload.purchase_order_product_id;
+            return fetchJson(`${base}/items/${PO_PRODUCTS_COLLECTION}/${pk}`, { method: "PATCH", body: JSON.stringify(payload) });
+        }));
     }
 }
 
@@ -1126,12 +1132,36 @@ export async function POST(req: NextRequest) {
         if (Boolean(body?.markAsInvoice)) patch.payment_status = 2;
 
         const url = `${base}/items/${PO_COLLECTION}/${encodeURIComponent(String(poId))}`;
-        await fetchJson(url, { method: "PATCH", body: JSON.stringify(patch) });
+        
+        // ✅ 1) Fetch original state for rollback
+        const original = await fetchJson<{ data: Record<string, unknown> }>(`${url}?fields=inventory_status,date_approved,approver_id,receiving_type,payment_status`);
+        
+        try {
+            // ✅ 2) Patch Header
+            await fetchJson(url, { method: "PATCH", body: JSON.stringify(patch) });
 
-        // ✅ Sync line items financials
-        await syncPoProductFinancialsOnApproval(base, poId, Boolean(body?.markAsInvoice));
+            // ✅ 3) Sync line items financials (now uses Batch API internally)
+            await syncPoProductFinancialsOnApproval(base, poId, Boolean(body?.markAsInvoice));
 
-        return ok({ ok: true });
+            return ok({ ok: true });
+        } catch (e: unknown) {
+            // ✅ 4) ROLLBACK: If sync fails, restore the header to its original state
+            const error = e as Error;
+            try {
+                const rollbackPatch = {
+                    inventory_status: original?.data?.inventory_status ?? 1,
+                    date_approved: original?.data?.date_approved ?? null,
+                    approver_id: original?.data?.approver_id ?? null,
+                    receiving_type: original?.data?.receiving_type ?? null,
+                    payment_status: original?.data?.payment_status ?? null,
+                };
+                await fetchJson(url, { method: "PATCH", body: JSON.stringify(rollbackPatch) });
+            } catch (rollErr) {
+                console.error("[approval-po] Critical: Rollback failed:", (rollErr as Error).message);
+            }
+            
+            return bad(String(error?.message ?? error ?? "Failed to approve PO"), 400);
+        }
     } catch (e: unknown) {
         const error = e as Error;
         return bad(String(error?.message ?? error ?? "Failed to approve PO"), 400);
