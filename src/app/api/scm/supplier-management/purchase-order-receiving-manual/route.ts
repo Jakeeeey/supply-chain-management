@@ -80,7 +80,7 @@ function deriveDiscountPercentFromCode(codeRaw: string): number {
 }
 
 function keyLine(poId: number, productId: number, branchId: number) { return `${poId}::${productId}::${branchId}`; }
-function nowISO() { 
+function nowISO() {
     const date = new Date();
     const phOffset = 8 * 60; // 8 hours in minutes
     const localOffset = date.getTimezoneOffset(); // in minutes
@@ -215,7 +215,7 @@ async function fetchSupplierNames(base: string, supplierIds: number[]) {
     if (!uniq.length) return map;
     for (const ids of chunk(uniq, 250)) {
         const url = `${base}/items/${SUPPLIERS_COLLECTION}?limit=-1&filter[id][_in]=${encodeURIComponent(ids.join(","))}&fields=id,supplier_name`;
-        const j = await fetchJson<{ data: Array<{id: string | number; supplier_name: string}> }>(url);
+        const j = await fetchJson<{ data: Array<{ id: string | number; supplier_name: string }> }>(url);
         for (const s of (j?.data ?? [])) map.set(toNum(s.id), toStr(s.supplier_name, "—"));
     }
     return map;
@@ -239,7 +239,7 @@ async function fetchBranchesMap(base: string, branchIds: number[]) {
     if (!uniq.length) return map;
     for (const ids of chunk(uniq, 250)) {
         const url = `${base}/items/${BRANCHES_COLLECTION}?limit=-1&filter[id][_in]=${encodeURIComponent(ids.join(","))}&fields=id,branch_name,branch_description`;
-        const j = await fetchJson<{ data: Array<{id: string | number; branch_name: string; branch_description: string}> }>(url);
+        const j = await fetchJson<{ data: Array<{ id: string | number; branch_name: string; branch_description: string }> }>(url);
         for (const b of (j?.data ?? [])) map.set(toNum(b.id), toStr(b.branch_name) || toStr(b.branch_description) || `Branch ${b.id}`);
     }
     return map;
@@ -276,7 +276,7 @@ async function fetchDiscountTypesMap(base: string) {
             const computed = lines.length > 0 ? calculateDiscountFromLines(lines) : (rawPct > 0 ? rawPct : deriveDiscountPercentFromCode(toStr(dt.discount_type)));
             map.set(id, { name: toStr(dt.discount_type), pct: computed });
         }
-    } catch {}
+    } catch { }
     return map;
 }
 
@@ -286,10 +286,10 @@ async function fetchProductSupplierLinks(base: string, productIds: number[], sup
     if (!ids.length) return map;
 
     for (const chunkIds of chunk(ids, 250)) {
-        const url = supplierId 
+        const url = supplierId
             ? `${base}/items/${PRODUCT_SUPPLIER_COLLECTION}?limit=-1&filter[product_id][_in]=${encodeURIComponent(chunkIds.join(","))}&filter[supplier_id][_eq]=${supplierId}&fields=*`
             : `${base}/items/${PRODUCT_SUPPLIER_COLLECTION}?limit=-1&filter[product_id][_in]=${encodeURIComponent(chunkIds.join(","))}&fields=*`;
-            
+
         const j = await fetchJson<{ data: Record<string, unknown>[] }>(url);
         for (const link of (j?.data ?? [])) {
             const pid = toNum(link?.product_id);
@@ -413,18 +413,18 @@ export async function GET() {
             const poId = toNum(po.purchase_order_id);
             const lines = poLinesAll.filter((l) => toNum(l.purchase_order_id) === poId);
             const porRows = porRowsAll.filter((r) => toNum(r.purchase_order_id) === poId);
-            
+
             // ✅ Hide PO if nothing left to receive
             const hasPending = lines.some(ln => {
                 const received = porRows.filter(r => toNum(r.product_id) === toNum(ln.product_id) && toNum(r.branch_id) === toNum(ln.branch_id));
                 const totalReceived = received.reduce((sum, r) => sum + effectiveReceivedQty(r), 0);
                 return totalReceived < toNum(ln.ordered_quantity);
             });
-            
+
             // ✅ Fix: Also check if there are unposted receipts or reverted draft data
             // Even if fully received (hasPending = false), we still show the PO if it needs posting or editing
             const hasUnposted = porRows.some(r => toNum(r.isPosted) === 0 && (toStr(r.receipt_no) || toNum(r.received_quantity) > 0 || toNum(r.is_reverted) === 1));
-            
+
             if (!hasPending && !hasUnposted && lines.length > 0) return null;
             return {
                 id: String(poId), poNumber: toStr(po.purchase_order_no),
@@ -523,7 +523,7 @@ export async function POST(req: NextRequest) {
                 }
 
                 const draftRow = pors.map(id => porRows.find(r => toNum(r.purchase_order_product_id) === id)).find(r => r && (!toStr(r.receipt_no) || toNum(r.is_reverted) === 1));
-                
+
                 const lineDiscountTypeId = productLinksMap.get(pid)?.discount_type;
                 let lineDiscountPercent = headerDiscountPercent;
                 let lineDiscountTypeStr = dType ? toStr(dType.discount_type || dType.name, "Standard") : "Standard";
@@ -633,9 +633,9 @@ export async function POST(req: NextRequest) {
                     const savedDtId = ensureId(openRow.discount_type);
                     if (savedDtId) {
                         const dt = discountMap.get(String(savedDtId));
-                        if (dt) { 
-                            lineDiscountTypeStr = dt.name; 
-                            lineDiscountPercent = dt.pct; 
+                        if (dt) {
+                            lineDiscountTypeStr = dt.name;
+                            lineDiscountPercent = dt.pct;
                             // Update dAmt from restored percentage
                             dAmt = uPrice * (lineDiscountPercent / 100);
                         }
@@ -686,7 +686,7 @@ export async function POST(req: NextRequest) {
                 const rs = porRows.filter(r => r.receipt_no === rno);
                 const isReverted = rs.some(r => toNum(r.is_reverted) === 1);
                 return { receiptNo: rno, receiptDate: rs[0]?.receipt_date || rs[0]?.received_date || "", isPosted: rs.every(r => toNum(r.isPosted) === 1), isReverted, itemsCount: rs.length };
-            }).sort((a,b) => (b.receiptNo ?? "").localeCompare(a.receiptNo ?? ""));
+            }).sort((a, b) => (b.receiptNo ?? "").localeCompare(a.receiptNo ?? ""));
 
             return ok({
                 id: String(po.purchase_order_id), poNumber: toStr(po.purchase_order_no),
@@ -727,10 +727,10 @@ export async function POST(req: NextRequest) {
                 }
             }
 
-            return ok({ 
-                productId: String(p.product_id), 
-                name: String(p.product_name), 
-                barcode: String(p.barcode || p.product_code), 
+            return ok({
+                productId: String(p.product_id),
+                name: String(p.product_name),
+                barcode: String(p.barcode || p.product_code),
                 unitPrice: toNum(p.cost_per_unit),
                 discountType: discTypeStr,
                 discountPercent: discPct,
@@ -753,8 +753,8 @@ export async function POST(req: NextRequest) {
             if (trimmedDate) {
                 const parsedDate = new Date(trimmedDate);
                 const year = parsedDate.getFullYear();
-                if (isNaN(year) || year < 2000 || year > 2099) {
-                    return bad("Invalid Receipt Date. Year must be between 2000 and 2099.", 400);
+                if (isNaN(year) || year < 2000 || year > 2999) {
+                    return bad("Invalid Receipt Date. Year must be between 2000 and 2999.", 400);
                 }
             }
 
@@ -778,14 +778,14 @@ export async function POST(req: NextRequest) {
             const discountMap = await fetchDiscountTypesMap(base);
             const porRows = await fetchPORByPOIds(base, [thePoId]);
             const lines = await fetchPOProductsByPOId(base, thePoId);
-            
+
             // ✅ Fix: Correctly resolve ALL product IDs involved (from lines AND any extra existing POR rows)
             const productIdsSet = new Set<number>();
             lines.forEach(l => productIdsSet.add(toNum(l.product_id)));
             porRows.forEach(r => productIdsSet.add(toNum(r.product_id)));
             // Also include from porCounts keys if they are composite pid-bid
             Object.keys(porCounts).forEach(k => { if (k.includes("-")) productIdsSet.add(toNum(k.split("-")[0])); });
-            
+
             const linksMap = await fetchProductSupplierLinks(base, Array.from(productIdsSet), toNum(po?.supplier_name));
 
             for (const [key, qtyNum] of Object.entries(porCounts)) {
@@ -839,7 +839,7 @@ export async function POST(req: NextRequest) {
                         const m = meta[porId] || {};
                         const pId = toNum(row.product_id);
                         const uPrice = toNum(row.unit_price || 0);
-                        
+
                         if (qty <= 0) {
                             const isExtra = !lines.some(l => toNum(l.product_id) === toNum(row.product_id) && toNum(l.branch_id) === toNum(row.branch_id));
                             if (isExtra) deleteIds.push(porId);
@@ -966,8 +966,8 @@ export async function POST(req: NextRequest) {
                     // Reset standard items to 0 if they were previously part of a reverted receipt
                     cleanupPatches.push({
                         purchase_order_product_id: drId,
-                        received_quantity: 0, 
-                        total_amount: 0, 
+                        received_quantity: 0,
+                        total_amount: 0,
                         discounted_amount: 0,
                         vat_amount: 0,
                         withholding_amount: 0,
@@ -978,7 +978,7 @@ export async function POST(req: NextRequest) {
                     });
                 }
             }
-            
+
             try {
                 if (cleanupDeletes.length > 0) {
                     await fetchJson(`${base}/items/${POR_COLLECTION}`, { method: "DELETE", body: JSON.stringify(cleanupDeletes) });
@@ -998,7 +998,7 @@ export async function POST(req: NextRequest) {
             // Post Inventory is the sole authority for status transitions (6/9).
             // Only track the receiver_id if provided.
             if (receiverId) {
-                await fetchJson(`${base}/items/${PO_COLLECTION}/${thePoId}`, { method: "PATCH", body: JSON.stringify({ receiver_id: receiverId }) }).catch(() => {});
+                await fetchJson(`${base}/items/${PO_COLLECTION}/${thePoId}`, { method: "PATCH", body: JSON.stringify({ receiver_id: receiverId }) }).catch(() => { });
             }
 
             // ✅ Determine isInvoice status (still needed for detail response)
@@ -1017,7 +1017,7 @@ export async function POST(req: NextRequest) {
             fPors.forEach(r => allBranchIdsSet.add(toNum(r.branch_id)));
             const updatedBranchesMap = await fetchBranchesMap(base, Array.from(allBranchIdsSet));
             const updatedSupplierMap = await fetchSupplierNames(base, [toNum(po.supplier_name)]);
-            
+
             const updatedAllocationsMap = new Map<number, unknown[]>();
             const processedLinesSet = new Set<string>();
 
@@ -1030,10 +1030,10 @@ export async function POST(req: NextRequest) {
                 const p = updatedProductsMap.get(pid);
                 const pors = updatedPorIdsByKey.get(k) || [];
                 const allRows = pors.map(id => fPors.find(r => toNum(r.purchase_order_product_id) === id)).filter(Boolean);
-                
+
                 const currentRows = allRows.filter(r => toStr(r!.receipt_no) === toStr(receiptNo));
                 const previousRows = allRows.filter(r => toStr(r!.receipt_no) !== toStr(receiptNo));
-                
+
                 const prevRecQty = previousRows.reduce((sum, r) => sum + effectiveReceivedQty(r!), 0);
                 const currRecQty = currentRows.reduce((sum, r) => sum + effectiveReceivedQty(r!), 0);
                 const ordered = toNum(ln.ordered_quantity);
@@ -1064,7 +1064,7 @@ export async function POST(req: NextRequest) {
             // 2. Process extra POR rows that aren't in fLines
             for (const r of fPors) {
                 if (toStr(r.receipt_no) !== toStr(receiptNo)) continue; // ONLY show items from THIS receipt
-                
+
                 const pid = toNum(r.product_id);
                 const bid = toNum(r.branch_id);
                 const k = keyLine(thePoId, pid, bid);
@@ -1121,7 +1121,7 @@ export async function POST(req: NextRequest) {
 
             // Then get the full product details (only BOX items)
             const map = await fetchProductsMap(base, pids);
-            
+
             const results = links.map(link => {
                 const pid = toNum(link.product_id);
                 const p = map.get(pid);
