@@ -139,7 +139,7 @@ const PRODUCTS_COLLECTION = "products";
 const BRANCHES_COLLECTION = "branches";
 
 const POR_COLLECTION = "purchase_order_receiving";
-const POR_ITEMS_COLLECTION = "purchase_order_receiving_items";
+
 
 type POStatus = "OPEN" | "PARTIAL" | "RECEIVED" | "CLOSED";
 interface Supplier { id: number; supplier_name: string; }
@@ -180,13 +180,7 @@ interface PORRow {
     discount_type?: number | string | null;
     is_reverted?: number | string | null;
 }
-interface ReceivingItem {
-    receiving_item_id: number;
-    purchase_order_product_id: number;
-    product_id: number;
-    rfid_code: string;
-    created_at: string;
-}
+
 
 const POR_SAFE_FIELDS =
     "purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted,is_reverted,discounted_amount,vat_amount,withholding_amount,total_amount,unit_price,discount_type";
@@ -332,18 +326,7 @@ async function fetchPORByPOIds(base: string, poIds: number[]) {
     return rows;
 }
 
-async function fetchReceivingItems(base: string, filterPorIds?: number[]) {
-    const qs: string[] = [
-        "limit=-1",
-        "fields=receiving_item_id,purchase_order_product_id,product_id,rfid_code,created_at",
-    ];
-    if (filterPorIds && filterPorIds.length) {
-        qs.push(`filter[purchase_order_product_id][_in]=${encodeURIComponent(filterPorIds.join(","))}`);
-    }
-    const url = `${base}/items/${POR_ITEMS_COLLECTION}?${qs.join("&")}`;
-    const j = await fetchJson(url) as { data: ReceivingItem[] };
-    return Array.isArray(j?.data) ? j.data : [];
-}
+
 
 async function patchPO(base: string, poId: number, payload: unknown) {
     const url = `${base}/items/${PO_COLLECTION}/${encodeURIComponent(String(poId))}`;
@@ -364,18 +347,7 @@ function productDisplayCode(p: Product | null, productId: number) {
     return toStr(p?.barcode) || toStr(p?.product_code) || String(productId);
 }
 
-function groupRfidsByPorId(rows: ReceivingItem[]) {
-    const map = new Map<number, string[]>();
-    for (const r of rows) {
-        const porId = toNum(r?.purchase_order_product_id);
-        if (!porId) continue;
-        const arr = map.get(porId) ?? [];
-        const code = toStr(r?.rfid_code);
-        if (code) arr.push(code);
-        map.set(porId, arr);
-    }
-    return map;
-}
+
 
 function hasReceiptEvidence(por: PORRow) {
     return Boolean(toStr(por?.receipt_no) || toStr(por?.receipt_date) || toStr(por?.received_date));
@@ -406,39 +378,7 @@ function buildPorIdsByKey(porRows: PORRow[]) {
     return map;
 }
 
-function isPartiallyReceivedOrTagged(
-    poId: number,
-    lines: PoProductRow[],
-    porRows: PORRow[],
-    rfidsByPorId: Map<number, string[]>
-) {
-    if (!lines.length) return false;
-    const porIdsByKey = buildPorIdsByKey(porRows);
 
-    const recByPor = new Map<number, number>();
-    for (const r of porRows) {
-        const porId = toNum(r?.purchase_order_product_id);
-        if (!porId) continue;
-        recByPor.set(porId, effectiveReceivedQty(r));
-    }
-
-    for (const ln of lines) {
-        const pid = toNum(ln.product_id);
-        const bid = toNum(ln.branch_id);
-        const expected = Math.max(0, toNum(ln.ordered_quantity));
-        if (!pid || expected <= 0) continue;
-
-        const porIds = porIdsByKey.get(keyLine(poId, pid, bid)) ?? [];
-        if (!porIds.length) continue;
-
-        const taggedQty = porIds.reduce((sum, id) => sum + (rfidsByPorId.get(id) ?? []).length, 0);
-        if (taggedQty > 0) return true;
-        
-        const receivedQty = porIds.reduce((sum, id) => sum + (recByPor.get(id) ?? 0), 0);
-        if (receivedQty > 0) return true;
-    }
-    return false;
-}
 
 function isFullyReceived(
     poId: number,
@@ -728,9 +668,7 @@ export async function GET() {
             linesByPo.set(poId, arr);
         }
 
-        // RFID tags
-        const receivingItems = (porIdsAll.length ? await fetchReceivingItems(base, porIdsAll) : []) as ReceivingItem[];
-        const rfidsByPorId = groupRfidsByPorId(receivingItems);
+
 
         // Supplier names
         const supplierIds = poHeaders.map((p) => toNum(p?.supplier_name)).filter(Boolean);
@@ -753,23 +691,20 @@ export async function GET() {
             const porRows = porByPo.get(poId) ?? [];
             const lines = linesByPo.get(poId) ?? [];
 
-            const taggingOk = isPartiallyReceivedOrTagged(poId, lines, porRows, rfidsByPorId);
-            // ✅ Check for new statuses (6=Received, 9=Partially Received) AND legacy (12, 13)
-            const eligibleByStatus = invStatus === 6 || invStatus === 9 || invStatus === 12 || invStatus === 13;
+            // ✅ HARDENED: Status 12 (Transit/En Route) is NOT eligible for posting.
+            // A PO must be physically received (status 6, 9, or 13) before it can be posted.
+            const eligibleByStatus = invStatus === 6 || invStatus === 9 || invStatus === 13;
             
-            // ✅ Also check if there are unposted POR rows with receipt activity
-            // This catches POs whose inventory_status was never updated but DO have received items
+            // ✅ Also check if there are unposted POR rows with ACTUAL receipt activity
+            // (must have receipt_no AND received_quantity > 0 to count as real receipt activity)
             const hasUnpostedReceipts = porRows.some((r) => 
-                toNum(r?.isPosted) === 0 && (
-                    toStr(r?.receipt_no) || toStr(r?.receipt_date) || toStr(r?.received_date) || toNum(r?.received_quantity) > 0
-                )
+                toNum(r?.isPosted) === 0 &&
+                toStr(r?.receipt_no) &&
+                toNum(r?.received_quantity) > 0
             );
             
-            // Show PO if it has the right status OR has unposted receipt activity
+            // Show PO only if it has an eligible receiving status OR has genuine unposted receipts
             if (!eligibleByStatus && !hasUnpostedReceipts) continue;
-            
-            // If status is 12 (En Route) and nothing is tagged, skip
-            if (!taggingOk && !hasUnpostedReceipts && invStatus === 12) continue;
 
             const fully = isFullyReceived(poId, lines, porRows);
 
@@ -877,26 +812,17 @@ export async function POST(req: NextRequest) {
             const lines = await fetchPOProductsByPOId(base, poId);
             const porRows = await fetchPORByPOIds(base, [poId]);
 
-            const porIds = porRows.map((r: PORRow) => toNum(r?.purchase_order_product_id)).filter(Boolean);
-            const receivingItems = porIds.length ? await fetchReceivingItems(base, porIds) : [];
-            const rfidsByPorId = groupRfidsByPorId(receivingItems);
-
             // ✅ Block if PO is already financially posted (locked by Post Amounts)
-            if (toNum(po?.is_posted) === 1 || (po as Record<string, unknown>)?.is_posted === true) {
+            if (toNum(po?.is_posted) === 1 || po?.is_posted === true) {
                 return bad("This PO has been fully posted and is now locked. No further changes allowed.", 409);
             }
 
-            const receivingOk = isPartiallyReceivedOrTagged(poId, lines, porRows, rfidsByPorId);
-            // Also allow opening POs that already had a partial post (inventory_status=13)
-            const invStatus = toNum(po?.inventory_status);
+            // ✅ HARDENED: Check for actual receipt activity (must have receipt_no AND received_quantity > 0)
+            const hasAnyRealReceipts = porRows.some(r => toNum(r.received_quantity) > 0 && toStr(r.receipt_no));
             const hasAnyPosted = porRows.some((r) => toNum(r?.isPosted) === 1);
-            // ✅ Fallback: check for unposted POR rows with receipt activity (same logic as GET list)
-            const hasUnpostedReceipts = porRows.some((r) =>
-                toNum(r?.isPosted) === 0 && (
-                    toStr(r?.receipt_no) || toStr(r?.receipt_date) || toStr(r?.received_date) || toNum(r?.received_quantity) > 0
-                )
-            );
-            if (!receivingOk && !hasAnyPosted && !hasUnpostedReceipts && invStatus !== 13) {
+            const invStatus = toNum(po?.inventory_status);
+
+            if (!hasAnyRealReceipts && !hasAnyPosted && invStatus !== 13) {
                 return bad("PO is not ready for posting. Please receive at least one item first.", 409);
             }
 
@@ -984,7 +910,7 @@ export async function POST(req: NextRequest) {
                     // If it has a receiptNo but qty is 0, we still show it because it's part of the receipt's history (e.g., reverted).
                     if (!receiptNo && receivedQty === 0) continue; 
 
-                    const rfids = receiptRows.flatMap(r => rfidsByPorId.get(toNum(r.purchase_order_product_id)) ?? []);
+                    const rfids: string[] = [];
                     
                     const srcRow = receiptRows.find(r => toNum(r.unit_price) > 0) || receiptRows.find(r => toNum(r.isPosted) === 1) || receiptRows[0];
                     let discountTypeId = "";
@@ -1349,24 +1275,26 @@ export async function POST(req: NextRequest) {
             const lines = await fetchPOProductsByPOId(base, poId);
             const porRows = await fetchPORByPOIds(base, [poId]);
 
-            const porIds = porRows.map((r: PORRow) => toNum(r?.purchase_order_product_id)).filter(Boolean);
-            const receivingItems = porIds.length ? await fetchReceivingItems(base, porIds) : [];
-            const rfidsByPorId = groupRfidsByPorId(receivingItems);
 
-            const taggingOk = isPartiallyReceivedOrTagged(poId, lines, porRows, rfidsByPorId);
-            const hasAnyActivity = porRows.some(
-                (r) => effectiveReceivedQty(r) > 0 || hasReceiptEvidence(r)
+
+            // ✅ HARDENED: Require actual receipt activity before allowing posting
+            const hasAnyReceivedQty = porRows.some(
+                (r) => effectiveReceivedQty(r) > 0 && toStr(r?.receipt_no)
             );
             const hasAnyPosted = porRows.some((r) => toNum(r?.isPosted) === 1);
 
-            if (!taggingOk && !hasAnyActivity && !hasAnyPosted) {
+            if (!hasAnyReceivedQty && !hasAnyPosted) {
                 return bad("Cannot post. Please receive items in Receiving Products first.", 409);
             }
 
-
-            // Post ALL currently unposted POR rows
+            // Post ALL currently unposted POR rows that have actual received quantities
             const toPost = porRows
-                .filter((r) => toNum(r?.isPosted) === 0 && (toNum(r.received_quantity) > 0 || toStr(r.receipt_no)));
+                .filter((r) => toNum(r?.isPosted) === 0 && toNum(r.received_quantity) > 0 && toStr(r.receipt_no));
+
+            // ✅ HARDENED: Block if no rows qualify for posting
+            if (toPost.length === 0 && !hasAnyPosted) {
+                return bad("Nothing to post. No receipts with received quantities found. Please complete receiving first.", 409);
+            }
 
             let fully = isFullyReceived(poId, lines, porRows);
             if (toPost.length > 0) {
