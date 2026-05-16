@@ -202,7 +202,7 @@ async function fetchApprovedNotReceivedPOs(base: string): Promise<POHeaderRow[]>
         "fields=purchase_order_id,purchase_order_no,date,date_encoded,approver_id,date_approved,payment_status,inventory_status,date_received,supplier_name,total_amount,price_type",
         "filter[_or][0][inventory_status][_eq]=3", "filter[_or][1][inventory_status][_eq]=9",
         "filter[_or][2][inventory_status][_eq]=11", "filter[_or][3][inventory_status][_eq]=12",
-        "filter[inventory_status][_neq]=13",
+        "filter[_or][4][inventory_status][_eq]=13",
     ].join("&");
     const url = `${base}/items/${PO_COLLECTION}?${qs}`;
     const j = await fetchJson<{ data: POHeaderRow[] }>(url);
@@ -249,7 +249,7 @@ async function fetchPORByPOIds(base: string, poIds: number[]) {
     if (!poIds.length) return [] as PORow[];
     const rows: PORow[] = [];
     for (const ids of chunk(Array.from(new Set(poIds)), 250)) {
-        const url = `${base}/items/${POR_COLLECTION}?limit=-1&filter[purchase_order_id][_in]=${encodeURIComponent(ids.join(","))}&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted,is_reverted,lot_id,batch_no,expiry_date,unit_price,discount_type`;
+        const url = `${base}/items/${POR_COLLECTION}?limit=-1&filter[purchase_order_id][_in]=${encodeURIComponent(ids.join(","))}&fields=purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted,is_reverted,lot_id,batch_no,expiry_date,unit_price,discount_type,discounted_amount`;
         const j = await fetchJson<{ data: PORow[] }>(url);
         rows.push(...(j?.data ?? []));
     }
@@ -343,7 +343,12 @@ function isFullyReceived(poId: number, lines: POProductRow[], porRows: PORow[]) 
 
 function receivingStatusFrom(poId: number, lines: POProductRow[], porRows: PORow[]): "OPEN" | "PARTIAL" | "CLOSED" {
     const fully = isFullyReceived(poId, lines, porRows);
-    if (fully) return "CLOSED";
+    if (fully) {
+        // Even if quantities are fully received, if there are unposted/reverted receipts, it's not truly closed
+        const hasUnposted = porRows.some(r => toNum(r.isPosted) === 0 && (toStr(r.receipt_no) || toNum(r.received_quantity) > 0 || toNum(r.is_reverted) === 1));
+        if (hasUnposted) return "PARTIAL";
+        return "CLOSED";
+    }
     const hasAnyPosted = porRows.some(r => toNum(r.isPosted) === 1);
     const hasAnyReceipt = porRows.some(r => effectiveReceivedQty(r) > 0 || toStr(r.receipt_no));
     if (hasAnyPosted || hasAnyReceipt) return "PARTIAL";
@@ -415,7 +420,12 @@ export async function GET() {
                 const totalReceived = received.reduce((sum, r) => sum + effectiveReceivedQty(r), 0);
                 return totalReceived < toNum(ln.ordered_quantity);
             });
-            if (!hasPending && lines.length > 0) return null;
+            
+            // ✅ Fix: Also check if there are unposted receipts or reverted draft data
+            // Even if fully received (hasPending = false), we still show the PO if it needs posting or editing
+            const hasUnposted = porRows.some(r => toNum(r.isPosted) === 0 && (toStr(r.receipt_no) || toNum(r.received_quantity) > 0 || toNum(r.is_reverted) === 1));
+            
+            if (!hasPending && !hasUnposted && lines.length > 0) return null;
             return {
                 id: String(poId), poNumber: toStr(po.purchase_order_no),
                 supplierName: supplierMap.get(toNum(po.supplier_name)) || "—",
@@ -438,7 +448,7 @@ export async function POST(req: NextRequest) {
 
         if (action === "load_receipt") {
             const { poId, receiptNo } = body;
-            const url = `${base}/items/${POR_COLLECTION}?limit=-1&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&filter[receipt_no][_eq]=${encodeURIComponent(receiptNo)}&fields=purchase_order_product_id,product_id,branch_id,received_quantity,lot_id,batch_no,expiry_date,receipt_date,is_reverted`;
+            const url = `${base}/items/${POR_COLLECTION}?limit=-1&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&filter[receipt_no][_eq]=${encodeURIComponent(receiptNo)}&fields=purchase_order_product_id,product_id,branch_id,received_quantity,lot_id,batch_no,expiry_date,receipt_date,is_reverted,discount_type,discounted_amount`;
             const j = await fetchJson<{ data: Record<string, unknown>[] }>(url);
             return ok({ items: j?.data || [] });
         }
@@ -498,6 +508,8 @@ export async function POST(req: NextRequest) {
                     }
                 }
 
+                const draftRow = pors.map(id => porRows.find(r => toNum(r.purchase_order_product_id) === id)).find(r => r && (!toStr(r.receipt_no) || toNum(r.is_reverted) === 1));
+                
                 const lineDiscountTypeId = productLinksMap.get(pid)?.discount_type;
                 let lineDiscountPercent = headerDiscountPercent;
                 let lineDiscountTypeStr = dType ? toStr(dType.discount_type || dType.name, "Standard") : "Standard";
@@ -507,11 +519,30 @@ export async function POST(req: NextRequest) {
                     if (dt) { lineDiscountPercent = dt.pct; lineDiscountTypeStr = dt.name; }
                 }
 
-                const dAmt = toNum(ln.unit_price) * (lineDiscountPercent / 100);
+                let dAmt = toNum(ln.unit_price) * (lineDiscountPercent / 100);
+
+                // ✅ RESTORATION: If this is a reverted/draft row, use its saved discount info
+                if (draftRow) {
+                    const savedDtId = ensureId(draftRow.discount_type);
+                    if (savedDtId) {
+                        const dt = discountMap.get(String(savedDtId));
+                        if (dt) {
+                            lineDiscountTypeStr = dt.name;
+                            lineDiscountPercent = dt.pct;
+                            // Update base dAmt from the restored percentage
+                            dAmt = toNum(ln.unit_price) * (lineDiscountPercent / 100);
+                        }
+                    }
+                    const savedTotalDisc = toNum(draftRow.discounted_amount);
+                    const savedQty = toNum(draftRow.received_quantity);
+                    // Use actual saved amount if available, as it is the most accurate source
+                    if (savedTotalDisc > 0 && savedQty > 0) {
+                        dAmt = savedTotalDisc / savedQty;
+                    }
+                }
                 const orderedQty = toNum(ln.ordered_quantity);
                 const trueRemaining = Math.max(0, orderedQty - postedQty - unpostedQty);
 
-                const draftRow = pors.map(id => porRows.find(r => toNum(r.purchase_order_product_id) === id)).find(r => r && !toStr(r.receipt_no));
                 const porIdStr = draftRow ? String(draftRow.purchase_order_product_id) : `${pid}-${bid}`;
 
                 // ✅ Include if there is still a true remaining balance, OR unposted receipts, OR draft data from revert
@@ -568,7 +599,7 @@ export async function POST(req: NextRequest) {
                     }
                 }
 
-                const openRow = pors.map(id => porRows.find(r => toNum(r.purchase_order_product_id) === id)).find(r => r && !toStr(r.receipt_no));
+                const openRow = pors.map(id => porRows.find(r => toNum(r.purchase_order_product_id) === id)).find(r => r && (!toStr(r.receipt_no) || toNum(r.is_reverted) === 1));
                 const porIdStr = openRow ? String(openRow.purchase_order_product_id) : `${pid}-${bid}`;
 
                 let lineDiscountTypeStr = dType ? toStr(dType.discount_type || dType.name, "Standard") : "Standard";
@@ -582,6 +613,25 @@ export async function POST(req: NextRequest) {
                     if (dt) { lineDiscountPercent = dt.pct; lineDiscountTypeStr = dt.name; }
                 }
                 dAmt = uPrice * (lineDiscountPercent / 100);
+
+                // ✅ RESTORATION (Extra Items): Use saved discount info
+                if (openRow) {
+                    const savedDtId = ensureId(openRow.discount_type);
+                    if (savedDtId) {
+                        const dt = discountMap.get(String(savedDtId));
+                        if (dt) { 
+                            lineDiscountTypeStr = dt.name; 
+                            lineDiscountPercent = dt.pct; 
+                            // Update dAmt from restored percentage
+                            dAmt = uPrice * (lineDiscountPercent / 100);
+                        }
+                    }
+                    const savedTotalDisc = toNum(openRow.discounted_amount);
+                    const savedQty = toNum(openRow.received_quantity);
+                    if (savedTotalDisc > 0 && savedQty > 0) {
+                        dAmt = savedTotalDisc / savedQty;
+                    }
+                }
 
                 // ✅ Include extra items ONLY if they have draft data (reverted receipt)
                 //    (Do not include if they have postedQty or unpostedQty, as they belong to existing receipts)
@@ -601,10 +651,10 @@ export async function POST(req: NextRequest) {
                 }
             }
 
-            // ✅ Build draftData: POR rows where receipt_no is null but received_quantity > 0
+            // ✅ Build draftData: POR rows where receipt_no is null OR is_reverted is 1, and received_quantity > 0
             //    These are rows created by the "Draft Transformation" revert in Post Inventory.
-            //    The frontend uses this to auto-populate the workbench.
-            const draftRows = porRows.filter(r => !toStr(r.receipt_no) && toNum(r.received_quantity) > 0 && toNum(r.isPosted) !== 1);
+            //    The frontend uses this to auto-populate the workbench, including restored receipt data.
+            const draftRows = porRows.filter(r => (!toStr(r.receipt_no) || toNum(r.is_reverted) === 1) && toNum(r.received_quantity) > 0 && toNum(r.isPosted) !== 1);
             const draftData = draftRows.map(r => ({
                 porId: toNum(r.purchase_order_product_id),
                 productId: toNum(r.product_id),
@@ -613,6 +663,8 @@ export async function POST(req: NextRequest) {
                 batchNo: toStr(r.batch_no) || null,
                 expiryDate: toStr(r.expiry_date) || null,
                 lotId: r.lot_id ? toNum(r.lot_id) : null,
+                receiptNo: toStr(r.receipt_no) || null,
+                receiptDate: toStr(r.receipt_date) || null,
             }));
 
             const uniqueReceipts = Array.from(new Set(porRows.map(r => r.receipt_no).filter(Boolean)));
@@ -859,8 +911,12 @@ export async function POST(req: NextRequest) {
             }
 
             // ✅ GLOBAL CLEANUP: Find all OTHER draft rows (reverted/orphaned) for this PO and clean them up
+            //    Scope it to standard drafts or items explicitly loaded for this save operation.
             const allPorsForPo = await fetchPORByPOIds(base, [thePoId]);
-            const draftsToClean = allPorsForPo.filter(r => !toStr(r.receipt_no) && !processedPorIds.has(toNum(r.purchase_order_product_id)));
+            const draftsToClean = allPorsForPo.filter(r => (!toStr(r.receipt_no) || (toNum(r.is_reverted) === 1 && isEdit && r.receipt_no === receiptNo)) && !processedPorIds.has(toNum(r.purchase_order_product_id)));
+
+            const cleanupDeletes: number[] = [];
+            const cleanupPatches: Partial<PORow>[] = [];
 
             for (const dr of draftsToClean) {
                 const drId = toNum(dr.purchase_order_product_id);
@@ -868,23 +924,34 @@ export async function POST(req: NextRequest) {
 
                 if (isExtra) {
                     // Permanently delete orphaned extra items
-                    await fetchJson(`${base}/items/${POR_COLLECTION}/${drId}`, { method: "DELETE" }).catch(() => {});
+                    cleanupDeletes.push(drId);
                 } else if (toNum(dr.received_quantity) > 0) {
                     // Reset standard items to 0 if they were previously part of a reverted receipt
-                    await fetchJson(`${base}/items/${POR_COLLECTION}/${drId}`, { 
-                        method: "PATCH", 
-                        body: JSON.stringify({ 
-                            received_quantity: 0, 
-                            total_amount: 0, 
-                            discounted_amount: 0,
-                            vat_amount: 0,
-                            withholding_amount: 0,
-                            receipt_no: null,
-                            receipt_date: null,
-                            received_date: null
-                        }) 
-                    }).catch(() => {});
+                    cleanupPatches.push({
+                        purchase_order_product_id: drId,
+                        received_quantity: 0, 
+                        total_amount: 0, 
+                        discounted_amount: 0,
+                        vat_amount: 0,
+                        withholding_amount: 0,
+                        receipt_no: null,
+                        receipt_date: null,
+                        received_date: null,
+                        is_reverted: 0
+                    });
                 }
+            }
+            
+            try {
+                if (cleanupDeletes.length > 0) {
+                    await fetchJson(`${base}/items/${POR_COLLECTION}`, { method: "DELETE", body: JSON.stringify(cleanupDeletes) });
+                }
+                if (cleanupPatches.length > 0) {
+                    await fetchJson(`${base}/items/${POR_COLLECTION}`, { method: "PATCH", body: JSON.stringify(cleanupPatches) });
+                }
+            } catch (err) {
+                console.error("Cleanup failed:", err);
+                // We don't rollback the main save for cleanup failure, but we log it.
             }
 
             const fLines = await fetchPOProductsByPOId(base, thePoId), fPors = await fetchPORByPOIds(base, [thePoId]);
