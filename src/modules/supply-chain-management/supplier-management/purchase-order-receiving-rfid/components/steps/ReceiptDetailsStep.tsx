@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Pencil, XCircle } from "lucide-react";
+import { Pencil, XCircle, AlertCircle } from "lucide-react";
 import {
     Select,
     SelectContent,
@@ -32,6 +32,8 @@ function statusBadgeClasses(status?: string) {
     return "bg-primary/15 text-primary border border-primary/20";
 }
 
+const API_URL = "/api/scm/supplier-management/purchase-order-receiving-rfid";
+
 export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
     const {
         selectedPO,
@@ -45,6 +47,45 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
         editingReceiptId,
         clearEditingReceiptId,
     } = useReceivingProducts();
+
+    const [receiptNoDupError, setReceiptNoDupError] = React.useState<string | null>(null);
+    const [checkingDup, setCheckingDup] = React.useState(false);
+    const dupCheckTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // ✅ Debounced receipt number duplicate check
+    const checkReceiptNoDuplicate = React.useCallback((value: string) => {
+        if (dupCheckTimer.current) clearTimeout(dupCheckTimer.current);
+        const trimmed = value.trim();
+        if (!trimmed || !selectedPO?.id) {
+            setReceiptNoDupError(null);
+            return;
+        }
+        dupCheckTimer.current = setTimeout(async () => {
+            try {
+                setCheckingDup(true);
+                const r = await fetch(API_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "check_receipt_no", receiptNo: trimmed, poId: selectedPO.id }),
+                });
+                const j = await r.json().catch(() => ({}));
+                if (j?.data?.isDuplicate) {
+                    setReceiptNoDupError(`This receipt number is already in use on PO #${j.data.existingPoId}.`);
+                } else {
+                    setReceiptNoDupError(null);
+                }
+            } catch {
+                setReceiptNoDupError(null);
+            } finally {
+                setCheckingDup(false);
+            }
+        }, 400);
+    }, [selectedPO?.id]);
+
+    // Clear dup error when editing receipt changes
+    React.useEffect(() => {
+        if (editingReceiptId) setReceiptNoDupError(null);
+    }, [editingReceiptId]);
 
     const branchesLabel = React.useMemo(() => {
         const allocs = Array.isArray(selectedPO?.allocations) ? selectedPO!.allocations : [];
@@ -82,6 +123,19 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
         if (!receiptNo.trim()) errs.push("Receipt Number is required.");
         if (!receiptType.trim()) errs.push("Receipt Type is required.");
         if (!receiptDate.trim()) errs.push("Receipt Date is required.");
+
+        // ✅ Date year range validation
+        if (receiptDate.trim()) {
+            const parsedYear = new Date(receiptDate.trim()).getFullYear();
+            if (isNaN(parsedYear) || parsedYear < 2000 || parsedYear > 2099) {
+                errs.push("Invalid year. Must be between 2000 and 2099.");
+            }
+        }
+
+        // ✅ Block if duplicate receipt number detected
+        if (receiptNoDupError) {
+            errs.push(receiptNoDupError);
+        }
 
         if (errs.length > 0) {
             toast.error("Required fields missing", {
@@ -209,10 +263,26 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
                         <Label>Receipt Number *</Label>
                         <Input 
                             value={receiptNo} 
-                            onChange={(e) => setReceiptNo(e.target.value)} 
+                            onChange={(e) => {
+                                setReceiptNo(e.target.value);
+                                setReceiptNoDupError(null);
+                            }}
+                            onBlur={() => {
+                                if (!editingReceiptId) checkReceiptNoDuplicate(receiptNo);
+                            }}
                             placeholder="Enter Receipt Number..."
-                            disabled={!!editingReceiptId} // Disable changing receipt number while editing
+                            disabled={!!editingReceiptId}
+                            className={receiptNoDupError ? "border-destructive focus-visible:ring-destructive" : ""}
                         />
+                        {receiptNoDupError && (
+                            <div className="flex items-center gap-1.5 text-xs text-destructive mt-1">
+                                <AlertCircle className="h-3 w-3 shrink-0" />
+                                <span>{receiptNoDupError}</span>
+                            </div>
+                        )}
+                        {checkingDup && (
+                            <div className="text-xs text-muted-foreground mt-1">Checking availability...</div>
+                        )}
                     </div>
 
                     <div className="grid gap-2">
@@ -236,13 +306,15 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
                         <Input
                             type="date"
                             value={receiptDate}
+                            max="2099-12-31"
+                            min="2000-01-01"
                             onChange={(e) => setReceiptDate(e.target.value)}
                         />
                     </div>
 
 
 
-                    <Button type="button" className="w-full" onClick={handleContinue}>
+                    <Button type="button" className="w-full" onClick={handleContinue} disabled={!!receiptNoDupError || checkingDup}>
                         Continue to Product Checklist
                     </Button>
                 </div>

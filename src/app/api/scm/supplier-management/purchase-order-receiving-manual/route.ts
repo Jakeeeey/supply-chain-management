@@ -453,6 +453,20 @@ export async function POST(req: NextRequest) {
             return ok({ items: j?.data || [] });
         }
 
+        // ✅ Real-time receipt number duplicate check (lightweight — used by frontend onBlur)
+        if (action === "check_receipt_no") {
+            const receiptNoCheck = toStr(body.receiptNo).trim();
+            const poIdCheck = toNum(body.poId);
+            if (!receiptNoCheck || !poIdCheck) return ok({ isDuplicate: false });
+
+            const checkUrl = `${base}/items/${POR_COLLECTION}?limit=1&filter[receipt_no][_eq]=${encodeURIComponent(receiptNoCheck)}&filter[purchase_order_id][_neq]=${poIdCheck}&filter[is_reverted][_neq]=1&fields=purchase_order_id`;
+            const checkJ = await fetchJson<{ data: Array<Record<string, unknown>> }>(checkUrl).catch(() => ({ data: [] }));
+            if (checkJ?.data?.length) {
+                return ok({ isDuplicate: true, existingPoId: checkJ.data[0]?.purchase_order_id });
+            }
+            return ok({ isDuplicate: false });
+        }
+
         if (action === "open_po" || action === "verify_po") {
             const poId = toNum(body.poId || body.barcode);
             const poUrl = `${base}/items/${PO_COLLECTION}/${poId}?fields=*,discount_type.*,discount_type.line_per_discount_type.line_id.*`;
@@ -729,6 +743,29 @@ export async function POST(req: NextRequest) {
             const { poId, receiptNo, receiptDate, porCounts, porMetaData, receiverId, isEdit } = body;
             const thePoId = toNum(poId);
             if (!thePoId) return bad("Missing PO ID");
+
+            // ✅ Receipt Number Validation
+            const trimmedReceiptNo = toStr(receiptNo).trim();
+            if (!trimmedReceiptNo) return bad("Receipt Number is required.", 400);
+
+            // ✅ Date Validation: Prevent invalid years (e.g., 6-digit years like "151531")
+            const trimmedDate = toStr(receiptDate).trim();
+            if (trimmedDate) {
+                const parsedDate = new Date(trimmedDate);
+                const year = parsedDate.getFullYear();
+                if (isNaN(year) || year < 2000 || year > 2099) {
+                    return bad("Invalid Receipt Date. Year must be between 2000 and 2099.", 400);
+                }
+            }
+
+            // ✅ Cross-PO Receipt Number Uniqueness Check
+            // A receipt number must be unique across ALL Purchase Orders (not just the current one).
+            // Exclusions: rows on the SAME PO (allowed) and rows marked as is_reverted=1 (inactive drafts).
+            const dupCheckUrl = `${base}/items/${POR_COLLECTION}?limit=1&filter[receipt_no][_eq]=${encodeURIComponent(trimmedReceiptNo)}&filter[purchase_order_id][_neq]=${thePoId}&filter[is_reverted][_neq]=1&fields=purchase_order_product_id,purchase_order_id`;
+            const dupCheckJ = await fetchJson<{ data: Array<Record<string, unknown>> }>(dupCheckUrl).catch(() => ({ data: [] }));
+            if (dupCheckJ?.data?.length) {
+                return bad(`Receipt Number "${trimmedReceiptNo}" is already in use on another Purchase Order (PO ID: ${dupCheckJ.data[0]?.purchase_order_id}).`, 409);
+            }
 
             const poUrl = `${base}/items/${PO_COLLECTION}/${thePoId}?fields=purchase_order_id,purchase_order_no,supplier_name,discount_type.*,discount_type.line_per_discount_type.line_id.*,inventory_status,price_type,date_encoded,vat_amount,withholding_tax_amount`;
             const pj = await fetchJson<{ data: POHeaderRow }>(poUrl);
