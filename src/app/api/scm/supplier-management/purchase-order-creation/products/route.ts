@@ -178,7 +178,8 @@ export async function GET(req: NextRequest) {
             for (const family of familyMap.values()) {
                 const boxProduct = family.find((p) => {
                     const rawUom = p.unit_of_measurement;
-                    const uomId = Number(typeof rawUom === "object" && rawUom !== null ? (rawUom as any).unit_id ?? (rawUom as any).id : rawUom);
+                    const uomObj = rawUom as Record<string, unknown>;
+                    const uomId = Number(typeof rawUom === "object" && rawUom !== null ? uomObj.unit_id ?? uomObj.id : rawUom);
                     return uomId === 11;
                 });
                 
@@ -187,7 +188,8 @@ export async function GET(req: NextRequest) {
                 } else {
                     const pieceProduct = family.find((p) => {
                         const rawUom = p.unit_of_measurement;
-                        const uomId = Number(typeof rawUom === "object" && rawUom !== null ? (rawUom as any).unit_id ?? (rawUom as any).id : rawUom);
+                        const uomObj = rawUom as Record<string, unknown>;
+                        const uomId = Number(typeof rawUom === "object" && rawUom !== null ? uomObj.unit_id ?? uomObj.id : rawUom);
                         return uomId === 1;
                     });
                     if (pieceProduct) prioritizedRows.push(pieceProduct);

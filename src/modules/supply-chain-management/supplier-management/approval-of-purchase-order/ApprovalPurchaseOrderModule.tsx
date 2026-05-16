@@ -99,8 +99,8 @@ export default function ApprovalPurchaseOrderModule({ approverId, approverName }
                     setDetail(null);
                     return `PO ${selectedId} approved successfully!`;
                 },
-                error: (err: any) => {
-                    const msg = String(err?.message ?? err);
+                error: (err: unknown) => {
+                    const msg = err instanceof Error ? err.message : String(err);
                     setError(msg);
                     return `Approval failed: ${msg}`;
                 },

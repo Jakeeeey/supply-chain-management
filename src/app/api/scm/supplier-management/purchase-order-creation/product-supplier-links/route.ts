@@ -104,10 +104,16 @@ export async function GET(req: NextRequest) {
         const familyUrl = `${base}/items/products?limit=-1&fields=product_id,parent_id,unit_of_measurement.*&filter=${encodeURIComponent(JSON.stringify(familyFilter))}`;
         const familyRes = await fetch(familyUrl, { headers: { "Content-Type": "application/json", Authorization: `Bearer ${TOKEN}` }, cache: "no-store" });
         const familyJson = await familyRes.json().catch(() => ({}));
-        const rawFamilyProducts = (familyJson.data ?? []) as any[];
+        interface FamilyProduct {
+            product_id: string | number;
+            parent_id?: string | number | null;
+            unit_of_measurement?: number | string | Record<string, unknown> | null;
+        }
+
+        const rawFamilyProducts = (familyJson.data ?? []) as FamilyProduct[];
 
         // ✅ Prioritize Box (11) over Piece (1)
-        const familyMap = new Map<string, any[]>();
+        const familyMap = new Map<string, FamilyProduct[]>();
         for (const p of rawFamilyProducts) {
             const rid = String(p.parent_id || p.product_id);
             if (!familyMap.has(rid)) familyMap.set(rid, []);

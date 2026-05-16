@@ -539,7 +539,7 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        const createdPo = (parsed.json?.data ?? parsed.json) as any;
+        const createdPo = (parsed.json?.data ?? parsed.json) as Record<string, unknown>;
         const poId = numOrZero(createdPo?.purchase_order_id);
         if (!poId) throw new Error("Failed to retrieve created PO ID.");
 
