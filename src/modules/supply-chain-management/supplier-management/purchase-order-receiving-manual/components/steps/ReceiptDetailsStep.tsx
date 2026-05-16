@@ -128,8 +128,8 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
         // ✅ Date year range validation
         if (receiptDate.trim()) {
             const parsedYear = new Date(receiptDate.trim()).getFullYear();
-            if (isNaN(parsedYear) || parsedYear < 2000 || parsedYear > 2099) {
-                errs.push("Invalid year. Must be between 2000 and 2099.");
+            if (isNaN(parsedYear) || parsedYear < 2000 || parsedYear > 3000) {
+                errs.push("Invalid year. Must be between 2000 and 3000.");
             }
         }
 
@@ -309,7 +309,7 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
                         <Input
                             type="date"
                             value={receiptDate}
-                            max="2099-12-31"
+                            max="3000-12-31"
                             min="2000-01-01"
                             onChange={(e) => setReceiptDate(e.target.value)}
                         />

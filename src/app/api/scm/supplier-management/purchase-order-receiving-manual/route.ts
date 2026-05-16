@@ -753,8 +753,8 @@ export async function POST(req: NextRequest) {
             if (trimmedDate) {
                 const parsedDate = new Date(trimmedDate);
                 const year = parsedDate.getFullYear();
-                if (isNaN(year) || year < 2000 || year > 2999) {
-                    return bad("Invalid Receipt Date. Year must be between 2000 and 2999.", 400);
+                if (isNaN(year) || year < 2000 || year > 3000) {
+                    return bad("Invalid Receipt Date. Year must be between 2000 and 3000.", 400);
                 }
             }
 
