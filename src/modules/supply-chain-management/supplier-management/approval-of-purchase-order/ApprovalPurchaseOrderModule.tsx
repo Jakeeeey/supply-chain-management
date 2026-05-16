@@ -85,22 +85,31 @@ export default function ApprovalPurchaseOrderModule({ approverId, approverName }
         }) => {
             if (!selectedId) return;
 
-            try {
-                setError("");
-                await provider.approvePurchaseOrder({
-                    id: selectedId,
-                    ...opts,
-                    approverId: approverId,
-                });
+            const promise = provider.approvePurchaseOrder({
+                id: selectedId,
+                ...opts,
+                approverId: approverId,
+            });
 
-                // Refresh list and clear selection
-                await refreshList();
-                setSelectedId(null);
-                setDetail(null);
-            } catch (e: unknown) {
-                const msg = String(e instanceof Error ? e.message : e);
-                setError(msg);
-                toast.error(`Approval failed: ${msg}`);
+            toast.promise(promise, {
+                loading: `Approving PO ${selectedId}...`,
+                success: () => {
+                    refreshList();
+                    setSelectedId(null);
+                    setDetail(null);
+                    return `PO ${selectedId} approved successfully!`;
+                },
+                error: (err: any) => {
+                    const msg = String(err?.message ?? err);
+                    setError(msg);
+                    return `Approval failed: ${msg}`;
+                },
+            });
+
+            try {
+                await promise;
+            } catch {
+                // error handled by toast
             }
         },
         [selectedId, refreshList, approverId]
