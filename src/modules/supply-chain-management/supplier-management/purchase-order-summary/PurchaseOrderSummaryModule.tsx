@@ -44,6 +44,7 @@ interface Allocation {
   unitPrice: number;
   discount: number;
   total: number;
+  balance?: number;
   status: "FULFILLED" | "PARTIAL" | "OPEN";
 }
 
@@ -730,7 +731,7 @@ export default function PurchaseOrderSummaryModule({
                           </TableHeader>
                           <TableBody>
                             {allocations.map((item) => {
-                              const balance = Math.max(0, item.orderedQty - item.receivedQty);
+                              const balance = item.balance ?? 0;
                               const isComplete = item.receivedQty >= item.orderedQty;
                               const isPartial = item.receivedQty > 0 && item.receivedQty < item.orderedQty;
 
@@ -748,8 +749,8 @@ export default function PurchaseOrderSummaryModule({
                                   <TableCell className={`text-[11px] font-black text-center px-2 font-mono ${isComplete ? 'text-green-600' : (isPartial ? 'text-blue-600' : 'text-muted-foreground/50')}`}>
                                     {item.receivedQty}
                                   </TableCell>
-                                  <TableCell className={`text-[11px] font-black text-center px-2 font-mono ${balance > 0 ? 'text-destructive' : 'text-green-600 opacity-30'}`}>
-                                    {balance}
+                                  <TableCell className={`text-[11px] font-black text-center px-2 font-mono ${balance > 0 ? 'text-green-600' : (balance < 0 ? 'text-destructive' : 'text-green-600 opacity-30')}`}>
+                                    {balance > 0 ? `+${balance}` : balance}
                                   </TableCell>
                                   <TableCell className="text-[11px] font-black font-mono text-right text-foreground px-4">
                                     ₱{item.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -767,8 +768,11 @@ export default function PurchaseOrderSummaryModule({
                               <TableCell className="text-center font-black font-mono text-[11px] text-primary">
                                 {allocations.reduce((s, i) => s + i.receivedQty, 0)}
                               </TableCell>
-                              <TableCell className="text-center font-black font-mono text-[11px] text-destructive">
-                                {allocations.reduce((s, i) => s + Math.max(0, i.orderedQty - i.receivedQty), 0)}
+                               <TableCell className={`text-center font-black font-mono text-[11px] ${allocations.reduce((s, i) => s + (i.balance ?? 0), 0) >= 0 ? 'text-green-600' : 'text-destructive'}`}>
+                                {(() => {
+                                  const totalBalance = allocations.reduce((s, i) => s + (i.balance ?? 0), 0);
+                                  return totalBalance > 0 ? `+${totalBalance}` : totalBalance;
+                                })()}
                               </TableCell>
                               <TableCell className="text-right font-black font-mono text-[11px] text-foreground px-4">
                                 ₱{allocations.reduce((s, i) => s + i.total, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
