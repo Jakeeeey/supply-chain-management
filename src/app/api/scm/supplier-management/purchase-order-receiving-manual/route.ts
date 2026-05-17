@@ -459,10 +459,19 @@ export async function POST(req: NextRequest) {
             const poIdCheck = toNum(body.poId);
             if (!receiptNoCheck || !poIdCheck) return ok({ isDuplicate: false });
 
-            const checkUrl = `${base}/items/${POR_COLLECTION}?limit=1&filter[receipt_no][_eq]=${encodeURIComponent(receiptNoCheck)}&filter[purchase_order_id][_neq]=${poIdCheck}&filter[is_reverted][_neq]=1&fields=purchase_order_id`;
-            const checkJ = await fetchJson<{ data: Array<Record<string, unknown>> }>(checkUrl).catch(() => ({ data: [] }));
+            const checkUrl = `${base}/items/${POR_COLLECTION}?limit=1&filter[receipt_no][_eq]=${encodeURIComponent(receiptNoCheck)}&filter[purchase_order_id][_neq]=${poIdCheck}&filter[is_reverted][_neq]=1&fields=purchase_order_id.purchase_order_no,purchase_order_id.purchase_order_id`;
+            const checkJ = await fetchJson<{ data: Record<string, unknown>[] }>(checkUrl).catch(() => ({ data: [] }));
+            
             if (checkJ?.data?.length) {
-                return ok({ isDuplicate: true, existingPoId: checkJ.data[0]?.purchase_order_id });
+                const first = checkJ.data[0];
+                const poObj = first?.purchase_order_id;
+                const poNo = (typeof poObj === "object" && poObj !== null) ? (poObj as Record<string, unknown>)["purchase_order_no"] as string : null;
+                const poId = (typeof poObj === "object" && poObj !== null) ? (poObj as Record<string, unknown>)["purchase_order_id"] : poObj;
+
+                return ok({ 
+                    isDuplicate: true, 
+                    existingPoNo: poNo || `ID #${poId}`
+                });
             }
             return ok({ isDuplicate: false });
         }

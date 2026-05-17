@@ -70,7 +70,7 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
                 });
                 const j = await r.json().catch(() => ({}));
                 if (j?.data?.isDuplicate) {
-                    setReceiptNoDupError(`This receipt number is already in use on PO #${j.data.existingPoId}.`);
+                    setReceiptNoDupError(`This receipt number is already in use on ${j.data.existingPoNo}.`);
                 } else {
                     setReceiptNoDupError(null);
                 }
@@ -133,8 +133,20 @@ export function ReceiptDetailsStep({ onContinue }: { onContinue: () => void }) {
             }
         }
 
-        // ✅ Block if duplicate receipt number detected
-        if (receiptNoDupError) {
+        // ✅ Block if duplicate receipt number detected (sync check for race conditions)
+        const trimmedReceiptNo = receiptNo.trim();
+        if (trimmedReceiptNo && Array.isArray(selectedPO?.history)) {
+            const exists = selectedPO.history.some((h: { receiptNo: string }) => h.receiptNo === trimmedReceiptNo);
+            if (exists) {
+                if (!editingReceiptId) {
+                    errs.push("Receipt Number already exists for this PO.");
+                } else if (editingReceiptId !== trimmedReceiptNo) {
+                    errs.push("Cannot rename to an existing receipt number.");
+                }
+            }
+        }
+
+        if (receiptNoDupError && !errs.includes(receiptNoDupError)) {
             errs.push(receiptNoDupError);
         }
 

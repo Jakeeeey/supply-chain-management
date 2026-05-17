@@ -341,6 +341,34 @@ async function fetchProductSupplierLinks(base: string, supplierId: number) {
     return map;
 }
 
+async function fetchProductSupplierLinksBySids(base: string, supplierIds: number[]) {
+    const fields = encodeURIComponent("id,product_id,supplier_id,discount_type.*,discount_type.line_per_discount_type.line_id.*");
+    const uniq = Array.from(new Set(supplierIds.filter(n => n > 0)));
+    if (!uniq.length) return new Map<number, Map<number, Record<string, unknown>>>();
+
+    const rows: Record<string, unknown>[] = [];
+    // We already have a chunk helper in this file
+    for (const ids of chunk(uniq, 250)) {
+        const url =
+            `${base}/items/product_per_supplier?limit=-1` +
+            `&filter[supplier_id][_in]=${encodeURIComponent(ids.join(","))}` +
+            `&fields=${fields}`;
+        const j = await fetchJson(url) as { data: Array<Record<string, unknown>> };
+        rows.push(...(Array.isArray(j?.data) ? j.data : []));
+    }
+
+    const map = new Map<number, Map<number, Record<string, unknown>>>();
+    for (const r of rows) {
+        const sid = toNum(r?.supplier_id);
+        const pid = toNum(r?.product_id);
+        if (sid && pid) {
+            if (!map.has(sid)) map.set(sid, new Map());
+            map.get(sid)!.set(pid, r);
+        }
+    }
+    return map;
+}
+
 // =====================
 // BUILDERS / LOGIC
 // =====================
@@ -692,8 +720,10 @@ export async function GET() {
         if (!poHeaders.length) return ok([] as PostingListItem[]);
 
         const rawPoIds = poHeaders.map(p => toNum(p?.purchase_order_id)).filter(Boolean) as number[];
-        const poLinesAll = await fetchPOProductsByPOIds(base, rawPoIds);
-        const porRowsAllPre = await fetchPORByPOIds(base, rawPoIds);
+        const [poLinesAll, porRowsAllPre] = await Promise.all([
+            fetchPOProductsByPOIds(base, rawPoIds),
+            fetchPORByPOIds(base, rawPoIds)
+        ]);
 
         const candidatePoIds = poHeaders.filter(po => {
             const poId = toNum(po?.purchase_order_id);
@@ -734,15 +764,20 @@ export async function GET() {
         }
 
         // RFID tags
-        const receivingItems = (porIdsAll.length ? await fetchReceivingItems(base, porIdsAll) : []) as ReceivingItem[];
-        groupRfidsByPorId(receivingItems);
-
-        // Supplier names
+        // Supplier & Product IDs
         const supplierIds = poHeaders.map((p) => toNum(p?.supplier_name)).filter(Boolean);
-        const supplierNamesMap = await fetchSupplierNames(base, supplierIds);
-        
         const allProductIds = Array.from(new Set(Array.from(linesByPo.values()).flatMap(rows => rows.map(r => toNum(r.product_id)).filter(Boolean))));
-        const productsMap = await fetchProductsMap(base, allProductIds as number[]);
+
+        // Parallel fetch
+        const [receivingItemsUncasted, supplierNamesMap, productsMap, allPslMapBySid] = await Promise.all([
+            porIdsAll.length ? fetchReceivingItems(base, porIdsAll) : Promise.resolve([]),
+            fetchSupplierNames(base, supplierIds),
+            fetchProductsMap(base, allProductIds as number[]),
+            fetchProductSupplierLinksBySids(base, supplierIds)
+        ]);
+        const receivingItems = receivingItemsUncasted as ReceivingItem[];
+        
+        groupRfidsByPorId(receivingItems);
 
         const list: PostingListItem[] = [];
 
@@ -800,7 +835,7 @@ export async function GET() {
             let listTotal = 0;
             if (readyRows.length > 0) {
                 const sid = toNum(po?.supplier_name);
-                const psl = sid ? await fetchProductSupplierLinks(base, sid) : new Map();
+                const psl = sid ? (allPslMapBySid.get(sid) || new Map()) : new Map();
                 const poDType = po?.discount_type as Record<string, unknown> | null | undefined;
                 const poDiscPct = resolveDiscountPercent(poDType);
 
@@ -882,32 +917,24 @@ export async function POST(req: NextRequest) {
             const po = pj?.data ?? null;
             if (!po) return bad("PO not found.", 404);
 
-            // ✅ Check is_posted lock
-            if (toNum(po?.is_posted) === 1 || po?.is_posted === true) {
-                return bad("This PO has been fully posted and is now locked. No further changes allowed.", 409);
-            }
-
-            const lines = await fetchPOProductsByPOId(base, poId);
-            const porRows = await fetchPORByPOIds(base, [poId]);
-
-            const porIds = porRows.map((r: PORRow) => toNum(r?.purchase_order_product_id)).filter(Boolean);
-            const receivingItems = porIds.length ? await fetchReceivingItems(base, porIds) : [];
-            const rfidsByPorId = groupRfidsByPorId(receivingItems);
-
-            const receivingOk = isPartiallyReceivedOrTagged(poId, lines, porRows, rfidsByPorId);
-            const invStatus = toNum(po?.inventory_status);
-            // ✅ Check for receipts ready for amount posting (inventory-posted but NOT yet amount-posted)
-            const hasReadyForAmounts = porRows.some((r) => toNum(r?.isPosted) === 1 && toNum(r?.is_posted_amounts) !== 1);
-            if (!receivingOk && !hasReadyForAmounts && invStatus !== 13) {
-                return bad("PO is not ready for amount posting. No inventory-posted receipts available.", 409);
-            }
-
-            const fully = isFullyReceived(poId, lines, porRows);
+            // ✅ We intentionally allow loading fully posted POs in this module
+            // so the frontend can display the updated "Fully Posted" state.
+            // The lock is strictly enforced during modify actions (post_receipt, post_all).
+            // if (toNum(po?.is_posted) === 1 || po?.is_posted === true) {
+            //     return bad("This PO has been fully posted and is now locked. No further changes allowed.", 409);
+            // }
 
             const sid = toNum(po?.supplier_name);
-            const supplierMap = await fetchSupplierNames(base, sid ? [sid] : []);
-            const supplierName = sid ? toStr(supplierMap.get(sid)) : toStr(po?.supplier_name);
 
+            // 🚀 Stage 1: Parallel fetch independent data
+            const [lines, porRows, supplierMap, productSupplierLinks] = await Promise.all([
+                fetchPOProductsByPOId(base, poId),
+                fetchPORByPOIds(base, [poId]),
+                fetchSupplierNames(base, sid ? [sid] : []),
+                sid ? fetchProductSupplierLinks(base, sid) : Promise.resolve(new Map())
+            ]);
+
+            const porIds = porRows.map((r: PORRow) => toNum(r?.purchase_order_product_id)).filter(Boolean);
             const productIds = Array.from(new Set([
                 ...lines.map((x) => toNum(x.product_id)),
                 ...porRows.map((x) => toNum(x.product_id))
@@ -917,9 +944,25 @@ export async function POST(req: NextRequest) {
                 ...porRows.map((x) => toNum(x.branch_id))
             ].filter(Boolean)));
 
-            const productsMap = await fetchProductsMap(base, productIds);
-            const branchesMap = await fetchBranchesMap(base, branchIds);
-            const productSupplierLinks = sid ? await fetchProductSupplierLinks(base, sid) : new Map();
+            // 🚀 Stage 2: Parallel fetch dependent data
+            const [receivingItems, productsMap, branchesMap] = await Promise.all([
+                porIds.length ? fetchReceivingItems(base, porIds) : Promise.resolve([]),
+                fetchProductsMap(base, productIds),
+                fetchBranchesMap(base, branchIds)
+            ]);
+
+            const rfidsByPorId = groupRfidsByPorId(receivingItems);
+            const receivingOk = isPartiallyReceivedOrTagged(poId, lines, porRows, rfidsByPorId);
+            const invStatus = toNum(po?.inventory_status);
+            
+            // ✅ Check for receipts ready for amount posting (inventory-posted but NOT yet amount-posted)
+            const hasReadyForAmounts = porRows.some((r) => toNum(r?.isPosted) === 1 && toNum(r?.is_posted_amounts) !== 1);
+            if (!receivingOk && !hasReadyForAmounts && invStatus !== 13) {
+                return bad("PO is not ready for amount posting. No inventory-posted receipts available.", 409);
+            }
+
+            const fully = isFullyReceived(poId, lines, porRows);
+            const supplierName = sid ? toStr(supplierMap.get(sid)) : toStr(po?.supplier_name);
 
             // ── DEBUG: Log what productSupplierLinks contains ──
             console.log("[DEBUG open_po] supplierId (sid):", sid);
