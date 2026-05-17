@@ -711,10 +711,37 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
 
     const toggleProductVerification = React.useCallback((productId: string) => {
         setVerifiedProductIds(prev => {
-            if (prev.includes(productId)) return prev.filter(id => id !== productId);
+            if (prev.includes(productId)) {
+                // Clear from manualCounts when unchecking to prevent ghost items in totals
+                setManualCounts(prevCounts => {
+                    const next = { ...prevCounts };
+                    
+                    // Clear by basic productId patterns (for extra items)
+                    delete next[productId];
+                    Object.keys(next).forEach(k => {
+                        if (k.startsWith(`${productId}-`)) delete next[k];
+                    });
+
+                    // Clear by allocation item ID (for standard items)
+                    if (selectedPO?.allocations) {
+                        selectedPO.allocations.forEach(a => {
+                            if (Array.isArray(a.items)) {
+                                a.items.forEach(i => {
+                                    if (String(i.productId) === String(productId)) {
+                                        delete next[i.id];
+                                    }
+                                });
+                            }
+                        });
+                    }
+
+                    return next;
+                });
+                return prev.filter(id => id !== productId);
+            }
             return [...prev, productId];
         });
-    }, []);
+    }, [selectedPO]);
 
     // ✅ NEW: Supplier Products Fetching
     const getSupplierProducts = React.useCallback(async (supplierId: string) => {
