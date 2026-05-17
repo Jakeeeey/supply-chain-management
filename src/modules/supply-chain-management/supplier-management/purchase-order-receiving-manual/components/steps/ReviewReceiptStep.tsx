@@ -130,10 +130,18 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
     }, [selectedPO]);
 
     const receivedItems = React.useMemo(() => {
-        return allItems.filter(it => 
-            (safeCounts[String(it.id)] ?? 0) > 0 && 
-            verifiedProductIds.includes(String(it.productId))
-        );
+        const seen = new Set<string>();
+        return allItems.filter(it => {
+            const porId = String(it.id);
+            const isVerified = verifiedProductIds.includes(String(it.productId));
+            const hasCount = (safeCounts[porId] ?? 0) > 0;
+            
+            if (isVerified && hasCount && !seen.has(porId)) {
+                seen.add(porId);
+                return true;
+            }
+            return false;
+        });
     }, [allItems, safeCounts, verifiedProductIds]);
 
     const executeSave = async () => {
@@ -158,7 +166,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
         }
 
         const missingLotOrExpiry: string[] = [];
-        allItems.forEach((it: ReceivingPOItem) => {
+        receivedItems.forEach((it: ReceivingPOItem) => {
             const porId = String(it.id);
             const count = safeCounts[porId] ?? 0;
             if (count > 0) {
@@ -178,10 +186,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
         }
 
         // Check if any count is entered
-        const hasAnyCounts = allItems.some((it: ReceivingPOItem) => {
-            const porId = String(it.id);
-            return (safeCounts[porId] ?? 0) > 0;
-        });
+        const hasAnyCounts = receivedItems.length > 0;
         if (!hasAnyCounts) {
             setClientSaveError("Please enter at least 1 quantity before saving.");
             return;
@@ -192,7 +197,8 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
         // ✅ Check if Incomplete
         const isPartial = allItems.some((it: ReceivingPOItem) => {
             const porId = String(it.id);
-            const count = safeCounts[porId] ?? 0;
+            const isVerified = verifiedProductIds.includes(String(it.productId));
+            const count = isVerified ? (safeCounts[porId] ?? 0) : 0;
             const expected = Number(it.expectedQty || 0);
             return count < expected;
         });
@@ -212,16 +218,16 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
         });
 
         await saveReceipt(metaData);
-    }, [saveReceipt, selectedPO?.status, allItems, safeCounts, lotNumbers, batchNumbers, expiryDates, editingReceiptId]);
+    }, [saveReceipt, selectedPO?.status, allItems, receivedItems, verifiedProductIds, safeCounts, lotNumbers, batchNumbers, expiryDates, editingReceiptId]);
 
-    const totalEntered = Object.values(safeCounts).reduce((a: number, b: number) => a + Number(b), 0);
+    const totalEntered = receivedItems.reduce((a: number, b: ReceivingPOItem) => a + Number(safeCounts[String(b.id)] ?? 0), 0);
     const totalExpected = allItems.reduce((a: number, b: ReceivingPOItem) => a + Number(b.expectedQty || 0), 0);
 
     const financials = React.useMemo(() => {
         let gross = 0;
         let discount = 0;
 
-        allItems.forEach((it: ReceivingPOItem) => {
+        receivedItems.forEach((it: ReceivingPOItem) => {
             const porId = String(it.id);
             const count = safeCounts[porId] ?? 0;
             const price = Number(it.unitPrice || 0);
@@ -252,7 +258,7 @@ export function ReviewReceiptStep({ onBack, receiverName }: { onBack: () => void
         }
 
         return { gross, discount, net, vatAmount, whtAmount, grandTotal, isExclusive };
-    }, [allItems, safeCounts, selectedPO?.priceType]);
+    }, [receivedItems, safeCounts, selectedPO?.priceType]);
 
     return (
         <div className="space-y-4">
