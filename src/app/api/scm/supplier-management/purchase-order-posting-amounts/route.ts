@@ -882,10 +882,12 @@ export async function POST(req: NextRequest) {
             const po = pj?.data ?? null;
             if (!po) return bad("PO not found.", 404);
 
-            // ✅ Check is_posted lock
-            if (toNum(po?.is_posted) === 1 || po?.is_posted === true) {
-                return bad("This PO has been fully posted and is now locked. No further changes allowed.", 409);
-            }
+            // ✅ We intentionally allow loading fully posted POs in this module
+            // so the frontend can display the updated "Fully Posted" state.
+            // The lock is strictly enforced during modify actions (post_receipt, post_all).
+            // if (toNum(po?.is_posted) === 1 || po?.is_posted === true) {
+            //     return bad("This PO has been fully posted and is now locked. No further changes allowed.", 409);
+            // }
 
             const lines = await fetchPOProductsByPOId(base, poId);
             const porRows = await fetchPORByPOIds(base, [poId]);
