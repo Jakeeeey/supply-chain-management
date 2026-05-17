@@ -167,6 +167,7 @@ interface PORow {
     received_quantity?: string | number;
     receipt_no?: string | null;
     receipt_date?: string | null;
+    receipt_type?: string | number | null;
     received_date?: string | null;
     isPosted?: string | number;
     lot_id?: string | number | null;
@@ -446,9 +447,15 @@ export async function POST(req: NextRequest) {
         const body = await req.json().catch(() => ({}));
         const action = toStr(body.action);
 
+        if (action === "get_receipt_types") {
+            const url = `${base}/items/sales_invoice_type?limit=-1&sort=id&fields=id,type,shortcut`;
+            const j = await fetchJson<{ data: Record<string, unknown>[] }>(url).catch(() => ({ data: [] }));
+            return ok({ receiptTypes: j?.data || [] });
+        }
+
         if (action === "load_receipt") {
             const { poId, receiptNo } = body;
-            const url = `${base}/items/${POR_COLLECTION}?limit=-1&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&filter[receipt_no][_eq]=${encodeURIComponent(receiptNo)}&fields=purchase_order_product_id,product_id,branch_id,received_quantity,lot_id,batch_no,expiry_date,receipt_date,is_reverted,discount_type,discounted_amount`;
+            const url = `${base}/items/${POR_COLLECTION}?limit=-1&filter[purchase_order_id][_eq]=${encodeURIComponent(String(poId))}&filter[receipt_no][_eq]=${encodeURIComponent(receiptNo)}&fields=purchase_order_product_id,product_id,branch_id,received_quantity,lot_id,batch_no,expiry_date,receipt_date,is_reverted,discount_type,discounted_amount,receipt_type`;
             const j = await fetchJson<{ data: Record<string, unknown>[] }>(url);
             return ok({ items: j?.data || [] });
         }
@@ -677,7 +684,7 @@ export async function POST(req: NextRequest) {
             // ✅ Build draftData: POR rows where receipt_no is null OR is_reverted is 1, and received_quantity > 0
             //    These are rows created by the "Draft Transformation" revert in Post Inventory.
             //    The frontend uses this to auto-populate the workbench, including restored receipt data.
-            const draftRows = porRows.filter(r => (!toStr(r.receipt_no) || toNum(r.is_reverted) === 1) && toNum(r.received_quantity) > 0 && toNum(r.isPosted) !== 1);
+            const draftRows = porRows.filter(r => (!toStr(r.receipt_no) || toNum(r.is_reverted) === 1) && toNum(r.received_quantity) > 0);
             const draftData = draftRows.map(r => ({
                 porId: toNum(r.purchase_order_product_id),
                 productId: toNum(r.product_id),
@@ -688,6 +695,7 @@ export async function POST(req: NextRequest) {
                 lotId: r.lot_id ? toNum(r.lot_id) : null,
                 receiptNo: toStr(r.receipt_no) || null,
                 receiptDate: toStr(r.receipt_date) || null,
+                receiptType: r.receipt_type ? (typeof r.receipt_type === "object" ? String((r.receipt_type as { id: string | number }).id) : String(r.receipt_type)) : null,
             }));
 
             const uniqueReceipts = Array.from(new Set(porRows.map(r => r.receipt_no).filter(Boolean)));
@@ -749,7 +757,7 @@ export async function POST(req: NextRequest) {
         }
 
         if (action === "save_receipt") {
-            const { poId, receiptNo, receiptDate, porCounts, porMetaData, receiverId, isEdit } = body;
+            const { poId, receiptNo, receiptDate, receiptType, porCounts, porMetaData, receiverId, isEdit } = body;
             const thePoId = toNum(poId);
             if (!thePoId) return bad("Missing PO ID");
 
@@ -855,7 +863,7 @@ export async function POST(req: NextRequest) {
                             else {
                                 batchUpdatePayloads.push({
                                     purchase_order_product_id: porId,
-                                    receipt_no: null, receipt_date: null, received_quantity: 0, received_date: null, isPosted: 0,
+                                    receipt_no: null, receipt_date: null, receipt_type: null, received_quantity: 0, received_date: null, isPosted: 0,
                                     is_reverted: 0, discounted_amount: 0, vat_amount: 0, withholding_amount: 0, total_amount: 0,
                                     lot_id: null, batch_no: null, expiry_date: null
                                 });
@@ -881,7 +889,7 @@ export async function POST(req: NextRequest) {
 
                             const patch: Partial<PORow> = {
                                 purchase_order_product_id: porId,
-                                receipt_no: receiptNo, receipt_date: receiptDate, received_quantity: qty, received_date: nowISO(), isPosted: 0,
+                                receipt_no: receiptNo, receipt_date: receiptDate, receipt_type: receiptType ? Number(receiptType) : null, received_quantity: qty, received_date: nowISO(), isPosted: 0,
                                 is_reverted: 0, discount_type: dtId || null, discounted_amount: lineDisc,
                                 vat_amount: vatAmtTotal, withholding_amount: ewtAmtTotal,
                                 total_amount: Number(lineGross.toFixed(2))
@@ -924,7 +932,7 @@ export async function POST(req: NextRequest) {
 
                     const patch: Partial<PORow> = {
                         purchase_order_product_id: porId,
-                        receipt_no: receiptNo, receipt_date: receiptDate, received_quantity: qty, received_date: nowISO(), isPosted: 0,
+                        receipt_no: receiptNo, receipt_date: receiptDate, receipt_type: receiptType ? Number(receiptType) : null, received_quantity: qty, received_date: nowISO(), isPosted: 0,
                         is_reverted: 0, discount_type: dtId || null, discounted_amount: lineDisc,
                         vat_amount: vatAmtTotal, withholding_amount: ewtAmtTotal,
                         total_amount: Number(lineGross.toFixed(2))
@@ -982,6 +990,7 @@ export async function POST(req: NextRequest) {
                         withholding_amount: 0,
                         receipt_no: null,
                         receipt_date: null,
+                        receipt_type: null,
                         received_date: null,
                         is_reverted: 0
                     });

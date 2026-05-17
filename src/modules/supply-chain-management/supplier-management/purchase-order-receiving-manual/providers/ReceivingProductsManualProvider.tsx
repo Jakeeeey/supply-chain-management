@@ -56,6 +56,12 @@ export type UnitOption = {
     unit_shortcut: string;
 };
 
+export type ReceiptTypeOption = {
+    id: number;
+    type: string;
+    shortcut: string;
+};
+
 export type DraftDataItem = {
     porId: number;
     productId: number;
@@ -64,6 +70,9 @@ export type DraftDataItem = {
     batchNo: string | null;
     expiryDate: string | null;
     lotId: number | null;
+    receiptNo?: string | null;
+    receiptDate?: string | null;
+    receiptType?: string | null;
 };
 
 export type ReceivingPODetail = {
@@ -146,6 +155,8 @@ type Ctx = {
     setReceiptType: (v: string) => void;
     receiptDate: string;
     setReceiptDate: (v: string) => void;
+
+    receiptTypes: ReceiptTypeOption[];
 
     manualCounts: Record<string, number>;
     setManualCounts: React.Dispatch<React.SetStateAction<Record<string, number>>>;
@@ -249,6 +260,7 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
     // receipt
     const [receiptNo, setReceiptNo] = React.useState("");
     const [receiptType, setReceiptType] = React.useState("");
+    const [receiptTypes, setReceiptTypes] = React.useState<ReceiptTypeOption[]>([]);
     const [receiptDate, setReceiptDate] = React.useState(todayYMD());
 
     const [manualCounts, setManualCounts] = React.useState<Record<string, number>>({});
@@ -344,6 +356,24 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
                 setUnits([]);
             } finally {
                 setUnitsLoading(false);
+            }
+        })();
+    }, []);
+
+    // ✅ Fetch receipt types on mount
+    React.useEffect(() => {
+        (async () => {
+            try {
+                const r = await fetch(API_URL, {
+                    method: "POST",
+                    cache: "no-store",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "get_receipt_types" }),
+                });
+                const j = await asJson(r) as { data?: { receiptTypes?: ReceiptTypeOption[] } };
+                setReceiptTypes(Array.isArray(j?.data?.receiptTypes) ? j.data.receiptTypes : []);
+            } catch {
+                setReceiptTypes([]);
             }
         })();
     }, []);
@@ -528,10 +558,11 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
                     setManualCounts(counts);
                     setVerifiedProductIds(verifiedIds);
                     setMetaDataByPorId(meta);
-                    setReceiptDate(todayYMD());
-                    setReceiptNo("");
-                    setReceiptType("");
-                    toast.info("Reverted receipt data restored. Enter a new receipt number to continue.");
+                    const firstDraft = detail?.draftData?.[0];
+                    setReceiptDate(firstDraft?.receiptDate || todayYMD());
+                    setReceiptNo(firstDraft?.receiptNo || "");
+                    setReceiptType(firstDraft?.receiptType || "");
+                    toast.info("Reverted receipt data restored.");
                 } else {
                     const draft = detail?.id ? loadDraft(detail.id) : null;
                     const hasDraftData = draft ? (
@@ -765,8 +796,19 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ action: "load_receipt", poId: selectedPO.id, receiptNo: rNo })
             });
-            const j = await asJson(r);
+            const j = await asJson(r) as { data?: { items?: { product_id: string; branch_id: string; received_quantity: number; lot_id?: string; batch_no?: string; expiry_date?: string; receipt_type?: string | { id?: string | number } }[] } };
             const items = j?.data?.items || [];
+            
+            if (items.length > 0) {
+                const rt = items[0].receipt_type;
+                if (typeof rt === "object" && rt !== null) {
+                    setReceiptType(String((rt as { id?: string | number }).id || ""));
+                } else if (rt !== undefined && rt !== null) {
+                    setReceiptType(String(rt));
+                } else {
+                    setReceiptType("");
+                }
+            }
             
             const counts: Record<string, number> = {};
             const verifiedIds: string[] = [];
@@ -779,7 +821,7 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
                 let targetId = `${pid}-${bid}`;
                 selectedPO.allocations.forEach((a: { items: ReceivingPOItem[] }) => {
                     a.items.forEach((i: ReceivingPOItem) => {
-                        if (i.productId === pid && i.branchId === bid) targetId = i.id;
+                        if (String(i.productId) === pid && String(i.branchId) === bid) targetId = i.id;
                     });
                 });
                 
@@ -984,6 +1026,7 @@ export function ReceivingProductsManualProvider({ children, receiverId }: { chil
         setReceiptNo,
         receiptType,
         setReceiptType,
+        receiptTypes,
         receiptDate,
         setReceiptDate,
 
