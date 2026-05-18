@@ -180,7 +180,6 @@ export default function StockTransferDispatchManualView({ currentUser }: { curre
                           <TableCell className="py-3">
                             <div className="flex flex-col">
                               <span className="font-semibold text-sm">{productName}</span>
-                              <span className="text-[10px] text-muted-foreground font-mono uppercase tracking-tight">ID: {String(product?.product_id || 'N/A')}</span>
                             </div>
                           </TableCell>
                           <TableCell className="text-sm font-bold text-center">{targetQty}</TableCell>
