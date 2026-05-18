@@ -257,7 +257,7 @@ export default function StockTransferApprovalView() {
                       const description = product?.description || product?.barcode || 'N/A';
                       const brandName = typeof product?.product_brand === 'object' ? product?.product_brand?.brand_name : 'N/A';
                       const unitName = typeof product?.unit_of_measurement === 'object' ? product?.unit_of_measurement?.unit_name : 'unit';
-                      const originalId = product ? (product.product_id) : item.product_id;
+                      // const originalId = product ? (product.product_id) : item.product_id;
 
                       return (
                         <TableRow key={item.id} className="hover:bg-muted/5 border-b border-border/50">
