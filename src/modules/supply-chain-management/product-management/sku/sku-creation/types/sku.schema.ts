@@ -22,7 +22,7 @@ export type InventoryType = z.infer<typeof InventoryTypeSchema>;
 export const skuSchema = z
   .object({
     product_id: z.number().int().optional(),
-    id: z.number().int().optional(), // For Directus drafting
+    id: z.number().int().optional(),
     isActive: z.union([z.boolean(), z.number()]),
     status: SKUStatusSchema,
     inventory_type: InventoryTypeSchema,
@@ -30,7 +30,7 @@ export const skuSchema = z
     parent_id: z.number().int().nullable().optional(),
 
     product_name: z.string().min(1, "Product name is required"),
-    product_code: z.string().optional(), // System generated
+    product_code: z.string().optional(), 
     barcode: z.string().nullable().optional(),
     product_images: z.string().nullable().optional(),
     main_image: z.string().nullable().optional(),
@@ -39,13 +39,13 @@ export const skuSchema = z
     product_category: z.number().int().min(1, "Category is required"),
     product_supplier: z.number().int().min(1, "Supplier is required"),
 
-    description: z.string().nullable().optional(),
+    description: z.string().min(1, "Description is required"),
     short_description: z.string().nullable().optional(),
 
     // UOM and Conversion
-    base_unit: z.number().int().nullable().optional(), // Links to units master list
+    base_unit: z.number().int().nullable().optional(), 
     unit_of_measurement: z.union([z.number(), z.any()]).nullable().optional(),
-    unit_of_measurement_count: z.number().int().nullable().optional(), // Conversion rate
+    unit_of_measurement_count: z.number().int().nullable().optional(), 
 
     // Attributes for Variants
     size: z.string().nullable().optional(),
@@ -67,7 +67,7 @@ export const skuSchema = z
     units: z
       .array(
         z.object({
-          id: z.number().optional(), // Junction ID for updates
+          id: z.number().optional(), 
           unit_id: z.number().min(1, "Unit is required"),
           conversion_factor: z
             .number()
@@ -75,7 +75,7 @@ export const skuSchema = z
           price: z.number().nullable().optional(),
           cost: z.number().nullable().optional(),
           barcode: z.string().nullable().optional(),
-          sku_code: z.string().nullable().optional(), // Potentially for future breakdown
+          sku_code: z.string().nullable().optional(), 
         }),
       )
       .min(1, "At least one unit is required")

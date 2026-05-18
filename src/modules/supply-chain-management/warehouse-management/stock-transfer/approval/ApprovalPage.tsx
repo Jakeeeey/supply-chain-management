@@ -264,7 +264,6 @@ export default function StockTransferApprovalView() {
                           <TableCell className="py-3">
                             <div className="flex flex-col">
                               <span className="font-semibold text-sm">{productName}</span>
-                              <span className="text-[10px] text-muted-foreground font-mono">ID: {String(originalId || 'N/A')}</span>
                             </div>
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">{description}</TableCell>

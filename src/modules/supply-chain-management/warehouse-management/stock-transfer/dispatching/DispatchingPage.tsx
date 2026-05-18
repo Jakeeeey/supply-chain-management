@@ -294,7 +294,6 @@ export default function StockTransferDispatchView({ currentUser }: { currentUser
                             <TableCell className="py-3">
                               <div className="flex flex-col">
                                 <span className="font-semibold text-sm line-clamp-1">{productName}</span>
-                                <span className="text-[10px] text-muted-foreground font-mono uppercase tracking-tight">ID: {String((product?.product_id) || 'N/A')}</span>
                                 {item.isLoosePack && (
                                   <span className="text-[9px] bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded w-fit mt-1 font-bold flex items-center gap-1">
                                     <Edit2 className="w-2 h-2" /> MANUAL ENTRY
