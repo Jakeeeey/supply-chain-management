@@ -1362,18 +1362,27 @@ export async function POST(req: NextRequest) {
                     successfulPorIds.push(row.porId);
                 }
 
-                // ✅ Incremental Header Update: Add this receipt's totals to what's already posted
-                const alreadyPostedGross = toNum(po?.gross_amount) || 0;
-                const alreadyPostedDisc = toNum(po?.discounted_amount) || 0;
-                const alreadyPostedVat = toNum(po?.vat_amount) || 0;
-                const alreadyPostedWht = toNum(po?.withholding_tax_amount) || 0;
-                const alreadyPostedTotal = toNum(po?.total_amount) || 0;
+                // ✅ Full Header Update: Sum previously posted receipts + current receipt
+                let prevGross = 0, prevDisc = 0, prevVat = 0, prevWht = 0, prevNet = 0;
+                for (const r of porRows) {
+                    if (toNum(r.is_posted_amounts) === 1 && !toPost.find(p => p.porId === toNum(r.purchase_order_product_id))) {
+                        const rNet = toNum(r.total_amount);
+                        const rDisc = toNum(r.discounted_amount);
+                        const rGross = rNet + rDisc;
+                        
+                        prevGross += rGross;
+                        prevDisc += rDisc;
+                        prevNet += rNet;
+                        prevVat += toNum(r.vat_amount);
+                        prevWht += toNum(r.withholding_amount);
+                    }
+                }
 
-                const newGross = Number((alreadyPostedGross + receiptGross).toFixed(2));
-                const newDisc = Number((alreadyPostedDisc + receiptDisc).toFixed(2));
-                const newVat = Number((alreadyPostedVat + receiptVat).toFixed(2));
-                const newWht = Number((alreadyPostedWht + receiptWht).toFixed(2));
-                const newTotal = Number((alreadyPostedTotal + receiptNet).toFixed(2));
+                const newGross = Number((prevGross + receiptGross).toFixed(2));
+                const newDisc = Number((prevDisc + receiptDisc).toFixed(2));
+                const newVat = Number((prevVat + receiptVat).toFixed(2));
+                const newWht = Number((prevWht + receiptWht).toFixed(2));
+                const newTotal = Number((prevNet + receiptNet).toFixed(2));
 
                 // ✅ Check if ALL receipts are now fully done (inventory + amounts)
                 const updatedPorRows = porRows.map(r => {
@@ -1513,19 +1522,28 @@ export async function POST(req: NextRequest) {
                     successfulPorIds.push(porId);
                 }
 
-                // ✅ Incremental Header Update
-                const alreadyGross = toNum(po?.gross_amount) || 0;
-                const alreadyDisc = toNum(po?.discounted_amount) || 0;
-                const alreadyVat = toNum(po?.vat_amount) || 0;
-                const alreadyWht = toNum(po?.withholding_tax_amount) || 0;
-                const alreadyTotal = toNum(po?.total_amount) || 0;
+                // ✅ Full Header Update: Sum previously posted receipts + current posting
+                let prevGross = 0, prevDisc = 0, prevVat = 0, prevWht = 0, prevNet = 0;
+                for (const r of porRows) {
+                    if (toNum(r.is_posted_amounts) === 1 && !toPost.find(p => toNum(p.purchase_order_product_id) === toNum(r.purchase_order_product_id))) {
+                        const rNet = toNum(r.total_amount);
+                        const rDisc = toNum(r.discounted_amount);
+                        const rGross = rNet + rDisc;
+                        
+                        prevGross += rGross;
+                        prevDisc += rDisc;
+                        prevNet += rNet;
+                        prevVat += toNum(r.vat_amount);
+                        prevWht += toNum(r.withholding_amount);
+                    }
+                }
 
                 const poUpdate: Record<string, unknown> = {
-                    gross_amount: Number((alreadyGross + sumGross).toFixed(2)),
-                    discounted_amount: Number((alreadyDisc + sumDisc).toFixed(2)),
-                    vat_amount: Number((alreadyVat + sumVat).toFixed(2)),
-                    withholding_tax_amount: Number((alreadyWht + sumWht).toFixed(2)),
-                    total_amount: Number((alreadyTotal + sumNet).toFixed(2)),
+                    gross_amount: Number((prevGross + sumGross).toFixed(2)),
+                    discounted_amount: Number((prevDisc + sumDisc).toFixed(2)),
+                    vat_amount: Number((prevVat + sumVat).toFixed(2)),
+                    withholding_tax_amount: Number((prevWht + sumWht).toFixed(2)),
+                    total_amount: Number((prevNet + sumNet).toFixed(2)),
                 };
 
                 // ✅ Check if ALL receipts are now fully done
