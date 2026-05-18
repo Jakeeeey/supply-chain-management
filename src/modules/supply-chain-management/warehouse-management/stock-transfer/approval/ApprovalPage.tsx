@@ -31,6 +31,22 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from '@/components/ui/pagination';
 
 export default function StockTransferApprovalView() {
   const {
@@ -52,13 +68,13 @@ export default function StockTransferApprovalView() {
   } = useStockTransferApproval();
 
   const [currentPage, setCurrentPage] = React.useState(1);
-  const [itemsPerPage] = React.useState(10);
+  const [itemsPerPage, setItemsPerPage] = React.useState(10);
   const [productSearch, setProductSearch] = React.useState('');
 
-  // Reset page when group or search changes
+  // Reset page when group, search, or page size changes
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [selectedOrderNo, productSearch]);
+  }, [selectedOrderNo, productSearch, itemsPerPage]);
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'N/A';
@@ -89,10 +105,23 @@ export default function StockTransferApprovalView() {
     });
   }, [selectedGroup, productSearch]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / itemsPerPage));
   const paginatedItems = filteredItems.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
+
+  function buildPageList(current: number, total: number): (number | 'ellipsis')[] {
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+    const pages: (number | 'ellipsis')[] = [1];
+    if (current > 3) pages.push('ellipsis');
+    const rangeStart = Math.max(2, current - 1);
+    const rangeEnd = Math.min(total - 1, current + 1);
+    for (let p = rangeStart; p <= rangeEnd; p++) pages.push(p);
+    if (current < total - 2) pages.push('ellipsis');
+    pages.push(total);
+    return pages;
+  }
 
   const currentTotalAmount = React.useMemo(() => {
     if (!selectedGroup) return 0;
@@ -280,6 +309,73 @@ export default function StockTransferApprovalView() {
                     </TableRow>
                   </TableFooter>
                 </Table>
+
+                {/* Pagination Section */}
+                {filteredItems.length > 0 && (
+                  <div className="flex items-center justify-between gap-4 border-t border-border px-4 py-2 bg-muted/5">
+                    <div className="flex items-center gap-4">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest whitespace-nowrap">
+                        {Math.min(itemsPerPage * (currentPage - 1) + 1, filteredItems.length)}–{Math.min(itemsPerPage * currentPage, filteredItems.length)} of {filteredItems.length}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Show</span>
+                        <Select
+                          value={String(itemsPerPage)}
+                          onValueChange={(v) => setItemsPerPage(Number(v))}
+                        >
+                          <SelectTrigger className="h-7 w-[60px] text-[10px] font-bold border-border shadow-none bg-background">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {[10, 20, 50, 100].map((s) => (
+                              <SelectItem key={s} value={String(s)} className="text-[10px] font-bold">
+                                {s}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {totalPages > 1 && (
+                      <Pagination className="w-auto mx-0 justify-end scale-90 origin-right">
+                        <PaginationContent>
+                          <PaginationItem>
+                            <PaginationPrevious
+                              href="#"
+                              onClick={(e) => { e.preventDefault(); setCurrentPage((p) => Math.max(1, p - 1)); }}
+                              className={currentPage === 1 ? 'pointer-events-none opacity-40' : ''}
+                            />
+                          </PaginationItem>
+                          {buildPageList(currentPage, totalPages).map((p, i) =>
+                            p === 'ellipsis' ? (
+                              <PaginationItem key={`ellipsis-${i}`}>
+                                <PaginationEllipsis />
+                              </PaginationItem>
+                            ) : (
+                              <PaginationItem key={p}>
+                                <PaginationLink
+                                  href="#"
+                                  isActive={p === currentPage}
+                                  onClick={(e) => { e.preventDefault(); setCurrentPage(p); }}
+                                >
+                                  {p}
+                                </PaginationLink>
+                              </PaginationItem>
+                            )
+                          )}
+                          <PaginationItem>
+                            <PaginationNext
+                              href="#"
+                              onClick={(e) => { e.preventDefault(); setCurrentPage((p) => Math.min(totalPages, p + 1)); }}
+                              className={currentPage === totalPages ? 'pointer-events-none opacity-40' : ''}
+                            />
+                          </PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
+                    )}
+                  </div>
+                )}
 
                 <div className="mt-6 flex items-center justify-end gap-3">
                   <AlertDialog>
