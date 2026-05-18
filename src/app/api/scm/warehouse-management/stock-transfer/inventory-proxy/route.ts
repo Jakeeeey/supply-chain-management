@@ -53,13 +53,20 @@ export async function GET(request: NextRequest) {
       // Handle both camelCase (productId) and snake_case (product_id) from Spring API
       const list = Array.isArray(data) ? data : (data.data || []);
       const productId = searchParams.get('productId');
-      const found = list.find((inv: Record<string, unknown>) => 
-        String(inv.productId ?? inv.product_id) === productId
-      );
       
-      if (found) {
-        const inventory = found.runningInventory ?? found.running_inventory;
-        console.log(`[Proxy] Found aggregate inventory for product ${productId}: ${inventory}`);
+      if (productId) {
+        const found = list.find((inv: Record<string, unknown>) => 
+          String(inv.productId ?? inv.product_id) === productId
+        );
+        
+        if (found) {
+          const inventory = found.runningInventory ?? found.running_inventory;
+          console.log(`[Proxy] Found aggregate inventory for product ${productId}: ${inventory}`);
+          return NextResponse.json(data);
+        }
+      } else {
+        // If no productId requested, return the full aggregate list of inventories directly
+        console.log(`[Proxy] Returning full aggregate list of size: ${list.length}`);
         return NextResponse.json(data);
       }
     } else {
@@ -73,26 +80,50 @@ export async function GET(request: NextRequest) {
     }
 
     // ── 2. Fallback to Tag Count (v_rfid_onhand) if aggregate is 0 or missing ──
-    const branchId = searchParams.get('branchId');
-    const productId = searchParams.get('productId');
+    const branchId = searchParams.get('branchId') || searchParams.get('branch_id');
+    const productId = searchParams.get('productId') || searchParams.get('product_id');
 
-    if (branchId && productId && springBase) {
-      console.log(`[Proxy] Falling back to tag count for product ${productId} in branch ${branchId}`);
-      const tagCount = await getTagCount(branchId, productId, token);
-      
-      if (tagCount > 0) {
-        // Return a compatible object structure
-        const fallbackResult = {
-          data: [{
-            productId: Number(productId),
+    if (branchId && springBase) {
+      if (productId) {
+        console.log(`[Proxy] Falling back to tag count for product ${productId} in branch ${branchId}`);
+        const tagCount = await getTagCount(branchId, productId, token);
+        
+        if (tagCount > 0) {
+          // Return a compatible object structure
+          const fallbackResult = {
+            data: [{
+              productId: Number(productId),
+              branchId: Number(branchId),
+              runningInventory: tagCount,
+              unitName: searchParams.get('unitName') || 'Pieces',
+              _fallback: true
+            }]
+          };
+          console.log(`[Proxy] Tag count fallback found: ${tagCount}`);
+          return NextResponse.json(fallbackResult);
+        }
+      } else {
+        // Bulk fallback: get full tag counts for all products in this branch
+        console.log(`[Proxy] Falling back to bulk tag count for branch ${branchId}`);
+        const allTags = await fetchBranchTags(branchId, token);
+        if (allTags.length > 0) {
+          const countsMap: Record<number, number> = {};
+          allTags.forEach((row) => {
+            const pId = Number(row.productId ?? row.product_id);
+            if (!isNaN(pId)) {
+              countsMap[pId] = (countsMap[pId] || 0) + 1;
+            }
+          });
+          
+          const bulkFallbackResult = Object.entries(countsMap).map(([pId, count]) => ({
+            productId: Number(pId),
             branchId: Number(branchId),
-            runningInventory: tagCount,
-            unitName: searchParams.get('unitName') || 'Pieces',
+            runningInventory: count,
+            unitName: 'Pieces',
             _fallback: true
-          }]
-        };
-        console.log(`[Proxy] Tag count fallback found: ${tagCount}`);
-        return NextResponse.json(fallbackResult);
+          }));
+          return NextResponse.json({ data: bulkFallbackResult });
+        }
       }
     }
 
@@ -113,24 +144,39 @@ export async function GET(request: NextRequest) {
 // Simple memory cache for fallback tag counts to prevent N+1 payload crashes
 const rfidCache = new Map<string, { expiredAt: number; data: Record<string, unknown>[] }>();
 
-/** Helper to count RFID tags in v_rfid_onhand for a specific product */
-async function getTagCount(branchId: string, productId: string, token?: string) {
+/** Helper to fetch and cache all RFID tags in v_rfid_onhand for a branch */
+async function fetchBranchTags(branchId: string, token?: string): Promise<Record<string, unknown>[]> {
   const springBase = process.env.SPRING_API_BASE_URL?.replace(/\/$/, '');
-  if (!springBase) return 0;
+  if (!springBase) return [];
 
-  const cacheKey = branchId; // We cache the entire branch's RFIDs to serve all N+1 lookups instantly
+  const cacheKey = branchId; // We cache the entire branch's RFIDs
   const cached = rfidCache.get(cacheKey);
   const now = Date.now();
 
-  let rows: Record<string, unknown>[] = [];
-
   if (cached && cached.expiredAt > now) {
-    rows = cached.data;
-  } else {
-    // Note: If the backend supports productId we pass it, but if it ignores it, we gracefully cache the full array.
-    const url = `${springBase}/api/view-rfid-onhand?branchId=${branchId}&productId=${productId}`;
-    try {
-      const res = await fetch(url, {
+    return cached.data;
+  }
+
+  // Fetch full branch inventory tags
+  const url = `${springBase}/api/view-rfid-onhand?branch_id=${branchId}`;
+  const urlFallback = `${springBase}/api/view-rfid-onhand?branchId=${branchId}`;
+  
+  try {
+    // Try branch_id first
+    let res = await fetch(url, {
+      headers: {
+        'Accept': 'application/json',
+        ...(token ? { 
+          'Authorization': `Bearer ${token}`,
+          'Cookie': `vos_access_token=${token}`
+        } : {}),
+      },
+      cache: 'no-store'
+    });
+
+    // If failed, try branchId
+    if (!res.ok) {
+      res = await fetch(urlFallback, {
         headers: {
           'Accept': 'application/json',
           ...(token ? { 
@@ -140,20 +186,23 @@ async function getTagCount(branchId: string, productId: string, token?: string) 
         },
         cache: 'no-store'
       });
-
-      if (res.ok) {
-        const data = await res.json();
-        rows = Array.isArray(data) ? data : (data.data || []);
-        
-        // Cache the result for 15 seconds (perfect for a burst of lazy load requests)
-        rfidCache.set(cacheKey, { expiredAt: now + 15000, data: rows });
-      }
-    } catch (e) {
-      console.warn(`[getTagCount] Failed for ${url}:`, e);
-      return 0;
     }
-  }
 
-  // Count rows matching productId
+    if (res.ok) {
+      const data = await res.json();
+      const rows = Array.isArray(data) ? data : (data.data || []);
+      // Cache the result for 15 seconds (perfect for a burst of lazy load requests)
+      rfidCache.set(cacheKey, { expiredAt: now + 15000, data: rows });
+      return rows;
+    }
+  } catch (e) {
+    console.warn(`[fetchBranchTags] Failed for ${url}:`, e);
+  }
+  return [];
+}
+
+/** Helper to count RFID tags in v_rfid_onhand for a specific product */
+async function getTagCount(branchId: string, productId: string, token?: string) {
+  const rows = await fetchBranchTags(branchId, token);
   return rows.filter((row) => String(row.productId || row.product_id) === productId).length;
 }
