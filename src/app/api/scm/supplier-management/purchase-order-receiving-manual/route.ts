@@ -1213,10 +1213,16 @@ export async function POST(req: NextRequest) {
                 }
             });
 
-            return ok(results.map(r => {
-                const { uomId, ...rest } = r;
-                return rest;
-            }));
+            return ok(results.map(r => ({
+                productId: r.productId,
+                name: r.name,
+                sku: r.sku,
+                barcode: r.barcode,
+                unitPrice: r.unitPrice,
+                uom: r.uom,
+                discountType: r.discountType,
+                discountPercent: r.discountPercent
+            })));
         }
 
         if (action === "get_lots") {
