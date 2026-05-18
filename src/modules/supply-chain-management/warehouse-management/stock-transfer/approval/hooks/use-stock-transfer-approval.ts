@@ -54,7 +54,7 @@ export function useStockTransferApproval() {
         const newAvailable: Record<number, number> = {};
         const newAllocated: Record<number, number> = {};
 
-        // Fetch all product inventories in parallel (eliminates serial N+1 waterfall)
+        // Fetch alll product inventories in parallel (eliminates serial N+1 waterfall)
         const group = base.selectedGroup!;
         await Promise.all(group.items.map(async (item: OrderGroupItem) => {
           const product = item.product_id as ProductRow;
