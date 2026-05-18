@@ -725,7 +725,17 @@ export async function POST(req: NextRequest) {
             const j = await fetchJson<{ data: ProductRow[] }>(url);
             const p = j?.data?.[0];
             if (!p) return bad("Product not found", 404);
-            if (Number(p.unit_of_measurement?.unit_id ?? p.unit_of_measurement) !== 11) return bad("Only 'Box' UOM allowed", 400);
+            const uomId = Number(p.unit_of_measurement?.unit_id ?? p.unit_of_measurement);
+            if (uomId !== 11 && uomId !== 1) return bad("Only 'Box' or 'Piece' UOM allowed", 400);
+
+            if (uomId === 1) {
+                // Check if a Box variant exists for this product name
+                const boxUrl = `${base}/items/${PRODUCTS_COLLECTION}?limit=1&filter[product_name][_eq]=${encodeURIComponent(String(p.product_name))}&filter[unit_of_measurement][_eq]=11&fields=product_id`;
+                const boxJ = await fetchJson<{ data: Record<string, unknown>[] }>(boxUrl).catch(() => null);
+                if (boxJ && Array.isArray(boxJ.data) && boxJ.data.length > 0) {
+                    return bad("A Box variant exists for this product. Please use the Box variant.", 400);
+                }
+            }
 
             let discTypeStr = "Standard";
             let discPct = 0;
@@ -751,7 +761,7 @@ export async function POST(req: NextRequest) {
                 unitPrice: toNum(p.cost_per_unit),
                 discountType: discTypeStr,
                 discountPercent: discPct,
-                uom: "BOX",
+                uom: String(p.unit_of_measurement?.unit_shortcut ?? (uomId === 11 ? "BOX" : "PCS")).toUpperCase(),
                 sku: String(p.barcode || p.product_code)
             });
         }
@@ -1137,14 +1147,16 @@ export async function POST(req: NextRequest) {
             const pids = links.map(r => toNum(r.product_id)).filter(id => id > 0);
             if (!pids.length) return ok([]);
 
-            // Then get the full product details (only BOX items)
+            // Then get the full product details
             const map = await fetchProductsMap(base, pids);
 
-            const results = links.map(link => {
+            const rawResults = links.map(link => {
                 const pid = toNum(link.product_id);
                 const p = map.get(pid);
                 if (!p) return null;
-                if (Number(p.unit_of_measurement?.unit_id ?? p.unit_of_measurement) !== 11) return null;
+                
+                const uomId = Number(p.unit_of_measurement?.unit_id ?? p.unit_of_measurement);
+                if (uomId !== 11 && uomId !== 1) return null;
 
                 const dt = link.discount_type as Record<string, unknown> | null | undefined;
                 let discTypeStr = "Standard";
@@ -1163,13 +1175,54 @@ export async function POST(req: NextRequest) {
                     sku: String(p.barcode || p.product_code),
                     barcode: String(p.barcode || p.product_code),
                     unitPrice: toNum(p.cost_per_unit),
-                    uom: "BOX",
+                    uomId: uomId,
+                    uom: String(p.unit_of_measurement?.unit_shortcut ?? (uomId === 11 ? "BOX" : "PCS")).toUpperCase(),
                     discountType: discTypeStr,
                     discountPercent: discPct
                 };
-            }).filter(Boolean);
+            }).filter(Boolean) as Array<{
+                productId: string;
+                name: string;
+                sku: string;
+                barcode: string;
+                unitPrice: number;
+                uomId: number;
+                uom: string;
+                discountType: string;
+                discountPercent: number;
+            }>;
 
-            return ok(results);
+            // Box Priority Logic: group by name, keep Box if exists, else Piece
+            const groupedByName = new Map<string, typeof rawResults>();
+            for (const item of rawResults) {
+                const arr = groupedByName.get(item.name) || [];
+                arr.push(item);
+                groupedByName.set(item.name, arr);
+            }
+
+            const results: typeof rawResults = [];
+            groupedByName.forEach((items) => {
+                const boxItem = items.find(i => i.uomId === 11);
+                if (boxItem) {
+                    results.push(boxItem);
+                } else {
+                    const pieceItem = items.find(i => i.uomId === 1);
+                    if (pieceItem) {
+                        results.push(pieceItem);
+                    }
+                }
+            });
+
+            return ok(results.map(r => ({
+                productId: r.productId,
+                name: r.name,
+                sku: r.sku,
+                barcode: r.barcode,
+                unitPrice: r.unitPrice,
+                uom: r.uom,
+                discountType: r.discountType,
+                discountPercent: r.discountPercent
+            })));
         }
 
         if (action === "get_lots") {
