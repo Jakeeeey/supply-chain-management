@@ -1,4 +1,5 @@
 import { DispatchCreationFormValues } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/creation/types/dispatch.schema";
+import type { PostDispatchBudgetRow } from "@/modules/supply-chain-management/fleet-management/trip-management/dispatch-plan/creation/types/dispatch.types";
 
 export const dispatchCreationLifecycleService = {
   /**
@@ -56,7 +57,7 @@ export const dispatchCreationLifecycleService = {
   /**
    * Updates budgets for an existing dispatch plan.
    */
-  async updateBudget(planId: number, budgets: unknown[]) {
+  async updateBudget(planId: number, budgets: Omit<PostDispatchBudgetRow, "id">[]) {
     const response = await fetch(
       `/api/scm/fleet-management/trip-management/dispatch-plan/creation?plan_id=${planId}`,
       {

@@ -110,7 +110,7 @@ export async function GET(req: NextRequest) {
             if (rootIds.length === 0) return NextResponse.json({ data: [] });
 
             // 1.2) Fetch the full family (parent + all children)
-            // Filter: (product_id is a root OR parent_id is a root) AND UOM is 11 (Box)
+            // Filter: (product_id is a root OR parent_id is a root) AND UOM is 11 (Box) or 1 (Piece)
             const familyFilter = {
                 _and: [
                     {
@@ -119,7 +119,7 @@ export async function GET(req: NextRequest) {
                             { parent_id: { _in: rootIds } }
                         ]
                     },
-                    { unit_of_measurement: { _eq: 11 } } // ✅ Only BOX products
+                    { unit_of_measurement: { _in: [11, 1] } } // ✅ BOX or PIECE products
                 ]
             };
             const productsUrl =
@@ -166,7 +166,37 @@ export async function GET(req: NextRequest) {
                 };
             });
 
-            return NextResponse.json({ data: rows });
+            // ✅ Prioritize BOX (11) over PIECE (1) per family
+            const familyMap = new Map<string, Record<string, unknown>[]>();
+            for (const r of rows) {
+                const rid = String(r.parent_id || r.product_id || "");
+                if (!familyMap.has(rid)) familyMap.set(rid, []);
+                familyMap.get(rid)!.push(r);
+            }
+
+            const prioritizedRows: Record<string, unknown>[] = [];
+            for (const family of familyMap.values()) {
+                const boxProduct = family.find((p) => {
+                    const rawUom = p.unit_of_measurement;
+                    const uomObj = rawUom as Record<string, unknown>;
+                    const uomId = Number(typeof rawUom === "object" && rawUom !== null ? uomObj.unit_id ?? uomObj.id : rawUom);
+                    return uomId === 11;
+                });
+                
+                if (boxProduct) {
+                    prioritizedRows.push(boxProduct);
+                } else {
+                    const pieceProduct = family.find((p) => {
+                        const rawUom = p.unit_of_measurement;
+                        const uomObj = rawUom as Record<string, unknown>;
+                        const uomId = Number(typeof rawUom === "object" && rawUom !== null ? uomObj.unit_id ?? uomObj.id : rawUom);
+                        return uomId === 1;
+                    });
+                    if (pieceProduct) prioritizedRows.push(pieceProduct);
+                }
+            }
+
+            return NextResponse.json({ data: prioritizedRows });
         }
 
         // 2) If ids provided: fetch products by ids

@@ -59,12 +59,7 @@ function toStr(v: unknown, fb = "") {
     return s ? s : fb;
 }
 function toNum(v: unknown): number {
-    if (v && typeof v === "object") {
-        const obj = v as Record<string, unknown>;
-        return toNum(obj.id ?? obj.value ?? obj.product_id ?? obj.supplier_id ?? obj.branch_id ?? 0);
-    }
-    const s = String(v ?? "").replace(/,/g, "").trim();
-    const n = Number(s);
+    const n = parseFloat(String(v ?? "").replace(/,/g, ""));
     return Number.isFinite(n) ? n : 0;
 }
 function nowISO() {
@@ -144,7 +139,7 @@ const PRODUCTS_COLLECTION = "products";
 const BRANCHES_COLLECTION = "branches";
 
 const POR_COLLECTION = "purchase_order_receiving";
-const POR_ITEMS_COLLECTION = "purchase_order_receiving_items";
+
 
 type POStatus = "OPEN" | "PARTIAL" | "RECEIVED" | "CLOSED";
 interface Supplier { id: number; supplier_name: string; }
@@ -176,23 +171,19 @@ interface PORRow {
     receipt_date: string;
     received_date: string;
     isPosted: number | string;
+    is_posted_amounts?: number | string | null;
     discounted_amount: number | string;
     vat_amount: number | string;
     withholding_amount: number | string;
     unit_price: number | string;
     total_amount: number | string;
     discount_type?: number | string | null;
-}
-interface ReceivingItem {
-    receiving_item_id: number;
-    purchase_order_product_id: number;
-    product_id: number;
-    rfid_code: string;
-    created_at: string;
+    is_reverted?: number | string | null;
 }
 
+
 const POR_SAFE_FIELDS =
-    "purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted,discounted_amount,vat_amount,withholding_amount,total_amount,unit_price,discount_type";
+    "purchase_order_product_id,purchase_order_id,product_id,branch_id,received_quantity,receipt_no,receipt_date,received_date,isPosted,is_reverted,discounted_amount,vat_amount,withholding_amount,total_amount,unit_price,discount_type";
 
 // =====================
 // FETCHERS
@@ -335,18 +326,7 @@ async function fetchPORByPOIds(base: string, poIds: number[]) {
     return rows;
 }
 
-async function fetchReceivingItems(base: string, filterPorIds?: number[]) {
-    const qs: string[] = [
-        "limit=-1",
-        "fields=receiving_item_id,purchase_order_product_id,product_id,rfid_code,created_at",
-    ];
-    if (filterPorIds && filterPorIds.length) {
-        qs.push(`filter[purchase_order_product_id][_in]=${encodeURIComponent(filterPorIds.join(","))}`);
-    }
-    const url = `${base}/items/${POR_ITEMS_COLLECTION}?${qs.join("&")}`;
-    const j = await fetchJson(url) as { data: ReceivingItem[] };
-    return Array.isArray(j?.data) ? j.data : [];
-}
+
 
 async function patchPO(base: string, poId: number, payload: unknown) {
     const url = `${base}/items/${PO_COLLECTION}/${encodeURIComponent(String(poId))}`;
@@ -367,24 +347,14 @@ function productDisplayCode(p: Product | null, productId: number) {
     return toStr(p?.barcode) || toStr(p?.product_code) || String(productId);
 }
 
-function groupRfidsByPorId(rows: ReceivingItem[]) {
-    const map = new Map<number, string[]>();
-    for (const r of rows) {
-        const porId = toNum(r?.purchase_order_product_id);
-        if (!porId) continue;
-        const arr = map.get(porId) ?? [];
-        const code = toStr(r?.rfid_code);
-        if (code) arr.push(code);
-        map.set(porId, arr);
-    }
-    return map;
-}
+
 
 function hasReceiptEvidence(por: PORRow) {
     return Boolean(toStr(por?.receipt_no) || toStr(por?.receipt_date) || toStr(por?.received_date));
 }
 
 function effectiveReceivedQty(por: PORRow) {
+    if (toNum(por?.is_reverted) === 1) return 0;
     // IMPORTANT: treat numeric/string consistently
     const posted = toNum(por?.isPosted) === 1;
     if (posted) return Math.max(0, toNum(por?.received_quantity ?? 0));
@@ -408,39 +378,7 @@ function buildPorIdsByKey(porRows: PORRow[]) {
     return map;
 }
 
-function isPartiallyReceivedOrTagged(
-    poId: number,
-    lines: PoProductRow[],
-    porRows: PORRow[],
-    rfidsByPorId: Map<number, string[]>
-) {
-    if (!lines.length) return false;
-    const porIdsByKey = buildPorIdsByKey(porRows);
 
-    const recByPor = new Map<number, number>();
-    for (const r of porRows) {
-        const porId = toNum(r?.purchase_order_product_id);
-        if (!porId) continue;
-        recByPor.set(porId, effectiveReceivedQty(r));
-    }
-
-    for (const ln of lines) {
-        const pid = toNum(ln.product_id);
-        const bid = toNum(ln.branch_id);
-        const expected = Math.max(0, toNum(ln.ordered_quantity));
-        if (!pid || expected <= 0) continue;
-
-        const porIds = porIdsByKey.get(keyLine(poId, pid, bid)) ?? [];
-        if (!porIds.length) continue;
-
-        const taggedQty = porIds.reduce((sum, id) => sum + (rfidsByPorId.get(id) ?? []).length, 0);
-        if (taggedQty > 0) return true;
-        
-        const receivedQty = porIds.reduce((sum, id) => sum + (recByPor.get(id) ?? 0), 0);
-        if (receivedQty > 0) return true;
-    }
-    return false;
-}
 
 function isFullyReceived(
     poId: number,
@@ -496,6 +434,7 @@ function buildReceiptSummary(porRows: PORRow[]) {
     const groups = new Map<string, PORRow[]>();
 
     for (const r of porRows ?? []) {
+        if (toNum(r?.is_reverted) === 1) continue;
         const rn = toStr(r?.receipt_no);
         if (!rn) continue;
         const arr = groups.get(rn) ?? [];
@@ -563,12 +502,9 @@ function buildReceiptSummary(porRows: PORRow[]) {
 }
 
 function receivingStatusFrom(porRows: PORRow[], opts?: { isClosed?: boolean; fullyReceived?: boolean; hasAnyPosted?: boolean }) {
-    // CLOSED only if fully received AND all receipts/rows are posted
     if (opts?.isClosed) return "CLOSED" as POStatus;
-    // RECEIVED: all items received, receipts exist but not yet posted
-    if (opts?.fullyReceived) return "FOR POSTING" as POStatus;
-    // PARTIAL_POSTED: some receipts posted, some not, NOT fully received
     if (opts?.hasAnyPosted) return "PARTIAL_POSTED" as POStatus;
+    if (opts?.fullyReceived) return "FOR POSTING" as POStatus;
 
     const anyActivity = (porRows ?? []).some((r) => {
         return effectiveReceivedQty(r) > 0 || hasReceiptEvidence(r);
@@ -690,6 +626,7 @@ export async function GET() {
         const porCandidateUrl =
             `${base}/items/${POR_COLLECTION}?limit=-1` +
             `&filter[isPosted][_eq]=0` +
+            `&filter[is_reverted][_neq]=1` +
             `&filter[_or][0][receipt_no][_nnull]=true` +
             `&filter[_or][1][receipt_date][_nnull]=true` +
             `&filter[_or][2][received_date][_nnull]=true` +
@@ -731,9 +668,7 @@ export async function GET() {
             linesByPo.set(poId, arr);
         }
 
-        // RFID tags
-        const receivingItems = (porIdsAll.length ? await fetchReceivingItems(base, porIdsAll) : []) as ReceivingItem[];
-        const rfidsByPorId = groupRfidsByPorId(receivingItems);
+
 
         // Supplier names
         const supplierIds = poHeaders.map((p) => toNum(p?.supplier_name)).filter(Boolean);
@@ -756,23 +691,20 @@ export async function GET() {
             const porRows = porByPo.get(poId) ?? [];
             const lines = linesByPo.get(poId) ?? [];
 
-            const taggingOk = isPartiallyReceivedOrTagged(poId, lines, porRows, rfidsByPorId);
-            // ✅ Check for new statuses (6=Received, 9=Partially Received) AND legacy (12, 13)
-            const eligibleByStatus = invStatus === 6 || invStatus === 9 || invStatus === 12 || invStatus === 13;
+            // ✅ HARDENED: Status 12 (Transit/En Route) is NOT eligible for posting.
+            // A PO must be physically received (status 6, 9, or 13) before it can be posted.
+            const eligibleByStatus = invStatus === 6 || invStatus === 9 || invStatus === 13;
             
-            // ✅ Also check if there are unposted POR rows with receipt activity
-            // This catches POs whose inventory_status was never updated but DO have received items
+            // ✅ Also check if there are unposted POR rows with ACTUAL receipt activity
+            // (must have receipt_no AND received_quantity > 0 to count as real receipt activity)
             const hasUnpostedReceipts = porRows.some((r) => 
-                toNum(r?.isPosted) === 0 && (
-                    toStr(r?.receipt_no) || toStr(r?.receipt_date) || toStr(r?.received_date) || toNum(r?.received_quantity) > 0
-                )
+                toNum(r?.isPosted) === 0 &&
+                toStr(r?.receipt_no) &&
+                toNum(r?.received_quantity) > 0
             );
             
-            // Show PO if it has the right status OR has unposted receipt activity
+            // Show PO only if it has an eligible receiving status OR has genuine unposted receipts
             if (!eligibleByStatus && !hasUnpostedReceipts) continue;
-            
-            // If status is 12 (En Route) and nothing is tagged, skip
-            if (!taggingOk && !hasUnpostedReceipts && invStatus === 12) continue;
 
             const fully = isFullyReceived(poId, lines, porRows);
 
@@ -803,12 +735,14 @@ export async function GET() {
 
             const lr = latestReceiptInfo(porRows);
             const rs = buildReceiptSummary(porRows);
-            const allPosted = rs.receiptsCount > 0 && rs.unpostedReceiptsCount === 0;
-            const isClosed = fully && allPosted;
-            const fullyReceived = fully && !allPosted;
+            const allInvPosted = porRows.length > 0 && porRows.every(r => toNum(r.isPosted) === 1);
+            const allAmtPosted = porRows.length > 0 && porRows.every(r => toNum(r.is_posted_amounts) === 1);
+            const allLinesReceived = lines.length > 0 && lines.every(l => toNum(l.received) === 1);
+            const isClosed = fully && allInvPosted && allAmtPosted && allLinesReceived;
+            const fullyReceived = fully && !isClosed;
 
             // Align totalAmount with what's actually being posted
-            const unpostedRows = porRows.filter(r => toNum(r.isPosted) === 0 && (toNum(r.received_quantity) > 0 || toStr(r.receipt_no)));
+            const unpostedRows = porRows.filter(r => toNum(r.isPosted) === 0 && (toNum(r.received_quantity) > 0 || toStr(r.receipt_no)) && toNum(r.is_reverted) !== 1);
             let listTotal = 0;
             if (unpostedRows.length > 0) {
                 // Inventory module trusts stored values in POR for listTotal
@@ -819,6 +753,12 @@ export async function GET() {
                 listTotal = Number((toNum(po?.total_amount) - toNum(po?.discounted_amount)).toFixed(2));
             }
 
+            const itemsInReceipts = new Set<number>();
+            for (const r of unpostedRows) {
+                const pid = toNum(r?.product_id);
+                if (pid) itemsInReceipts.add(pid);
+            }
+
             list.push({
                 id: String(poId),
                 poNumber,
@@ -826,12 +766,11 @@ export async function GET() {
                 status: receivingStatusFrom(porRows, {
                     isClosed,
                     fullyReceived,
-                    // Only flag PARTIAL_POSTED when not fully received
-                    hasAnyPosted: !fully && hasAnyPosted,
+                    hasAnyPosted,
                 }),
                 totalAmount: listTotal,
                 currency: "PHP",
-                itemsCount: products.size,
+                itemsCount: itemsInReceipts.size > 0 ? itemsInReceipts.size : products.size,
                 branchesCount: branches.size,
                 receiptsCount: rs.receiptsCount,
                 unpostedReceiptsCount: rs.unpostedReceiptsCount,
@@ -873,26 +812,17 @@ export async function POST(req: NextRequest) {
             const lines = await fetchPOProductsByPOId(base, poId);
             const porRows = await fetchPORByPOIds(base, [poId]);
 
-            const porIds = porRows.map((r: PORRow) => toNum(r?.purchase_order_product_id)).filter(Boolean);
-            const receivingItems = porIds.length ? await fetchReceivingItems(base, porIds) : [];
-            const rfidsByPorId = groupRfidsByPorId(receivingItems);
-
             // ✅ Block if PO is already financially posted (locked by Post Amounts)
-            if (toNum(po?.is_posted) === 1 || (po as Record<string, unknown>)?.is_posted === true) {
+            if (toNum(po?.is_posted) === 1 || po?.is_posted === true) {
                 return bad("This PO has been fully posted and is now locked. No further changes allowed.", 409);
             }
 
-            const receivingOk = isPartiallyReceivedOrTagged(poId, lines, porRows, rfidsByPorId);
-            // Also allow opening POs that already had a partial post (inventory_status=13)
-            const invStatus = toNum(po?.inventory_status);
+            // ✅ HARDENED: Check for actual receipt activity (must have receipt_no AND received_quantity > 0)
+            const hasAnyRealReceipts = porRows.some(r => toNum(r.received_quantity) > 0 && toStr(r.receipt_no));
             const hasAnyPosted = porRows.some((r) => toNum(r?.isPosted) === 1);
-            // ✅ Fallback: check for unposted POR rows with receipt activity (same logic as GET list)
-            const hasUnpostedReceipts = porRows.some((r) =>
-                toNum(r?.isPosted) === 0 && (
-                    toStr(r?.receipt_no) || toStr(r?.receipt_date) || toStr(r?.received_date) || toNum(r?.received_quantity) > 0
-                )
-            );
-            if (!receivingOk && !hasAnyPosted && !hasUnpostedReceipts && invStatus !== 13) {
+            const invStatus = toNum(po?.inventory_status);
+
+            if (!hasAnyRealReceipts && !hasAnyPosted && invStatus !== 13) {
                 return bad("PO is not ready for posting. Please receive at least one item first.", 409);
             }
 
@@ -980,7 +910,7 @@ export async function POST(req: NextRequest) {
                     // If it has a receiptNo but qty is 0, we still show it because it's part of the receipt's history (e.g., reverted).
                     if (!receiptNo && receivedQty === 0) continue; 
 
-                    const rfids = receiptRows.flatMap(r => rfidsByPorId.get(toNum(r.purchase_order_product_id)) ?? []);
+                    const rfids: string[] = [];
                     
                     const srcRow = receiptRows.find(r => toNum(r.unit_price) > 0) || receiptRows.find(r => toNum(r.isPosted) === 1) || receiptRows[0];
                     let discountTypeId = "";
@@ -1069,9 +999,11 @@ export async function POST(req: NextRequest) {
 
             const lr = latestReceiptInfo(porRows);
             const rs = buildReceiptSummary(porRows);
-            const allPosted = rs.receiptsCount > 0 && rs.unpostedReceiptsCount === 0;
-            const isClosed = fully && allPosted;
-            const fullyReceived = fully && !allPosted;
+            const allInvPosted = porRows.length > 0 && porRows.every(r => toNum(r.isPosted) === 1);
+            const allAmtPosted = porRows.length > 0 && porRows.every(r => toNum(r.is_posted_amounts) === 1);
+            const allLinesReceived = lines.length > 0 && lines.every(l => toNum(l.received) === 1);
+            const isClosed = fully && allInvPosted && allAmtPosted && allLinesReceived;
+            const fullyReceived = fully && !isClosed;
 
             const branchName = branchesLabelFromLines(lines, branchesMap);
 
@@ -1137,7 +1069,7 @@ export async function POST(req: NextRequest) {
                 status: receivingStatusFrom(porRows, {
                     isClosed,
                     fullyReceived,
-                    hasAnyPosted: !fully && hasAnyPosted,
+                    hasAnyPosted,
                 }),
                 totalAmount: detailTotal,
                 currency: "PHP",
@@ -1284,10 +1216,23 @@ export async function POST(req: NextRequest) {
                 const amountsPosted = toNum(poCheckJ?.data?.is_posted) === 1 || poCheckJ?.data?.is_posted === true;
                 
                 if (fully) {
-                    // Check if ALL inventory receipts are now posted
                     const allInvPosted = updatedPorRows.every(r => toNum(r.isPosted) === 1);
+                    const allAmtPosted = updatedPorRows.every(r => toNum(r.is_posted_amounts) === 1);
+                    // To avoid a race condition with the popSyncPromises just issued, we re-evaluate line received status
+                    const allLinesReceived = lines.every(ln => {
+                        const pid = toNum(ln.product_id);
+                        const bid = toNum(ln.branch_id ?? 0);
+                        const k = keyLine(poId, pid, bid);
+                        const pors = updatedPorIdsByKey.get(k) || [];
+                        const totalPosted = pors.reduce((sum, id) => {
+                            const row = updatedPorRows.find(r => toNum(r.purchase_order_product_id) === id && toNum(r.isPosted) === 1);
+                            return sum + (row ? toNum(row.received_quantity) : 0);
+                        }, 0);
+                        const ordered = toNum(ln.ordered_quantity);
+                        return (totalPosted >= ordered && totalPosted > 0) || (ordered === 0 && totalPosted > 0);
+                    });
                     
-                    if (allInvPosted && amountsPosted) {
+                    if (allInvPosted && allAmtPosted && amountsPosted && allLinesReceived) {
                         poUpdate.inventory_status = 6; // ✅ Fully Received & Fully Posted = Received
                     } else {
                         poUpdate.inventory_status = 13; // ✅ Fully Received but pending some posting = For Posting
@@ -1330,85 +1275,113 @@ export async function POST(req: NextRequest) {
             const lines = await fetchPOProductsByPOId(base, poId);
             const porRows = await fetchPORByPOIds(base, [poId]);
 
-            const porIds = porRows.map((r: PORRow) => toNum(r?.purchase_order_product_id)).filter(Boolean);
-            const receivingItems = porIds.length ? await fetchReceivingItems(base, porIds) : [];
-            const rfidsByPorId = groupRfidsByPorId(receivingItems);
 
-            const taggingOk = isPartiallyReceivedOrTagged(poId, lines, porRows, rfidsByPorId);
-            const hasAnyActivity = porRows.some(
-                (r) => effectiveReceivedQty(r) > 0 || hasReceiptEvidence(r)
+
+            // ✅ HARDENED: Require actual receipt activity before allowing posting
+            const hasAnyReceivedQty = porRows.some(
+                (r) => effectiveReceivedQty(r) > 0 && toStr(r?.receipt_no)
             );
             const hasAnyPosted = porRows.some((r) => toNum(r?.isPosted) === 1);
 
-            if (!taggingOk && !hasAnyActivity && !hasAnyPosted) {
+            if (!hasAnyReceivedQty && !hasAnyPosted) {
                 return bad("Cannot post. Please receive items in Receiving Products first.", 409);
             }
 
-
-            // Post ALL currently unposted POR rows
+            // Post ALL currently unposted POR rows that have actual received quantities
             const toPost = porRows
-                .filter((r) => toNum(r?.isPosted) === 0 && (toNum(r.received_quantity) > 0 || toStr(r.receipt_no)));
+                .filter((r) => toNum(r?.isPosted) === 0 && toNum(r.received_quantity) > 0 && toStr(r.receipt_no));
 
-            if (toPost.length > 0) {
-                for (const r of toPost) {
-                    const porId = toNum(r.purchase_order_product_id);
-                    if (!porId) continue;
-                    await patchPOR(base, porId, { 
-                        isPosted: 1,
-                    });
-                }
+            // ✅ HARDENED: Block if no rows qualify for posting
+            if (toPost.length === 0 && !hasAnyPosted) {
+                return bad("Nothing to post. No receipts with received quantities found. Please complete receiving first.", 409);
             }
 
-            // After post_all, we need to re-fetch porRows to get the updated isPosted status
-            const updatedPorRowsAll = await fetchPORByPOIds(base, [poId]);
-
-            const fully = isFullyReceived(poId, lines, updatedPorRowsAll);
+            let fully = isFullyReceived(poId, lines, porRows);
+            if (toPost.length > 0) {
+            const successfulPorIds: number[] = [];
             try {
-                const poUpdate: Record<string, unknown> = { date_received: nowISO() };
-                const amountsPosted = toNum(po?.is_posted) === 1 || po?.is_posted === true;
-
-                if (fully) {
-                    // Check if ALL inventory receipts are now posted
-                    const allInvPosted = updatedPorRowsAll.every(r => toNum(r.isPosted) === 1);
-
-                    if (allInvPosted && amountsPosted) {
-                        poUpdate.inventory_status = 6; // ✅ Fully Received & Fully Posted = Received
-                    } else {
-                        poUpdate.inventory_status = 13; // ✅ Fully Received but pending some posting = For Posting
+                    // 1. Post receipts
+                    for (const r of toPost) {
+                        const porId = toNum(r.purchase_order_product_id);
+                        if (!porId) continue;
+                        await patchPOR(base, porId, { isPosted: 1 });
+                        successfulPorIds.push(porId);
                     }
-                } else {
-                    poUpdate.inventory_status = 9;  // Partially Received
-                }
-                await patchPO(base, poId, poUpdate);
-            } catch {}
 
-            const updatedPorIdsByKeyAll = buildPorIdsByKey(updatedPorRowsAll);
-            const popSyncPromisesAll = lines.map(async (ln) => {
-                const pid = toNum(ln.product_id);
-                const bid = toNum(ln.branch_id ?? 0);
-                const k = keyLine(poId, pid, bid);
-                const pors = updatedPorIdsByKeyAll.get(k) || [];
-                
-                const totalPosted = pors.reduce((sum, id) => {
-                    const row = updatedPorRowsAll.find(r => toNum(r.purchase_order_product_id) === id && toNum(r.isPosted) === 1);
-                    return sum + (row ? toNum(row.received_quantity) : 0);
-                }, 0);
-                
-                const ordered = toNum(ln.ordered_quantity);
-                const shouldBeReceived = (totalPosted >= ordered && totalPosted > 0) || (ordered === 0 && totalPosted > 0);
-                const currentReceived = toNum(ln.received || 0);
+                    // 2. Fetch updated state
+                    const updatedPorRowsAll = await fetchPORByPOIds(base, [poId]);
+                    fully = isFullyReceived(poId, lines, updatedPorRowsAll);
 
-                if (shouldBeReceived && currentReceived !== 1) {
-                    await fetchJson(`${base}/items/${PO_PRODUCTS_COLLECTION}/${ln.purchase_order_product_id}`, {
-                        method: "PATCH", body: JSON.stringify({ received: 1 })
-                    }).catch(() => {});
-                } else if (!shouldBeReceived && currentReceived === 1) {
-                    await fetchJson(`${base}/items/${PO_PRODUCTS_COLLECTION}/${ln.purchase_order_product_id}`, {
-                        method: "PATCH", body: JSON.stringify({ received: 0 })
-                    }).catch(() => {});
+                    // 3. Update PO Header
+                    const poUpdate: Record<string, unknown> = { date_received: nowISO() };
+                    const amountsPosted = toNum(po?.is_posted) === 1 || po?.is_posted === true;
+
+                    if (fully) {
+                        const allInvPosted = updatedPorRowsAll.every(r => toNum(r.isPosted) === 1);
+                        const allAmtPosted = updatedPorRowsAll.every(r => toNum(r.is_posted_amounts) === 1);
+                        
+                        const updatedPorIdsByKeyAll = buildPorIdsByKey(updatedPorRowsAll);
+                        const allLinesReceived = lines.every(ln => {
+                            const pid = toNum(ln.product_id);
+                            const bid = toNum(ln.branch_id ?? 0);
+                            const k = keyLine(poId, pid, bid);
+                            const pors = updatedPorIdsByKeyAll.get(k) || [];
+                            const totalPosted = pors.reduce((sum, id) => {
+                                const row = updatedPorRowsAll.find(r => toNum(r.purchase_order_product_id) === id && toNum(r.isPosted) === 1);
+                                return sum + (row ? toNum(row.received_quantity) : 0);
+                            }, 0);
+                            const ordered = toNum(ln.ordered_quantity);
+                            return (totalPosted >= ordered && totalPosted > 0) || (ordered === 0 && totalPosted > 0);
+                        });
+
+                        if (allInvPosted && allAmtPosted && amountsPosted && allLinesReceived) {
+                            poUpdate.inventory_status = 6; // Fully Received & Fully Posted
+                        } else {
+                            poUpdate.inventory_status = 13; // Fully Received but pending amounts
+                        }
+                    } else {
+                        poUpdate.inventory_status = 9;  // Partially Received
+                    }
+                    await patchPO(base, poId, poUpdate);
+
+                    // 4. Update PO Products Sync
+                    const updatedPorIdsByKeyAll = buildPorIdsByKey(updatedPorRowsAll);
+                    const popSyncPromisesAll = lines.map(async (ln) => {
+                        const pid = toNum(ln.product_id);
+                        const bid = toNum(ln.branch_id ?? 0);
+                        const k = keyLine(poId, pid, bid);
+                        const pors = updatedPorIdsByKeyAll.get(k) || [];
+                        
+                        const totalPosted = pors.reduce((sum, id) => {
+                            const row = updatedPorRowsAll.find(r => toNum(r.purchase_order_product_id) === id && toNum(r.isPosted) === 1);
+                            return sum + (row ? toNum(row.received_quantity) : 0);
+                        }, 0);
+                        
+                        const ordered = toNum(ln.ordered_quantity);
+                        const shouldBeReceived = (totalPosted >= ordered && totalPosted > 0) || (ordered === 0 && totalPosted > 0);
+                        const currentReceived = toNum(ln.received || 0);
+
+                        if (shouldBeReceived && currentReceived !== 1) {
+                            await fetchJson(`${base}/items/${PO_PRODUCTS_COLLECTION}/${ln.purchase_order_product_id}`, {
+                                method: "PATCH", body: JSON.stringify({ received: 1 })
+                            });
+                        } else if (!shouldBeReceived && currentReceived === 1) {
+                            await fetchJson(`${base}/items/${PO_PRODUCTS_COLLECTION}/${ln.purchase_order_product_id}`, {
+                                method: "PATCH", body: JSON.stringify({ received: 0 })
+                            });
+                        }
+                    });
+                    await Promise.all(popSyncPromisesAll);
+
+                } catch (err) {
+                    console.error("Post Inventory failed, initiating rollback...", err);
+                    // Rollback all successful posts in this session
+                    for (const porId of successfulPorIds) {
+                        await patchPOR(base, porId, { isPosted: 0 }).catch(e => console.error(`Rollback failed for POR ${porId}:`, e));
+                    }
+                    return bad(`Failed to post inventory: ${(err as Error).message}. Changes rolled back.`, 500);
                 }
-            });
-            await Promise.all(popSyncPromisesAll);
+            }
 
             return ok({
                 ok: true,
@@ -1421,9 +1394,12 @@ export async function POST(req: NextRequest) {
 
 
         // -------------------------
-        // revert_receipt — revert a single unposted receipt back to receiving.
-        // Only the POR rows for the specified receiptNo are affected.
-        // Already-posted receipts and other unposted receipts are NOT touched.
+        // revert_receipt — NON-DESTRUCTIVE "Draft Transformation" revert.
+        // Clears only the receipt_no and receipt_date to hide the receipt from
+        // Post Inventory, while preserving all item data (quantities, batches,
+        // expiry, financials, RFID tags) in the database.
+        // The PO status is rolled back to 9 (Partially Received) so the PO
+        // reappears in the Receiving Manual module with all data pre-filled.
         // -------------------------
         if (action === "revert_receipt") {
             const poId = toNum(body?.poId);
@@ -1451,102 +1427,36 @@ export async function POST(req: NextRequest) {
                 );
             }
 
-            // 4. Reset each target POR row: clear quantities, financials, and receipt metadata
-            const lines = await fetchPOProductsByPOId(base, poId);
-            const targetPorIds: number[] = [];
-            const targetPopIds: number[] = [];
-
+            // 4. REVERT FLAG: Set is_reverted=1 to mark this receipt as reverted.
+            //    Everything else is PRESERVED:
+            //    - receipt_no, receipt_date → KEPT (for identification in Receiving Manual)
+            //    - received_quantity → KEPT (for data restoration in Edit Mode)
+            //    - batch_no, expiry_date, lot_id → KEPT
+            //    - discounted_amount, vat_amount, withholding_amount, total_amount → KEPT
+            //    - RFID tags (purchase_order_receiving_items) → KEPT
             for (const r of targetRows) {
                 const porId = toNum(r?.purchase_order_product_id);
                 if (!porId) continue;
-                targetPorIds.push(porId);
-
-                const pop = lines.find(ln => toNum(ln.product_id) === toNum(r.product_id) && toNum(ln.branch_id) === toNum(r.branch_id));
-                const popId = toNum(pop?.purchase_order_product_id);
-                if (popId) targetPopIds.push(popId);
-
-                if (pop) {
-                    await patchPOR(base, porId, {
-                        received_quantity: 0,
-                        receipt_no: null,
-                        receipt_date: null,
-                        received_date: null,
-                        discounted_amount: 0,
-                        vat_amount: 0,
-                        withholding_amount: 0,
-                        total_amount: 0,
-                    });
-                } else {
-                    // Extra product: delete completely to prevent ghost records
-                    try {
-                        await fetch(`${base}/items/${POR_COLLECTION}`, {
-                            method: "DELETE",
-                            headers: directusHeaders(),
-                            body: JSON.stringify([porId]),
-                        });
-                    } catch (err) {
-                        console.error("Failed to delete extra POR item during revert:", err);
-                    }
-                }
+                await patchPOR(base, porId, {
+                    is_reverted: 1,
+                });
             }
 
-            // 4.5. Delete associated RFID tags (legacy POP linkages)
+            const lines = await fetchPOProductsByPOId(base, poId);
 
-            const allLinkIds = [...targetPorIds, ...targetPopIds];
-
-            if (allLinkIds.length > 0) {
-                try {
-                    const linkedItems = await fetchReceivingItems(base, allLinkIds);
-                    const itemIdsToDelete = linkedItems.map(it => toNum(it.receiving_item_id)).filter(id => id > 0);
-                    if (itemIdsToDelete.length > 0) {
-                        const deleteUrl = `${base}/items/${POR_ITEMS_COLLECTION}`;
-                        await fetch(deleteUrl, {
-                            method: "DELETE",
-                            headers: directusHeaders(),
-                            body: JSON.stringify(itemIdsToDelete),
-                        });
-                    }
-                } catch (err) {
-                    console.error("Failed to delete RFID tags during receipt revert:", err);
-                }
-            }
-
-            // 5. Re-evaluate PO status based on remaining activity
-            const updatedPorRows = await fetchPORByPOIds(base, [poId]);
-
-            const hasAnyRemainingReceipts = updatedPorRows.some(
-                (r) => toStr(r?.receipt_no) || effectiveReceivedQty(r) > 0
-            );
-            const hasAnyPosted = updatedPorRows.some(
-                (r) => toNum(r?.isPosted) === 1
-            );
-
-            // Determine next status:
-            // - If posted receipts exist but PO not fully received -> 9 (Partially Received)
-            // - If any unposted receipts with activity remain -> 9 (Partially Received)
-            // - If no activity at all remains -> 3 (Approved / For Receiving)
-            let nextStatus: number;
-            if (hasAnyPosted || hasAnyRemainingReceipts) {
-                nextStatus = 9; // Partially Received
-            } else {
-                nextStatus = 3; // Approved / For Receiving
-            }
+            // 5. Set PO status to 9 (Partially Received) so it appears in Receiving
+            //    (Receiving filters: inventory_status IN 3, 9, 11, 12)
+            const nextStatus = 9;
 
             const poUpdate: Record<string, unknown> = {
                 inventory_status: nextStatus,
             };
-            // Clear date_received only if nothing remains
-            if (!hasAnyRemainingReceipts && !hasAnyPosted) {
-                poUpdate.date_received = null;
-            }
 
-            try {
-                await patchPO(base, poId, poUpdate);
-            } catch {}
+            await patchPO(base, poId, poUpdate);
 
             // 6. Update 'received' flag in purchase_order_products
-            // Since we reverted, re-evaluate if the PO products are fully posted
-            const updatedPorIdsByKeyRevert = buildPorIdsByKey(updatedPorRows);
+            //    Re-evaluate based on POSTED receipts only (the reverted ones are now drafts)
+            const updatedPorIdsByKeyRevert = buildPorIdsByKey(porRows);
             const popSyncPromisesRevert = lines.map(async (ln) => {
                 const pid = toNum(ln.product_id);
                 const bid = toNum(ln.branch_id ?? 0);
@@ -1554,7 +1464,7 @@ export async function POST(req: NextRequest) {
                 const pors = updatedPorIdsByKeyRevert.get(k) || [];
                 
                 const totalPosted = pors.reduce((sum, id) => {
-                    const row = updatedPorRows.find(r => toNum(r.purchase_order_product_id) === id && toNum(r.isPosted) === 1);
+                    const row = porRows.find(r => toNum(r.purchase_order_product_id) === id && toNum(r.isPosted) === 1);
                     return sum + (row ? toNum(row.received_quantity) : 0);
                 }, 0);
                 
@@ -1576,7 +1486,7 @@ export async function POST(req: NextRequest) {
                 receiptNo,
                 revertedCount: targetRows.length,
                 newStatus: nextStatus,
-                noRemainingReceipts: !hasAnyRemainingReceipts && !hasAnyPosted,
+                noRemainingReceipts: false,
             });
         }
 

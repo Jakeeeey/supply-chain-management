@@ -3,8 +3,8 @@
 import * as React from "react";
 import { toast } from "sonner";
 
-const IDLE_TIMEOUT = 15 * 60 * 1000; // 15 minutes
-const WARNING_BEFORE = 60 * 1000;    // 1 minute warning (at 14 min)
+const IDLE_TIMEOUT = 24 * 60 * 60 * 1000; // 24 hours
+const WARNING_BEFORE = 15 * 60 * 1000; // 15 minute warning (at 23h 45m)
 
 export function IdleTimer() {
     const [isIdle, setIsIdle] = React.useState(false);
@@ -34,11 +34,11 @@ export function IdleTimer() {
         // Don't restart if already idle
         if (isIdle) return;
 
-        // Set warning at 14 minutes
+        // Set warning at 23 hours 45 minutes
         warningRef.current = setTimeout(() => {
             toast.warning("Inactivity Warning", {
-                description: "Your session will expire in 60 seconds due to inactivity. Move your mouse or type to stay logged in.",
-                duration: 60000,
+                description: "Your session will expire in 15 minutes due to inactivity. Move your mouse or type to stay logged in.",
+                duration: 15 * 60 * 1000,
                 action: {
                     label: "I'm back",
                     onClick: () => resetTimerRef.current(),
@@ -46,7 +46,7 @@ export function IdleTimer() {
             });
         }, IDLE_TIMEOUT - WARNING_BEFORE);
 
-        // Set logout at 15 minutes
+        // Set logout at 24 hours
         timeoutRef.current = setTimeout(() => {
             setIsIdle(true);
             logout();

@@ -387,15 +387,8 @@ export default function PurchaseOrderReviewPanel(props: {
                 })
             );
 
-            toast.success("Purchase Order approved successfully!", {
-                description: "The PO has been approved and updated.",
-            });
-
             setConfirmOpen(false);
         } catch (e: unknown) {
-            toast.error("Failed to approve Purchase Order", {
-                description: String(e instanceof Error ? e.message : e || "Unknown error"),
-            });
             setConfirmOpen(false);
             throw e;
         } finally {

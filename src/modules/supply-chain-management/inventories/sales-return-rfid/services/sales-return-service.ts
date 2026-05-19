@@ -564,7 +564,7 @@ export async function updateReturn(
     remarks: string;
     invoiceNo?: string;
     orderNo?: string;
-    appliedInvoiceId?: number;
+    appliedInvoiceId?: number | null;
     isThirdParty?: boolean;
   },
   userId: number,
@@ -612,27 +612,34 @@ export async function updateReturn(
 
   await repo.updateReturnHeader(payload.returnId, headerPayload);
 
-  // Handle Junction Table
-  if (payload.appliedInvoiceId) {
+  // 🟢 Handle Junction Table with explicit Unlinking (null check)
+  if (payload.hasOwnProperty("appliedInvoiceId")) {
     try {
       const linkResult = await repo.getJunctionLink(payload.returnId);
       const existingLinks = (linkResult.data || []) as any[];
 
-      if (existingLinks.length > 0) {
+      if (payload.appliedInvoiceId) {
+        // Link or Update
+        if (existingLinks.length > 0) {
+          const linkId = existingLinks[0].id;
+          await repo.updateJunctionLink(linkId, {
+            invoice_no: payload.appliedInvoiceId,
+            linked_by: userId,
+          });
+        } else {
+          await repo.createJunctionLink({
+            return_no: payload.returnId,
+            invoice_no: payload.appliedInvoiceId,
+            linked_by: userId,
+          });
+        }
+      } else if (payload.appliedInvoiceId === null && existingLinks.length > 0) {
+        // Explicit Unlink (Delete)
         const linkId = existingLinks[0].id;
-        await repo.updateJunctionLink(linkId, {
-          invoice_no: payload.appliedInvoiceId,
-          linked_by: userId,
-        });
-      } else {
-        await repo.createJunctionLink({
-          return_no: payload.returnId,
-          invoice_no: payload.appliedInvoiceId,
-          linked_by: userId,
-        });
+        await repo.deleteJunctionLink(linkId);
       }
-    } catch {
-      // Ignore junction errors
+    } catch (e) {
+      console.error("Failed to sync junction link:", e);
     }
   }
 

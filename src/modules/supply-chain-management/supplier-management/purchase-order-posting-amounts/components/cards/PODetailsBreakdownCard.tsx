@@ -79,11 +79,31 @@ export function PODetailsBreakdownCard() {
                                         receiptsMap.set(rn, arr);
                                     });
 
-                                    return Array.from(receiptsMap.entries()).map(([receiptNo, items]) => {
+                                    return Array.from(receiptsMap.entries()).map(([receiptNo, rawItems]) => {
+                                        const items = [...rawItems].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
                                         const receiptDate = items[0]?.receiptDate || "";
                                         const isPending = receiptNo === "PENDING";
                                         const receiptTitle = isPending ? "Pending Items" : `Receipt #: ${receiptNo}`;
                                         const receiptDateLabel = isPending ? "" : (receiptDate ? ` • ${new Date(receiptDate).toLocaleDateString()}` : "");
+
+                                        // ── Receipt-level subtotals ──
+                                        const rcptGross = items.reduce((s, it) => {
+                                            const qty = it.receivedQty || it.expectedQty || 0;
+                                            return s + (it.unitPrice || 0) * qty;
+                                        }, 0);
+                                        const rcptDiscount = items.reduce((s, it) => s + (it.discountAmount ?? 0), 0);
+                                        const rcptNet = Number((rcptGross - rcptDiscount).toFixed(2));
+
+                                        // VAT/EWT per receipt (only if invoice)
+                                        let rcptVat = 0;
+                                        let rcptEwt = 0;
+                                        if (isInvoice) {
+                                            const vatExcl = Number((rcptNet / 1.12).toFixed(2));
+                                            rcptVat = Number((rcptNet - vatExcl).toFixed(2));
+                                            rcptEwt = Number((vatExcl * 0.01).toFixed(2));
+                                        }
+
+                                        const cur = selectedPO.currency || "PHP";
 
                                         return (
                                             <div key={receiptNo} className="space-y-2 border border-border/30 rounded-lg p-2 bg-muted/10">
@@ -136,6 +156,36 @@ export function PODetailsBreakdownCard() {
                                                             })}
                                                         </TableBody>
                                                     </Table>
+                                                </div>
+
+                                                {/* ── Receipt Subtotals ── */}
+                                                <div className="flex flex-col gap-1 w-full max-w-xs ml-auto text-xs pt-2 border-t border-border/30 px-2 pb-1">
+                                                    <div className="flex justify-between text-muted-foreground">
+                                                        <span>Gross:</span>
+                                                        <span>{money(rcptGross, cur)}</span>
+                                                    </div>
+                                                    {rcptDiscount > 0 && (
+                                                        <div className="flex justify-between text-red-500/80 dark:text-red-400">
+                                                            <span>Discount:</span>
+                                                            <span>-{money(rcptDiscount, cur)}</span>
+                                                        </div>
+                                                    )}
+                                                    {isInvoice && rcptVat > 0 && (
+                                                        <div className="flex justify-between text-muted-foreground">
+                                                            <span>VAT:</span>
+                                                            <span>{money(rcptVat, cur)}</span>
+                                                        </div>
+                                                    )}
+                                                    {isInvoice && rcptEwt > 0 && (
+                                                        <div className="flex justify-between text-red-500/80 dark:text-red-400">
+                                                            <span>EWT:</span>
+                                                            <span>{money(rcptEwt, cur)}</span>
+                                                        </div>
+                                                    )}
+                                                    <div className="flex justify-between font-bold pt-1 border-t border-border/20">
+                                                        <span>Net Total:</span>
+                                                        <span>{money(rcptNet, cur)}</span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         );

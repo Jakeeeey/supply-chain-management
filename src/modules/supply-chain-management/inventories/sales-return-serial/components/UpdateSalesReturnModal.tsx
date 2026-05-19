@@ -169,6 +169,81 @@ const ReadOnlyField = ({
   </div>
 );
 
+// --- OPTIMIZED SUB-COMPONENTS TO PREVENT LAG ---
+const SerialInputSection = React.memo(({ onAdd, disabled }: { onAdd: (val: string) => void; disabled: boolean }) => {
+  const [localValue, setLocalValue] = useState("");
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && localValue.trim()) {
+      onAdd(localValue.trim());
+      setLocalValue("");
+    }
+  };
+  return (
+    <div className="relative group">
+      <Input
+        className="h-9 w-64 pl-10 pr-10 text-sm font-mono border-primary/30 focus:ring-primary/20"
+        placeholder="Type serial and press Enter..."
+        value={localValue}
+        onChange={(e) => setLocalValue(e.target.value)}
+        onKeyDown={handleKeyDown}
+        disabled={disabled}
+      />
+      <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary" />
+      {disabled ? (
+        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" />
+      ) : (
+        <Plus
+          className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary cursor-pointer"
+          onClick={() => {
+            if (localValue.trim()) {
+              onAdd(localValue.trim());
+              setLocalValue("");
+            }
+          }}
+        />
+      )}
+    </div>
+  );
+});
+SerialInputSection.displayName = "SerialInputSection";
+
+const RemarksInputSection = React.memo(({ value, onChange, disabled }: { value: string; onChange: (val: string) => void; disabled?: boolean }) => {
+  const [localValue, setLocalValue] = useState(value);
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
+  return (
+    <Textarea
+      value={localValue}
+      onChange={(e) => setLocalValue(e.target.value)}
+      onBlur={() => onChange(localValue)}
+      disabled={disabled}
+      className="min-h-[100px]"
+      placeholder="Add any notes regarding this return..."
+    />
+  );
+});
+RemarksInputSection.displayName = "RemarksInputSection";
+
+const ReasonInputSection = React.memo(({ value, onChange, disabled }: { value: string; onChange: (val: string) => void; disabled?: boolean }) => {
+  const [localValue, setLocalValue] = useState(value);
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
+  return (
+    <Input
+      className="h-8"
+      value={localValue}
+      onChange={(e) => setLocalValue(e.target.value)}
+      onBlur={() => onChange(localValue)}
+      disabled={disabled}
+    />
+  );
+});
+ReasonInputSection.displayName = "ReasonInputSection";
+
 export function UpdateSalesReturnModal({
   returnId,
   initialData,
@@ -202,7 +277,6 @@ export function UpdateSalesReturnModal({
   const [isUpdating, setIsUpdating] = useState(false);
   const [isReceiving, setIsReceiving] = useState(false);
 
-  const [serialInput, setSerialInput] = useState("");
   const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null);
   const [isValidatingSerial, setIsValidatingSerial] = useState(false);
 
@@ -305,8 +379,8 @@ export function UpdateSalesReturnModal({
     });
   };
 
-  const handleAddSerial = async () => {
-    const serial = serialInput.trim().toUpperCase();
+  const handleAddSerial = async (serialVal?: string) => {
+    const serial = (serialVal || "").trim().toUpperCase();
     if (!serial || selectedRowIndex === null) return;
     const selectedRow = details[selectedRowIndex];
     if (!selectedRow) return;
@@ -337,7 +411,6 @@ export function UpdateSalesReturnModal({
       }
 
       handleDetailChange(selectedRowIndex, { newSerial: serial });
-      setSerialInput("");
       toast.success("Serial Added", { description: `Serial ${serial} successfully tagged.` });
     } catch (err: unknown) {
       setIsValidatingSerial(false);
@@ -594,7 +667,7 @@ export function UpdateSalesReturnModal({
                         </TableCell>
                         <TableCell className="text-right">₱{Number(item.discountAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
                         <TableCell className="text-right font-bold">₱{Number(item.totalAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                        <TableCell><Input className="h-8" disabled={!canEditAll} value={item.reason || ""} onChange={e => handleDetailChange(idx, { reason: e.target.value })} /></TableCell>
+                        <TableCell onClick={e => e.stopPropagation()}><ReasonInputSection value={item.reason || ""} onChange={val => handleDetailChange(idx, { reason: val })} disabled={!canEditAll} /></TableCell>
                         <TableCell>
                           <LocalSearchableSelect value={item.returnType || ""} onValueChange={v => handleDetailChange(idx, { returnType: v })} options={returnTypeOptions.map(t => ({ value: t.type_name, label: t.type_name }))} disabled={!canEditAll} />
                         </TableCell>
@@ -618,11 +691,7 @@ export function UpdateSalesReturnModal({
                 </h4>
                 <div className="flex items-center gap-3">
                   {canEditAll && (
-                    <div className="relative group">
-                      <Input className="h-9 w-64 pl-10 pr-10 text-sm font-mono border-primary/30 focus:ring-primary/20" placeholder="Type serial and press Enter..." value={serialInput} onChange={e => setSerialInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleAddSerial()} disabled={isValidatingSerial} />
-                      <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary" />
-                      {isValidatingSerial ? <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" /> : <Plus className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary cursor-pointer" onClick={handleAddSerial} />}
-                    </div>
+                    <SerialInputSection onAdd={(serial) => handleAddSerial(serial)} disabled={isValidatingSerial} />
                   )}
                   <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 px-3 py-1 font-bold">{details[selectedRowIndex].serialNumbers?.length || 0} TOTAL</Badge>
                 </div>
@@ -684,7 +753,7 @@ export function UpdateSalesReturnModal({
                   </div>
                 </div>
               </div>
-              <div className="space-y-1.5"><Label className="text-xs font-bold uppercase">Remarks</Label><Textarea disabled={!canEditLimited} className="min-h-[100px]" value={headerData.remarks || ""} onChange={e => setHeaderData({ ...headerData, remarks: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label className="text-xs font-bold uppercase">Remarks</Label><RemarksInputSection disabled={!canEditLimited} value={headerData.remarks || ""} onChange={(val) => setHeaderData({ ...headerData, remarks: val })} /></div>
             </div>
             <div className="bg-background p-6 rounded-xl border border-primary/20 shadow-sm space-y-4 relative overflow-hidden">
               <div className="absolute top-0 left-0 w-1 h-full bg-primary"></div>

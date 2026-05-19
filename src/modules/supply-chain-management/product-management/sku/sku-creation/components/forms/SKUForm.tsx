@@ -68,6 +68,7 @@ const FormFieldWrapper = ({
             <Textarea
               placeholder={placeholder}
               {...field}
+              value={field.value ?? ""}
               className="min-h-[100px]"
               disabled={disabled}
             />
@@ -231,7 +232,6 @@ export function SKUForm({
       status: "DRAFT",
       inventory_type: "Regular",
       product_name: "",
-      description: "",
       short_description: "",
       unit_of_measurement_count: 1,
       barcode: "",
@@ -249,6 +249,7 @@ export function SKUForm({
       // Priority overrides for specific IDs
       product_id: initialData?.product_id,
       id: (initialData as Record<string, unknown>)?.id,
+      description: initialData?.description ?? "",
     },
   });
 
@@ -320,7 +321,7 @@ export function SKUForm({
                   <FormFieldWrapper
                     control={form.control}
                     name="description"
-                    label="Description"
+                    label="Description *"
                     placeholder="Specifications..."
                     rowSpan={2}
                     type="textarea"

@@ -28,6 +28,7 @@ export interface SummarySalesmanOption {
 export interface SummarySupplierOption {
   id: string | number;
   name: string;
+  shortcut?: string;
 }
 
 export interface API_SalesReturnType {
