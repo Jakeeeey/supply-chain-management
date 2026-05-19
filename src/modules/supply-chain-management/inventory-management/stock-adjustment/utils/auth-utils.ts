@@ -1,64 +1,114 @@
 /**
- * JWT Utility for decoding payloads without verification
- * Local copy scoped to the stock-adjustment module.
- * This is intentionally decoupled from @/lib/auth-utils to protect
- * the stock-adjustment module from breaking changes in the shared utility.
+ * src/lib/auth-utils.ts
+ * Centralized JWT utilities for VOS ERP.
  */
 
-export function decodeJwtPayload(token: string): Record<string, unknown> | null {
+export const COOKIE_NAME = "vos_access_token";
+export const REFRESH_COOKIE_NAME = "refreshToken"; // Matches Spring Boot backend
+export const SPRING_COOKIE_NAME = "springboot_token";
+export const LAST_VISITED_PATH_COOKIE = "vos_last_visited_path";
+export const COOKIE_MAX_AGE_CAP = 60 * 60 * 24 * 7; // 7 days cap
+export const REFRESH_PATH = "/api/auth/refresh";
+
+/**
+ * Global secure cookie flag based on environment.
+ */
+export const IS_SECURE_COOKIE = process.env.COOKIE_SECURE === "true" ||
+  (process.env.COOKIE_SECURE === undefined && process.env.NODE_ENV === "production");
+
+/**
+ * Shared cookie options for consistency.
+ */
+export const getCookieOptions = (remember: boolean, path: string = "/") => {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: IS_SECURE_COOKIE,
+    path,
+    ...(remember ? { maxAge: COOKIE_MAX_AGE_CAP } : {}),
+  };
+};
+
+export interface JwtPayload {
+  sub: string;
+  email: string;
+  FirstName?: string;
+  MiddleName?: string;
+  LastName?: string;
+  role?: string;
+  subsystems?: string[];
+  iat?: number;
+  exp?: number;
+  [key: string]: unknown;
+}
+
+/**
+ * Decodes a JWT payload without verifying the signature.
+ * Safe for use in both Client and Server environments (if using Buffer or atob).
+ * Note: Next.js middleware supports `Buffer`.
+ */
+export function decodeJwtPayload(token: string): JwtPayload | null {
+  if (!token) return null;
+
   try {
     const parts = token.split(".");
     if (parts.length < 2) return null;
 
-    const p = parts[1];
-    const b64 = p.replace(/-/g, "+").replace(/_/g, "/");
-    const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+    const base64Url = parts[1];
+    let base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
 
-    // Use Buffer for Node.js environments (API routes, Server Components)
-    if (typeof Buffer !== "undefined") {
-      const json = Buffer.from(padded, "base64").toString("utf8");
-      return JSON.parse(json);
+    // Pad for base64
+    while (base64.length % 4) {
+      base64 += "=";
     }
 
-    // Fallback for browser if needed (though usually we use atob)
-    const json = atob(padded);
-    return JSON.parse(json);
-  } catch {
+    const jsonPayload = Buffer.from(base64, "base64").toString("utf8");
+    return JSON.parse(jsonPayload) as JwtPayload;
+  } catch (error) {
+    console.error("[auth-utils] Error decoding JWT payload:", error);
     return null;
   }
 }
 
 /**
- * Extract User ID from JWT Payload
+ * Utility to extract token from various backend response formats.
  */
-export function getUserIdFromToken(token: string | null | undefined): number | null {
-  if (!token) return null;
-  const payload = decodeJwtPayload(token);
+export function pickTokenFromPayload(payload: Record<string, unknown> | string | null): string | null {
   if (!payload) return null;
+  if (typeof payload === "string") return payload.trim() || null;
 
-  // Try common ID fields
-  const idValue = payload.user_id ?? payload.userId ?? payload.id ?? payload.sub;
+  const t = payload.token ?? payload.accessToken ?? payload.access_token ?? payload.jwt;
+  return typeof t === "string" && t.trim() ? t.trim() : null;
+}
 
-  if (idValue !== undefined && idValue !== null) {
-    const num = Number(idValue);
-    return isNaN(num) ? null : num;
+/**
+ * Extracts the real client IP from standard proxy headers.
+ */
+export function extractClientIp(headers: Headers): string | null {
+  const xff = headers.get("x-forwarded-for");
+  if (xff) {
+    const first = xff.split(",")[0].trim();
+    if (first) return first;
   }
-
+  const realIp = headers.get("x-real-ip");
+  if (realIp) return realIp.trim();
   return null;
 }
 
 /**
- * Extract User Full Name from JWT Payload
+ * Resolves an IP address to approximate lat/lon.
  */
-export function getUserNameFromToken(token: string | null | undefined): string {
-  if (!token) return "System User";
-  const payload = decodeJwtPayload(token);
-  if (!payload) return "System User";
-
-  const first = String(payload.Firstname ?? payload.FirstName ?? payload.firstName ?? payload.firstname ?? payload.first_name ?? "").trim();
-  const last = String(payload.LastName ?? payload.Lastname ?? payload.lastName ?? payload.lastname ?? payload.last_name ?? "").trim();
-  const email = String(payload.email ?? payload.Email ?? "").trim();
-
-  const name = [first, last].filter(Boolean).join(" ") || email || "User";
-  return name;
+export async function resolveIpGeo(ip: string): Promise<{ latitude: number; longitude: number } | null> {
+  if (!ip || ip === "127.0.0.1" || ip === "::1") return null;
+  try {
+    const res = await fetch(`http://ip-api.com/json/${ip}?fields=status,lat,lon`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(3000),
+    });
+    const data = await res.json();
+    if (data.status !== "success") return null;
+    return { latitude: data.lat, longitude: data.lon };
+  } catch {
+    return null;
+  }
 }
